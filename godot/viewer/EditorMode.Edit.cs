@@ -217,7 +217,7 @@ public partial class EditorMode
         {
             var errors = EditModel.Apply(root, items);
             return errors.Count > 0 ? (false, "not saved: " + errors[0]) : (true, items.Count == 1 ? items[0].Target.Header : $"{items.Count} targets");
-        });
+        }, "apply " + (items.Count == 1 ? items[0].Target.Header : $"{items.Count} targets"));
         if (!ok) return false;
         _pending.Clear();
         AfterEdit();
@@ -293,6 +293,7 @@ public partial class EditorMode
     /// <summary>[Add gate]: the next click picks the fence point.</summary>
     public bool ArmGate()
     {
+        if (PlacementAsset != null) DisarmPlacement(false);
         if (!CanGate) { Say("gates: select one parcel or one property group", true); return false; }
         if (CurrentFence.EffectiveMode != "custom") { Say("gates need fence mode custom", true); return false; }
         if (Map.OriginEpsg5514 == null) { Say("this map has no origin_epsg5514 (export it again, map 0.4.0+)", true); return false; }
