@@ -12,6 +12,8 @@ from suchohrad_pipeline.rules import load_section
 from suchohrad_pipeline.terrain import flatten_buildings, grid_from_samples, save_terrain
 
 COVERAGE = box(10, 10, 210, 200)
+# Absolute S-JTSK position of the local origin (0, 0) of the synthetic slice.
+SYNTHETIC_ORIGIN = (-500000.0, -1100000.0)
 
 
 def plane(x, y):
@@ -61,7 +63,14 @@ def make_workspace(tmp: Path) -> dict[str, Path]:
         parcel("P-0006", "other", box(20, 20, 38, 98)),
     ]
     (work / "parcels.json").write_text(
-        json.dumps({"crs": "synthetic", "chunk_size_m": 250.0, "parcels": parcels})
+        json.dumps(
+            {
+                "crs": "synthetic",
+                "origin_epsg5514": list(SYNTHETIC_ORIGIN),
+                "chunk_size_m": 250.0,
+                "parcels": parcels,
+            }
+        )
     )
     (work / "buildings.json").write_text(json.dumps({"buildings": [b1]}))
     highways = [

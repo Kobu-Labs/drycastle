@@ -20,3 +20,10 @@ The category of a parcel (building plot, garden, road, field, forest, water, oth
 
 **Replacement scene**:
 What a mod supplies to replace a parcel's base contents.
+
+**Property group**:
+Several parcels that belong to one owner and are treated as one property, sharing a fence around their combined outer edge. Parcel IDs and boundaries do not change; a parcel is in at most one group.
+_Avoid_: merged parcel, estate
+
+**Hand edit**:
+A deliberate, developer-made change to a parcel's or property group's contents (fence, trees, placed objects) that survives every pipeline re-run.

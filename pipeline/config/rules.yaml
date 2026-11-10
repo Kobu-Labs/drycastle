@@ -230,6 +230,8 @@ props:
     building_clearance_m: 3.5
     road_clearance_m: 2.0
     parcel_edge_clearance_m: 1.0
+    # Rule-based trees keep this far from placed objects (objects.json, see config/edits.json).
+    object_clearance_m: 1.0
     # Tree size: trunk height and canopy edge in metres, scaled by a seeded factor in [0.8, 1.25].
     trunk_height_m: 1.8
     trunk_width_m: 0.35
