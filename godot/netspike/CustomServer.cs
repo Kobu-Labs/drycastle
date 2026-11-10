@@ -123,13 +123,16 @@ public class CustomServer : IRole
                 }
                 ref var last = ref c.Last[p.Id];
                 var q = cur[i];
-                int start = o;
-                if (!last.Valid || tick - last.LastTick >= Wire.KeyEvery)
+                var isFull = false;
+                if (!last.Valid || tick - last.LastFull >= Wire.KeyEvery)
                 {
                     _buf[o++] = (byte)p.Id; _buf[o++] = (byte)(Wire.FPosAbs | Wire.FYaw | Wire.FVel);
                     W16(ref o, q.X); W16(ref o, q.Y); W16(ref o, q.Z); W16(ref o, q.Yaw);
                     _buf[o++] = (byte)q.Vx; _buf[o++] = (byte)q.Vy; _buf[o++] = (byte)q.Vz;
                     _entriesFull++;
+                    // stagger keyframes over entities and clients so they do not all land on the same tick
+                    q.LastFull = tick - (c.Id * 7 + p.Id * 3) % Wire.KeyEvery;
+                    isFull = true;
                 }
                 else
                 {
@@ -148,8 +151,8 @@ public class CustomServer : IRole
                     if ((flags & Wire.FVel) != 0) { _buf[o++] = (byte)q.Vx; _buf[o++] = (byte)q.Vy; _buf[o++] = (byte)q.Vz; }
                     _entriesDelta++;
                 }
-                _ = start;
-                q.LastTick = tick; last = q;
+                if (!isFull) q.LastFull = last.LastFull;
+                last = q;
                 count++;
                 if (count >= Wire.MaxEntries) { Flush(c, tick, count, o); count = 0; o = 8; }
             }

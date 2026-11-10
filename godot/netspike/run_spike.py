@@ -201,12 +201,12 @@ def run_variant(args, outroot, name, n, port):
     return res
 
 
-def run_probe(args, outroot, k, syncs, mode, port):
+def run_probe(args, outroot, k, syncs, mode, port, change_from=0):
     outdir = outroot / "probe"
     outdir.mkdir(parents=True, exist_ok=True)
     common = ["--port", str(port), "--out", str(outdir), "--k", str(k), "--syncs", str(syncs), "--sync-mode", mode,
-              "--seconds", "6"]
-    log = open(outdir / f"probe_k{k}_s{syncs}_{mode}.log", "w")
+              "--seconds", "6", "--change-from", str(change_from)]
+    log = open(outdir / f"probe_k{k}_s{syncs}_{mode}_c{change_from}.log", "w")
     srv = subprocess.Popen(godot_cmd("--role", "probe-server", *common), stdout=log, stderr=subprocess.STDOUT)
     time.sleep(2.0)
     cli = subprocess.Popen(godot_cmd("--role", "probe-client", *common), stdout=log, stderr=subprocess.STDOUT)
@@ -219,7 +219,7 @@ def run_probe(args, outroot, k, syncs, mode, port):
     except subprocess.TimeoutExpired:
         srv.kill()
     log.close()
-    f = outdir / f"probe_k{k}_s{syncs}_{mode}.json"
+    f = outdir / f"probe_k{k}_s{syncs}_{mode}_c{change_from}.json"
     if f.exists():
         return json.loads(f.read_text())
     return {"k": k, "syncs": syncs, "sync_mode": mode, "error": "no result"}
@@ -280,7 +280,7 @@ def main():
     results = []
     port = PORT_BASE
     for n in [int(x) for x in args.ns.split(",")]:
-        for v in args.variants.split(","):
+        for v in [x for x in args.variants.split(",") if x]:
             port += 1
             print(f"--- {v} N={n} ({args.seconds} s)", flush=True)
             try:
@@ -293,13 +293,15 @@ def main():
 
     probes = []
     if not args.skip_probe:
-        cases = [(64, 1, "always"), (65, 1, "always")] if args.quick else \
+        cases = [(64, 1, "always"), (65, 1, "onchange", 64)] if args.quick else \
             [(32, 1, "always"), (63, 1, "always"), (64, 1, "always"), (65, 1, "always"), (80, 1, "always"),
-             (128, 1, "always"), (128, 2, "always"), (128, 4, "always"), (65, 1, "onchange")]
-        for k, s, m in cases:
+             (128, 1, "always"), (128, 2, "always"), (128, 4, "always"), (65, 1, "onchange"), (128, 1, "onchange"), (128, 1, "onchange", 64),
+             (128, 1, "always", 64), (65, 1, "onchange", 64), (64, 1, "onchange", 63), (128, 1, "onchange", 127)]
+        for k, s, m, *cf in cases:
             port += 1
-            print(f"--- probe K={k} syncs={s} mode={m}", flush=True)
-            p = run_probe(args, outroot, k, s, m, port)
+            cf = cf[0] if cf else 0
+            print(f"--- probe K={k} syncs={s} mode={m} change_from={cf}", flush=True)
+            p = run_probe(args, outroot, k, s, m, port, cf)
             probes.append(p)
             print("   ", p)
     (outroot / "summary.json").write_text(json.dumps({"env": env, "runs": results, "probe": probes}, indent=2))

@@ -52,7 +52,8 @@ public class ProbeRole : IRole
     {
         if (!_server || !_connected) return;
         _tick++;
-        for (var i = 0; i < _k; i++) _probe.SetP(i, i + 1 + _tick);
+        var from = _cfg.Int("change-from", 0);
+        for (var i = 0; i < _k; i++) _probe.SetP(i, i >= from ? i + 1 + _tick : i + 1);
     }
 
     public void Frame(double dt)
@@ -81,10 +82,11 @@ public class ProbeRole : IRole
     void Finish(bool connected)
     {
         var live = new List<int>(); var stuck = new List<int>();
-        for (var i = 0; i < _k; i++) (_changes[i] >= 10 ? live : stuck).Add(i);
-        Proc.WriteJson(Path.Combine(_cfg.Str("out", "out"), $"probe_k{_k}_s{_s}_{_cfg.Str("sync-mode", "always")}.json"), new Dictionary<string, object>
+        var from = _cfg.Int("change-from", 0);
+        for (var i = from; i < _k; i++) (_changes[i] >= 10 ? live : stuck).Add(i);
+        Proc.WriteJson(Path.Combine(_cfg.Str("out", "out"), $"probe_k{_k}_s{_s}_{_cfg.Str("sync-mode", "always")}_c{_cfg.Int("change-from", 0)}.json"), new Dictionary<string, object>
         {
-            ["k"] = _k, ["syncs"] = _s, ["sync_mode"] = _cfg.Str("sync-mode", "always"), ["connected"] = connected,
+            ["k"] = _k, ["syncs"] = _s, ["change_from"] = from, ["sync_mode"] = _cfg.Str("sync-mode", "always"), ["connected"] = connected,
             ["watched_properties"] = _k, ["properties_updating"] = live.Count, ["properties_stuck"] = stuck.Count,
             ["first_stuck_index"] = stuck.Count > 0 ? stuck[0] : -1,
             ["updating_indices_max"] = live.Count > 0 ? live.Max() : -1,

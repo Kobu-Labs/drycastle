@@ -28,7 +28,7 @@ public static class Wire
 
     public struct Ent
     {
-        public ushort X, Y, Z, Yaw; public sbyte Vx, Vy, Vz; public bool Valid; public int LastTick;
+        public ushort X, Y, Z, Yaw; public sbyte Vx, Vy, Vz; public bool Valid; public int LastFull;
     }
 
     public static Ent Quantise(NetPlayer p, Vector3 bmin)

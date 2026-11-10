@@ -26,7 +26,7 @@ public class ServerCore
     readonly double _joinTimeout, _warmup, _seconds;
     readonly string _out;
     readonly Window _win = new();
-    readonly List<double> _frameBusyMs = new(), _tickWorkMs = new();
+    readonly List<double> _frameBusyMs = new(), _tickWorkMs = new(), _frameProcMs = new(), _framePhysMs = new();
     readonly List<float[]> _histPos = new();
     readonly List<int> _histTick = new();
     readonly List<double> _histStamp = new();
@@ -130,7 +130,9 @@ public class ServerCore
         if (Measuring)
         {
             // previous frame's process + physics time as measured by the engine (includes network poll/replication)
-            _frameBusyMs.Add((Performance.GetMonitor(Performance.Monitor.TimeProcess) + Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess)) * 1000.0);
+            var pr = Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000.0;
+            var ph = Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000.0;
+            _frameProcMs.Add(pr); _framePhysMs.Add(ph); _frameBusyMs.Add(pr + ph);
             _framesInWindow++;
         }
         switch (_st)
@@ -186,6 +188,7 @@ public class ServerCore
             ["ticks_in_window"] = _ticksInWindow, ["achieved_tick_hz"] = _ticksInWindow / Math.Max(_win.Wall, 1e-9),
             ["frames_in_window"] = _framesInWindow,
             ["frame_busy_ms"] = Stats.Summary(_frameBusyMs),
+            ["frame_process_ms"] = Stats.Summary(_frameProcMs), ["frame_physics_ms"] = Stats.Summary(_framePhysMs),
             ["frames_over_33ms"] = _frameBusyMs.Count(x => x > 33.3),
             ["tick_work_ms"] = Stats.Summary(_tickWorkMs),
             ["map_chunks"] = Map.Stats.ChunksLoaded, ["map_colliders"] = Map.Stats.CollidersBuilt,
