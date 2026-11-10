@@ -5,15 +5,23 @@ eastwards and local y northwards. The axes stay those of EPSG:5514 (they are rot
 degrees from true north by the Krovak grid convergence); we do not re-orient them.
 """
 
+import functools
 from dataclasses import dataclass
 
-from pyproj import Transformer
 from shapely import transform
 from shapely.geometry.base import BaseGeometry
 
 WGS84 = "EPSG:4326"
 SJTSK = "EPSG:5514"
-_to_sjtsk = Transformer.from_crs(WGS84, SJTSK, always_xy=True)
+
+
+@functools.cache
+def _transformer():
+    """WGS84 -> S-JTSK; built on first use because importing pyproj is slow."""
+    from pyproj import Transformer
+
+    return Transformer.from_crs(WGS84, SJTSK, always_xy=True)
+
 
 # Coordinates are rounded to a millimetre so that outputs are byte-stable across runs.
 DECIMALS = 3
@@ -30,14 +38,14 @@ class Frame:
 
     @classmethod
     def at(cls, lon: float, lat: float) -> "Frame":
-        x, y = _to_sjtsk.transform(lon, lat)
+        x, y = _transformer().transform(lon, lat)
         return cls(lon, lat, x, y)
 
     def to_local(self, geom: BaseGeometry) -> BaseGeometry:
         """Reproject a WGS84 (lon, lat) geometry to local metres."""
 
         def convert(coords):  # coords: (n, 2) array
-            x, y = _to_sjtsk.transform(coords[:, 0], coords[:, 1])
+            x, y = _transformer().transform(coords[:, 0], coords[:, 1])
             out = coords.copy()
             out[:, 0] = (x - self.origin_x).round(DECIMALS)
             out[:, 1] = (y - self.origin_y).round(DECIMALS)
@@ -60,5 +68,5 @@ def box_to_sjtsk(west: float, south: float, east: float, north: float, steps: in
         + [(east - t * (east - west), north) for t in ts]
         + [(west, north - t * (north - south)) for t in ts]
     )
-    xs, ys = _to_sjtsk.transform([p[0] for p in ring], [p[1] for p in ring])
+    xs, ys = _transformer().transform([p[0] for p in ring], [p[1] for p in ring])
     return Polygon(list(zip(xs, ys, strict=True)))

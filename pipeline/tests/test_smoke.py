@@ -44,3 +44,7 @@ def test_force_flag_reaches_fetch(fake_fetch: list[bool]) -> None:
     assert cli.main(["fetch", "--force"]) == 0
     assert cli.main(["fetch"]) == 0
     assert fake_fetch == [True, False]
+
+
+def test_cli_stage_names_match_stages() -> None:
+    assert list(cli.STAGE_NAMES) == list(STAGES)

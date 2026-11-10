@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: setup test fetch normalise parcels rules terrain roads props export preview map viewer viewer-smoke viewer-shot assets-check netspike netspike-quick lint
+.PHONY: setup test fetch normalise parcels rules terrain roads props export parcel-run preview map viewer viewer-smoke viewer-shot assets-check netspike netspike-quick lint
 
 setup:
 	cd pipeline && uv sync
@@ -32,6 +32,12 @@ props:
 
 export:
 	cd pipeline && uv run python -m suchohrad_pipeline export --area $(AREA)
+
+# PARCEL=P-0412 [GROUP=G-0001] [OUT=file.json]: fences and trees of one parcel as JSON (stdout by default)
+PARCEL_ARGS = $(if $(PARCEL),--parcel $(PARCEL),) $(if $(GROUP),--group $(GROUP),) $(if $(OUT),--out $(abspath $(OUT)),)
+
+parcel-run:
+	cd pipeline && uv run python -m suchohrad_pipeline parcel-run --area $(AREA) $(PARCEL_ARGS)
 
 EXAG ?= 3
 
