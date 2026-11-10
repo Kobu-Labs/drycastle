@@ -76,6 +76,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="parcel-run: write the JSON fragment here instead of stdout",
     )
+    parser.add_argument(
+        "--glb",
+        metavar="PATH",
+        default=None,
+        help="parcel-run: also write a GLB with the parcels' props nodes (chunk-file frame)",
+    )
     return parser
 
 
@@ -90,6 +96,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             area=args.area,
             edits=args.edits,
             out=args.out,
+            glb=args.glb,
         )
     from suchohrad_pipeline.stages import STAGES
 

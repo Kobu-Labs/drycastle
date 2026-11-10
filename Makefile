@@ -33,8 +33,9 @@ props:
 export:
 	cd pipeline && uv run python -m suchohrad_pipeline export --area $(AREA)
 
-# PARCEL=P-0412 [GROUP=G-0001] [OUT=file.json]: fences and trees of one parcel as JSON (stdout by default)
-PARCEL_ARGS = $(if $(PARCEL),--parcel $(PARCEL),) $(if $(GROUP),--group $(GROUP),) $(if $(OUT),--out $(abspath $(OUT)),)
+# PARCEL=P-0412 [GROUP=G-0001] [OUT=file.json] [GLB=file.glb]: fences and trees of one parcel as JSON
+# (stdout by default), optionally also as a GLB with parcel_<ID>_props nodes
+PARCEL_ARGS = $(if $(PARCEL),--parcel $(PARCEL),) $(if $(GROUP),--group $(GROUP),) $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb $(abspath $(GLB)),)
 
 parcel-run:
 	cd pipeline && uv run python -m suchohrad_pipeline parcel-run --area $(AREA) $(PARCEL_ARGS)

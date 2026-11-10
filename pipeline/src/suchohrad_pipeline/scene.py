@@ -14,7 +14,7 @@ import shapely
 
 from suchohrad_pipeline.buildings import hex_to_rgb
 from suchohrad_pipeline.meshes import Mesh, building_mesh, collision_mesh
-from suchohrad_pipeline.propmeshes import fence_mesh, trees_mesh
+from suchohrad_pipeline.propmeshes import fence_mesh, parcel_props_meshes, trees_mesh
 from suchohrad_pipeline.roads import road_mesh
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 from suchohrad_pipeline.terrain import Terrain, load_terrain
@@ -57,12 +57,14 @@ class MapScene:
     building_elevation: dict[str, float] = field(default_factory=dict)
     parcels: dict[Chunk, list[tuple[str, Mesh, Mesh]]] = field(default_factory=dict)
     nodes: dict[Chunk, dict[str, Mesh]] = field(default_factory=dict)  # terrain, roads, props, ...
+    # fences and trees of one parcel (visual, collision), in the parcel's own chunk
+    parcel_props: dict[Chunk, list[tuple[str, Mesh, Mesh]]] = field(default_factory=dict)
     graph: dict | None = None
     props: dict | None = None
     spawns: dict | None = None
 
     def chunks(self) -> list[Chunk]:
-        return sorted(set(self.parcels) | set(self.nodes))
+        return sorted(set(self.parcels) | set(self.nodes) | set(self.parcel_props))
 
 
 def _by_chunk(mesh: Mesh, chunk_m: float) -> dict[Chunk, Mesh]:
@@ -145,8 +147,25 @@ def build_scene(
         pcfg = load_section("props", rules_path, area)
         fences = [{**s, "za": s["za"] * k, "zb": s["zb"] * k} for s in scene.props["fences"]]
         trees = [{**tr, "z": tr["z"] * k} for tr in scene.props["trees"]]
-        by_fence = _group(fences, lambda s: _chunk(s["a"], chunk_m))
-        by_tree = _group(trees, lambda tr: _chunk((tr["x"], tr["y"]), chunk_m))
+        chunk_of_parcel = {p["id"]: tuple(p["chunk"]) for p in parcels_doc["parcels"]}
+
+        def owned(it: dict) -> bool:  # OSM trees have no parcel (null or absent): chunk level
+            return it.get("parcel") in chunk_of_parcel
+
+        by_parcel_f = _group([s for s in fences if owned(s)], lambda s: s["parcel"])
+        by_parcel_t = _group([t for t in trees if owned(t)], lambda t: t["parcel"])
+        for pid in sorted(set(by_parcel_f) | set(by_parcel_t)):
+            visual, collision = parcel_props_meshes(
+                by_parcel_f.get(pid, []), by_parcel_t.get(pid, []), pcfg
+            )
+            if visual.face_count or collision.face_count:
+                scene.parcel_props.setdefault(chunk_of_parcel[pid], []).append(
+                    (pid, visual, collision)
+                )
+        by_fence = _group([s for s in fences if not owned(s)], lambda s: _chunk(s["a"], chunk_m))
+        by_tree = _group(
+            [t for t in trees if not owned(t)], lambda t: _chunk((t["x"], t["y"]), chunk_m)
+        )
         for key in sorted(set(by_fence) | set(by_tree)):
             visual = Mesh.concat(
                 [fence_mesh(by_fence.get(key, []), pcfg["fences"]),

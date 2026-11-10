@@ -19,7 +19,10 @@ from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 from suchohrad_pipeline.scene import build_scene
 
 DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
-MAP_VERSION_BASE = "0.1.0"
+# 0.2.0: fences and trees of a parcel moved from the chunk-level props / props_collision nodes into
+# per-parcel nodes (props_layout "per_parcel"). Pre-1.0, a node-layout change bumps the minor part.
+MAP_VERSION_BASE = "0.2.0"
+PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
                "props.json", "spawns.json")
@@ -46,6 +49,16 @@ def to_trimesh(mesh: Mesh) -> trimesh.Trimesh:
         vertex_colors=np.repeat(rgba, 3, axis=0),
         process=False,
     )
+
+
+def parcel_props_nodes(items: list[tuple[str, Mesh, Mesh]]) -> dict[str, Mesh]:
+    """``parcel_<ID>_props`` (visual) and ``parcel_<ID>_props_collision`` nodes; empty ones omitted."""
+    out: dict[str, Mesh] = {}
+    for pid, visual, collision in sorted(items, key=lambda t: t[0]):
+        for suffix, mesh in (("props", visual), ("props_collision", collision)):
+            if mesh.face_count:
+                out[f"parcel_{pid}_{suffix}"] = mesh
+    return out
 
 
 def chunk_name(ix: int, iy: int) -> str:
@@ -111,7 +124,10 @@ def run_export(
     chunk_entries = []
     for ix, iy in scene.chunks():
         items = sorted(scene.parcels.get((ix, iy), []), key=lambda t: t[0])
-        extra = scene.nodes.get((ix, iy), {})
+        extra = {
+            **scene.nodes.get((ix, iy), {}),
+            **parcel_props_nodes(scene.parcel_props.get((ix, iy), [])),
+        }
         rel = f"chunks/{chunk_name(ix, iy)}.glb"
         data = build_chunk_scene(items, extra).export(file_type="glb")
         (out_dir / rel).write_bytes(data)
@@ -180,6 +196,7 @@ def run_export(
         "map_version": f"{MAP_VERSION_BASE}-{area}",
         "format_version": ARTIFACT_FORMAT_VERSION,
         "chunk_size_m": parcels_doc["chunk_size_m"],
+        "props_layout": PROPS_LAYOUT,
         "gltf_axes": "Y-up: x east, y up, z -north, metres, shared slice-origin frame",
         "chunks": chunk_entries,
         "attribution": raw_manifest.get("attribution", []),

@@ -90,3 +90,10 @@ cap neighbours or the lower-ID neighbours are left out.
 Separately, on the real village the fragment was compared with the full props stage for every one of the 1165 parcels
 (with the edits described above, cap 150): fences and trees were identical for all of them. The full props output of
 the refactored `props.py` is byte-identical to the `data/village/work/props.json` that was generated before the change.
+
+## `--glb` (issue #40, part 4a)
+
+`parcel-run --glb PATH` also writes a GLB with the target parcels' `parcel_<ID>_props` and
+`parcel_<ID>_props_collision` nodes (same mesh code and glTF axes as the chunk export, chunk-file frame) and adds
+`glb` and `replaces` to the fragment. It imports trimesh, so it costs a little more start-up: P-0349 (large fenced
+plot) took 0.76 s and P-0578 (largest forest) 0.88 s end to end with `uv run` (warm), still inside the 2 s target.

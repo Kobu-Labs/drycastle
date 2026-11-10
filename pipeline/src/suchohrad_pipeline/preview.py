@@ -174,6 +174,7 @@ def _layers(scene: MapScene) -> list[Mesh]:
         return Mesh.concat([n[name] for n in scene.nodes.values() if name in n])
 
     objects = [v for chunk in scene.parcels.values() for _, v, _ in chunk]
+    objects += [v for chunk in scene.parcel_props.values() for _, v, _ in chunk]
     objects.append(node("props"))
     return [node("terrain"), node("roads"), Mesh.concat(objects)]
 

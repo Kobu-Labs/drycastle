@@ -7,6 +7,9 @@ namespace Suchohrad.MapLoader;
 /// Shared runtime loader for the Suchohrad base map. Loads a map folder (manifest.json,
 /// parcels.json, spawns.json, roads.json, chunks/*.glb) with Godot's runtime glTF importer,
 /// turns collision meshes into static trimesh colliders and supports parcel replacement.
+/// Node names in a chunk: parcel_&lt;ID&gt;_visual / _collision (buildings), parcel_&lt;ID&gt;_props /
+/// _props_collision (fences and trees of that parcel), terrain, terrain_collision, roads, and
+/// props / props_collision (items without a parcel, e.g. OSM trees).
 /// Independent of any mod. Axes: map x east, y north; Godot x east, y up, z = -north.
 /// </summary>
 public sealed class MapLoader
@@ -16,6 +19,10 @@ public sealed class MapLoader
     readonly Dictionary<string, Node3D> _chunkRoots = new();
     readonly Dictionary<string, Node3D> _visuals = new();
     readonly Dictionary<string, List<CollisionShape3D>> _shapes = new();
+    // Per-parcel fences and trees (parcel_<ID>_props / parcel_<ID>_props_collision), by parcel ID.
+    // Kept for the later runtime swap of one parcel's props; ReplaceParcel leaves them alone.
+    readonly Dictionary<string, MeshInstance3D> _propsVisuals = new();
+    readonly Dictionary<string, List<CollisionShape3D>> _propsShapes = new();
     readonly Dictionary<string, Node3D> _replacements = new();
     readonly List<(Vector3[] faces, Aabb box)> _terrain = new();
     float _meanTerrainY = float.NaN;
@@ -25,6 +32,9 @@ public sealed class MapLoader
     public string MapVersion { get; private set; } = "";
     public string RoadsJson { get; private set; } = "";
     public LoadStats Stats { get; } = new();
+    /// <summary>Per-parcel props visuals and colliders by parcel ID (for the runtime props swap).</summary>
+    public IReadOnlyDictionary<string, MeshInstance3D> PropsVisuals => _propsVisuals;
+    public IReadOnlyDictionary<string, List<CollisionShape3D>> PropsShapes => _propsShapes;
     public IReadOnlyDictionary<string, ParcelInfo> Parcels => _parcels;
     public IReadOnlyList<SpawnPoint> SpawnPoints => _spawns;
 
@@ -118,7 +128,11 @@ public sealed class MapLoader
             }
             FixMaterials(mi);
             Stats.Triangles += TriangleCount(mi.Mesh);
-            if (name.StartsWith("parcel_") && name.EndsWith("_visual"))
+            if (name.StartsWith("parcel_") && name.EndsWith("_props"))
+            {
+                _propsVisuals[name["parcel_".Length..^"_props".Length]] = mi;
+            }
+            else if (name.StartsWith("parcel_") && name.EndsWith("_visual"))
             {
                 var id = name["parcel_".Length..^"_visual".Length];
                 _visuals[id] = mi;
@@ -179,7 +193,13 @@ public sealed class MapLoader
             var faces = shape.GetFaces();
             _terrain.Add((faces, FacesAabb(faces)));
         }
-        else if (name.StartsWith("parcel_"))
+        else if (name.StartsWith("parcel_") && name.EndsWith("_props_collision"))
+        {
+            var id = name["parcel_".Length..^"_props_collision".Length];
+            if (!_propsShapes.TryGetValue(id, out var l)) _propsShapes[id] = l = new();
+            l.Add(cs);
+        }
+        else if (name.StartsWith("parcel_") && name.EndsWith("_collision"))
         {
             var id = name["parcel_".Length..^"_collision".Length];
             if (!_shapes.TryGetValue(id, out var l)) _shapes[id] = l = new();

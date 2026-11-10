@@ -181,8 +181,41 @@ public partial class Viewer : Node3D
                      $"collision_off={shapesOff} placed_at_anchor={placed} visual_back={shown} " +
                      $"collision_on={shapesOn} instance_freed={freed}");
         }
+        // per-parcel props nodes: visible visuals, enabled colliders, and a fence blocks the player
+        var pv = _map.PropsVisuals;
+        var ps = _map.PropsShapes;
+        var propsOk = pv.Count > 0 && pv.Values.All(v => v.Visible)
+            && ps.Values.All(l => l.All(c => !c.Disabled));
+        ok &= propsOk;
+        GD.Print($"{(propsOk ? "PASS" : "FAIL")} parcel props: visuals={pv.Count} collider_parcels={ps.Count} " +
+                 $"all_visible_and_enabled={propsOk}");
+        if (ps.Count > 0) ok &= FenceBlocks(ps.Keys.OrderBy(x => x).First());
         GD.Print(ok ? "SMOKE PASS" : "SMOKE FAIL");
         GetTree().Quit(ok ? 0 : 1);
+    }
+
+    // Walk the player at a fence collider's mesh from outside and check it is stopped.
+    bool FenceBlocks(string id)
+    {
+        var cs = _map.PropsShapes[id][0];
+        var faces = ((ConcavePolygonShape3D)cs.Shape).GetFaces();
+        // first triangle with a roughly vertical face: take its centroid, step 1.5 m along the normal
+        for (var i = 0; i + 2 < faces.Length; i += 3)
+        {
+            var n = (faces[i + 1] - faces[i]).Cross(faces[i + 2] - faces[i]).Normalized();
+            if (Mathf.Abs(n.Y) > 0.1f) continue;
+            var c = (faces[i] + faces[i + 1] + faces[i + 2]) / 3f;
+            var from = c + n * 1.5f; from.Y = c.Y;
+            var space = GetViewport().World3D.DirectSpaceState;
+            var q = PhysicsRayQueryParameters3D.Create(from, c - n * 0.5f);
+            q.CollideWithBodies = true;
+            var hit = space.IntersectRay(q);
+            var pass = hit.Count > 0;
+            GD.Print($"{(pass ? "PASS" : "FAIL")} fence collision {id}: ray_hits_fence_collider={pass}");
+            return pass;
+        }
+        GD.Print($"FAIL fence collision {id}: no vertical face");
+        return false;
     }
 
     Node3D? FindVisual(string id) => _map.Root.FindChild($"parcel_{id}_visual", true, false) as Node3D;
