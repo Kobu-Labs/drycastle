@@ -14,5 +14,6 @@ obj/
 .idea/
 .vscode/
 answers.md
-.claude/
+.claude/worktrees/
+.claude/settings.local.json
 pipeline/config/slice.local.yaml
