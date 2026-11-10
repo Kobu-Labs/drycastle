@@ -1,4 +1,4 @@
-.PHONY: setup test fetch normalise parcels rules terrain roads props export preview map viewer viewer-smoke viewer-shot lint
+.PHONY: setup test fetch normalise parcels rules terrain roads props export preview map viewer viewer-smoke viewer-shot netspike netspike-quick lint
 
 setup:
 	cd pipeline && uv sync
@@ -58,6 +58,16 @@ viewer-shot:
 	godot --path godot/viewer --resolution 1600x900 -- --view oblique --screenshot $(abspath out/screens)/oblique.png $(MAP_ARG)
 	godot --path godot/viewer --resolution 1600x900 -- --view street --screenshot $(abspath out/screens)/street.png $(MAP_ARG)
 	godot --path godot/viewer --resolution 1600x900 -- --view player --seed $(SEED) --screenshot $(abspath out/screens)/player.png $(MAP_ARG)
+
+# 64-client netcode spike (see godot/netspike/README in the main README). Needs a map folder:
+# MAP=/path/to/out/map or SUCHOHRAD_MAP. Results go to out/netspike/<timestamp>/.
+NETSPIKE_MAP = $(if $(MAP),--map $(abspath $(MAP)),)
+
+netspike:
+	python3 godot/netspike/run_spike.py $(NETSPIKE_MAP)
+
+netspike-quick:
+	python3 godot/netspike/run_spike.py --quick $(NETSPIKE_MAP)
 
 lint:
 	cd pipeline && uv run ruff check .
