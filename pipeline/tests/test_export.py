@@ -94,8 +94,9 @@ def test_parcels_and_manifest(workspace) -> None:
     assert [p["id"] for p in parcels] == ["P-0001", "P-0002", "P-0003"]
     assert parcels[0]["buildings"] == ["w1"] and parcels[2]["buildings"] == []
     m = json.loads((out / "manifest.json").read_text())
-    assert m["map_version"] == "0.1.0-slice"
+    assert m["map_version"] == "0.2.0-slice"
     assert m["attribution"] == ["A", "B"] and m["inputs"]["raw"] == {"osm.json": "ab"}
+    assert m["props_layout"] == "per_parcel"
     assert "not generated" in m["not_generated"]
     assert not any("time" in k or "date" in k for k in m)
 
@@ -126,10 +127,13 @@ def test_village_area_manifest_and_lighter_props(tmp_path) -> None:
         return run_export(*args[:1], tmp_path / area, *args[2:], area=area)
 
     slice_m, village = counts("slice"), counts("village")
-    assert village["map_version"] == "0.1.0-village"
-    assert slice_m["map_version"] == "0.1.0-slice"
-    assert any("props_collision" in c["triangles"] for c in slice_m["chunks"])
-    assert not any("props_collision" in c["triangles"] for c in village["chunks"])
+    assert village["map_version"] == "0.2.0-village"
+    assert slice_m["map_version"] == "0.2.0-slice"
+    def has_collision(m: dict) -> bool:
+        return any(n.endswith("props_collision") for c in m["chunks"] for n in c["triangles"])
+
+    assert has_collision(slice_m)
+    assert not has_collision(village)
     # the village export is byte-deterministic too
     run_export(*args[:1], tmp_path / "again", *args[2:], area="village")
     files = [p for p in (tmp_path / "village").rglob("*") if p.is_file()]

@@ -109,3 +109,16 @@ def tree_mesh(tree: dict, cfg: dict) -> Mesh:
 
 def trees_mesh(trees: list[dict], cfg: dict) -> Mesh:
     return Mesh.concat([tree_mesh(t, cfg) for t in trees])
+
+
+def parcel_props_meshes(fences: list[dict], trees: list[dict], pcfg: dict) -> tuple[Mesh, Mesh]:
+    """Visual (fence boxes + trees) and collision (fences, only if the rule is on) of one parcel.
+
+    The one place that builds per-parcel prop meshes: the chunk export and ``parcel-run --glb``
+    both call it, so a regenerated parcel matches the baked one triangle for triangle.
+    """
+    visual = Mesh.concat([fence_mesh(fences, pcfg["fences"]), trees_mesh(trees, pcfg["trees"])])
+    collision = (
+        fence_mesh(fences, pcfg["fences"], True) if pcfg["fences"]["collision"] else Mesh.empty()
+    )
+    return visual, collision

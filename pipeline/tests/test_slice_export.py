@@ -26,15 +26,15 @@ def test_chunk_glb_has_all_node_groups(ws) -> None:
     assert [c["file"] for c in manifest["chunks"]] == ["chunks/chunk_0_0.glb"]
     scene = trimesh.load(ws["out"] / "chunks" / "chunk_0_0.glb", force="scene")
     names = sorted(scene.graph.nodes_geometry)
-    assert names == [
+    assert {
         "parcel_P-0001_collision",
         "parcel_P-0001_visual",
-        "props",
-        "props_collision",
         "roads",
         "terrain",
         "terrain_collision",
-    ]
+    } <= set(names)
+    assert any(n.startswith("parcel_") and n.endswith("_props") for n in names)
+    assert any(n.endswith("_props_collision") for n in names)
     tris = manifest["chunks"][0]["triangles"]
     for name in names:
         geom = scene.geometry[scene.graph[name][1]]
@@ -97,3 +97,33 @@ def test_export_is_byte_deterministic_across_runs(ws, tmp_path) -> None:
     assert files == sorted(p.relative_to(second) for p in second.rglob("*") if p.is_file())
     for rel in files:
         assert (first / rel).read_bytes() == (second / rel).read_bytes(), rel
+
+
+def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
+    from suchohrad_pipeline.propmeshes import fence_mesh, trees_mesh
+    from suchohrad_pipeline.rules import load_section
+
+    manifest = export(ws)
+    assert manifest["props_layout"] == "per_parcel"
+    tris = manifest["chunks"][0]["triangles"]
+    props = json.loads((ws["work"] / "props.json").read_text())
+    pcfg = load_section("props", DEFAULT_RULES, "slice")
+    ids = sorted({x["parcel"] for x in props["fences"] + props["trees"] if x.get("parcel")})
+    assert ids and all(f"parcel_{i}_props" in tris for i in ids)
+    # triangle totals equal what the merged chunk-level nodes held before
+    want_visual = fence_mesh(props["fences"], pcfg["fences"]).face_count + trees_mesh(
+        props["trees"], pcfg["trees"]
+    ).face_count
+    want_collision = fence_mesh(props["fences"], pcfg["fences"], True).face_count
+    got_visual = sum(v for n, v in tris.items() if n == "props" or n.endswith("_props"))
+    got_collision = sum(v for n, v in tris.items() if n.endswith("props_collision"))
+    assert got_visual == want_visual > 0
+    assert got_collision == want_collision > 0
+    # fences always have a parcel; OSM trees (no parcel) stay in the chunk-level node
+    assert all(f["parcel"] for f in props["fences"])
+    osm = [t for t in props["trees"] if not t.get("parcel")]
+    assert ("props" in tris) == bool(osm)
+    scene = trimesh.load(ws["out"] / "chunks" / "chunk_0_0.glb", force="scene")
+    for name in tris:
+        if name.endswith("_props") or name.endswith("_props_collision"):
+            assert len(scene.geometry[scene.graph[name][1]].faces) == tris[name]

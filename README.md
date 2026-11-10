@@ -92,7 +92,7 @@ The pipeline runs over two areas around the same centre, chosen with `AREA=slice
 | raw data | `data/raw/` | `data/village/raw/` |
 | work files | `data/work/` | `data/village/work/` |
 | export, previews | `out/map/`, `out/preview/` | `out/village/map/`, `out/village/preview/` |
-| `map_version` | `0.1.0-slice` | `0.1.0-village` |
+| `map_version` | `0.2.0-slice` | `0.2.0-village` |
 
 Add the `village:` section to `pipeline/config/slice.local.yaml` (see `slice.example.yaml`).
 Both areas share the one committed registry `registry/parcels.registry.json`. Fetching the
@@ -209,10 +209,15 @@ chunk that has buildings or terrain; Y-up axes x east, y up, z -north, metres, o
 chunks). Nodes per chunk glb: `parcel_<ID>_visual` (walls and roof, flat per-face vertex colours)
 and `parcel_<ID>_collision` (extruded footprint, no roof detail) for each parcel with buildings;
 `terrain` and `terrain_collision` (flat colours by parcel kind; collision is every second grid
-vertex); `roads`; `props` (fences and trees, visual) and `props_collision` (fences). Also
+vertex); `roads`; `parcel_<ID>_props` (that parcel's fences and trees, visual) and
+`parcel_<ID>_props_collision` (its fences, only when the `fences.collision` rule is on), placed in
+the parcel's own chunk file so one parcel's props can be swapped at runtime; `props` and
+`props_collision` remain only for items without a parcel (OSM trees). The manifest says
+`"props_layout": "per_parcel"`; `map_version` went from `0.1.0` to `0.2.0` for this node-layout
+change (pre-1.0, a node-layout change bumps the minor part). Also
 `parcels.json` (ID, cadastral reference, kind, polygon and anchor in local metres with x east and
 y north, chunk, building IDs), `roads.json`, `spawns.json` and `manifest.json` (map version
-`0.1.0-slice`, chunk list with triangle counts per node, generated parts, terrain grid info,
+`0.2.0-slice`, chunk list with triangle counts per node, generated parts, terrain grid info,
 attribution, input hashes including the work files). The output has no timestamp and is
 byte-identical for identical input.
 
