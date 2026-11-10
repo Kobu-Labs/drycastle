@@ -16,6 +16,9 @@ namespace Suchohrad.Shooter;
 ///   --bazooka-smoke           server: same flat arena, judges the bazooka scenario
 ///   --bazooka-bot a|b         client: scripted bazooka smoke role (a shoots, b is the target)
 ///   --weapons-bot a|b         client: scripted weapons smoke role (a shoots, b stands still)
+///   --menu-shots DIR          render main menu, connect (empty, error), settings tabs, pause, loading and a dialog at 1280x720 and 3840x2160 into DIR as PNGs, then exit (needs a display)
+///   --offline                 client: skip the menus and walk the map locally (the old dev view)
+///   (client with a display and none of the smoke flags starts at the main menu; --connect host:port --name N joins straight away)
 ///   --hud-shots DIR           render the HUD with fake data at 1280x720 and 3840x2160 into DIR as PNGs, then exit (needs a display)
 ///   --smoke-move              client only: scripted movement check on the map collision (SHOOTER_SMOKE_MOVE_OK, exit 0; else exit 2)
 ///   --smoke                   load everything, print SHOOTER_SMOKE_OK and exit 0 (exit 2 on failure)
@@ -36,7 +39,16 @@ public partial class Shooter : Node3D
         var role = cfg.Str("role", "client");
         _smoke = cfg.Flag("smoke");
         _smokeMove = cfg.Flag("smoke-move");
+        _cfg = cfg;
+        GameSettings.Apply(GameSettings.Current, false);
         if (cfg.Str("hud-shots") != "") { _ = HudShots.Run(this, cfg.Str("hud-shots")); return; }
+        if (cfg.Str("menu-shots") != "") { _ = MenuShots.Run(this, cfg.Str("menu-shots")); return; }
+        if (role == "client" && !_smoke && !_smokeMove && !cfg.Flag("offline") && !cfg.Flag("headless-bot") && DisplayServer.GetName() != "headless")
+        {
+            GameSettings.RestoreWindowSize();
+            StartMenus(cfg);
+            return;
+        }
         try
         {
             if (role is not ("server" or "client")) throw new InvalidOperationException($"unknown role {role} (server|client)");
@@ -66,6 +78,97 @@ public partial class Shooter : Node3D
             GD.Print("SHOOTER_SMOKE_OK");
             GetTree().Quit(0);
         }
+    }
+
+    // ---- menu flow: Boot -> Main menu -> Play/connect -> Loading -> Game <-> Pause ----
+
+    Config _cfg = null!;
+    UiShell _shell = null!;
+    NetClient? _client;
+    bool _mapLoaded, _worldLit;
+
+    void StartMenus(Config cfg)
+    {
+        _shell = new UiShell { PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null)) };
+        AddChild(_shell);
+        GD.Print("SHOOTER_MENU role=client");
+        var target = cfg.Str("connect");
+        if (target == "") { ShowMain(); return; }
+        var (host, p) = ConnectForm.Split(target);
+        _ = BeginGame(host, int.TryParse(p, out var port) ? port : ConnectForm.DefaultPort, cfg.Str("name", "player"));
+    }
+
+    void ShowMain() =>
+        _shell.Reset(new MainMenu(() => _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n))), () => _shell.Push(new SettingsScreen(false))));
+
+    async Task Step(LoadingScreen ld, string key, float f)
+    {
+        ld.Set(key, f);
+        for (var i = 0; i < 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+
+    async Task BeginGame(string host, int port, string name)
+    {
+        var ld = new LoadingScreen($"{host}:{port}");
+        _shell.SetGameActive(false);
+        _shell.Reset(ld);
+        string? failure = null;
+        try
+        {
+            await Step(ld, "loading.data", 0.05f);
+            _data ??= LoadData();
+            await Step(ld, "loading.map", 0.15f); // one blocking step: MapLoader.Load has no incremental API
+            if (!_mapLoaded) { LoadMap(_cfg); _mapLoaded = true; }
+            await Step(ld, "loading.world", 0.75f);
+            if (!_worldLit) { AddLightAndSky(); _worldLit = true; }
+            await Step(ld, "loading.connect", 0.85f);
+            var done = new TaskCompletionSource<string?>();
+            var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
+            var client = _client = new NetClient
+            {
+                World = this, Host = host, Port = port, PlayerName = name, KillY = killY, Weapons = _data.Weapons,
+                OnWelcomed = () => done.TrySetResult(null),
+            };
+            client.OnFailed = (why, joined) =>
+            {
+                if (!joined) done.TrySetResult(Strings.F("connect.err.join", $"{host}:{port}", why));
+                else if (_client == client) LeaveMatch(Strings.F("connect.err.lost", $"{host}:{port}", why));
+            };
+            AddChild(client);
+            failure = await done.Task;
+        }
+        catch (Exception e)
+        {
+            failure = e.Message;
+            GD.PrintErr($"start failed: {e.Message}");
+        }
+        if (failure != null)
+        {
+            DropClient();
+            ShowMain();
+            _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n), failure));
+            return;
+        }
+        ld.Set("loading.ready", 1f);
+        _shell.SetGameActive(true);
+        _shell.Reset();
+        GD.Print("SHOOTER_GAME_STARTED");
+    }
+
+    void DropClient()
+    {
+        if (_client == null) return;
+        _client.Teardown();
+        _client.QueueFree();
+        _client = null;
+    }
+
+    /// <summary>Back to the main menu; with a message when the server dropped us (what happened and what to do).</summary>
+    void LeaveMatch(string? error)
+    {
+        DropClient();
+        ShowMain();
+        _shell.Toast(error == null ? Strings.T("disconnect.done") : error + " " + Strings.T("connect.err.help.lost"), error == null ? ToastKind.Info : ToastKind.Error);
     }
 
     static GameData LoadData()

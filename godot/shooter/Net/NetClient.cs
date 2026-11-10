@@ -85,9 +85,28 @@ public partial class NetClient : Node
 
     public override void _ExitTree() => _conn.Destroy();
 
+    /// <summary>Menu mode: raised instead of quitting when the connection fails or drops (the reason is short, for the error message).</summary>
+    public Action<string, bool>? OnFailed;
+    /// <summary>Menu mode: raised once the server's welcome arrived (the match is joined).</summary>
+    public Action? OnWelcomed;
+
+    /// <summary>Leaves the server and removes everything this client put into the world (back to the main menu).</summary>
+    public void Teardown()
+    {
+        _done = true;
+        if (_peer != null) { _peer.PeerDisconnect(); _conn.Flush(); _peer = null; }
+        foreach (var r in _remotes.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
+        _remotes.Clear();
+        foreach (var r in _rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
+        _rockets.Clear();
+        if (_me != null && GodotObject.IsInstanceValid(_me)) _me.QueueFree();
+        _me = null;
+    }
+
     void Fail(string why)
     {
         GD.PrintErr($"client: {why}");
+        if (OnFailed != null) { var joined = _welcomed; _done = true; OnFailed(why, joined); return; }
         if (Bot) { GD.Print("SHOOTER_NET_CLIENT_FAIL"); GetTree().Quit(2); }
         else GetTree().Quit(2);
         _done = true;
@@ -145,11 +164,12 @@ public partial class NetClient : Node
         {
             case WelcomeMsg w:
                 _myId = w.PlayerId; _welcomed = true;
-                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, KillY = KillY };
+                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY };
                 World.AddChild(_me);
                 if (WeaponsBot != "") NetServer.AddArenaColliders(World);
                 if (Bot) _me.InputOverride = new MoveInput { SpeedScale = 1 };
                 HudWelcome();
+                OnWelcomed?.Invoke();
                 GD.Print($"client: welcome, id {_myId}, server tick {w.ServerTick}");
                 break;
             case JoinMsg j: _names[j.PlayerId] = j.Name; GD.Print($"client: {j.Name} #{j.PlayerId} joined"); break;
@@ -462,7 +482,7 @@ public partial class NetClient : Node
     {
         if (Dead || Input.MouseMode != Input.MouseModeEnum.Captured) return;
         for (var k = 0; k < 4; k++)
-            if (Input.IsKeyPressed((Key)((int)Key.Key1 + k))) _wantSlot = k + 1;
+            if (Input.IsActionPressed($"slot_{k + 1}")) _wantSlot = k + 1;
     }
 
     public override void _UnhandledInput(InputEvent e)

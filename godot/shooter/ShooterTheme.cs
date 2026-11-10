@@ -27,9 +27,14 @@ public static class ShooterTheme
     public static readonly Color Text = new(0.96f, 0.97f, 0.98f);
     public static readonly Color Dim = new(0.76f, 0.79f, 0.85f);
     public static readonly Color Accent = new(0.40f, 0.82f, 1f);
-    public static readonly Color Good = new(0.45f, 0.90f, 0.55f);
+    public static readonly Color Hover = new(0.19f, 0.23f, 0.31f, 0.95f);
+    public static readonly Color Backdrop = new(0.05f, 0.06f, 0.09f);
+    public static readonly Color DisabledText = new(0.58f, 0.61f, 0.68f);
+    // good / danger swap to a blue / orange pair (distinguishable with red-green colour blindness) when the accessibility flag is on
+    public static bool ColorBlind { get; private set; }
+    public static Color Good => ColorBlind ? new Color(0.35f, 0.70f, 1f) : new Color(0.45f, 0.90f, 0.55f);
     public static readonly Color Warn = new(1f, 0.74f, 0.30f);
-    public static readonly Color Danger = new(1f, 0.42f, 0.38f);
+    public static Color Danger => ColorBlind ? new Color(1f, 0.62f, 0.10f) : new Color(1f, 0.42f, 0.38f);
     public static readonly Color Outline = new(0f, 0f, 0f, 0.85f);
     public static readonly Color Scrim = new(0f, 0f, 0f, 0.60f);
 
@@ -47,7 +52,21 @@ public static class ShooterTheme
     public static Theme Build()
     {
         if (_theme != null) return _theme;
-        var t = new Theme { DefaultFontSize = FontBody };
+        _theme = new Theme { DefaultFontSize = FontBody };
+        Populate(_theme);
+        return _theme;
+    }
+
+    /// <summary>Switches the palette flag and refills the shared Theme in place (every control using it restyles).</summary>
+    public static void SetColorBlind(bool on)
+    {
+        if (ColorBlind == on) return;
+        ColorBlind = on;
+        if (_theme != null) Populate(_theme);
+    }
+
+    static void Populate(Theme t)
+    {
 
         t.SetColor("font_color", "Label", Text);
         t.SetColor("font_outline_color", "Label", Outline);
@@ -80,8 +99,94 @@ public static class ShooterTheme
         Bar(t, "HealthBarLow", Danger);
         Bar(t, "ReloadBar", Warn);
         t.SetFontSize("font_size", "ProgressBar", FontSmall);
-        _theme = t;
-        return t;
+        Menu(t);
+    }
+
+    static StyleBoxFlat Ring(int pad = Space * 1) => new StyleBoxFlat { DrawCenter = false, BorderColor = Accent }.With(b => { b.SetBorderWidthAll(BorderStrong); b.SetCornerRadiusAll(Radius); b.SetContentMarginAll(pad); });
+
+    static StyleBoxFlat With(this StyleBoxFlat b, Action<StyleBoxFlat> f) { f(b); return b; }
+
+    /// <summary>Menu controls: every state is distinct (normal, hover, pressed, focus ring, disabled); focus is a thick accent ring.</summary>
+    static void Menu(Theme t)
+    {
+        const int pad = 12;
+        foreach (var type in new[] { "Button", "OptionButton", "CheckBox" })
+        {
+            t.SetColor("font_color", type, Text);
+            t.SetColor("font_hover_color", type, Text);
+            t.SetColor("font_pressed_color", type, Text);
+            t.SetColor("font_hover_pressed_color", type, Text);
+            t.SetColor("font_focus_color", type, Text);
+            t.SetColor("font_disabled_color", type, DisabledText);
+            t.SetFontSize("font_size", type, FontBody);
+            t.SetStylebox("focus", type, Ring(pad));
+        }
+        foreach (var type in new[] { "Button", "OptionButton" })
+        {
+            t.SetStylebox("normal", type, Box(Raised, pad, Line));
+            t.SetStylebox("hover", type, Box(Hover, pad, Accent));
+            t.SetStylebox("pressed", type, Box(Active, pad, Accent, BorderStrong));
+            t.SetStylebox("hover_pressed", type, Box(Active, pad, Accent, BorderStrong));
+            t.SetStylebox("disabled", type, Box(Surface, pad, new Color(Line, 0.4f)));
+        }
+        t.SetConstant("separation", "VBoxContainer", Space);
+        t.SetConstant("separation", "HBoxContainer", Space);
+        t.SetConstant("h_separation", "Button", Space);
+        t.SetConstant("h_separation", "CheckBox", Space);
+        VariationButton(t, "MenuPrimary", Box(Active, pad, Accent), Box(Hover, pad, Accent, BorderStrong), Box(Raised, pad, Accent, BorderStrong));
+        VariationButton(t, "MenuDanger", Box(Raised, pad, Danger), Box(Hover, pad, Danger), Box(Active, pad, Danger, BorderStrong));
+        VariationButton(t, "MenuTab", Box(Surface, pad, Line), Box(Hover, pad, Accent), Box(Active, pad, Accent, BorderStrong));
+        t.SetStylebox("focus", "MenuTab", Ring(pad));
+        t.SetStylebox("hover_pressed", "MenuTab", Box(Active, pad, Accent, BorderStrong));
+        t.SetStylebox("normal", "CheckBox", Box(Colors.Transparent, Space / 2, null, 0));
+        t.SetStylebox("hover", "CheckBox", Box(Hover, Space / 2, null, 0));
+        t.SetStylebox("pressed", "CheckBox", Box(Colors.Transparent, Space / 2, null, 0));
+        t.SetStylebox("hover_pressed", "CheckBox", Box(Hover, Space / 2, null, 0));
+        t.SetStylebox("disabled", "CheckBox", Box(Colors.Transparent, Space / 2, null, 0));
+
+        t.SetStylebox("normal", "LineEdit", Box(Backdrop, pad, Line));
+        t.SetStylebox("focus", "LineEdit", Box(Backdrop, pad, Accent, BorderStrong));
+        t.SetStylebox("read_only", "LineEdit", Box(Surface, pad, Line));
+        t.SetColor("font_color", "LineEdit", Text);
+        t.SetColor("font_placeholder_color", "LineEdit", Dim);
+        t.SetColor("caret_color", "LineEdit", Accent);
+        t.SetColor("selection_color", "LineEdit", Active);
+        t.SetFontSize("font_size", "LineEdit", FontBody);
+
+        t.SetStylebox("slider", "HSlider", Box(Backdrop, 0, Line, Border, 3).With(b => b.ContentMarginTop = b.ContentMarginBottom = 4));
+        t.SetStylebox("grabber_area", "HSlider", Box(Active, 0, null, 0, 3));
+        t.SetStylebox("grabber_area_highlight", "HSlider", Box(Accent, 0, null, 0, 3));
+        t.SetStylebox("focus", "HSlider", Ring(2));
+        t.SetConstant("center_grabber", "HSlider", 1);
+
+        t.SetStylebox("panel", "PopupMenu", Box(Raised, Space, Accent));
+        t.SetStylebox("hover", "PopupMenu", Box(Active, Space / 2, null, 0));
+        t.SetColor("font_color", "PopupMenu", Text);
+        t.SetColor("font_hover_color", "PopupMenu", Text);
+        t.SetFontSize("font_size", "PopupMenu", FontBody);
+
+        PanelVariation(t, "MenuBackdrop", Box(Backdrop, 0, null, 0, 0));
+        PanelVariation(t, "MenuCard", Box(Surface with { A = 0.94f }, Space * 3, Line));
+        PanelVariation(t, "MenuToast", Box(Raised with { A = 0.97f }, Space * 2, Accent, BorderStrong));
+        PanelVariation(t, "MenuToastWarn", Box(Raised with { A = 0.97f }, Space * 2, Warn, BorderStrong));
+        PanelVariation(t, "MenuToastError", Box(Raised with { A = 0.97f }, Space * 2, Danger, BorderStrong));
+        PanelVariation(t, "MenuRow", Box(Raised with { A = 0.6f }, Space, null, 0));
+        t.SetStylebox("scroll", "VScrollBar", Box(new Color(0, 0, 0, 0.4f), 0, null, 0, 2).With(b => b.ContentMarginLeft = b.ContentMarginRight = 6));
+        t.SetStylebox("grabber", "VScrollBar", Box(Line, 0, null, 0, 2));
+        t.SetStylebox("grabber_highlight", "VScrollBar", Box(Accent, 0, null, 0, 2));
+        t.SetStylebox("grabber_pressed", "VScrollBar", Box(Accent, 0, null, 0, 2));
+        t.SetStylebox("focus", "ScrollContainer", new StyleBoxEmpty());
+        Variation(t, "MenuError", FontBody, Danger);
+        Variation(t, "MenuOk", FontBody, Good);
+    }
+
+    static void VariationButton(Theme t, string name, StyleBox normal, StyleBox hover, StyleBox pressed)
+    {
+        t.SetTypeVariation(name, "Button");
+        t.SetStylebox("normal", name, normal);
+        t.SetStylebox("hover", name, hover);
+        t.SetStylebox("pressed", name, pressed);
+        t.SetStylebox("hover_pressed", name, pressed);
     }
 
     static void Variation(Theme t, string name, int size, Color color)

@@ -3,35 +3,6 @@ using Suchohrad.ShooterCore;
 
 namespace Suchohrad.Shooter;
 
-/// <summary>Persisted HUD-related settings (the future settings screen writes the same file and calls <see cref="Hud.ApplySettings"/>).</summary>
-public sealed class HudSettings
-{
-    const string Path = "user://shooter_settings.cfg";
-    public float UiScale = 1f;
-    public bool ReduceMotion;
-
-    public static HudSettings Load()
-    {
-        var s = new HudSettings();
-        var cf = new ConfigFile();
-        if (cf.Load(Path) == Error.Ok)
-        {
-            s.UiScale = HudLogic.ClampUiScale((float)(double)cf.GetValue("accessibility", "ui_scale", 1.0));
-            s.ReduceMotion = (bool)cf.GetValue("accessibility", "reduce_motion", false);
-        }
-        return s;
-    }
-
-    public void Save()
-    {
-        var cf = new ConfigFile();
-        cf.Load(Path);
-        cf.SetValue("accessibility", "ui_scale", (double)HudLogic.ClampUiScale(UiScale));
-        cf.SetValue("accessibility", "reduce_motion", ReduceMotion);
-        cf.Save(Path);
-    }
-}
-
 /// <summary>
 /// In-match HUD (issue #88). Every element is built once in <see cref="_Ready"/>; the setters change text, fill,
 /// visibility or modulate only when the value changed. <see cref="_Process"/> only advances time based items
@@ -42,10 +13,10 @@ public sealed class HudSettings
 public partial class Hud : CanvasLayer
 {
     const int Slots = 4, FeedRows = HudLogic.FeedMax, BoardRows = 16, Indicators = 4;
-    const float RefHeight = 1080f, MinBaseScale = 0.8f, CameraFov = 90f;
+    const float RefHeight = 1080f, MinBaseScale = 0.8f;
     const float CrossThick = 3, CrossLen = 12, CrossMinGap = 8;
 
-    public HudSettings Settings { get; private set; } = new();
+    public GameSettings Settings { get; private set; } = new();
     /// <summary>Id of the local player (scoreboard highlight, score line).</summary>
     public ushort MyId { get; set; }
     /// <summary>Held-Tab input; the screenshot mode overrides it.</summary>
@@ -57,7 +28,7 @@ public partial class Hud : CanvasLayer
     // crosshair, hit marker, indicators
     readonly ColorRect[] _arms = new ColorRect[4], _armsBack = new ColorRect[4];
     float _gap = -1;
-    Control _hit = null!;
+    Control _hit = null!, _crossRoot = null!;
     readonly Line2D[] _hitLines = new Line2D[4];
     double _hitUntil, _hitFade;
     readonly Control[] _ind = new Control[Indicators];
@@ -113,7 +84,8 @@ public partial class Hud : CanvasLayer
     {
         Strings.Register();
         Layer = 10;
-        Settings = HudSettings.Load();
+        Settings = GameSettings.Current;
+        GameSettings.Changed += OnSettingsChanged;
         _root = new Control { Theme = ShooterTheme.Build(), MouseFilter = Control.MouseFilterEnum.Ignore };
         AddChild(_root);
         BuildProtection();
@@ -133,12 +105,17 @@ public partial class Hud : CanvasLayer
         RefreshHint();
     }
 
-    public void ApplySettings(HudSettings s)
+    /// <summary>The live settings changed (settings screen preview/apply): rescale, crosshair visibility and FOV, key hints.</summary>
+    void OnSettingsChanged()
     {
-        Settings = s;
-        s.UiScale = HudLogic.ClampUiScale(s.UiScale);
+        Settings = GameSettings.Current;
         Relayout();
+        _gap = -1;
+        _hintMode = null;
+        if (_crossRoot != null) _crossRoot.Visible = Settings.ShowCrosshair;
     }
+
+    public override void _ExitTree() => GameSettings.Changed -= OnSettingsChanged;
 
     // ---- layout helpers ----
 
@@ -191,7 +168,7 @@ public partial class Hud : CanvasLayer
 
     void BuildCrosshair()
     {
-        var c = Place(new Control { MouseFilter = Control.MouseFilterEnum.Ignore }, 0.5f, 0.5f, 0, 0, 0, 0);
+        var c = _crossRoot = Place(new Control { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = Settings.ShowCrosshair }, 0.5f, 0.5f, 0, 0, 0, 0);
         _root.AddChild(c);
         for (var i = 0; i < 4; i++)
         {
@@ -567,7 +544,7 @@ public partial class Hud : CanvasLayer
         UpdateFeed(now);
         UpdateCrosshair();
         RefreshHint();
-        var want = ForceScoreboard ?? (Input.IsKeyPressed(Key.Tab) || _phase == MatchPhase.Ending);
+        var want = ForceScoreboard ?? (Input.IsActionPressed("scoreboard") || _phase == MatchPhase.Ending);
         if (want != _boardShown || (want && _boardDirty)) UpdateBoard(want);
     }
 
@@ -614,7 +591,7 @@ public partial class Hud : CanvasLayer
     void UpdateCrosshair()
     {
         var deg = Spread?.Invoke() ?? 0f;
-        var gap = HudLogic.CrosshairGap(deg, CameraFov, GetViewport().GetVisibleRect().Size.Y, CrossMinGap * UiFactor()) / UiFactor();
+        var gap = HudLogic.CrosshairGap(deg, Settings.Fov, GetViewport().GetVisibleRect().Size.Y, CrossMinGap * UiFactor()) / UiFactor();
         if (Math.Abs(gap - _gap) < 0.25f) return;
         _gap = gap;
         const float o = 1; // outline width
@@ -636,7 +613,7 @@ public partial class Hud : CanvasLayer
         var mode = MouseModeOverride ?? Input.MouseMode;
         if (_hintMode == mode) return;
         _hintMode = mode;
-        Set(_hint, Strings.T(mode == Input.MouseModeEnum.Captured ? "hud.hint.captured" : "hud.hint.released"));
+        Set(_hint, mode == Input.MouseModeEnum.Captured ? Strings.F("hud.hint.captured", InputBindings.Name("scoreboard"), InputBindings.Name("slot_1"), InputBindings.Name("slot_4")) : Strings.T("hud.hint.released"));
     }
 
     void UpdateBoard(bool show)

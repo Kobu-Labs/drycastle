@@ -10,11 +10,12 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class Player : CharacterBody3D
 {
-    public const float MouseSensitivity = 0.0025f;
-
+    
     readonly CollisionShape3D _shape = new();
     readonly CapsuleShape3D _capsule = new() { Radius = MoveConsts.CapsuleRadius, Height = MoveConsts.CapsuleHeight };
     readonly Camera3D _camera = new() { Fov = 90, Far = 2000, Current = true };
+    /// <summary>False when a UiShell owns Esc and the mouse mode (the match client); true keeps the old Esc/click behaviour for the offline view.</summary>
+    public bool SelfManageMouse { get; set; } = true;
     MoveState _state;
     float _yaw, _pitch;
     bool _headless;
@@ -48,8 +49,14 @@ public partial class Player : CharacterBody3D
         FloorSnapLength = 0.3f;
         FloorMaxAngle = Mathf.DegToRad(50);
         SetCrouchShape(false);
-        if (CaptureMouse && !_headless) Input.MouseMode = Input.MouseModeEnum.Captured;
+        if (CaptureMouse && !_headless && SelfManageMouse) Input.MouseMode = Input.MouseModeEnum.Captured;
+        ApplyFov();
+        GameSettings.Changed += ApplyFov;
     }
+
+    public override void _ExitTree() => GameSettings.Changed -= ApplyFov;
+
+    void ApplyFov() => _camera.Fov = GameSettings.Current.Fov;
 
     public void Teleport(Vector3 feet)
     {
@@ -77,10 +84,13 @@ public partial class Player : CharacterBody3D
         if (!CaptureMouse) return;
         if (e is InputEventMouseMotion m && Input.MouseMode == Input.MouseModeEnum.Captured)
         {
-            _yaw -= m.Relative.X * MouseSensitivity;
-            _pitch = Mathf.Clamp(_pitch - m.Relative.Y * MouseSensitivity, -1.55f, 1.55f);
+            var gs = GameSettings.Current;
+            var k = GameSettings.BaseSensitivity * gs.Sensitivity;
+            _yaw -= m.Relative.X * k;
+            _pitch = Mathf.Clamp(_pitch - m.Relative.Y * k * (gs.InvertY ? -1 : 1), -1.55f, 1.55f);
             _camera.Rotation = new Vector3(_pitch, _yaw, 0);
         }
+        else if (!SelfManageMouse) return;
         else if (e is InputEventKey { Pressed: true, Keycode: Key.Escape })
             Input.MouseMode = Input.MouseModeEnum.Visible;
         else if (e is InputEventMouseButton { Pressed: true } && Input.MouseMode != Input.MouseModeEnum.Captured)
@@ -103,16 +113,16 @@ public partial class Player : CharacterBody3D
     {
         if (InputOverride is { } o) return o;
         var b = MoveButtons.None;
-        if (Input.IsKeyPressed(Key.Space)) b |= MoveButtons.Jump;
-        if (Input.IsKeyPressed(Key.Shift)) b |= MoveButtons.Sprint;
-        if (Input.IsKeyPressed(Key.Ctrl) || Input.IsKeyPressed(Key.C)) b |= MoveButtons.Crouch;
-        if (Input.IsMouseButtonPressed(MouseButton.Left)) b |= MoveButtons.Fire;
-        if (Input.IsKeyPressed(Key.R)) b |= MoveButtons.Reload;
+        if (Input.IsActionPressed("jump")) b |= MoveButtons.Jump;
+        if (Input.IsActionPressed("sprint")) b |= MoveButtons.Sprint;
+        if (Input.IsActionPressed("crouch")) b |= MoveButtons.Crouch;
+        if (Input.IsActionPressed("fire")) b |= MoveButtons.Fire;
+        if (Input.IsActionPressed("reload")) b |= MoveButtons.Reload;
         var captured = Input.MouseMode == Input.MouseModeEnum.Captured;
         return new MoveInput
         {
-            MoveX = captured ? (Input.IsKeyPressed(Key.D) ? 1 : 0) - (Input.IsKeyPressed(Key.A) ? 1 : 0) : 0,
-            MoveY = captured ? (Input.IsKeyPressed(Key.W) ? 1 : 0) - (Input.IsKeyPressed(Key.S) ? 1 : 0) : 0,
+            MoveX = captured ? (Input.IsActionPressed("move_right") ? 1 : 0) - (Input.IsActionPressed("move_left") ? 1 : 0) : 0,
+            MoveY = captured ? (Input.IsActionPressed("move_forward") ? 1 : 0) - (Input.IsActionPressed("move_back") ? 1 : 0) : 0,
             Yaw = _yaw,
             Buttons = captured ? b : MoveButtons.None,
             SpeedScale = 1,

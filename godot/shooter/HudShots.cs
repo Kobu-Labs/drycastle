@@ -41,12 +41,12 @@ public static class HudShots
         host.GetTree().Quit(failed ? 2 : 0);
     }
 
-    static async Task Frames(Node host, int n)
+    internal static async Task Frames(Node host, int n)
     {
         for (var i = 0; i < n; i++) await host.ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
     }
 
-    static void Backdrop(SubViewport vp)
+    internal static void Backdrop(SubViewport vp)
     {
         vp.AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-55, 30, 0) });
         vp.AddChild(new WorldEnvironment

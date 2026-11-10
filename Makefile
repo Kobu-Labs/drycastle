@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots
 
 setup:
 	cd pipeline && uv sync
@@ -179,3 +179,8 @@ lint:
 shooter-hud-shots:
 	dotnet build godot/shooter/shooter.csproj
 	godot --path godot/shooter -- --hud-shots $(abspath $(or $(DIR),out/hud))
+
+# Menu screenshots (main, connect, settings tabs, pause, loading) at 1280x720 and 3840x2160 (needs a display): make shooter-menu-shots DIR=out/menu
+shooter-menu-shots:
+	dotnet build godot/shooter/shooter.csproj
+	godot --path godot/shooter -- --menu-shots $(abspath $(or $(DIR),out/menu))
