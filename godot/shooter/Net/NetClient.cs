@@ -48,7 +48,6 @@ public partial class NetClient : Node
     readonly HashSet<ushort> _deadRockets = new();
     readonly List<(double T, AmmoMsg M)> _ammoLog = new();
     int _wantSlot = 1;
-    Label? _hud;
     double _ammoAt;
 
     readonly ENetConnection _conn = new();
@@ -150,6 +149,7 @@ public partial class NetClient : Node
                 World.AddChild(_me);
                 if (WeaponsBot != "") NetServer.AddArenaColliders(World);
                 if (Bot) _me.InputOverride = new MoveInput { SpeedScale = 1 };
+                HudWelcome();
                 GD.Print($"client: welcome, id {_myId}, server tick {w.ServerTick}");
                 break;
             case JoinMsg j: _names[j.PlayerId] = j.Name; GD.Print($"client: {j.Name} #{j.PlayerId} joined"); break;
@@ -172,9 +172,13 @@ public partial class NetClient : Node
         if (!Match.Apply(kind, payload, Now)) return;
         switch (kind)
         {
-            case EventKind.MatchState: GD.Print($"client {PlayerName}: {Match.ScoreboardText(Now)}"); break;
+            case EventKind.MatchState:
+                if (Match.Restarts != _hudRestarts) { _hudRestarts = Match.Restarts; _hud?.ClearKills(); }
+                _hud?.SetMatch(Match.Phase, Match.TimeRemaining(Now), Match.Rows, Match.Winners, Match.NameOf);
+                GD.Print($"client {PlayerName}: {Match.ScoreboardText(Now)}"); break;
             case EventKind.Kill:
                 var k = Match.KillFeed[^1];
+                _hud?.AddKill(k, Match.NameOf(k.Killer), Match.NameOf(k.Victim));
                 GD.Print($"client {PlayerName}: kill feed: {Match.NameOf(k.Killer)} -> {Match.NameOf(k.Victim)} (weapon {k.Weapon})");
                 break;
             case EventKind.Spawn:
@@ -185,12 +189,13 @@ public partial class NetClient : Node
                     _wantSlot = StartSlot();
                     Dead = false; _gotSelf = false; _pending.Clear(); // the next snapshot carries the spawn position
                     _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
+                    _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset();
                 }
                 break;
             case EventKind.Death:
                 var d = Match.LastDeath.Values.Last();
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
-                if (d.Victim == _myId) { Dead = true; _deaths++; }
+                if (d.Victim == _myId) { Dead = true; _deaths++; _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay); _hud?.SetProtection(0); }
                 break;
         }
     }
@@ -445,7 +450,7 @@ public partial class NetClient : Node
         GetTree().Quit(ok ? 0 : 2);
     }
 
-    // ---- weapons: input, events, debug HUD line, placeholder effects ----
+    // ---- weapons: input, events, placeholder effects (the HUD lives in NetClient.Hud.cs) ----
 
     int StartSlot() => Weapons == null ? 1 : Math.Max(1, Weapons.Weapons.FindIndex(w => w.Id == Weapons.StartingWeapon) + 1);
 
@@ -476,9 +481,11 @@ public partial class NetClient : Node
         {
             case EventKind.Ammo when WeaponCodec.DecodeAmmo(payload) is { } a:
                 Ammo = a; _ammoAt = Now; _ammoLog.Add((Now, a));
+                HudAmmo();
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
                 _shotLog.Add((Now, sh));
+                if (sh.Shooter == _myId && Weapons != null && sh.Weapon < Weapons.Weapons.Count) _spread.Shot(Weapons.Weapons[sh.Weapon], Now);
                 var melee = Weapons != null && sh.Weapon < Weapons.Weapons.Count && Weapons.Weapons[sh.Weapon].Kind == WeaponKind.Melee;
                 ShotFx.Spawn(World, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), new Vector3(sh.End.X, sh.End.Y, sh.End.Z), melee);
                 break;
@@ -495,27 +502,10 @@ public partial class NetClient : Node
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 _hitLog.Add((Now, h));
+                HudHit(h);
                 GD.Print($"client {PlayerName}: hit #{h.Attacker} -> #{h.Victim} {h.Damage}{(h.Headshot ? " head" : "")}{(h.Backstab ? " backstab" : "")}{(h.Kill ? " kill" : "")}");
                 break;
         }
     }
 
-    /// <summary>One debug text line (weapon, ammo): the real HUD is a separate issue.</summary>
-    void UpdateHud()
-    {
-        if (!ShotFx.Enabled || Weapons == null) return;
-        if (_hud == null)
-        {
-            _hud = new Label { Position = new Vector2(16, 16) };
-            _hud.AddThemeFontSizeOverride("font_size", 18);
-            var layer = new CanvasLayer();
-            layer.AddChild(_hud);
-            AddChild(layer);
-        }
-        if (Ammo is not { } a || a.Slot < 1 || a.Slot > Weapons.Weapons.Count) { _hud.Text = ""; return; }
-        var w = Weapons.Weapons[a.Slot - 1];
-        var (mag, reserve) = a.Slots[a.Slot - 1];
-        var left = a.ReloadRemaining - (Now - _ammoAt);
-        _hud.Text = w.MagazineSize == 0 ? $"[{a.Slot}] {w.Id}" : $"[{a.Slot}] {w.Id}  {mag} / {reserve}" + (left > 0 ? $"  reloading {left:F1}s" : "");
-    }
 }

@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots
 
 setup:
 	cd pipeline && uv sync
@@ -174,3 +174,8 @@ shooter-test:
 
 lint:
 	cd pipeline && uv run ruff check .
+
+# HUD screenshots with fake data at 1280x720 and 3840x2160 (needs a display): make shooter-hud-shots DIR=out/hud
+shooter-hud-shots:
+	dotnet build godot/shooter/shooter.csproj
+	godot --path godot/shooter -- --hud-shots $(abspath $(or $(DIR),out/hud))

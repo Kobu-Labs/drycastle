@@ -16,6 +16,7 @@ namespace Suchohrad.Shooter;
 ///   --bazooka-smoke           server: same flat arena, judges the bazooka scenario
 ///   --bazooka-bot a|b         client: scripted bazooka smoke role (a shoots, b is the target)
 ///   --weapons-bot a|b         client: scripted weapons smoke role (a shoots, b stands still)
+///   --hud-shots DIR           render the HUD with fake data at 1280x720 and 3840x2160 into DIR as PNGs, then exit (needs a display)
 ///   --smoke-move              client only: scripted movement check on the map collision (SHOOTER_SMOKE_MOVE_OK, exit 0; else exit 2)
 ///   --smoke                   load everything, print SHOOTER_SMOKE_OK and exit 0 (exit 2 on failure)
 /// No gameplay yet: this only boots the role on the loaded map.
@@ -35,6 +36,7 @@ public partial class Shooter : Node3D
         var role = cfg.Str("role", "client");
         _smoke = cfg.Flag("smoke");
         _smokeMove = cfg.Flag("smoke-move");
+        if (cfg.Str("hud-shots") != "") { _ = HudShots.Run(this, cfg.Str("hud-shots")); return; }
         try
         {
             if (role is not ("server" or "client")) throw new InvalidOperationException($"unknown role {role} (server|client)");
