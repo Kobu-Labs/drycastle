@@ -493,6 +493,7 @@ def test_objects_json_content_and_order(ws, tmp_path, capsys) -> None:
         "scale": 1.5,
         "colour": None,
         "parcel": "P-0001",
+        "owner": "P-0001",
         "chunk": [0, 0],
     }
     assert bench["parcel"] == "P-0002" and bench["colour"] == "#334455"
