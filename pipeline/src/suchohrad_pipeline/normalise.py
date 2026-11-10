@@ -1,7 +1,7 @@
 """Normalise stage: raw OSM + cadastral parcels (WGS84) -> local metres.
 
 Reads ``data/raw/{osm.json,parcels.geojson,slice_centre.json}`` and writes
-``data/work/normalised/{buildings,highways,landuse,parcels}.geojson`` plus ``frame.json``.
+``data/work/normalised/{buildings,highways,landuse,parcels,trees}.geojson`` plus ``frame.json``.
 Coordinates in the output are local metres (EPSG:5514 axes, origin at the slice centre).
 """
 
@@ -9,7 +9,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from shapely.geometry import LineString, Polygon, shape
+from shapely.geometry import LineString, Point, Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, polygonize, unary_union
 
@@ -18,6 +18,7 @@ from suchohrad_pipeline.frame import Frame
 
 DEFAULT_WORK_DIR = REPO_ROOT / "data" / "work"
 LANDUSE_CLASSES = ("landuse", "natural")
+HIGHWAY_TAGS = ("width", "lanes", "surface", "oneway", "tracktype", "bridge", "tunnel")
 LOCAL_CRS_NAME = "local metres: EPSG:5514 axes, origin at the slice centre"
 
 
@@ -64,9 +65,18 @@ def _relation_polygon(rel: dict) -> BaseGeometry | None:
 
 def parse_osm(raw: dict) -> dict[str, list[OsmFeature]]:
     """Group OSM elements (``out geom`` JSON) into buildings, highways and landuse features."""
-    out: dict[str, list[OsmFeature]] = {"buildings": [], "highways": [], "landuse": []}
+    out: dict[str, list[OsmFeature]] = {
+        "buildings": [],
+        "highways": [],
+        "landuse": [],
+        "trees": [],
+    }
     for el in raw.get("elements", []):
         tags = el.get("tags", {})
+        if el["type"] == "node":
+            if tags.get("natural") == "tree" and "lon" in el and "lat" in el:
+                out["trees"].append(OsmFeature(f"n{el['id']}", {}, Point(el["lon"], el["lat"])))
+            continue
         if el["type"] == "way" and el.get("geometry"):
             pts = _points(el["geometry"])
             osm_id = f"w{el['id']}"
@@ -106,6 +116,12 @@ def _landuse_props(f: OsmFeature) -> dict:
     return {"osm_id": f.osm_id, "class": cls, "value": f.tags[cls]}
 
 
+def _highway_props(f: OsmFeature) -> dict:
+    props = {"osm_id": f.osm_id, "highway": f.tags["highway"]}
+    props.update({k: f.tags[k] for k in HIGHWAY_TAGS if k in f.tags})
+    return props
+
+
 def _dump(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=1, sort_keys=True) + "\n")
 
@@ -135,10 +151,11 @@ def run_normalise(
     write(
         "highways",
         [
-            _feature(frame.to_local(f.geom), {"osm_id": f.osm_id, "highway": f.tags["highway"]})
+            _feature(frame.to_local(f.geom), _highway_props(f))
             for f in osm["highways"]
         ],
     )
+    write("trees", [_feature(frame.to_local(f.geom), {"osm_id": f.osm_id}) for f in osm["trees"]])
     write(
         "landuse",
         [_feature(frame.to_local(f.geom), _landuse_props(f)) for f in osm["landuse"]],
