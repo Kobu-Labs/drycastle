@@ -1,6 +1,63 @@
 # Parcel kind and building rules for the base map.
 #
-# Planned contents (not implemented yet): mapping from OSM tags to parcel kinds
-# (building plot, garden, road, field, forest, water, other), default building
-# heights and roof types, and facade colour palettes. The rules stage reads this
-# file so that changing a rule and re-running the pipeline regenerates the map.
+# Later stages will add default building heights, roof types and facade colour palettes here.
+# The rules are read by the `parcels` stage (and the later rules stage); changing a value and
+# re-running the pipeline regenerates the map.
+
+# --- Parcel registry matching ---------------------------------------------------------------
+registry:
+  # A registry entry whose cadastral reference vanished is matched to an unmatched current
+  # parcel when the intersection-over-union of their outlines is at least this (0..1).
+  min_iou: 0.5
+
+# --- Building assignment --------------------------------------------------------------------
+# Each OSM building goes to the parcel it overlaps most (straddling buildings included).
+building_assignment:
+  # A building overlapping no parcel goes to the nearest parcel closer than this many metres,
+  # otherwise it is listed as unassigned.
+  max_distance_m: 10
+
+# --- Parcel kind ----------------------------------------------------------------------------
+# kind is one of: building_plot, road, forest, field, water, garden, other.
+# Rules are tried in this order, the first that matches wins:
+#   1. building_plot  the parcel has at least one assigned building
+#   2. road           the parcel is covered by a road centreline buffer (see `road`)
+#   3. water/forest/field  OSM landuse/natural polygons cover the parcel (see `landuse`)
+#   4. garden         small parcel in built-up area without a building (see `garden`)
+#   5. other          everything else
+parcel_kind:
+  road:
+    # OSM highway values counted as roads (footways, paths and tracks are not).
+    highways: [motorway, trunk, primary, secondary, tertiary, unclassified, residential, living_street, service]
+    # Total width of the buffer drawn around each centreline, in metres.
+    buffer_width_m: 8
+    # Fraction of the parcel area (0..1) that must lie inside the buffer to be a road.
+    min_covered_ratio: 0.3
+  landuse:
+    # A parcel gets the kind of the OSM polygon that covers at least this fraction of it.
+    min_cover_ratio: 0.5
+    # OSM landuse=<value> -> kind (values not listed are ignored; residential is built-up).
+    landuse:
+      forest: forest
+      farmland: field
+      meadow: field
+      grass: field
+      orchard: field
+      vineyard: field
+    # OSM natural=<value> -> kind.
+    natural:
+      water: water
+      wood: forest
+  garden:
+    # Parcels up to this area (square metres) ...
+    max_area_m2: 1500
+    # ... that lie in built-up area: covered at least min_cover_ratio by one of these OSM
+    # landuse values, or within builtup_distance_m metres of any building.
+    builtup_landuse: [residential]
+    builtup_distance_m: 30
+
+# --- Chunking -------------------------------------------------------------------------------
+chunking:
+  # Edge of a square chunk in metres, on a grid anchored at the local origin (slice centre).
+  # A parcel belongs to the chunk containing its anchor point.
+  size_m: 250
