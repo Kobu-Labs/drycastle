@@ -165,6 +165,10 @@ public sealed partial class MapLoader
             {
                 _propsVisuals[name["parcel_".Length..^"_props".Length]] = mi;
             }
+            else if (RegionId(name) is { } regionId)
+            {
+                RegisterBakedRegion(regionId, mi);
+            }
             else if (name.StartsWith("parcel_") && name.EndsWith("_visual"))
             {
                 var id = name["parcel_".Length..^"_visual".Length];

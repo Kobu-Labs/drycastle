@@ -75,6 +75,11 @@ viewing and headless servers are unaffected):
 - `make viewer-edit-smoke` exports a fresh slice map and a work-directory copy into a scratch directory
   (`SMOKE_DIR=...`, default a temp dir), starts the viewer headless with `--watch`, writes edits files during the
   run and checks objects, swapped props, colliders, replacement without leaks and survival of a broken file.
+- `make viewer-regions-smoke` does the same for regions: exports a slice map with three regions, then recolours,
+  reshapes, adds and removes regions through the watcher (alone and together with a parcel edit in one file
+  change) and checks that only those regions are swapped (`region-run --glb`, `MapLoader.ApplyRegions`; a region
+  split over chunk files is swapped completely), that repeated swaps do not grow the node count and that a broken
+  file changes nothing.
   `parcel-run`/`export` take `--work DIR` and `export` takes `--out DIR` for such experiments.
 
 ## Editor mode

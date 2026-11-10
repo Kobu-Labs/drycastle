@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-editor-smoke viewer-panel-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint
 
 setup:
 	cd pipeline && uv sync
@@ -76,6 +76,12 @@ viewer-smoke:
 # runs the viewer headless with --watch and checks that edits show up. Needs uv, dotnet and godot.
 viewer-edit-smoke:
 	python3 godot/viewer/edit_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
+
+# Region hot reload end to end (headless): exports a slice map with regions into a scratch dir, then recolours, reshapes,
+# adds and removes regions (also together with a parcel edit) through the watcher and checks the swaps, that nothing
+# leaks and that a broken file changes nothing. Needs uv, dotnet and godot.
+viewer-regions-smoke:
+	python3 godot/viewer/regions_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
 
 # Editor mode end to end (headless): exports a slice map into a scratch dir, drives the editor APIs (picking,
 # selection, groups, edits.json writes, outlines, editor-state.json, F2 round trip). Needs uv, dotnet and godot.

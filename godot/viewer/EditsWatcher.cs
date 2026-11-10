@@ -13,6 +13,10 @@ using Godot;
 /// file per parcel and per group against the last applied state, regenerates the changed parcels with
 /// a `uv run ... parcel-run` subprocess (never blocking the main thread) and swaps the result into the
 /// map with MapLoader.ApplyFragment. Edits arriving during a run are coalesced into the next run.
+/// Regions (hand-drawn colour shapes) are diffed the same way: an added, recoloured, reshaped or removed region
+/// (plus the regions overlapping it) is regenerated with `region-run --glb` and swapped in with
+/// MapLoader.ApplyRegions. Parcel and region work of one file change run one after the other in one run and are
+/// applied together, or not at all when either subprocess fails.
 /// A file that cannot be parsed (half-written) is ignored until it changes again; a failed run only
 /// prints the error. Also writes editor-state.json (camera, selection) at most once a second.
 /// The state at start is assumed to be what the map was built with, so nothing runs at startup.
@@ -48,9 +52,15 @@ public partial class EditsWatcher : Node
     public int AppliedCount { get; private set; }
     /// <summary>Number of objects-only updates done in process (no subprocess).</summary>
     public int InstantCount { get; private set; }
-    /// <summary>Number of parcel-run subprocesses started. Stays flat while only placed objects change.</summary>
+    /// <summary>Number of runs started (each a parcel-run, a region-run or both). Stays flat while only placed objects change.</summary>
     public int RunCount => _runCounter;
     public double LastInstantMs { get; private set; }
+    /// <summary>Number of parcel-run subprocesses started (RunCount counts runs, which may also be region-only).</summary>
+    public int ParcelRunCount { get; private set; }
+    /// <summary>Number of region-run subprocesses started.</summary>
+    public int RegionRunCount => _regionRunCounter;
+    /// <summary>Region ids replaced by the last applied run (empty when it had no region work).</summary>
+    public IReadOnlyList<string> LastRegionsReplaced { get; private set; } = Array.Empty<string>();
     public int FailedCount { get; private set; }
     public int ParseFailedCount { get; private set; }
     public bool Busy => _run != null;
@@ -58,25 +68,27 @@ public partial class EditsWatcher : Node
 
     sealed record Snapshot(
         string Text, Dictionary<string, string> Parcels, Dictionary<string, string> Groups,
-        Dictionary<string, List<string>> Members, Dictionary<string, string> NoObjects);
+        Dictionary<string, List<string>> Members, Dictionary<string, string> NoObjects,
+        Dictionary<string, string> Regions, Dictionary<string, (double X0, double Y0, double X1, double Y1)> RegionBoxes);
 
     sealed class Run
     {
         public Task<(int code, string err)> Task = null!;
         public Snapshot Snap = null!;
         public List<string> Ids = new();
-        public string Fragment = "", Glb = "", Edits = "";
+        public List<string> RegionIds = new();
+        public string Fragment = "", Glb = "", Edits = "", RegionSummary = "", RegionGlb = "";
         public long StartedMs, DetectedMs;
         public Process? Process;
     }
 
-    Snapshot _applied = new("", new(), new(), new(), new());
+    Snapshot _applied = new("", new(), new(), new(), new(), new(), new());
     (DateTime mtime, long len) _seen;
     double _pollT, _stateT;
     bool _dirty;
     long _dirtySinceMs;
     Run? _run;
-    int _runCounter;
+    int _runCounter, _regionRunCounter;
     string _tmpDir = "";
     string _lastState = "";
 
@@ -196,11 +208,63 @@ public partial class EditsWatcher : Node
                         ? m.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList()
                         : new();
                 }
-            snap = new Snapshot(text, parcels, groups, members, noObjects);
+            var regions = new Dictionary<string, string>();
+            var boxes = new Dictionary<string, (double, double, double, double)>();
+            if (doc.RootElement.TryGetProperty("regions", out var rg) && rg.ValueKind == JsonValueKind.Object)
+                foreach (var kv in rg.EnumerateObject())
+                {
+                    regions[kv.Name] = Canon(kv.Value);
+                    if (RegionBox(kv.Value) is { } box) boxes[kv.Name] = box;
+                }
+            snap = new Snapshot(text, parcels, groups, members, noObjects, regions, boxes);
             error = "";
             return true;
         }
         catch (JsonException e) { error = e.Message; return false; }
+    }
+
+    static (double, double, double, double)? RegionBox(JsonElement entry)
+    {
+        if (entry.ValueKind != JsonValueKind.Object || !entry.TryGetProperty("polygon", out var poly)
+            || poly.ValueKind != JsonValueKind.Array) return null;
+        double x0 = double.MaxValue, y0 = double.MaxValue, x1 = double.MinValue, y1 = double.MinValue;
+        foreach (var pt in poly.EnumerateArray())
+        {
+            if (pt.ValueKind != JsonValueKind.Array || pt.GetArrayLength() < 2
+                || pt[0].ValueKind != JsonValueKind.Number || pt[1].ValueKind != JsonValueKind.Number) return null;
+            x0 = Math.Min(x0, pt[0].GetDouble()); x1 = Math.Max(x1, pt[0].GetDouble());
+            y0 = Math.Min(y0, pt[1].GetDouble()); y1 = Math.Max(y1, pt[1].GetDouble());
+        }
+        return x0 <= x1 ? (x0, y0, x1, y1) : null;
+    }
+
+    /// <summary>
+    /// Regions affected by the change from old to new: added, removed or changed (colour or polygon) entries, plus every
+    /// other region whose bounding box touches the old or new shape of one of them (its visible area changes with it;
+    /// the higher ID wins where regions overlap). Bounding boxes only: a few extra regions are rebuilt, none are missed.
+    /// </summary>
+    static SortedSet<string> RegionDiff(Snapshot old, Snapshot now)
+    {
+        var changed = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var rid in old.Regions.Keys.Union(now.Regions.Keys))
+        {
+            old.Regions.TryGetValue(rid, out var a);
+            now.Regions.TryGetValue(rid, out var b);
+            if (a != b) changed.Add(rid);
+        }
+        if (changed.Count == 0) return changed;
+        var shapes = new List<(double X0, double Y0, double X1, double Y1)>();
+        foreach (var rid in changed)
+        {
+            if (old.RegionBoxes.TryGetValue(rid, out var ob)) shapes.Add(ob);
+            if (now.RegionBoxes.TryGetValue(rid, out var nb)) shapes.Add(nb);
+        }
+        var result = new SortedSet<string>(changed, StringComparer.Ordinal);
+        foreach (var (rid, box) in now.RegionBoxes)
+            if (!changed.Contains(rid)
+                && shapes.Any(s => s.X0 <= box.X1 && box.X0 <= s.X1 && s.Y0 <= box.Y1 && box.Y0 <= s.Y1))
+                result.Add(rid);
+        return result;
     }
 
     /// <summary>
@@ -243,6 +307,7 @@ public partial class EditsWatcher : Node
     /// </summary>
     static SortedSet<string>? ObjectsOnlyDiff(Snapshot old, Snapshot now, Func<string, bool> known)
     {
+        if (RegionDiff(old, now).Count > 0) return null; // regions need a region-run
         if (old.Groups.Count != now.Groups.Count) return null;
         foreach (var (gid, text) in now.Groups)
             if (!old.Groups.TryGetValue(gid, out var o) || o != text) return null;
@@ -346,15 +411,50 @@ public partial class EditsWatcher : Node
         var known = affected.Where(Map.Parcels.ContainsKey).ToList();
         foreach (var unknown in affected.Except(known))
             GD.Print($"warning: edits mention parcel {unknown}, which is not in the map; skipped");
-        if (known.Count == 0)
+        var regionIds = RegionDiff(_applied, snap!).ToList();
+        if (known.Count == 0 && regionIds.Count == 0)
         {
             _applied = snap!;
             return;
         }
-        Launch(snap!, known);
+        Launch(snap!, known, regionIds);
     }
 
-    void Launch(Snapshot snap, List<string> ids)
+    ProcessStartInfo UvStart(params string[] args)
+    {
+        var uv = System.Environment.GetEnvironmentVariable("SUCHOHRAD_UV");
+        var psi = new ProcessStartInfo(string.IsNullOrEmpty(uv) ? "uv" : uv)
+        {
+            WorkingDirectory = PipelineDir,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        foreach (var a in new[] { "run", "python", "-m", "suchohrad_pipeline" }.Concat(args))
+            psi.ArgumentList.Add(a);
+        return psi;
+    }
+
+    static (int code, string err) RunProcess(Run run, ProcessStartInfo psi)
+    {
+        try
+        {
+            using var p = Process.Start(psi) ?? throw new InvalidOperationException("could not start uv");
+            run.Process = p;
+            var stdout = p.StandardOutput.ReadToEndAsync();
+            var err = p.StandardError.ReadToEnd();
+            p.WaitForExit();
+            stdout.Wait();
+            return (p.ExitCode, err);
+        }
+        catch (Exception e)
+        {
+            return (-1, $"could not run uv ({e.Message}); is uv installed and on PATH? (SUCHOHRAD_UV overrides)");
+        }
+    }
+
+    void Launch(Snapshot snap, List<string> ids, List<string> regionIds)
     {
         var n = ++_runCounter;
         var run = new Run
@@ -369,40 +469,41 @@ public partial class EditsWatcher : Node
         };
         // the subprocess reads exactly the snapshot we diffed, not whatever the file is by then
         File.WriteAllText(run.Edits, snap.Text);
-        var uv = System.Environment.GetEnvironmentVariable("SUCHOHRAD_UV");
-        var psi = new ProcessStartInfo(string.IsNullOrEmpty(uv) ? "uv" : uv)
+        run.RegionIds = regionIds;
+        run.RegionSummary = Path.Combine(_tmpDir, $"regions-{n}.json");
+        run.RegionGlb = Path.Combine(_tmpDir, $"regions-{n}.glb");
+        ProcessStartInfo? parcelPsi = null, regionPsi = null;
+        if (ids.Count > 0)
         {
-            WorkingDirectory = PipelineDir,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var a in new[] { "run", "python", "-m", "suchohrad_pipeline", "parcel-run", "--area", Area })
-            psi.ArgumentList.Add(a);
-        foreach (var id in ids) { psi.ArgumentList.Add("--parcel"); psi.ArgumentList.Add(id); }
-        foreach (var a in new[] { "--edits", run.Edits, "--glb", run.Glb, "--out", run.Fragment })
-            psi.ArgumentList.Add(a);
+            ParcelRunCount++;
+            var a = new List<string> { "parcel-run", "--area", Area };
+            foreach (var id in ids) { a.Add("--parcel"); a.Add(id); }
+            a.AddRange(new[] { "--edits", run.Edits, "--glb", run.Glb, "--out", run.Fragment });
+            parcelPsi = UvStart(a.ToArray());
+        }
+        if (regionIds.Count > 0)
+        {
+            _regionRunCounter++;
+            var a = new List<string> { "region-run", "--area", Area };
+            foreach (var id in regionIds) { a.Add("--region"); a.Add(id); }
+            a.AddRange(new[] { "--edits", run.Edits, "--glb", run.RegionGlb, "--out", run.RegionSummary });
+            regionPsi = UvStart(a.ToArray());
+        }
         run.Task = Task.Run(() =>
         {
-            try
+            var log = new StringBuilder();
+            foreach (var psi in new[] { parcelPsi, regionPsi })
             {
-                using var p = Process.Start(psi) ?? throw new InvalidOperationException("could not start uv");
-                run.Process = p;
-                var stdout = p.StandardOutput.ReadToEndAsync();
-                var err = p.StandardError.ReadToEnd();
-                p.WaitForExit();
-                stdout.Wait();
-                return (p.ExitCode, err);
+                if (psi == null) continue;
+                var (code, err) = RunProcess(run, psi);
+                log.Append(err);
+                if (code != 0) return (code, log.ToString());
             }
-            catch (Exception e)
-            {
-                return (-1, $"could not run uv ({e.Message}); is uv installed and on PATH? (SUCHOHRAD_UV overrides)");
-            }
+            return (0, log.ToString());
         });
         _run = run;
-        GD.Print($"edits changed: regenerating {string.Join(", ", ids)}");
-        Launched?.Invoke(ids);
+        GD.Print($"edits changed: regenerating {string.Join(", ", ids.Concat(regionIds))}");
+        Launched?.Invoke(ids.Concat(regionIds).ToList());
     }
 
     void Finish(Run run)
@@ -413,29 +514,37 @@ public partial class EditsWatcher : Node
         {
             if (code != 0)
             {
-                Fail($"parcel-run failed for {string.Join(", ", run.Ids)} (exit {code}): {err.Trim()}");
+                Fail($"{(run.Ids.Count > 0 ? "parcel-run" : "region-run")} failed for {string.Join(", ", run.Ids.Concat(run.RegionIds))} (exit {code}): {err.Trim()}");
                 return;
             }
-            Suchohrad.MapLoader.FragmentResult result;
-            try { result = Map.ApplyFragment(run.Fragment); }
+            Suchohrad.MapLoader.FragmentResult result = new(Array.Empty<string>(), 0, 0);
+            Suchohrad.MapLoader.RegionResult? regions = null;
+            try
+            {
+                if (run.Ids.Count > 0) result = Map.ApplyFragment(run.Fragment);
+                if (run.RegionIds.Count > 0) regions = Map.ApplyRegions(run.RegionSummary);
+            }
             catch (Exception e)
             {
-                Fail($"applying the result for {string.Join(", ", run.Ids)} failed: {e.Message}");
+                Fail($"applying the result for {string.Join(", ", run.Ids.Concat(run.RegionIds))} failed: {e.Message}");
                 return;
             }
+            LastRegionsReplaced = regions?.Replaced ?? Array.Empty<string>();
             _applied = run.Snap;
             var ms = Time.GetTicksMsec() - (ulong)run.DetectedMs;
             LastLatencyMs = ms;
             AppliedCount++;
             GD.Print($"edits applied: {string.Join(", ", result.Replaced)} in {ms} ms " +
                      $"(objects={result.Objects} props_nodes={result.PropsNodes}, parcel-run {Time.GetTicksMsec() - (ulong)run.StartedMs} ms)");
+            if (regions != null)
+                GD.Print($"regions applied: {string.Join(", ", regions.Replaced)} (region_nodes={regions.Nodes})");
             foreach (var line in err.Split('\n', StringSplitOptions.RemoveEmptyEntries))
                 GD.Print(line.Trim());
-            Applied?.Invoke(result.Replaced, ms);
+            Applied?.Invoke(result.Replaced.Concat(regions?.Replaced ?? Array.Empty<string>()).ToList(), ms);
         }
         finally
         {
-            foreach (var f in new[] { run.Edits, run.Fragment, run.Glb })
+            foreach (var f in new[] { run.Edits, run.Fragment, run.Glb, run.RegionSummary, run.RegionGlb })
                 try { File.Delete(f); } catch { /* best effort */ }
         }
         // edits that arrived while the run was in flight set _dirty in the poll and start the next run
