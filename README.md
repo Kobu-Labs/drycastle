@@ -287,12 +287,67 @@ viewing and headless servers are unaffected):
   (temp file, then rename).
 - `editor-state.json` (written at most once a second while watching, an ignored build output):
   `{"camera": {"x": east, "y": north, "z": elevation, "yaw_deg": view direction counter-clockwise from east},
-  "format_version": 1, "selected": []}`; x and y are in the map frame (local metres). `selected` stays empty
-  until the editor UI exists.
+  "format_version": 1, "selected": []}`; x and y are in the map frame (local metres). `selected` is the list of
+  selected parcel IDs while the editor mode is on (empty otherwise).
 - `make viewer-edit-smoke` exports a fresh slice map and a work-directory copy into a scratch directory
   (`SMOKE_DIR=...`, default a temp dir), starts the viewer headless with `--watch`, writes edits files during the
   run and checks objects, swapped props, colliders, replacement without leaks and survival of a broken file.
   `parcel-run`/`export` take `--work DIR` and `export` takes `--out DIR` for such experiments.
+
+## Editor mode
+
+The first visible part of the world map editor: `--editor` starts the viewer in editor mode (it implies
+`--watch`); F2 toggles between walk mode (unchanged) and editor mode. Needs `uv` for the hot reload.
+
+```sh
+# slice, against the default edits file (pipeline/config/edits.json)
+dotnet build godot/viewer/viewer.csproj
+godot --path godot/viewer -- --editor --map out/map --area slice
+# village
+godot --path godot/viewer -- --editor --map out/village/map --area village
+```
+
+Options: `--edits PATH` (default `pipeline/config/edits.json`), `--state PATH` (default `out/editor-state.json`),
+`--area slice|village`, plus the usual `--map`, `--seed`, `--assets`.
+
+| Key | Action |
+| --- | --- |
+| F2 | toggle walk / editor mode; walk mode puts the player back where it was |
+| W A S D, Q / E | fly, down / up; Shift is 3x faster |
+| right mouse (hold) | look around (the mouse is only captured while held) |
+| mouse wheel | change the fly speed (shown in the top-left HUD) |
+| left click | select the parcel under the cursor; click on nothing clears |
+| Shift + left click | add or remove that parcel in the selection |
+| G | create a property group (`G-NNNN`) from 2+ selected parcels |
+| T | snap to a top-down view above the cursor; again restores the previous camera |
+| Esc | clear the selection |
+
+Hovering shows `P-0415 garden` (and `[G-0007]` when grouped) at the cursor. Outlines are unshaded ribbons draped
+0.25 m over the terrain: yellow for the selection, orange for property groups (edges shared by two members are
+not drawn, so a group reads as one shape), faint white for the hovered parcel. The right-hand panel shows the
+selection (ID, kind, area, cadastral reference, group) and the buttons Group selected, Add selected to group,
+Remove from group and Dissolve group; Fence, Trees and Objects are placeholders for Editor 6 and 7. The bottom
+line shows messages (`saved`, `regenerating P-0004...`, `applied in 480 ms`, errors) and the key hints.
+
+Group operations rewrite `edits.json` atomically (temp file, then rename). The file is reloaded from disk
+right before every save, so a change by another writer (e.g. the MCP server) is kept, and everything not
+related to groups (fences, trees, objects, unknown parcels) is written back unchanged. The text is exactly what
+`suchohrad_pipeline.edits.dump_edits` writes (sorted keys, indent 1, Python float formatting, trailing
+newline), so both writers give byte-identical files; `pipeline/tests/fixtures/edits_roundtrip.json` is the fixture
+for that. A parcel is in at most one group; `G` refuses (status line) when a selected parcel is already in one.
+The watcher then regenerates the affected parcels (the fence runs along a group's outer edge) by itself.
+
+Classes: `EditorMode` (camera, picking, selection, outlines, UI, group operations), `EditsFile` (reader,
+canonical writer and group operations for edits.json), `ParcelInfo` (now with `Rings`, `Bounds`, `AreaM2`, `Group`
+and `Contains`) and `ParcelIndex` / `MapLoader.ParcelAt(x, z)` (grid index over the parcel boxes; about 5 us per
+lookup).
+
+`make viewer-editor-smoke` (`SMOKE_DIR=...` for the scratch directory) exports a slice map into a scratch dir,
+starts the viewer headless with `--editor-smoke` and drives the editor through its API: F2 round trip, top-down
+snap, picking, selection, outlines (shared edges not drawn), creating and dissolving a group, saved file content
+checked byte for byte against `dump_edits`, `editor-state.json`. Screenshots of the editor mode (windowed, needs a
+GPU): `godot --path godot/viewer -- --map DIR --edits FILE --state FILE --editor-shot out.png --select P-0003
+--shot-at P-0003 [--hover P-0005]`.
 
 ## Netcode spike
 
