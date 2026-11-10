@@ -213,7 +213,10 @@ def summarise(raw_dir: Path) -> list[str]:
 
 
 def run(
-    force: bool = False, config_path: Path = DEFAULT_CONFIG, raw_dir: Path = DEFAULT_RAW_DIR
+    force: bool = False,
+    config_path: Path = DEFAULT_CONFIG,
+    raw_dir: Path = DEFAULT_RAW_DIR,
+    **_options: object,
 ) -> int:
     try:
         cfg = load_slice_config(config_path)
