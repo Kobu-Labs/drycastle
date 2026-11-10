@@ -642,3 +642,12 @@ def test_custom_sections_carry_their_own_fence_style(ws) -> None:
     assert mesh.face_count == 10 * len(got)
     # the brick wall colour (not the rules colour) is on every triangle of its sections
     assert (mesh.colours == [0xB5, 0x52, 0x3A]).all()
+
+
+def test_roundtrip_fixture_is_canonical():
+    """tests/fixtures/edits_roundtrip.json is the file the Godot editor's C# writer must reproduce byte for
+    byte (`make viewer-editor-smoke`); it must stay exactly what dump_text writes for its own content."""
+    from pathlib import Path
+
+    text = (Path(__file__).parent / "fixtures" / "edits_roundtrip.json").read_text(encoding="utf-8")
+    assert dump_text(parse(json.loads(text))) == text
