@@ -135,6 +135,17 @@ public partial class EditorMode : Node
         }
     }
 
+    /// <summary>Leave the editor and walk from the ground below the fly camera, facing where it looks.</summary>
+    public void WalkFromHere()
+    {
+        if (!Active) return;
+        var from = FlyCam.GlobalPosition;
+        var ground = RayToGround(from + Vector3.Up * 2f, Vector3.Down, out var hit) ? hit : new Vector3(from.X, from.Y, from.Z);
+        _savedPlayer = (ground + Vector3.Up * 1.0f, new Vector3(0, Mathf.RadToDeg(_yaw), 0), 0f, _savedPlayer?.input ?? true);
+        SetActive(false);
+        Say("dropped to the ground; F2 returns to the editor");
+    }
+
     void ApplyCamRotation() => FlyCam.Basis = Basis.FromEuler(new Vector3(_pitch, _yaw, 0));
 
     /// <summary>Place the fly camera at pos looking at target (smoke tests, screenshots).</summary>
@@ -425,10 +436,13 @@ public partial class EditorMode : Node
                 switch (k.Keycode)
                 {
                     case Key.F1: ToggleCheatSheet(); break;
+                    case Key.F3: WalkFromHere(); break;
                     case Key.G: GroupSelected(); break;
                     case Key.T: ToggleTopDown(); break;
                     case Key.Enter or Key.KpEnter:
-                        if (GetViewport().GuiGetFocusOwner() is not (LineEdit or TextEdit)) Apply();
+                        if (GetViewport().GuiGetFocusOwner() is (LineEdit or TextEdit)) break;
+                        if (Tool == EditorTool.Group) { if (!_btnGroup.Disabled) GroupSelected(); }
+                        else Apply();
                         break;
                     case Key.Escape:
                         if (_cheat.Visible) _cheat.Visible = false;
@@ -684,6 +698,7 @@ public partial class EditorMode : Node
             var lines = gids.Select(g => $"{g}: {string.Join(", ", Map.Parcels.Values.Where(p => p.Group == g).Select(p => p.Id).OrderBy(x => x, StringComparer.Ordinal))}");
             _groupLabel.Text = string.Join("\n", lines);
         }
+        _groupCount.Text = sel.Count == 0 ? "Nothing marked yet" : $"{sel.Count} parcel{(sel.Count == 1 ? "" : "s")} marked";
         _btnGroup.Disabled = sel.Count < 2;
         _btnAdd.Disabled = gids.Count != 1 || sel.All(p => p.Group != null);
         _btnRemove.Disabled = gids.Count == 0;

@@ -99,6 +99,22 @@ public partial class IconGlyph : Control
                 DrawString(f, P(0, 18), "?", HorizontalAlignment.Center, 24 * u, Mathf.Max(fs, 12), col);
                 break;
             }
+            case "reset":
+            {
+                var pts = new List<Vector2>();
+                for (var i = 0; i <= 16; i++)
+                {
+                    var a = Mathf.Lerp(-2.4f, 2.9f, i / 16f);
+                    pts.Add(P(12 + 7f * Mathf.Cos(a), 12 + 7f * Mathf.Sin(a)));
+                }
+                DrawPolyline(pts.ToArray(), col, w);
+                Poly(false, (4.5f, 3.5f), (5.6f, 8.2f), (10.4f, 7.2f));
+                break;
+            }
+            case "walk":
+                DrawCircle(P(12, 5), 2.5f * u, col);
+                Line(12, 8, 12, 15); Line(12, 15, 8, 22); Line(12, 15, 16, 22); Line(7, 11, 17, 11);
+                break;
             case "close":
                 Line(6, 6, 18, 18); Line(18, 6, 6, 18);
                 break;

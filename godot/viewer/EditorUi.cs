@@ -20,6 +20,7 @@ public partial class EditorMode
     Label _panelTitle = null!, _speedLabel = null!;
     VBoxContainer _editHead = null!, _editFoot = null!;
     Button _btnTopDown = null!;
+    Label _groupCount = null!;
     readonly Dictionary<EditorTool, VBoxContainer> _pages = new();
     readonly Dictionary<EditorTool, Button> _railButtons = new();
 
@@ -54,11 +55,11 @@ public partial class EditorMode
 
     // ---- rail ----
 
-    Button IconBtn(string icon, string tip, Action onPress, bool toggle = false)
+    Button IconBtn(string icon, string tip, Action onPress, bool toggle = false, int size = EditorTheme.RailButton)
     {
         var b = new Button
         {
-            CustomMinimumSize = new Vector2(EditorTheme.RailButton, EditorTheme.RailButton), ToggleMode = toggle, TooltipText = tip,
+            CustomMinimumSize = new Vector2(size, size), ToggleMode = toggle, TooltipText = tip,
             ThemeTypeVariation = "RailButton", FocusMode = Control.FocusModeEnum.All,
         };
         b.AddChild(new IconGlyph { Kind = icon, Owner = b });
@@ -90,6 +91,7 @@ public partial class EditorMode
         _btnRedo = IconBtn("redo", "Redo  (Ctrl+Y)", () => Redo());
         col.AddChild(_btnUndo);
         col.AddChild(_btnRedo);
+        col.AddChild(IconBtn("walk", "Drop to the ground here and walk  (F3)", WalkFromHere));
         col.AddChild(IconBtn("help", "Controls  (F1)", ToggleCheatSheet));
     }
 
@@ -156,13 +158,26 @@ public partial class EditorMode
         sel.AddChild(_selLabel);
 
         var grp = Page(EditorTool.Group);
+        grp.AddChild(new Label { Text = "Marking parcels", ThemeTypeVariation = "Header" });
+        grp.AddChild(new Label
+        {
+            Text = "Click parcels in the 3D view to mark them (click a marked parcel again to unmark). Then group them: a group is one property with one fence around its outer edge.",
+            ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart,
+        });
+        _groupCount = new Label { ThemeTypeVariation = "Header" };
+        grp.AddChild(_groupCount);
         _groupLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
         grp.AddChild(_groupLabel);
-        _btnGroup = Btn("Group selected (G)", GroupSelected);
-        _btnAdd = Btn("Add selected to group", AddSelectedToGroup);
-        _btnRemove = Btn("Remove from group", RemoveSelectedFromGroup);
-        _btnDissolve = Btn("Dissolve group", DissolveGroup);
-        foreach (var b in new[] { _btnGroup, _btnAdd, _btnRemove, _btnDissolve }) grp.AddChild(b);
+        _btnGroup = Btn("Group the marked parcels  (Enter)", GroupSelected);
+        _btnGroup.ThemeTypeVariation = "PrimaryButton";
+        grp.AddChild(_btnGroup);
+        grp.AddChild(new HSeparator());
+        grp.AddChild(new Label { Text = "Existing groups", ThemeTypeVariation = "Header" });
+        _btnAdd = Btn("Add the marked parcels to the group", AddSelectedToGroup);
+        _btnRemove = Btn("Take the marked parcels out of their group", RemoveSelectedFromGroup);
+        _btnDissolve = Btn("Dissolve the group", DissolveGroup);
+        foreach (var b in new[] { _btnAdd, _btnRemove, _btnDissolve }) grp.AddChild(b);
+        grp.AddChild(new Label { Text = "Clear the marks with Esc.", ThemeTypeVariation = "Dim" });
 
         BuildFenceSection(Page(EditorTool.Fence));
         BuildTreesSection(Page(EditorTool.Trees));
@@ -190,6 +205,12 @@ public partial class EditorMode
         page.AddChild(new Label { Text = "Camera", ThemeTypeVariation = "Header" });
         _btnTopDown = Btn("Top-down view (T)", ToggleTopDown);
         page.AddChild(_btnTopDown);
+
+        page.AddChild(new HSeparator());
+        page.AddChild(new Label { Text = "Walk", ThemeTypeVariation = "Header" });
+        page.AddChild(Btn("Drop to the ground here and walk  (F3)", WalkFromHere));
+        page.AddChild(Btn("Walk from where I was  (F2)", () => SetActive(false)));
+        page.AddChild(new Label { Text = "Dropping puts you on the ground below the camera, facing the way you look.", ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
         page.AddChild(new Label { Text = "WASD fly, Space up, Shift down, hold the right mouse button to look.", ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
     }
 
@@ -225,6 +246,7 @@ public partial class EditorMode
     const string CheatText =
         "Fly\tWASD, Space up, Shift down, Alt x3, hold RMB to look, wheel changes speed\n" +
         "Select\tLMB select, Shift+LMB add or remove, Esc clear\n" +
+        "Walk\tF2 walk from where you were, F3 drop to the ground below the camera and walk\n" +
         "Tools\t1 Select, 2 Group, 3 Fence, 4 Trees, 5 Objects, 6 View (press again to hide)\n" +
         "Group\tG group the selection\n" +
         "Edit\tEnter apply, Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo\n" +

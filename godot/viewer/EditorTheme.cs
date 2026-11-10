@@ -78,6 +78,28 @@ public static class EditorTheme
         t.SetStylebox("hover_pressed", "RailButton", Box(Active, 0, Accent));
         t.SetStylebox("disabled", "RailButton", Box(Colors.Transparent, 0));
 
+        // palette: category tabs and item tiles (icon above the name)
+        t.SetTypeVariation("TabButton", "Button");
+        t.SetStylebox("normal", "TabButton", Box(Raised, 4, Border));
+        t.SetStylebox("hover", "TabButton", Box(Hover, 4, Border));
+        t.SetStylebox("pressed", "TabButton", Box(Active, 4, Accent));
+        t.SetStylebox("hover_pressed", "TabButton", Box(Active, 4, Accent));
+        t.SetConstant("icon_max_width", "TabButton", 40);
+        t.SetTypeVariation("PaletteButton", "Button");
+        foreach (var st in new[] { "normal", "hover", "pressed", "hover_pressed" })
+        {
+            var on = st.Contains("pressed");
+            var sb = Box(on ? Active : st == "hover" ? Hover : Raised, 4, on ? Accent : Border);
+            t.SetStylebox(st, "PaletteButton", sb);
+        }
+        t.SetConstant("icon_max_width", "PaletteButton", 80);
+        t.SetConstant("h_separation", "PaletteButton", 0);
+
+        t.SetTypeVariation("PrimaryButton", "Button");
+        t.SetStylebox("normal", "PrimaryButton", Box(Active, 8, Accent));
+        t.SetStylebox("hover", "PrimaryButton", Box(new Color(0.14f, 0.44f, 0.62f), 8, Accent));
+        t.SetStylebox("disabled", "PrimaryButton", Box(new Color(Raised, 0.45f), 8));
+
         // section header buttons
         t.SetTypeVariation("FlatButton", "Button");
         t.SetStylebox("normal", "FlatButton", Box(Colors.Transparent, 4));
