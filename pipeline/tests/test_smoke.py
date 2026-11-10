@@ -27,7 +27,7 @@ def fake_fetch(monkeypatch: pytest.MonkeyPatch) -> list[bool]:
         return stage
 
     monkeypatch.setitem(STAGES, "fetch", run)
-    for name in ("normalise", "parcels"):
+    for name in ("normalise", "parcels", "rules", "export"):
         monkeypatch.setitem(STAGES, name, fake_stage(name))
     return calls
 
@@ -37,8 +37,9 @@ def test_run_all_runs_every_stage_in_order(
 ) -> None:
     assert cli.main(["run-all"]) == 0
     lines = capsys.readouterr().out.strip().splitlines()
-    assert lines == [f"{s}: fake" for s in EXPECTED_ORDER[:3]] + [
-        f"{s}: not implemented yet" for s in EXPECTED_ORDER[3:]
+    stubs = {"terrain", "roads", "props"}
+    assert lines == [
+        f"{s}: not implemented yet" if s in stubs else f"{s}: fake" for s in EXPECTED_ORDER
     ]
 
 
@@ -49,5 +50,5 @@ def test_force_flag_reaches_fetch(fake_fetch: list[bool]) -> None:
 
 
 def test_other_stage_prints_stub_message(capsys: pytest.CaptureFixture[str]) -> None:
-    assert cli.main(["rules"]) == 0
-    assert capsys.readouterr().out == "rules: not implemented yet\n"
+    assert cli.main(["terrain"]) == 0
+    assert capsys.readouterr().out == "terrain: not implemented yet\n"
