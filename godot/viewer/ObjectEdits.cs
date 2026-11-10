@@ -19,6 +19,7 @@ public static class ObjectEdits
     static readonly Regex AssetRx = new("^(pack:[^/\\s]+/\\S+|prim:[A-Za-z0-9_.-]+)$", RegexOptions.Compiled);
     static readonly Regex ParcelRx = new("^P-\\d{4,}$", RegexOptions.Compiled);
     static readonly Regex GroupRx = new("^G-\\d{4,}$", RegexOptions.Compiled);
+    static readonly Regex RegionRx = new("^R-\\d{4,}$", RegexOptions.Compiled);
 
     public static Obj Parcels(Obj root) => (Obj)root["parcels"]!;
 
@@ -154,7 +155,7 @@ public static class ObjectEdits
     {
         var errs = new List<string>();
         if (!(root.GetValueOrDefault("version") is EditsFile.Num v && v.Text == "1")) errs.Add("version: must be 1");
-        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "groups")) errs.Add($"{k}: unknown key");
+        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "groups" or "regions")) errs.Add($"{k}: unknown key");
         var seen = new Dictionary<string, string>();
         foreach (var (pid, entry) in Parcels(root))
         {
@@ -183,6 +184,77 @@ public static class ObjectEdits
                 }
             if (g.TryGetValue("fence", out var gf)) errs.AddRange(gf is Obj gfo ? EditModel.CheckFence(gfo, $"{path}.fence") : new List<string> { $"{path}.fence: must be an object" });
         }
+        if (root.GetValueOrDefault("regions") is { } regions)
+        {
+            if (regions is not Obj ro) errs.Add("regions: must be an object");
+            else
+                foreach (var (rid, entry) in ro)
+                {
+                    var path = $"regions.{rid}";
+                    if (!RegionRx.IsMatch(rid)) errs.Add($"{path}: region IDs look like R-0001");
+                    errs.AddRange(CheckRegion(entry, path));
+                }
+        }
         return errs;
+    }
+
+    /// <summary>Mirror of edits.py `_check_region`: colour, and a simple ring of at least 3 [x, y] points (closing point optional).</summary>
+    static List<string> CheckRegion(object? entry, string path)
+    {
+        var errs = new List<string>();
+        if (entry is not Obj r) { errs.Add($"{path}: must be an object"); return errs; }
+        foreach (var k in r.Keys) if (k is not ("colour" or "polygon")) errs.Add($"{path}.{k}: unknown key");
+        if (!r.TryGetValue("colour", out var c)) errs.Add($"{path}.colour: required");
+        else if (!(c is string cs && EditSchema.ColourRx.IsMatch(cs))) errs.Add($"{path}.colour: must be a colour like \"#rrggbb\"");
+        if (!r.TryGetValue("polygon", out var poly)) { errs.Add($"{path}.polygon: required"); return errs; }
+        if (poly is not List<object?> pts) { errs.Add($"{path}.polygon: must be a list of [x, y] points"); return errs; }
+        var ring = new List<(double x, double y)>();
+        for (var i = 0; i < pts.Count; i++)
+        {
+            if (pts[i] is List<object?> p && p.Count == 2 && Number(p[0]) is double x && Number(p[1]) is double y) ring.Add((x, y));
+            else errs.Add($"{path}.polygon.{i}: must be [x, y] in absolute S-JTSK metres");
+        }
+        if (errs.Count > 0) return errs;
+        if (ring.Count > 1 && ring[0] == ring[^1]) ring.RemoveAt(ring.Count - 1);
+        if (ring.Count < 3) errs.Add($"{path}.polygon: needs at least 3 points");
+        else if (Enumerable.Range(0, ring.Count).Any(i => ring[i] == ring[(i + 1) % ring.Count])) errs.Add($"{path}.polygon: has repeated consecutive points");
+        else if (!IsSimpleRing(ring)) errs.Add($"{path}.polygon: must not intersect or touch itself, and must enclose an area");
+        return errs;
+    }
+
+    static double Cross((double x, double y) o, (double x, double y) a, (double x, double y) b)
+        => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+
+    static bool OnSegment((double x, double y) a, (double x, double y) b, (double x, double y) p)
+        => Math.Min(a.x, b.x) <= p.x && p.x <= Math.Max(a.x, b.x) && Math.Min(a.y, b.y) <= p.y && p.y <= Math.Max(a.y, b.y);
+
+    /// <summary>Closed segments ab and cd share at least one point.</summary>
+    static bool SegmentsMeet((double x, double y) a, (double x, double y) b, (double x, double y) c, (double x, double y) d)
+    {
+        double d1 = Cross(a, b, c), d2 = Cross(a, b, d), d3 = Cross(c, d, a), d4 = Cross(c, d, b);
+        if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+        return (d1 == 0 && OnSegment(a, b, c)) || (d2 == 0 && OnSegment(a, b, d)) || (d3 == 0 && OnSegment(c, d, a)) || (d4 == 0 && OnSegment(c, d, b));
+    }
+
+    /// <summary>No two edges meet except neighbours at their shared vertex (a neighbour doubling back counts as meeting), and the area is not 0.</summary>
+    static bool IsSimpleRing(List<(double x, double y)> r)
+    {
+        int n = r.Count;
+        double area = 0;
+        for (var i = 0; i < n; i++) area += r[i].x * r[(i + 1) % n].y - r[(i + 1) % n].x * r[i].y;
+        if (area == 0) return false;
+        for (var i = 0; i < n; i++)
+            for (var j = i + 1; j < n; j++)
+            {
+                var a = r[i]; var b = r[(i + 1) % n]; var c = r[j]; var d = r[(j + 1) % n];
+                if (j == i + 1 || (i == 0 && j == n - 1))
+                {
+                    // neighbours: they may only share the common vertex; the far end of one must not lie on the other
+                    var (shared, far1, far2) = j == i + 1 ? (b, a, d) : (a, b, c);
+                    if (Cross(shared, far1, far2) == 0 && OnSegment(shared, far1, far2) | OnSegment(shared, far2, far1)) return false;
+                }
+                else if (SegmentsMeet(a, b, c, d)) return false;
+            }
+        return true;
     }
 }
