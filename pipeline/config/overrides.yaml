@@ -1,5 +1,25 @@
-# Manual corrections applied after the rules stage.
+# Manual corrections applied at the end of the rules stage (data/work/buildings.json).
 #
-# Planned contents (not implemented yet): per-parcel or per-building fixes for
-# cases the automatic rules get wrong, keyed by our stable parcel ID (never by
-# cadastral number or street address). Empty until the pipeline needs one.
+# Keep this file small: it is for cases the automatic rules get wrong. The map is still
+# regenerated from scratch, so overrides must stay valid across regenerations.
+#
+# Format: one top-level key `buildings`, a mapping from a key to a mapping of fields.
+#   key      our parcel ID (`P-0001`, applies to every building on that parcel) or an OSM id
+#            (`w123456`, one building). Parcel entries apply first, OSM id entries after them.
+#   fields   any of the building fields below; unknown fields are an error.
+#              height_m      total height to the roof top, metres
+#              levels        number of storeys
+#              roof          flat | gabled | hipped (no footprint-fill fallback is applied)
+#              ridge_dir     ridge direction in radians (counter-clockwise from east, 0..pi)
+#              wall_colour   "#rrggbb"
+#              roof_colour   "#rrggbb"
+# Keys that match no building are reported as a warning.
+#
+# Example (commented out):
+# buildings:
+#   P-0042:
+#     wall_colour: "#d8c8a8"
+#   w123456:
+#     height_m: 9.5
+#     roof: hipped
+buildings: {}

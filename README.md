@@ -33,10 +33,13 @@ make lint     # ruff check
 ## Running
 
 ```sh
-make map        # run every pipeline stage in order (fetch, normalise, parcels, then stubs)
+make map        # run every pipeline stage in order (fetch ... export; terrain/roads/props are stubs)
 make fetch      # run only the fetch stage (downloads raw data into data/raw/)
 make normalise  # raw data -> local metres in data/work/normalised/
 make parcels    # parcel registry, kinds, building assignment; prints a report
+make rules      # building heights, roofs, colours -> data/work/buildings.json
+make export     # chunk glTFs, parcels.json, manifest.json -> out/map/
+make preview    # out/preview/topdown.png and iso.png (needs rules; matplotlib)
 make viewer   # open the Godot viewer project (godot --path godot/viewer)
 ```
 
@@ -100,6 +103,33 @@ on unchanged input leaves the registry byte-identical. Note that the registry fo
 parcels outside the fetched box are not in the input, so shrinking or moving the slice retires
 their IDs (reversible: an entry whose exact reference reappears is revived). Retiring or
 reassigning IDs is a breaking change of the map artifact (see the versioning decision).
+
+## Buildings: rules, meshes, export
+
+`make rules` writes `data/work/buildings.json`, one entry per building assigned to a parcel
+(buildings without a parcel are skipped and counted): ID, parcel ID, footprint (local metres,
+holes allowed), `height_m` (to the roof top), `eave_height_m`, `roof_height_m`, `levels`, `roof`
+(`flat`, `gabled`, `hipped`), `ridge_dir` (radians, pitched roofs only), `wall_colour` and
+`roof_colour` (RGB). Precedence: `pipeline/config/overrides.yaml` > OSM tags (`height`,
+`building:levels`, `roof:shape`, `roof:levels`) > building-type class > footprint-area class.
+Thresholds, classes and colour palettes are in the `buildings` section of
+`pipeline/config/rules.yaml`. A gabled or hipped ridge runs along the longest side of the
+minimum rotated rectangle; if the footprint fills less than 80% of it the roof is flat. Colours
+and the small random choices are drawn from a generator seeded with sha256 of
+`<parcel id>:<building id>`, so reruns give identical output. The override file format (by parcel
+ID or OSM id, any building field) is documented at the top of `overrides.yaml`.
+
+`make export` writes `out/map/` (gitignored): `chunks/chunk_<ix>_<iy>.glb` (one glTF per 250 m
+chunk that has buildings; Y-up axes x east, y up, z -north, metres, one frame for all chunks),
+where each parcel with buildings has the nodes `parcel_<ID>_visual` (walls and roof, flat
+per-face vertex colours) and `parcel_<ID>_collision` (extruded footprint, no roof detail);
+`parcels.json` (ID, cadastral reference, kind, polygon and anchor in local metres with x east
+and y north, chunk, building IDs) and `manifest.json` (map version `0.1.0-slice`, chunk list,
+attribution, input hashes, a note that terrain and roads are not generated yet). The output has
+no timestamp and is byte-identical for identical input.
+
+`make preview` renders `out/preview/topdown.png` (parcels by kind, buildings in wall colour) and
+`iso.png` (isometric view from the mesh data), both with a scale bar.
 
 ## Data attribution
 

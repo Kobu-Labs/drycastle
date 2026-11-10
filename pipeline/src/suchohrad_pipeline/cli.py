@@ -3,9 +3,11 @@
 import argparse
 from collections.abc import Sequence
 
+from suchohrad_pipeline import preview
 from suchohrad_pipeline.stages import STAGES
 
 RUN_ALL = "run-all"
+PREVIEW = "preview"  # not a map stage: renders PNGs from the work files
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -13,7 +15,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="suchohrad_pipeline",
         description="Generate the Suchohrad base map from source data.",
     )
-    choices = [*STAGES, RUN_ALL]
+    choices = [*STAGES, RUN_ALL, PREVIEW]
     parser.add_argument(
         "stage",
         choices=choices,
@@ -41,4 +43,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             if status != 0:
                 return status
         return 0
+    if args.stage == PREVIEW:
+        return preview.run()
     return STAGES[args.stage](force=args.force, report=args.report)
