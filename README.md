@@ -33,8 +33,10 @@ make lint     # ruff check
 ## Running
 
 ```sh
-make map      # run every pipeline stage in order (stubs for now)
-make fetch    # run only the fetch stage (downloads raw data into data/raw/)
+make map        # run every pipeline stage in order (fetch, normalise, parcels, then stubs)
+make fetch      # run only the fetch stage (downloads raw data into data/raw/)
+make normalise  # raw data -> local metres in data/work/normalised/
+make parcels    # parcel registry, kinds, building assignment; prints a report
 make viewer   # open the Godot viewer project (godot --path godot/viewer)
 ```
 
@@ -66,6 +68,38 @@ Reruns skip files whose request parameters are unchanged and download nothing; u
 `cd pipeline && uv run python -m suchohrad_pipeline fetch --force` to refetch everything.
 Requests are sequential, use the User-Agent `suchohrad-pipeline`, have timeouts and retry with
 backoff (Overpass falls back to a second public instance).
+
+## Normalise and the parcel registry
+
+`make normalise` reprojects the OSM data and cadastral parcels from WGS84 to EPSG:5514 and then
+shifts them into a local metric frame whose origin is the slice centre (`slice_centre.json`).
+Axes stay those of EPSG:5514. It writes `data/work/normalised/{buildings,highways,landuse,parcels}.geojson`
+(local metres, gitignored) and `data/work/frame.json`.
+
+`make parcels` gives every cadastral parcel an own stable ID (`P-0001`, 4 digits, growing when
+needed) and writes `data/work/parcels.json` (ID, cadastral reference, polygon, area, kind,
+anchor point, building ids, 250 m chunk index) and prints a report (counts by kind, buildings
+assigned or unassigned, new and retired IDs). Kind and building-assignment rules, with their
+order and thresholds, are documented in `pipeline/config/rules.yaml`.
+
+The committed registry `registry/parcels.registry.json` is the source of truth for IDs. Per
+parcel it holds `id`, `cadastral_ref`, `previous_refs`, `status` (`active` or `retired`) and a
+geometry signature in absolute EPSG:5514 metres (area, centroid and outline, used for matching;
+it comes from the cadastre only). Each regeneration matches current parcels to it:
+
+1. same cadastral reference keeps the ID;
+2. otherwise an unmatched registry entry with outline IoU >= 0.5 keeps its ID (the parcel was
+   renumbered; the old reference is appended to `previous_refs`);
+3. otherwise the parcel is new and gets the next ID after the highest ever used, in cadastral
+   reference order;
+4. entries nobody claimed become `retired`. They are never deleted and their IDs never reused.
+
+To regenerate after the cadastre or OSM changed: `make fetch` (or `fetch --force`), `make parcels`
+(which needs `make normalise` first), then review and commit the `registry/` diff. Re-running
+on unchanged input leaves the registry byte-identical. Note that the registry follows the slice:
+parcels outside the fetched box are not in the input, so shrinking or moving the slice retires
+their IDs (reversible: an entry whose exact reference reappears is revived). Retiring or
+reassigning IDs is a breaking change of the map artifact (see the versioning decision).
 
 ## Data attribution
 
