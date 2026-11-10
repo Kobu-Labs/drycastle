@@ -1,0 +1,5 @@
+# Manual corrections applied after the rules stage.
+#
+# Planned contents (not implemented yet): per-parcel or per-building fixes for
+# cases the automatic rules get wrong, keyed by our stable parcel ID (never by
+# cadastral number or street address). Empty until the pipeline needs one.
