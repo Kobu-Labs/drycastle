@@ -39,6 +39,13 @@ under it when `z` is null), `rotation_deg` counter-clockwise seen from above, un
 `colour` (material override). Unknown or missing assets give a warning and a magenta placeholder box.
 Objects have no collision in v1.
 
+Regions (`regions` in `edits.json`, schema in `pipeline/src/suchohrad_pipeline/edits.py`) are baked into the
+chunk files as `region_<ID>` nodes (flat colour, no collision) and rebuilt for hot reload by
+`region-run --region ID --glb PATH`, whose JSON summary has `replaces` (the baked `region_<ID>` nodes to hide)
+and a GLB with one `region_<ID>` node per region in the chunk frame. `EditsFile` keeps `regions` as read and writes
+them canonically (the key is omitted while empty); `ObjectEdits.ValidateDocument` mirrors the schema. The editor UI
+for drawing regions is a separate piece of work.
+
 Assets directory: `--assets DIR`, else env `SUCHOHRAD_ASSETS`, else `<repo>/assets`.
 
 Loader API additions: `ApplyFragment(path)` takes a `parcel-run --out ... --glb ...` fragment, hides the baked

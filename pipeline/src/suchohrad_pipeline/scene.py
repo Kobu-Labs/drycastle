@@ -13,8 +13,10 @@ import numpy as np
 import shapely
 
 from suchohrad_pipeline.buildings import hex_to_rgb
+from suchohrad_pipeline.edits import DEFAULT_EDITS, load_edits
 from suchohrad_pipeline.meshes import Mesh, building_mesh, collision_mesh
 from suchohrad_pipeline.propmeshes import fence_mesh, parcel_props_meshes, trees_mesh
+from suchohrad_pipeline.regions import node_name, plan_regions, region_meshes
 from suchohrad_pipeline.roads import road_mesh
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 from suchohrad_pipeline.terrain import Terrain, load_terrain
@@ -62,6 +64,7 @@ class MapScene:
     graph: dict | None = None
     props: dict | None = None
     spawns: dict | None = None
+    warnings: list[str] = field(default_factory=list)  # stale or unusable edits entries
 
     def chunks(self) -> list[Chunk]:
         return sorted(set(self.parcels) | set(self.nodes) | set(self.parcel_props))
@@ -90,8 +93,12 @@ def build_scene(
     rules_path: Path = DEFAULT_RULES,
     exaggeration: float = 1.0,
     area: str | None = None,
+    edits_path: Path = DEFAULT_EDITS,
 ) -> MapScene:
-    """All meshes of the map. ``exaggeration`` scales heights (preview only; 1 for export)."""
+    """All meshes of the map. ``exaggeration`` scales heights (preview only; 1 for export).
+
+    ``edits_path`` is read for the regions (``region_<ID>`` nodes in every chunk they touch).
+    """
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     chunk_m = float(parcels_doc["chunk_size_m"])
     buildings = {
@@ -141,6 +148,15 @@ def build_scene(
     scene.graph = _read(work_dir, "roads.json")
     if scene.graph:
         put("roads", _by_chunk(road_mesh(scene.graph, t, load_section("roads", rules_path)), chunk_m))
+
+    rplan = plan_regions(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), t)
+    scene.warnings += rplan.warnings
+    if rplan.regions:
+        meshes = region_meshes(
+            rplan, t, scene.graph, load_section("roads", rules_path), load_section("regions", rules_path)
+        )
+        for rid, mesh in meshes.items():
+            put(node_name(rid), _by_chunk(mesh, chunk_m))
 
     scene.props = _read(work_dir, "props.json")
     if scene.props:

@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run preview map viewer viewer-smoke viewer-edit-smoke viewer-editor-smoke viewer-panel-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-editor-smoke viewer-panel-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint
 
 setup:
 	cd pipeline && uv sync
@@ -39,6 +39,13 @@ PARCEL_ARGS = $(if $(PARCEL),--parcel $(PARCEL),) $(if $(GROUP),--group $(GROUP)
 
 parcel-run:
 	cd pipeline && uv run python -m suchohrad_pipeline parcel-run --area $(AREA) $(PARCEL_ARGS)
+
+# [REGION=R-0001] [OUT=file.json] GLB=file.glb: meshes of the regions (none named: all) as a GLB with
+# region_<ID> nodes (hot reload); the JSON summary lists the regions to replace
+REGION_ARGS = $(if $(REGION),--region $(REGION),) $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb $(abspath $(GLB)),)
+
+region-run:
+	cd pipeline && uv run python -m suchohrad_pipeline region-run --area $(AREA) $(REGION_ARGS)
 
 EXAG ?= 3
 
