@@ -151,15 +151,6 @@ public class WeaponTests
     }
 
     [Fact]
-    public void BazookaFireDoesNothing()
-    {
-        var r = new Rig();
-        r.Tick(slot: 3); r.Idle(1);
-        Assert.Null(r.Tick(true, slot: 3));
-        Assert.Equal(1, r.W.Mag(3));
-    }
-
-    [Fact]
     public void KnifeSwingsAtItsInterval()
     {
         var r = new Rig();

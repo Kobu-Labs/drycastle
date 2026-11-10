@@ -9,6 +9,12 @@ public sealed record ShotMsg(ushort Shooter, byte Weapon, Vector3 Origin, Vector
 /// <summary>Hit (to attacker and victim). Damage is what was dealt (before clamping to remaining health).</summary>
 public sealed record HitMsg(ushort Victim, ushort Attacker, byte Weapon, ushort Damage, bool Headshot, bool Backstab, bool Kill);
 
+/// <summary>Rocket launched (broadcast). Id matches the projectile entity in snapshots.</summary>
+public sealed record LaunchMsg(ushort Id, ushort Owner, byte Weapon, Vector3 Origin, Vector3 Velocity);
+
+/// <summary>Explosion (broadcast, for effects): where, which projectile and who fired it.</summary>
+public sealed record ExplosionMsg(ushort Id, ushort Owner, byte Weapon, Vector3 Position);
+
 /// <summary>Owner-only ammo state: selected slot (1-based), seconds of reload left (0 = not reloading) and per slot magazine and reserve.</summary>
 public sealed record AmmoMsg(byte Slot, float ReloadRemaining, IReadOnlyList<(ushort Mag, ushort Reserve)> Slots)
 {
@@ -20,6 +26,8 @@ public sealed record AmmoMsg(byte Slot, float ReloadRemaining, IReadOnlyList<(us
 /// Payload codecs for the weapon event kinds (little-endian).
 ///   Shot: u16 shooter, u8 weapon, f32 x3 origin, f32 x3 end
 ///   Hit:  u16 victim, u16 attacker, u8 weapon, u16 damage, u8 flags (1 headshot, 2 backstab, 4 kill)
+///   Launch: u16 id, u16 owner, u8 weapon, f32 x3 origin, f32 x3 velocity
+///   Explosion: u16 id, u16 owner, u8 weapon, f32 x3 position
 ///   Ammo: u8 slot, f32 reloadRemaining, u8 n, n * (u16 mag, u16 reserve)
 ///   Debug teleport (client to server, dev servers only): u8 2, u16 target, f32 x3 position
 /// </summary>
@@ -52,6 +60,32 @@ public static class WeaponCodec
     public static HitMsg? DecodeHit(byte[] d) => d.Length < 8 ? null : new HitMsg(
         BinaryPrimitives.ReadUInt16LittleEndian(d), BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(2)), d[4],
         BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(5)), (d[7] & 1) != 0, (d[7] & 2) != 0, (d[7] & 4) != 0);
+
+    public static byte[] Encode(LaunchMsg m)
+    {
+        var b = new byte[29];
+        BinaryPrimitives.WriteUInt16LittleEndian(b, m.Id);
+        BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(2), m.Owner);
+        b[4] = m.Weapon;
+        Put(b, 5, m.Origin); Put(b, 17, m.Velocity);
+        return b;
+    }
+
+    public static LaunchMsg? DecodeLaunch(byte[] d) => d.Length < 29 ? null : new LaunchMsg(
+        BinaryPrimitives.ReadUInt16LittleEndian(d), BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(2)), d[4], Get(d, 5), Get(d, 17));
+
+    public static byte[] Encode(ExplosionMsg m)
+    {
+        var b = new byte[17];
+        BinaryPrimitives.WriteUInt16LittleEndian(b, m.Id);
+        BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(2), m.Owner);
+        b[4] = m.Weapon;
+        Put(b, 5, m.Position);
+        return b;
+    }
+
+    public static ExplosionMsg? DecodeExplosion(byte[] d) => d.Length < 17 ? null : new ExplosionMsg(
+        BinaryPrimitives.ReadUInt16LittleEndian(d), BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(2)), d[4], Get(d, 5));
 
     public static byte[] Encode(AmmoMsg m)
     {

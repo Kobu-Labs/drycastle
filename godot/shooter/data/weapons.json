@@ -24,7 +24,7 @@
       "magazine_size": 1, "reserve_ammo": 4, "reload_time": 3.5, "switch_time": 0.7,
       "move_speed_multiplier": 0.85,
       "projectile_speed": 40, "projectile_life": 3.75,
-      "splash": { "radius": 6, "full_damage_radius": 1.5, "edge_damage": 20, "self_damage_multiplier": 0.5 }
+      "splash": { "radius": 6, "full_damage_radius": 1.5, "edge_damage": 20, "self_damage_multiplier": 0.5, "knockback_speed": 4.5 }
     },
     {
       "id": "knife", "kind": "melee", "full_auto": false,

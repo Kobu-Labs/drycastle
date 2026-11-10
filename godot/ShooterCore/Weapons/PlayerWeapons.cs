@@ -3,13 +3,13 @@ namespace Suchohrad.ShooterCore;
 /// <summary>Weapon related input of one tick. <see cref="Slot"/> is the wanted hotbar slot 1..4 (0 = no preference).</summary>
 public readonly record struct WeaponInput(bool Fire, bool Reload, int Slot, bool Next);
 
-/// <summary>A trigger pull that fired (hitscan) or swung (melee) this tick.</summary>
+/// <summary>A trigger pull that fired (hitscan, projectile) or swung (melee) this tick.</summary>
 public readonly record struct FireOutcome(WeaponDef Weapon, int WeaponIndex, float SpreadDegrees);
 
 /// <summary>
 /// Weapon state of one player: hotbar (slots 1-4 = the order of weapons.json), ammo per weapon, reload, switch and
 /// fire timers, spread. Godot-free and deterministic: time is passed in (seconds), the host calls <see cref="Update"/>
-/// once per processed input. The projectile weapon (bazooka) is present but its fire does nothing yet.
+/// once per processed input. A projectile pull (bazooka) consumes a round and returns the outcome; the host spawns the rocket.
 /// </summary>
 public sealed class PlayerWeapons
 {
@@ -108,8 +108,12 @@ public sealed class PlayerWeapons
                 _spreadExtra = Math.Min(_spreadExtra + w.SpreadPerShot, Math.Max(0, w.SpreadMax - w.SpreadBase));
                 Changed = true;
                 return new FireOutcome(w, Slot - 1, spread);
-            default:
-                return null; // projectile weapons: another issue
+            default: // projectile: one rocket per magazine, the reload is started by the next pull or the reload key
+                if (_mag[Slot - 1] <= 0) { if (CanReload(w)) StartReload(now, w); return null; }
+                _mag[Slot - 1]--;
+                _nextFire = now + w.FireInterval;
+                Changed = true;
+                return new FireOutcome(w, Slot - 1, 0);
         }
     }
 

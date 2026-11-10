@@ -18,6 +18,8 @@ public enum EventKind : byte
     Debug = 8,
     /// <summary>Server to the owning client: ammo, slot and reload state.</summary>
     Ammo = 9,
+    /// <summary>Server broadcast: a rocket was launched (projectile id, owner, origin, velocity).</summary>
+    Launch = 10,
 }
 
 public abstract record ReliableMsg;

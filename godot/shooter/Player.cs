@@ -58,6 +58,14 @@ public partial class Player : CharacterBody3D
         _state = new MoveState { Position = ToN(feet), OnFloor = false, FallPeakY = feet.Y };
     }
 
+    /// <summary>Add a velocity impulse (explosion knockback, server only) and leave the floor so gravity and the physics move take over.</summary>
+    public void AddImpulse(Vector3 v)
+    {
+        _state.Velocity += ToN(v);
+        _state.OnFloor = false;
+        _state.FallPeakY = Mathf.Max(_state.FallPeakY, GlobalPosition.Y);
+    }
+
     public void Respawn()
     {
         Health = MoveConsts.MaxHealth;

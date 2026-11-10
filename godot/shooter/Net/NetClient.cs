@@ -35,10 +35,17 @@ public partial class NetClient : Node
     public WeaponsFile Weapons = null!;
     /// <summary>Weapons smoke role: "a" (shoots) or "b" (stands still and counts hits); empty = none.</summary>
     public string WeaponsBot = "";
+    /// <summary>Bazooka smoke role ("a"/"b"); WeaponsBot carries the same letter so the shared bot plumbing runs.</summary>
+    public string BazookaBot = "";
     /// <summary>Latest owner ammo state from the server (null before the first one).</summary>
     public AmmoMsg? Ammo { get; private set; }
     readonly List<(double T, ShotMsg M)> _shotLog = new();
     readonly List<(double T, HitMsg M)> _hitLog = new();
+    readonly List<(double T, LaunchMsg M)> _launchLog = new();
+    readonly List<(double T, ExplosionMsg M)> _explosionLog = new();
+    sealed class Rocket { public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; }
+    readonly Dictionary<ushort, Rocket> _rockets = new();
+    readonly HashSet<ushort> _deadRockets = new();
     readonly List<(double T, AmmoMsg M)> _ammoLog = new();
     int _wantSlot = 1;
     Label? _hud;
@@ -98,6 +105,7 @@ public partial class NetClient : Node
             return;
         }
         RenderRemotes();
+        RenderRockets();
         UpdateHud();
     }
 
@@ -199,10 +207,32 @@ public partial class NetClient : Node
         foreach (var (id, rec) in _dec.States)
         {
             if (id == _myId) { OnSelf(rec, h.Ack); continue; }
-            if (rec.Type != EntityType.Player) continue; // projectiles and vehicles are rendered by later issues
+            if (rec.Type == EntityType.Projectile) { OnRocketState(id, rec); continue; }
+            if (rec.Type != EntityType.Player) continue; // vehicles are rendered by a later issue
             if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id); _remotes[id] = r; }
             r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
+        }
+    }
+
+    /// <summary>Rockets are drawn at the newest snapshot position and dead-reckoned along their direction (a 100 ms interpolation delay would make them vanish 4 m short of the blast).</summary>
+    void OnRocketState(ushort id, EntityRecord rec)
+    {
+        if (_deadRockets.Contains(id)) return;
+        var dir = HitMath.Forward(rec.YawRad, rec.PitchRad);
+        var speed = Weapons != null && rec.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[rec.Weapon].ProjectileSpeed : 40f;
+        if (!_rockets.TryGetValue(id, out var r)) { r = new Rocket { Node = RocketFx.Make(World) }; _rockets[id] = r; }
+        r.Pos = rec.Position; r.Dir = dir; r.At = Now; r.Speed = speed;
+    }
+
+    void RenderRockets()
+    {
+        foreach (var r in _rockets.Values)
+        {
+            if (r.Node == null) continue;
+            var p = r.Pos + r.Dir * (r.Speed * (float)Math.Min(0.1, Now - r.At));
+            r.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
+            if (Mathf.Abs(r.Dir.Y) < 0.99f) r.Node.LookAt(r.Node.GlobalPosition + new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z));
         }
     }
 
@@ -451,6 +481,17 @@ public partial class NetClient : Node
                 _shotLog.Add((Now, sh));
                 var melee = Weapons != null && sh.Weapon < Weapons.Weapons.Count && Weapons.Weapons[sh.Weapon].Kind == WeaponKind.Melee;
                 ShotFx.Spawn(World, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), new Vector3(sh.End.X, sh.End.Y, sh.End.Z), melee);
+                break;
+            case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
+                _launchLog.Add((Now, l));
+                break;
+            case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
+                _explosionLog.Add((Now, ex));
+                if (_rockets.Remove(ex.Id, out var rk)) { if (GodotObject.IsInstanceValid(rk.Node)) rk.Node.QueueFree(); }
+                _dec.Remove(ex.Id);
+                _deadRockets.Add(ex.Id);
+                if (_deadRockets.Count > 256) _deadRockets.Clear();
+                RocketFx.Explode(World, new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z), Weapons?.Weapons.ElementAtOrDefault(ex.Weapon)?.Splash?.Radius ?? 6f);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 _hitLog.Add((Now, h));

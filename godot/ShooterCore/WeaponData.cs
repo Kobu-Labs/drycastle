@@ -71,4 +71,10 @@ public class SplashDef
     public float FullDamageRadius { get; set; }
     public float EdgeDamage { get; set; }
     public float SelfDamageMultiplier { get; set; } = 1;
+    /// <summary>
+    /// Knockback speed (m/s) added to a player hit at full splash strength; scales with the splash fraction (damage / full damage).
+    /// Tuned small (4.5 m/s: a point-blank blast lifts about 0.5 m, a rocket jump is a hop, not flight); ground friction
+    /// kills the horizontal part within a few ticks. 0 disables knockback.
+    /// </summary>
+    public float KnockbackSpeed { get; set; } = 4.5f;
 }

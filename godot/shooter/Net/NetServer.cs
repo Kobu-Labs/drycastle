@@ -63,6 +63,12 @@ public partial class NetServer : Node
     readonly Random _rng = new();
     // weapons smoke bookkeeping
     int _shotsFired, _hitsLanded, _headshots, _wallBlocked, _backstabs, _refills;
+    // rockets: server-owned projectile entities, ids from 0x8000 up (player ids count up from 1)
+    sealed class Rocket { public ushort Id, Owner; public byte Weapon; public Vector3 Pos, Dir; public float Age; }
+    readonly List<Rocket> _rockets = new();
+    ushort _nextRocket = 0x8000;
+    public bool BazookaSmoke;
+    int _rocketsFired, _explosions, _directHits, _splashHits, _selfHits, _worldExplosions, _expiredRockets, _knocked;
     public const float ArenaX = 20000f, ArenaZ = 20000f;
 
     public override void _Ready()
@@ -74,7 +80,7 @@ public partial class NetServer : Node
             GetTree().Quit(2);
             return;
         }
-        if (WeaponsSmoke) BuildArena();
+        if (WeaponsSmoke || BazookaSmoke) BuildArena();
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
@@ -95,12 +101,17 @@ public partial class NetServer : Node
         Poll();
         _match.Update();
         foreach (var c in _clients.Values.ToList()) if (c.Joined) SimulateClient(c, (float)delta);
+        StepRockets((float)delta);
         SendSnapshots();
         if (_clients.Count > _peakPlayers) _peakPlayers = _clients.Count;
         foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved;
         if (_tick % (Wire.TickRate * 2) == 0 && _clients.Count > 0)
             GD.Print($"server: tick {_tick}, players {string.Join(", ", _clients.Values.Where(c => c.Joined).Select(c => $"{c.Name}#{c.Id}@({c.Body.GlobalPosition.X:F1},{c.Body.GlobalPosition.Y:F1},{c.Body.GlobalPosition.Z:F1}) ack={c.Ack}"))}");
-        if (WeaponsSmoke)
+        if (BazookaSmoke)
+        {
+            if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishBazooka();
+        }
+        else if (WeaponsSmoke)
         {
             if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishWeapons();
         }
@@ -150,6 +161,15 @@ public partial class NetServer : Node
         }
         Box("ArenaFloor", new Vector3(ArenaX, -1, ArenaZ), new Vector3(400, 2, 400));
         Box("ArenaWall", new Vector3(ArenaX + 20, 2, ArenaZ - 3), new Vector3(14, 4, 0.5f));
+    }
+
+    void FinishBazooka()
+    {
+        var ok = _rocketsFired >= 3 && _explosions >= 3 && _directHits >= 1 && _splashHits >= 1 && _selfHits >= 1 && _worldExplosions >= 2 && _kills >= 1 && _refills >= 1 && _knocked >= 1;
+        GD.Print($"server: bazooka smoke rockets={_rocketsFired} explosions={_explosions} direct={_directHits} splash={_splashHits} self={_selfHits} world={_worldExplosions} expired={_expiredRockets} knocked={_knocked} kills={_kills} refills={_refills}");
+        GD.Print(ok ? "SHOOTER_BAZOOKA_SERVER_OK" : "SHOOTER_BAZOOKA_SERVER_FAIL");
+        GetTree().Quit(ok ? 0 : 2);
+        SetPhysicsProcess(false);
     }
 
     void FinishWeapons()
@@ -207,7 +227,7 @@ public partial class NetServer : Node
         {
             var m = Wire.DecodeReliable(d);
             if (m is HelloMsg h && !c.Joined) OnHello(c, h);
-            else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || WeaponsSmoke)) OnDebug(c, e.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || WeaponsSmoke || BazookaSmoke)) OnDebug(c, e.Payload);
         }
         else if (c.Joined && d[0] == Wire.TInput)
         {
@@ -310,6 +330,7 @@ public partial class NetServer : Node
             case PlayerKilled k:
                 _kills += k.Killer != k.Victim ? 1 : 0;
                 if (WeaponsSmoke && _kills >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5;
+                if (BazookaSmoke && _kills >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.5;
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon)));
                 break;
             case PlayerDied d: BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
@@ -395,7 +416,16 @@ public partial class NetServer : Node
             if (hit == null && HitMath.Raycast(N(eye), d, MaxShotRange, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
             var end = eye + dir * (hit?.Distance ?? Math.Min(wall, MaxShotRange));
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
-            if (hit is { } h) Deal(c, shot, h.Id, HitMath.HitscanDamage(w, h.Distance, h.Head), h.Head, false);
+            if (hit is { } h) Deal(c.Id, (byte)shot.WeaponIndex, h.Id, HitMath.HitscanDamage(w, h.Distance, h.Head), h.Head, false);
+        }
+        else if (w.Kind == WeaponKind.Projectile)
+        {
+            var dir = HitMath.Forward(yaw, pitch);
+            var rocket = new Rocket { Id = _nextRocket, Owner = c.Id, Weapon = (byte)shot.WeaponIndex, Pos = eye, Dir = new Vector3(dir.X, dir.Y, dir.Z) };
+            _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
+            _rockets.Add(rocket);
+            _rocketsFired++;
+            BroadcastEvent(EventKind.Launch, WeaponCodec.Encode(new LaunchMsg(rocket.Id, c.Id, rocket.Weapon, N(eye), dir * w.ProjectileSpeed)));
         }
         else if (w.Kind == WeaponKind.Melee)
         {
@@ -409,23 +439,82 @@ public partial class NetServer : Node
                 if (WorldDistance(eye, to.Normalized(), to.Length()) < to.Length() - 0.05f) { _wallBlocked++; hit = null; }
             }
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(eye) + fwd * w.Reach)));
-            if (hit is { } m) Deal(c, shot, m.Id, HitMath.MeleeDamage(w, m.Backstab), false, m.Backstab);
+            if (hit is { } m) Deal(c.Id, (byte)shot.WeaponIndex, m.Id, HitMath.MeleeDamage(w, m.Backstab), false, m.Backstab);
         }
     }
 
-    void Deal(Client attacker, FireOutcome shot, ushort victim, float damage, bool head, bool backstab)
+    /// <summary>Applies damage through the match and sends the hit event; returns the result (Ignored when absorbed).</summary>
+    DamageResult Deal(ushort attackerId, byte weaponIdx, ushort victim, float damage, bool head, bool backstab)
     {
-        var r = _match.ApplyDamage(victim, attacker.Id, (byte)shot.WeaponIndex, damage);
-        if (r == DamageResult.Ignored) return; // dead, spawn protected or round not running: the shot is absorbed
+        var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage);
+        if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
         _hitsLanded++;
         if (head) _headshots++;
         if (backstab) _backstabs++;
         var kill = r == DamageResult.Killed;
-        var msg = new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attacker.Id, (byte)shot.WeaponIndex, (ushort)damage, head, backstab, kill)));
-        Send(attacker, msg);
+        var msg = new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attackerId, weaponIdx, (ushort)damage, head, backstab, kill)));
+        _byId.TryGetValue(attackerId, out var attacker);
+        if (attacker != null) Send(attacker, msg);
         if (_byId.TryGetValue(victim, out var v) && v != attacker) Send(v, msg);
-        if (kill && victim != attacker.Id) { attacker.W.RefillReserves(); _refills++; }
-        GD.Print($"server: hit {attacker.Name} -> #{victim} {damage:F0}{(head ? " head" : "")}{(backstab ? " backstab" : "")}{(kill ? " KILL" : "")}");
+        if (kill && victim != attackerId && attacker != null) { attacker.W.RefillReserves(); _refills++; }
+        GD.Print($"server: hit #{attackerId} -> #{victim} {damage:F0}{(head ? " head" : "")}{(backstab ? " backstab" : "")}{(kill ? " KILL" : "")}");
+        return r;
+    }
+
+    /// <summary>Moves every rocket one tick: swept against the world and live players (not the owner), explodes on impact or when its life runs out.</summary>
+    void StepRockets(float dt)
+    {
+        for (var k = _rockets.Count - 1; k >= 0; k--)
+        {
+            var r = _rockets[k];
+            var w = Weapons.Weapons[r.Weapon];
+            var len = w.ProjectileSpeed * dt;
+            var wall = WorldDistance(r.Pos, r.Dir, len);
+            var sweep = ProjectileMath.Sweep(N(r.Pos), N(r.Dir), len, wall, LiveTargets(), r.Owner);
+            switch (sweep.Kind)
+            {
+                case ImpactKind.Player:
+                    _rockets.RemoveAt(k);
+                    Explode(r, w, r.Pos + r.Dir * sweep.Distance, sweep.Victim);
+                    continue;
+                case ImpactKind.World:
+                    _rockets.RemoveAt(k);
+                    _worldExplosions++;
+                    // pulled back a hair so the blast centre is in front of the surface, not inside it
+                    Explode(r, w, r.Pos + r.Dir * MathF.Max(0, sweep.Distance - 0.02f), null);
+                    continue;
+            }
+            r.Pos += r.Dir * len;
+            r.Age += dt;
+            if (r.Age >= w.ProjectileLife) { _rockets.RemoveAt(k); _expiredRockets++; Explode(r, w, r.Pos, null); }
+        }
+    }
+
+    /// <summary>
+    /// Explosion: the direct-hit victim takes the full damage (and no splash on top); everyone else alive within the splash
+    /// radius takes the linear falloff damage, the owner scaled by the self multiplier. Splash ignores walls. Affected players get knockback.
+    /// </summary>
+    void Explode(Rocket r, WeaponDef w, Vector3 pos, ushort? direct)
+    {
+        _explosions++;
+        BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(r.Id, r.Owner, r.Weapon, N(pos))));
+        foreach (var t in LiveTargets())
+        {
+            var isDirect = direct == t.Id;
+            var dist = ProjectileMath.DistanceToCapsule(N(pos), t.Feet, HitMath.Height(t.Crouching), MoveConsts.CapsuleRadius);
+            var self = t.Id == r.Owner;
+            var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, self);
+            if (dmg <= 0) continue;
+            var res = Deal(r.Owner, r.Weapon, t.Id, dmg, false, false);
+            if (res == DamageResult.Ignored) continue; // spawn protected: neither damage nor knockback
+            if (isDirect) _directHits++; else if (self) _selfHits++; else _splashHits++;
+            if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v))
+            {
+                var center = t.Feet + new NVec3(0, HitMath.Height(t.Crouching) / 2, 0);
+                var k = ProjectileMath.Knockback(w, N(pos), center, isDirect ? 1f : ProjectileMath.SplashFraction(w, dist));
+                if (k != NVec3.Zero) { v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z)); _knocked++; }
+            }
+        }
     }
 
     void SendSnapshots()
@@ -435,6 +524,9 @@ public partial class NetServer : Node
             if (c.Joined)
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, _match.StateOf(c.Id), c.Slot));
+        foreach (var r in _rockets)
+            ents.Add(EntityRecord.Make(r.Id, EntityType.Projectile, N(r.Pos),
+                MathF.Atan2(-r.Dir.X, -r.Dir.Z), MathF.Asin(Math.Clamp(r.Dir.Y, -1f, 1f)), 0, EntityState.Alive, r.Weapon));
         foreach (var c in _clients.Values)
         {
             if (!c.Joined) continue;
