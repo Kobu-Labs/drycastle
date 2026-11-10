@@ -1,0 +1,86 @@
+{
+ "groups": {
+  "G-0002": {
+   "fence": {
+    "mode": "none"
+   },
+   "parcels": [
+    "P-0004",
+    "P-0005"
+   ]
+  },
+  "G-0010": {
+   "parcels": [
+    "P-0100"
+   ]
+  }
+ },
+ "parcels": {
+  "P-0004": {
+   "fence": {
+    "colour": "#aabbcc",
+    "gaps": [
+     {
+      "at": [
+       -465123.25,
+       -1203456.5
+      ],
+      "width_m": 2.5
+     },
+     {
+      "at": [
+       -465100,
+       -1203400.125
+      ],
+      "width_m": 3
+     }
+    ],
+    "height_m": 1.4,
+    "mode": "custom",
+    "type": "wire"
+   },
+   "objects": [
+    {
+     "asset": "prim:slab",
+     "colour": "#334455",
+     "id": "slab-žá \"q\" \\ x",
+     "position": [
+      -465123.456,
+      -1203456.789
+     ],
+     "rotation_deg": 1e-05,
+     "scale": 2.0,
+     "z": -0.5
+    },
+    {
+     "asset": "pack:kenney-car-kit/sedan",
+     "id": "car-1",
+     "position": [
+      1e+16,
+      123456789012345.6
+     ],
+     "rotation_deg": -0.0,
+     "scale": 1e-07
+    }
+   ],
+   "trees": {
+    "density_per_1000m2": 1e-05,
+    "seed_offset": -3
+   }
+  },
+  "P-0005": {
+   "trees": {
+    "count": 0
+   }
+  },
+  "P-0100": {
+   "objects": []
+  },
+  "P-9999": {
+   "fence": {
+    "mode": "none"
+   }
+  }
+ },
+ "version": 1
+}

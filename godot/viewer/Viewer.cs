@@ -10,7 +10,9 @@ using Suchohrad.MapLoader;
 /// Map viewer root. Loads the map, adds light and sky, spawns the player.
 /// Options (after "--"): --map DIR, --seed N, --smoke, --screenshot PATH,
 /// --view overview|oblique|street|player, --frames N, --assets DIR, --watch, --edits PATH,
-/// --area slice|village, --state PATH, --edit-smoke --edit-smoke-plan FILE.
+/// --area slice|village, --state PATH, --edit-smoke --edit-smoke-plan FILE,
+/// --editor (editor mode, implies --watch; F2 toggles walk/editor), --editor-smoke --editor-smoke-plan FILE,
+/// --editor-shot PNG [--select P-0001,P-0002] [--shot-at P-0001] (editor screenshot of the main window).
 /// Env: SUCHOHRAD_MAP, SUCHOHRAD_ASSETS, SUCHOHRAD_UV (the uv executable).
 /// --watch hot-reloads the edits file (see EditsWatcher) and writes editor-state.json.
 /// </summary>
@@ -24,6 +26,7 @@ public partial class Viewer : Node3D
     readonly HashSet<string> _flags = new();
     string? _replaced;
     EditsWatcher? _watcher;
+    EditorMode? _editor;
 
     public override void _Ready()
     {
@@ -65,9 +68,19 @@ public partial class Viewer : Node3D
         _player.Position = sp.Position + Vector3.Up * 1.0f;
         _player.LookYawPitch(rng.RandfRange(0, 360), 0);
 
-        if (_flags.Contains("watch") || _flags.Contains("edit-smoke")) StartWatcher(repo);
+        var editorMode = _flags.Contains("editor") || _flags.Contains("editor-smoke") || _opts.ContainsKey("editor-shot");
+        if (editorMode || _flags.Contains("watch") || _flags.Contains("edit-smoke")) StartWatcher(repo);
+        if (editorMode)
+        {
+            _editor = new EditorMode { Name = "Editor", Map = _map, Player = _player, Watcher = _watcher, EditsPath = _watcher!.EditsPath };
+            AddChild(_editor);
+            // --editor starts in editor mode; the smoke and screenshot drivers switch it themselves
+            if (_flags.Contains("editor") && !_flags.Contains("editor-smoke")) _editor.SetActive(true);
+        }
 
-        if (_flags.Contains("edit-smoke")) _ = RunEditSmoke();
+        if (_flags.Contains("editor-smoke")) _ = RunEditorSmoke();
+        else if (_opts.ContainsKey("editor-shot")) _ = RunEditorShot();
+        else if (_flags.Contains("edit-smoke")) _ = RunEditSmoke();
         else if (_flags.Contains("smoke")) _ = RunSmoke(rng);
         else if (_opts.ContainsKey("screenshot")) _ = RunScreenshot();
     }
@@ -89,7 +102,12 @@ public partial class Viewer : Node3D
             PipelineDir = Path.Combine(repo, "pipeline"),
             StatePath = Path.GetFullPath(_opts.GetValueOrDefault("state") ?? Path.Combine(repo, "out", "editor-state.json")),
             Map = _map,
-            CameraProvider = () => (_player.Camera.GlobalPosition, -_player.Camera.GlobalBasis.Z),
+            CameraProvider = () =>
+            {
+                var cam = _editor?.CurrentCamera ?? _player.Camera;
+                return (cam.GlobalPosition, -cam.GlobalBasis.Z);
+            },
+            SelectionProvider = () => _editor?.Selection ?? (IReadOnlyCollection<string>)Array.Empty<string>(),
         };
         AddChild(_watcher);
     }
@@ -141,7 +159,7 @@ public partial class Viewer : Node3D
 
     public override void _UnhandledInput(InputEvent e)
     {
-        if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.R } && _shotCam == null)
+        if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.R } && _shotCam == null && _editor?.Active != true)
             ToggleReplacement(_player.GlobalPosition);
     }
 

@@ -14,7 +14,7 @@ using Godot;
 /// a `uv run ... parcel-run` subprocess (never blocking the main thread) and swaps the result into the
 /// map with MapLoader.ApplyFragment. Edits arriving during a run are coalesced into the next run.
 /// A file that cannot be parsed (half-written) is ignored until it changes again; a failed run only
-/// prints the error. Also writes editor-state.json (camera) at most once a second.
+/// prints the error. Also writes editor-state.json (camera, selection) at most once a second.
 /// The state at start is assumed to be what the map was built with, so nothing runs at startup.
 /// </summary>
 public partial class EditsWatcher : Node
@@ -30,6 +30,11 @@ public partial class EditsWatcher : Node
     /// <summary>Camera in Godot axes: position and the (unit) forward vector.</summary>
     public Func<(Vector3 pos, Vector3 forward)>? CameraProvider { get; init; }
 
+    /// <summary>Selected parcel ids for editor-state.json (the editor mode); null writes an empty selection.</summary>
+    public Func<IReadOnlyCollection<string>>? SelectionProvider { get; init; }
+
+    /// <summary>Raised on the main thread when a parcel-run starts: the parcel ids.</summary>
+    public event Action<IReadOnlyList<string>>? Launched;
     /// <summary>Raised on the main thread after a swap: parcel ids, edit-to-applied milliseconds.</summary>
     public event Action<IReadOnlyList<string>, double>? Applied;
     /// <summary>Raised on the main thread when a run or the swap failed.</summary>
@@ -288,6 +293,7 @@ public partial class EditsWatcher : Node
         });
         _run = run;
         GD.Print($"edits changed: regenerating {string.Join(", ", ids)}");
+        Launched?.Invoke(ids);
     }
 
     void Finish(Run run)
@@ -342,10 +348,12 @@ public partial class EditsWatcher : Node
         try
         {
             var (pos, fwd) = CameraProvider();
+            var selected = string.Join(",", (SelectionProvider?.Invoke() ?? Array.Empty<string>())
+                .OrderBy(x => x, StringComparer.Ordinal).Select(x => JsonSerializer.Serialize(x)));
             var yaw = Mathf.RadToDeg(Mathf.Atan2(-fwd.Z, fwd.X)); // counter-clockwise from east, like rotation_deg
             var json = "{\"camera\":{" +
                        $"\"x\":{F(pos.X)},\"y\":{F(-pos.Z)},\"yaw_deg\":{F(yaw)},\"z\":{F(pos.Y)}" +
-                       "},\"format_version\":1,\"selected\":[]}\n";
+                       "},\"format_version\":1,\"selected\":[" + selected + "]}\n";
             if (json == _lastState) return;
             _lastState = json;
             var dir = Path.GetDirectoryName(StatePath);
