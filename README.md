@@ -44,7 +44,9 @@ make props      # fences, trees, spawn candidates (data/work/props.json, spawns.
 make export     # chunk glTFs, parcels.json, roads.json, spawns.json, manifest.json -> out/map/
 make preview    # out/preview/topdown.png, iso.png, iso_close.png (matplotlib; EXAG=3 relief factor)
 make map AREA=village   # the same for the whole village (any target takes AREA=slice|village)
-make viewer   # open the Godot viewer project (godot --path godot/viewer)
+make viewer         # build and run the Godot viewer (see "Viewer" below)
+make viewer-smoke   # headless smoke test of the viewer and the loader
+make viewer-shot    # windowed run, writes PNGs to out/screens/
 ```
 
 To build the C# projects without the editor:
@@ -207,6 +209,31 @@ byte-identical for identical input.
 `iso.png` (isometric view from the mesh data: terrain relief, roads, buildings, fences, trees;
 `make preview EXAG=5` changes the relief exaggeration, default 3) and `iso_close.png` (the same,
 zoomed on the densest cluster of buildings), all with a scale bar.
+
+## Viewer
+
+`godot/viewer` loads the whole map at startup with the shared `godot/MapLoader` library
+(namespace `Suchohrad.MapLoader`) and lets you walk around in first person.
+
+Map folder: `--map <dir>` after Godot's own args, else the env var `SUCHOHRAD_MAP`, else
+`../../out/map` relative to `godot/viewer`. With make: `make viewer MAP=/path/to/out/map`.
+
+- Controls: WASD, mouse look, Space jump, Shift sprint, Escape frees or recaptures the mouse,
+  R replaces the nearest parcel with a magenta test cube (`test_cube.tscn`) and restores it on the
+  next press.
+- Spawn: a random candidate from `spawns.json`; `--seed N` makes it repeatable.
+- `make viewer-smoke` (headless; exit code 0 on success): prints chunk, parcel, collider and spawn
+  counts, drops the character at 3 spawn points and checks it lands and stays on the ground, then
+  tests `ReplaceParcel` / `RestoreParcel`.
+- `make viewer-shot` (needs a display): renders `overview`, `oblique`, `street` and `player` views
+  at 1600x900 into `out/screens/`; options `--screenshot <path> --view <name> --frames <n>`.
+
+Loader API (`MapLoader`): `Load(dir)`, `Root`, `Parcels` (id, kind, cadastral ref, chunk, building
+ids, anchor), `SpawnPoints`, `Stats`, `GroundHeight(x, z)`, `ReplaceParcel(id, PackedScene)`
+(hides the parcel's `_visual` node, disables its collision, instantiates the scene at the anchor on
+the terrain), `RestoreParcel(id)`. Collision meshes (`*_collision`) become hidden static trimesh
+colliders. To guarantee the flat colour look the loader
+replaces every visual material with a rough, non-metallic one that uses COLOR_0 (sRGB) as albedo.
 
 ## Data attribution
 

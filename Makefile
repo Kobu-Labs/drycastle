@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: setup test fetch normalise parcels rules terrain roads props export preview map viewer lint
+.PHONY: setup test fetch normalise parcels rules terrain roads props export preview map viewer viewer-smoke viewer-shot lint
 
 setup:
 	cd pipeline && uv sync
@@ -41,8 +41,26 @@ preview:
 map:
 	cd pipeline && uv run python -m suchohrad_pipeline run-all --area $(AREA)
 
+# MAP: map folder (default: SUCHOHRAD_MAP env var, else ../../out/map relative to godot/viewer)
+MAP_ARG = $(if $(MAP),--map $(abspath $(MAP)),)
+SEED ?= 1
+
 viewer:
-	godot --path godot/viewer
+	dotnet build godot/viewer/viewer.csproj
+	godot --path godot/viewer -- $(MAP_ARG)
+
+viewer-smoke:
+	dotnet build godot/viewer/viewer.csproj
+	godot --headless --path godot/viewer -- --smoke --seed $(SEED) $(MAP_ARG)
+
+# Windowed run; writes PNGs to out/screens/
+viewer-shot:
+	dotnet build godot/viewer/viewer.csproj
+	mkdir -p out/screens
+	godot --path godot/viewer --resolution 1600x900 -- --view overview --screenshot $(abspath out/screens)/overview.png $(MAP_ARG)
+	godot --path godot/viewer --resolution 1600x900 -- --view oblique --screenshot $(abspath out/screens)/oblique.png $(MAP_ARG)
+	godot --path godot/viewer --resolution 1600x900 -- --view street --screenshot $(abspath out/screens)/street.png $(MAP_ARG)
+	godot --path godot/viewer --resolution 1600x900 -- --view player --seed $(SEED) --screenshot $(abspath out/screens)/player.png $(MAP_ARG)
 
 lint:
 	cd pipeline && uv run ruff check .
