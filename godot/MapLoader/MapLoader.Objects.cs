@@ -54,6 +54,14 @@ public sealed partial class MapLoader
         set { _assetsDir = value; _assetManifest = null; _assetTemplates.Clear(); }
     }
 
+    /// <summary>Free the cached asset templates (they are not in the tree). Call when the map is torn down.</summary>
+    public void FreeCaches()
+    {
+        foreach (var t in _assetTemplates.Values)
+            if (t != null && GodotObject.IsInstanceValid(t)) t.Free();
+        _assetTemplates.Clear();
+    }
+
     /// <summary>Messages the loader would print as warnings (also written with GD.PushWarning).</summary>
     public List<string> Warnings { get; } = new();
 
@@ -337,6 +345,7 @@ public sealed partial class MapLoader
                 foreach (var (mi, name) in meshes)
                 {
                     mi.GetParent().RemoveChild(mi);
+                    mi.Owner = null;
                     container.AddChild(mi);
                     mi.Transform = Transform3D.Identity;
                     if (name.EndsWith("_collision")) BuildCollider(mi, name, dynamic: true);

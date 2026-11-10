@@ -9,8 +9,10 @@ using Suchohrad.MapLoader;
 /// <summary>
 /// Map viewer root. Loads the map, adds light and sky, spawns the player.
 /// Options (after "--"): --map DIR, --seed N, --smoke, --screenshot PATH,
-/// --view overview|oblique|street|player, --frames N.
-/// Env: SUCHOHRAD_MAP.
+/// --view overview|oblique|street|player, --frames N, --assets DIR, --watch, --edits PATH,
+/// --area slice|village, --state PATH, --edit-smoke --edit-smoke-plan FILE.
+/// Env: SUCHOHRAD_MAP, SUCHOHRAD_ASSETS, SUCHOHRAD_UV (the uv executable).
+/// --watch hot-reloads the edits file (see EditsWatcher) and writes editor-state.json.
 /// </summary>
 public partial class Viewer : Node3D
 {
@@ -21,6 +23,7 @@ public partial class Viewer : Node3D
     readonly Dictionary<string, string> _opts = new();
     readonly HashSet<string> _flags = new();
     string? _replaced;
+    EditsWatcher? _watcher;
 
     public override void _Ready()
     {
@@ -31,6 +34,9 @@ public partial class Viewer : Node3D
             mapDir = ProjectSettings.GlobalizePath("res://") + "../../out/map";
         mapDir = Path.GetFullPath(mapDir);
 
+        var repo = Path.GetFullPath(ProjectSettings.GlobalizePath("res://") + "../..");
+        var assets = _opts.GetValueOrDefault("assets") ?? OS.GetEnvironment("SUCHOHRAD_ASSETS");
+        _map.AssetsDir = string.IsNullOrEmpty(assets) ? Path.Combine(repo, "assets") : Path.GetFullPath(assets);
         try
         {
             AddChild(_map.Root);
@@ -59,8 +65,33 @@ public partial class Viewer : Node3D
         _player.Position = sp.Position + Vector3.Up * 1.0f;
         _player.LookYawPitch(rng.RandfRange(0, 360), 0);
 
-        if (_flags.Contains("smoke")) _ = RunSmoke(rng);
+        if (_flags.Contains("watch") || _flags.Contains("edit-smoke")) StartWatcher(repo);
+
+        if (_flags.Contains("edit-smoke")) _ = RunEditSmoke();
+        else if (_flags.Contains("smoke")) _ = RunSmoke(rng);
         else if (_opts.ContainsKey("screenshot")) _ = RunScreenshot();
+    }
+
+    public override void _ExitTree() => _map.FreeCaches();
+
+    void StartWatcher(string repo)
+    {
+        var edits = _opts.GetValueOrDefault("edits") ?? Path.Combine(repo, "pipeline", "config", "edits.json");
+        // the map folder name carries the area: "0.3.0-slice" / "0.3.0-village"
+        var fromMap = _map.MapVersion.Contains('-') ? _map.MapVersion[(_map.MapVersion.LastIndexOf('-') + 1)..] : "";
+        var area = _opts.GetValueOrDefault("area") ?? (fromMap is "slice" or "village" ? fromMap : "slice");
+        if (area is not ("slice" or "village")) { GD.PrintErr($"--area must be slice or village, got '{area}'"); area = "slice"; }
+        _watcher = new EditsWatcher
+        {
+            Name = "EditsWatcher",
+            EditsPath = Path.GetFullPath(edits),
+            Area = area,
+            PipelineDir = Path.Combine(repo, "pipeline"),
+            StatePath = Path.GetFullPath(_opts.GetValueOrDefault("state") ?? Path.Combine(repo, "out", "editor-state.json")),
+            Map = _map,
+            CameraProvider = () => (_player.Camera.GlobalPosition, -_player.Camera.GlobalBasis.Z),
+        };
+        AddChild(_watcher);
     }
 
     void ParseArgs()
