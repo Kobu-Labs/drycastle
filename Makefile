@@ -1,4 +1,4 @@
-.PHONY: setup test fetch normalise parcels map viewer lint
+.PHONY: setup test fetch normalise parcels rules export preview map viewer lint
 
 setup:
 	cd pipeline && uv sync
@@ -14,6 +14,15 @@ normalise:
 
 parcels:
 	cd pipeline && uv run python -m suchohrad_pipeline parcels --report
+
+rules:
+	cd pipeline && uv run python -m suchohrad_pipeline rules
+
+export:
+	cd pipeline && uv run python -m suchohrad_pipeline export
+
+preview:
+	cd pipeline && uv run python -m suchohrad_pipeline preview
 
 map:
 	cd pipeline && uv run python -m suchohrad_pipeline run-all
