@@ -103,6 +103,7 @@ def make_fences(
     cfg: dict,
     specs: dict[str, FenceSpec] | None = None,
     groups: dict[str, list[str]] | None = None,
+    road_polys: list[BaseGeometry] | None = None,
 ) -> list[dict]:
     """Fence sections along parcel boundaries: dicts with parcel, a, b (x, y) and za, zb (z).
 
@@ -111,6 +112,9 @@ def make_fences(
     parcel IDs: the members' outer edge is fenced as one property, each piece with its owner's
     settings and the seeded roll keyed by the group ID. Custom sections carry their own
     ``height_m``, ``thickness_m`` and ``colour``.
+
+    ``road_polys`` replaces the road parcels taken from ``parcels`` for the gate-gap logic (the
+    per-parcel run passes only the road parcels near its targets).
     """
     specs = specs or {}
     polys = {p["id"]: shape(p["polygon"]) for p in parcels}
@@ -134,7 +138,11 @@ def make_fences(
     if zone is not None:
         avoid.append(zone)
     avoid_geom = unary_union(avoid) if avoid else None
-    road_parcels = [polys[p["id"]] for p in parcels if p["kind"] == "road"]
+    road_parcels = (
+        road_polys
+        if road_polys is not None
+        else [polys[p["id"]] for p in parcels if p["kind"] == "road"]
+    )
     road_union = unary_union(road_parcels).buffer(0.5) if road_parcels else None
     gate = float(cfg["gate_gap_m"])
     done = None  # union of boundaries already fenced (buffered a little)
@@ -212,8 +220,13 @@ def make_trees(
     cfg: dict,
     overrides: dict[str, dict] | None = None,
     objects: list[tuple[float, float]] | None = None,
+    only: set[str] | None = None,
+    include_osm: bool = True,
 ) -> list[dict]:
     """OSM trees plus seeded rule-based trees in parcels (gardens, forests, ...).
+
+    ``only`` limits the rule-based trees to those parcel IDs (each parcel's trees depend only on
+    its own seed and the context geometry); ``include_osm=False`` leaves the OSM trees out.
 
     ``overrides`` maps a parcel ID to its edited trees (``density_per_1000m2`` or ``count``, and
     ``seed_offset``). ``objects`` are placed object positions (local metres) that trees keep
@@ -248,7 +261,7 @@ def make_trees(
             "colour": palette[rng.randrange(len(palette))],
         }
 
-    for f in sorted(osm_trees, key=lambda f: f["properties"]["osm_id"]):
+    for f in sorted(osm_trees if include_osm else [], key=lambda f: f["properties"]["osm_id"]):
         x, y = f["geometry"]["coordinates"][:2]
         if terrain.coverage.contains(Point(x, y)):
             trees.append(
@@ -258,6 +271,8 @@ def make_trees(
     density = cfg["density_per_1000m2"]
     spacing = float(cfg["min_spacing_m"])
     for p in sorted(parcels, key=lambda p: p["id"]):
+        if only is not None and p["id"] not in only:
+            continue
         ov = (overrides or {}).get(p["id"])
         seed_key = f"{p['id']}:trees"
         fixed: int | None = None
@@ -445,6 +460,7 @@ class EditPlan:
     groups: dict[str, list[str]] = field(default_factory=dict)  # valid member parcels only
     tree_overrides: dict[str, dict] = field(default_factory=dict)
     objects: list[dict] = field(default_factory=list)  # objects.json entries, sorted by id
+    object_owner: dict[str, str] = field(default_factory=dict)  # object id -> parcel listing it
     warnings: list[str] = field(default_factory=list)
 
 
@@ -502,6 +518,7 @@ def plan_edits(
                 plan.warnings.append(
                     f"objects {obj['id']}: outside its parcel {pid} (inside {inside}); placed anyway"
                 )
+            plan.object_owner[obj["id"]] = pid
             plan.objects.append(
                 {
                     "id": obj["id"],
