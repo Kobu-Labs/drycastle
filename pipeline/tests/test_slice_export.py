@@ -125,5 +125,5 @@ def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
     assert ("props" in tris) == bool(osm)
     scene = trimesh.load(ws["out"] / "chunks" / "chunk_0_0.glb", force="scene")
     for name in tris:
-        if name.endswith("_props") or name.endswith("_props_collision"):
+        if name.endswith(("_props", "_props_collision")):
             assert len(scene.geometry[scene.graph[name][1]].faces) == tris[name]
