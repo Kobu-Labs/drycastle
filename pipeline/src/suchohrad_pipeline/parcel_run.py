@@ -18,6 +18,7 @@ target parcels' share of the full props stage (``props.json`` / ``objects.json``
 """
 
 import json
+import struct
 import sys
 import time
 from pathlib import Path
@@ -48,6 +49,16 @@ FRAGMENT_FORMAT_VERSION = 1
 NEIGHBOUR_M = 0.5
 _ROAD_UNION_M = 1.0  # road parcels within this of a parcel matter for its gate gap (buffer 0.5)
 _MARGIN_M = 1.0
+
+
+def _empty_glb() -> bytes:
+    """A valid GLB with one empty scene (trimesh refuses to export a scene without geometry)."""
+    body = b'{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[]}]}'
+    body += b" " * (-len(body) % 4)
+    return b"glTF" + struct.pack("<II", 2, 20 + len(body)) + struct.pack("<I", len(body)) + b"JSON" + body
+
+
+_EMPTY_GLB = _empty_glb()
 
 
 class TargetError(ValueError):
@@ -230,6 +241,32 @@ def compute_fragment(
     return {"fences": fences, "trees": trees, "objects": objects}
 
 
+def write_glb(path: Path, fragment: dict, fcfg: dict) -> None:
+    """GLB with ``parcel_<ID>_props`` and ``parcel_<ID>_props_collision`` of the target parcels.
+
+    Same mesh functions, glTF axes and node naming as the chunk export (z scale 1), and the same
+    frame as the chunk files: add it at the map root. Parcels without fences or trees get no nodes.
+    """
+    from suchohrad_pipeline.export import build_chunk_scene, parcel_props_nodes
+    from suchohrad_pipeline.propmeshes import parcel_props_meshes
+
+    by_f: dict[str, list[dict]] = {}
+    by_t: dict[str, list[dict]] = {}
+    for s in fragment["fences"]:
+        by_f.setdefault(s["parcel"], []).append(s)
+    for t in fragment["trees"]:
+        by_t.setdefault(t["parcel"], []).append(t)
+    items = [
+        (pid, *parcel_props_meshes(by_f.get(pid, []), by_t.get(pid, []), fcfg))
+        for pid in sorted(set(by_f) | set(by_t))
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    nodes = parcel_props_nodes(items)
+    path.write_bytes(
+        build_chunk_scene([], nodes).export(file_type="glb") if nodes else _EMPTY_GLB
+    )
+
+
 def run_parcel_run(
     work_dir: Path,
     area: str,
@@ -237,6 +274,7 @@ def run_parcel_run(
     groups: list[str],
     edits_path: Path = DEFAULT_EDITS,
     rules_path: Path = DEFAULT_RULES,
+    glb_path: Path | None = None,
 ) -> dict:
     t0 = time.perf_counter()
     terrain, _ = load_terrain(work_dir, mmap=True)
@@ -255,11 +293,17 @@ def run_parcel_run(
     targets = expand_targets(plan, {p["id"] for p in parcels_doc["parcels"]}, parcels, groups)
     t1 = time.perf_counter()
     fragment = compute_fragment(parcels_doc, buildings, graph, terrain, fcfg, plan, targets)
+    glb = {}
+    if glb_path is not None:
+        write_glb(glb_path, fragment, fcfg)
+        # "replaces" lets the viewer hide the baked nodes even when the new result is empty
+        glb = {"glb": str(glb_path.resolve()), "replaces": targets}
     t2 = time.perf_counter()
     return {
         "format_version": FRAGMENT_FORMAT_VERSION,
         "parcels": targets,
         **fragment,
+        **glb,
         "timing_s": {
             "load": round(t1 - t0, 3),
             "compute": round(t2 - t1, 3),
@@ -274,6 +318,7 @@ def run(
     area: str = DEFAULT_AREA,
     edits: str | None = None,
     out: str | None = None,
+    glb: str | None = None,
 ) -> int:
     groups = groups or []
     if not parcels and not groups:
@@ -281,7 +326,10 @@ def run(
         return 2
     edits_path = Path(edits) if edits else DEFAULT_EDITS
     try:
-        fragment = run_parcel_run(area_paths(area).work, area, parcels, groups, edits_path)
+        fragment = run_parcel_run(
+            area_paths(area).work, area, parcels, groups, edits_path,
+            glb_path=Path(glb) if glb else None,
+        )
     except FileNotFoundError as exc:
         print(
             f"parcel-run: error: missing input {Path(str(exc.filename)).name}; run earlier stages",

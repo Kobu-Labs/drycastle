@@ -159,3 +159,69 @@ def test_cli_errors(ws, tmp_path, monkeypatch, capsys):
 
 def test_default_rules_are_a_valid_rules_path():
     assert DEFAULT_RULES.is_file()
+
+
+def test_glb_nodes_match_the_export_per_parcel_nodes(tmp_path):
+    import numpy as np
+    import trimesh
+
+    from suchohrad_pipeline.export import run_export
+
+    full = make_workspace(tmp_path)
+    work = full["work"]
+    edits_path = write(tmp_path, "edits.json", EDITS)
+    rules_path = write(tmp_path, "rules.yaml", RULES_NOCAP)
+    run_props(work, rules_path, area="slice", edits_path=edits_path)
+    manifest = run_export(work, tmp_path / "map", full["raw"], rules_path, full["overrides"])
+    exported = {
+        c["file"]: trimesh.load(tmp_path / "map" / c["file"], force="scene")
+        for c in manifest["chunks"]
+    }
+    baked = {}  # node name -> trimesh geometry, over all chunk files
+    for scene in exported.values():
+        for name in scene.graph.nodes_geometry:
+            baked[name] = scene.geometry[scene.graph[name][1]]
+
+    targets = ["P-0001", "P-0002", "P-0003", "P-0004", "P-0005", "P-0006"]
+    checked = 0
+    for pid in targets:
+        glb = tmp_path / f"{pid}.glb"
+        frag = parcel_run.run_parcel_run(
+            work, "slice", [pid], [], edits_path, rules_path, glb_path=glb
+        )
+        assert frag["glb"] == str(glb) and frag["replaces"] == frag["parcels"]
+        scene = trimesh.load(glb, force="scene")
+        names = sorted(scene.graph.nodes_geometry)
+        want = sorted(n for n in baked if n in (f"parcel_{p}_props" for p in frag["parcels"])
+                      or n in (f"parcel_{p}_props_collision" for p in frag["parcels"]))
+        assert names == want, pid
+        for name in names:
+            got = scene.geometry[scene.graph[name][1]]
+            assert len(got.faces) == len(baked[name].faces) > 0
+            assert np.allclose(got.vertices, baked[name].vertices)
+            checked += 1
+    assert checked >= 4  # not vacuous: several parcels have fences and trees
+
+
+def test_glb_of_a_parcel_without_props_still_names_it_in_replaces(ws, tmp_path):
+    import trimesh
+
+    edits_path = write(tmp_path, "e.json", {**NO_EDITS, "parcels": {"P-0001": {"fence": {"mode": "none"}, "trees": {"count": 0}}}})
+    rules_path = write(tmp_path, "r.yaml", RULES_NOCAP)
+    glb = tmp_path / "out" / "x.glb"
+    frag = parcel_run.run_parcel_run(ws, "slice", ["P-0001"], [], edits_path, rules_path, glb_path=glb)
+    assert frag["replaces"] == ["P-0001"] and frag["fences"] == [] and frag["trees"] == []
+    assert not trimesh.load(glb, force="scene").graph.nodes_geometry
+
+
+def test_cli_glb_option_and_group_expansion(ws, tmp_path, monkeypatch, capsys):
+    import trimesh
+
+    monkeypatch.setattr(parcel_run, "area_paths", lambda area: SimpleNamespace(work=ws))
+    edits_path = write(tmp_path, "edits.json", EDITS)
+    glb = tmp_path / "g.glb"
+    argv = ["parcel-run", "--group", "G-0001", "--edits", str(edits_path), "--glb", str(glb)]
+    assert cli.main(argv) == 0
+    frag = json.loads(capsys.readouterr().out)
+    assert frag["glb"] == str(glb) and frag["replaces"] == ["P-0001", "P-0002"]
+    assert trimesh.load(glb, force="scene").graph.nodes_geometry
