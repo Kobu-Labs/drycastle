@@ -12,7 +12,7 @@ namespace Suchohrad.MapLoader;
 /// props / props_collision (items without a parcel, e.g. OSM trees).
 /// Independent of any mod. Axes: map x east, y north; Godot x east, y up, z = -north.
 /// </summary>
-public sealed class MapLoader
+public sealed partial class MapLoader
 {
     readonly Dictionary<string, ParcelInfo> _parcels = new();
     readonly List<SpawnPoint> _spawns = new();
@@ -42,6 +42,7 @@ public sealed class MapLoader
     public void Load(string mapDir)
     {
         var t0 = Time.GetTicksMsec();
+        _mapDir = mapDir;
         if (!Directory.Exists(mapDir)) throw new DirectoryNotFoundException(mapDir);
 
         using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(mapDir, "manifest.json")));
@@ -58,6 +59,9 @@ public sealed class MapLoader
             var iy = c.GetProperty("index")[1].GetInt32();
             LoadChunk(file, new Vector2I(ix, iy));
         }
+        if (manifest.RootElement.TryGetProperty("files", out var files)
+            && files.TryGetProperty("objects", out var objFile) && objFile.GetString() is { } of)
+            LoadObjects(Path.Combine(mapDir, of));
         Stats.LoadSeconds = (Time.GetTicksMsec() - t0) / 1000.0;
     }
 
@@ -176,17 +180,19 @@ public sealed class MapLoader
         };
     }
 
-    void BuildCollider(MeshInstance3D mi, string name)
+    /// <summary>Static trimesh collider under the (hidden) collision mesh. Dynamic ones (parcel swaps) are not registered.</summary>
+    CollisionShape3D? BuildCollider(MeshInstance3D mi, string name, bool dynamic = false)
     {
         mi.Visible = false;
         var shape = mi.Mesh.CreateTrimeshShape() as ConcavePolygonShape3D;
-        if (shape == null) return;
+        if (shape == null) return null;
         shape.BackfaceCollision = true;
         var body = new StaticBody3D { Name = "Body" };
         var cs = new CollisionShape3D { Name = "Shape", Shape = shape };
         body.AddChild(cs);
         mi.AddChild(body);
         Stats.CollidersBuilt++;
+        if (dynamic) return cs;
 
         if (name == "terrain_collision")
         {
@@ -205,6 +211,7 @@ public sealed class MapLoader
             if (!_shapes.TryGetValue(id, out var l)) _shapes[id] = l = new();
             l.Add(cs);
         }
+        return cs;
     }
 
     // Chunk nodes have identity transforms in the exported files; faces are used as-is.

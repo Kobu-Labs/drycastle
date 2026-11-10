@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: setup test fetch normalise parcels rules terrain roads props export parcel-run preview map viewer viewer-smoke viewer-shot assets-check netspike netspike-quick lint
+.PHONY: setup test fetch normalise parcels rules terrain roads props export parcel-run preview map viewer viewer-smoke viewer-edit-smoke viewer-shot assets-check netspike netspike-quick lint
 
 setup:
 	cd pipeline && uv sync
@@ -59,6 +59,11 @@ viewer:
 viewer-smoke:
 	dotnet build godot/viewer/viewer.csproj
 	godot --headless --path godot/viewer -- --smoke --seed $(SEED) $(MAP_ARG)
+
+# Hot reload end to end: exports a fresh slice map into a scratch dir (nothing under data/ or out/ is touched),
+# runs the viewer headless with --watch and checks that edits show up. Needs uv, dotnet and godot.
+viewer-edit-smoke:
+	python3 godot/viewer/edit_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
 
 # Loads every glTF in assets/manifest.json with GLTFDocument (headless); exits nonzero on failure.
 assets-check:

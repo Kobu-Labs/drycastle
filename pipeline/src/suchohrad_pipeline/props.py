@@ -529,6 +529,7 @@ def plan_edits(
                     "scale": float(obj.get("scale", 1)),
                     "colour": obj.get("colour"),
                     "parcel": inside,
+                    "owner": pid,  # the parcel entry that lists it (may differ from "parcel")
                     "chunk": chunk_of(lx, ly, chunk_m),
                 }
             )

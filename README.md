@@ -47,6 +47,7 @@ make preview    # out/preview/topdown.png, iso.png, iso_close.png (matplotlib; E
 make map AREA=village   # the same for the whole village (any target takes AREA=slice|village)
 make viewer         # build and run the Godot viewer (see "Viewer" below)
 make viewer-smoke   # headless smoke test of the viewer and the loader
+make viewer-edit-smoke  # hot reload end to end (scratch export, headless viewer, edits written during the run)
 make viewer-shot    # windowed run, writes PNGs to out/screens/
 make netspike-quick # netcode spike, N=8, 15 s (needs a map: MAP=/path/to/out/map)
 make netspike       # netcode spike, N=16/32/64, 60 s per variant (about 30 minutes)
@@ -250,6 +251,48 @@ ids, anchor), `SpawnPoints`, `Stats`, `GroundHeight(x, z)`, `ReplaceParcel(id, P
 the terrain), `RestoreParcel(id)`. Collision meshes (`*_collision`) become hidden static trimesh
 colliders. To guarantee the flat colour look the loader
 replaces every visual material with a rough, non-metallic one that uses COLOR_0 (sRGB) as albedo.
+
+### Objects, parcel swap and hot reload
+
+The map folder (map version 0.3.0) also holds `objects.json` (the placed objects planned by the props
+stage from `pipeline/config/edits.json`; `files.objects` in `manifest.json`) and `prims/<name>.glb`, one
+flat-colour GLB per `prim:` primitive (`prims` in the manifest; same axes as the chunk files, standing on
+y = 0). The loader instances every object: `pack:<pack>/<model>` from `assets/manifest.json` (`file`,
+resolved against the assets directory), `prim:<name>` from `<map>/prims`. Each object is a node
+`Objects/objects_<parcel>/object_<id>` with position (x east, z = -north, y = `z` or the terrain height
+under it when `z` is null), `rotation_deg` counter-clockwise seen from above, uniform `scale` and an optional
+`colour` (material override). Unknown or missing assets give a warning and a magenta placeholder box.
+Objects have no collision in v1.
+
+Assets directory: `--assets DIR`, else env `SUCHOHRAD_ASSETS`, else `<repo>/assets`.
+
+Loader API additions: `ApplyFragment(path)` takes a `parcel-run --out ... --glb ...` fragment, hides the baked
+`parcel_<ID>_props` visual and collider of every parcel in `replaces`, drops that parcel's previous dynamic
+nodes (`dyn_props_<ID>`) and objects, adds the fragment's props nodes with colliders and its objects. It is
+idempotent and an empty result removes the parcel's props. `RevertParcel(id)` restores the baked nodes and
+objects. `AssetsDir`, `ObjectNodes`, `DynamicProps`, `Warnings` are exposed.
+
+Hot reload: `make viewer` with `--watch` (`godot --path godot/viewer -- --watch`; off by default, so normal
+viewing and headless servers are unaffected):
+
+- `--edits PATH` the edits file (default `pipeline/config/edits.json`), `--area slice|village` (default: from
+  the map version), `--state PATH` (default `out/editor-state.json`), env `SUCHOHRAD_UV` (the `uv` executable).
+- The file is polled twice a second. The state at startup is assumed to be what the map was built with.
+  A change is diffed per parcel and per group (a group change affects all its members and the other way
+  round), and only those parcels are regenerated with
+  `uv run python -m suchohrad_pipeline parcel-run --area A --parcel ... --edits <snapshot> --glb ... --out ...`
+  in the `pipeline` directory (0.3 to 0.9 s) in a subprocess; edits that arrive during a run are coalesced into
+  the next one. The viewer prints `edits applied: <ids> in <ms> ms`. A half-written or invalid file is ignored
+  until it changes again, a failed `parcel-run` only prints its error. Writers must replace the file atomically
+  (temp file, then rename).
+- `editor-state.json` (written at most once a second while watching, an ignored build output):
+  `{"camera": {"x": east, "y": north, "z": elevation, "yaw_deg": view direction counter-clockwise from east},
+  "format_version": 1, "selected": []}`; x and y are in the map frame (local metres). `selected` stays empty
+  until the editor UI exists.
+- `make viewer-edit-smoke` exports a fresh slice map and a work-directory copy into a scratch directory
+  (`SMOKE_DIR=...`, default a temp dir), starts the viewer headless with `--watch`, writes edits files during the
+  run and checks objects, swapped props, colliders, replacement without leaks and survival of a broken file.
+  `parcel-run`/`export` take `--work DIR` and `export` takes `--out DIR` for such experiments.
 
 ## Netcode spike
 

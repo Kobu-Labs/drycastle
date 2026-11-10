@@ -74,7 +74,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--out",
         metavar="PATH",
         default=None,
-        help="parcel-run: write the JSON fragment here instead of stdout",
+        help="parcel-run: write the JSON fragment here instead of stdout; "
+        "export: write the map folder here instead of out/map",
+    )
+    parser.add_argument(
+        "--work",
+        metavar="DIR",
+        default=None,
+        help="export, parcel-run: read this work directory instead of data/work (experiments)",
     )
     parser.add_argument(
         "--glb",
@@ -97,6 +104,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             edits=args.edits,
             out=args.out,
             glb=args.glb,
+            work=args.work,
         )
     from suchohrad_pipeline.stages import STAGES
 
@@ -111,5 +119,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         return preview.run(exaggeration=args.exaggeration, area=args.area)
     return STAGES[args.stage](
-        force=args.force, report=args.report, area=args.area, edits=args.edits
+        force=args.force,
+        report=args.report,
+        area=args.area,
+        edits=args.edits,
+        out=args.out,
+        work=args.work,
     )

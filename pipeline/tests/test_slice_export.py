@@ -67,7 +67,11 @@ def test_roads_json_spawns_json_and_manifest(ws) -> None:
     assert {"nodes", "edges"} <= set(roads) and len(roads["edges"]) == 3
     spawns = json.loads((out / "spawns.json").read_text())["spawns"]
     assert spawns and all({"id", "x", "y", "z", "kind", "chunk"} <= set(s) for s in spawns)
-    assert manifest["files"] == {"roads": "roads.json", "spawns": "spawns.json"}
+    assert manifest["files"] == {
+        "objects": "objects.json",
+        "roads": "roads.json",
+        "spawns": "spawns.json",
+    }
     assert {"terrain", "roads", "fences", "trees", "spawns", "buildings"} <= set(
         manifest["generated"]
     )

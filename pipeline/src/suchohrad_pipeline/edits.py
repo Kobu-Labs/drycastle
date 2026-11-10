@@ -37,6 +37,8 @@ formatting is fixed, so git diffs stay small. Version 1::
     rotation_deg        number, default 0.
     scale               number > 0, default 1.
     colour              optional "#rrggbb" override.
+    (objects.json entries also carry ``parcel`` (the parcel containing the object, or null),
+    ``owner`` (the parcel entry that lists it) and ``chunk``; both are derived.)
 
 ``groups`` (a property group: parcels that share one fence around their combined outer edge)
     parcels             non-empty list of unique parcel IDs. A parcel is in at most one group.
