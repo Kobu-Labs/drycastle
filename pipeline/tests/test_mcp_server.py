@@ -447,6 +447,113 @@ def test_concurrent_writers_do_not_lose_updates(tools, env):
     assert not list(settings.edits_path.parent.glob("edits.json.*.tmp"))
 
 
+# --- regions ------------------------------------------------------------------------------
+
+SQUARE = [[OX + 10, OY + 10], [OX + 20, OY + 10], [OX + 20, OY + 20], [OX + 10, OY + 20]]
+
+
+def test_region_create_list_colour_delete(env):
+    tools, settings, _ = env
+    assert tools.list_regions() == {"count": 0, "total_matching": 0, "regions": []}
+    out = tools.create_region("#8A7A5C", polygon=SQUARE)
+    assert out["id"] == "R-0001" and out["area_m2"] == 100.0 and out["points"] == 4
+    assert out["warnings"] == [] and out["polygon"] == SQUARE
+    canonical(settings)
+    assert load_edits(settings.edits_path).regions["R-0001"] == {"colour": "#8a7a5c", "polygon": SQUARE}
+    second = tools.create_region("#112233", polygon=[*SQUARE[:3], SQUARE[0]])  # closing point is dropped
+    assert second["id"] == "R-0002" and second["points"] == 3
+    rows = tools.list_regions()["regions"]
+    assert [r["id"] for r in rows] == ["R-0001", "R-0002"]
+    assert rows[0]["bbox"] == [OX + 10, OY + 10, OX + 20, OY + 20] and rows[0]["centroid"] == [OX + 15, OY + 15]
+    tools.set_region_colour("R-0001", "#ffffff")
+    assert tools.list_regions()["regions"][0]["colour"] == "#ffffff"
+    tools.delete_region("R-0001")
+    canonical(settings)
+    assert tools.create_region("#000000", polygon=SQUARE)["id"] == "R-0003"  # max + 1, no reuse of 0001
+    tools.delete_region("R-0003")
+    tools.delete_region("R-0002")
+    assert "regions" not in json.loads(settings.edits_path.read_text())
+    canonical(settings)
+
+
+def test_region_parcel_relative_points(env):
+    tools, settings, _ = env
+    # P-0001's front edge is y=100 (road to the north): along grows west, inward grows south
+    out = tools.create_region("#00ff00", parcel="P-0001", points=[[0, 1], [-5, 1], {"along": -5, "inward": 6}, [0, 6]])
+    assert out["polygon"] == [
+        [OX + 67.5, OY + 99.0], [OX + 72.5, OY + 99.0], [OX + 72.5, OY + 94.0], [OX + 67.5, OY + 94.0]
+    ]
+    assert out["area_m2"] == 25.0
+    canonical(settings)
+    near = tools.list_regions(near={"parcel": "P-0001", "radius_m": 1})
+    assert [r["id"] for r in near["regions"]] == ["R-0001"] and near["regions"][0]["distance_m"] == 0
+    assert tools.list_regions(near={"x": OX + 500, "y": OY + 500})["regions"] == []
+    assert tools.list_regions(near={"x": OX + 70, "y": OY + 95, "radius_m": 3})["count"] == 1
+
+
+def test_region_move_point(env):
+    tools, settings, _ = env
+    tools.create_region("#123456", polygon=SQUARE)
+    out = tools.move_region_point("R-0001", 2, offset={"dx": 5, "dy": -2})
+    assert out["position"] == [OX + 25, OY + 18] and out["old"] == [OX + 20, OY + 20]
+    tools.move_region_point("R-0001", 0, position=[OX + 5, OY + 5])
+    assert load_edits(settings.edits_path).regions["R-0001"]["polygon"][0] == [OX + 5, OY + 5]
+    canonical(settings)
+
+
+def test_region_errors_leave_file_untouched(env):
+    tools, settings, _ = env
+    with pytest.raises(ToolError, match="exactly one"):
+        tools.create_region("#000000")
+    with pytest.raises(ToolError, match="exactly one"):
+        tools.create_region("#000000", polygon=SQUARE, points=[[0, 0]])
+    with pytest.raises(ToolError, match="pass parcel"):
+        tools.create_region("#000000", points=[[0, 0], [1, 0], [1, 1]])
+    with pytest.raises(ToolError, match="unknown parcel"):
+        tools.create_region("#000000", parcel="P-9999", points=[[0, 0], [1, 0], [1, 1]])
+    with pytest.raises(ToolError, match="#rrggbb"):
+        tools.create_region("red", polygon=SQUARE)
+    with pytest.raises(ToolError, match="at least 3"):
+        tools.create_region("#000000", polygon=SQUARE[:2])
+    with pytest.raises(ToolError, match=r"polygon\[1\]"):
+        tools.create_region("#000000", polygon=[[1, 2], [1], [3, 4]])
+    bow = [[OX, OY], [OX + 10, OY + 10], [OX + 10, OY], [OX, OY + 10]]
+    with pytest.raises(ToolError, match="nothing was written"):
+        tools.create_region("#000000", polygon=bow)
+    assert not settings.edits_path.exists()
+    tools.create_region("#123456", polygon=SQUARE)
+    before = settings.edits_path.read_bytes()
+    with pytest.raises(ToolError, match="nothing was written"):
+        tools.move_region_point("R-0001", 2, position=[OX + 10, OY + 10])  # collapses the square
+    with pytest.raises(ToolError, match="nothing was written"):
+        tools.move_region_point("R-0001", 1, position=[OX + 10, OY + 20])  # bow tie via touch
+    with pytest.raises(ToolError, match="out of range"):
+        tools.move_region_point("R-0001", 4, offset={"dx": 1})
+    with pytest.raises(ToolError, match="exactly one"):
+        tools.move_region_point("R-0001", 0)
+    with pytest.raises(ToolError, match="not a region ID"):
+        tools.delete_region("P-0001")
+    with pytest.raises(ToolError, match="does not exist"):
+        tools.delete_region("R-0009")
+    with pytest.raises(ToolError, match="does not exist"):
+        tools.set_region_colour("R-0009", "#000000")
+    with pytest.raises(ToolError, match="#rrggbb"):
+        tools.set_region_colour("R-0001", "#12")
+    assert settings.edits_path.read_bytes() == before
+
+
+def test_region_overlap_warning_and_coexistence(env):
+    tools, settings, _ = env
+    tools.place_object("P-0001", CAR)
+    tools.create_region("#111111", polygon=SQUARE)
+    out = tools.create_region("#222222", polygon=[[OX + 15, OY + 15], [OX + 30, OY + 15], [OX + 30, OY + 30]])
+    assert out["warnings"] and "R-0002 wins" in out["warnings"][0]
+    tools.create_group(["P-0001", "P-0002"])
+    edits = load_edits(settings.edits_path)
+    assert len(edits.regions) == 2 and edits.groups  # other writers keep the regions
+    canonical(settings)
+
+
 def test_object_polygon_orientation():
     # a 2 x 4 m (x, z) car at rotation 0 spans x +-1 east, z +-2 i.e. north-south
     poly = object_polygon((10, 20), [2, 1, 4], 0, 1)
@@ -483,7 +590,8 @@ def test_through_mcp_session(env):
             assert names == {
                 "list_assets", "find_parcels", "get_parcel", "set_fence", "reset_fence", "set_trees",
                 "reset_trees", "place_object", "remove_object", "move_object", "create_group",
-                "dissolve_group",
+                "dissolve_group", "create_region", "set_region_colour", "move_region_point",
+                "delete_region", "list_regions",
             }
             tool = next(t for t in (await client.list_tools()).tools if t.name == "place_object")
             assert {"parcel", "asset", "anchor", "offset_m", "position"} <= set(tool.input_schema["properties"])

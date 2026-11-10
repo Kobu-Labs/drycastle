@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 import shapely
+import shapely.affinity
 from mcp.server.mcpserver.exceptions import ToolError
 from shapely.geometry import LinearRing, LineString, Point, Polygon, shape
 from shapely.ops import nearest_points, unary_union
@@ -54,6 +55,7 @@ from suchohrad_pipeline.edits import (
     EditsError,
     dump_edits,
     load_edits,
+    region_ring,
     resolve_fence,
     validate,
 )
@@ -74,7 +76,9 @@ ROAD_FAR_M = 30.0
 OVERLAP_SEARCH_M = 25.0
 _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")
-_GENERATED_ID = re.compile(r"[oG]-(\d+)")
+_REGION_ID = re.compile(r"R-\d{4,}")
+_COLOUR = re.compile(r"#[0-9a-fA-F]{6}")
+_GENERATED_ID = re.compile(r"[oGR]-(\d+)")
 
 
 def _r3(v: float) -> float:
@@ -466,7 +470,9 @@ class ParcelEditTools:
             edits = _read_edits(path)
             result = change(edits)
             _empty_parcel_cleanup(edits)
-            doc = {"version": 1, "parcels": edits.parcels, "groups": edits.groups}
+            doc: dict = {"version": 1, "parcels": edits.parcels, "groups": edits.groups}
+            if edits.regions:
+                doc["regions"] = edits.regions
             errors = validate(doc)
             if errors:
                 raise ToolError(
@@ -1255,6 +1261,215 @@ class ParcelEditTools:
         }
 
 
+    # regions -------------------------------------------------------------------------------
+    @staticmethod
+    def _region_colour(colour: object) -> str:
+        if not (isinstance(colour, str) and _COLOUR.fullmatch(colour)):
+            raise ToolError(f'colour must look like "#rrggbb" (got {colour!r})')
+        return colour.lower()
+
+    @staticmethod
+    def _region_id(id: object) -> str:
+        if not (isinstance(id, str) and _REGION_ID.fullmatch(id)):
+            raise ToolError(f"{id!r} is not a region ID like R-0001. list_regions shows the existing ones.")
+        return id
+
+    @staticmethod
+    def _xy(name: str, p: object) -> list[float]:
+        if not (isinstance(p, (list, tuple)) and len(p) == 2):
+            raise ToolError(f"{name} must be [x, y] in absolute S-JTSK metres, got {p!r}")
+        return _pt(_check_num(f"{name}[0]", p[0]), _check_num(f"{name}[1]", p[1]))
+
+    def _region_entry(self, edits: Edits, rid: str) -> dict:
+        if rid not in edits.regions:
+            raise ToolError(
+                f"region {rid} does not exist; regions: {sorted(edits.regions) or 'none'}. "
+                "Call list_regions to see them."
+            )
+        return edits.regions[rid]
+
+    @staticmethod
+    def _region_row(rid: str, entry: dict) -> dict:
+        ring = region_ring(entry["polygon"])
+        poly = Polygon(ring)
+        c = poly.centroid
+        return {
+            "id": rid,
+            "colour": entry["colour"],
+            "area_m2": round(poly.area, 1),
+            "points": len(entry["polygon"]),
+            "bbox": [_r3(v) for v in poly.bounds],
+            "centroid": _pt(c.x, c.y),
+        }
+
+    @staticmethod
+    def _overlap_warnings(edits: Edits, rid: str) -> list[str]:
+        mine = Polygon(region_ring(edits.regions[rid]["polygon"]))
+        if not mine.is_valid:
+            return []
+        out = []
+        for oid, other in sorted(edits.regions.items()):
+            if oid == rid:
+                continue
+            op = Polygon(region_ring(other["polygon"]))
+            if op.is_valid and mine.intersection(op).area > 0.01:
+                winner = max(rid, oid)
+                out.append(f"overlaps region {oid}; where they overlap {winner} wins (higher ID)")
+        return out
+
+    def create_region(
+        self,
+        colour: str,
+        polygon: list[list[float]] | None = None,
+        parcel: str | None = None,
+        points: list | None = None,
+    ) -> dict:
+        """Create a region (see the registered tool description)."""
+        col = self._region_colour(colour)
+        if (polygon is None) == (points is None):
+            raise ToolError(
+                "give exactly one of polygon (absolute [x, y] points) or parcel + points "
+                "(parcel-relative along/inward metres)"
+            )
+        if polygon is not None:
+            if parcel is not None:
+                raise ToolError("parcel only goes with points; polygon is absolute S-JTSK metres")
+            if not isinstance(polygon, list):
+                raise ToolError("polygon must be a list of [x, y] points")
+            pts = [self._xy(f"polygon[{i}]", p) for i, p in enumerate(polygon)]
+        else:
+            if parcel is None:
+                raise ToolError("points are relative to a parcel: pass parcel too (e.g. P-0001)")
+            pid = self.map.need(parcel)
+            if not isinstance(points, list):
+                raise ToolError("points must be a list of [along, inward] metres")
+            frame, _ = self.map.frame(pid)
+            pts = []
+            for i, q in enumerate(points):
+                if isinstance(q, dict) and set(q) <= {"along", "inward"}:
+                    q = [q.get("along", 0.0), q.get("inward", 0.0)]
+                if not (isinstance(q, (list, tuple)) and len(q) == 2):
+                    raise ToolError(f"points[{i}] must be [along, inward] or {{along, inward}}, got {q!r}")
+                a = _check_num(f"points[{i}].along", q[0])
+                d = _check_num(f"points[{i}].inward", q[1])
+                pts.append(self.map.to_abs(*frame.at(a, d)))
+        if len(pts) > 1 and pts[0] == pts[-1]:
+            pts.pop()  # the file does not need the closing point
+        if len(pts) < 3:
+            raise ToolError(f"a region needs at least 3 points, got {len(pts)}. Nothing was changed.")
+
+        def change(edits: Edits) -> dict:
+            rid = _next_id("R", list(edits.regions))
+            edits.regions[rid] = {"colour": col, "polygon": pts}
+            return {"id": rid, "warnings": self._overlap_warnings(edits, rid)}
+
+        out = self._write(change)
+        row = self._region_row(out["id"], {"colour": col, "polygon": pts})
+        return {
+            "summary": f"created {out['id']} ({col}, {row['points']} points, {row['area_m2']} m2)"
+            + (f", {len(out['warnings'])} warning(s)" if out["warnings"] else ""),
+            **row,
+            "polygon": pts,
+            "warnings": out["warnings"],
+        }
+
+    def set_region_colour(self, id: str, colour: str) -> dict:
+        """Change a region's colour."""
+        rid = self._region_id(id)
+        col = self._region_colour(colour)
+
+        def change(edits: Edits) -> str:
+            entry = self._region_entry(edits, rid)
+            old = entry["colour"]
+            entry["colour"] = col
+            return old
+
+        old = self._write(change)
+        return {"summary": f"{rid} colour {old} -> {col}", "id": rid, "colour": col, "warnings": []}
+
+    def move_region_point(
+        self,
+        id: str,
+        index: int,
+        position: list[float] | None = None,
+        offset: dict | None = None,
+    ) -> dict:
+        """Move one polygon point to a position or by an offset."""
+        rid = self._region_id(id)
+        if isinstance(index, bool) or not isinstance(index, int):
+            raise ToolError(f"index must be an integer, got {index!r}")
+        if (position is None) == (offset is None):
+            raise ToolError('give exactly one of position [x, y] or offset {"dx": m, "dy": m}')
+        if position is not None:
+            target: list[float] | None = self._xy("position", position)
+        else:
+            if not isinstance(offset, dict) or set(offset) - {"dx", "dy"}:
+                raise ToolError('offset must be {"dx": metres east, "dy": metres north}')
+            dx = _check_num("offset.dx", offset.get("dx", 0.0))
+            dy = _check_num("offset.dy", offset.get("dy", 0.0))
+            target = None
+
+        def change(edits: Edits) -> dict:
+            entry = self._region_entry(edits, rid)
+            poly = entry["polygon"]
+            if not 0 <= index < len(poly):
+                raise ToolError(
+                    f"index {index} is out of range: {rid} has {len(poly)} points (0..{len(poly) - 1}). "
+                    "list_regions shows the point count."
+                )
+            old = poly[index]
+            new = target if target is not None else _pt(old[0] + dx, old[1] + dy)
+            poly[index] = new
+            return {"old": old, "new": new, "warnings": self._overlap_warnings(edits, rid)}
+
+        out = self._write(change)
+        return {
+            "summary": f"moved {rid} point {index} {out['old']} -> {out['new']}",
+            "id": rid,
+            "index": index,
+            "old": out["old"],
+            "position": out["new"],
+            "warnings": out["warnings"],
+        }
+
+    def delete_region(self, id: str) -> dict:
+        """Delete a region."""
+        rid = self._region_id(id)
+
+        def change(edits: Edits) -> dict:
+            self._region_entry(edits, rid)
+            return edits.regions.pop(rid)
+
+        entry = self._write(change)
+        return {"summary": f"deleted {rid} ({entry['colour']})", "id": rid, "entry": entry, "warnings": []}
+
+    def list_regions(self, near: dict | None = None, limit: int = 50) -> dict:
+        """List regions, optionally those near a point or parcel."""
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ToolError("limit must be an integer >= 1")
+        edits = _read_edits(self.settings.edits_path)
+        rows = [self._region_row(rid, e) for rid, e in sorted(edits.regions.items())]
+        if near is not None:
+            if not isinstance(near, dict):
+                raise ToolError('near must be {"x": .., "y": ..} or {"parcel": "P-0001", "radius_m": ..}')
+            radius = _check_num("near.radius_m", near.get("radius_m", 100.0), positive=True)
+            if "parcel" in near:
+                src: Any = shapely.affinity.translate(
+                    self.map.polys[self.map.need(near["parcel"])], *self.map.origin
+                )
+            elif "x" in near and "y" in near:
+                src = Point(_check_num("near.x", near["x"]), _check_num("near.y", near["y"]))
+            else:
+                raise ToolError('near needs "x" and "y" (S-JTSK metres) or "parcel"')
+            keep = []
+            for row in rows:
+                d = Polygon(region_ring(edits.regions[row["id"]]["polygon"])).distance(src)
+                if d <= radius:
+                    keep.append({**row, "distance_m": round(d, 1)})
+            rows = sorted(keep, key=lambda r: (r["distance_m"], r["id"]))
+        return {"count": len(rows[:limit]), "total_matching": len(rows), "regions": rows[:limit]}
+
+
 # --- MCP registration -----------------------------------------------------------------------
 
 _ASSET_NOTE = (
@@ -1272,11 +1487,11 @@ def build_server(settings: Settings) -> Any:
     server = MCPServer(
         "suchohrad-parcel-edits",
         instructions=(
-            "Edit parcels of the Suchohrad map: fences, trees, placed objects and property "
-            "groups, all stored in edits.json (a viewer in --editor --watch mode shows changes "
-            "within about a second). Coordinates are absolute S-JTSK metres (x east, y north). "
+            "Edit parcels of the Suchohrad map: fences, trees, placed objects, property "
+            "groups and ground-colour regions, all stored in edits.json (a viewer in --editor --watch "
+            "mode shows changes within about a second). Coordinates are absolute S-JTSK metres (x east, y north). "
             "Typical flow: find_parcels (selected=true for what the user selected) -> get_parcel "
-            "-> set_fence / set_trees / place_object."
+            "-> set_fence / set_trees / place_object; create_region for ground colour."
         ),
     )
 
@@ -1411,6 +1626,47 @@ def build_server(settings: Settings) -> Any:
     @server.tool(description="Dissolve a property group (id G-0001). Parcel ids, boundaries and the members' own fence edits stay.")
     def dissolve_group(id: str) -> dict:
         return tools.dissolve_group(id)
+
+    @server.tool(description=(
+        "Create a region (id R-NNNN): a flat-coloured shape painted on the ground, independent "
+        "of parcel boundaries (a meadow, a gravel yard, a path). `colour` is \"#rrggbb\". Give "
+        "exactly one shape form: `polygon` = [[x, y], ...] in absolute S-JTSK metres, or `parcel` "
+        "+ `points` = [[along, inward], ...] metres in that parcel's front-edge frame (same axes "
+        "as place_object: along grows right, inward grows away from the road; see get_parcel). "
+        "Needs 3+ points; edges may not cross or touch each other. Invalid shapes are refused "
+        "and nothing is written. Where regions overlap the higher ID wins (reported in "
+        "`warnings`). Returns the id, area, bbox and the final absolute polygon."))
+    def create_region(
+        colour: str,
+        polygon: list[list[float]] | None = None,
+        parcel: str | None = None,
+        points: list[list[float]] | None = None,
+    ) -> dict:
+        return tools.create_region(colour, polygon, parcel, points)
+
+    @server.tool(description="Change a region's colour (\"#rrggbb\"). Use list_regions for ids.")
+    def set_region_colour(id: str, colour: str) -> dict:
+        return tools.set_region_colour(id, colour)
+
+    @server.tool(description=(
+        "Move one point of a region's polygon (`index`, 0-based as in the file) to an absolute "
+        "`position` [x, y] or by an `offset` {\"dx\": east m, \"dy\": north m}; give exactly one. "
+        "A move that would make the polygon self-intersect is refused and nothing is written."))
+    def move_region_point(
+        id: str, index: int, position: list[float] | None = None, offset: dict | None = None
+    ) -> dict:
+        return tools.move_region_point(id, index, position, offset)
+
+    @server.tool(description="Delete a region by id (e.g. R-0001).")
+    def delete_region(id: str) -> dict:
+        return tools.delete_region(id)
+
+    @server.tool(description=(
+        "List regions: id, colour, area_m2, point count, bbox [minx, miny, maxx, maxy] and "
+        "centroid (absolute S-JTSK). Optional filter `near` = {\"x\", \"y\", radius_m?} or "
+        "{\"parcel\", radius_m?} (default radius 100 m; adds distance_m, nearest first); `limit`."))
+    def list_regions(near: dict | None = None, limit: int = 50) -> dict:
+        return tools.list_regions(near, limit)
 
     return server
 
