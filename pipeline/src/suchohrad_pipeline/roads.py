@@ -12,11 +12,11 @@ from pathlib import Path
 
 import numpy as np
 import shapely
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Polygon
 
 from suchohrad_pipeline.buildings import hex_to_rgb
 from suchohrad_pipeline.config import DEFAULT_AREA, area_paths
-from suchohrad_pipeline.meshes import Mesh
+from suchohrad_pipeline.meshes import Mesh, _polygons, triangulate
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 from suchohrad_pipeline.terrain import Terrain
 
@@ -153,23 +153,84 @@ def ribbon_sides(pts: np.ndarray, width: float) -> tuple[np.ndarray, np.ndarray]
     return pts + off * half, pts - off * half
 
 
+def _terrain_triangles(terrain: Terrain, bounds: tuple[float, float, float, float]):
+    """Terrain mesh triangles (3x3 vertex arrays) of the cells touching ``bounds``.
+
+    Cells are split along the same diagonal as in ``Terrain.chunk_mesh`` / ``Terrain.surface``.
+    """
+    st, h = terrain.step, terrain.heights
+    c0 = max(int(math.floor(bounds[0] / st)) - terrain.i0, 0)
+    c1 = min(int(math.floor(bounds[2] / st)) - terrain.i0, terrain.ncols - 1)
+    r0 = max(int(math.floor(bounds[1] / st)) - terrain.j0, 0)
+    r1 = min(int(math.floor(bounds[3] / st)) - terrain.j0, terrain.nrows - 1)
+    for cj in range(r0, r1 + 1):
+        for ci in range(c0, c1 + 1):
+            if not terrain.valid[cj : cj + 2, ci : ci + 2].all():
+                continue  # no terrain mesh here
+            x, y = (terrain.i0 + ci) * st, (terrain.j0 + cj) * st
+            v00 = (x, y, h[cj, ci])
+            v10 = (x + st, y, h[cj, ci + 1])
+            v01 = (x, y + st, h[cj + 1, ci])
+            v11 = (x + st, y + st, h[cj + 1, ci + 1])
+            if abs(v10[2] - v01[2]) < abs(v00[2] - v11[2]):
+                yield np.array([v00, v10, v01])
+                yield np.array([v10, v11, v01])
+            else:
+                yield np.array([v00, v10, v11])
+                yield np.array([v00, v11, v01])
+
+
+def _area2(t) -> float:
+    (x0, y0), (x1, y1), (x2, y2) = t
+    return (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
+
+
+def _area2(t) -> float:
+    (x0, y0), (x1, y1), (x2, y2) = t
+    return (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
+
+
 def ribbon_mesh(
     pts: np.ndarray, width: float, terrain: Terrain, lift: float, colour: list[int], step: float
 ) -> Mesh:
-    """Triangle strip draped on the terrain surface (counter-clockwise seen from above)."""
+    """Ribbon laid exactly on the terrain surface (counter-clockwise seen from above).
+
+    The ribbon footprint is clipped against every terrain triangle it touches, and each piece
+    lies in that triangle's plane (plus ``lift``). The ribbon therefore has vertices on every
+    terrain edge it crosses and cannot be cut through by a terrain crease between its samples.
+    """
     pts = resample(np.asarray(pts, float), step)
     left, right = ribbon_sides(pts, width)
-    mid = pts
-    rows = []
-    for side in (right, mid, left):
-        z = terrain.surface(side[:, 0], side[:, 1]) + lift
-        rows.append(np.column_stack([side, z]))
-    # Three vertices across (right, centre, left) so the strip follows a kink under the middle.
+    quads = [
+        Polygon([left[k], left[k + 1], right[k + 1], right[k]]) for k in range(len(pts) - 1)
+    ]
+    foot = shapely.unary_union([q.buffer(0) for q in quads if q.area > 1e-9])
     tris = []
-    for k in range(len(pts) - 1):
-        for a, b in ((0, 1), (1, 2)):
-            tris.append([rows[a][k], rows[a][k + 1], rows[b][k + 1]])
-            tris.append([rows[a][k], rows[b][k + 1], rows[b][k]])
+    for tri in _terrain_triangles(terrain, foot.bounds):
+        piece = foot.intersection(Polygon(tri[:, :2]))
+        if piece.is_empty:
+            continue
+        a, b, c = tri
+        det = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])
+        if abs(det) < 1e-12:
+            continue
+        # plane z = a.z + gx * (x - a.x) + gy * (y - a.y)
+        gx = ((b[2] - a[2]) * (c[1] - a[1]) - (c[2] - a[2]) * (b[1] - a[1])) / det
+        gy = ((c[2] - a[2]) * (b[0] - a[0]) - (b[2] - a[2]) * (c[0] - a[0])) / det
+        for poly in _polygons(piece):
+            for t in triangulate(poly):
+                if abs(_area2(t)) < 2e-6:
+                    continue  # sliver from clipping along a terrain edge
+                if abs(_area2(t)) < 2e-6:
+                    continue  # sliver from clipping along a terrain edge
+                v = np.array([(x, y, a[2] + gx * (x - a[0]) + gy * (y - a[1]) + lift) for x, y in t])
+                if (v[1, 0] - v[0, 0]) * (v[2, 1] - v[0, 1]) - (v[2, 0] - v[0, 0]) * (
+                    v[1, 1] - v[0, 1]
+                ) < 0:
+                    v = v[[0, 2, 1]]
+                tris.append(v)
+    if not tris:
+        return Mesh.empty()
     return Mesh(np.array(tris), np.tile(np.array(colour, np.uint8), (len(tris), 1)))
 
 

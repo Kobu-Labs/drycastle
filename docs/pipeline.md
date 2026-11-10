@@ -123,8 +123,9 @@ edge; road ribbons, fences, trees and spawns outside coverage are dropped.
 **Roads** (`make roads`): highways from `normalised/highways.geojson` (classes and widths in
 `rules.yaml`; an OSM `width` or `lanes` tag wins) become graph nodes and edges in
 `out/map/roads.json` (`nodes`: id, x, y; `edges`: id, osm_id, from, to, polyline, highway, width,
-oneway, surface, length_m; local metres, x east, y north). Ribbon meshes are draped on the
-terrain surface and lifted by `lift_m` (0.05 m); overlapping ribbons at intersections are
+oneway, surface, length_m; local metres, x east, y north). Ribbon footprints are clipped against the
+terrain triangles they cover, so every piece lies in a terrain triangle's plane lifted by `lift_m` (0.05 m)
+and no terrain crease can poke through; overlapping ribbons at intersections are
 accepted in v1, and a higher road class sits a hair above a lower one.
 
 **Props** (`make props`): low fences (thin boxes, 1.2 m) along the boundaries of building plots
