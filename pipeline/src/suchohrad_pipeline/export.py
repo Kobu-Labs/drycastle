@@ -23,7 +23,9 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # 0.2.0: fences and trees of a parcel moved from the chunk-level props / props_collision nodes into
 # per-parcel nodes (props_layout "per_parcel"). Pre-1.0, a node-layout change bumps the minor part.
 # 0.3.0: manifest lists objects.json (files.objects) and one GLB per primitive (prims).
-MAP_VERSION_BASE = "0.3.0"
+# 0.4.0: parcels.json carries origin_epsg5514 (the local frame's origin in S-JTSK metres, so the editor can
+# write absolute coordinates) and the manifest lists edit_defaults (the rule values the editor shows as defaults).
+MAP_VERSION_BASE = "0.4.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
@@ -108,6 +110,25 @@ def _dump(path: Path, doc: dict) -> None:
     path.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 
 
+def _edit_defaults(rules_path: Path, area: str) -> dict:
+    """Rule values the editor shows as the greyed defaults of fences and trees (area overlay applied)."""
+    props = load_section("props", rules_path, area)
+    fences, trees = props["fences"], props["trees"]
+    return {
+        "fence": {
+            "kinds": list(fences["kinds"]),
+            "probability": fences["probability"],
+            "height_m": fences["height_m"],
+            "thickness_m": fences["thickness_m"],
+            "colour": fences["colour"],
+        },
+        "trees": {
+            "density_per_1000m2": dict(trees["density_per_1000m2"]),
+            "max_per_parcel": trees["max_per_parcel"],
+        },
+    }
+
+
 def run_export(
     work_dir: Path = DEFAULT_WORK_DIR,
     out_dir: Path = DEFAULT_OUT_DIR,
@@ -179,16 +200,16 @@ def run_export(
         _dump(out_dir / "spawns.json", scene.spawns)
         files["spawns"] = "spawns.json"
 
-    _dump(
-        out_dir / "parcels.json",
-        {
-            "version": ARTIFACT_FORMAT_VERSION,
-            "crs": parcels_doc["crs"],
-            "axes": "x east, y north (local metres); glTF files use Y-up: x east, y up, z -north",
-            "chunk_size_m": parcels_doc["chunk_size_m"],
-            "parcels": parcels_out,
-        },
-    )
+    parcels_file = {
+        "version": ARTIFACT_FORMAT_VERSION,
+        "crs": parcels_doc["crs"],
+        "axes": "x east, y north (local metres); glTF files use Y-up: x east, y up, z -north",
+        "chunk_size_m": parcels_doc["chunk_size_m"],
+        "parcels": parcels_out,
+    }
+    if "origin_epsg5514" in parcels_doc:  # always there from the parcels stage on
+        parcels_file["origin_epsg5514"] = parcels_doc["origin_epsg5514"]
+    _dump(out_dir / "parcels.json", parcels_file)
     generated = {"buildings"}
     terrain_info = None
     if scene.terrain is not None:
@@ -230,6 +251,7 @@ def run_export(
         "inputs": inputs,
         "generated": sorted(generated),
         "files": files,
+        "edit_defaults": _edit_defaults(rules_path, area),
         "prims": prims,
         "terrain": terrain_info,
         "not_generated": NOT_GENERATED_NOTE,

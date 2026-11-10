@@ -254,7 +254,7 @@ replaces every visual material with a rough, non-metallic one that uses COLOR_0 
 
 ### Objects, parcel swap and hot reload
 
-The map folder (map version 0.3.0) also holds `objects.json` (the placed objects planned by the props
+The map folder (map version 0.4.0: `parcels.json` also carries `origin_epsg5514`, the local frame's origin in S-JTSK metres, and the manifest `edit_defaults`, the rule values the editor shows as defaults) also holds `objects.json` (the placed objects planned by the props
 stage from `pipeline/config/edits.json`; `files.objects` in `manifest.json`) and `prims/<name>.glb`, one
 flat-colour GLB per `prim:` primitive (`prims` in the manifest; same axes as the chunk files, standing on
 y = 0). The loader instances every object: `pack:<pack>/<model>` from `assets/manifest.json` (`file`,

@@ -90,7 +90,7 @@ public partial class Viewer : Node3D
     void StartWatcher(string repo)
     {
         var edits = _opts.GetValueOrDefault("edits") ?? Path.Combine(repo, "pipeline", "config", "edits.json");
-        // the map folder name carries the area: "0.3.0-slice" / "0.3.0-village"
+        // the map folder name carries the area: "0.4.0-slice" / "0.4.0-village"
         var fromMap = _map.MapVersion.Contains('-') ? _map.MapVersion[(_map.MapVersion.LastIndexOf('-') + 1)..] : "";
         var area = _opts.GetValueOrDefault("area") ?? (fromMap is "slice" or "village" ? fromMap : "slice");
         if (area is not ("slice" or "village")) { GD.PrintErr($"--area must be slice or village, got '{area}'"); area = "slice"; }

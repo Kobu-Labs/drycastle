@@ -25,6 +25,7 @@ def workspace(tmp_path: Path) -> dict[str, Path]:
     parcel = {"kind": "building_plot", "anchor": [0, 0], "polygon": {"type": "Polygon"}}
     parcels = {
         "crs": "synthetic",
+        "origin_epsg5514": [-568000.5, -1200000.25],
         "chunk_size_m": 250.0,
         "parcels": [
             {
@@ -95,9 +96,12 @@ def test_parcels_and_manifest(workspace) -> None:
     assert [p["id"] for p in parcels] == ["P-0001", "P-0002", "P-0003"]
     assert parcels[0]["buildings"] == ["w1"] and parcels[2]["buildings"] == []
     m = json.loads((out / "manifest.json").read_text())
-    assert m["map_version"] == "0.3.0-slice"
+    assert m["map_version"] == "0.4.0-slice"
     assert m["attribution"] == ["A", "B"] and m["inputs"]["raw"] == {"osm.json": "ab"}
     assert m["props_layout"] == "per_parcel"
+    pj = json.loads((out / "parcels.json").read_text())
+    assert pj["origin_epsg5514"] == json.loads((workspace["work"] / "parcels.json").read_text())["origin_epsg5514"]
+    assert m["edit_defaults"]["fence"]["height_m"] > 0 and "garden" in m["edit_defaults"]["trees"]["density_per_1000m2"]
     assert "not generated" in m["not_generated"]
     assert not any("time" in k or "date" in k for k in m)
 
@@ -128,8 +132,8 @@ def test_village_area_manifest_and_lighter_props(tmp_path) -> None:
         return run_export(*args[:1], tmp_path / area, *args[2:], area=area)
 
     slice_m, village = counts("slice"), counts("village")
-    assert village["map_version"] == "0.3.0-village"
-    assert slice_m["map_version"] == "0.3.0-slice"
+    assert village["map_version"] == "0.4.0-village"
+    assert slice_m["map_version"] == "0.4.0-slice"
     def has_collision(m: dict) -> bool:
         return any(n.endswith("props_collision") for c in m["chunks"] for n in c["triangles"])
 
