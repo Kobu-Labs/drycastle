@@ -20,6 +20,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="stage",
         help="one of: " + ", ".join(choices),
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="fetch: ignore the disk cache and download everything again",
+    )
     return parser
 
 
@@ -27,8 +32,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.stage == RUN_ALL:
         for run in STAGES.values():
-            status = run()
+            status = run(force=args.force)
             if status != 0:
                 return status
         return 0
-    return STAGES[args.stage]()
+    return STAGES[args.stage](force=args.force)

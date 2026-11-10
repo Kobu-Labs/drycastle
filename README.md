@@ -34,7 +34,7 @@ make lint     # ruff check
 
 ```sh
 make map      # run every pipeline stage in order (stubs for now)
-make fetch    # run only the fetch stage
+make fetch    # run only the fetch stage (downloads raw data into data/raw/)
 make viewer   # open the Godot viewer project (godot --path godot/viewer)
 ```
 
@@ -45,7 +45,29 @@ dotnet build godot/MapLoader/MapLoader.csproj
 dotnet build godot/viewer/viewer.csproj
 ```
 
+## Configuring the slice and fetching data
+
+The map is built for a small slice of the village first. The slice is a square around the
+centroid of one OSM way (for example a building), set in a local, gitignored file:
+
+```sh
+cp pipeline/config/slice.example.yaml pipeline/config/slice.local.yaml
+# edit osm_way (OSM way id), radius_m (default 100) and margin_m (extra metres fetched, default 25)
+make fetch
+```
+
+`make fetch` writes to `data/raw/` (gitignored): `osm.json` (Overpass: buildings, highways,
+barriers, landuse, natural tree/wood/water), `parcels.geojson` (INSPIRE cadastral parcels
+intersecting the box, WFS) and `dmr5.tif` (DMR 5.0 terrain, 1 m, EPSG:3046, via INSPIRE WCS).
+Each file has a `<name>.meta.json` sidecar (request, url, fetched-at, sha256, source, licence,
+attribution) and `manifest.json` lists the sources, licences and required attribution.
+
+Reruns skip files whose request parameters are unchanged and download nothing; use
+`cd pipeline && uv run python -m suchohrad_pipeline fetch --force` to refetch everything.
+Requests are sequential, use the User-Agent `suchohrad-pipeline`, have timeouts and retry with
+backoff (Overpass falls back to a second public instance).
+
 ## Data attribution
 
 - Map data: (c) OpenStreetMap contributors, licensed under the Open Database License (ODbL).
-- Terrain (DMR 3.5): UGKK SR / GKU Bratislava, CC BY 4.0.
+- Terrain (DMR 5.0) and cadastral parcels: UGKK SR, GKU Bratislava, CC BY 4.0.
