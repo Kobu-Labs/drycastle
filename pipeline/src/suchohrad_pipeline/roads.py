@@ -248,25 +248,33 @@ def junction_mesh(
     return Mesh(np.array(tris), np.tile(np.array(colour, np.uint8), (8, 1)))
 
 
-def road_mesh(graph: dict, terrain: Terrain, cfg: dict) -> Mesh:
-    """All ribbons and junction patches of the graph, clipped to the terrain coverage."""
+def road_mesh(graph: dict, terrain: Terrain, cfg: dict, only: set[str] | None = None) -> Mesh:
+    """All ribbons and junction patches of the graph, clipped to the terrain coverage.
+
+    ``only`` limits the output to those edge IDs (and the junctions they touch); junction
+    patches are still derived from every edge of the graph.
+    """
     order = {hw: i for i, hw in enumerate(cfg["order"])}
     lift, step = float(cfg["lift_m"]), float(cfg["sample_step_m"])
     meshes = []
     node_best: dict[str, tuple[float, int, list[int]]] = {}
     nodes = {n["id"]: n for n in graph["nodes"]}
     deg: dict[str, int] = {}
+    touched: set[str] = set()
     for e in sorted(graph["edges"], key=lambda e: (order.get(e["highway"], 0), e["id"])):
         rank = order.get(e["highway"], 0)
         z = lift + rank * 0.003
         colour = road_colour(e["highway"], e["surface"], cfg)
-        meshes.append(ribbon_mesh(np.array(e["polyline"]), e["width"], terrain, z, colour, step))
+        keep = only is None or e["id"] in only
+        if keep:
+            meshes.append(ribbon_mesh(np.array(e["polyline"]), e["width"], terrain, z, colour, step))
+            touched.update((e["from"], e["to"]))
         for end in (e["from"], e["to"]):
             deg[end] = deg.get(end, 0) + 1
             if end not in node_best or (e["width"], rank) > node_best[end][:2]:
                 node_best[end] = (e["width"], rank, colour)
     for nid in sorted(node_best):
-        if deg[nid] >= 2:
+        if deg[nid] >= 2 and nid in touched:
             w, rank, colour = node_best[nid]
             n = nodes[nid]
             meshes.append(

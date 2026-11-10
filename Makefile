@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run preview map viewer viewer-smoke viewer-edit-smoke viewer-editor-smoke viewer-panel-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint
 
 setup:
 	cd pipeline && uv sync
@@ -40,6 +40,13 @@ PARCEL_ARGS = $(if $(PARCEL),--parcel $(PARCEL),) $(if $(GROUP),--group $(GROUP)
 parcel-run:
 	cd pipeline && uv run python -m suchohrad_pipeline parcel-run --area $(AREA) $(PARCEL_ARGS)
 
+# [REGION=R-0001] [OUT=file.json] GLB=file.glb: meshes of the regions (none named: all) as a GLB with
+# region_<ID> nodes (hot reload); the JSON summary lists the regions to replace
+REGION_ARGS = $(if $(REGION),--region $(REGION),) $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb $(abspath $(GLB)),)
+
+region-run:
+	cd pipeline && uv run python -m suchohrad_pipeline region-run --area $(AREA) $(REGION_ARGS)
+
 EXAG ?= 3
 
 preview:
@@ -70,6 +77,12 @@ viewer-smoke:
 viewer-edit-smoke:
 	python3 godot/viewer/edit_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
 
+# Region hot reload end to end (headless): exports a slice map with regions into a scratch dir, then recolours, reshapes,
+# adds and removes regions (also together with a parcel edit) through the watcher and checks the swaps, that nothing
+# leaks and that a broken file changes nothing. Needs uv, dotnet and godot.
+viewer-regions-smoke:
+	python3 godot/viewer/regions_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
+
 # Editor mode end to end (headless): exports a slice map into a scratch dir, drives the editor APIs (picking,
 # selection, groups, edits.json writes, outlines, editor-state.json, F2 round trip). Needs uv, dotnet and godot.
 viewer-editor-smoke:
@@ -80,6 +93,12 @@ viewer-editor-smoke:
 # windowed screenshots of the panel (needs a display). Needs uv, dotnet and godot.
 viewer-panel-smoke:
 	python3 godot/viewer/panel_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),) $(if $(SHOTS),--shots $(SHOTS),)
+
+# Region tool end to end (headless): exports a slice map with one region into a scratch dir, drives drawing, closing, colour,
+# corner drags (valid and self-crossing), recolour, delete with confirm, undo/redo, Esc levels and the Ctrl+P palette through
+# the editor APIs and key events, and compares edits.json after every step with the Python writer's text. Needs uv, dotnet and godot.
+viewer-region-editor-smoke:
+	python3 godot/viewer/region_editor_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
 
 # Objects, gizmo and session undo end to end (headless): exports a slice map into a scratch dir, drives placement, drag,
 # rotate, cross-parcel moves, field edits, duplicate/delete, group + fence Apply and undo/redo through the editor APIs,

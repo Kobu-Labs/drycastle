@@ -125,6 +125,11 @@ public static class EditorTheme
         t.SetFontSize("font_size", "Title", FontTitle);
         t.SetTypeVariation("Dim", "Label");
         t.SetColor("font_color", "Dim", Dim);
+        t.SetTypeVariation("Danger", "Label");
+        t.SetColor("font_color", "Danger", Danger);
+        t.SetTypeVariation("DangerButton", "Button");
+        t.SetStylebox("normal", "DangerButton", Box(new Color(Danger, 0.25f), 8, Danger));
+        t.SetStylebox("hover", "DangerButton", Box(new Color(Danger, 0.45f), 8, Danger));
         t.SetTypeVariation("Warn", "Label");
         t.SetColor("font_color", "Warn", Warn);
 

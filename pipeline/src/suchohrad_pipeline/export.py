@@ -6,6 +6,7 @@ glTF (x, y, z) = local (east, up, -north). parcels.json keeps local metres (x ea
 
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +14,7 @@ import trimesh
 
 from suchohrad_pipeline.buildings import DEFAULT_OVERRIDES
 from suchohrad_pipeline.config import DEFAULT_AREA, DEFAULT_RAW_DIR, REPO_ROOT, area_paths
+from suchohrad_pipeline.edits import DEFAULT_EDITS
 from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.primitives import PRIMITIVES, build_primitive
@@ -136,6 +138,7 @@ def run_export(
     rules_path: Path = DEFAULT_RULES,
     overrides_path: Path = DEFAULT_OVERRIDES,
     area: str = DEFAULT_AREA,
+    edits_path: Path = DEFAULT_EDITS,
 ) -> dict:
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     buildings = {
@@ -148,7 +151,9 @@ def run_export(
     for old in chunks_dir.glob("chunk_*.glb"):
         old.unlink()
 
-    scene = build_scene(work_dir, rules_path, area=area)
+    scene = build_scene(work_dir, rules_path, area=area, edits_path=edits_path)
+    for warning in scene.warnings:
+        print(f"export: warning: {warning}", file=sys.stderr)
     parcels_out = []
     for p in sorted(parcels_doc["parcels"], key=lambda p: p["id"]):
         parcels_out.append(
@@ -228,6 +233,8 @@ def run_export(
             generated |= {"fences", "trees"}
         if scene.spawns is not None:
             generated |= {"spawns"}
+    if any(name.startswith("region_") for nodes in scene.nodes.values() for name in nodes):
+        generated.add("regions")
     inputs = {
         "raw": {f["file"]: f["sha256"] for f in raw_manifest.get("files", [])},
         "work/parcels.json": _sha256(work_dir / "parcels.json"),
@@ -265,13 +272,15 @@ def run(
     area: str = DEFAULT_AREA,
     out: str | None = None,
     work: str | None = None,
+    edits: str | None = None,
     **_options: object,
 ) -> int:
     """``out`` and ``work`` override the area's map and work directories (experiments, tests)."""
     paths = area_paths(area)
     out_dir = Path(out) if out else paths.out
     try:
-        manifest = run_export(Path(work) if work else paths.work, out_dir, paths.raw, area=area)
+        manifest = run_export(Path(work) if work else paths.work, out_dir, paths.raw, area=area,
+                              edits_path=Path(edits) if edits else DEFAULT_EDITS)
     except FileNotFoundError as exc:
         print(f"export: error: missing input {Path(str(exc.filename)).name}; run earlier stages")
         return 1

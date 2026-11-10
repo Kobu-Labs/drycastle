@@ -155,6 +155,13 @@ terrain:
     road: ["#8e8e8e"]
     other: ["#b8b0a2", "#c0b8aa"]
 
+# --- Regions (export, region-run) ---------------------------------------------------------
+regions:
+  # Regions (hand-drawn colour shapes, edits.json) float this far above the terrain surface ...
+  lift_m: 0.03
+  # ... and this far above a road ribbon where they cover one (so they never z-fight with it).
+  road_lift_m: 0.02
+
 # --- Roads (roads stage) --------------------------------------------------------------------
 # Ribbons from OSM highways in normalised/highways.geojson, draped on the terrain. Overlapping
 # ribbons at junctions are accepted in v1 (a higher road class is lifted a hair above lower ones

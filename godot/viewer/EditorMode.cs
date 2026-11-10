@@ -75,6 +75,7 @@ public partial class EditorMode : Node
         OutlineRoot = new Node3D { Name = "EditorOutlines", Visible = false };
         AddChild(OutlineRoot);
         BuildUi();
+        BuildRegionWorld();
         if (Watcher != null)
         {
             Watcher.Launched += ids => Say("regenerating " + string.Join(", ", ids.Take(3)) + "...");
@@ -129,6 +130,7 @@ public partial class EditorMode : Node
             Player.Camera.MakeCurrent();
             Input.MouseMode = Input.MouseModeEnum.Captured;
             CancelDrag();
+            CancelRegionGesture();
             DisarmPlacement(false);
             HoverId = null;
             _hoverLabel.Visible = false;
@@ -215,7 +217,8 @@ public partial class EditorMode : Node
 
     bool OverUi(Vector2 mouse)
         => _ui.Visible && ((_panel.Visible && _panel.GetGlobalRect().HasPoint(mouse)) || _rail.GetGlobalRect().HasPoint(mouse)
-            || _statusBar.GetGlobalRect().HasPoint(mouse) || (_cheat.Visible && _cheat.GetGlobalRect().HasPoint(mouse)));
+            || _statusBar.GetGlobalRect().HasPoint(mouse) || (_cheat.Visible && _cheat.GetGlobalRect().HasPoint(mouse))
+            || (_confirm.Visible && _confirm.GetGlobalRect().HasPoint(mouse)) || (_palette.Visible && _palette.GetGlobalRect().HasPoint(mouse)));
 
     // ---- selection ----
 
@@ -417,6 +420,11 @@ public partial class EditorMode : Node
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown } wd when !OverUi(wd.Position):
                 SetSpeed(Speed / 1.25f);
                 break;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Tool == EditorTool.Region:
+                RegionLeftPress(mb.Position, mb.CtrlPressed);
+                break;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } when !_looking && Modal:
+                break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && GateArmed:
                 if (RayToGround(FlyCam.ProjectRayOrigin(mb.Position), FlyCam.ProjectRayNormal(mb.Position), out var gp)) GateBegin(gp);
                 else Say("click on the ground near the fence", true);
@@ -431,6 +439,8 @@ public partial class EditorMode : Node
                 LeftPress(mb.Position, mb.ShiftPressed);
                 break;
             case InputEventKey { Pressed: true, Echo: false } k:
+                if (HandleRegionKey(k)) { GetViewport().SetInputAsHandled(); break; }
+                if (Modal) break;
                 if (HandleObjectKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (!k.CtrlPressed && !k.AltPressed && HandleToolKey(k.Keycode)) { GetViewport().SetInputAsHandled(); break; }
                 switch (k.Keycode)
@@ -468,6 +478,8 @@ public partial class EditorMode : Node
         }
         if (Active && Dragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
             EndDrag();
+        if (Active && RegionDragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
+            EndCornerDrag();
         if (Active && GateDragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
             GateEnd();
     }
@@ -481,6 +493,7 @@ public partial class EditorMode : Node
         UpdateHover();
         UpdateGateDrag();
         UpdateObjectTools();
+        UpdateRegionTool();
         _pollT += delta;
         if (_pollT > 0.5)
         {
@@ -491,13 +504,14 @@ public partial class EditorMode : Node
         if (_outlinesDirty) RebuildOutlines();
         if (_panelDirty) RefreshPanel();
         var c = FlyCam.GlobalPosition;
-        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (_dirtyLabel.Visible ? "  |  * UNSAVED" : "");
+        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedRegionId != null && Tool == EditorTool.Region ? $"  |  region {SelectedRegionId}" : "") + (_dirtyLabel.Visible || RegionDraftPending ? "  |  * UNSAVED" : "");
         if (Time.GetTicksMsec() / 1000.0 > _statusUntil && _statusLabel.Text != "")
             _statusLabel.Text = "";
     }
 
     void Fly(float dt)
     {
+        if (Modal || GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit) return; // typing is not flying
         if (Input.IsKeyPressed(Key.Ctrl)) return; // Ctrl+D, Ctrl+Z ... are editor commands, not flying
         var dir = Vector3.Zero;
         var fwd = -FlyCam.GlobalBasis.Z;
@@ -531,7 +545,7 @@ public partial class EditorMode : Node
         var mouse = GetViewport().GetMousePosition();
         string? id = null;
         _hoverPoint = null;
-        if (!_looking && !OverUi(mouse))
+        if (!_looking && !OverUi(mouse) && Tool != EditorTool.Region)
         {
             var p = PickScreen(mouse, out var point);
             if (p != null || point != default) _hoverPoint = point;
@@ -705,6 +719,7 @@ public partial class EditorMode : Node
         _btnDissolve.Disabled = gids.Count != 1;
         RefreshEditPanel();
         RefreshObjectsPanel();
+        RefreshRegionsPanel();
     }
 }
 

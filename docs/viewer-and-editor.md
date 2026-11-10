@@ -39,6 +39,13 @@ under it when `z` is null), `rotation_deg` counter-clockwise seen from above, un
 `colour` (material override). Unknown or missing assets give a warning and a magenta placeholder box.
 Objects have no collision in v1.
 
+Regions (`regions` in `edits.json`, schema in `pipeline/src/suchohrad_pipeline/edits.py`) are baked into the
+chunk files as `region_<ID>` nodes (flat colour, no collision) and rebuilt for hot reload by
+`region-run --region ID --glb PATH`, whose JSON summary has `replaces` (the baked `region_<ID>` nodes to hide)
+and a GLB with one `region_<ID>` node per region in the chunk frame. `EditsFile` keeps `regions` as read and writes
+them canonically (the key is omitted while empty); `ObjectEdits.ValidateDocument` mirrors the schema. The editor UI
+for drawing regions is a separate piece of work.
+
 Assets directory: `--assets DIR`, else env `SUCHOHRAD_ASSETS`, else `<repo>/assets`.
 
 Loader API additions: `ApplyFragment(path)` takes a `parcel-run --out ... --glb ...` fragment, hides the baked
@@ -68,6 +75,11 @@ viewing and headless servers are unaffected):
 - `make viewer-edit-smoke` exports a fresh slice map and a work-directory copy into a scratch directory
   (`SMOKE_DIR=...`, default a temp dir), starts the viewer headless with `--watch`, writes edits files during the
   run and checks objects, swapped props, colliders, replacement without leaks and survival of a broken file.
+- `make viewer-regions-smoke` does the same for regions: exports a slice map with three regions, then recolours,
+  reshapes, adds and removes regions through the watcher (alone and together with a parcel edit in one file
+  change) and checks that only those regions are swapped (`region-run --glb`, `MapLoader.ApplyRegions`; a region
+  split over chunk files is swapped completely), that repeated swaps do not grow the node count and that a broken
+  file changes nothing.
   `parcel-run`/`export` take `--work DIR` and `export` takes `--out DIR` for such experiments.
 
 ## Editor mode
@@ -227,3 +239,12 @@ GPU): `godot --path godot/viewer -- --map DIR --edits FILE --state FILE --editor
 `uv run`) that edits `pipeline/config/edits.json` in plain language: "park a car in front of the house on the selected
 parcel". It uses the pipeline's own validator, reads the viewer's `editor-state.json` for the selection, and the
 viewer's `--watch` applies the change. Registration, tool reference and workflow: [mcp.md](mcp.md).
+
+### Regions tool
+
+Rail icon 6 (View moved to 7). `N` starts a shape, LMB or `C` adds corners (0.5 m grid, Ctrl free), Enter closes it, the colour is chosen
+(picker or `#rrggbb`) and Enter creates the region: one save, one undo step. Select a region by clicking it or its row in the panel;
+drag corners, `[` `]` plus arrows, recolour, `Del` (asks first). Invalid shapes are refused before commit with the reason in the panel
+(a red preview outline while drawing or dragging). `Ctrl+P` opens a command palette. Esc steps back one level. Details and the
+keyboard walkthrough: `docs/regions-ui-notes.md`. `make viewer-region-editor-smoke` drives all of it headless and compares every saved
+`edits.json` with the Python writer's text.

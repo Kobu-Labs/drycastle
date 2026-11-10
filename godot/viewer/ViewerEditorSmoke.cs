@@ -254,8 +254,17 @@ public partial class Viewer
     async Task RunEditorShot()
     {
         var ed = _editor!;
-        GetWindow().Size = new Vector2I(1600, 900);
+        var size = (_opts.GetValueOrDefault("shot-size") ?? "1600x900").Split('x');
+        var want = new Vector2I(int.Parse(size[0]), int.Parse(size[1]));
+        GetWindow().Mode = Window.ModeEnum.Windowed;
+        GetWindow().Borderless = true;
+        GetWindow().Unresizable = false;
+        GetWindow().Position = new Vector2I(0, 0);
+        GetWindow().Size = want;
         await Physics(30);
+        GetWindow().Size = want;
+        await Physics(10);
+        GD.Print($"window size wanted {want}, got {GetWindow().Size}");
         Input.MouseMode = Input.MouseModeEnum.Visible;
         ed.SetActive(true);
         var ids = (_opts.GetValueOrDefault("select") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
@@ -307,6 +316,27 @@ public partial class Viewer
             ed.LookFrom(target + off + right * dist * 0.3f, target + right * dist * 0.3f);
             ed.SetHover(_opts.GetValueOrDefault("hover"));
         }
+        // Region tool shots: --shot-region R-0001 (select it), --shot-draft "x,y;x,y;..." (absolute metres, drawing), --shot-closed (colour step)
+        if (_opts.GetValueOrDefault("shot-draft") is { } draft)
+        {
+            ed.StartRegion();
+            double cx = 0, cy = 0; var n = 0;
+            foreach (var pt in draft.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var xy = pt.Split(',').Select(v => double.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+                ed.AddRegionPoint(xy[0], xy[1]); cx += xy[0]; cy += xy[1]; n++;
+            }
+            if (_flags.Contains("shot-closed")) ed.CloseRegion();
+            ed.LookAtAbs(cx / n, cy / n, 70);
+        }
+        else if (_opts.GetValueOrDefault("shot-region") is { } sreg)
+        {
+            Check(ed.SelectRegion(sreg), $"shot region {sreg} selected");
+            var r = ed.Region(sreg)!;
+            ed.LookAtAbs(r.Points.Average(p => p.x), r.Points.Average(p => p.y), 70);
+        }
+        ed.RefreshNow();
+        ed.RegionWorldNow();
         var frames = _opts.TryGetValue("frames", out var f) && int.TryParse(f, out var fi) ? fi : 60;
         for (var i = 0; i < frames; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);

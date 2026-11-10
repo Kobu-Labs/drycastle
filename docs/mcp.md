@@ -1,7 +1,7 @@
 # MCP server for parcel edits
 
 A small stdio MCP server (`pipeline/src/suchohrad_pipeline/mcp_server.py`) that lets Claude Code edit parcels in
-plain language: fences, trees, placed objects (cars, slabs, pots, bushes, ...) and property groups. It writes
+plain language: fences, trees, placed objects (cars, slabs, pots, bushes, ...), property groups and regions (ground colour shapes). It writes
 `pipeline/config/edits.json`, the same file the viewer's editor panel writes. It never talks to the viewer: a
 viewer started with `--editor --watch` notices the file change within about a second and regenerates just the
 affected parcels.
@@ -37,7 +37,7 @@ or check a `.mcp.json` into your own working copy (project scope):
 }
 ```
 
-Then `/mcp` in Claude Code should list `suchohrad-edits` with 12 tools. `make mcp` runs the same thing in a
+Then `/mcp` in Claude Code should list `suchohrad-edits` with 17 tools. `make mcp` runs the same thing in a
 terminal (it waits for JSON-RPC on stdin, so it is only useful for debugging); the repo does not ship a
 `.mcp.json`.
 
@@ -72,6 +72,7 @@ Example prompts:
 - "Group P-0012 and P-0013 as one property and give them a wire fence."
 - "Put a flower pot at each side of the front door of the house on P-0021." (anchors `near_building`, offsets)
 - "Remove the car I just placed."
+- "Paint a gravel yard, 6 by 8 m, behind the house on P-0021." (`create_region`, see Regions)
 
 ## Conventions
 
@@ -87,7 +88,7 @@ Example prompts:
   which is right for a car parked in front of a house. This assumes models face +Z, as the Kenney car kit does.
 - **Asset sizes** (`list_assets`) are raw bounding boxes in metres. Some packs are authored small (the Kenney
   suburban kit: a tree is 0.77 m, a fence section 0.5 m), so pass `scale` for those.
-- **IDs**: groups `G-NNNN` (highest existing + 1, as the Godot editor allocates them), placed objects `o-NNNN`
+- **IDs**: groups `G-NNNN` and regions `R-NNNN` (highest existing + 1, as the Godot editor allocates them), placed objects `o-NNNN`
   (highest existing `O-` id + 1; any other unique string is valid in the file too). IDs of removed items are
   not reserved: the next free number after the current maximum is used.
 - **Writes**: every write reloads the file, applies the change, validates the *whole* document with
@@ -117,9 +118,41 @@ All inputs and outputs are JSON. Write tools return `summary`, `warnings` and th
 | `move_object` | `id`, `parcel?`, `anchor?`, `offset_m?`, `position?`, `rotation_deg?`, `scale?`, `colour?` | a new anchor re-faces the road unless `rotation_deg` is given; a new `parcel` re-lists the object |
 | `create_group` | `parcels` (2+), `fence?` | new `G-NNNN`; a parcel can be in one group only; warns when the parcels do not touch |
 | `dissolve_group` | `id` | removes the group; members and their own fence edits stay |
+| `create_region` | `colour`, and either `polygon` `[[x,y],..]` or `parcel` + `points` `[[along,inward],..]` | new `R-NNNN`; see Regions |
+| `set_region_colour` | `id`, `colour` | |
+| `move_region_point` | `id`, `index`, `position?` `[x,y]` or `offset?` `{dx,dy}` | exactly one of position / offset |
+| `delete_region` | `id` | |
+| `list_regions` | `near?` `{x,y,radius_m?}` or `{parcel,radius_m?}`, `limit?` | id, colour, `area_m2`, `points`, `bbox`, `centroid`; `distance_m` when `near` |
+
+## Regions
+
+A region (`R-NNNN`) is a hand-drawn shape painted in one `#rrggbb` colour on the ground, independent of parcel
+boundaries (see `docs/pipeline.md`, "Regions"). The tools write the `regions` section of `edits.json` and
+validate with the same `edits.validate` as the editor: at least 3 points, no repeated consecutive points, edges
+may not cross or touch each other. An invalid result (also from `move_region_point`) is refused with the
+problems listed and the file stays byte-for-byte as it was. Where regions overlap, the higher ID wins; creating
+or moving into an overlap is allowed and reported in `warnings`. Colours are stored lower-case.
+
+`create_region` takes exactly one shape form. Absolute S-JTSK metres:
+
+```json
+{"colour": "#8a7a5c", "polygon": [[-596810.0, -1160420.0], [-596800.0, -1160420.0], [-596800.0, -1160410.0]]}
+```
+
+or points relative to a parcel, in the same front-edge frame as `place_object` (`along` grows to the right,
+`inward` away from the road; `{"along": .., "inward": ..}` objects are accepted too), converted to absolute
+coordinates on write:
+
+```json
+{"colour": "#b9b3a5", "parcel": "P-0021", "points": [[-3, 8], [3, 8], [3, 14], [-3, 14]]}
+```
+
+`move_region_point` indexes the stored polygon from 0: `{"id": "R-0001", "index": 2, "offset": {"dx": 1.5, "dy": 0}}`
+(`dx` east, `dy` north) or `"position": [x, y]`. `list_regions` returns for example
+`{"id": "R-0001", "colour": "#8a7a5c", "area_m2": 100.0, "points": 4, "bbox": [..], "centroid": [..]}`.
 
 Not in v1: a screenshot tool (`snapshot(parcel)` can come later, the viewer already has `--screenshot`), and
-drawing free-form fence polylines.
+drawing free-form fence polylines, and inserting or removing region points (delete and recreate).
 
 ## Tests
 

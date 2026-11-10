@@ -138,13 +138,37 @@ collision node; trees have no collision in v1.
 file): per-parcel fence mode (`auto`, `none`, `custom` with a type, height, colour and gaps),
 property groups (`G-NNNN`: one fence around the members' combined outer edge), tree density or
 count with a seed offset, and placed objects (`pack:` or `prim:` assets, absolute S-JTSK metres).
-Objects go to `work/objects.json`. The format and validator are documented in
+Objects go to `work/objects.json`. `regions` (`R-NNNN`: `colour` `#rrggbb`, `polygon` one ring of at
+least 3 `[x, y]` absolute S-JTSK points, no self-intersection) are shapes painted over the ground;
+they are not read by the props stage, only by the export and `region-run` (below). The format and validator are documented in
 `pipeline/src/suchohrad_pipeline/edits.py`. Entries for parcels that no longer exist are skipped
 with a warning; schema errors fail the stage.
 
 **Spawns**: `out/map/spawns.json` has a seeded subset (default 60) of points on roads and on
 garden, field and other parcels, at least `min_building_distance_m` from any building, with
 elevation, parcel, highway type (roads) and chunk index.
+
+## Regions
+
+A region (`regions` in `edits.json`) is a hand-drawn colour shape, independent of parcel borders. It
+changes only colour: no collision, no effect on trees, fences or objects, no `regions.json`. The
+export builds one flat mesh per region (`regions.py`): the polygon is cut along the terrain mesh
+triangles and, where it covers a road ribbon, along the ribbon outline, so the edges are exact and
+the surface follows the ground; every vertex is lifted `regions.lift_m` (0.03 m) above the terrain,
+or `regions.road_lift_m` (0.02 m) above the ribbon's own height on a road. Buildings, trees,
+fences and objects are not considered. Where regions overlap the higher ID wins: its polygon is
+subtracted from the lower regions before draping, so nothing z-fights. Parts outside the terrain
+coverage are cut off; a region wholly outside it is skipped with a warning (`export: warning:
+...`), as is any region when there is no terrain. Schema errors fail the run like every other edit.
+Nodes are `region_<ID>` in each chunk file the region touches (so a region over a chunk border is
+several nodes with the same name, one per chunk file); the manifest lists `regions` in `generated`.
+
+`make region-run [REGION=R-0001] [GLB=file.glb] [OUT=file.json]` (`python -m suchohrad_pipeline
+region-run --region ID ... --glb PATH`, none named = all) writes a GLB with one `region_<ID>` node
+per region (the whole region, in the chunk files' frame) and prints a JSON summary: `regions` (with
+a mesh), `replaces` (the baked `region_<ID>` nodes to hide: the named IDs, even deleted ones, plus
+every region overlapping a named one, whose visible area changes with it), `triangles`, `glb`,
+`timing_s`. Like `parcel-run --glb` it is for hot reload; nothing under `data/` is written.
 
 ## Export
 
@@ -155,7 +179,7 @@ and `parcel_<ID>_collision` (extruded footprint, no roof detail) for each parcel
 `terrain` and `terrain_collision` (flat colours by parcel kind; collision is every second grid
 vertex); `roads`; `parcel_<ID>_props` (that parcel's fences and trees, visual) and
 `parcel_<ID>_props_collision` (its fences, only when the `fences.collision` rule is on), placed in
-the parcel's own chunk file so one parcel's props can be swapped at runtime; `props` and
+the parcel's own chunk file so one parcel's props can be swapped at runtime; `region_<ID>` (see Regions); `props` and
 `props_collision` remain only for items without a parcel (OSM trees). The manifest says
 `"props_layout": "per_parcel"`; `map_version` went from `0.1.0` to `0.2.0` for this node-layout
 change (pre-1.0, a node-layout change bumps the minor part). Also

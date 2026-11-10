@@ -10,9 +10,9 @@ using Suchohrad.MapLoader;
 /// Map viewer root. Loads the map, adds light and sky, spawns the player.
 /// Options (after "--"): --map DIR, --seed N, --smoke, --screenshot PATH,
 /// --view overview|oblique|street|player, --frames N, --assets DIR, --watch, --edits PATH,
-/// --area slice|village, --state PATH, --edit-smoke --edit-smoke-plan FILE,
+/// --area slice|village, --state PATH, --edit-smoke --edit-smoke-plan FILE, --regions-smoke --regions-smoke-plan FILE,
 /// --editor (editor mode, implies --watch; F2 toggles walk/editor), --editor-smoke --editor-smoke-plan FILE,
-/// --panel-smoke --panel-smoke-plan FILE (Fence/Trees panel), --objects-smoke --objects-smoke-plan FILE (objects, gizmo, undo),
+/// --panel-smoke --panel-smoke-plan FILE (Fence/Trees panel), --objects-smoke --objects-smoke-plan FILE (objects, gizmo, undo), --region-editor-smoke --region-editor-smoke-plan FILE (Region tool),
 /// --editor-shot PNG [--select P-0001,P-0002] [--shot-at P-0001] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-reroll] [--shot-tool Select|Group|Fence|Trees|Objects|View]
 /// [--shot-object ID] [--shot-arm ASSET --shot-ghost x,y --shot-ghost-rot DEG] [--shot-filter TEXT] [--shot-open car,pot]
 /// (editor screenshot of the main window).
@@ -71,8 +71,8 @@ public partial class Viewer : Node3D
         _player.Position = sp.Position + Vector3.Up * 1.0f;
         _player.LookYawPitch(rng.RandfRange(0, 360), 0);
 
-        var editorMode = _flags.Contains("editor") || _flags.Contains("editor-smoke") || _flags.Contains("panel-smoke") || _flags.Contains("objects-smoke") || _opts.ContainsKey("editor-shot");
-        if (editorMode || _flags.Contains("watch") || _flags.Contains("edit-smoke")) StartWatcher(repo);
+        var editorMode = _flags.Contains("editor") || _flags.Contains("editor-smoke") || _flags.Contains("panel-smoke") || _flags.Contains("objects-smoke") || _flags.Contains("region-editor-smoke") || _opts.ContainsKey("editor-shot");
+        if (editorMode || _flags.Contains("watch") || _flags.Contains("edit-smoke") || _flags.Contains("regions-smoke")) StartWatcher(repo);
         if (editorMode)
         {
             _editor = new EditorMode { Name = "Editor", Map = _map, Player = _player, Watcher = _watcher, EditsPath = _watcher!.EditsPath };
@@ -84,8 +84,10 @@ public partial class Viewer : Node3D
         if (_flags.Contains("editor-smoke")) _ = RunEditorSmoke();
         else if (_flags.Contains("panel-smoke")) _ = RunPanelSmoke();
         else if (_flags.Contains("objects-smoke")) _ = RunObjectsSmoke();
+        else if (_flags.Contains("region-editor-smoke")) _ = RunRegionEditorSmoke();
         else if (_opts.ContainsKey("editor-shot")) _ = RunEditorShot();
         else if (_flags.Contains("edit-smoke")) _ = RunEditSmoke();
+        else if (_flags.Contains("regions-smoke")) _ = RunRegionsSmoke();
         else if (_flags.Contains("smoke")) _ = RunSmoke(rng);
         else if (_opts.ContainsKey("screenshot")) _ = RunScreenshot();
     }

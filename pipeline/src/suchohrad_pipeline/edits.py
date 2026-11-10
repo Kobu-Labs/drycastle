@@ -6,7 +6,8 @@ formatting is fixed, so git diffs stay small. Version 1::
 
     {"version": 1,
      "parcels": {"P-0412": {"fence": {...}, "trees": {...}, "objects": [...]}},
-     "groups":  {"G-0001": {"parcels": ["P-0412", "P-0413"], "fence": {...}}}}
+     "groups":  {"G-0001": {"parcels": ["P-0412", "P-0413"], "fence": {...}}},
+     "regions": {"R-0001": {"colour": "#8a7a5c", "polygon": [[x, y], ...]}}}
 
 ``fence`` (all keys optional)
     mode              auto | none | custom. Default auto, or custom when type, height_m,
@@ -47,6 +48,15 @@ formatting is fixed, so git diffs stay small. Version 1::
                         settings of the member that owns it. Edges shared by two members get no
                         fence.
 
+``regions`` (a hand-drawn shape painted in one colour over the ground; only the colour changes)
+    colour              "#rrggbb".
+    polygon             one ring: a list of at least 3 [x, y] points in absolute S-JTSK metres, x
+                        east, y north. Not closed by repeating the first point (a repeated last
+                        point is tolerated), no repeated or collinear-only points, no
+                        self-intersection (edges may not cross or touch each other). Regions are
+                        independent of parcel boundaries. Where regions overlap, the higher ID
+                        wins. The ``regions`` key is only written when there are regions.
+
 Unknown keys are validation errors. Entries that refer to parcels that no longer exist are not
 errors: the props stage warns about them and skips them (see props.plan_edits).
 """
@@ -60,6 +70,8 @@ import re
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from shapely.geometry import LinearRing, Polygon
 
 from suchohrad_pipeline.config import PIPELINE_DIR
 
@@ -75,7 +87,7 @@ FENCE_TYPES: dict[str, dict[str, float | str]] = {
     "brick_wall": {"height_m": 1.8, "thickness_m": 0.3, "colour": "#b5523a"},
 }
 
-TOP_KEYS = ("version", "parcels", "groups")
+TOP_KEYS = ("version", "parcels", "groups", "regions")
 PARCEL_KEYS = ("fence", "trees", "objects")
 FENCE_KEYS = ("mode", "type", "height_m", "thickness_m", "colour", "gaps")
 CUSTOM_FENCE_KEYS = ("type", "height_m", "thickness_m", "colour", "gaps")
@@ -83,9 +95,11 @@ GAP_KEYS = ("at", "width_m")
 TREE_KEYS = ("density_per_1000m2", "count", "seed_offset")
 OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour")
 GROUP_KEYS = ("parcels", "fence")
+REGION_KEYS = ("colour", "polygon")
 
 _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")
+_REGION_ID = re.compile(r"R-\d{4,}")
 _COLOUR = re.compile(r"#[0-9a-fA-F]{6}")
 _ASSET = re.compile(r"pack:[^/\s]+/\S+|prim:[A-Za-z0-9_.-]+")
 
@@ -100,10 +114,11 @@ class EditsError(ValueError):
 
 @dataclass
 class Edits:
-    """A validated edits document. ``parcels`` and ``groups`` are JSON-native, as written."""
+    """A validated edits document. ``parcels``, ``groups`` and ``regions`` are JSON-native, as written."""
 
     parcels: dict[str, dict] = field(default_factory=dict)
     groups: dict[str, dict] = field(default_factory=dict)
+    regions: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -292,6 +307,52 @@ def _check_groups(groups: dict, errors: list[str]) -> None:
             _check_fence(entry["fence"], f"{path}.fence", errors)
 
 
+def region_ring(polygon: list) -> list[tuple[float, float]]:
+    """The points of a region polygon as tuples, without a repeated closing point."""
+    pts = [(float(p[0]), float(p[1])) for p in polygon]
+    if len(pts) > 1 and pts[0] == pts[-1]:
+        pts.pop()
+    return pts
+
+
+def _check_region(entry: object, path: str, errors: list[str]) -> None:
+    if not _is_dict(entry, path, errors):
+        return
+    _unknown_keys(entry, REGION_KEYS, path, errors)
+    if "colour" not in entry:
+        errors.append(f"{path}.colour: required")
+    else:
+        _check_colour(entry["colour"], f"{path}.colour", errors)
+    if "polygon" not in entry:
+        errors.append(f"{path}.polygon: required")
+        return
+    poly = entry["polygon"]
+    ppath = f"{path}.polygon"
+    if not isinstance(poly, list):
+        errors.append(f"{ppath}: must be a list of [x, y] points")
+        return
+    n = len(errors)
+    for i, pt in enumerate(poly):
+        _check_point(pt, f"{ppath}.{i}", errors)
+    if len(errors) > n:
+        return
+    ring = region_ring(poly)
+    if len(ring) < 3:
+        errors.append(f"{ppath}: needs at least 3 points")
+    elif any(a == b for a, b in zip(ring, ring[1:] + ring[:1], strict=True)):
+        errors.append(f"{ppath}: has repeated consecutive points")
+    elif not LinearRing(ring).is_simple or abs(Polygon(ring).area) <= 0:
+        errors.append(f"{ppath}: must not intersect or touch itself, and must enclose an area")
+
+
+def _check_regions(regions: dict, errors: list[str]) -> None:
+    for rid, entry in regions.items():
+        path = f"regions.{rid}"
+        if not _REGION_ID.fullmatch(rid):
+            errors.append(f"{path}: region IDs look like R-0001")
+        _check_region(entry, path, errors)
+
+
 def validate(doc: object) -> list[str]:
     """Every problem in an edits document as ``path: message``; an empty list means valid."""
     if not isinstance(doc, dict):
@@ -307,6 +368,9 @@ def validate(doc: object) -> list[str]:
     groups = doc.get("groups", {})
     if _is_dict(groups, "groups", errors):
         _check_groups(groups, errors)
+    regions = doc.get("regions", {})
+    if _is_dict(regions, "regions", errors):
+        _check_regions(regions, errors)
     return errors
 
 
@@ -319,6 +383,7 @@ def parse(doc: object) -> Edits:
     return Edits(
         parcels=copy.deepcopy(doc.get("parcels", {})),
         groups=copy.deepcopy(doc.get("groups", {})),
+        regions=copy.deepcopy(doc.get("regions", {})),
     )
 
 
@@ -338,7 +403,9 @@ def load_edits(path: Path = DEFAULT_EDITS) -> Edits:
 
 def dump_text(edits: Edits) -> str:
     """The canonical text of an edits document (sorted keys, indent 1, trailing newline)."""
-    doc = {"version": EDITS_VERSION, "parcels": edits.parcels, "groups": edits.groups}
+    doc: dict = {"version": EDITS_VERSION, "parcels": edits.parcels, "groups": edits.groups}
+    if edits.regions:  # omitted when empty, so files without regions keep their bytes
+        doc["regions"] = edits.regions
     errors = validate(doc)
     if errors:
         raise EditsError(errors)
