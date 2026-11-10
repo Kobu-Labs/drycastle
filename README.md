@@ -12,7 +12,7 @@ A GTA-like open-world game set in the real village of Suchohrad (Slovakia), in a
 | `godot/netspike/` | Godot C# project, 64-client headless netcode spike (issue #18); report in `docs/spikes/netcode-spike.md`. |
 | `godot/viewer/` | Godot 4.7 C# project for looking at the generated map. |
 | `mods/shooter/` | Shooter PoC (stub). Design notes are in `mods/shooter.md`. |
-| `docs/` | Pipeline and viewer/editor reference, UI standard, ADRs (`docs/adr/`). `GLOSSARY.md` defines the domain terms. `docs/brief.md` is the original project brief. |
+| `docs/` | Pipeline and viewer/editor reference, UI standard, ADRs (`docs/adr/`). `GLOSSARY.md` defines the domain terms. |
 
 ## Pinned versions
 
