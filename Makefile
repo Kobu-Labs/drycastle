@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test
 
 setup:
 	cd pipeline && uv sync
@@ -136,6 +136,21 @@ netspike:
 
 netspike-quick:
 	python3 godot/netspike/run_spike.py --quick $(NETSPIKE_MAP)
+
+# Shooter v1 (godot/shooter + godot/ShooterCore). MAP=/path/to/out/map or SUCHOHRAD_MAP.
+# shooter-server runs headless; add SMOKE=1 to boot, load and exit cleanly.
+SHOOTER_MAP = $(if $(MAP),--map $(abspath $(MAP)),)
+
+shooter-server:
+	dotnet build godot/shooter/shooter.csproj
+	godot --headless --path godot/shooter -- --role server $(if $(SMOKE),--smoke,) $(SHOOTER_MAP)
+
+shooter-client:
+	dotnet build godot/shooter/shooter.csproj
+	godot --path godot/shooter -- --role client $(if $(SMOKE),--smoke,) $(SHOOTER_MAP)
+
+shooter-test:
+	dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj
 
 lint:
 	cd pipeline && uv run ruff check .

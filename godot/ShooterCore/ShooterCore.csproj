@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Scene-free: no Godot reference. Shared by the shooter client, the headless server and the unit tests. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Suchohrad.ShooterCore</RootNamespace>
+  </PropertyGroup>
+
+</Project>

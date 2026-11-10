@@ -1,5 +1,6 @@
 # data caches and generated output
 data/
+!godot/shooter/data/
 out/
 .venv/
 __pycache__/

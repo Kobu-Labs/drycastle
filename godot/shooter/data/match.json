@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "score_goal": 25,
+  "time_limit": 600,
+  "respawn_delay": 3,
+  "spawn_protection": 3,
+  "end_screen_time": 10,
+  "min_spawn_distance": 40,
+  "min_players": 1
+}

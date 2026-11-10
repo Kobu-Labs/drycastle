@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "run_over_min_speed": 8,
+  "run_over_damage_per_speed": 10,
+  "run_over_max_damage": 100,
+  "abandon_return_time": 30,
+  "spawn_count": 8,
+  "vehicles": [
+    { "id": "car", "top_speed": 28, "acceleration": 9, "steering": 0.6, "mass": 1200 }
+  ]
+}

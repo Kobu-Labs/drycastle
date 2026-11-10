@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "starting_weapon": "pistol",
+  "weapons": [
+    {
+      "id": "pistol", "kind": "hitscan", "full_auto": false,
+      "damage": 24, "headshot_multiplier": 2, "fire_interval": 0.15,
+      "magazine_size": 15, "reserve_ammo": 60, "reload_time": 1.6, "switch_time": 0.3,
+      "move_speed_multiplier": 1.0,
+      "falloff_start": 25, "falloff_end": 60, "falloff_multiplier": 0.7,
+      "spread_base": 0.4, "spread_per_shot": 0.3, "spread_max": 4, "spread_recovery": 0.4
+    },
+    {
+      "id": "ak47", "kind": "hitscan", "full_auto": true,
+      "damage": 30, "headshot_multiplier": 2, "fire_interval": 0.10,
+      "magazine_size": 30, "reserve_ammo": 90, "reload_time": 2.5, "switch_time": 0.5,
+      "move_speed_multiplier": 0.95,
+      "falloff_start": 40, "falloff_end": 100, "falloff_multiplier": 0.6,
+      "spread_base": 1.0, "spread_per_shot": 0.25, "spread_max": 4, "spread_recovery": 0.6
+    },
+    {
+      "id": "bazooka", "kind": "projectile", "full_auto": false,
+      "damage": 100, "fire_interval": 1.0,
+      "magazine_size": 1, "reserve_ammo": 4, "reload_time": 3.5, "switch_time": 0.7,
+      "move_speed_multiplier": 0.85,
+      "projectile_speed": 40, "projectile_life": 3.75,
+      "splash": { "radius": 6, "full_damage_radius": 1.5, "edge_damage": 20, "self_damage_multiplier": 0.5 }
+    },
+    {
+      "id": "knife", "kind": "melee", "full_auto": false,
+      "damage": 50, "backstab_damage": 100, "fire_interval": 0.55, "reach": 1.8,
+      "switch_time": 0.25, "move_speed_multiplier": 1.1
+    }
+  ]
+}

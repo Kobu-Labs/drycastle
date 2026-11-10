@@ -1,0 +1,24 @@
+; Engine configuration file.
+; It's best edited using the editor UNLESS YOU KNOW WHAT YOU ARE DOING.
+
+config_version=5
+
+[application]
+
+config/name="Suchohrad Shooter"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.7", "C#")
+
+[debug]
+
+file_logging/enable_file_logging=false
+file_logging/enable_file_logging.pc=false
+
+[dotnet]
+
+project/assembly_name="shooter"
+
+[physics]
+
+common/physics_ticks_per_second=30
+3d/physics_engine="Jolt Physics"
