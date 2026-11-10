@@ -74,7 +74,7 @@ ROAD_FAR_M = 30.0
 OVERLAP_SEARCH_M = 25.0
 _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")
-_GENERATED_ID = re.compile(r"[OG]-(\d+)")
+_GENERATED_ID = re.compile(r"[oG]-(\d+)")
 
 
 def _r3(v: float) -> float:
@@ -1062,7 +1062,7 @@ class ParcelEditTools:
         absolute = self.map.to_abs(x, y)
 
         def change(edits: Edits) -> dict:
-            oid = _next_id("O", [o["id"] for _, o in _all_objects(edits)])
+            oid = _next_id("o", [o["id"] for _, o in _all_objects(edits)])
             entry: dict = {"id": oid, "asset": asset, "position": absolute, "rotation_deg": rot}
             if scale is not None:
                 entry["scale"] = scl
@@ -1379,7 +1379,7 @@ def build_server(settings: Settings) -> Any:
             parcel, asset, anchor, offset_m, position, rotation_deg, scale, colour
         )
 
-    @server.tool(description="Remove a placed object by its id (e.g. O-0003).")
+    @server.tool(description="Remove a placed object by its id (e.g. o-0003).")
     def remove_object(id: str) -> dict:
         return tools.remove_object(id)
 

@@ -87,7 +87,7 @@ Example prompts:
   which is right for a car parked in front of a house. This assumes models face +Z, as the Kenney car kit does.
 - **Asset sizes** (`list_assets`) are raw bounding boxes in metres. Some packs are authored small (the Kenney
   suburban kit: a tree is 0.77 m, a fence section 0.5 m), so pass `scale` for those.
-- **IDs**: groups `G-NNNN` (highest existing + 1, as the Godot editor allocates them), placed objects `O-NNNN`
+- **IDs**: groups `G-NNNN` (highest existing + 1, as the Godot editor allocates them), placed objects `o-NNNN`
   (highest existing `O-` id + 1; any other unique string is valid in the file too). IDs of removed items are
   not reserved: the next free number after the current maximum is used.
 - **Writes**: every write reloads the file, applies the change, validates the *whole* document with

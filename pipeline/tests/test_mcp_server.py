@@ -247,7 +247,7 @@ def test_place_object_anchors(tools, env):
     assert got["near_building"] == (67.5, 72.0)
     assert got["centre"][1] == pytest.approx(70.0, abs=0.01)
     ids = [o["id"] for o in load_edits(settings.edits_path).parcels["P-0001"]["objects"]]
-    assert ids == [f"O-000{i}" for i in range(1, 7)]
+    assert ids == [f"o-000{i}" for i in range(1, 7)]
     canonical(settings)
 
 
@@ -259,7 +259,7 @@ def test_place_object_offsets_rotation_and_fields(tools, env):
     assert local(out["position"]) == (62.5, 95.5)  # along > 0 = to the right = west
     assert out["rotation_deg"] == 270.0 and out["scale"] == 2.0
     assert out["entry"] == {
-        "id": "O-0001", "asset": "prim:slab", "position": out["position"],
+        "id": "o-0001", "asset": "prim:slab", "position": out["position"],
         "rotation_deg": 270.0, "scale": 2.0, "colour": "#aa0000",
     }
     assert "warnings" in out and not any("outside" in w for w in out["warnings"])
@@ -278,7 +278,7 @@ def test_place_object_exact_position_and_warnings(tools):
     assert out["position"] == [OX + 50, OY + 50] and out["warnings"] == []
     # overlap with the placed object
     out = tools.place_object("P-0001", CAR, position=[OX + 51, OY + 50.5])
-    assert any("overlaps placed object O-0001" in w for w in out["warnings"])
+    assert any("overlaps placed object o-0001" in w for w in out["warnings"])
     # inside the house
     out = tools.place_object("P-0001", CAR, position=[OX + 67, OY + 62])
     assert any("overlaps building w1" in w for w in out["warnings"])
@@ -343,25 +343,25 @@ def test_remove_and_move_object(tools, env):
     with pytest.raises(ToolError, match="nothing to change"):
         tools.move_object(a)
     with pytest.raises(ToolError, match="no placed object"):
-        tools.move_object("O-0099", rotation_deg=1)
+        tools.move_object("o-0099", rotation_deg=1)
     tools.remove_object(a)
     tools.remove_object(b)
     assert load_edits(settings.edits_path).parcels == {}  # entries dropped when empty
-    with pytest.raises(ToolError, match="no placed object 'O-0001'"):
-        tools.remove_object("O-0001")
+    with pytest.raises(ToolError, match="no placed object 'o-0001'"):
+        tools.remove_object("o-0001")
     # ids keep growing past the highest existing one
-    assert tools.place_object("P-0001", CAR)["id"] == "O-0001"
+    assert tools.place_object("P-0001", CAR)["id"] == "o-0001"
 
 
 def test_object_ids_continue_after_foreign_ids(tools, env):
     settings = env[1]
     settings.edits_path.write_text(
         json.dumps({"version": 1, "parcels": {"P-0003": {"objects": [
-            {"id": "O-0007", "asset": "prim:box", "position": [1, 2]},
+            {"id": "o-0007", "asset": "prim:box", "position": [1, 2]},
             {"id": "bench", "asset": "prim:box", "position": [1, 2]},
         ]}}, "groups": {}})
     )
-    assert tools.place_object("P-0001", CAR)["id"] == "O-0008"
+    assert tools.place_object("P-0001", CAR)["id"] == "o-0008"
 
 
 # --- groups -------------------------------------------------------------------------------
@@ -491,7 +491,7 @@ def test_through_mcp_session(env):
             ok = await client.call_tool("place_object", {"parcel": "P-0001", "asset": CAR, "anchor": "front"})
             assert not ok.is_error
             payload = ok.structured_content or json.loads(ok.content[0].text)
-            assert payload["id"] == "O-0001" and payload["rotation_deg"] == 180.0
+            assert payload["id"] == "o-0001" and payload["rotation_deg"] == 180.0
             bad = await client.call_tool("place_object", {"parcel": "P-0001", "asset": "pack:x/y"})
             assert bad.is_error and "unknown pack model" in bad.content[0].text
             assert "Traceback" not in bad.content[0].text
