@@ -1,0 +1,109 @@
+"""Low-poly prop meshes: fence boxes and blocky trees (counter-clockwise seen from outside)."""
+
+import math
+
+import numpy as np
+
+from suchohrad_pipeline.buildings import hex_to_rgb
+from suchohrad_pipeline.meshes import Mesh
+
+
+def box_tris(
+    p0, p1, width: float, z0: float, z1: float, bottom: bool = True
+) -> list[list[tuple[float, float, float]]]:
+    """Box along the axis p0 -> p1 (plan view), ``width`` across, from z0 to z1.
+
+    Only the corners of the plan rectangle are used, so slanted ends are not possible; 10 or 12
+    triangles.
+    """
+    p0, p1 = np.asarray(p0, float), np.asarray(p1, float)
+    d = p1 - p0
+    d /= max(float(np.linalg.norm(d)), 1e-12)
+    v = np.array([-d[1], d[0]]) * width / 2
+    ring = [p0 - v, p1 - v, p1 + v, p0 + v]
+    tris = []
+    for k in range(4):
+        a, b = ring[k], ring[(k + 1) % 4]
+        tris.append([(*a, z0), (*b, z0), (*b, z1)])
+        tris.append([(*a, z0), (*b, z1), (*a, z1)])
+    top = [(*p, z1) for p in ring]
+    tris += [[top[0], top[1], top[2]], [top[0], top[2], top[3]]]
+    if bottom:
+        low = [(*p, z0) for p in ring]
+        tris += [[low[0], low[2], low[1]], [low[0], low[3], low[2]]]
+    return tris
+
+
+def pyramid_tris(centre, half: float, z0: float, z1: float, angle: float):
+    """Four-sided pyramid with a square base (base included, 6 triangles)."""
+    c, s = math.cos(angle), math.sin(angle)
+    ring = [
+        (centre[0] + c * dx - s * dy, centre[1] + s * dx + c * dy)
+        for dx, dy in ((-half, -half), (half, -half), (half, half), (-half, half))
+    ]
+    apex = (centre[0], centre[1], z1)
+    tris = [[(*ring[k], z0), (*ring[(k + 1) % 4], z0), apex] for k in range(4)]
+    base = [(*p, z0) for p in ring]
+    tris += [[base[0], base[2], base[1]], [base[0], base[3], base[2]]]
+    return tris
+
+
+def _mesh(tris: list, colours: list[list[int]]) -> Mesh:
+    if not tris:
+        return Mesh.empty()
+    return Mesh(np.array(tris, float), np.array(colours, np.uint8))
+
+
+def fence_mesh(sections: list[dict], cfg: dict, bottom: bool = False) -> Mesh:
+    """One thin box per fence section (visual: no bottom face; collision: closed)."""
+    height, thick = float(cfg["height_m"]), float(cfg["thickness_m"])
+    colour = hex_to_rgb(cfg["colour"])
+    tris, cols = [], []
+    for s in sections:
+        z0 = min(s["za"], s["zb"]) - 0.1
+        z1 = max(s["za"], s["zb"]) + height
+        t = box_tris(s["a"], s["b"], thick, z0, z1, bottom)
+        tris += t
+        cols += [colour] * len(t)
+    return _mesh(tris, cols)
+
+
+def tree_mesh(tree: dict, cfg: dict) -> Mesh:
+    """Trunk box plus a canopy: two stacked boxes (broadleaf) or two stacked pyramids (conifer)."""
+    s = float(tree["scale"])
+    trunk_w, trunk_h, canopy = (
+        float(cfg["trunk_width_m"]) * s,
+        float(cfg["trunk_height_m"]) * s,
+        float(cfg["canopy_m"]) * s,
+    )
+    x, y, z = tree["x"], tree["y"], tree["z"]
+    rot = float(tree["rot"])
+    ux, uy = math.cos(rot), math.sin(rot)
+    trunk_c, canopy_c = hex_to_rgb(cfg["trunk_colour"]), hex_to_rgb(tree["colour"])
+
+    def along(half: float):
+        return (x - ux * half, y - uy * half), (x + ux * half, y + uy * half)
+
+    tris = box_tris(*along(trunk_w / 2), trunk_w, z - 0.2, z + trunk_h, bottom=False)
+    cols = [trunk_c] * len(tris)
+    if tree["shape"] == "cone":
+        for base, half, top in (
+            (trunk_h * 0.5, canopy * 0.55, trunk_h + canopy * 0.7),
+            (trunk_h + canopy * 0.35, canopy * 0.38, trunk_h + canopy * 1.5),
+        ):
+            t = pyramid_tris((x, y), half, z + base, z + top, rot)
+            tris += t
+            cols += [canopy_c] * len(t)
+    else:
+        for half, lo, hi in (
+            (canopy / 2, trunk_h - 0.3 * s, trunk_h - 0.3 * s + canopy),
+            (canopy * 0.3, trunk_h - 0.3 * s + canopy, trunk_h - 0.3 * s + canopy * 1.6),
+        ):
+            t = box_tris(*along(half), half * 2, z + lo, z + hi, bottom=half > canopy * 0.4)
+            tris += t
+            cols += [canopy_c] * len(t)
+    return _mesh(tris, cols)
+
+
+def trees_mesh(trees: list[dict], cfg: dict) -> Mesh:
+    return Mesh.concat([tree_mesh(t, cfg) for t in trees])

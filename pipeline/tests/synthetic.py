@@ -1,0 +1,89 @@
+"""Synthetic slice shared by the terrain, roads, props and export tests (no real data)."""
+
+import json
+from pathlib import Path
+
+import numpy as np
+from shapely.geometry import Polygon, box, mapping
+
+from suchohrad_pipeline.buildings import derive_building, load_building_rules
+from suchohrad_pipeline.roads import build_graph
+from suchohrad_pipeline.rules import load_section
+from suchohrad_pipeline.terrain import flatten_buildings, grid_from_samples, save_terrain
+
+COVERAGE = box(10, 10, 210, 200)
+
+
+def plane(x, y):
+    """Height of the synthetic ground: a gentle slope; inside coverage."""
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    inside = (x >= 10) & (x <= 210) & (y >= 10) & (y <= 200)
+    return 100 + 0.05 * x + 0.02 * y, inside
+
+
+def make_terrain(step: float = 4.0):
+    return grid_from_samples(250.0, step, COVERAGE, plane)
+
+
+def parcel(pid: str, kind: str, geom: Polygon, buildings: list[str] | None = None) -> dict:
+    c = geom.representative_point()
+    return {
+        "id": pid,
+        "cadastral_ref": f"X.{pid}",
+        "kind": kind,
+        "polygon": mapping(geom),
+        "anchor": [c.x, c.y],
+        "chunk": [0, 0],
+        "buildings": buildings or [],
+    }
+
+
+def line_feature(osm_id: str, highway: str, coords: list, **tags) -> dict:
+    return {
+        "type": "Feature",
+        "properties": {"osm_id": osm_id, "highway": highway, **tags},
+        "geometry": {"type": "LineString", "coordinates": coords},
+    }
+
+
+def make_workspace(tmp: Path) -> dict[str, Path]:
+    work, raw = tmp / "work", tmp / "raw"
+    (work / "normalised").mkdir(parents=True)
+    raw.mkdir()
+    rules = load_building_rules()
+    b1 = derive_building("w1", "P-0001", box(60, 55, 75, 70), {"roof:shape": "gabled"}, rules)
+    parcels = [
+        parcel("P-0001", "building_plot", box(40, 40, 95, 100), ["w1"]),
+        parcel("P-0002", "garden", box(95, 40, 140, 100)),
+        parcel("P-0003", "road", box(20, 100, 200, 112)),
+        parcel("P-0004", "field", box(40, 115, 200, 190)),
+        parcel("P-0005", "forest", box(145, 40, 200, 100)),
+        parcel("P-0006", "other", box(20, 20, 38, 98)),
+    ]
+    (work / "parcels.json").write_text(
+        json.dumps({"crs": "synthetic", "chunk_size_m": 250.0, "parcels": parcels})
+    )
+    (work / "buildings.json").write_text(json.dumps({"buildings": [b1]}))
+    highways = [
+        line_feature("w10", "residential", [[20, 106], [120, 106], [200, 106]], surface="asphalt"),
+        line_feature("w11", "track", [[120, 106], [120, 180]]),
+    ]
+    (work / "normalised" / "highways.geojson").write_text(json.dumps({"features": highways}))
+    tree = {
+        "type": "Feature",
+        "properties": {"osm_id": "n1"},
+        "geometry": {"type": "Point", "coordinates": [150, 150]},
+    }
+    (work / "normalised" / "trees.geojson").write_text(json.dumps({"features": [tree]}))
+    (raw / "manifest.json").write_text(
+        json.dumps({"attribution": ["A"], "files": [{"file": "osm.json", "sha256": "ab"}]})
+    )
+    overrides = tmp / "overrides.yaml"
+    overrides.write_text("buildings: {}\n")
+
+    terrain = make_terrain()
+    elevations = flatten_buildings(terrain, [b1], 2.0, 6.0)
+    save_terrain(work, terrain, elevations)
+    graph = build_graph(highways, load_section("roads"))
+    (work / "roads.json").write_text(json.dumps(graph, sort_keys=True))
+    return {"work": work, "raw": raw, "overrides": overrides, "out": tmp / "out"}

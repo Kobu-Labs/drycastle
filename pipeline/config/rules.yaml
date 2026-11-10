@@ -125,3 +125,122 @@ buildings:
     walls: ["#e8dcc0", "#d9c7a0", "#cfb48c", "#e6cfc0", "#d8c0b0", "#ece4d0", "#c9b8a0", "#dcd2b8"]
     roofs: ["#a8442f", "#b5523a", "#8c3a2a", "#7a4a35", "#6b5a4c", "#5e5e63", "#7c7f86"]
     flat_roofs: ["#6a6a6e", "#7c7f86", "#8a8478", "#5c5f66"]
+
+# --- Terrain (terrain stage) ----------------------------------------------------------------
+# data/raw/dmr5.tif (DMR 5.0, EPSG:3046) is resampled bilinearly into a regular grid in the local
+# frame. Chunk edges are grid lines, so neighbouring chunks share their border vertices exactly.
+# Terrain exists only where the DMR raster covers: a grid cell is meshed only when all four of
+# its corners lie inside the raster (no clamping, no invented ground); chunks without such cells
+# get no terrain nodes. Heights for objects outside coverage (e.g. a far building) are clamped to
+# the grid edge.
+terrain:
+  # Wanted grid step in metres. Each chunk is divided into an even number of cells, so the real
+  # step is chunk size / round_to_even(chunk size / grid_step_m) (4.03 m for 4 m and 250 m chunks).
+  grid_step_m: 4
+  # Ground is flattened to the mean elevation of a building footprint: every cell touching the
+  # footprint grown by this margin is made flat ...
+  flatten_margin_m: 2
+  # ... and the terrain blends back to the natural height over this many metres around it.
+  flatten_blend_m: 6
+  # The collision mesh uses every n-th grid vertex (coarser, uniform colour). Must be 1 or 2.
+  collision_decimate: 2
+  # Flat face colours by the parcel kind under the face centre. A list is a set of shades; one
+  # is picked per parcel (seeded by the parcel ID), so parcels read as patches.
+  colours:
+    building_plot: ["#c9b78f", "#c2b088"]
+    garden: ["#8fbf6a", "#83b562", "#9bc673", "#8ab868"]
+    field: ["#b9cf72", "#c6d783", "#a9c463", "#d1d88f"]
+    forest: ["#3f7a45", "#386f3f"]
+    water: ["#6fa3d4"]
+    road: ["#8e8e8e"]
+    other: ["#b8b0a2", "#c0b8aa"]
+
+# --- Roads (roads stage) --------------------------------------------------------------------
+# Ribbons from OSM highways in normalised/highways.geojson, draped on the terrain. Overlapping
+# ribbons at junctions are accepted in v1 (a higher road class is lifted a hair above lower ones
+# to avoid z-fighting). roads.json: nodes are way ends and shared vertices, edges run between them.
+roads:
+  # Ribbon sample spacing along a way, in metres (the ribbon follows the terrain at this step).
+  sample_step_m: 2
+  # Ribbons float this far above the terrain surface.
+  lift_m: 0.05
+  # Width in metres by highway value (an OSM `width` tag wins, then lanes * lane_width_m).
+  # Highway values not listed are not built.
+  lane_width_m: 3.0
+  widths:
+    motorway: 10
+    trunk: 9
+    primary: 8
+    secondary: 7
+    tertiary: 6
+    unclassified: 5
+    residential: 5
+    living_street: 4.5
+    service: 3.5
+    track: 3
+    path: 1.5
+    footway: 1.5
+    cycleway: 2
+    pedestrian: 3
+  # Draw order of classes (later = lifted slightly higher at overlaps).
+  order: [path, footway, cycleway, pedestrian, track, service, living_street, residential, unclassified, tertiary, secondary, primary, trunk, motorway]
+  # OSM surface values that count as unpaved (gravel colour); any other tagged surface is paved.
+  # Without a surface tag: the classes in unpaved_by_default are unpaved, the rest paved.
+  unpaved_surfaces: [unpaved, gravel, fine_gravel, compacted, ground, dirt, earth, grass, sand, mud, pebblestone]
+  unpaved_by_default: [track, path]
+  colours:
+    asphalt: "#4a4c52"
+    gravel: "#a89c84"
+    path: "#9a8a6c"
+
+# --- Props: fences and trees (props stage) --------------------------------------------------
+# Everything is seeded from sha256(parcel id + ":" + purpose), so reruns give identical props.
+props:
+  fences:
+    # Parcels of these kinds get a fence on their boundary. A garden counts only when a building
+    # is within garden_near_building_m.
+    kinds: [building_plot, garden]
+    garden_near_building_m: 25
+    # Fraction of eligible parcels that get a fence (seeded per parcel).
+    probability: 0.75
+    height_m: 1.2
+    thickness_m: 0.08
+    # A fence is built from boxes of at most this length.
+    section_m: 3
+    colour: "#8a6a47"
+    # Boundary stretches within this distance of a building are not fenced.
+    building_clearance_m: 0.8
+    # Boundary stretches within this distance of a road centreline are not fenced.
+    road_clearance_m: 0.5
+    # Boundary stretches shared with a road parcel get a gap of this length for a gate (0 = no
+    # gap), centred on the middle of the longest such stretch. Stretches already fenced for
+    # another parcel (shared boundary) are not fenced twice.
+    gate_gap_m: 3
+  trees:
+    # Trees per 1000 m2 of parcel area, by kind (random placement, min spacing, seeded).
+    density_per_1000m2: {garden: 1.5, building_plot: 0.8, forest: 8.0, field: 0.0, other: 0.3}
+    max_per_parcel: 120
+    min_spacing_m: 3.5
+    building_clearance_m: 3.5
+    road_clearance_m: 2.0
+    parcel_edge_clearance_m: 1.0
+    # Tree size: trunk height and canopy edge in metres, scaled by a seeded factor in [0.8, 1.25].
+    trunk_height_m: 1.8
+    trunk_width_m: 0.35
+    canopy_m: 2.6
+    trunk_colour: "#6b4a2f"
+    canopy_colours: ["#4f8f45", "#5a9a4c", "#468040"]
+    forest_canopy_colours: ["#2f6a3a", "#285e33"]
+
+# --- Spawn candidates (props stage, spawns.json) --------------------------------------------
+spawns:
+  # Number of candidates written (a seeded subset of all valid points).
+  count: 60
+  # Share of the subset taken from roads, the rest from open ground (garden, field, other).
+  road_fraction: 0.4
+  min_building_distance_m: 12
+  min_tree_distance_m: 2
+  # Candidate pool: spacing along roads and per-parcel point density in the open ground.
+  road_spacing_m: 12
+  ground_per_1000m2: 2.0
+  ground_kinds: [garden, field, other]

@@ -1,4 +1,4 @@
-.PHONY: setup test fetch normalise parcels rules export preview map viewer lint
+.PHONY: setup test fetch normalise parcels rules terrain roads props export preview map viewer lint
 
 setup:
 	cd pipeline && uv sync
@@ -18,11 +18,22 @@ parcels:
 rules:
 	cd pipeline && uv run python -m suchohrad_pipeline rules
 
+terrain:
+	cd pipeline && uv run python -m suchohrad_pipeline terrain
+
+roads:
+	cd pipeline && uv run python -m suchohrad_pipeline roads
+
+props:
+	cd pipeline && uv run python -m suchohrad_pipeline props
+
 export:
 	cd pipeline && uv run python -m suchohrad_pipeline export
 
+EXAG ?= 3
+
 preview:
-	cd pipeline && uv run python -m suchohrad_pipeline preview
+	cd pipeline && uv run python -m suchohrad_pipeline preview --exaggeration $(EXAG)
 
 map:
 	cd pipeline && uv run python -m suchohrad_pipeline run-all

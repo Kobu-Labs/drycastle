@@ -33,13 +33,16 @@ make lint     # ruff check
 ## Running
 
 ```sh
-make map        # run every pipeline stage in order (fetch ... export; terrain/roads/props are stubs)
+make map        # run every pipeline stage in order (fetch ... export)
 make fetch      # run only the fetch stage (downloads raw data into data/raw/)
 make normalise  # raw data -> local metres in data/work/normalised/
 make parcels    # parcel registry, kinds, building assignment; prints a report
 make rules      # building heights, roofs, colours -> data/work/buildings.json
-make export     # chunk glTFs, parcels.json, manifest.json -> out/map/
-make preview    # out/preview/topdown.png and iso.png (needs rules; matplotlib)
+make terrain    # DMR 5.0 -> height grid, ground flattened under buildings (data/work/terrain*)
+make roads      # OSM highways -> road graph (data/work/roads.json)
+make props      # fences, trees, spawn candidates (data/work/props.json, spawns.json)
+make export     # chunk glTFs, parcels.json, roads.json, spawns.json, manifest.json -> out/map/
+make preview    # out/preview/topdown.png, iso.png, iso_close.png (matplotlib; EXAG=3 relief factor)
 make viewer   # open the Godot viewer project (godot --path godot/viewer)
 ```
 
@@ -119,17 +122,56 @@ and the small random choices are drawn from a generator seeded with sha256 of
 `<parcel id>:<building id>`, so reruns give identical output. The override file format (by parcel
 ID or OSM id, any building field) is documented at the top of `overrides.yaml`.
 
-`make export` writes `out/map/` (gitignored): `chunks/chunk_<ix>_<iy>.glb` (one glTF per 250 m
-chunk that has buildings; Y-up axes x east, y up, z -north, metres, one frame for all chunks),
-where each parcel with buildings has the nodes `parcel_<ID>_visual` (walls and roof, flat
-per-face vertex colours) and `parcel_<ID>_collision` (extruded footprint, no roof detail);
-`parcels.json` (ID, cadastral reference, kind, polygon and anchor in local metres with x east
-and y north, chunk, building IDs) and `manifest.json` (map version `0.1.0-slice`, chunk list,
-attribution, input hashes, a note that terrain and roads are not generated yet). The output has
-no timestamp and is byte-identical for identical input.
+## Terrain, roads, props, spawns
 
-`make preview` renders `out/preview/topdown.png` (parcels by kind, buildings in wall colour) and
-`iso.png` (isometric view from the mesh data), both with a scale bar.
+Settings for all of this are in the `terrain`, `roads`, `props` and `spawns` sections of
+`pipeline/config/rules.yaml`.
+
+**Terrain** (`make terrain`): `data/raw/dmr5.tif` (EPSG:3046) is resampled bilinearly into a
+regular height grid in the local frame (default step about 4 m; chunk borders are grid lines, so
+neighbouring chunks share border vertices). Terrain is meshed only where the DMR raster covers
+all four corners of a grid cell; nothing is clamped or invented outside it, and chunks without
+covered cells get no terrain. Heights are metres above the DMR datum, not rebased. The ground under
+each building footprint (grown by a margin) is flattened to the footprint's mean elevation and
+blends back to the natural height over a few metres; the building stands at that elevation.
+Buildings outside coverage (their chunk files have no terrain) take the clamped height of the grid
+edge; road ribbons, fences, trees and spawns outside coverage are dropped.
+
+**Roads** (`make roads`): highways from `normalised/highways.geojson` (classes and widths in
+`rules.yaml`; an OSM `width` or `lanes` tag wins) become graph nodes and edges in
+`out/map/roads.json` (`nodes`: id, x, y; `edges`: id, osm_id, from, to, polyline, highway, width,
+oneway, surface, length_m; local metres, x east, y north). Ribbon meshes are draped on the
+terrain surface and lifted by `lift_m` (0.05 m); overlapping ribbons at intersections are
+accepted in v1, and a higher road class sits a hair above a lower one.
+
+**Props** (`make props`): low fences (thin boxes, 1.2 m) along the boundaries of building plots
+and of gardens near buildings (seeded per parcel, a gate gap on road frontage, no fence through
+buildings or the carriageway), OSM trees and seeded rule-based trees in gardens, plots and forests
+(blocky box canopy, or stacked pyramids in forests). Fences also get a simple closed-box
+collision node; trees have no collision in v1.
+
+**Spawns**: `out/map/spawns.json` has a seeded subset (default 60) of points on roads and on
+garden, field and other parcels, at least `min_building_distance_m` from any building, with
+elevation, parcel, highway type (roads) and chunk index.
+
+## Export
+
+`make export` writes `out/map/` (gitignored): `chunks/chunk_<ix>_<iy>.glb` (one glTF per 250 m
+chunk that has buildings or terrain; Y-up axes x east, y up, z -north, metres, one frame for all
+chunks). Nodes per chunk glb: `parcel_<ID>_visual` (walls and roof, flat per-face vertex colours)
+and `parcel_<ID>_collision` (extruded footprint, no roof detail) for each parcel with buildings;
+`terrain` and `terrain_collision` (flat colours by parcel kind; collision is every second grid
+vertex); `roads`; `props` (fences and trees, visual) and `props_collision` (fences). Also
+`parcels.json` (ID, cadastral reference, kind, polygon and anchor in local metres with x east and
+y north, chunk, building IDs), `roads.json`, `spawns.json` and `manifest.json` (map version
+`0.1.0-slice`, chunk list with triangle counts per node, generated parts, terrain grid info,
+attribution, input hashes including the work files). The output has no timestamp and is
+byte-identical for identical input.
+
+`make preview` renders `out/preview/topdown.png` (parcels by kind, buildings in wall colour),
+`iso.png` (isometric view from the mesh data: terrain relief, roads, buildings, fences, trees;
+`make preview EXAG=5` changes the relief exaggeration, default 3) and `iso_close.png` (the same,
+zoomed on the densest cluster of buildings), all with a scale bar.
 
 ## Data attribution
 

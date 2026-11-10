@@ -32,6 +32,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="parcels: print counts by kind, building assignment and registry changes",
     )
+    parser.add_argument(
+        "--exaggeration",
+        type=float,
+        default=preview.DEFAULT_EXAGGERATION,
+        help="preview: multiply terrain heights by this factor in the isometric images",
+    )
     return parser
 
 
@@ -44,5 +50,5 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return status
         return 0
     if args.stage == PREVIEW:
-        return preview.run()
+        return preview.run(exaggeration=args.exaggeration)
     return STAGES[args.stage](force=args.force, report=args.report)
