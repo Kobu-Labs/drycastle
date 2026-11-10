@@ -181,9 +181,9 @@ def test_export_copies_objects_json_when_present(workspace) -> None:
 
 
 def test_export_run_honours_out_and_work(workspace, tmp_path, monkeypatch) -> None:
-    from suchohrad_pipeline import export as export_mod
     from dataclasses import replace
 
+    from suchohrad_pipeline import export as export_mod
     from suchohrad_pipeline.config import area_paths
 
     paths = replace(area_paths("slice"), raw=workspace["raw"])
