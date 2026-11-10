@@ -35,6 +35,10 @@ public enum MoveButtons
     Fire = 8,
     /// <summary>Aiming cancels sprint.</summary>
     Aim = 16,
+    Reload = 32,
+    Use = 64,
+    /// <summary>Switch to the next weapon (hotbar slot changes also travel as the selected slot).</summary>
+    Switch = 128,
 }
 
 /// <summary>One tick of player input: movement axes (x = strafe right, y = forward, each -1..1), look yaw in radians, buttons.</summary>

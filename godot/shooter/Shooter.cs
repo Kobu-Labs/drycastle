@@ -7,6 +7,8 @@ namespace Suchohrad.Shooter;
 /// Shooter entry point. Args after "--":
 ///   --role server|client      (default client; the server is for --headless)
 ///   --map DIR                 map folder (else SUCHOHRAD_MAP, else ../../out/map relative to the project)
+///   --connect HOST[:PORT] --name NAME   join a server (default port 27015); --headless-bot [--bot-seconds N] scripts a walk
+///   --port N                  server listen port (default 27015); --quit-after SECONDS ends the server with a verdict
 ///   --smoke-move              client only: scripted movement check on the map collision (SHOOTER_SMOKE_MOVE_OK, exit 0; else exit 2)
 ///   --smoke                   load everything, print SHOOTER_SMOKE_OK and exit 0 (exit 2 on failure)
 /// No gameplay yet: this only boots the role on the loaded map.
@@ -31,7 +33,9 @@ public partial class Shooter : Node3D
             var data = LoadData();
             GD.Print($"data: {data.Weapons.Weapons.Count} weapons, score goal {data.Match.ScoreGoal}, {data.Vehicles.Vehicles.Count} vehicle types");
             LoadMap(cfg);
-            if (role == "client") BuildClientView();
+            if (role == "server" && !_smoke) BuildServer(cfg);
+            if (role == "client" && cfg.Str("connect") != "") BuildNetClient(cfg);
+            else if (role == "client") BuildClientView();
             if (role == "client" && _smokeMove) _smoke = false;
             GD.Print($"SHOOTER_READY role={role}");
         }
@@ -75,6 +79,51 @@ public partial class Shooter : Node3D
 
     Vector3 RandomSpawn() =>
         _map.SpawnPoints.Count > 0 ? _map.SpawnPoints[_rng.Next(_map.SpawnPoints.Count)].Position : Vector3.Zero;
+
+    void BuildServer(Config cfg)
+    {
+        var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
+        var server = new NetServer
+        {
+            World = this, PickSpawn = () => RandomSpawn() + Vector3.Up * 0.1f, KillY = killY,
+            Port = int.TryParse(cfg.Str("port", "27015"), out var port) ? port : 27015,
+            QuitAfter = double.TryParse(cfg.Str("quit-after", "0"), out var q) ? q : 0,
+        };
+        AddChild(server);
+    }
+
+    /// <summary>Networked client: light/sky, then prediction and interpolation via <see cref="NetClient"/>.</summary>
+    void BuildNetClient(Config cfg)
+    {
+        var target = cfg.Str("connect");
+        var host = target; var port = 27015;
+        var colon = target.LastIndexOf(':');
+        if (colon > 0 && int.TryParse(target[(colon + 1)..], out var pp)) { host = target[..colon]; port = pp; }
+        var bot = cfg.Flag("headless-bot");
+        if (!bot) AddLightAndSky();
+        var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
+        _smoke = false;
+        AddChild(new NetClient
+        {
+            World = this, Host = host, Port = port, PlayerName = cfg.Str("name", "player"), Bot = bot, KillY = killY,
+            BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6,
+        });
+    }
+
+    void AddLightAndSky()
+    {
+        AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-55, 30, 0), ShadowEnabled = true });
+        var sky = new ProceduralSkyMaterial();
+        AddChild(new WorldEnvironment
+        {
+            Environment = new Godot.Environment
+            {
+                BackgroundMode = Godot.Environment.BGMode.Sky,
+                Sky = new Sky { SkyMaterial = sky },
+                AmbientLightSource = Godot.Environment.AmbientSource.Sky,
+            },
+        });
+    }
 
     /// <summary>Client view: light, sky and the first-person player at a random spawn point.</summary>
     void BuildClientView()

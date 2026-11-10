@@ -1,0 +1,254 @@
+using Godot;
+using Suchohrad.ShooterCore;
+using NVec3 = System.Numerics.Vector3;
+
+namespace Suchohrad.Shooter;
+
+/// <summary>
+/// Network client over raw ENet (ADR 0002). Sends one input per 30 Hz physics tick (the last 3 for loss cover),
+/// predicts the local player with the shared movement step and reconciles against the server position at the
+/// acked input seq (replaying the unacked inputs), and renders remote players about 100 ms (3 ticks) in the past
+/// from interpolation buffers as capsules with a name label.
+/// </summary>
+public partial class NetClient : Node
+{
+    sealed class Pending { public NetInput Input; public MoveState After; }
+    sealed class Remote { public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
+
+    public const double InterpDelayTicks = 3.0;
+    const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
+
+    public Node3D World = null!;
+    public string Host = "127.0.0.1";
+    public int Port = 27015;
+    public string PlayerName = "player";
+    public bool Bot;
+    public double BotSeconds = 6;
+    public bool Headless;
+    public float KillY = float.NegativeInfinity;
+
+    readonly ENetConnection _conn = new();
+    ENetPacketPeer? _peer;
+    Player? _me;
+    ushort _myId;
+    bool _welcomed, _gotSelf;
+    ushort _seq;
+    readonly List<Pending> _pending = new();
+    readonly SnapshotDecoder _dec = new();
+    readonly Dictionary<ushort, string> _names = new();
+    readonly Dictionary<ushort, Remote> _remotes = new();
+    uint _lastTick;
+    double _lastArrival;
+    double _elapsed, _connectElapsed;
+    int _recon, _snaps;
+    float _maxErr;
+    NVec3 _meMin = new(float.MaxValue), _meMax = new(float.MinValue);
+    bool _done;
+
+    public override void _Ready()
+    {
+        var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
+        if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
+        _peer = _conn.ConnectToHost(Host, Port, Wire.Channels, 0);
+        if (_peer == null) { Fail("ConnectToHost failed"); return; }
+        GD.Print($"client: connecting to {Host}:{Port} as {PlayerName}");
+    }
+
+    public override void _ExitTree() => _conn.Destroy();
+
+    void Fail(string why)
+    {
+        GD.PrintErr($"client: {why}");
+        if (Bot) { GD.Print("SHOOTER_NET_CLIENT_FAIL"); GetTree().Quit(2); }
+        else GetTree().Quit(2);
+        _done = true;
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_done) return;
+        Poll();
+        if (!_welcomed)
+        {
+            _connectElapsed += delta;
+            if (_connectElapsed > 10) Fail("connect timeout");
+            return;
+        }
+        RenderRemotes();
+    }
+
+    void Poll()
+    {
+        for (var guard = 0; guard < 10000; guard++)
+        {
+            var r = _conn.Service(0);
+            var ev = (ENetConnection.EventType)(long)r[0];
+            if (ev is ENetConnection.EventType.None or ENetConnection.EventType.Error) break;
+            var peer = (ENetPacketPeer)r[1].AsGodotObject();
+            switch (ev)
+            {
+                case ENetConnection.EventType.Connect:
+                    peer.Send(Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName)), (int)ENetPacketPeer.FlagReliable);
+                    _conn.Flush();
+                    break;
+                case ENetConnection.EventType.Disconnect:
+                    if (!_done) Fail("server disconnected");
+                    return;
+                case ENetConnection.EventType.Receive:
+                    while (peer.GetAvailablePacketCount() > 0) OnPacket(peer.GetPacket());
+                    break;
+            }
+        }
+    }
+
+    void OnPacket(byte[] d)
+    {
+        if (d.Length == 0) return;
+        if (d[0] < Wire.TInput) OnReliable(Wire.DecodeReliable(d));
+        else if (d[0] == Wire.TSnapshot) OnSnapshot(d);
+    }
+
+    void OnReliable(ReliableMsg? m)
+    {
+        switch (m)
+        {
+            case WelcomeMsg w:
+                _myId = w.PlayerId; _welcomed = true;
+                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, KillY = KillY };
+                World.AddChild(_me);
+                if (Bot) _me.InputOverride = new MoveInput { SpeedScale = 1 };
+                GD.Print($"client: welcome, id {_myId}, server tick {w.ServerTick}");
+                break;
+            case JoinMsg j: _names[j.PlayerId] = j.Name; GD.Print($"client: {j.Name} #{j.PlayerId} joined"); break;
+            case LeaveMsg l:
+                _names.Remove(l.PlayerId); _dec.Remove(l.PlayerId);
+                if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
+                break;
+            case EventMsg e: EventReceived?.Invoke((EventKind)e.Kind, e.Payload); break;
+        }
+    }
+
+    /// <summary>Raised for every reliable event envelope (shot, hit, kill, ... handled by later issues).</summary>
+    public event Action<EventKind, byte[]>? EventReceived;
+
+    void OnSnapshot(byte[] d)
+    {
+        if (_me == null || !_dec.Apply(d, out var h)) return;
+        if (_lastTick != 0 && h.Tick < _lastTick) return;
+        _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
+        foreach (var id in _dec.RemoveStale(h.Tick, 90)) if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree();
+        foreach (var (id, rec) in _dec.States)
+        {
+            if (id == _myId) { OnSelf(rec, h.Ack); continue; }
+            if (rec.Type != EntityType.Player) continue; // projectiles and vehicles are rendered by later issues
+            if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id); _remotes[id] = r; }
+            r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
+            r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
+        }
+    }
+
+    Remote MakeRemote(ushort id)
+    {
+        var node = new Node3D { Name = $"Remote{id}" };
+        node.AddChild(new MeshInstance3D
+        {
+            Mesh = new CapsuleMesh { Radius = MoveConsts.CapsuleRadius, Height = MoveConsts.CapsuleHeight },
+            Position = new Vector3(0, MoveConsts.CapsuleHeight / 2, 0),
+        });
+        node.AddChild(new Label3D
+        {
+            Text = _names.TryGetValue(id, out var n) ? n : $"#{id}",
+            Position = new Vector3(0, MoveConsts.CapsuleHeight + 0.3f, 0),
+            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+            PixelSize = 0.005f, NoDepthTest = true,
+        });
+        World.AddChild(node);
+        return new Remote { Node = node };
+    }
+
+    void OnSelf(EntityRecord rec, ushort ack)
+    {
+        var sp = rec.Position;
+        if (!_gotSelf)
+        {
+            _gotSelf = true;
+            _me!.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y });
+            return;
+        }
+        _me!.Health = rec.Health;
+        var idx = _pending.FindIndex(p => p.Input.Seq == ack);
+        if (idx < 0) return;
+        var predicted = _pending[idx].After;
+        var err = (predicted.Position - sp).Length();
+        _maxErr = MathF.Max(_maxErr, err);
+        _pending.RemoveRange(0, idx + 1);
+        if (err <= ReconcileEpsilon) return;
+        _recon++;
+        // server position wins; our own velocity/floor state for that tick is the best available guess for the rest
+        var s = predicted;
+        s.Position = sp;
+        if (err > SnapDistance) { s.Velocity = default; _pending.Clear(); }
+        _me.SetState(s);
+        for (var i = 0; i < _pending.Count; i++)
+        {
+            _me.Simulate(_pending[i].Input.ToMove(), 1f / Wire.TickRate);
+            _pending[i].After = _me.State;
+        }
+    }
+
+    public override void _PhysicsProcess(double delta)
+    {
+        if (_done || !_welcomed || _me == null || _peer == null) return;
+        _elapsed += delta;
+        if (Bot && _elapsed >= BotSeconds) { FinishBot(); return; }
+        if (!_gotSelf) return; // wait for our spawn position
+        var dt = (float)delta;
+        MoveInput mi;
+        if (Bot)
+        {
+            // scripted walk: forward, changing heading every 1.5 s, a jump now and then
+            var t = _elapsed;
+            var phase = (int)(t / 1.5);
+            var yaw = (float)(phase * Math.PI / 2 + (PlayerName.GetHashCode() & 3) * Math.PI / 2);
+            var jump = ((int)(t * 30) % 45) == 0 ? MoveButtons.Jump : MoveButtons.None;
+            mi = new MoveInput { MoveY = 1, Yaw = yaw, Buttons = jump, SpeedScale = 1 };
+        }
+        else mi = _me.Sample();
+        _me.Yaw = mi.Yaw;
+        var ni = NetInput.From(++_seq, mi, _me.Pitch, 0);
+        _me.Simulate(ni.ToMove(), dt);
+        _pending.Add(new Pending { Input = ni, After = _me.State });
+        if (_pending.Count > 120) _pending.RemoveAt(0);
+        var recent = new NetInput[Math.Min(3, _pending.Count)];
+        for (var i = 0; i < recent.Length; i++) recent[i] = _pending[_pending.Count - recent.Length + i].Input;
+        _peer.Send(Wire.ChanData, Wire.EncodeInputs(recent), 0);
+        _conn.Flush();
+        var p = _me.State.Position;
+        _meMin = NVec3.Min(_meMin, p); _meMax = NVec3.Max(_meMax, p);
+    }
+
+    void RenderRemotes()
+    {
+        if (_lastTick == 0) return;
+        var rt = _lastTick + (Time.GetTicksMsec() / 1000.0 - _lastArrival) * Wire.TickRate - InterpDelayTicks;
+        foreach (var r in _remotes.Values)
+            if (r.Buf.At(rt) is { } s)
+            {
+                r.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
+                r.Node.Rotation = new Vector3(0, s.Yaw, 0);
+            }
+    }
+
+    void FinishBot()
+    {
+        _done = true;
+        var own = new Vector2(_meMax.X - _meMin.X, _meMax.Z - _meMin.Z).Length();
+        var seen = _remotes.Count;
+        var best = 0f;
+        foreach (var r in _remotes.Values) best = MathF.Max(best, new Vector2(r.Max.X - r.Min.X, r.Max.Z - r.Min.Z).Length());
+        GD.Print($"client {PlayerName}: moved {own:F1} m (predicted), saw {seen} remote player(s), remote moved up to {best:F1} m, snapshots {_snaps}, reconciliations {_recon}, max error {_maxErr:F3} m");
+        var ok = own >= 2f && seen >= 1 && best >= 1f && _snaps > 30;
+        GD.Print(ok ? "SHOOTER_NET_CLIENT_OK" : "SHOOTER_NET_CLIENT_FAIL");
+        GetTree().Quit(ok ? 0 : 2);
+    }
+}

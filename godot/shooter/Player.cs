@@ -28,13 +28,23 @@ public partial class Player : CharacterBody3D
     /// <summary>When set, replaces keyboard/mouse input (smoke test).</summary>
     public MoveInput? InputOverride { get; set; }
     public bool CaptureMouse { get; set; } = true;
+    /// <summary>False on the dedicated server (no camera node).</summary>
+    public bool UseCamera { get; set; } = true;
+    /// <summary>True: this node runs its own physics tick from keyboard/mouse. False: a network driver calls <see cref="Simulate"/>.</summary>
+    public bool AutoSim { get; set; } = true;
+    /// <summary>True applies fall damage, death and respawn (offline play and the server); a predicting client leaves them to the server.</summary>
+    public bool Authoritative { get; set; } = true;
+    public float Yaw { get => _yaw; set => _yaw = value; }
+    public float Pitch { get => _pitch; set => _pitch = value; }
 
     public override void _Ready()
     {
         _headless = DisplayServer.GetName() == "headless";
         AddChild(_shape);
         _shape.Shape = _capsule;
-        AddChild(_camera);
+        if (UseCamera) AddChild(_camera);
+        else _camera.Current = false;
+        if (!AutoSim) SetPhysicsProcess(false);
         FloorSnapLength = 0.3f;
         FloorMaxAngle = Mathf.DegToRad(50);
         SetCrouchShape(false);
@@ -69,6 +79,18 @@ public partial class Player : CharacterBody3D
             Input.MouseMode = Input.MouseModeEnum.Captured;
     }
 
+    /// <summary>The current input: the override if set, else keyboard and mouse.</summary>
+    public MoveInput Sample() => ReadInput();
+
+    /// <summary>Put the body in an exact movement state (reconciliation, spawn).</summary>
+    public void SetState(MoveState s)
+    {
+        _state = s;
+        GlobalPosition = ToG(s.Position);
+        Velocity = ToG(s.Velocity);
+        SetCrouchShape(s.Crouching);
+    }
+
     MoveInput ReadInput()
     {
         if (InputOverride is { } o) return o;
@@ -89,11 +111,15 @@ public partial class Player : CharacterBody3D
 
     public override void _PhysicsProcess(double delta)
     {
-        var dt = (float)delta;
         var input = ReadInput();
         _yaw = input.Yaw;
         if (InputOverride != null) _camera.Rotation = new Vector3(_pitch, _yaw, 0);
+        Simulate(input, (float)delta);
+    }
 
+    /// <summary>One movement tick: the shared step, the physics move and (when authoritative) fall damage and respawn.</summary>
+    public void Simulate(in MoveInput input, float dt)
+    {
         _state.HeadBlocked = _state.Crouching && HeadBlockedCheck();
         MovementStep.Step(ref _state, input, dt);
         SetCrouchShape(_state.Crouching);
@@ -101,12 +127,12 @@ public partial class Player : CharacterBody3D
         Velocity = ToG(_state.Velocity);
         MoveAndSlide();
         LastFallDamage = MovementStep.PostMove(ref _state, ToN(GlobalPosition), ToN(Velocity), IsOnFloor());
-        if (LastFallDamage > 0)
+        if (Authoritative && LastFallDamage > 0)
         {
             Health -= LastFallDamage;
             GD.Print($"player: fall damage {LastFallDamage:F1}, health {Health:F1}");
         }
-        if (Health <= 0 || GlobalPosition.Y < KillY) Respawn();
+        if (Authoritative && (Health <= 0 || GlobalPosition.Y < KillY)) Respawn();
     }
 
     bool HeadBlockedCheck()
