@@ -31,6 +31,18 @@ public partial class NetClient : Node
     /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
     public readonly ClientMatchState Match = new();
     public bool Dead { get; private set; }
+    /// <summary>weapons.json: hotbar order and the per-weapon movement speed multiplier used by prediction.</summary>
+    public WeaponsFile Weapons = null!;
+    /// <summary>Weapons smoke role: "a" (shoots) or "b" (stands still and counts hits); empty = none.</summary>
+    public string WeaponsBot = "";
+    /// <summary>Latest owner ammo state from the server (null before the first one).</summary>
+    public AmmoMsg? Ammo { get; private set; }
+    readonly List<(double T, ShotMsg M)> _shotLog = new();
+    readonly List<(double T, HitMsg M)> _hitLog = new();
+    readonly List<(double T, AmmoMsg M)> _ammoLog = new();
+    int _wantSlot = 1;
+    Label? _hud;
+    double _ammoAt;
 
     readonly ENetConnection _conn = new();
     ENetPacketPeer? _peer;
@@ -86,6 +98,7 @@ public partial class NetClient : Node
             return;
         }
         RenderRemotes();
+        UpdateHud();
     }
 
     void Poll()
@@ -127,6 +140,7 @@ public partial class NetClient : Node
                 _myId = w.PlayerId; _welcomed = true;
                 _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, KillY = KillY };
                 World.AddChild(_me);
+                if (WeaponsBot != "") NetServer.AddArenaColliders(World);
                 if (Bot) _me.InputOverride = new MoveInput { SpeedScale = 1 };
                 GD.Print($"client: welcome, id {_myId}, server tick {w.ServerTick}");
                 break;
@@ -136,6 +150,7 @@ public partial class NetClient : Node
                 if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
                 break;
             case EventMsg e:
+                OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 EventReceived?.Invoke((EventKind)e.Kind, e.Payload);
                 break;
@@ -159,6 +174,7 @@ public partial class NetClient : Node
                 GD.Print($"client {PlayerName}: spawn #{sp.Id} protected {sp.Protection:F1}s");
                 if (sp.Id == _myId && _me != null)
                 {
+                    _wantSlot = StartSlot();
                     Dead = false; _gotSelf = false; _pending.Clear(); // the next snapshot carries the spawn position
                     _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
                 }
@@ -237,7 +253,7 @@ public partial class NetClient : Node
         _me.SetState(s);
         for (var i = 0; i < _pending.Count; i++)
         {
-            _me.Simulate(_pending[i].Input.ToMove(), 1f / Wire.TickRate);
+            _me.Simulate(_pending[i].Input.ToMove(SpeedFor(_pending[i].Input.Slot)), 1f / Wire.TickRate);
             _pending[i].After = _me.State;
         }
     }
@@ -246,7 +262,7 @@ public partial class NetClient : Node
     {
         if (_done || !_welcomed || _me == null || _peer == null) return;
         _elapsed += delta;
-        if (Bot && _elapsed >= BotSeconds) { if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
+        if (Bot && _elapsed >= BotSeconds) { if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
         if (!_gotSelf) return; // wait for our spawn position
         var dt = (float)delta;
         MoveInput mi;
@@ -263,6 +279,7 @@ public partial class NetClient : Node
             if (MatchBot == "alice") MatchAliceStep();
             else MatchBobCheck();
         }
+        else if (Bot && WeaponsBot != "") mi = WeaponsBotStep();
         else if (Bot)
         {
             // scripted walk: forward, changing heading every 1.5 s, a jump now and then
@@ -273,9 +290,10 @@ public partial class NetClient : Node
             mi = new MoveInput { MoveY = 1, Yaw = yaw, Buttons = jump, SpeedScale = 1 };
         }
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
+        if (!Bot) ReadSlotKeys();
         _me.Yaw = mi.Yaw;
-        var ni = NetInput.From(++_seq, mi, _me.Pitch, 0);
-        _me.Simulate(ni.ToMove(), dt);
+        var ni = NetInput.From(++_seq, mi, _me.Pitch, (byte)(Weapons != null ? _wantSlot : 0));
+        _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt);
         _pending.Add(new Pending { Input = ni, After = _me.State });
         if (_pending.Count > 120) _pending.RemoveAt(0);
         var recent = new NetInput[Math.Min(3, _pending.Count)];
@@ -395,5 +413,68 @@ public partial class NetClient : Node
         var ok = own >= 2f && seen >= 1 && best >= 1f && _snaps > 30;
         GD.Print(ok ? "SHOOTER_NET_CLIENT_OK" : "SHOOTER_NET_CLIENT_FAIL");
         GetTree().Quit(ok ? 0 : 2);
+    }
+
+    // ---- weapons: input, events, debug HUD line, placeholder effects ----
+
+    int StartSlot() => Weapons == null ? 1 : Math.Max(1, Weapons.Weapons.FindIndex(w => w.Id == Weapons.StartingWeapon) + 1);
+
+    /// <summary>Movement speed multiplier of the weapon in <paramref name="slot"/> (0: none, 1.0). The server applies the same value.</summary>
+    float SpeedFor(byte slot) =>
+        Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].MoveSpeedMultiplier : 1f;
+
+    void ReadSlotKeys()
+    {
+        if (Dead || Input.MouseMode != Input.MouseModeEnum.Captured) return;
+        for (var k = 0; k < 4; k++)
+            if (Input.IsKeyPressed((Key)((int)Key.Key1 + k))) _wantSlot = k + 1;
+    }
+
+    public override void _UnhandledInput(InputEvent e)
+    {
+        if (Bot || Weapons == null || Dead || Input.MouseMode != Input.MouseModeEnum.Captured) return;
+        if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
+        {
+            var n = Weapons.Weapons.Count;
+            _wantSlot = (_wantSlot - 1 + (b.ButtonIndex == MouseButton.WheelDown ? 1 : n - 1)) % n + 1;
+        }
+    }
+
+    void OnWeaponEvent(EventKind kind, byte[] payload)
+    {
+        switch (kind)
+        {
+            case EventKind.Ammo when WeaponCodec.DecodeAmmo(payload) is { } a:
+                Ammo = a; _ammoAt = Now; _ammoLog.Add((Now, a));
+                break;
+            case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
+                _shotLog.Add((Now, sh));
+                var melee = Weapons != null && sh.Weapon < Weapons.Weapons.Count && Weapons.Weapons[sh.Weapon].Kind == WeaponKind.Melee;
+                ShotFx.Spawn(World, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), new Vector3(sh.End.X, sh.End.Y, sh.End.Z), melee);
+                break;
+            case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
+                _hitLog.Add((Now, h));
+                GD.Print($"client {PlayerName}: hit #{h.Attacker} -> #{h.Victim} {h.Damage}{(h.Headshot ? " head" : "")}{(h.Backstab ? " backstab" : "")}{(h.Kill ? " kill" : "")}");
+                break;
+        }
+    }
+
+    /// <summary>One debug text line (weapon, ammo): the real HUD is a separate issue.</summary>
+    void UpdateHud()
+    {
+        if (!ShotFx.Enabled || Weapons == null) return;
+        if (_hud == null)
+        {
+            _hud = new Label { Position = new Vector2(16, 16) };
+            _hud.AddThemeFontSizeOverride("font_size", 18);
+            var layer = new CanvasLayer();
+            layer.AddChild(_hud);
+            AddChild(layer);
+        }
+        if (Ammo is not { } a || a.Slot < 1 || a.Slot > Weapons.Weapons.Count) { _hud.Text = ""; return; }
+        var w = Weapons.Weapons[a.Slot - 1];
+        var (mag, reserve) = a.Slots[a.Slot - 1];
+        var left = a.ReloadRemaining - (Now - _ammoAt);
+        _hud.Text = w.MagazineSize == 0 ? $"[{a.Slot}] {w.Id}" : $"[{a.Slot}] {w.Id}  {mag} / {reserve}" + (left > 0 ? $"  reloading {left:F1}s" : "");
     }
 }

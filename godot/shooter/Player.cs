@@ -98,6 +98,8 @@ public partial class Player : CharacterBody3D
         if (Input.IsKeyPressed(Key.Space)) b |= MoveButtons.Jump;
         if (Input.IsKeyPressed(Key.Shift)) b |= MoveButtons.Sprint;
         if (Input.IsKeyPressed(Key.Ctrl) || Input.IsKeyPressed(Key.C)) b |= MoveButtons.Crouch;
+        if (Input.IsMouseButtonPressed(MouseButton.Left)) b |= MoveButtons.Fire;
+        if (Input.IsKeyPressed(Key.R)) b |= MoveButtons.Reload;
         var captured = Input.MouseMode == Input.MouseModeEnum.Captured;
         return new MoveInput
         {

@@ -1,5 +1,6 @@
 using Godot;
 using Suchohrad.ShooterCore;
+using NVec3 = System.Numerics.Vector3;
 
 namespace Suchohrad.Shooter;
 
@@ -23,6 +24,7 @@ public partial class NetServer : Node
         public ushort LastSeq;
         public bool HasSeq;
         public byte Slot;
+        public PlayerWeapons W = null!;
         public readonly SnapshotEncoder Enc = new();
         public Vector3 Start;
         public float MaxMoved;
@@ -36,6 +38,10 @@ public partial class NetServer : Node
     public bool DebugCommands;
     /// <summary>Match smoke mode: QuitAfter is a failure deadline; the server finishes itself after one full round and restart.</summary>
     public bool MatchSmoke;
+    /// <summary>weapons.json (hotbar, ammo, damage numbers).</summary>
+    public WeaponsFile Weapons = null!;
+    /// <summary>Weapons smoke mode: builds a flat test arena with a wall far from the map and judges the scenario (implies debug commands).</summary>
+    public bool WeaponsSmoke;
     public float KillY = float.NegativeInfinity;
     public int Port = 27015;
     /// <summary>Quit after this many seconds and report whether two players were seen moving (smoke test); 0 = run forever.</summary>
@@ -54,6 +60,10 @@ public partial class NetServer : Node
     // match smoke bookkeeping
     int _kills, _roundsEnded, _restarts, _ignoredHits, _earlyProtectionEnds;
     double _finishAt;
+    readonly Random _rng = new();
+    // weapons smoke bookkeeping
+    int _shotsFired, _hitsLanded, _headshots, _wallBlocked, _backstabs, _refills;
+    public const float ArenaX = 20000f, ArenaZ = 20000f;
 
     public override void _Ready()
     {
@@ -64,6 +74,7 @@ public partial class NetServer : Node
             GetTree().Quit(2);
             return;
         }
+        if (WeaponsSmoke) BuildArena();
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
@@ -89,7 +100,11 @@ public partial class NetServer : Node
         foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved;
         if (_tick % (Wire.TickRate * 2) == 0 && _clients.Count > 0)
             GD.Print($"server: tick {_tick}, players {string.Join(", ", _clients.Values.Where(c => c.Joined).Select(c => $"{c.Name}#{c.Id}@({c.Body.GlobalPosition.X:F1},{c.Body.GlobalPosition.Y:F1},{c.Body.GlobalPosition.Z:F1}) ack={c.Ack}"))}");
-        if (MatchSmoke)
+        if (WeaponsSmoke)
+        {
+            if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishWeapons();
+        }
+        else if (MatchSmoke)
         {
             if (_finishAt > 0 && _elapsed >= _finishAt) FinishMatch();
             else if (QuitAfter > 0 && _elapsed >= QuitAfter) FinishMatch();
@@ -111,6 +126,39 @@ public partial class NetServer : Node
             return space.IntersectRay(q).Count == 0;
         });
         GD.Print($"server: {Spawns.Count}/{before} spawn candidates have ground");
+    }
+
+    /// <summary>Flat floor (top at y 0) and a 14 x 4 m wall in the middle of nowhere, so the weapons smoke does not depend on the map layout.</summary>
+    void BuildArena()
+    {
+        KillY = -1000f; // the arena lies far below the map spawns the host derived killY from
+        AddArenaColliders(World);
+        Spawns = new List<System.Numerics.Vector3>
+        {
+            new(ArenaX - 3, 0, ArenaZ + 5), new(ArenaX + 3, 0, ArenaZ + 5), new(ArenaX - 3, 0, ArenaZ + 9), new(ArenaX + 3, 0, ArenaZ + 9),
+        };
+    }
+
+    /// <summary>The arena geometry; the weapons smoke clients build the same so their prediction stands on it too.</summary>
+    public static void AddArenaColliders(Node3D world)
+    {
+        void Box(string name, Vector3 center, Vector3 size)
+        {
+            var b = new StaticBody3D { Name = name, Position = center };
+            b.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = size } });
+            world.AddChild(b);
+        }
+        Box("ArenaFloor", new Vector3(ArenaX, -1, ArenaZ), new Vector3(400, 2, 400));
+        Box("ArenaWall", new Vector3(ArenaX + 20, 2, ArenaZ - 3), new Vector3(14, 4, 0.5f));
+    }
+
+    void FinishWeapons()
+    {
+        var ok = _kills >= 2 && _hitsLanded >= 5 && _headshots >= 1 && _wallBlocked >= 1 && _backstabs >= 1 && _refills >= 1;
+        GD.Print($"server: weapons smoke shots={_shotsFired} hits={_hitsLanded} headshots={_headshots} backstabs={_backstabs} wallBlocked={_wallBlocked} kills={_kills} refills={_refills}");
+        GD.Print(ok ? "SHOOTER_WEAPONS_SERVER_OK" : "SHOOTER_WEAPONS_SERVER_FAIL");
+        GetTree().Quit(ok ? 0 : 2);
+        SetPhysicsProcess(false);
     }
 
     void FinishMatch()
@@ -159,7 +207,7 @@ public partial class NetServer : Node
         {
             var m = Wire.DecodeReliable(d);
             if (m is HelloMsg h && !c.Joined) OnHello(c, h);
-            else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && DebugCommands) OnDebug(c, e.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || WeaponsSmoke)) OnDebug(c, e.Payload);
         }
         else if (c.Joined && d[0] == Wire.TInput)
         {
@@ -182,6 +230,7 @@ public partial class NetServer : Node
         c.Id = _nextId++;
         c.Name = string.IsNullOrWhiteSpace(h.Name) ? $"player{c.Id}" : h.Name.Trim();
         // health, death and respawn belong to the match state machine, not the body
+        c.W = new PlayerWeapons(Weapons);
         c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}" };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
@@ -220,6 +269,17 @@ public partial class NetServer : Node
 
     void OnDebug(Client c, byte[] payload)
     {
+        if (WeaponCodec.DecodeDebugTeleport(payload) is { } tp)
+        {
+            if (!_byId.TryGetValue(tp.Target, out var t)) return;
+            var p = new Vector3(tp.Pos.X, tp.Pos.Y + 0.1f, tp.Pos.Z);
+            t.Body.Teleport(p);
+            t.Inputs.Clear();
+            _match.SetPosition(t.Id, tp.Pos);
+            // the owning client resynchronises on its own spawn event (no protection)
+            BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(t.Id, tp.Pos, 0)));
+            return;
+        }
         if (MatchCodec.DecodeDebugKill(payload) is not { } target) return;
         var r = _match.ApplyDamage(target, c.Id, SpecialWeapons.Debug, 9999);
         if (r == DamageResult.Ignored && _match.IsProtected(target)) _ignoredHits++;
@@ -242,11 +302,14 @@ public partial class NetServer : Node
                     sc.Body.Teleport(new Vector3(s.Position.X, s.Position.Y + 0.1f, s.Position.Z));
                     sc.Body.Health = MoveConsts.MaxHealth;
                     sc.Inputs.Clear(); sc.Start = sc.Body.GlobalPosition; sc.MaxMoved = 0;
+                    sc.W.Reset(_elapsed);
+                    SendAmmo(sc);
                 }
                 BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(s.Id, s.Position, s.ProtectionSeconds)));
                 break;
             case PlayerKilled k:
                 _kills += k.Killer != k.Victim ? 1 : 0;
+                if (WeaponsSmoke && _kills >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5;
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon)));
                 break;
             case PlayerDied d: BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
@@ -274,8 +337,11 @@ public partial class NetServer : Node
             if ((i.Buttons & (ushort)MoveButtons.Fire) != 0 && _match.NotifyFired(c.Id)) _earlyProtectionEnds++;
             c.Body.Yaw = Quant.Yaw(i.Yaw);
             c.Body.Pitch = Quant.Pitch(i.Pitch);
-            c.Body.Simulate(i.ToMove(), dt);
-            c.Slot = i.Slot;
+            c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
+            var wi = new WeaponInput((i.Buttons & (ushort)MoveButtons.Fire) != 0, (i.Buttons & (ushort)MoveButtons.Reload) != 0, i.Slot, (i.Buttons & (ushort)MoveButtons.Switch) != 0);
+            if (c.W.Update(_elapsed, wi) is { } shot) FireWeapon(c, i, shot);
+            if (c.W.Changed) SendAmmo(c);
+            c.Slot = (byte)(c.W.Slot - 1);
             if (c.Body.LastFallDamage > 0) _match.ApplyDamage(c.Id, c.Id, SpecialWeapons.Fall, c.Body.LastFallDamage);
             if (c.Body.GlobalPosition.Y < KillY) GD.Print($"server: {c.Name} fell out of the world at {c.Body.GlobalPosition} (killY {KillY}, spawn {_match.Get(c.Id)?.Position})");
             if (c.Body.GlobalPosition.Y < KillY) _match.ApplyDamage(c.Id, c.Id, SpecialWeapons.Void, 9999, ignoreProtection: true);
@@ -284,6 +350,82 @@ public partial class NetServer : Node
         c.Body.Health = _match.Get(c.Id)?.Health ?? 0;
         var p = c.Body.GlobalPosition - c.Start;
         c.MaxMoved = Mathf.Max(c.MaxMoved, new Vector2(p.X, p.Z).Length());
+    }
+
+    void SendAmmo(Client c)
+    {
+        c.W.Changed = false;
+        Send(c, new EventMsg((byte)EventKind.Ammo, WeaponCodec.Encode(WeaponCodec.BuildAmmo(c.W, _elapsed))));
+    }
+
+    static NVec3 N(Vector3 v) => new(v.X, v.Y, v.Z);
+
+    List<HitTarget> LiveTargets() =>
+        _byId.Values.Where(o => _match.Get(o.Id)?.Life == PlayerLife.Alive)
+            .Select(o => new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Crouching, o.Body.Yaw)).ToList();
+
+    /// <summary>Distance from <paramref name="from"/> along <paramref name="dir"/> to the first world collider (player bodies excluded), or infinity.</summary>
+    float WorldDistance(Vector3 from, Vector3 dir, float max)
+    {
+        var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
+        var ex = new Godot.Collections.Array<Rid>();
+        foreach (var o in _byId.Values) ex.Add(o.Body.GetRid());
+        q.Exclude = ex;
+        var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        return r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3());
+    }
+
+    const float MaxShotRange = 300f;
+
+    /// <summary>Resolves one shot or swing against the current positions (no lag compensation) and walls, applies damage, sends events.</summary>
+    void FireWeapon(Client c, in NetInput i, FireOutcome shot)
+    {
+        var w = shot.Weapon;
+        var feet = c.Body.GlobalPosition;
+        var eye = feet + Vector3.Up * MovementStep.EyeHeight(c.Body.State.Crouching);
+        var yaw = Quant.Yaw(i.Yaw); var pitch = Quant.Pitch(i.Pitch);
+        var targets = LiveTargets();
+        _shotsFired++;
+        if (w.Kind == WeaponKind.Hitscan)
+        {
+            var d = HitMath.SpreadDirection(yaw, pitch, shot.SpreadDegrees, _rng);
+            var dir = new Vector3(d.X, d.Y, d.Z);
+            var wall = WorldDistance(eye, dir, MaxShotRange);
+            var hit = HitMath.Raycast(N(eye), d, MaxShotRange, wall, targets, c.Id);
+            if (hit == null && HitMath.Raycast(N(eye), d, MaxShotRange, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
+            var end = eye + dir * (hit?.Distance ?? Math.Min(wall, MaxShotRange));
+            BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
+            if (hit is { } h) Deal(c, shot, h.Id, HitMath.HitscanDamage(w, h.Distance, h.Head), h.Head, false);
+        }
+        else if (w.Kind == WeaponKind.Melee)
+        {
+            var fwd = HitMath.Forward(yaw, 0);
+            var hit = HitMath.Melee(N(feet), yaw, w.Reach, targets, c.Id);
+            if (hit is { } h && _byId.TryGetValue(h.Id, out var v))
+            {
+                // a wall between the attacker and the victim's chest blocks the stab
+                var chest = v.Body.GlobalPosition + Vector3.Up * 1.0f;
+                var to = chest - eye;
+                if (WorldDistance(eye, to.Normalized(), to.Length()) < to.Length() - 0.05f) { _wallBlocked++; hit = null; }
+            }
+            BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(eye) + fwd * w.Reach)));
+            if (hit is { } m) Deal(c, shot, m.Id, HitMath.MeleeDamage(w, m.Backstab), false, m.Backstab);
+        }
+    }
+
+    void Deal(Client attacker, FireOutcome shot, ushort victim, float damage, bool head, bool backstab)
+    {
+        var r = _match.ApplyDamage(victim, attacker.Id, (byte)shot.WeaponIndex, damage);
+        if (r == DamageResult.Ignored) return; // dead, spawn protected or round not running: the shot is absorbed
+        _hitsLanded++;
+        if (head) _headshots++;
+        if (backstab) _backstabs++;
+        var kill = r == DamageResult.Killed;
+        var msg = new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attacker.Id, (byte)shot.WeaponIndex, (ushort)damage, head, backstab, kill)));
+        Send(attacker, msg);
+        if (_byId.TryGetValue(victim, out var v) && v != attacker) Send(v, msg);
+        if (kill && victim != attacker.Id) { attacker.W.RefillReserves(); _refills++; }
+        GD.Print($"server: hit {attacker.Name} -> #{victim} {damage:F0}{(head ? " head" : "")}{(backstab ? " backstab" : "")}{(kill ? " KILL" : "")}");
     }
 
     void SendSnapshots()

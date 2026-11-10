@@ -16,6 +16,8 @@ public enum EventKind : byte
     Death = 7,
     /// <summary>Client to server developer commands (only honoured when the server runs with --debug-cmds).</summary>
     Debug = 8,
+    /// <summary>Server to the owning client: ammo, slot and reload state.</summary>
+    Ammo = 9,
 }
 
 public abstract record ReliableMsg;

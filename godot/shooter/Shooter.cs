@@ -12,6 +12,8 @@ namespace Suchohrad.Shooter;
 ///   --match-set k=v,k=v       server: override match.json values (score_goal, time_limit, respawn_delay, spawn_protection, end_screen_time, min_spawn_distance, min_players)
 ///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
 ///   --match-bot alice|bob     client: scripted match smoke role (alice kills bob with the debug command, bob fires after each spawn)
+///   --weapons-smoke           server: flat test arena with a wall (far from the map), honours debug commands, judges the weapons scenario
+///   --weapons-bot a|b         client: scripted weapons smoke role (a shoots, b stands still)
 ///   --smoke-move              client only: scripted movement check on the map collision (SHOOTER_SMOKE_MOVE_OK, exit 0; else exit 2)
 ///   --smoke                   load everything, print SHOOTER_SMOKE_OK and exit 0 (exit 2 on failure)
 /// No gameplay yet: this only boots the role on the loaded map.
@@ -92,6 +94,7 @@ public partial class Shooter : Node3D
             World = this, KillY = killY,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             MatchConfig = ApplyOverrides(_data.Match, cfg.Str("match-set")),
+            Weapons = _data.Weapons, WeaponsSmoke = cfg.Flag("weapons-smoke"),
             MatchSmoke = cfg.Flag("match-smoke"), DebugCommands = cfg.Flag("debug-cmds") || cfg.Flag("match-smoke"),
             Port = int.TryParse(cfg.Str("port", "27015"), out var port) ? port : 27015,
             QuitAfter = double.TryParse(cfg.Str("quit-after", "0"), out var q) ? q : 0,
@@ -135,7 +138,7 @@ public partial class Shooter : Node3D
         {
             World = this, Host = host, Port = port, PlayerName = cfg.Str("name", "player"), Bot = bot, KillY = killY,
             BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6,
-            MatchBot = cfg.Str("match-bot"),
+            MatchBot = cfg.Str("match-bot"), WeaponsBot = cfg.Str("weapons-bot"), Weapons = _data.Weapons,
         });
     }
 

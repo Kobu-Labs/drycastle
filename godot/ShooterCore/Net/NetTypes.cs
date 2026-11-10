@@ -58,13 +58,13 @@ public struct NetInput
     };
 
     /// <summary>The movement input both sides simulate with (the dequantised values, so prediction matches the server).</summary>
-    public readonly MoveInput ToMove() => new()
+    public readonly MoveInput ToMove(float speedScale = 1f) => new()
     {
         MoveX = Quant.Axis(MoveX),
         MoveY = Quant.Axis(MoveY),
         Yaw = Quant.Yaw(Yaw),
         Buttons = (MoveButtons)Buttons,
-        SpeedScale = 1f,
+        SpeedScale = speedScale,
     };
 
     /// <summary>True if <paramref name="a"/> is newer than <paramref name="b"/> in wrapping 16 bit order.</summary>

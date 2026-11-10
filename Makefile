@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test shooter-net-smoke shooter-match-smoke
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke
 
 setup:
 	cd pipeline && uv sync
@@ -158,6 +158,11 @@ shooter-net-smoke:
 shooter-match-smoke:
 	dotnet build godot/shooter/shooter.csproj
 	python3 godot/shooter/run_match_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
+
+# Headless server (flat test arena + wall) + alice/bob bots: AK damage and headshot, switch time, wall block, reload timing, knife backstab, ammo refill on kill.
+shooter-weapons-smoke:
+	dotnet build godot/shooter/shooter.csproj
+	python3 godot/shooter/run_weapons_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
 
 shooter-test:
 	dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj
