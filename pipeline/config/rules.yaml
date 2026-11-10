@@ -216,10 +216,16 @@ props:
     # gap), centred on the middle of the longest such stretch. Stretches already fenced for
     # another parcel (shared boundary) are not fenced twice.
     gate_gap_m: 3
+    # Emit fence collision boxes (props_collision node). They are about half of all triangles of a
+    # chunk file; turn off where fences need not stop players (the village profile does).
+    collision: true
   trees:
     # Trees per 1000 m2 of parcel area, by kind (random placement, min spacing, seeded).
     density_per_1000m2: {garden: 1.5, building_plot: 0.8, forest: 8.0, field: 0.0, other: 0.3}
     max_per_parcel: 120
+    # Cap on rule-based trees per chunk (0 = no cap); OSM trees always stay. Surplus trees are
+    # dropped by a position hash, so the result is stable and spread over the chunk.
+    max_per_chunk: 0
     min_spacing_m: 3.5
     building_clearance_m: 3.5
     road_clearance_m: 2.0
@@ -244,3 +250,21 @@ spawns:
   road_spacing_m: 12
   ground_per_1000m2: 2.0
   ground_kinds: [garden, field, other]
+
+# --- Area overlays --------------------------------------------------------------------------
+# `areas.<name>.<section>` is merged over the section when the pipeline runs with that area
+# (--area / AREA=). The slice has none and keeps the settings above. The village is ~50x larger,
+# so it trades prop density for chunk size (all chunks are loaded at startup, 16-64 players,
+# weak GPUs): fewer fences without collision, fewer trees, a few more spawn candidates.
+areas:
+  village:
+    props:
+      fences:
+        probability: 0.5
+        section_m: 4
+        collision: false
+      trees:
+        density_per_1000m2: {garden: 1.0, building_plot: 0.5, forest: 4.0, field: 0.0, other: 0.2}
+        max_per_chunk: 150
+    spawns:
+      count: 150

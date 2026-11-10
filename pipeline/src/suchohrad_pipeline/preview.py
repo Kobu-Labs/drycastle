@@ -260,13 +260,14 @@ def run_preview(
     rules_path: Path = DEFAULT_RULES,
     exaggeration: float = DEFAULT_EXAGGERATION,
     overview: bool = False,
+    area: str | None = None,
 ) -> list[Path]:
     parcels, buildings = _load(work_dir)
     top, iso, close = out_dir / "topdown.png", out_dir / "iso.png", out_dir / "iso_close.png"
     render_topdown(parcels, buildings, top)
     has_terrain = (work_dir / "terrain.json").is_file()
     k = exaggeration if has_terrain else 1.0
-    scene = build_scene(work_dir, rules_path, k)
+    scene = build_scene(work_dir, rules_path, k, area)
     what = f"terrain relief x{k:g}, roads, fences, trees, buildings" if has_terrain else "buildings"
     render_iso(scene, parcels, buildings, iso, _extent(buildings, 20),
                f"Isometric view from the south-west, flat colours from the mesh data ({what})")
@@ -293,7 +294,7 @@ def run(
     ap = area_paths(area)
     try:
         paths = run_preview(ap.work, ap.preview, exaggeration=exaggeration,
-                            overview=area != DEFAULT_AREA)
+                            overview=area != DEFAULT_AREA, area=area)
     except FileNotFoundError as exc:
         print(f"preview: error: missing input {Path(str(exc.filename)).name}; run rules first")
         return 1

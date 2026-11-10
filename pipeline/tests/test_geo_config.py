@@ -102,3 +102,22 @@ def test_area_paths_keep_slice_layout_and_separate_village(tmp_path: Path) -> No
         tmp_path / "out/village/map")
     with pytest.raises(ConfigError):
         area_paths("moon")
+
+
+def test_fetched_bounds_come_from_area_json_or_config(tmp_path: Path) -> None:
+    import json
+
+    from suchohrad_pipeline.normalise import fetched_bounds
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "slice_centre.json").write_text(json.dumps({"lon": 16.86, "lat": 48.40}))
+    cfg = tmp_path / "s.yaml"
+    cfg.write_text("osm_way: 1\nradius_m: 100\nmargin_m: 25\nvillage:\n  radius_m: 700\n")
+    legacy = fetched_bounds(raw, "slice", cfg)  # raw data without area.json
+    assert legacy is not None and legacy[0] == legacy[-1] and len(legacy) > 4
+    xs = [p[0] for p in legacy]
+    assert 250 < max(xs) - min(xs) < 320  # a (100 + 25) * 2 box, rotated in S-JTSK
+    (raw / "area.json").write_text(json.dumps({"bbox_wgs84": [16.85, 48.39, 16.87, 48.41]}))
+    explicit = fetched_bounds(raw, "slice", cfg)
+    assert max(p[0] for p in explicit) - min(p[0] for p in explicit) > 1000

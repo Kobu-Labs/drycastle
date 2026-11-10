@@ -316,23 +316,50 @@ def make_spawns(
     return out
 
 
-def run_props(work_dir: Path = DEFAULT_WORK_DIR, rules_path: Path = DEFAULT_RULES) -> dict:
+def cap_trees(trees: list[dict], chunk_m: float, limit: int) -> list[dict]:
+    """Keep at most ``limit`` rule-based trees per chunk (OSM trees always stay); 0 = no cap.
+
+    Which trees go is decided by a hash of position, so it is stable and spread over the chunk.
+    """
+    if limit <= 0:
+        return trees
+    by_chunk: dict[tuple[int, int], list[dict]] = {}
+    for tr in trees:
+        if tr["src"] == "rule":
+            by_chunk.setdefault(tuple(chunk_of(tr["x"], tr["y"], chunk_m)), []).append(tr)
+    drop: set[int] = set()
+    for members in by_chunk.values():
+        if len(members) > limit:
+            ranked = sorted(
+                members,
+                key=lambda t: hashlib.sha256(f"{t['x']}:{t['y']}:cap".encode()).hexdigest(),
+            )
+            drop.update(id(t) for t in ranked[limit:])
+    return [t for t in trees if id(t) not in drop]
+
+
+def run_props(
+    work_dir: Path = DEFAULT_WORK_DIR,
+    rules_path: Path = DEFAULT_RULES,
+    area: str | None = None,
+) -> dict:
     terrain, _ = load_terrain(work_dir)
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     parcels = parcels_doc["parcels"]
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     graph = json.loads((work_dir / "roads.json").read_text())
     osm_trees = json.loads((work_dir / "normalised" / "trees.geojson").read_text())["features"]
-    fcfg = load_section("props", rules_path)
+    fcfg = load_section("props", rules_path, area)
     fences = make_fences(parcels, buildings, graph, terrain, fcfg["fences"])
     trees = make_trees(parcels, buildings, graph, osm_trees, terrain, fcfg["trees"])
+    trees = cap_trees(trees, float(parcels_doc["chunk_size_m"]), int(fcfg["trees"]["max_per_chunk"]))
     spawns = make_spawns(
         parcels,
         buildings,
         graph,
         trees,
         terrain,
-        load_section("spawns", rules_path),
+        load_section("spawns", rules_path, area),
         load_section("roads", rules_path),
         float(parcels_doc["chunk_size_m"]),
     )
@@ -350,7 +377,7 @@ def run_props(work_dir: Path = DEFAULT_WORK_DIR, rules_path: Path = DEFAULT_RULE
 
 def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
     try:
-        counts = run_props(area_paths(area).work)
+        counts = run_props(area_paths(area).work, area=area)
     except FileNotFoundError as exc:
         print(f"props: error: missing input {Path(str(exc.filename)).name}; run earlier stages")
         return 1

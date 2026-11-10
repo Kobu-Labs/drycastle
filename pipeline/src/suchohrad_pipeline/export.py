@@ -93,7 +93,7 @@ def run_export(
     for old in chunks_dir.glob("chunk_*.glb"):
         old.unlink()
 
-    scene = build_scene(work_dir, rules_path)
+    scene = build_scene(work_dir, rules_path, area=area)
     parcels_out = []
     for p in sorted(parcels_doc["parcels"], key=lambda p: p["id"]):
         parcels_out.append(
