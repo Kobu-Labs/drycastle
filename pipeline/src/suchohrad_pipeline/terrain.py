@@ -10,16 +10,19 @@ are valid. Heights of invalid vertices are clamped samples, used only by height 
 objects outside coverage.
 """
 
+import functools
 import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
-import rasterio
 import shapely
-from pyproj import Transformer
 from shapely.geometry import Polygon
+
+if TYPE_CHECKING:
+    import rasterio
 
 from suchohrad_pipeline.buildings import footprint_polygon
 from suchohrad_pipeline.config import DEFAULT_AREA, DEFAULT_RAW_DIR, area_paths
@@ -28,8 +31,21 @@ from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 
 TERRAIN_FORMAT_VERSION = 1
-_to_dmr = Transformer.from_crs("EPSG:5514", "EPSG:3046", always_xy=True)
-_from_dmr = Transformer.from_crs("EPSG:3046", "EPSG:5514", always_xy=True)
+
+
+@functools.cache
+def _to_dmr():
+    """S-JTSK -> DMR CRS; pyproj is imported on first use because it is slow to import."""
+    from pyproj import Transformer
+
+    return Transformer.from_crs("EPSG:5514", "EPSG:3046", always_xy=True)
+
+
+@functools.cache
+def _from_dmr():
+    from pyproj import Transformer
+
+    return Transformer.from_crs("EPSG:3046", "EPSG:5514", always_xy=True)
 
 
 def cells_per_chunk(chunk_m: float, step_m: float) -> int:
@@ -136,7 +152,7 @@ class Terrain:
 # --- building the grid ----------------------------------------------------------------------
 
 
-def dmr_coverage(src: rasterio.DatasetReader, origin: tuple[float, float]) -> Polygon:
+def dmr_coverage(src: "rasterio.DatasetReader", origin: tuple[float, float]) -> Polygon:
     """Polygon (local metres) between the outermost pixel centres of the raster."""
     r = src.res[0]
     left, bottom = src.bounds.left + r / 2, src.bounds.bottom + r / 2
@@ -148,7 +164,7 @@ def dmr_coverage(src: rasterio.DatasetReader, origin: tuple[float, float]) -> Po
         + [(right - (right - left) * k / n, top) for k in range(n)]
         + [(left, top - (top - bottom) * k / n) for k in range(n)]
     )
-    xs, ys = _from_dmr.transform([p[0] for p in ring], [p[1] for p in ring])
+    xs, ys = _from_dmr().transform([p[0] for p in ring], [p[1] for p in ring])
     pts = np.column_stack([np.array(xs) - origin[0], np.array(ys) - origin[1]])
     return Polygon(np.round(pts, 3))
 
@@ -157,6 +173,8 @@ def sample_dmr(
     tif: Path, origin: tuple[float, float], x: np.ndarray, y: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
     """Bilinear heights at local points; second result is True where inside the raster."""
+    import rasterio
+
     with rasterio.open(tif) as src:
         data = src.read(1).astype(np.float64)
         nodata = src.nodata
@@ -166,7 +184,7 @@ def sample_dmr(
         bad |= data == nodata
     fill = float(data[~bad].mean()) if (~bad).any() else 0.0
     data = np.where(bad, fill, data)
-    e, n = _to_dmr.transform(x + origin[0], y + origin[1])
+    e, n = _to_dmr().transform(x + origin[0], y + origin[1])
     col = (np.asarray(e) - left) / res - 0.5
     row = (top - np.asarray(n)) / res - 0.5
     rows, cols = data.shape
@@ -283,15 +301,17 @@ def save_terrain(work_dir: Path, t: Terrain, elevations: dict[str, float]) -> No
     (work_dir / "terrain.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 
 
-def load_terrain(work_dir: Path) -> tuple[Terrain, dict[str, float]]:
+def load_terrain(work_dir: Path, mmap: bool = False) -> tuple[Terrain, dict[str, float]]:
+    """Read the terrain work files; ``mmap`` memory-maps the arrays (read-only, for small queries)."""
+    mode = "r" if mmap else None
     doc = json.loads((work_dir / "terrain.json").read_text())
     t = Terrain(
         doc["chunk_m"],
         doc["cells_per_chunk"],
         doc["i0"],
         doc["j0"],
-        np.load(work_dir / "terrain_heights.npy"),
-        np.load(work_dir / "terrain_valid.npy"),
+        np.load(work_dir / "terrain_heights.npy", mmap_mode=mode),
+        np.load(work_dir / "terrain_valid.npy", mmap_mode=mode),
         Polygon(doc["coverage"]),
     )
     return t, doc["building_elevation"]
@@ -307,6 +327,8 @@ def build_terrain(
     frame = json.loads((work_dir / "frame.json").read_text())
     origin = (frame["origin_epsg5514"][0], frame["origin_epsg5514"][1])
     tif = raw_dir / "dmr5.tif"
+    import rasterio
+
     with rasterio.open(tif) as src:
         coverage = dmr_coverage(src, origin)
     t = grid_from_samples(
