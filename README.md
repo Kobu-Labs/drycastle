@@ -9,6 +9,7 @@ A GTA-like open-world game set in the real village of Suchohrad (Slovakia), in a
 | `pipeline/` | Python (uv) project that generates the base map. Package `suchohrad_pipeline`, one stub per stage. |
 | `pipeline/config/` | Rules and manual overrides for the pipeline (explanatory stubs for now). |
 | `godot/MapLoader/` | C# class library, shared runtime loader for chunk glTF and parcel replacement. |
+| `godot/netspike/` | Godot C# project, 64-client headless netcode spike (issue #18); report in `docs/spikes/netcode-spike.md`. |
 | `godot/viewer/` | Godot 4.7 C# project for looking at the generated map. |
 | `mods/shooter/` | Shooter PoC (stub). Design notes are in `mods/shooter.md`. |
 | `docs/` | Agent docs, ADRs (`docs/adr/`). `GLOSSARY.md` defines the domain terms. |
@@ -47,6 +48,8 @@ make map AREA=village   # the same for the whole village (any target takes AREA=
 make viewer         # build and run the Godot viewer (see "Viewer" below)
 make viewer-smoke   # headless smoke test of the viewer and the loader
 make viewer-shot    # windowed run, writes PNGs to out/screens/
+make netspike-quick # netcode spike, N=8, 15 s (needs a map: MAP=/path/to/out/map)
+make netspike       # netcode spike, N=16/32/64, 60 s per variant (about 30 minutes)
 ```
 
 To build the C# projects without the editor:
@@ -234,6 +237,26 @@ ids, anchor), `SpawnPoints`, `Stats`, `GroundHeight(x, z)`, `ReplaceParcel(id, P
 the terrain), `RestoreParcel(id)`. Collision meshes (`*_collision`) become hidden static trimesh
 colliders. To guarantee the flat colour look the loader
 replaces every visual material with a rough, non-metallic one that uses COLOR_0 (sRGB) as albedo.
+
+## Netcode spike
+
+`godot/netspike` is the gate for the shooter PoC: a headless Godot dedicated server (ENet, 30 Hz,
+`CharacterBody3D` players on the real map collision) with up to 64 headless bot clients, one
+process each. It compares two replication approaches and probes the `MultiplayerSynchronizer`
+64-watched-property issue (godotengine/godot#103938). Results and the recommendation are in
+`docs/spikes/netcode-spike.md`.
+
+```sh
+export SUCHOHRAD_MAP=/path/to/out/map     # or pass MAP=... to make
+make netspike-quick     # N=8, 15 s per variant, short property probe
+make netspike           # N=16,32,64, 60 s per variant (builtin, custom, each with and without interest), property probe
+python3 godot/netspike/run_spike.py --ns 16 --seconds 20 --variants custom --skip-probe   # custom runs
+```
+
+Needs `python3` (stdlib only), `dotnet`, `godot` on `PATH`; `taskset` is used if present to pin the
+server and the clients to separate cores. Output (per-run JSON, client sample files, logs,
+`summary.json`) goes to `out/netspike/<timestamp>/`. The processes take `--role server|client|
+probe-server|probe-client`, `--mode builtin|custom`, `--interest R`; see `Spike.cs`.
 
 ## Data attribution
 
