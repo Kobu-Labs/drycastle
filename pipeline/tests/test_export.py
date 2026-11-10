@@ -182,12 +182,12 @@ def test_export_copies_objects_json_when_present(workspace) -> None:
 
 def test_export_run_honours_out_and_work(workspace, tmp_path, monkeypatch) -> None:
     from suchohrad_pipeline import export as export_mod
+    from dataclasses import replace
+
     from suchohrad_pipeline.config import area_paths
 
-    paths = area_paths("slice")
-    monkeypatch.setattr(
-        export_mod, "area_paths", lambda area: paths.__class__(area, workspace["raw"], *paths[2:])
-    )
+    paths = replace(area_paths("slice"), raw=workspace["raw"])
+    monkeypatch.setattr(export_mod, "area_paths", lambda area: paths)
     target = tmp_path / "custom_out"
     assert export_mod.run(out=str(target), work=str(workspace["work"])) == 0
     assert (target / "manifest.json").is_file()
