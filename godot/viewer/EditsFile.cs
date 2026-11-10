@@ -85,6 +85,8 @@ public static class EditsFile
                 var first = true;
                 foreach (var kv in o)
                 {
+                    // like dump_text: the regions key is only written when there are regions
+                    if (depth == 0 && kv.Key == "regions" && kv.Value is SortedDictionary<string, object?> { Count: 0 }) continue;
                     if (!first) sb.Append(",\n");
                     first = false;
                     Indent(sb, depth + 1);

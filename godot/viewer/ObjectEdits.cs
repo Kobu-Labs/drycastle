@@ -215,11 +215,46 @@ public static class ObjectEdits
             else errs.Add($"{path}.polygon.{i}: must be [x, y] in absolute S-JTSK metres");
         }
         if (errs.Count > 0) return errs;
-        if (ring.Count > 1 && ring[0] == ring[^1]) ring.RemoveAt(ring.Count - 1);
-        if (ring.Count < 3) errs.Add($"{path}.polygon: needs at least 3 points");
-        else if (Enumerable.Range(0, ring.Count).Any(i => ring[i] == ring[(i + 1) % ring.Count])) errs.Add($"{path}.polygon: has repeated consecutive points");
-        else if (!IsSimpleRing(ring)) errs.Add($"{path}.polygon: must not intersect or touch itself, and must enclose an area");
+        switch (RingProblemCode(ring))
+        {
+            case RingTooFew: errs.Add($"{path}.polygon: needs at least 3 points"); break;
+            case RingRepeated: errs.Add($"{path}.polygon: has repeated consecutive points"); break;
+            case RingNotSimple: errs.Add($"{path}.polygon: must not intersect or touch itself, and must enclose an area"); break;
+        }
         return errs;
+    }
+
+    public const int RingOk = 0, RingTooFew = 1, RingRepeated = 2, RingNotSimple = 3;
+
+    /// <summary>What is wrong with a region ring (RingOk when nothing): the same three rules as the validator. A repeated closing point is ignored.</summary>
+    public static int RingProblemCode(IReadOnlyList<(double x, double y)> points)
+    {
+        var ring = points.ToList();
+        if (ring.Count > 1 && ring[0] == ring[^1]) ring.RemoveAt(ring.Count - 1);
+        if (ring.Count < 3) return RingTooFew;
+        if (Enumerable.Range(0, ring.Count).Any(i => ring[i] == ring[(i + 1) % ring.Count])) return RingRepeated;
+        return IsSimpleRing(ring) ? RingOk : RingNotSimple;
+    }
+
+    /// <summary>
+    /// Whether adding <paramref name="p"/> to an open chain of corners is allowed: not the last corner again, and the new
+    /// edge neither crosses nor touches an earlier edge (it may only start at the last corner, and not double back along it).
+    /// </summary>
+    public static bool ChainAccepts(IReadOnlyList<(double x, double y)> chain, (double x, double y) p)
+    {
+        if (chain.Count == 0) return true;
+        var last = chain[^1];
+        if (last == p) return false;
+        for (var i = 0; i + 1 < chain.Count; i++)
+        {
+            var a = chain[i]; var b = chain[i + 1];
+            if (i + 2 == chain.Count)
+            {
+                if (Cross(last, a, p) == 0 && (OnSegment(last, a, p) || OnSegment(last, p, a))) return false;
+            }
+            else if (SegmentsMeet(last, p, a, b)) return false;
+        }
+        return true;
     }
 
     static double Cross((double x, double y) o, (double x, double y) a, (double x, double y) b)

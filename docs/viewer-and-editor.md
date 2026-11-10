@@ -239,3 +239,12 @@ GPU): `godot --path godot/viewer -- --map DIR --edits FILE --state FILE --editor
 `uv run`) that edits `pipeline/config/edits.json` in plain language: "park a car in front of the house on the selected
 parcel". It uses the pipeline's own validator, reads the viewer's `editor-state.json` for the selection, and the
 viewer's `--watch` applies the change. Registration, tool reference and workflow: [mcp.md](mcp.md).
+
+### Regions tool
+
+Rail icon 6 (View moved to 7). `N` starts a shape, LMB or `C` adds corners (0.5 m grid, Ctrl free), Enter closes it, the colour is chosen
+(picker or `#rrggbb`) and Enter creates the region: one save, one undo step. Select a region by clicking it or its row in the panel;
+drag corners, `[` `]` plus arrows, recolour, `Del` (asks first). Invalid shapes are refused before commit with the reason in the panel
+(a red preview outline while drawing or dragging). `Ctrl+P` opens a command palette. Esc steps back one level. Details and the
+keyboard walkthrough: `docs/regions-ui-notes.md`. `make viewer-region-editor-smoke` drives all of it headless and compares every saved
+`edits.json` with the Python writer's text.
