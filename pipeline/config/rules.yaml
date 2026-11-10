@@ -149,11 +149,11 @@ terrain:
   colours:
     building_plot: ["#c9b78f", "#c2b088"]
     garden: ["#8fbf6a", "#83b562", "#9bc673", "#8ab868"]
-    field: ["#b9cf72", "#c6d783", "#a9c463", "#d1d88f"]
-    forest: ["#3f7a45", "#386f3f"]
-    water: ["#6fa3d4"]
+    field: ["#6f9a69", "#78a272", "#68925f", "#7fa878"]
+    forest: ["#2f5f38", "#2a5633", "#356a3c"]
+    water: ["#6b7a6a", "#62725f"]
     road: ["#8e8e8e"]
-    other: ["#b8b0a2", "#c0b8aa"]
+    other: ["#72996b", "#7aa072", "#6a9163"]
 
 # --- Regions (export, region-run) ---------------------------------------------------------
 regions:
@@ -196,7 +196,7 @@ roads:
   unpaved_surfaces: [unpaved, gravel, fine_gravel, compacted, ground, dirt, earth, grass, sand, mud, pebblestone]
   unpaved_by_default: [track, path]
   colours:
-    asphalt: "#4a4c52"
+    asphalt: "#8a8c90"
     gravel: "#a89c84"
     path: "#9a8a6c"
 
