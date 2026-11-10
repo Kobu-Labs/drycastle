@@ -1,0 +1,6 @@
+# Parcel kind and building rules for the base map.
+#
+# Planned contents (not implemented yet): mapping from OSM tags to parcel kinds
+# (building plot, garden, road, field, forest, water, other), default building
+# heights and roof types, and facade colour palettes. The rules stage reads this
+# file so that changing a rule and re-running the pipeline regenerates the map.
