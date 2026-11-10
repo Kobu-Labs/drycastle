@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: setup test fetch normalise parcels rules terrain roads props export preview map viewer viewer-smoke viewer-shot netspike netspike-quick lint
+.PHONY: setup test fetch normalise parcels rules terrain roads props export preview map viewer viewer-smoke viewer-shot assets-check netspike netspike-quick lint
 
 setup:
 	cd pipeline && uv sync
@@ -52,6 +52,10 @@ viewer:
 viewer-smoke:
 	dotnet build godot/viewer/viewer.csproj
 	godot --headless --path godot/viewer -- --smoke --seed $(SEED) $(MAP_ARG)
+
+# Loads every glTF in assets/manifest.json with GLTFDocument (headless); exits nonzero on failure.
+assets-check:
+	godot --headless --path godot/viewer --script res://asset_check.gd -- --manifest $(abspath assets/manifest.json)
 
 # Windowed run; writes PNGs to out/screens/
 viewer-shot:
