@@ -1,5 +1,8 @@
 """Props stage: fences, trees and spawn candidates -> ``data/work/props.json`` and ``spawns.json``.
 
+Hand edits (``config/edits.json``, see ``edits.py``) are applied here too: fence modes and groups,
+tree density or count overrides, and placed objects, which are written to ``objects.json``.
+
 Everything random is drawn from ``random.Random`` seeded with sha256 of ``<parcel id>:<purpose>``
 (never Python's ``hash()``), so identical input gives identical output. Only places inside the
 terrain coverage are used.
@@ -9,15 +12,26 @@ import hashlib
 import json
 import math
 import random
+import sys
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
 import shapely
-from shapely.geometry import LineString, MultiLineString, Point, shape
-from shapely.ops import linemerge, unary_union
+from shapely.geometry import LineString, MultiLineString, Point, Polygon, shape
+from shapely.geometry.base import BaseGeometry
+from shapely.ops import linemerge, nearest_points, unary_union
 
 from suchohrad_pipeline.buildings import footprint_polygon
 from suchohrad_pipeline.config import DEFAULT_AREA, area_paths
+from suchohrad_pipeline.edits import (
+    DEFAULT_EDITS,
+    Edits,
+    EditsError,
+    FenceSpec,
+    load_edits,
+    resolve_fence,
+)
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.roads import edge_lines
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
@@ -25,6 +39,7 @@ from suchohrad_pipeline.terrain import Terrain, load_terrain
 
 PROPS_FORMAT_VERSION = 1
 SPAWNS_FORMAT_VERSION = 1
+OBJECTS_FORMAT_VERSION = 1
 _MIN_PIECE_M = 0.5
 
 
@@ -65,11 +80,51 @@ def road_zone(graph: dict, extra: float):
 # --- fences ---------------------------------------------------------------------------------
 
 
+def _owned_edge(poly: Polygon, others: BaseGeometry | None, outer: BaseGeometry) -> BaseGeometry:
+    """The part of a group member's boundary that is on the group's outer edge."""
+    own = poly.boundary
+    if others is not None and not others.is_empty:
+        own = own.difference(others)
+    return own.intersection(outer)
+
+
+def _gap_zone(base: BaseGeometry, x: float, y: float, width: float) -> BaseGeometry:
+    """A gap of ``width`` metres centred on the boundary point nearest to (x, y)."""
+    near, _ = nearest_points(base, Point(x, y))
+    return near.buffer(width / 2)
+
+
 def make_fences(
-    parcels: list[dict], buildings: list[dict], graph: dict, terrain: Terrain, cfg: dict
+    parcels: list[dict],
+    buildings: list[dict],
+    graph: dict,
+    terrain: Terrain,
+    cfg: dict,
+    specs: dict[str, FenceSpec] | None = None,
+    groups: dict[str, list[str]] | None = None,
 ) -> list[dict]:
-    """Fence sections along parcel boundaries: dicts with parcel, a, b (x, y) and za, zb (z)."""
+    """Fence sections along parcel boundaries: dicts with parcel, a, b (x, y) and za, zb (z).
+
+    ``specs`` holds the effective fence of parcels that have edits (gaps in local metres); a
+    parcel without a spec gets the rules' ``auto`` fence. ``groups`` maps a group ID to its member
+    parcel IDs: the members' outer edge is fenced as one property, each piece with its owner's
+    settings and the seeded roll keyed by the group ID. Custom sections carry their own
+    ``height_m``, ``thickness_m`` and ``colour``.
+    """
+    specs = specs or {}
     polys = {p["id"]: shape(p["polygon"]) for p in parcels}
+    member_of: dict[str, str] = {}
+    others: dict[str, BaseGeometry | None] = {}
+    outer: dict[str, BaseGeometry] = {}
+    for gid, pids in (groups or {}).items():
+        union = unary_union([polys[q] for q in pids])
+        outer[gid] = unary_union(
+            [Polygon(g.exterior).boundary for g in getattr(union, "geoms", [union])]
+        )
+        for pid in pids:
+            member_of[pid] = gid
+            rest = [polys[q] for q in pids if q != pid]
+            others[pid] = unary_union(rest) if rest else None
     bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
     bunion = unary_union(bpolys) if bpolys else None
     near = float(cfg["garden_near_building_m"])
@@ -84,27 +139,43 @@ def make_fences(
     done = None  # union of boundaries already fenced (buffered a little)
     sections: list[dict] = []
     for p in sorted(parcels, key=lambda p: p["id"]):
-        if p["kind"] not in cfg["kinds"]:
+        pid = p["id"]
+        spec = specs.get(pid)
+        if spec is not None and spec.mode == "none":
             continue
-        poly = polys[p["id"]]
-        if p["kind"] == "garden" and (bunion is None or poly.distance(bunion) > near):
-            continue
-        if seeded(f"{p['id']}:fence").random() >= float(cfg["probability"]):
-            continue
-        boundary = poly.boundary
+        custom = spec is not None and spec.mode == "custom"
+        gid = member_of.get(pid)
+        poly = polys[pid]
+        if not custom:
+            if p["kind"] not in cfg["kinds"]:
+                continue
+            if p["kind"] == "garden" and (bunion is None or poly.distance(bunion) > near):
+                continue
+            if seeded(f"{gid or pid}:fence").random() >= float(cfg["probability"]):
+                continue
+        base = poly.boundary if gid is None else _owned_edge(poly, others[pid], outer[gid])
+        boundary = base
         if avoid_geom is not None:
             boundary = boundary.difference(avoid_geom)
         boundary = boundary.intersection(terrain.coverage)
-        if gate > 0 and road_union is not None and not boundary.is_empty:
+        if not custom and gate > 0 and road_union is not None and not boundary.is_empty:
             front = merged_lines(boundary.intersection(road_union))
             front = [ln for ln in front if ln.length > gate * 1.5]
             if front:
                 best = max(front, key=lambda ln: (ln.length, ln.coords[0]))
                 mid = best.interpolate(best.length / 2)
                 boundary = boundary.difference(mid.buffer(gate / 2))
+        if spec is not None and not boundary.is_empty:
+            for x, y, width in spec.gaps:
+                boundary = boundary.difference(_gap_zone(base, x, y, width))
         if done is not None and not boundary.is_empty:
             boundary = boundary.difference(done)
         pieces = [ln for ln in merged_lines(boundary) if ln.length >= _MIN_PIECE_M]
+        style = (
+            {"height_m": spec.height_m, "thickness_m": spec.thickness_m, "colour": spec.colour}
+            if custom and spec is not None
+            else {}
+        )
         fenced = []
         for ln in pieces:
             fenced.append(ln)
@@ -114,11 +185,12 @@ def make_fences(
             for i in range(k):
                 sections.append(
                     {
-                        "parcel": p["id"],
+                        "parcel": pid,
                         "a": [_r3(pts[i, 0]), _r3(pts[i, 1])],
                         "b": [_r3(pts[i + 1, 0]), _r3(pts[i + 1, 1])],
                         "za": _r3(z[i]),
                         "zb": _r3(z[i + 1]),
+                        **style,
                     }
                 )
         if fenced:
@@ -137,13 +209,25 @@ def make_trees(
     osm_trees: list[dict],
     terrain: Terrain,
     cfg: dict,
+    overrides: dict[str, dict] | None = None,
+    objects: list[tuple[float, float]] | None = None,
 ) -> list[dict]:
-    """OSM trees plus seeded rule-based trees in parcels (gardens, forests, ...)."""
+    """OSM trees plus seeded rule-based trees in parcels (gardens, forests, ...).
+
+    ``overrides`` maps a parcel ID to its edited trees (``density_per_1000m2`` or ``count``, and
+    ``seed_offset``). ``objects`` are placed object positions (local metres) that trees keep
+    ``object_clearance_m`` away from.
+    """
     bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
     bzone = unary_union(bpolys).buffer(float(cfg["building_clearance_m"])) if bpolys else None
     rzone = road_zone(graph, float(cfg["road_clearance_m"]))
+    ozone = (
+        unary_union([Point(x, y).buffer(float(cfg["object_clearance_m"])) for x, y in objects])
+        if objects
+        else None
+    )
     shapely.prepare(terrain.coverage)
-    for g in (bzone, rzone):
+    for g in (bzone, rzone, ozone):
         if g is not None:
             shapely.prepare(g)
     trees: list[dict] = []
@@ -173,17 +257,29 @@ def make_trees(
     density = cfg["density_per_1000m2"]
     spacing = float(cfg["min_spacing_m"])
     for p in sorted(parcels, key=lambda p: p["id"]):
-        rate = float(density.get(p["kind"], 0.0))
-        if rate <= 0:
+        ov = (overrides or {}).get(p["id"])
+        seed_key = f"{p['id']}:trees"
+        fixed: int | None = None
+        if ov is None:
+            rate = float(density.get(p["kind"], 0.0))
+        else:
+            rate = float(ov.get("density_per_1000m2", 0.0))
+            fixed = ov.get("count")
+            if int(ov.get("seed_offset", 0)):
+                seed_key += f":{int(ov['seed_offset'])}"
+        if fixed is None and rate <= 0:
             continue
         poly = shape(p["polygon"])
         inner = poly.buffer(-float(cfg["parcel_edge_clearance_m"]))
         if inner.is_empty:
             continue
         shapely.prepare(inner)
-        rng = seeded(f"{p['id']}:trees")
-        expected = rate * poly.area / 1000.0
-        count = min(int(cfg["max_per_parcel"]), int(expected) + (rng.random() < expected % 1))
+        rng = seeded(seed_key)
+        if fixed is not None:
+            count = int(fixed)
+        else:
+            expected = rate * poly.area / 1000.0
+            count = min(int(cfg["max_per_parcel"]), int(expected) + (rng.random() < expected % 1))
         minx, miny, maxx, maxy = inner.bounds
         placed: list[tuple[float, float]] = []
         for _ in range(count * 40):
@@ -197,6 +293,8 @@ def make_trees(
             if bzone is not None and shapely.contains_xy(bzone, x, y):
                 continue
             if rzone is not None and shapely.contains_xy(rzone, x, y):
+                continue
+            if ozone is not None and shapely.contains_xy(ozone, x, y):
                 continue
             if any(math.hypot(x - a, y - b) < spacing for a, b in placed):
                 continue
@@ -338,10 +436,93 @@ def cap_trees(trees: list[dict], chunk_m: float, limit: int) -> list[dict]:
     return [t for t in trees if id(t) not in drop]
 
 
+@dataclass
+class EditPlan:
+    """Edits resolved against the parcels of this run (see :func:`plan_edits`)."""
+
+    specs: dict[str, FenceSpec] = field(default_factory=dict)  # gaps in local metres
+    groups: dict[str, list[str]] = field(default_factory=dict)  # valid member parcels only
+    tree_overrides: dict[str, dict] = field(default_factory=dict)
+    objects: list[dict] = field(default_factory=list)  # objects.json entries, sorted by id
+    warnings: list[str] = field(default_factory=list)
+
+
+def _local_xy(x: float, y: float, origin: list[float] | None) -> tuple[float, float]:
+    if origin is None:
+        raise ValueError("parcels.json has no origin_epsg5514; run the parcels stage again")
+    return x - origin[0], y - origin[1]
+
+
+def plan_edits(
+    edits: Edits, parcels: list[dict], origin: list[float] | None, chunk_m: float
+) -> EditPlan:
+    """Resolve the edits against this run's parcels.
+
+    Entries for parcels that no longer exist (parcel entries, group members, objects) are skipped
+    with a warning. An object outside every parcel, or outside the parcel it is listed under, is
+    still placed, with a warning; its ``parcel`` is the parcel containing it, or null.
+    """
+    plan = EditPlan()
+    polys = {p["id"]: shape(p["polygon"]) for p in parcels}
+    for gid in sorted(edits.groups):
+        members = []
+        for pid in edits.groups[gid].get("parcels", []):
+            if pid in polys:
+                members.append(pid)
+            else:
+                plan.warnings.append(f"groups.{gid}: parcel {pid} not found; skipped")
+        if members:
+            plan.groups[gid] = sorted(members)
+        else:
+            plan.warnings.append(f"groups.{gid}: no member parcels left; group skipped")
+    member_group = {pid: gid for gid, pids in plan.groups.items() for pid in pids}
+    for pid in sorted(edits.parcels):
+        if pid not in polys:
+            plan.warnings.append(f"parcels.{pid}: parcel not found; entry skipped")
+    for pid in sorted(polys):
+        entry = edits.parcels.get(pid, {})
+        group_fence = edits.groups[member_group[pid]].get("fence") if pid in member_group else None
+        if "fence" in entry or group_fence is not None:
+            spec = resolve_fence(entry.get("fence"), group_fence)
+            gaps = tuple((*_local_xy(x, y, origin), w) for x, y, w in spec.gaps)
+            plan.specs[pid] = replace(spec, gaps=gaps)
+        if "trees" in entry:
+            plan.tree_overrides[pid] = entry["trees"]
+    for pid in sorted(edits.parcels):
+        if pid not in polys:
+            continue
+        for obj in edits.parcels[pid].get("objects", []):
+            lx, ly = _local_xy(*obj["position"], origin)
+            hits = sorted(q for q, g in polys.items() if g.covers(Point(lx, ly)))
+            inside = hits[0] if hits else None
+            if inside is None:
+                plan.warnings.append(f"objects {obj['id']}: outside every parcel; placed anyway")
+            elif inside != pid:
+                plan.warnings.append(
+                    f"objects {obj['id']}: outside its parcel {pid} (inside {inside}); placed anyway"
+                )
+            plan.objects.append(
+                {
+                    "id": obj["id"],
+                    "asset": obj["asset"],
+                    "position": [_r3(lx), _r3(ly)],
+                    "z": obj.get("z"),
+                    "rotation_deg": float(obj.get("rotation_deg", 0)),
+                    "scale": float(obj.get("scale", 1)),
+                    "colour": obj.get("colour"),
+                    "parcel": inside,
+                    "chunk": chunk_of(lx, ly, chunk_m),
+                }
+            )
+    plan.objects.sort(key=lambda o: o["id"])
+    return plan
+
+
 def run_props(
     work_dir: Path = DEFAULT_WORK_DIR,
     rules_path: Path = DEFAULT_RULES,
     area: str | None = None,
+    edits_path: Path = DEFAULT_EDITS,
 ) -> dict:
     terrain, _ = load_terrain(work_dir)
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
@@ -350,9 +531,24 @@ def run_props(
     graph = json.loads((work_dir / "roads.json").read_text())
     osm_trees = json.loads((work_dir / "normalised" / "trees.geojson").read_text())["features"]
     fcfg = load_section("props", rules_path, area)
-    fences = make_fences(parcels, buildings, graph, terrain, fcfg["fences"])
-    trees = make_trees(parcels, buildings, graph, osm_trees, terrain, fcfg["trees"])
-    trees = cap_trees(trees, float(parcels_doc["chunk_size_m"]), int(fcfg["trees"]["max_per_chunk"]))
+    chunk_m = float(parcels_doc["chunk_size_m"])
+    plan = plan_edits(load_edits(edits_path), parcels, parcels_doc.get("origin_epsg5514"), chunk_m)
+    for warning in plan.warnings:
+        print(f"props: warning: {warning}", file=sys.stderr)
+    fences = make_fences(
+        parcels, buildings, graph, terrain, fcfg["fences"], specs=plan.specs, groups=plan.groups
+    )
+    trees = make_trees(
+        parcels,
+        buildings,
+        graph,
+        osm_trees,
+        terrain,
+        fcfg["trees"],
+        overrides=plan.tree_overrides,
+        objects=[(o["position"][0], o["position"][1]) for o in plan.objects],
+    )
+    trees = cap_trees(trees, chunk_m, int(fcfg["trees"]["max_per_chunk"]))
     spawns = make_spawns(
         parcels,
         buildings,
@@ -363,6 +559,8 @@ def run_props(
         load_section("roads", rules_path),
         float(parcels_doc["chunk_size_m"]),
     )
+    objects_doc = {"format_version": OBJECTS_FORMAT_VERSION, "objects": plan.objects}
+    (work_dir / "objects.json").write_text(json.dumps(objects_doc, indent=1, sort_keys=True) + "\n")
     props = {"version": PROPS_FORMAT_VERSION, "fences": fences, "trees": trees}
     spawn_doc = {
         "version": SPAWNS_FORMAT_VERSION,
@@ -372,14 +570,32 @@ def run_props(
     }
     for name, doc in (("props.json", props), ("spawns.json", spawn_doc)):
         (work_dir / name).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-    return {"fences": len(fences), "trees": len(trees), "spawns": len(spawns)}
+    return {
+        "fences": len(fences),
+        "trees": len(trees),
+        "spawns": len(spawns),
+        "objects": len(plan.objects),
+    }
 
 
-def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
+def run(
+    force: bool = False,
+    area: str = DEFAULT_AREA,
+    edits: str | None = None,
+    **_options: object,
+) -> int:
+    edits_path = Path(edits) if edits else DEFAULT_EDITS
     try:
-        counts = run_props(area_paths(area).work, area=area)
+        counts = run_props(area_paths(area).work, area=area, edits_path=edits_path)
     except FileNotFoundError as exc:
         print(f"props: error: missing input {Path(str(exc.filename)).name}; run earlier stages")
+        return 1
+    except EditsError as exc:
+        for error in exc.errors:
+            print(f"props: error: {edits_path.name}: {error}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"props: error: {exc}", file=sys.stderr)
         return 1
     print("props: " + ", ".join(f"{k}: {v}" for k, v in counts.items()))
     return 0

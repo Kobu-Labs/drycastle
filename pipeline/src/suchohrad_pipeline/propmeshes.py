@@ -56,10 +56,12 @@ def _mesh(tris: list, colours: list[list[int]]) -> Mesh:
 
 def fence_mesh(sections: list[dict], cfg: dict, bottom: bool = False) -> Mesh:
     """One thin box per fence section (visual: no bottom face; collision: closed)."""
-    height, thick = float(cfg["height_m"]), float(cfg["thickness_m"])
-    colour = hex_to_rgb(cfg["colour"])
     tris, cols = [], []
     for s in sections:
+        # custom (edited) sections carry their own style; the rest use the rules
+        height = float(s.get("height_m", cfg["height_m"]))
+        thick = float(s.get("thickness_m", cfg["thickness_m"]))
+        colour = hex_to_rgb(s.get("colour", cfg["colour"]))
         z0 = min(s["za"], s["zb"]) - 0.1
         z1 = max(s["za"], s["zb"]) + height
         t = box_tris(s["a"], s["b"], thick, z0, z1, bottom)

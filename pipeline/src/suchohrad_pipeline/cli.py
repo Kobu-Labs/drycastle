@@ -36,6 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="fetch: ignore the disk cache and download everything again",
     )
     parser.add_argument(
+        "--edits",
+        metavar="PATH",
+        default=None,
+        help="props: hand edits file (default: pipeline/config/edits.json)",
+    )
+    parser.add_argument(
         "--report",
         action="store_true",
         help="parcels: print counts by kind, building assignment and registry changes",
@@ -53,10 +59,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.stage == RUN_ALL:
         for run in STAGES.values():
-            status = run(force=args.force, report=args.report, area=args.area)
+            status = run(force=args.force, report=args.report, area=args.area, edits=args.edits)
             if status != 0:
                 return status
         return 0
     if args.stage == PREVIEW:
         return preview.run(exaggeration=args.exaggeration, area=args.area)
-    return STAGES[args.stage](force=args.force, report=args.report, area=args.area)
+    return STAGES[args.stage](
+        force=args.force, report=args.report, area=args.area, edits=args.edits
+    )
