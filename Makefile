@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: setup test fetch normalise parcels rules terrain roads props export parcel-run preview map viewer viewer-smoke viewer-edit-smoke viewer-editor-smoke viewer-panel-smoke viewer-shot assets-check netspike netspike-quick lint
+.PHONY: setup test fetch normalise parcels rules terrain roads props export parcel-run preview map viewer viewer-smoke viewer-edit-smoke viewer-editor-smoke viewer-panel-smoke mcp viewer-shot assets-check netspike netspike-quick lint
 
 setup:
 	cd pipeline && uv sync
@@ -75,6 +75,13 @@ viewer-editor-smoke:
 # windowed screenshots of the panel (needs a display). Needs uv, dotnet and godot.
 viewer-panel-smoke:
 	python3 godot/viewer/panel_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),) $(if $(SHOTS),--shots $(SHOTS),)
+
+# MCP server (stdio) for parcel edits, see docs/mcp.md. Claude Code normally starts it itself; this is for manual runs.
+# EDITS=file STATE=file ASSETS=file override the defaults. AREA=slice|village picks the map work files.
+MCP_ARGS = $(if $(EDITS),--edits $(abspath $(EDITS)),) $(if $(STATE),--state $(abspath $(STATE)),) $(if $(ASSETS),--assets $(abspath $(ASSETS)),)
+
+mcp:
+	cd pipeline && uv run python -m suchohrad_pipeline.mcp_server --area $(AREA) $(MCP_ARGS)
 
 # Loads every glTF in assets/manifest.json with GLTFDocument (headless); exits nonzero on failure.
 assets-check:

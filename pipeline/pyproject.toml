@@ -12,6 +12,7 @@ dependencies = [
     "requests",
     "pyyaml",
     "mapbox-earcut>=2.1.0",
+    "mcp>=2.3.0",
 ]
 
 [dependency-groups]
