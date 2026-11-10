@@ -3,8 +3,10 @@ using Godot;
 /// <summary>First-person character: WASD, mouse look, jump, gravity, sprint. Origin is at the feet.</summary>
 public partial class Player : CharacterBody3D
 {
-    const float WalkSpeed = 5f;
-    const float SprintSpeed = 10f;
+    // Debug viewer speeds (the village is 1.4 km across); override with SUCHOHRAD_SPEED=<multiplier>.
+    static readonly float SpeedScale = float.TryParse(System.Environment.GetEnvironmentVariable("SUCHOHRAD_SPEED"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var k) ? k : 1f;
+    static readonly float WalkSpeed = 40f * SpeedScale;
+    static readonly float SprintSpeed = 80f * SpeedScale;
     const float JumpSpeed = 5f;
     const float Gravity = 20f;
     const float EyeHeight = 1.65f;
