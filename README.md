@@ -48,7 +48,7 @@ make viewer         # build and run the Godot viewer (see "Viewer" below)
 make viewer-smoke   # headless smoke test of the viewer and the loader
 make viewer-shot    # windowed run, writes PNGs to out/screens/
 make netspike-quick # netcode spike, N=8, 15 s (needs a map: MAP=/path/to/out/map)
-make netspike       # netcode spike, N=16/32/64, 60 s per variant (about 25 minutes)
+make netspike       # netcode spike, N=16/32/64, 60 s per variant (about 30 minutes)
 ```
 
 To build the C# projects without the editor:
