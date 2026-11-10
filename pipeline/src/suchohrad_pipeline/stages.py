@@ -1,12 +1,12 @@
 """Pipeline stages, in execution order.
 
-Stages other than fetch are stubs for now. A real stage replaces its ``run`` function and
+Stages not implemented yet are stubs. A real stage replaces its ``run`` function and
 keeps the same name in ``STAGES`` so the CLI and ``run-all`` keep working.
 """
 
 from collections.abc import Callable
 
-from suchohrad_pipeline import fetch
+from suchohrad_pipeline import fetch, normalise, parcels
 
 
 def _stub(name: str) -> Callable[..., int]:
@@ -20,8 +20,7 @@ def _stub(name: str) -> Callable[..., int]:
 
 STAGES: dict[str, Callable[..., int]] = {
     "fetch": fetch.run,
-    **{
-        name: _stub(name)
-        for name in ("normalise", "parcels", "rules", "terrain", "roads", "props", "export")
-    },
+    "normalise": normalise.run,
+    "parcels": parcels.run,
+    **{name: _stub(name) for name in ("rules", "terrain", "roads", "props", "export")},
 }

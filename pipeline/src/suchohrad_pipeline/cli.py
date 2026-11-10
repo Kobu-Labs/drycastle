@@ -25,6 +25,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="fetch: ignore the disk cache and download everything again",
     )
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="parcels: print counts by kind, building assignment and registry changes",
+    )
     return parser
 
 
@@ -32,8 +37,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.stage == RUN_ALL:
         for run in STAGES.values():
-            status = run(force=args.force)
+            status = run(force=args.force, report=args.report)
             if status != 0:
                 return status
         return 0
-    return STAGES[args.stage](force=args.force)
+    return STAGES[args.stage](force=args.force, report=args.report)
