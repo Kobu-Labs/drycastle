@@ -9,8 +9,10 @@ On every regeneration the current cadastral parcels are matched to it:
    (the parcel was renumbered; the old reference moves to ``previous_refs``);
 3. else the parcel is new and gets the next ID after the highest ever used, in the order of
    cadastral reference;
-4. active entries nobody claimed become ``retired``. Entries are never deleted and IDs never
-   reused.
+4. active entries nobody claimed become ``retired`` only when their outline lies inside the
+   fetched area (``bounds``): a run knows nothing about parcels outside what it fetched, so those
+   entries are left untouched. Without ``bounds`` every unclaimed entry is retired. Entries are
+   never deleted and IDs never reused.
 """
 
 import json
@@ -90,9 +92,15 @@ def save_registry(registry: dict, path: Path = DEFAULT_REGISTRY) -> None:
 
 
 def match_parcels(
-    registry: dict, current: dict[str, BaseGeometry], min_iou: float = 0.5
+    registry: dict,
+    current: dict[str, BaseGeometry],
+    min_iou: float = 0.5,
+    bounds: BaseGeometry | None = None,
 ) -> MatchResult:
-    """Match current parcels (cadastral reference -> geometry in EPSG:5514) to the registry."""
+    """Match current parcels (cadastral reference -> geometry in EPSG:5514) to the registry.
+
+    ``bounds`` is the fetched area in EPSG:5514; only entries inside it can be retired.
+    """
     entries = {e["id"]: dict(e) for e in registry.get("parcels", [])}
     by_ref = {e["cadastral_ref"]: e for e in entries.values()}
     ids: dict[str, str] = {}
@@ -152,9 +160,11 @@ def match_parcels(
         res.new.append(entry["id"])
         next_n += 1
 
-    # 4. retire the rest, keep them forever
+    # 4. retire the rest (only inside the fetched area), keep them forever
     for entry_id, entry in sorted(entries.items()):
         if entry_id not in claimed and entry["status"] == "active":
+            if bounds is not None and not bounds.covers(outline_polygon(entry["geometry"])):
+                continue
             entry["status"] = "retired"
             res.retired.append(entry_id)
 

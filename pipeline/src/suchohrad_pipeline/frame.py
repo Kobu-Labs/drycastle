@@ -47,3 +47,18 @@ class Frame:
 
     def local_to_sjtsk(self, x: float, y: float) -> tuple[float, float]:
         return x + self.origin_x, y + self.origin_y
+
+
+def box_to_sjtsk(west: float, south: float, east: float, north: float, steps: int = 16):
+    """Absolute EPSG:5514 polygon of a WGS84 lon/lat box (edges densified, they are curved)."""
+    from shapely.geometry import Polygon
+
+    ts = [i / steps for i in range(steps + 1)]
+    ring = (
+        [(west + t * (east - west), south) for t in ts]
+        + [(east, south + t * (north - south)) for t in ts]
+        + [(east - t * (east - west), north) for t in ts]
+        + [(west, north - t * (north - south)) for t in ts]
+    )
+    xs, ys = _to_sjtsk.transform([p[0] for p in ring], [p[1] for p in ring])
+    return Polygon(list(zip(xs, ys, strict=True)))

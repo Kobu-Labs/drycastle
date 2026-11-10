@@ -4,6 +4,7 @@ import argparse
 from collections.abc import Sequence
 
 from suchohrad_pipeline import preview
+from suchohrad_pipeline.config import AREAS, DEFAULT_AREA
 from suchohrad_pipeline.stages import STAGES
 
 RUN_ALL = "run-all"
@@ -21,6 +22,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=choices,
         metavar="stage",
         help="one of: " + ", ".join(choices),
+    )
+    parser.add_argument(
+        "--area",
+        choices=AREAS,
+        default=DEFAULT_AREA,
+        help="slice (default): data/raw, data/work, out/map; "
+        "village: data/village/..., out/village/map",
     )
     parser.add_argument(
         "--force",
@@ -45,10 +53,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.stage == RUN_ALL:
         for run in STAGES.values():
-            status = run(force=args.force, report=args.report)
+            status = run(force=args.force, report=args.report, area=args.area)
             if status != 0:
                 return status
         return 0
     if args.stage == PREVIEW:
-        return preview.run(exaggeration=args.exaggeration)
-    return STAGES[args.stage](force=args.force, report=args.report)
+        return preview.run(exaggeration=args.exaggeration, area=args.area)
+    return STAGES[args.stage](force=args.force, report=args.report, area=args.area)

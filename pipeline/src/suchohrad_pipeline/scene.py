@@ -84,7 +84,10 @@ def _read(work_dir: Path, name: str) -> dict | None:
 
 
 def build_scene(
-    work_dir: Path, rules_path: Path = DEFAULT_RULES, exaggeration: float = 1.0
+    work_dir: Path,
+    rules_path: Path = DEFAULT_RULES,
+    exaggeration: float = 1.0,
+    area: str | None = None,
 ) -> MapScene:
     """All meshes of the map. ``exaggeration`` scales heights (preview only; 1 for export)."""
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
@@ -139,7 +142,7 @@ def build_scene(
 
     scene.props = _read(work_dir, "props.json")
     if scene.props:
-        pcfg = load_section("props", rules_path)
+        pcfg = load_section("props", rules_path, area)
         fences = [{**s, "za": s["za"] * k, "zb": s["zb"] * k} for s in scene.props["fences"]]
         trees = [{**tr, "z": tr["z"] * k} for tr in scene.props["trees"]]
         by_fence = _group(fences, lambda s: _chunk(s["a"], chunk_m))
@@ -150,7 +153,8 @@ def build_scene(
                  trees_mesh(by_tree.get(key, []), pcfg["trees"])]
             )
             put("props", {key: visual})
-            put("props_collision", {key: fence_mesh(by_fence.get(key, []), pcfg["fences"], True)})
+            if pcfg["fences"]["collision"]:
+                put("props_collision", {key: fence_mesh(by_fence.get(key, []), pcfg["fences"], True)})
     scene.spawns = _read(work_dir, "spawns.json")
     return scene
 

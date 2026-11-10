@@ -77,12 +77,21 @@ def _merge(base: dict, extra: dict) -> dict:
     return out
 
 
-def load_section(name: str, path: Path = DEFAULT_RULES) -> dict:
+def load_section(name: str, path: Path = DEFAULT_RULES, area: str | None = None) -> dict:
     """A top-level section of rules.yaml, merged over the same section of the shipped rules.yaml.
 
-    The shipped file is the single source of defaults, so a custom file may be partial.
+    The shipped file is the single source of defaults, so a custom file may be partial. With
+    ``area`` the section is further overlaid by ``areas.<area>.<name>`` (shipped file first, then
+    the custom one), so the village can use lighter settings than the slice.
     """
-    base = (yaml.safe_load(DEFAULT_RULES.read_text()) or {}).get(name) or {}
-    if path == DEFAULT_RULES or not path.is_file():
-        return base
-    return _merge(base, (yaml.safe_load(path.read_text()) or {}).get(name) or {})
+    shipped = yaml.safe_load(DEFAULT_RULES.read_text()) or {}
+    docs = [shipped]
+    if path != DEFAULT_RULES and path.is_file():
+        docs.append(yaml.safe_load(path.read_text()) or {})
+    out: dict = {}
+    for doc in docs:
+        out = _merge(out, doc.get(name) or {})
+    if area:
+        for doc in docs:
+            out = _merge(out, ((doc.get("areas") or {}).get(area) or {}).get(name) or {})
+    return out

@@ -187,3 +187,43 @@ def test_run_props_writes_files_deterministically(ws, tmp_path) -> None:
     doc = json.loads(first["spawns.json"])
     assert set(doc) == {"version", "axes", "chunk_size_m", "spawns"}
     assert box(0, 0, 250, 250).contains(Point(doc["spawns"][0]["x"], doc["spawns"][0]["y"]))
+
+
+def test_area_overlay_only_applies_to_that_area(tmp_path) -> None:
+    slice_props = load_section("props", area="slice")
+    village = load_section("props", area="village")
+    assert slice_props == load_section("props")
+    assert slice_props["fences"]["collision"] is True and slice_props["trees"]["max_per_chunk"] == 0
+    assert village["fences"]["collision"] is False and village["trees"]["max_per_chunk"] > 0
+    # keys the overlay does not mention keep their value
+    assert village["fences"]["height_m"] == slice_props["fences"]["height_m"]
+    custom = tmp_path / "r.yaml"
+    custom.write_text(yaml.safe_dump({"areas": {"village": {"spawns": {"count": 7}}}}))
+    assert load_section("spawns", custom, "village")["count"] == 7
+    assert load_section("spawns", custom, "slice")["count"] == load_section("spawns")["count"]
+
+
+def test_cap_trees_is_per_chunk_stable_and_keeps_osm_trees() -> None:
+    from suchohrad_pipeline.props import cap_trees
+
+    trees = [{"src": "rule", "x": float(i), "y": 1.0} for i in range(40)]
+    trees += [{"src": "rule", "x": 300.0 + i, "y": 1.0} for i in range(5)]
+    trees += [{"src": "osm", "x": 2.5, "y": 2.0}]
+    capped = cap_trees(trees, 250.0, 10)
+    assert sum(1 for t in capped if t["x"] < 250 and t["src"] == "rule") == 10
+    assert sum(1 for t in capped if t["x"] >= 300) == 5  # under the cap, untouched
+    assert any(t["src"] == "osm" for t in capped)
+    assert capped == cap_trees(trees, 250.0, 10)
+    assert cap_trees(trees, 250.0, 0) == trees
+
+
+def test_run_props_cap_via_rules(ws, tmp_path) -> None:
+    rules = tmp_path / "rules.yaml"
+    rules.write_text(yaml.safe_dump({"props": {"trees": {"max_per_chunk": 1}}}))
+    run_props(ws["work"], rules)
+    rule_trees = [t for t in json.loads((ws["work"] / "props.json").read_text())["trees"]
+                  if t["src"] == "rule"]
+    per_chunk = {}
+    for t in rule_trees:
+        per_chunk[(t["x"] // 250, t["y"] // 250)] = per_chunk.get((t["x"] // 250, t["y"] // 250), 0) + 1
+    assert per_chunk and max(per_chunk.values()) <= 1

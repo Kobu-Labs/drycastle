@@ -3,3 +3,10 @@
 osm_way: 1234567890   # placeholder: OSM way id whose centroid is the slice centre
 radius_m: 100         # half-side of the slice in metres (default 100)
 margin_m: 25          # extra metres fetched around the slice (default 25)
+
+# Whole-village area (AREA=village / --area village): same centre, a larger square.
+# Fetched to data/village/raw, built in data/village/work, exported to out/village/map.
+# The parcel registry (registry/parcels.registry.json) is shared by both areas.
+village:
+  radius_m: 700       # half-side in metres (default 700)
+  margin_m: 25        # extra metres fetched around it (default: margin_m above)

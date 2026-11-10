@@ -310,3 +310,66 @@ def test_stage_writes_parcels_json_and_is_idempotent(tmp_path: Path) -> None:
     again = build_parcels(work, registry, rules)
     assert (registry.read_bytes(), (work / "parcels.json").read_bytes()) == before
     assert not again.match.new
+
+
+# --- area-aware registry: slice and village share one registry --------------------------------
+
+# Slice box covers the first two parcels, the village box all of them (plus extra parcels).
+SLICE_BOX = box(-10, -10, 210, 110)
+VILLAGE_BOX = box(-10, -10, 1100, 1100)
+VILLAGE = {**BASE, "200/1": box(500, 0, 600, 100), "200/2": box(600, 0, 700, 100)}
+SLICE = {k: v for k, v in VILLAGE.items() if SLICE_BOX.covers(v)}
+
+
+def _run(registry: dict, current: dict, bounds):
+    res = match_parcels(registry, current, 0.5, bounds)
+    return res
+
+
+def test_village_after_slice_keeps_ids_and_appends_new_ones() -> None:
+    s = _run({"parcels": []}, SLICE, SLICE_BOX)
+    assert s.ids == {"100/1": "P-0001", "100/2": "P-0002"}
+    v = _run(s.registry, VILLAGE, VILLAGE_BOX)
+    assert v.ids["100/1"] == "P-0001" and v.ids["100/2"] == "P-0002"
+    assert v.ids["100/3"] == "P-0003"
+    assert v.ids["200/1"] == "P-0004" and v.ids["200/2"] == "P-0005"
+    assert not v.retired
+
+
+def test_slice_after_village_does_not_retire_village_only_parcels() -> None:
+    v = _run({"parcels": []}, VILLAGE, VILLAGE_BOX)
+    s = _run(v.registry, SLICE, SLICE_BOX)
+    assert not s.retired and not s.new
+    assert all(e["status"] == "active" for e in s.registry["parcels"])
+    assert s.registry == v.registry  # outside entries untouched, inside ones unchanged
+
+
+def test_unmatched_entry_inside_area_is_retired_outside_is_not() -> None:
+    v = _run({"parcels": []}, VILLAGE, VILLAGE_BOX)
+    gone_inside = {k: p for k, p in SLICE.items() if k != "100/2"}
+    s = _run(v.registry, gone_inside, SLICE_BOX)
+    assert s.retired == [v.ids["100/2"]]
+    status = {e["id"]: e["status"] for e in s.registry["parcels"]}
+    assert status[v.ids["100/2"]] == "retired"
+    assert status[v.ids["200/1"]] == "active" and status[v.ids["100/3"]] == "active"
+
+
+def test_without_bounds_every_unclaimed_entry_is_retired() -> None:
+    v = _run({"parcels": []}, VILLAGE, None)
+    s = _run(v.registry, SLICE, None)
+    assert len(s.retired) == 3
+
+
+def test_both_orders_are_idempotent_and_stable(tmp_path: Path) -> None:
+    path = tmp_path / "reg.json"
+    sequence = [(SLICE, SLICE_BOX), (VILLAGE, VILLAGE_BOX), (SLICE, SLICE_BOX),
+                (VILLAGE, VILLAGE_BOX), (VILLAGE, VILLAGE_BOX), (SLICE, SLICE_BOX)]
+    seen = []
+    for current, bounds in sequence:
+        res = _run(load_registry(path), current, bounds)
+        save_registry(res.registry, path)
+        seen.append(path.read_bytes())
+    assert seen[1] == seen[2] == seen[3] == seen[4] == seen[5]  # nothing changes after village
+    first_ids = {e["cadastral_ref"]: e["id"] for e in json.loads(seen[0])["parcels"]}
+    final_ids = {e["cadastral_ref"]: e["id"] for e in json.loads(seen[-1])["parcels"]}
+    assert all(final_ids[r] == i for r, i in first_ids.items())

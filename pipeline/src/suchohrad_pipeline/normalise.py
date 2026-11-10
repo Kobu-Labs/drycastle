@@ -13,8 +13,17 @@ from shapely.geometry import LineString, Point, Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, polygonize, unary_union
 
-from suchohrad_pipeline.config import DEFAULT_RAW_DIR, REPO_ROOT
-from suchohrad_pipeline.frame import Frame
+from suchohrad_pipeline.config import (
+    DEFAULT_AREA,
+    DEFAULT_CONFIG,
+    DEFAULT_RAW_DIR,
+    REPO_ROOT,
+    ConfigError,
+    area_paths,
+    load_slice_config,
+)
+from suchohrad_pipeline.frame import Frame, box_to_sjtsk
+from suchohrad_pipeline.geo import compute_bbox
 
 DEFAULT_WORK_DIR = REPO_ROOT / "data" / "work"
 LANDUSE_CLASSES = ("landuse", "natural")
@@ -126,8 +135,31 @@ def _dump(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=1, sort_keys=True) + "\n")
 
 
+def fetched_bounds(raw_dir: Path, area: str, config_path: Path | None = None) -> list | None:
+    """Fetched box as an absolute EPSG:5514 ring, from ``area.json`` (written by fetch).
+
+    Raw data fetched before ``area.json`` existed falls back to the area's configured box.
+    Returns None when neither is available.
+    """
+    path = raw_dir / "area.json"
+    if path.is_file():
+        west, south, east, north = json.loads(path.read_text())["bbox_wgs84"]
+    else:
+        centre = json.loads((raw_dir / "slice_centre.json").read_text())
+        try:
+            cfg = load_slice_config(config_path or DEFAULT_CONFIG, area)
+        except ConfigError:
+            return None
+        box = compute_bbox(centre["lon"], centre["lat"], cfg.radius_m, cfg.margin_m)
+        west, south, east, north = box.west, box.south, box.east, box.north
+    ring = box_to_sjtsk(west, south, east, north).exterior.coords
+    return [[round(x, 2), round(y, 2)] for x, y in ring]
+
+
 def run_normalise(
-    raw_dir: Path = DEFAULT_RAW_DIR, work_dir: Path = DEFAULT_WORK_DIR
+    raw_dir: Path = DEFAULT_RAW_DIR,
+    work_dir: Path = DEFAULT_WORK_DIR,
+    area: str = DEFAULT_AREA,
 ) -> dict[str, int]:
     centre = json.loads((raw_dir / "slice_centre.json").read_text())
     frame = Frame.at(centre["lon"], centre["lat"])
@@ -186,14 +218,16 @@ def run_normalise(
             "lon": frame.lon,
             "lat": frame.lat,
             "origin_epsg5514": [frame.origin_x, frame.origin_y],
+            "fetched_bounds_epsg5514": fetched_bounds(raw_dir, area),
         },
     )
     return counts
 
 
-def run(force: bool = False, **_options: object) -> int:
+def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
+    paths = area_paths(area)
     try:
-        counts = run_normalise()
+        counts = run_normalise(paths.raw, paths.work, area)
     except FileNotFoundError as exc:
         print(f"normalise: error: missing input {Path(str(exc.filename)).name}; run fetch first")
         return 1
