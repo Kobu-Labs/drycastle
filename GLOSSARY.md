@@ -27,7 +27,3 @@ _Avoid_: merged parcel, estate
 
 **Hand edit**:
 A deliberate, developer-made change to a parcel's or property group's contents (fence, trees, placed objects) that survives every pipeline re-run.
-
-**UI standard**:
-The checkable definition of AAA-level UI/UX in `docs/standards/ui-ux.md`. It applies to every screen, including the map editor and developer tools, and gates acceptance of any UI issue.
-_Avoid_: style guide, polish pass
