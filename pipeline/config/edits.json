@@ -1,6 +1,19 @@
 {
  "groups": {},
  "parcels": {
+  "P-0510": {
+   "objects": [
+    {
+     "asset": "prim:radio_tower",
+     "id": "o-0072",
+     "position": [
+      -589200.5,
+      -1249679.4
+     ],
+     "rotation_deg": 81.94
+    }
+   ]
+  },
   "P-1082": {
    "fence": {
     "mode": "none"

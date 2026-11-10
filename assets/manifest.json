@@ -770,6 +770,26 @@
       "pack": null
     },
     {
+      "id": "prim:radio_tower",
+      "category": "other",
+      "name": "Radio tower",
+      "file": null,
+      "size_m": [
+        3.0,
+        36.0,
+        2.6
+      ],
+      "tags": [
+        "lattice",
+        "antenna",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/suchohrad_pipeline/primitives.py)",
+      "pack": null
+    },
+    {
       "id": "prim:slab",
       "category": "slab",
       "name": "Pavement slab",

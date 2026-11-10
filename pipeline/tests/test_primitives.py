@@ -135,3 +135,13 @@ def test_props_warns_for_unknown_assets_only() -> None:
     ]
     warnings = unknown_asset_warnings(objs)
     assert len(warnings) == 2 and "objects b" in warnings[0] and "objects c" in warnings[1]
+
+
+def test_radio_tower_is_a_tall_lattice_on_a_cabin() -> None:
+    mesh = build_primitive("radio_tower")
+    lo, hi = bbox(mesh)
+    assert (hi - lo) == pytest.approx([3.0, 2.6, 36.0])
+    assert hi[2] == pytest.approx(36.0)
+    assert mesh.face_count > 1000  # lattice members, not a solid block
+    taller = bbox(build_primitive("radio_tower", {"height_m": 50}))[1]
+    assert taller[2] == pytest.approx(50.0)
