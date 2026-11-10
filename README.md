@@ -388,6 +388,13 @@ GPU): `godot --path godot/viewer -- --map DIR --edits FILE --state FILE --editor
 --shot-at P-0003 [--hover P-0005] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-reroll] [--shot-focus X,Y --shot-dist D]`
 (`--shot-edits` writes that edits file first and waits for the regenerated parcels).
 
+### MCP server for parcel edits
+
+`pipeline/src/suchohrad_pipeline/mcp_server.py` is a stdio MCP server (`make mcp`, normally started by Claude Code via
+`uv run`) that edits `pipeline/config/edits.json` in plain language: "park a car in front of the house on the selected
+parcel". It uses the pipeline's own validator, reads the viewer's `editor-state.json` for the selection, and the
+viewer's `--watch` applies the change. Registration, tool reference and workflow: [docs/mcp.md](docs/mcp.md).
+
 ## Netcode spike
 
 `godot/netspike` is the gate for the shooter PoC: a headless Godot dedicated server (ENet, 30 Hz,
