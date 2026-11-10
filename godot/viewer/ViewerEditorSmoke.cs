@@ -270,6 +270,7 @@ public partial class Viewer
         ed.RefreshNow();
         foreach (var title in (_opts.GetValueOrDefault("shot-collapse") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
             ed.SetSectionOpen(title, false);
+        if (_opts.GetValueOrDefault("shot-tool") is { } stool) ed.SetTool(stool);
         if (_opts.GetValueOrDefault("shot-gate") is { } sg && int.TryParse(sg, out var gi)) ed.SelectGate(gi);
         if (_flags.Contains("shot-reroll")) ed.Reroll(); // leaves a pending change: shows the unsaved marker
         foreach (var cat in (_opts.GetValueOrDefault("shot-open") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)) ed.SetPaletteGroupOpen(cat, true);

@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: setup test fetch normalise parcels rules terrain roads props export parcel-run preview map viewer viewer-smoke viewer-edit-smoke viewer-editor-smoke viewer-panel-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run preview map viewer viewer-smoke viewer-edit-smoke viewer-editor-smoke viewer-panel-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint
 
 setup:
 	cd pipeline && uv sync
@@ -55,6 +55,11 @@ SEED ?= 1
 viewer:
 	dotnet build godot/viewer/viewer.csproj
 	godot --path godot/viewer -- $(MAP_ARG)
+
+# Editor mode (see README "Editor mode"). MAP=... AREA=slice|village, optional EDITS=file STATE=file (scratch copies).
+editor:
+	dotnet build godot/viewer/viewer.csproj
+	godot --path godot/viewer -- --editor --area $(AREA) $(MAP_ARG) $(if $(EDITS),--edits $(abspath $(EDITS)),) $(if $(STATE),--state $(abspath $(STATE)),)
 
 viewer-smoke:
 	dotnet build godot/viewer/viewer.csproj

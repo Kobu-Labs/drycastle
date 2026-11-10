@@ -534,7 +534,9 @@ public partial class EditorMode
             return;
         }
         SelectObject(null);
-        Click(PickScreen(screen, out _)?.Id, shift);
+        var hit = PickScreen(screen, out _)?.Id;
+        if (Tool == EditorTool.Group) { if (hit != null) Click(hit, true); return; } // marking: every click toggles a parcel
+        Click(hit, shift);
     }
 
     void UpdateObjectTools()
@@ -556,12 +558,10 @@ public partial class EditorMode
     Label _objStatus = null!, _objCount = null!, _objAsset = null!, _undoInfo = null!;
     VBoxContainer _objBox = null!;
     SpinBox _objX = null!, _objY = null!, _objRot = null!, _objScale = null!;
-    CheckBox _objColourChk = null!;
+    Button _objColourReset = null!;
     ColorPickerButton _objColour = null!;
-    Button _btnUndo = null!, _btnRedo = null!;
+    Button _btnUndo = null!, _btnRedo = null!; // the rail buttons (EditorUi.cs)
     readonly List<(AssetInfo info, Button btn)> _palButtons = new();
-    readonly Dictionary<string, (Button head, VBoxContainer body, int count)> _palGroups = new();
-    readonly Dictionary<string, bool> _palOpen = new();
     string _filter = "";
 
     void BuildObjectsSection(VBoxContainer body)
@@ -578,11 +578,6 @@ public partial class EditorMode
         };
         BuildGizmo();
 
-        var ur = new HBoxContainer();
-        _btnUndo = Btn("Undo (Ctrl+Z)", () => Undo());
-        _btnRedo = Btn("Redo (Ctrl+Y)", () => Redo());
-        foreach (var b in new[] { _btnUndo, _btnRedo }) { b.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; ur.AddChild(b); }
-        body.AddChild(ur);
         _undoInfo = Note();
         body.AddChild(_undoInfo);
         _objCount = Note();
@@ -590,10 +585,8 @@ public partial class EditorMode
 
         // selected object
         _objBox = new VBoxContainer { Visible = false };
-        _objBox.AddThemeConstantOverride("separation", 4);
         var head = new Label { Text = "Selected object" };
-        head.AddThemeFontSizeOverride("font_size", 15);
-        head.AddThemeColorOverride("font_color", new Color(1f, 0.92f, 0.4f));
+        head.ThemeTypeVariation = "Header";
         _objBox.AddChild(head);
         _objAsset = Note("");
         _objBox.AddChild(_objAsset);
@@ -610,10 +603,14 @@ public partial class EditorMode
         _objScale.ValueChanged += v => { if (!_syncing) SetObjectScale(v); };
         _objBox.AddChild(Row("scale", _objScale, 60));
         _objColour = new ColorPickerButton { CustomMinimumSize = new Vector2(80, 28), FocusMode = Control.FocusModeEnum.None, EditAlpha = false };
-        _objColourChk = SetBox();
-        _objColourChk.Toggled += on => { if (!_syncing) SetObjectColour(on ? "#" + _objColour.Color.ToHtml(false) : null); };
-        _objColour.PopupClosed += () => { if (!_syncing && _objColourChk.ButtonPressed) SetObjectColour("#" + _objColour.Color.ToHtml(false)); };
-        var cr = Row("colour", _objColour, 60); cr.AddChild(_objColourChk);
+        _objColourReset = ResetBtn(() => SetObjectColour(null));
+        // one undo step per picked colour: commit when the picker closes
+        _objColour.PopupClosed += () =>
+        {
+            var hex = "#" + _objColour.Color.ToHtml(false);
+            if (!_syncing && !string.Equals(SelectedObject?.Colour, hex, StringComparison.OrdinalIgnoreCase)) SetObjectColour(hex);
+        };
+        var cr = Row("colour", _objColour, 60); cr.AddChild(_objColourReset);
         _objBox.AddChild(cr);
         var br = new HBoxContainer();
         var dup = Btn("Duplicate (Ctrl+D)", () => DuplicateSelected());
@@ -623,57 +620,87 @@ public partial class EditorMode
         _objBox.AddChild(Note("drag the object to move it (0.5 m grid), drag the ring to rotate (15 degrees); Ctrl = free; arrows nudge 0.5 m"));
         body.AddChild(_objBox);
 
-        // palette
-        var ph = new Label { Text = "Palette" };
-        ph.AddThemeFontSizeOverride("font_size", 15);
-        ph.AddThemeColorOverride("font_color", new Color(1f, 0.92f, 0.4f));
+        // palette: category tabs (a render of one item each), then a grid of item renders
+        var ph = new Label { Text = "Place an object", ThemeTypeVariation = "Header" };
         body.AddChild(ph);
         _objStatus = Note("");
         body.AddChild(_objStatus);
-        _filterEdit = new LineEdit { PlaceholderText = "filter (name, id, category)", ClearButtonEnabled = true };
-        _filterEdit.AddThemeFontSizeOverride("font_size", 15);
+        _filterEdit = new LineEdit { PlaceholderText = "search all objects", ClearButtonEnabled = true };
         _filterEdit.TextChanged += t => SetPaletteFilter(t);
         body.AddChild(_filterEdit);
 
         var catalog = Map.AssetCatalog;
         var cats = Categories.Concat(catalog.Select(a => a.Category).Distinct().Except(Categories).OrderBy(x => x, StringComparer.Ordinal)).ToList();
+        var tabs = new HFlowContainer();
+        tabs.AddThemeConstantOverride("h_separation", EditorTheme.Space / 2);
+        tabs.AddThemeConstantOverride("v_separation", EditorTheme.Space / 2);
+        body.AddChild(tabs);
+        var tabGroup = new ButtonGroup();
         foreach (var cat in cats)
         {
-            var items = catalog.Where(a => a.Category == cat).ToList();
+            var items = catalog.Where(a => a.Category == cat).OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
             if (items.Count == 0) continue;
-            var gbody = new VBoxContainer();
-            var grid = new GridContainer { Columns = 2 };
-            grid.AddThemeConstantOverride("h_separation", 4);
-            grid.AddThemeConstantOverride("v_separation", 4);
-            gbody.AddChild(grid);
-            var ghead = new Button { Flat = true, Alignment = HorizontalAlignment.Left, FocusMode = Control.FocusModeEnum.None };
-            ghead.AddThemeFontSizeOverride("font_size", 16);
             var capture = cat;
-            ghead.Pressed += () => SetPaletteGroupOpen(capture, !GroupOpen(capture));
-            body.AddChild(ghead);
-            body.AddChild(gbody);
-            foreach (var a in items.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase))
+            var tab = new Button
             {
-                var info = a;
-                var b = new Button { Text = a.Name, ToggleMode = true, FocusMode = Control.FocusModeEnum.None, ClipText = true, TooltipText = a.Id, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 26) };
-                b.AddThemeFontSizeOverride("font_size", 13);
-                b.Pressed += () => { if (PlacementAsset == info.Id) DisarmPlacement(); else ArmPlacement(info.Id); };
-                grid.AddChild(b);
-                _palButtons.Add((a, b));
-            }
-            _palGroups[cat] = (ghead, gbody, items.Count);
-            _palOpen[cat] = false;
+                ToggleMode = true, ButtonGroup = tabGroup, FocusMode = Control.FocusModeEnum.None, ThemeTypeVariation = "TabButton",
+                CustomMinimumSize = new Vector2(EditorTheme.RailButton, EditorTheme.RailButton), ExpandIcon = true,
+                Text = items.Count == 0 ? "" : cat[..Math.Min(cat.Length, 3)], // replaced by the render when it arrives
+                TooltipText = $"{Cap(cat)} ({items.Count})",
+            };
+            tab.Pressed += () => SetPaletteGroupOpen(capture, true);
+            tabs.AddChild(tab);
+            _palTabs[cat] = (tab, items[0].Id, items.Count);
         }
+        _palTitle = new Label { ThemeTypeVariation = "Header" };
+        body.AddChild(_palTitle);
+        var grid = new GridContainer { Columns = 3 };
+        grid.AddThemeConstantOverride("h_separation", EditorTheme.Space / 2);
+        grid.AddThemeConstantOverride("v_separation", EditorTheme.Space / 2);
+        body.AddChild(grid);
+        foreach (var a in catalog.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var info = a;
+            var b = new Button
+            {
+                Text = a.Name, ToggleMode = true, FocusMode = Control.FocusModeEnum.None, ClipText = true, ExpandIcon = true, AutowrapMode = TextServer.AutowrapMode.WordSmart,
+                TooltipText = $"{a.Name}\n{a.Id}", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ThemeTypeVariation = "PaletteButton",
+                CustomMinimumSize = new Vector2(0, 128), IconAlignment = HorizontalAlignment.Center, VerticalIconAlignment = VerticalAlignment.Top,
+            };
+            b.Pressed += () => { if (PlacementAsset == info.Id) DisarmPlacement(); else ArmPlacement(info.Id); };
+            grid.AddChild(b);
+            _palButtons.Add((a, b));
+        }
+        _palActive = cats.FirstOrDefault(c => _palTabs.ContainsKey(c)) ?? "";
         ApplyPaletteLayout();
+        if (DisplayServer.GetName() != "headless") StartThumbnails(catalog);
     }
 
-    bool GroupOpen(string cat) => _palOpen.GetValueOrDefault(cat);
+    AssetThumbs? _thumbs;
+    Label _palTitle = null!;
+    string _palActive = "";
+    readonly Dictionary<string, (Button btn, string sample, int count)> _palTabs = new();
 
-    /// <summary>Open or close one category of the palette (while a filter is set, groups with matches are open regardless).</summary>
+    static string Cap(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
+
+    void StartThumbnails(IReadOnlyList<AssetInfo> catalog)
+    {
+        _thumbs = new AssetThumbs { Source = id => Map.InstantiateAsset(id) };
+        AddChild(_thumbs);
+        _thumbs.Ready += (id, tex) =>
+        {
+            foreach (var (a, b) in _palButtons) if (a.Id == id) b.Icon = tex;
+            foreach (var (_, t) in _palTabs) if (t.sample == id) { t.btn.Icon = tex; t.btn.Text = ""; }
+        };
+        // the visible category first, then the rest
+        _thumbs.Request(catalog.Where(a => a.Category == _palActive).Select(a => a.Id).Concat(catalog.Select(a => a.Id)));
+    }
+
+    /// <summary>Show one category of the palette (open = true); false does nothing, a category is always shown.</summary>
     public void SetPaletteGroupOpen(string category, bool open)
     {
-        if (!_palGroups.ContainsKey(category)) return;
-        _palOpen[category] = open;
+        if (!open || !_palTabs.ContainsKey(category)) return;
+        _palActive = category;
         ApplyPaletteLayout();
     }
 
@@ -690,22 +717,17 @@ public partial class EditorMode
 
     void ApplyPaletteLayout()
     {
-        foreach (var (a, b) in _palButtons) b.Visible = Matches(a, _filter);
-        foreach (var (cat, g) in _palGroups)
-        {
-            var shown = _palButtons.Count(p => p.info.Category == cat && p.btn.Visible);
-            var open = _filter == "" ? GroupOpen(cat) : shown > 0;
-            g.head.Visible = shown > 0;
-            g.body.Visible = open && shown > 0;
-            g.head.Text = (open ? "v " : "> ") + $"{cat} ({(_filter == "" ? g.count : shown)})";
-        }
+        foreach (var (a, b) in _palButtons) b.Visible = _filter == "" ? a.Category == _palActive : Matches(a, _filter);
+        foreach (var (cat, t) in _palTabs) t.btn.SetPressedNoSignal(_filter == "" && cat == _palActive);
+        var n = _palButtons.Count(p => p.btn.Visible);
+        _palTitle.Text = _filter == "" ? $"{Cap(_palActive)} ({n})" : n == 0 ? $"Nothing matches \"{_filter}\"" : $"{n} match \"{_filter}\"";
     }
 
-    /// <summary>The palette as listed: every manifest asset with its category and name; Visible is false when the filter hides it.</summary>
+    /// <summary>The palette as listed: every manifest asset with its category and name; Visible is false when the filter or category hides it.</summary>
     public IReadOnlyList<PaletteEntry> Palette => _palButtons.Select(p => new PaletteEntry(p.info.Category, p.info.Id, p.info.Name, p.btn.Visible)).ToList();
-    public string PaletteGroupTitle(string category) => _palGroups.TryGetValue(category, out var g) ? g.head.Text : "";
-    public bool PaletteGroupShown(string category) => _palGroups.TryGetValue(category, out var g) && g.head.Visible;
-    public bool PaletteGroupBodyShown(string category) => _palGroups.TryGetValue(category, out var g) && g.body.Visible;
+    public string PaletteGroupTitle(string category) => _palTabs.TryGetValue(category, out var t) ? $"{category} ({t.count})" : "";
+    public bool PaletteGroupShown(string category) => _palTabs.ContainsKey(category) && (_filter == "" || _palButtons.Any(p => p.info.Category == category && p.btn.Visible));
+    public bool PaletteGroupBodyShown(string category) => _filter == "" ? category == _palActive : _palButtons.Any(p => p.info.Category == category && p.btn.Visible);
     public string PaletteFilter => _filter;
     public string ObjectsStatusText => _objStatus.Text;
     public bool ObjectFieldsShown => _objBox.Visible;
@@ -714,7 +736,7 @@ public partial class EditorMode
     public SpinBox ObjectYSpin => _objY;
     public SpinBox ObjectRotationSpin => _objRot;
     public SpinBox ObjectScaleSpin => _objScale;
-    public bool ObjectColourSet => _objColourChk.ButtonPressed;
+    public bool ObjectColourSet => _objColourReset.Visible;
     public string UndoInfoText => _undoInfo.Text;
 
     void RefreshObjectsPanel()
@@ -730,9 +752,8 @@ public partial class EditorMode
                 _objAsset.Text = $"{o.Id}  {AssetName(o.Asset)}\n{o.Asset}\nparcel entry {o.Parcel}";
                 _objX.SetValueNoSignal(o.X); _objY.SetValueNoSignal(o.Y);
                 _objRot.SetValueNoSignal(o.Rotation); _objScale.SetValueNoSignal(o.Scale);
-                _objColourChk.SetPressedNoSignal(o.Colour != null);
+                _objColourReset.Visible = o.Colour != null;
                 _objColour.Color = Color.FromHtml(o.Colour ?? "#cccccc");
-                _objColour.Disabled = o.Colour == null;
                 _objColour.Modulate = o.Colour == null ? Grey : Colors.White;
             }
             finally { _syncing = false; }
@@ -748,10 +769,12 @@ public partial class EditorMode
         _objCount.Text = parcels.Count == 0
             ? $"{ObjectEdits.All(Disk()).Count()} placed objects in the file"
             : $"{ObjectEdits.All(Disk()).Count(t => parcels.Contains(t.pid))} placed objects on {(parcels.Count == 1 ? parcels[0] : "the selection")}, {ObjectEdits.All(Disk()).Count()} in the file";
-        _hintLabel.Text = PlacementAsset != null
+        _hintLabel.Text = Tool == EditorTool.Group && PlacementAsset == null
+            ? "marking parcels: click a parcel to mark or unmark it, Enter groups the marked ones, Esc clears the marks"
+            : PlacementAsset != null
             ? "placing: LMB place, R / Shift+R rotate, Ctrl free position, Esc or RMB stop, Ctrl+Z undo"
             : SelectedObjectId != null
                 ? "object: drag moves, drag the ring rotates, arrows nudge, Del delete, Ctrl+D duplicate, R rotate, Ctrl+Z undo, Esc deselect"
-                : "WASD fly, RMB look, LMB select, Shift+LMB add, G group, T top-down, Enter apply, Ctrl+Z undo, Esc clear, F2 walk";
+                : "WASD fly, RMB look, LMB select, Shift+LMB add, G group, T top-down, Enter apply, Ctrl+Z undo, Esc back, F1 controls, F2 walk";
     }
 }

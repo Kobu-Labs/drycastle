@@ -83,9 +83,9 @@ public partial class EditorMode
     bool EditFence(Action<FenceDraft> change, bool needCustom = false)
     {
         if (_target == null) { Say("select a parcel first", true); return false; }
-        if (needCustom && CurrentFence.EffectiveMode != "custom") { Say("this needs fence mode custom", true); return false; }
         var p = PendingFor();
         var d = p.Fence ??= EditModel.FenceFromDisk(Disk(), _target);
+        if (needCustom && d.EffectiveMode != "custom") { d.SetMode("custom"); Say("fence set to custom so your change shows"); }
         change(d);
         AfterEdit();
         return true;
@@ -420,7 +420,7 @@ public partial class EditorMode
 
     OptionButton _modeOpt = null!, _typeOpt = null!, _scopeOpt = null!;
     Label _hdrLabel = null!, _dirtyLabel = null!, _footLabel = null!, _fenceInfo = null!, _gateHint = null!, _treesNote = null!, _rulesLabel = null!, _mixedLabel = null!;
-    CheckBox _heightChk = null!, _thickChk = null!, _colourChk = null!;
+    Button _heightReset = null!, _thickReset = null!, _colourReset = null!;
     SpinBox _heightSpin = null!, _thickSpin = null!, _densitySpin = null!, _countSpin = null!, _seedSpin = null!;
     ColorPickerButton _colourBtn = null!;
     VBoxContainer _gapsBox = null!;
@@ -428,40 +428,13 @@ public partial class EditorMode
     CheckBox _radioRules = null!, _radioDensity = null!, _radioCount = null!;
     HBoxContainer _scopeRow = null!;
     string _gapRowsKey = "";
-    readonly Dictionary<string, Control> _sectionBodies = new();
 
-    static readonly Color Grey = new(0.62f, 0.64f, 0.68f);
+    static readonly Color Grey = EditorTheme.Dim;
 
-    VBoxContainer Section(VBoxContainer parent, string title, bool open)
-    {
-        var body = new VBoxContainer();
-        body.AddThemeConstantOverride("separation", 6);
-        var head = new Button { Flat = true, Alignment = HorizontalAlignment.Left, FocusMode = Control.FocusModeEnum.None };
-        head.AddThemeFontSizeOverride("font_size", 17);
-        head.AddThemeColorOverride("font_color", new Color(1f, 0.92f, 0.4f));
-        void Set(bool o) { body.Visible = o; head.Text = (o ? "v " : "> ") + title; }
-        head.Pressed += () => Set(!body.Visible);
-        Set(open);
-        parent.AddChild(head);
-        parent.AddChild(body);
-        _sectionBodies[title] = body;
-        _sectionHeads[title] = Set;
-        return body;
-    }
-
-    readonly Dictionary<string, Action<bool>> _sectionHeads = new();
-
-    /// <summary>Open or close a panel section by title (Selection stays; Group, Fence, Trees); used by screenshots.</summary>
-    public void SetSectionOpen(string title, bool open)
-    {
-        if (_sectionHeads.TryGetValue(title, out var set)) set(open);
-    }
-
-    static Label Note(string text = "", int size = 14)
+    static Label Note(string text = "")
     {
         var l = new Label { Text = text, AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
-        l.AddThemeFontSizeOverride("font_size", size);
-        l.AddThemeColorOverride("font_color", Grey);
+        l.ThemeTypeVariation = "Dim";
         return l;
     }
 
@@ -469,7 +442,6 @@ public partial class EditorMode
     {
         var r = new HBoxContainer();
         var l = new Label { Text = label, CustomMinimumSize = new Vector2(labelWidth, 0) };
-        l.AddThemeFontSizeOverride("font_size", 15);
         r.AddChild(l);
         field.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         r.AddChild(field);
@@ -479,28 +451,26 @@ public partial class EditorMode
     static SpinBox Spin(double min, double max, double step, string suffix = "")
     {
         var s = new SpinBox { MinValue = min, MaxValue = max, Step = step, Suffix = suffix, AllowGreater = false, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        s.GetLineEdit().AddThemeFontSizeOverride("font_size", 15);
         // after Enter in the field, release the focus so the next Enter applies the changes
         s.GetLineEdit().TextSubmitted += _ => s.GetLineEdit().ReleaseFocus();
         return s;
     }
 
-    CheckBox SetBox(string text = "set")
+    /// <summary>The small "back to default" button next to a field; shown only while the field is overridden.</summary>
+    Button ResetBtn(Action reset)
     {
-        var c = new CheckBox { Text = text, FocusMode = Control.FocusModeEnum.None };
-        c.AddThemeFontSizeOverride("font_size", 13);
-        return c;
+        var b = IconBtn("reset", "Back to the default", reset, size: EditorTheme.Space * 4);
+        b.Visible = false;
+        return b;
     }
 
     void BuildPanelHeader(VBoxContainer outer)
     {
         _hdrLabel = new Label { Text = "Nothing selected", MouseFilter = Control.MouseFilterEnum.Ignore };
-        _hdrLabel.AddThemeFontSizeOverride("font_size", 20);
-        _hdrLabel.AddThemeColorOverride("font_color", Colors.White);
+        _hdrLabel.ThemeTypeVariation = "Title";
         outer.AddChild(_hdrLabel);
         _dirtyLabel = new Label { Text = "* unsaved changes", Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore };
-        _dirtyLabel.AddThemeFontSizeOverride("font_size", 15);
-        _dirtyLabel.AddThemeColorOverride("font_color", new Color(1f, 0.65f, 0.2f));
+        _dirtyLabel.ThemeTypeVariation = "Warn";
         outer.AddChild(_dirtyLabel);
         _scopeRow = new HBoxContainer { Visible = false };
         _scopeOpt = new OptionButton { FocusMode = Control.FocusModeEnum.None };
@@ -516,7 +486,7 @@ public partial class EditorMode
 
     void BuildPanelFooter(VBoxContainer outer)
     {
-        _footLabel = Note("no unsaved changes", 14);
+        _footLabel = Note("no unsaved changes");
         outer.AddChild(_footLabel);
         var r = new HBoxContainer();
         _btnApply = Btn("Apply (Enter)", () => Apply());
@@ -550,29 +520,26 @@ public partial class EditorMode
         body.AddChild(Row("type", _typeOpt));
 
         _heightSpin = Spin(0.1, 10, 0.05, " m");
-        _heightChk = SetBox();
-        _heightChk.Toggled += on => { if (!_syncing) SetFenceHeight(on ? _heightSpin.Value : null); };
+        _heightReset = ResetBtn(() => SetFenceHeight(null));
         _heightSpin.ValueChanged += v => { if (!_syncing) SetFenceHeight(v); };
-        var hr = Row("height", _heightSpin); hr.AddChild(_heightChk); body.AddChild(hr);
+        var hr = Row("height", _heightSpin); hr.AddChild(_heightReset); body.AddChild(hr);
 
         _thickSpin = Spin(0.01, 2, 0.01, " m");
-        _thickChk = SetBox();
-        _thickChk.Toggled += on => { if (!_syncing) SetFenceThickness(on ? _thickSpin.Value : null); };
+        _thickReset = ResetBtn(() => SetFenceThickness(null));
         _thickSpin.ValueChanged += v => { if (!_syncing) SetFenceThickness(v); };
-        var tr = Row("thickness", _thickSpin); tr.AddChild(_thickChk); body.AddChild(tr);
+        var tr = Row("thickness", _thickSpin); tr.AddChild(_thickReset); body.AddChild(tr);
 
         _colourBtn = new ColorPickerButton { CustomMinimumSize = new Vector2(80, 28), FocusMode = Control.FocusModeEnum.None, EditAlpha = false };
-        _colourChk = SetBox();
-        _colourChk.Toggled += on => { if (!_syncing) SetFenceColour(on ? "#" + _colourBtn.Color.ToHtml(false) : null); };
+        _colourReset = ResetBtn(() => SetFenceColour(null));
         _colourBtn.ColorChanged += c => { if (!_syncing) SetFenceColour("#" + c.ToHtml(false)); };
-        var cr = Row("colour", _colourBtn); cr.AddChild(_colourChk); body.AddChild(cr);
+        var cr = Row("colour", _colourBtn); cr.AddChild(_colourReset); body.AddChild(cr);
 
         var gh = new Label { Text = "Gates" };
-        gh.AddThemeFontSizeOverride("font_size", 15);
+        gh.ThemeTypeVariation = "Header";
         body.AddChild(gh);
         _gapsBox = new VBoxContainer();
         body.AddChild(_gapsBox);
-        _btnAddGate = Btn("Add gate", () => { if (GateArmed) CancelGate(); else ArmGate(); });
+        _btnAddGate = Btn("Add gate", () => { if (GateArmed) CancelGate(); else { if (CurrentFence.EffectiveMode != "custom") SetFenceMode("custom"); ArmGate(); } });
         body.AddChild(_btnAddGate);
         _gateHint = Note();
         body.AddChild(_gateHint);
@@ -588,17 +555,16 @@ public partial class EditorMode
         CheckBox Radio(string text, string kind)
         {
             var c = new CheckBox { Text = text, ButtonGroup = group, FocusMode = Control.FocusModeEnum.None };
-            c.AddThemeFontSizeOverride("font_size", 15);
             c.Toggled += on => { if (on && !_syncing) SetTreesKind(kind); };
             return c;
         }
         _radioRules = Radio("rules (default)", TreesDraft.Rules);
         _radioDensity = Radio("density", TreesDraft.Density);
         _densitySpin = Spin(0, 500, 0.1, " / 1000 m2");
-        _densitySpin.ValueChanged += v => { if (!_syncing) SetTreesValue(v); };
+        _densitySpin.ValueChanged += v => { if (_syncing) return; if (CurrentTrees.Kind != TreesDraft.Density) SetTreesKind(TreesDraft.Density); SetTreesValue(v); };
         _radioCount = Radio("count", TreesDraft.Count);
         _countSpin = Spin(0, 5000, 1, " trees");
-        _countSpin.ValueChanged += v => { if (!_syncing) SetTreesValue(v); };
+        _countSpin.ValueChanged += v => { if (_syncing) return; if (CurrentTrees.Kind != TreesDraft.Count) SetTreesKind(TreesDraft.Count); SetTreesValue(v); };
         body.AddChild(_radioRules);
         var d = new HBoxContainer(); d.AddChild(_radioDensity); d.AddChild(_densitySpin); body.AddChild(d);
         var c2 = new HBoxContainer(); c2.AddChild(_radioCount); c2.AddChild(_countSpin); body.AddChild(c2);
@@ -665,18 +631,17 @@ public partial class EditorMode
         };
         _typeOpt.SetItemText(0, $"(default: {eff.type})");
         _typeOpt.Select(d.Type == null ? 0 : 1 + Array.IndexOf(EditSchema.FenceTypes.Select(x => x.Name).ToArray(), d.Type));
-        _typeOpt.Disabled = !custom;
-        SyncOptional(_heightChk, _heightSpin, d.Height, eff.height, custom);
-        SyncOptional(_thickChk, _thickSpin, d.Thickness, eff.thickness, custom);
-        _colourChk.SetPressedNoSignal(d.Colour != null);
-        _colourChk.Disabled = !custom;
+        _typeOpt.Disabled = !has;
+        SyncOptional(_heightReset, _heightSpin, d.Height, eff.height, has);
+        SyncOptional(_thickReset, _thickSpin, d.Thickness, eff.thickness, has);
+        _colourReset.Visible = d.Colour != null;
         _colourBtn.Color = Color.FromHtml(d.Colour ?? eff.colour);
-        _colourBtn.Disabled = !custom || d.Colour == null;
+        _colourBtn.Disabled = !has;
         _colourBtn.Modulate = d.Colour == null ? Grey : Colors.White;
         SyncGapRows(d, custom);
-        _btnAddGate.Disabled = !has || !custom || !CanGate;
+        _btnAddGate.Disabled = !has || !CanGate;
         _btnAddGate.Text = GateArmed ? "Click the fence... (Esc cancels)" : "Add gate";
-        _gateHint.Text = !has ? "" : !CanGate ? "gates: select one parcel or one property group" : !custom ? "gates need mode custom" : Map.OriginEpsg5514 == null ? "gates need a map exported with origin_epsg5514 (0.4.0+)" : "";
+        _gateHint.Text = !has ? "" : !CanGate ? "gates: select one parcel or one property group" : Map.OriginEpsg5514 == null ? "gates need a map exported with origin_epsg5514 (0.4.0+)" : "";
 
         // ---- trees ----
         var tr = CurrentTrees;
@@ -687,24 +652,23 @@ public partial class EditorMode
         _radioCount.SetPressedNoSignal(tr.Kind == TreesDraft.Count);
         foreach (var r in new[] { _radioRules, _radioDensity, _radioCount }) r.Disabled = !has;
         _densitySpin.SetValueNoSignal(tr.Kind == TreesDraft.Density ? tr.DensityValue : RulesDensity);
-        _densitySpin.Editable = tr.Kind == TreesDraft.Density;
+        _densitySpin.Editable = has;
         _densitySpin.Modulate = tr.Kind == TreesDraft.Density ? Colors.White : Grey;
         _countSpin.SetValueNoSignal(tr.Kind == TreesDraft.Count ? tr.CountValue : Math.Round(RulesDensity * FirstArea / 1000.0));
-        _countSpin.Editable = tr.Kind == TreesDraft.Count;
+        _countSpin.Editable = has;
         _countSpin.Modulate = tr.Kind == TreesDraft.Count ? Colors.White : Grey;
         _seedSpin.SetValueNoSignal(tr.Seed);
-        _seedSpin.Editable = tr.Kind != TreesDraft.Rules;
+        _seedSpin.Editable = has;
         _seedSpin.Modulate = tr.Kind == TreesDraft.Rules ? Grey : Colors.White;
         _btnReroll.Disabled = !has;
         _btnResetTrees.Disabled = !has || tr.Kind == TreesDraft.Rules;
     }
 
-    static void SyncOptional(CheckBox chk, SpinBox spin, double? value, double effective, bool custom)
+    static void SyncOptional(Button reset, SpinBox spin, double? value, double effective, bool enabled)
     {
-        chk.SetPressedNoSignal(value != null);
-        chk.Disabled = !custom;
+        reset.Visible = value != null;
         spin.SetValueNoSignal(value ?? effective);
-        spin.Editable = custom && value != null;
+        spin.Editable = enabled;
         spin.Modulate = value == null ? Grey : Colors.White;
     }
 
@@ -720,7 +684,6 @@ public partial class EditorMode
                 var idx = i;
                 var row = new HBoxContainer { Name = $"gap{i}" };
                 var pick = new Button { Text = $"gate {i + 1}", FocusMode = Control.FocusModeEnum.None, ToggleMode = true };
-                pick.AddThemeFontSizeOverride("font_size", 14);
                 pick.Pressed += () => SelectGate(idx);
                 var w = Spin(EditSchema.GateMin, 30, EditSchema.GateSnap, " m");
                 w.ValueChanged += v => { if (!_syncing) SetGapWidth(idx, v); };

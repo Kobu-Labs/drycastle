@@ -67,6 +67,10 @@ public sealed partial class MapLoader
         }
     }
 
+    /// <summary>A fresh copy of an asset's scene (not in the tree; the caller frees it); null when unknown or unloadable.</summary>
+    public Node3D? InstantiateAsset(string asset)
+        => GetAssetTemplate(asset, out _) is { } t ? (Node3D)t.Duplicate() : null;
+
     /// <summary>Free the cached asset templates (they are not in the tree). Call when the map is torn down.</summary>
     public void FreeCaches()
     {
