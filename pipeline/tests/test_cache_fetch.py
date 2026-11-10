@@ -254,7 +254,6 @@ def test_dmr_tiles_single_when_small_and_cover_box_when_large() -> None:
 
 def _geotiff(x0: float, y0: float, value: float) -> bytes:
     import numpy as np
-    import rasterio
     from rasterio.io import MemoryFile
     from rasterio.transform import from_origin
 
@@ -266,7 +265,6 @@ def _geotiff(x0: float, y0: float, value: float) -> bytes:
 
 
 def test_mosaic_merges_adjacent_tiles() -> None:
-    import rasterio
     from rasterio.io import MemoryFile
 
     merged = fetch.mosaic_tiffs([_geotiff(0, 4, 1.0), _geotiff(4, 4, 2.0)])
