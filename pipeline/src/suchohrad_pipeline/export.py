@@ -12,14 +12,14 @@ import numpy as np
 import trimesh
 
 from suchohrad_pipeline.buildings import DEFAULT_OVERRIDES
-from suchohrad_pipeline.config import DEFAULT_RAW_DIR, REPO_ROOT
+from suchohrad_pipeline.config import DEFAULT_AREA, DEFAULT_RAW_DIR, REPO_ROOT, area_paths
 from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 from suchohrad_pipeline.scene import build_scene
 
 DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
-MAP_VERSION = "0.1.0-slice"
+MAP_VERSION_BASE = "0.1.0"
 ARTIFACT_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
                "props.json", "spawns.json")
@@ -80,6 +80,7 @@ def run_export(
     raw_dir: Path = DEFAULT_RAW_DIR,
     rules_path: Path = DEFAULT_RULES,
     overrides_path: Path = DEFAULT_OVERRIDES,
+    area: str = DEFAULT_AREA,
 ) -> dict:
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     buildings = {
@@ -176,7 +177,7 @@ def run_export(
         "config/overrides.yaml": _sha256(overrides_path),
     }
     manifest = {
-        "map_version": MAP_VERSION,
+        "map_version": f"{MAP_VERSION_BASE}-{area}",
         "format_version": ARTIFACT_FORMAT_VERSION,
         "chunk_size_m": parcels_doc["chunk_size_m"],
         "gltf_axes": "Y-up: x east, y up, z -north, metres, shared slice-origin frame",
@@ -192,11 +193,12 @@ def run_export(
     return manifest
 
 
-def run(force: bool = False, **_options: object) -> int:
+def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
+    paths = area_paths(area)
     try:
-        manifest = run_export()
+        manifest = run_export(paths.work, paths.out, paths.raw, area=area)
     except FileNotFoundError as exc:
         print(f"export: error: missing input {Path(str(exc.filename)).name}; run earlier stages")
         return 1
-    print(f"export: {len(manifest['chunks'])} chunk file(s) written to out/map/")
+    print(f"export: {len(manifest['chunks'])} chunk file(s) written to {paths.out.relative_to(REPO_ROOT)}/")
     return 0

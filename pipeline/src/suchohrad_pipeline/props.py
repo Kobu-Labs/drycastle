@@ -17,6 +17,7 @@ from shapely.geometry import LineString, MultiLineString, Point, shape
 from shapely.ops import linemerge, unary_union
 
 from suchohrad_pipeline.buildings import footprint_polygon
+from suchohrad_pipeline.config import DEFAULT_AREA, area_paths
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.roads import edge_lines
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
@@ -347,9 +348,9 @@ def run_props(work_dir: Path = DEFAULT_WORK_DIR, rules_path: Path = DEFAULT_RULE
     return {"fences": len(fences), "trees": len(trees), "spawns": len(spawns)}
 
 
-def run(force: bool = False, **_options: object) -> int:
+def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
     try:
-        counts = run_props()
+        counts = run_props(area_paths(area).work)
     except FileNotFoundError as exc:
         print(f"props: error: missing input {Path(str(exc.filename)).name}; run earlier stages")
         return 1

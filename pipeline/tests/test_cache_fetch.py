@@ -225,3 +225,103 @@ def test_bad_dmr_response_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(HttpError, match="GeoTIFF"):
         fetch.run_fetch(SliceConfig(osm_way=1), tmp_path, client=Bad())
     assert not (tmp_path / "dmr5.tif").exists()
+
+
+# --- village-sized fetches: DMR tiling and mosaic, WFS paging ------------------------------
+
+
+def test_dmr_tiles_single_when_small_and_cover_box_when_large() -> None:
+    from suchohrad_pipeline.geo import compute_bbox
+
+    small = compute_bbox(17.0, 48.5, 100, 25)
+    assert fetch.dmr_tiles(small) == [fetch.dmr_params(small)]
+    big = compute_bbox(17.0, 48.5, 1400, 25)
+    tiles = fetch.dmr_tiles(big)
+    assert len(tiles) > 1
+
+    def rng(p: dict, i: int) -> tuple[int, int]:
+        a, b = (int(v) for v in p["subset"][i][2:-1].split(","))
+        return a, b
+
+    full_e, full_n = rng(fetch.dmr_params(big), 0), rng(fetch.dmr_params(big), 1)
+    assert min(rng(t, 0)[0] for t in tiles) == full_e[0]
+    assert max(rng(t, 0)[1] for t in tiles) == full_e[1]
+    assert min(rng(t, 1)[0] for t in tiles) == full_n[0]
+    assert max(rng(t, 1)[1] for t in tiles) == full_n[1]
+    assert all(rng(t, 0)[1] - rng(t, 0)[0] <= fetch.DMR_TILE_M for t in tiles)
+    assert all(rng(t, 1)[1] - rng(t, 1)[0] <= fetch.DMR_TILE_M for t in tiles)
+
+
+def _geotiff(x0: float, y0: float, value: float) -> bytes:
+    import numpy as np
+    import rasterio
+    from rasterio.io import MemoryFile
+    from rasterio.transform import from_origin
+
+    with MemoryFile() as mem:
+        with mem.open(driver="GTiff", height=4, width=4, count=1, dtype="float32",
+                      crs="EPSG:3046", transform=from_origin(x0, y0, 1, 1)) as dst:
+            dst.write(np.full((1, 4, 4), value, dtype="float32"))
+        return mem.read()
+
+
+def test_mosaic_merges_adjacent_tiles() -> None:
+    import rasterio
+    from rasterio.io import MemoryFile
+
+    merged = fetch.mosaic_tiffs([_geotiff(0, 4, 1.0), _geotiff(4, 4, 2.0)])
+    with MemoryFile(merged) as mem, mem.open() as src:
+        assert (src.width, src.height) == (8, 4)
+        row = src.read(1)[0]
+        assert list(row[:4]) == [1.0] * 4 and list(row[4:]) == [2.0] * 4
+        assert src.crs.to_epsg() == 3046
+
+
+def test_large_dmr_is_fetched_per_tile_cached_and_mosaicked(tmp_path: Path, monkeypatch) -> None:
+    tile_calls: list[dict] = []
+
+    class Tiled(RouterClient):
+        def request(self, method, urls, *, params=None, data=None):
+            url = urls if isinstance(urls, str) else urls[0]
+            if "/el/" in url:
+                tile_calls.append(params)
+                i = len(tile_calls) - 1
+                return FakeResponse(200, _geotiff(4 * i, 4, float(i))), url
+            return super().request(method, urls, params=params, data=data)
+
+    monkeypatch.setattr(fetch, "DMR_TILE_M", 800)
+    cfg = SliceConfig(osm_way=1, radius_m=700, margin_m=10)
+    client = Tiled()
+    fetch.run_fetch(cfg, tmp_path, client=client)
+    n = len(tile_calls)
+    assert n > 1
+    assert (tmp_path / "dmr5.tif").is_file()
+    assert len(list((tmp_path / "dmr_tiles").glob("*.tif"))) == n
+    tile_calls.clear()
+    fetch.run_fetch(cfg, tmp_path, client=client)
+    assert tile_calls == []  # cached
+    fetch.run_fetch(cfg, tmp_path, client=client, force=True)
+    assert len(tile_calls) == n
+
+
+def test_wfs_paging_follows_full_pages_only() -> None:
+    def page(n: int) -> bytes:
+        feats = [{"type": "Feature", "geometry": None, "properties": {"n": i}} for i in range(n)]
+        return json.dumps({"type": "FeatureCollection", "features": feats}).encode()
+
+    class Paged(PoliteClient):
+        def __init__(self, sizes: list[int]) -> None:
+            super().__init__(session=FakeSession([]), min_interval=0)  # type: ignore[arg-type]
+            self.sizes, self.starts = sizes, []
+
+        def request(self, method, urls, *, params=None, data=None):
+            self.starts.append(params["startIndex"])
+            return FakeResponse(200, page(self.sizes.pop(0))), "https://x.invalid"
+
+    params = {**fetch.parcel_params(), "count": 3}
+    one = Paged([2])
+    body, _ = fetch._parcels_paged(one, params)
+    assert one.starts == [0] and len(json.loads(body)["features"]) == 2
+    many = Paged([3, 3, 1])
+    body, _ = fetch._parcels_paged(many, params)
+    assert many.starts == [0, 3, 6] and len(json.loads(body)["features"]) == 7

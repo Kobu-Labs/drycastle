@@ -8,10 +8,11 @@ from pathlib import Path
 
 from shapely import STRtree
 from shapely.affinity import translate
-from shapely.geometry import shape
+from shapely.geometry import Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
+from suchohrad_pipeline.config import DEFAULT_AREA, area_paths
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.registry import (
     DEFAULT_REGISTRY,
@@ -183,7 +184,9 @@ def build_parcels(
 
     # Registry works in absolute EPSG:5514 metres, independent of the slice centre.
     absolute = {r: translate(g, ox, oy) for r, g in zip(refs, parcels, strict=True)}
-    match = match_parcels(load_registry(registry_path), absolute, rules.min_iou)
+    ring = frame.get("fetched_bounds_epsg5514")
+    bounds = Polygon(ring) if ring else None
+    match = match_parcels(load_registry(registry_path), absolute, rules.min_iou, bounds)
     save_registry(match.registry, registry_path)
 
     assignment = assign_buildings(parcels, buildings, rules.max_assign_distance_m)
@@ -232,9 +235,11 @@ def build_parcels(
     )
 
 
-def run(force: bool = False, report: bool = False, **_options: object) -> int:
+def run(
+    force: bool = False, report: bool = False, area: str = DEFAULT_AREA, **_options: object
+) -> int:
     try:
-        result = build_parcels()
+        result = build_parcels(area_paths(area).work)
     except FileNotFoundError as exc:
         print(f"parcels: error: missing input {Path(str(exc.filename)).name}; run normalise first")
         return 1

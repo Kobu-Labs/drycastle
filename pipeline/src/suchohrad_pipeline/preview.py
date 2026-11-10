@@ -21,7 +21,7 @@ from matplotlib.patches import Patch, PathPatch
 from matplotlib.path import Path as MplPath
 from shapely.geometry import box, shape
 
-from suchohrad_pipeline.config import REPO_ROOT
+from suchohrad_pipeline.config import DEFAULT_AREA, REPO_ROOT, area_paths
 from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.rules import DEFAULT_RULES
@@ -67,9 +67,17 @@ def _extent(buildings: list[dict], pad: float) -> tuple[float, float, float, flo
     return x0 - pad, x1 + pad, y0 - pad, y1 + pad
 
 
-def render_topdown(parcels: list[dict], buildings: list[dict], path: Path) -> None:
+def render_topdown(
+    parcels: list[dict],
+    buildings: list[dict],
+    path: Path,
+    chunk_m: float | None = None,
+    title: str = "Parcels by kind, buildings in wall colour (top-down)",
+) -> None:
+    """Top-down map; with ``chunk_m`` the chunk grid is drawn and each chunk labelled."""
     x0, x1, y0, y1 = _extent(buildings, 25)
-    fig, ax = plt.subplots(figsize=(12, 12 * (y1 - y0) / (x1 - x0)), dpi=110)
+    width = 18 if chunk_m else 12
+    fig, ax = plt.subplots(figsize=(width, width * (y1 - y0) / (x1 - x0)), dpi=110)
     for p in parcels:
         ax.add_patch(
             PathPatch(
@@ -104,7 +112,19 @@ def render_topdown(parcels: list[dict], buildings: list[dict], path: Path) -> No
     ax.set_aspect("equal")
     ax.set_xlabel("local x, east (m)")
     ax.set_ylabel("local y, north (m)")
-    ax.set_title("Parcels by kind, buildings in wall colour (top-down)")
+    ax.set_title(title)
+    if chunk_m:
+        for gx in np.arange(math.floor(x0 / chunk_m) * chunk_m, x1 + chunk_m, chunk_m):
+            ax.axvline(gx, color="#c0392b", linewidth=1.0, linestyle="--", zorder=6)
+        for gy in np.arange(math.floor(y0 / chunk_m) * chunk_m, y1 + chunk_m, chunk_m):
+            ax.axhline(gy, color="#c0392b", linewidth=1.0, linestyle="--", zorder=6)
+        for ix in range(math.floor(x0 / chunk_m), math.ceil(x1 / chunk_m)):
+            for iy in range(math.floor(y0 / chunk_m), math.ceil(y1 / chunk_m)):
+                lx, ly = (ix + 0.5) * chunk_m, (iy + 0.5) * chunk_m
+                if x0 <= lx <= x1 and y0 <= ly <= y1:
+                    ax.text(lx, ly, f"chunk {ix},{iy}", color="#c0392b", fontsize=9, ha="center",
+                            va="center", zorder=7,
+                            bbox={"facecolor": "white", "alpha": 0.7, "edgecolor": "none"})
     ax.legend(
         handles=[Patch(facecolor=c, edgecolor="#6b6b6b", label=k) for k, c in KIND_COLOURS.items()]
         + [Patch(facecolor="#d9c7a0", edgecolor="#2a2a2a", label="building")],
@@ -239,6 +259,7 @@ def run_preview(
     out_dir: Path = DEFAULT_PREVIEW_DIR,
     rules_path: Path = DEFAULT_RULES,
     exaggeration: float = DEFAULT_EXAGGERATION,
+    overview: bool = False,
 ) -> list[Path]:
     parcels, buildings = _load(work_dir)
     top, iso, close = out_dir / "topdown.png", out_dir / "iso.png", out_dir / "iso_close.png"
@@ -253,12 +274,26 @@ def run_preview(
     render_iso(scene, parcels, buildings, close,
                (cx - CLOSE_HALF_X_M, cx + CLOSE_HALF_X_M, cy - CLOSE_HALF_Y_M, cy + CLOSE_HALF_Y_M),
                f"Close-up of the densest building cluster (relief x{k:g})")
-    return [top, iso, close]
+    paths = [top, iso, close]
+    if overview:
+        chunk_m = float(json.loads((work_dir / "parcels.json").read_text())["chunk_size_m"])
+        over = out_dir / "overview.png"
+        render_topdown(parcels, buildings, over, chunk_m,
+                       f"Overview with the {chunk_m:g} m chunk grid (chunk ix,iy)")
+        paths.append(over)
+    return paths
 
 
-def run(force: bool = False, exaggeration: float = DEFAULT_EXAGGERATION, **_options: object) -> int:
+def run(
+    force: bool = False,
+    exaggeration: float = DEFAULT_EXAGGERATION,
+    area: str = DEFAULT_AREA,
+    **_options: object,
+) -> int:
+    ap = area_paths(area)
     try:
-        paths = run_preview(exaggeration=exaggeration)
+        paths = run_preview(ap.work, ap.preview, exaggeration=exaggeration,
+                            overview=area != DEFAULT_AREA)
     except FileNotFoundError as exc:
         print(f"preview: error: missing input {Path(str(exc.filename)).name}; run rules first")
         return 1

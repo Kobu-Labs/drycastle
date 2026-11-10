@@ -15,8 +15,8 @@ import shapely
 from shapely.geometry import LineString
 
 from suchohrad_pipeline.buildings import hex_to_rgb
+from suchohrad_pipeline.config import DEFAULT_AREA, area_paths
 from suchohrad_pipeline.meshes import Mesh
-from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 from suchohrad_pipeline.terrain import Terrain
 
@@ -223,13 +223,14 @@ def read_highways(work_dir: Path) -> list[dict]:
     return json.loads((work_dir / "normalised" / "highways.geojson").read_text())["features"]
 
 
-def run(force: bool = False, **_options: object) -> int:
+def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
+    work_dir = area_paths(area).work
     try:
-        graph = build_graph(read_highways(DEFAULT_WORK_DIR), load_section("roads", DEFAULT_RULES))
+        graph = build_graph(read_highways(work_dir), load_section("roads", DEFAULT_RULES))
     except FileNotFoundError as exc:
         print(f"roads: error: missing input {Path(str(exc.filename)).name}; run earlier stages")
         return 1
-    (DEFAULT_WORK_DIR / "roads.json").write_text(json.dumps(graph, indent=1, sort_keys=True) + "\n")
+    (work_dir / "roads.json").write_text(json.dumps(graph, indent=1, sort_keys=True) + "\n")
     print(f"roads: {len(graph['nodes'])} nodes, {len(graph['edges'])} edges")
     return 0
 

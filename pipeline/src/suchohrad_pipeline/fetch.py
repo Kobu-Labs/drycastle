@@ -3,16 +3,21 @@
 import json
 import math
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 
 import rasterio
+from rasterio.io import MemoryFile
+from rasterio.merge import merge
 
 from suchohrad_pipeline.cache import Source, fetch_cached, write_manifest
 from suchohrad_pipeline.config import (
+    DEFAULT_AREA,
     DEFAULT_CONFIG,
     DEFAULT_RAW_DIR,
     ConfigError,
     SliceConfig,
+    area_paths,
     load_slice_config,
 )
 from suchohrad_pipeline.geo import METRIC_CRS, Bbox, centroid_of_geometry, compute_bbox
@@ -27,6 +32,8 @@ WCS_URL = "https://inspirews.skgeodesy.sk/geoserver/el/ows"
 PARCEL_TYPE = "cp:CP.CadastralParcel"
 DMR_COVERAGE = "el__EL.GridCoverage"
 OVERPASS_TIMEOUT_S = 90
+WFS_PAGE = 5000  # features per WFS request; more pages are requested only when a page is full
+DMR_TILE_M = 1000  # a DMR WCS request covers at most this many metres per side, else tiles
 
 OSM = Source(
     name="OpenStreetMap (Overpass API)",
@@ -97,17 +104,57 @@ def _overpass(client: PoliteClient, query: str) -> tuple[bytes, str]:
 
 def dmr_params(bbox: Bbox) -> dict:
     """WCS 2.0.1 GetCoverage parameters, snapped outwards to whole metres (DMR cell edges)."""
+    return _dmr_subset(
+        math.floor(bbox.min_e), math.ceil(bbox.max_e), math.floor(bbox.min_n), math.ceil(bbox.max_n)
+    )
+
+
+def dmr_tiles(bbox: Bbox, tile_m: int = DMR_TILE_M) -> list[dict]:
+    """GetCoverage parameters covering the box in whole-metre tiles of at most ``tile_m``.
+
+    A box that fits in one tile gives the single request ``dmr_params`` would give.
+    """
+    e0, e1 = math.floor(bbox.min_e), math.ceil(bbox.max_e)
+    n0, n1 = math.floor(bbox.min_n), math.ceil(bbox.max_n)
+
+    def split(a: int, b: int) -> list[tuple[int, int]]:
+        parts = max(1, math.ceil((b - a) / tile_m))
+        edges = [a + round((b - a) * i / parts) for i in range(parts + 1)]
+        return list(pairwise(edges))
+
+    return [_dmr_subset(ea, eb, na, nb) for na, nb in split(n0, n1) for ea, eb in split(e0, e1)]
+
+
+def _dmr_subset(e0: int, e1: int, n0: int, n1: int) -> dict:
     return {
         "service": "WCS",
         "version": "2.0.1",
         "request": "GetCoverage",
         "coverageId": DMR_COVERAGE,
         "format": "image/tiff",
-        "subset": [
-            f"E({math.floor(bbox.min_e)},{math.ceil(bbox.max_e)})",
-            f"N({math.floor(bbox.min_n)},{math.ceil(bbox.max_n)})",
-        ],
+        "subset": [f"E({e0},{e1})", f"N({n0},{n1})"],
     }
+
+
+def mosaic_tiffs(tiles: list[bytes]) -> bytes:
+    """Merge GeoTIFF tiles (same CRS and resolution) into one GeoTIFF."""
+    sources = [MemoryFile(t).open() for t in tiles]
+    try:
+        data, transform = merge(sources)
+        profile = sources[0].profile
+        profile.update(
+            driver="GTiff", height=data.shape[1], width=data.shape[2], transform=transform
+        )
+        profile.pop("blockxsize", None)
+        profile.pop("blockysize", None)
+        profile.pop("tiled", None)
+        with MemoryFile() as mem:
+            with mem.open(**profile) as out:
+                out.write(data)
+            return mem.read()
+    finally:
+        for src in sources:
+            src.close()
 
 
 def parcel_params() -> dict:
@@ -120,6 +167,31 @@ def parcel_params() -> dict:
         "srsName": "EPSG:4326",
         "count": 5000,
     }
+
+
+def _parcels_paged(client: PoliteClient, params: dict) -> tuple[bytes, str]:
+    """WFS GetFeature, sorted; follows ``startIndex`` paging while a page comes back full."""
+    page = int(params["count"])
+    docs, start = [], 0
+    while True:
+        resp, url = client.request(
+            "GET",
+            WFS_URL,
+            params={**params, "sortBy": "nationalCadastralReference", "startIndex": start},
+        )
+        try:
+            doc = json.loads(resp.content)
+        except json.JSONDecodeError as exc:
+            raise HttpError("WFS returned a non-JSON response") from exc
+        docs.append(doc)
+        if len(doc.get("features", [])) < page:
+            break
+        start += page
+    if len(docs) == 1:
+        return resp.content, url
+    merged = dict(docs[0])
+    merged["features"] = [f for d in docs for f in d.get("features", [])]
+    return json.dumps(merged).encode(), url
 
 
 def _resolve_centre(
@@ -138,6 +210,28 @@ def _resolve_centre(
     return centre["lon"], centre["lat"]
 
 
+def _wcs(client: PoliteClient, params: dict) -> tuple[bytes, str]:
+    resp, url = client.request("GET", WCS_URL, params=params)
+    if resp.content[:4] not in (b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+"):
+        raise HttpError("WCS did not return a GeoTIFF (exception report?)")
+    return resp.content, url
+
+
+def write_area(
+    raw_dir: Path, area: str, cfg: SliceConfig, lon: float, lat: float, bbox: Bbox
+) -> None:
+    """Record the fetched area (used later to tell which registry entries it covers)."""
+    doc = {
+        "area": area,
+        "lon": lon,
+        "lat": lat,
+        "radius_m": cfg.radius_m,
+        "margin_m": cfg.margin_m,
+        "bbox_wgs84": [bbox.west, bbox.south, bbox.east, bbox.north],
+    }
+    (raw_dir / "area.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+
+
 def _record(result: FetchResult, path: Path, downloaded: bool) -> None:
     result.files.append(path)
     (result.downloaded if downloaded else result.cached).append(path.name)
@@ -149,6 +243,7 @@ def run_fetch(
     *,
     force: bool = False,
     client: PoliteClient | None = None,
+    area: str = DEFAULT_AREA,
 ) -> FetchResult:
     client = client or PoliteClient()
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -156,6 +251,7 @@ def run_fetch(
 
     lon, lat = _resolve_centre(client, raw_dir, cfg, force)
     bbox = compute_bbox(lon, lat, cfg.radius_m, cfg.margin_m)
+    write_area(raw_dir, area, cfg, lon, lat, bbox)
 
     query = osm_query(bbox)
     path = raw_dir / "osm.json"
@@ -168,32 +264,33 @@ def run_fetch(
     params = {**parcel_params(), "bbox": bbox.wfs}
 
     def fetch_parcels() -> tuple[bytes, str]:
-        resp, url = client.request("GET", WFS_URL, params=params)
-        try:
-            json.loads(resp.content)
-        except json.JSONDecodeError as exc:
-            raise HttpError("WFS returned a non-JSON response") from exc
-        return resp.content, url
+        return _parcels_paged(client, params)
 
     path = raw_dir / "parcels.geojson"
     _record(
         result, path, fetch_cached(path, CADASTRE, {"params": params}, fetch_parcels, force=force)
     )
 
-    dparams = dmr_params(bbox)
-
-    def fetch_dmr() -> tuple[bytes, str]:
-        resp, url = client.request("GET", WCS_URL, params=dparams)
-        if resp.content[:4] not in (b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+"):
-            raise HttpError("WCS did not return a GeoTIFF (exception report?)")
-        return resp.content, url
-
+    tiles = dmr_tiles(bbox)
     path = raw_dir / "dmr5.tif"
-    _record(
-        result,
-        path,
-        fetch_cached(path, DMR, {"params": dparams, "crs": METRIC_CRS}, fetch_dmr, force=force),
-    )
+    if len(tiles) == 1:
+        request = {"params": tiles[0], "crs": METRIC_CRS}
+        fetch_dmr = lambda: _wcs(client, tiles[0])
+    else:
+        request = {"tiles": tiles, "crs": METRIC_CRS}
+
+        def fetch_dmr() -> tuple[bytes, str]:
+            bodies, url = [], WCS_URL
+            for i, tile in enumerate(tiles):
+                tpath = raw_dir / "dmr_tiles" / f"tile_{i}.tif"
+                fetch_cached(
+                    tpath, DMR, {"params": tile, "crs": METRIC_CRS},
+                    lambda tile=tile: _wcs(client, tile), force=force,
+                )
+                bodies.append(tpath.read_bytes())
+            return mosaic_tiffs(bodies), url
+
+    _record(result, path, fetch_cached(path, DMR, request, fetch_dmr, force=force))
 
     write_manifest(raw_dir, [OSM, CADASTRE, DMR], result.files)
     return result
@@ -215,12 +312,14 @@ def summarise(raw_dir: Path) -> list[str]:
 def run(
     force: bool = False,
     config_path: Path = DEFAULT_CONFIG,
-    raw_dir: Path = DEFAULT_RAW_DIR,
+    raw_dir: Path | None = None,
+    area: str = DEFAULT_AREA,
     **_options: object,
 ) -> int:
+    raw_dir = raw_dir or area_paths(area).raw
     try:
-        cfg = load_slice_config(config_path)
-        result = run_fetch(cfg, raw_dir, force=force)
+        cfg = load_slice_config(config_path, area)
+        result = run_fetch(cfg, raw_dir, force=force, area=area)
     except (ConfigError, HttpError) as exc:
         print(f"fetch: error: {exc}")
         return 1

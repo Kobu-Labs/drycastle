@@ -73,3 +73,32 @@ def test_config_overrides_and_errors(tmp_path: Path) -> None:
         load_slice_config(f)
     with pytest.raises(ConfigError):
         load_slice_config(tmp_path / "missing.yaml")
+
+
+def test_village_section_defaults_and_overrides(tmp_path: Path) -> None:
+    f = tmp_path / "s.yaml"
+    f.write_text("osm_way: 42\nradius_m: 50\nmargin_m: 5\n")
+    cfg = load_slice_config(f, "village")
+    assert (cfg.osm_way, cfg.radius_m, cfg.margin_m) == (42, 700.0, 5.0)
+    f.write_text("osm_way: 42\nradius_m: 50\nvillage:\n  radius_m: 900\n  margin_m: 40\n")
+    cfg = load_slice_config(f, "village")
+    assert (cfg.radius_m, cfg.margin_m) == (900.0, 40.0)
+    assert load_slice_config(f).radius_m == 50.0  # the slice is unaffected
+    f.write_text("osm_way: 42\nvillage:\n  radius_m: -1\n")
+    with pytest.raises(ConfigError):
+        load_slice_config(f, "village")
+    with pytest.raises(ConfigError):
+        load_slice_config(f, "moon")
+
+
+def test_area_paths_keep_slice_layout_and_separate_village(tmp_path: Path) -> None:
+    from suchohrad_pipeline.config import area_paths
+
+    s, v = area_paths("slice", tmp_path), area_paths("village", tmp_path)
+    assert (s.raw, s.work, s.out) == (
+        tmp_path / "data/raw", tmp_path / "data/work", tmp_path / "out/map")
+    assert (v.raw, v.work, v.out) == (
+        tmp_path / "data/village/raw", tmp_path / "data/village/work",
+        tmp_path / "out/village/map")
+    with pytest.raises(ConfigError):
+        area_paths("moon")
