@@ -1,10 +1,254 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using Godot;
+using Suchohrad.MapLoader;
 
-/// <summary>Minimal map viewer scene root. Prints a ready message for now.</summary>
+/// <summary>
+/// Map viewer root. Loads the map, adds light and sky, spawns the player.
+/// Options (after "--"): --map DIR, --seed N, --smoke, --screenshot PATH,
+/// --view overview|oblique|street|player, --frames N.
+/// Env: SUCHOHRAD_MAP.
+/// </summary>
 public partial class Viewer : Node3D
 {
+    readonly Suchohrad.MapLoader.MapLoader _map = new();
+    Player _player = null!;
+    Camera3D? _shotCam;
+    PackedScene _testCube = GD.Load<PackedScene>("res://test_cube.tscn");
+    readonly Dictionary<string, string> _opts = new();
+    readonly HashSet<string> _flags = new();
+    string? _replaced;
+
     public override void _Ready()
     {
-        GD.Print("viewer ready");
+        ParseArgs();
+        var mapDir = _opts.GetValueOrDefault("map")
+            ?? OS.GetEnvironment("SUCHOHRAD_MAP");
+        if (string.IsNullOrEmpty(mapDir))
+            mapDir = ProjectSettings.GlobalizePath("res://") + "../../out/map";
+        mapDir = Path.GetFullPath(mapDir);
+
+        try
+        {
+            AddChild(_map.Root);
+            _map.Load(mapDir);
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr($"map load failed from '{mapDir}': {e.Message}");
+            GetTree().Quit(2);
+            return;
+        }
+        var s = _map.Stats;
+        GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} parcels={_map.Parcels.Count} " +
+                 $"colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} " +
+                 $"visual_triangles={s.Triangles} load_time={s.LoadSeconds:F2}s");
+
+        AddEnvironment();
+        _player = new Player { Name = "Player" };
+        AddChild(_player);
+
+        var seed = _opts.TryGetValue("seed", out var sv) && long.TryParse(sv, out var sl) ? sl : (long)Time.GetTicksUsec();
+        var rng = new RandomNumberGenerator { Seed = (ulong)seed };
+        GD.Print($"seed={seed}");
+        if (_map.SpawnPoints.Count == 0) { GD.PrintErr("no spawn points"); GetTree().Quit(3); return; }
+        var sp = _map.SpawnPoints[rng.RandiRange(0, _map.SpawnPoints.Count - 1)];
+        _player.Position = sp.Position + Vector3.Up * 1.0f;
+        _player.LookYawPitch(rng.RandfRange(0, 360), 0);
+
+        if (_flags.Contains("smoke")) _ = RunSmoke(rng);
+        else if (_opts.ContainsKey("screenshot")) _ = RunScreenshot();
+    }
+
+    void ParseArgs()
+    {
+        var a = OS.GetCmdlineUserArgs();
+        for (var i = 0; i < a.Length; i++)
+        {
+            if (!a[i].StartsWith("--")) continue;
+            var k = a[i][2..];
+            if (i + 1 < a.Length && !a[i + 1].StartsWith("--")) _opts[k] = a[++i];
+            else _flags.Add(k);
+        }
+    }
+
+    void AddEnvironment()
+    {
+        var sun = new DirectionalLight3D
+        {
+            ShadowEnabled = true,
+            DirectionalShadowMaxDistance = 250f,
+            LightEnergy = 1.1f,
+            RotationDegrees = new Vector3(-50, -35, 0),
+        };
+        AddChild(sun);
+        var sky = new Sky
+        {
+            SkyMaterial = new ProceduralSkyMaterial
+            {
+                SkyTopColor = new Color(0.30f, 0.52f, 0.85f),
+                SkyHorizonColor = new Color(0.70f, 0.82f, 0.93f),
+                GroundHorizonColor = new Color(0.70f, 0.82f, 0.93f),
+                GroundBottomColor = new Color(0.70f, 0.82f, 0.93f),
+            }
+        };
+        AddChild(new WorldEnvironment
+        {
+            Environment = new Godot.Environment
+            {
+                BackgroundMode = Godot.Environment.BGMode.Sky,
+                Sky = sky,
+                AmbientLightSource = Godot.Environment.AmbientSource.Sky,
+                AmbientLightEnergy = 0.9f,
+                TonemapMode = Godot.Environment.ToneMapper.Linear,
+            }
+        });
+    }
+
+    public override void _UnhandledInput(InputEvent e)
+    {
+        if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.R } && _shotCam == null)
+            ToggleReplacement(_player.GlobalPosition);
+    }
+
+    void ToggleReplacement(Vector3 near)
+    {
+        if (_replaced != null)
+        {
+            _map.RestoreParcel(_replaced);
+            GD.Print($"restored {_replaced}");
+            _replaced = null;
+            return;
+        }
+        var id = _map.NearestParcel(near, modelsOnly: true);
+        if (id == null) return;
+        _map.ReplaceParcel(id, _testCube);
+        _replaced = id;
+        GD.Print($"replaced {id} at {_map.AnchorOnTerrain(id)}");
+    }
+
+    async Task Physics(int n)
+    {
+        for (var i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+    }
+
+    async Task RunSmoke(RandomNumberGenerator rng)
+    {
+        _player.InputEnabled = false;
+        var ok = true;
+        await Physics(3);
+        var spawns = _map.SpawnPoints;
+        for (var n = 0; n < 3; n++)
+        {
+            var sp = spawns[rng.RandiRange(0, spawns.Count - 1)];
+            _player.Velocity = Vector3.Zero;
+            _player.GlobalPosition = sp.Position + Vector3.Up * 2.0f;
+            for (var i = 0; i < 240 && !(i > 5 && _player.IsOnFloor()); i++) await Physics(1);
+            var dy = _player.GlobalPosition.Y - sp.Position.Y;
+            await Physics(30); // must stay put, not sink
+            var dy2 = _player.GlobalPosition.Y - sp.Position.Y;
+            var pass = _player.IsOnFloor() && Mathf.Abs(dy2) < 2.0f && Mathf.Abs(dy2 - dy) < 0.2f;
+            ok &= pass;
+            GD.Print($"{(pass ? "PASS" : "FAIL")} spawn {sp.Id} ({sp.Kind}): on_floor={_player.IsOnFloor()} " +
+                     $"feet_vs_spawn_y={dy2:F2} m");
+        }
+
+        // parcel replacement
+        var id = _map.Parcels.Values.Where(p => p.HasModel && p.BuildingIds.Count > 0)
+            .Select(p => p.Id).OrderBy(x => x).FirstOrDefault();
+        if (id == null) { GD.Print("FAIL replace: no parcel with a model"); ok = false; }
+        else
+        {
+            var visual = FindVisual(id);
+            var before = visual?.Visible == true;
+            var inst = _map.ReplaceParcel(id, _testCube);
+            await Physics(2);
+            var hidden = visual?.Visible == false;
+            var shapesOff = ShapesDisabled(id, true);
+            var anchor = _map.AnchorOnTerrain(id);
+            var placed = inst.IsInsideTree() && inst.GlobalPosition.DistanceTo(anchor) < 0.01f;
+            _map.RestoreParcel(id);
+            await Physics(2);
+            var shown = visual?.Visible == true;
+            var shapesOn = ShapesDisabled(id, false);
+            var freed = !IsInstanceValid(inst) || inst.IsQueuedForDeletion();
+            var pass = before && hidden && shapesOff && placed && shown && shapesOn && freed;
+            ok &= pass;
+            GD.Print($"{(pass ? "PASS" : "FAIL")} replace/restore {id}: visual_before={before} hidden={hidden} " +
+                     $"collision_off={shapesOff} placed_at_anchor={placed} visual_back={shown} " +
+                     $"collision_on={shapesOn} instance_freed={freed}");
+        }
+        GD.Print(ok ? "SMOKE PASS" : "SMOKE FAIL");
+        GetTree().Quit(ok ? 0 : 1);
+    }
+
+    Node3D? FindVisual(string id) => _map.Root.FindChild($"parcel_{id}_visual", true, false) as Node3D;
+
+    bool ShapesDisabled(string id, bool expected)
+    {
+        var col = _map.Root.FindChild($"parcel_{id}_collision", true, false);
+        var cs = col?.FindChild("Shape", true, false) as CollisionShape3D;
+        return cs != null && cs.Disabled == expected;
+    }
+
+    async Task RunScreenshot()
+    {
+        _player.InputEnabled = false;
+        Input.MouseMode = Input.MouseModeEnum.Visible;
+        await Physics(3);
+        var view = _opts.GetValueOrDefault("view", "player");
+        // Render into an own 1600x900 viewport so the image does not depend on the window size.
+        var vp = new SubViewport
+        {
+            Size = new Vector2I(1600, 900),
+            World3D = GetViewport().World3D,
+            Msaa3D = Viewport.Msaa.Msaa4X,
+            RenderTargetUpdateMode = SubViewport.UpdateMode.Always,
+        };
+        AddChild(vp);
+        PlaceShotCamera(view, vp);
+        var frames = _opts.TryGetValue("frames", out var f) && int.TryParse(f, out var fi) ? fi : 90;
+        var t0 = Time.GetTicksMsec();
+        for (var i = 0; i < frames; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var avgFps = frames * 1000.0 / Math.Max(1, Time.GetTicksMsec() - t0);
+        await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        var path = _opts["screenshot"];
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        var err = vp.GetTexture().GetImage().SavePng(path);
+        var prims = RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalPrimitivesInFrame);
+        var calls = RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalDrawCallsInFrame);
+        GD.Print($"screenshot {view}: {(err == Error.Ok ? "saved" : "FAILED " + err)} gpu='{RenderingServer.GetVideoAdapterName()}' " +
+                 $"avg_fps={avgFps:F0} primitives={prims} draw_calls={calls}");
+        GetTree().Quit(err == Error.Ok ? 0 : 1);
+    }
+
+    void PlaceShotCamera(string view, SubViewport vp)
+    {
+        // Village centre: mean anchor of parcels that have buildings.
+        var withB = _map.Parcels.Values.Where(p => p.HasModel && p.BuildingIds.Count > 0).ToList();
+        var c = new Vector3(
+            withB.Average(p => p.AnchorXZ.X), 0, withB.Average(p => p.AnchorXZ.Z));
+        c.Y = _map.GroundHeight(c.X, c.Z) is var h && !float.IsNaN(h) ? h : _player.GlobalPosition.Y;
+        Vector3 pos, look = c + Vector3.Up * 3f;
+        switch (view)
+        {
+            case "overview": pos = c + new Vector3(0, 140, 140); break;
+            case "oblique": pos = c + new Vector3(-110, 45, 60); break;
+            case "street":
+                var road = _map.SpawnPoints.Where(s => s.Kind == "road")
+                    .OrderBy(s => new Vector2(s.Position.X - c.X, s.Position.Z - c.Z).LengthSquared()).First();
+                pos = road.Position + Vector3.Up * 1.65f;
+                look = new Vector3(c.X, pos.Y, c.Z);
+                break;
+            case "player": pos = _player.Camera.GlobalPosition; look = pos + -_player.Camera.GlobalBasis.Z; break;
+            default: throw new ArgumentException($"unknown view {view}");
+        }
+        _shotCam = new Camera3D { Far = 3000f, Fov = view == "street" ? 75f : 60f };
+        vp.AddChild(_shotCam);
+        _shotCam.GlobalPosition = pos;
+        _shotCam.LookAt(look, Vector3.Up);
     }
 }

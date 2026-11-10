@@ -154,6 +154,7 @@ public sealed class MapLoader
         mi.MaterialOverride = new StandardMaterial3D
         {
             VertexColorUseAsAlbedo = true,
+            VertexColorIsSrgb = true,
             AlbedoColor = Colors.White,
             Roughness = 1f,
             Metallic = 0f,
