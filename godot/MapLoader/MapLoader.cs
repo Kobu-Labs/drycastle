@@ -37,6 +37,11 @@ public sealed partial class MapLoader
     public IReadOnlyDictionary<string, List<CollisionShape3D>> PropsShapes => _propsShapes;
     public IReadOnlyDictionary<string, ParcelInfo> Parcels => _parcels;
     public IReadOnlyList<SpawnPoint> SpawnPoints => _spawns;
+    /// <summary>Point lookup over the parcel polygons (valid after Load).</summary>
+    public ParcelIndex ParcelIndex { get; private set; } = new(Array.Empty<ParcelInfo>());
+
+    /// <summary>The parcel containing the ground point (Godot x, z); null when none.</summary>
+    public ParcelInfo? ParcelAt(float x, float z) => ParcelIndex.At(x, z);
 
     /// <summary>Load a map folder. The path is an OS path, not res://. Throws on failure.</summary>
     public void Load(string mapDir)
@@ -48,6 +53,7 @@ public sealed partial class MapLoader
         using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(mapDir, "manifest.json")));
         MapVersion = manifest.RootElement.GetProperty("map_version").GetString() ?? "";
         ReadParcels(Path.Combine(mapDir, "parcels.json"));
+        ParcelIndex = new ParcelIndex(_parcels.Values);
         ReadSpawns(Path.Combine(mapDir, "spawns.json"));
         var roads = Path.Combine(mapDir, "roads.json");
         if (File.Exists(roads)) RoadsJson = File.ReadAllText(roads); // no consumer in v1
@@ -73,6 +79,19 @@ public sealed partial class MapLoader
             var id = p.GetProperty("id").GetString()!;
             var a = p.GetProperty("anchor");
             var ch = p.GetProperty("chunk");
+            var rings = new List<Vector2[]>();
+            if (p.TryGetProperty("polygon", out var poly) && poly.TryGetProperty("coordinates", out var coords))
+                foreach (var r in coords.EnumerateArray())
+                    rings.Add(r.EnumerateArray()
+                        .Select(c => new Vector2(c[0].GetSingle(), -c[1].GetSingle())).ToArray());
+            var bounds = new Rect2();
+            if (rings.Count > 0)
+            {
+                bounds = new Rect2(rings[0][0], Vector2.Zero);
+                foreach (var ring in rings) foreach (var v in ring) bounds = bounds.Expand(v);
+            }
+            var area = 0f;
+            for (var i = 0; i < rings.Count; i++) area += (i == 0 ? 1 : -1) * ParcelInfo.RingArea(rings[i]);
             _parcels[id] = new ParcelInfo
             {
                 Id = id,
@@ -80,6 +99,9 @@ public sealed partial class MapLoader
                 CadastralRef = p.GetProperty("cadastral_ref").GetString() ?? "",
                 Chunk = new Vector2I(ch[0].GetInt32(), ch[1].GetInt32()),
                 AnchorMap = new Vector2(a[0].GetSingle(), a[1].GetSingle()),
+                Rings = rings,
+                Bounds = bounds,
+                AreaM2 = Mathf.Max(0f, area),
                 BuildingIds = p.GetProperty("buildings").EnumerateArray()
                     .Select(b => b.ToString()).ToList(),
             };
@@ -198,6 +220,7 @@ public sealed partial class MapLoader
         {
             var faces = shape.GetFaces();
             _terrain.Add((faces, FacesAabb(faces)));
+            _terrainGrid = null;
         }
         else if (name.StartsWith("parcel_") && name.EndsWith("_props_collision"))
         {
@@ -227,38 +250,81 @@ public sealed partial class MapLoader
         return new Aabb(min, max - min);
     }
 
+    const float TerrainCell = 8f;
+    Dictionary<long, List<(int mesh, int tri)>>? _terrainGrid;
+
+    static long CellKey(int cx, int cz) => ((long)cx << 32) ^ (uint)cz;
+
+    // Triangles bucketed by 8 m cells so a height lookup tests a handful of triangles, not the whole mesh.
+    void BuildTerrainGrid()
+    {
+        var grid = new Dictionary<long, List<(int, int)>>();
+        for (var m = 0; m < _terrain.Count; m++)
+        {
+            var faces = _terrain[m].faces;
+            for (var t = 0; t * 3 + 2 < faces.Length; t++)
+            {
+                var a = faces[t * 3]; var b = faces[t * 3 + 1]; var c = faces[t * 3 + 2];
+                int x0 = (int)Mathf.Floor(Mathf.Min(a.X, Mathf.Min(b.X, c.X)) / TerrainCell);
+                int x1 = (int)Mathf.Floor(Mathf.Max(a.X, Mathf.Max(b.X, c.X)) / TerrainCell);
+                int z0 = (int)Mathf.Floor(Mathf.Min(a.Z, Mathf.Min(b.Z, c.Z)) / TerrainCell);
+                int z1 = (int)Mathf.Floor(Mathf.Max(a.Z, Mathf.Max(b.Z, c.Z)) / TerrainCell);
+                for (var x = x0; x <= x1; x++)
+                    for (var z = z0; z <= z1; z++)
+                    {
+                        var k = CellKey(x, z);
+                        if (!grid.TryGetValue(k, out var l)) grid[k] = l = new();
+                        l.Add((m, t));
+                    }
+            }
+        }
+        _terrainGrid = grid;
+    }
+
     /// <summary>Terrain height at Godot (x, z), from the terrain collision mesh. NaN if not covered.</summary>
     public float GroundHeight(float x, float z)
     {
-        foreach (var (faces, box) in _terrain)
+        if (_terrain.Count == 0) return float.NaN;
+        if (_terrainGrid == null) BuildTerrainGrid();
+        if (!_terrainGrid!.TryGetValue(CellKey((int)Mathf.Floor(x / TerrainCell), (int)Mathf.Floor(z / TerrainCell)), out var tris))
+            return float.NaN;
+        foreach (var (m, t) in tris)
         {
-            if (x < box.Position.X || x > box.End.X || z < box.Position.Z || z > box.End.Z) continue;
-            for (var i = 0; i + 2 < faces.Length; i += 3)
-            {
-                var a = faces[i]; var b = faces[i + 1]; var c = faces[i + 2];
-                var d = (b.Z - c.Z) * (a.X - c.X) + (c.X - b.X) * (a.Z - c.Z);
-                if (Mathf.Abs(d) < 1e-9f) continue;
-                var l1 = ((b.Z - c.Z) * (x - c.X) + (c.X - b.X) * (z - c.Z)) / d;
-                var l2 = ((c.Z - a.Z) * (x - c.X) + (a.X - c.X) * (z - c.Z)) / d;
-                var l3 = 1f - l1 - l2;
-                const float e = -1e-4f;
-                if (l1 >= e && l2 >= e && l3 >= e) return l1 * a.Y + l2 * b.Y + l3 * c.Y;
-            }
+            var faces = _terrain[m].faces;
+            var a = faces[t * 3]; var b = faces[t * 3 + 1]; var c = faces[t * 3 + 2];
+            var d = (b.Z - c.Z) * (a.X - c.X) + (c.X - b.X) * (a.Z - c.Z);
+            if (Mathf.Abs(d) < 1e-9f) continue;
+            var l1 = ((b.Z - c.Z) * (x - c.X) + (c.X - b.X) * (z - c.Z)) / d;
+            var l2 = ((c.Z - a.Z) * (x - c.X) + (a.X - c.X) * (z - c.Z)) / d;
+            var l3 = 1f - l1 - l2;
+            const float e = -1e-4f;
+            if (l1 >= e && l2 >= e && l3 >= e) return l1 * a.Y + l2 * b.Y + l3 * c.Y;
         }
         return float.NaN;
     }
 
-    float TerrainOrMean(float x, float z)
+    /// <summary>Mean terrain height over all terrain vertices (0 without terrain).</summary>
+    public float MeanTerrainHeight
+    {
+        get
+        {
+            if (float.IsNaN(_meanTerrainY))
+            {
+                var ys = _terrain.SelectMany(t => t.faces).Select(f => f.Y).ToList();
+                _meanTerrainY = ys.Count > 0 ? ys.Average() : 0f;
+            }
+            return _meanTerrainY;
+        }
+    }
+
+    /// <summary>Terrain height at (x, z), or the mean terrain height where the terrain has no triangle.</summary>
+    public float GroundHeightOrMean(float x, float z)
     {
         var h = GroundHeight(x, z);
-        if (!float.IsNaN(h)) return h;
-        if (float.IsNaN(_meanTerrainY))
-        {
-            var ys = _terrain.SelectMany(t => t.faces).Select(f => f.Y).ToList();
-            _meanTerrainY = ys.Count > 0 ? ys.Average() : 0f;
-        }
-        return _meanTerrainY;
+        return float.IsNaN(h) ? MeanTerrainHeight : h;
     }
+
+    float TerrainOrMean(float x, float z) => GroundHeightOrMean(x, z);
 
     /// <summary>Parcel anchor placed on the terrain, in Godot axes.</summary>
     public Vector3 AnchorOnTerrain(string parcelId)
