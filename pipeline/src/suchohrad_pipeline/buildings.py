@@ -20,7 +20,7 @@ from shapely.affinity import rotate
 from shapely.geometry import MultiPolygon, Polygon, shape
 from shapely.geometry.polygon import orient
 
-from suchohrad_pipeline.config import PIPELINE_DIR
+from suchohrad_pipeline.config import DEFAULT_AREA, PIPELINE_DIR, area_paths
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.rules import DEFAULT_RULES
 
@@ -359,16 +359,19 @@ def write_buildings(work_dir: Path, result: BuildingsResult) -> Path:
     return path
 
 
-def run(force: bool = False, report: bool = False, **_options: object) -> int:
+def run(
+    force: bool = False, report: bool = False, area: str = DEFAULT_AREA, **_options: object
+) -> int:
+    work_dir = area_paths(area).work
     try:
-        result = build_buildings()
+        result = build_buildings(work_dir)
     except FileNotFoundError as exc:
         print(f"rules: error: missing input {Path(str(exc.filename)).name}; run parcels first")
         return 1
     except RulesError as exc:
         print(f"rules: error: {exc}")
         return 1
-    write_buildings(DEFAULT_WORK_DIR, result)
+    write_buildings(work_dir, result)
     for line in result.report():
         print(line if line.startswith("warning") else f"rules: {line}")
     return 0

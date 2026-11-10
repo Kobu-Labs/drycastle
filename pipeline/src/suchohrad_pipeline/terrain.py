@@ -22,7 +22,7 @@ from pyproj import Transformer
 from shapely.geometry import Polygon
 
 from suchohrad_pipeline.buildings import footprint_polygon
-from suchohrad_pipeline.config import DEFAULT_RAW_DIR
+from suchohrad_pipeline.config import DEFAULT_AREA, DEFAULT_RAW_DIR, area_paths
 from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
@@ -319,13 +319,14 @@ def build_terrain(
     return t, elevations
 
 
-def run(force: bool = False, **_options: object) -> int:
+def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
+    paths = area_paths(area)
     try:
-        t, elevations = build_terrain()
+        t, elevations = build_terrain(paths.work, paths.raw)
     except FileNotFoundError as exc:
         print(f"terrain: error: missing input {Path(str(exc.filename)).name}; run earlier stages")
         return 1
-    save_terrain(DEFAULT_WORK_DIR, t, elevations)
+    save_terrain(paths.work, t, elevations)
     print(
         f"terrain: grid {t.ncols}x{t.nrows} cells, step {t.step:.3f} m, "
         f"{int(t.valid.sum())} valid vertices, {len(t.chunks())} chunk(s) with terrain, "

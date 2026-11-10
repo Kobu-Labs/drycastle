@@ -44,6 +44,7 @@ make roads      # OSM highways -> road graph (data/work/roads.json)
 make props      # fences, trees, spawn candidates (data/work/props.json, spawns.json)
 make export     # chunk glTFs, parcels.json, roads.json, spawns.json, manifest.json -> out/map/
 make preview    # out/preview/topdown.png, iso.png, iso_close.png (matplotlib; EXAG=3 relief factor)
+make map AREA=village   # the same for the whole village (any target takes AREA=slice|village)
 make viewer         # build and run the Godot viewer (see "Viewer" below)
 make viewer-smoke   # headless smoke test of the viewer and the loader
 make viewer-shot    # windowed run, writes PNGs to out/screens/
@@ -80,6 +81,37 @@ Reruns skip files whose request parameters are unchanged and download nothing; u
 Requests are sequential, use the User-Agent `suchohrad-pipeline`, have timeouts and retry with
 backoff (Overpass falls back to a second public instance).
 
+## Whole village (areas)
+
+The pipeline runs over two areas around the same centre, chosen with `AREA=slice` (default) or
+`AREA=village` for make, or `--area` on the CLI:
+
+| | slice | village |
+| --- | --- | --- |
+| size | `radius_m` (default 100) | `village.radius_m` (default 700, `village.margin_m` defaults to `margin_m`) |
+| raw data | `data/raw/` | `data/village/raw/` |
+| work files | `data/work/` | `data/village/work/` |
+| export, previews | `out/map/`, `out/preview/` | `out/village/map/`, `out/village/preview/` |
+| `map_version` | `0.1.0-slice` | `0.1.0-village` |
+
+Add the `village:` section to `pipeline/config/slice.local.yaml` (see `slice.example.yaml`).
+Both areas share the one committed registry `registry/parcels.registry.json`. Fetching the
+village is polite: Overpass in one request, cadastral WFS paged (`startIndex`, 5000 per page, sorted)
+when a page is full, the DMR raster in WCS tiles of at most 1000 m per side (cached per tile in
+`dmr_tiles/`) that are mosaicked into `dmr5.tif`. All are cached; `--force` refetches.
+
+`rules.yaml` has an `areas.<name>` overlay that is merged over a section only for that area. The
+village profile uses fewer fences without collision boxes, fewer trees (`props.trees.max_per_chunk`
+caps rule-based trees per chunk) and more spawn candidates, to keep chunk files small for 16-64
+players on weak GPUs. `make preview AREA=village` also writes `overview.png`: the parcels and
+buildings with the 250 m chunk grid and chunk indices.
+
+Village numbers (one real run, default settings): 1165 parcels, 384 buildings, 40 chunk files,
+about 400k visual and 75k collision triangles in total, at most about 24k visual triangles and 1.7 MB
+per chunk, 29 MB of glb in all (fences without collision and the tree cap took that from 39 MB). A
+full run after the fetch takes about half a minute; the fetch takes about two minutes. Nothing was
+measured in Godot yet; terrain (4 m grid, 7.7k triangles per chunk) is now the biggest visual part.
+
 ## Normalise and the parcel registry
 
 `make normalise` reprojects the OSM data and cadastral parcels from WGS84 to EPSG:5514 and then
@@ -107,9 +139,12 @@ it comes from the cadastre only). Each regeneration matches current parcels to i
 
 To regenerate after the cadastre or OSM changed: `make fetch` (or `fetch --force`), `make parcels`
 (which needs `make normalise` first), then review and commit the `registry/` diff. Re-running
-on unchanged input leaves the registry byte-identical. Note that the registry follows the slice:
-parcels outside the fetched box are not in the input, so shrinking or moving the slice retires
-their IDs (reversible: an entry whose exact reference reappears is revived). Retiring or
+on unchanged input leaves the registry byte-identical. A run only retires entries whose outline
+lies inside the box it fetched (`fetched_bounds_epsg5514` in `frame.json`); entries outside are
+left untouched. So the village after the slice keeps every ID and numbers the new parcels after the
+highest one, and the slice after the village retires nothing. Shrinking or moving an area retires
+only what is inside the new box and no longer in the cadastre (reversible: an entry whose exact
+reference reappears is revived). Retiring or
 reassigning IDs is a breaking change of the map artifact (see the versioning decision).
 
 ## Buildings: rules, meshes, export

@@ -112,3 +112,27 @@ def test_export_is_byte_deterministic(workspace, tmp_path) -> None:
     for rel in files:
         assert (first / rel).read_bytes() == (second / rel).read_bytes(), rel
     shutil.rmtree(second)
+
+
+def test_village_area_manifest_and_lighter_props(tmp_path) -> None:
+    from suchohrad_pipeline.props import run_props
+    from tests.synthetic import make_workspace
+
+    ws = make_workspace(tmp_path)
+    args = (ws["work"], tmp_path / "v", ws["raw"], DEFAULT_RULES, ws["overrides"])
+
+    def counts(area: str) -> dict:
+        run_props(ws["work"], DEFAULT_RULES, area=area)
+        return run_export(*args[:1], tmp_path / area, *args[2:], area=area)
+
+    slice_m, village = counts("slice"), counts("village")
+    assert village["map_version"] == "0.1.0-village"
+    assert slice_m["map_version"] == "0.1.0-slice"
+    assert any("props_collision" in c["triangles"] for c in slice_m["chunks"])
+    assert not any("props_collision" in c["triangles"] for c in village["chunks"])
+    # the village export is byte-deterministic too
+    run_export(*args[:1], tmp_path / "again", *args[2:], area="village")
+    files = [p for p in (tmp_path / "village").rglob("*") if p.is_file()]
+    assert files
+    for p in files:
+        assert p.read_bytes() == (tmp_path / "again" / p.relative_to(tmp_path / "village")).read_bytes()
