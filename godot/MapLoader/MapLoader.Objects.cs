@@ -23,13 +23,16 @@ public sealed class PlacedObject
     public const string NoParcelGroup = "_none";
 }
 
+/// <summary>An entry of assets/manifest.json: id ("pack:..." / "prim:..."), category, display name and size in metres (glTF axes).</summary>
+public sealed record AssetInfo(string Id, string Category, string Name, Vector3 Size);
+
 /// <summary>Result of <see cref="MapLoader.ApplyFragment"/>.</summary>
 public sealed record FragmentResult(IReadOnlyList<string> Replaced, int Objects, int PropsNodes);
 
 // Placed objects, the dynamic per-parcel props swap (parcel-run fragments) and their bookkeeping.
 public sealed partial class MapLoader
 {
-    sealed record AssetEntry(string File, Vector3 Size);
+    sealed record AssetEntry(string File, Vector3 Size, string Category, string Name);
 
     string _mapDir = "";
     Node3D? _objectsRoot;
@@ -52,6 +55,16 @@ public sealed partial class MapLoader
     {
         get => _assetsDir ?? DefaultAssetsDir();
         set { _assetsDir = value; _assetManifest = null; _assetTemplates.Clear(); }
+    }
+
+    /// <summary>Every asset of the manifest in file order (empty when the manifest is missing).</summary>
+    public IReadOnlyList<AssetInfo> AssetCatalog
+    {
+        get
+        {
+            if (_assetManifest == null) ReadAssetManifest();
+            return _assetManifest!.Select(kv => new AssetInfo(kv.Key, kv.Value.Category, kv.Value.Name, kv.Value.Size)).ToList();
+        }
     }
 
     /// <summary>Free the cached asset templates (they are not in the tree). Call when the map is torn down.</summary>
@@ -158,29 +171,7 @@ public sealed partial class MapLoader
             _groupNodes[group] = container;
         }
         var node = new Node3D { Name = $"object_{SafeName(o.Id)}" };
-        var template = GetAssetTemplate(o.Asset, out var size);
-        Node3D model;
-        if (template != null)
-        {
-            model = (Node3D)template.Duplicate();
-        }
-        else
-        {
-            var s = size ?? Vector3.One;
-            model = new MeshInstance3D
-            {
-                Name = "Placeholder",
-                Mesh = new BoxMesh { Size = s },
-                Position = new Vector3(0, s.Y / 2f, 0),
-                MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(1f, 0f, 1f, 1f), Roughness = 1f },
-            };
-        }
-        node.AddChild(model);
-        if (!string.IsNullOrEmpty(o.Colour) && Color.HtmlIsValid(o.Colour))
-        {
-            var mat = new StandardMaterial3D { AlbedoColor = Color.FromHtml(o.Colour), Roughness = 1f, MetallicSpecular = 0f };
-            foreach (var mi in AllMeshes(model)) mi.MaterialOverride = mat;
-        }
+        node.AddChild(CreateObjectModel(o.Asset, o.Colour, out _));
         container.AddChild(node);
         var y = o.Z ?? TerrainOrMean(o.X, -o.Y);
         node.Position = new Vector3(o.X, y, -o.Y);
@@ -188,6 +179,46 @@ public sealed partial class MapLoader
         node.Scale = Vector3.One * (o.Scale > 0 ? o.Scale : 1f);
         _objectNodes[o.Id] = node;
         _objectGroup[o.Id] = group;
+    }
+
+    /// <summary>
+    /// A fresh instance of an asset (a copy of its cached template, or a magenta box of the manifest size when it
+    /// cannot be loaded), with the optional "#rrggbb" colour override applied. Not in the tree; the caller owns it.
+    /// </summary>
+    public Node3D CreateObjectModel(string asset, string? colour, out Vector3 size)
+    {
+        var template = GetAssetTemplate(asset, out var sz);
+        size = sz ?? Vector3.One;
+        Node3D model;
+        if (template != null) model = (Node3D)template.Duplicate();
+        else
+            model = new MeshInstance3D
+            {
+                Name = "Placeholder",
+                Mesh = new BoxMesh { Size = size },
+                Position = new Vector3(0, size.Y / 2f, 0),
+                MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(1f, 0f, 1f, 1f), Roughness = 1f },
+            };
+        if (!string.IsNullOrEmpty(colour) && Color.HtmlIsValid(colour))
+        {
+            var mat = new StandardMaterial3D { AlbedoColor = Color.FromHtml(colour), Roughness = 1f, MetallicSpecular = 0f };
+            foreach (var mi in AllMeshes(model)) mi.MaterialOverride = mat;
+        }
+        return model;
+    }
+
+    /// <summary>
+    /// Instant path for placed objects (no pipeline run): drop every object listed under the given parcels
+    /// (<see cref="PlacedObject.Owner"/>) and instance <paramref name="objects"/> in their place, with the same
+    /// node names and ownership as <see cref="ApplyFragment"/>, so a later fragment swap stays consistent. An object
+    /// whose id exists under another owner is moved (its node is replaced), never duplicated.
+    /// </summary>
+    public int ApplyObjects(IEnumerable<string> parcels, IEnumerable<PlacedObject> objects)
+    {
+        foreach (var id in parcels) RemoveGroupObjects(id);
+        var n = 0;
+        foreach (var o in objects) { AddObject(o); n++; }
+        return n;
     }
 
     static IEnumerable<MeshInstance3D> AllMeshes(Node n)
@@ -240,8 +271,10 @@ public sealed partial class MapLoader
         {
             var file = a.TryGetProperty("file", out var f) && f.ValueKind == JsonValueKind.String ? f.GetString()! : "";
             var sz = a.GetProperty("size_m");
-            _assetManifest[a.GetProperty("id").GetString()!] =
-                new AssetEntry(file, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()));
+            var id = a.GetProperty("id").GetString()!;
+            var cat = a.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString()! : "other";
+            var name = a.TryGetProperty("name", out var nm) && nm.ValueKind == JsonValueKind.String ? nm.GetString()! : id;
+            _assetManifest[id] = new AssetEntry(file, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name);
         }
     }
 

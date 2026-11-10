@@ -42,7 +42,7 @@ public partial class EditorMode : Node
     SortedDictionary<string, object?>? _disk;
 
     float _yaw, _pitch;
-    bool _looking;
+    bool _looking, _rmbMoved;
     (Vector3 pos, float yaw, float pitch)? _savedCam;
     (Vector3 pos, Vector3 euler, float pitch, bool input)? _savedPlayer;
     Vector3? _hoverPoint;
@@ -68,6 +68,7 @@ public partial class EditorMode : Node
             Watcher.Launched += ids => Say("regenerating " + string.Join(", ", ids.Take(3)) + "...");
             Watcher.Applied += (_, ms) => Say($"applied in {ms:F0} ms");
             Watcher.Failed += m => Say("error: " + m, true);
+            Watcher.InstantApplied += (_, _) => _panelDirty = true;
             Watcher.ParseFailed += m => Say("edits file is not valid JSON yet: " + m, true);
         }
         _seenEdits = Stat();
@@ -115,6 +116,8 @@ public partial class EditorMode : Node
             Player.SetPhysicsProcess(true);
             Player.Camera.MakeCurrent();
             Input.MouseMode = Input.MouseModeEnum.Captured;
+            CancelDrag();
+            DisarmPlacement(false);
             HoverId = null;
             _hoverLabel.Visible = false;
         }
@@ -268,19 +271,26 @@ public partial class EditorMode : Node
 
     /// <summary>
     /// Reload the file from disk, apply the operation to that fresh content (another writer may have
-    /// changed it), write it back atomically and refresh the group data. Returns whether it was saved.
+    /// changed it), validate the result (the Python validator's rules), write it back atomically and refresh
+    /// the group data. The touched `parcels.&lt;ID&gt;` / `groups.&lt;ID&gt;` entries (before and after) go on the undo
+    /// stack under <paramref name="description"/> (default: the operation's message). Returns whether it was saved.
     /// </summary>
-    bool Mutate(Func<SortedDictionary<string, object?>, (bool ok, string message)> op)
+    bool Mutate(Func<SortedDictionary<string, object?>, (bool ok, string message)> op, string? description = null)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var root = EditsFile.Load(EditsPath);
+            var before = ObjectEdits.CloneObj(root);
             var (ok, msg) = op(root);
             if (!ok) { Say(msg, true); ReloadGroups(); return false; }
+            var errors = ObjectEdits.ValidateDocument(root);
+            if (errors.Count > 0) { Say("not saved: " + errors[0], true); ReloadGroups(); return false; }
+            var changes = DiffEntries(before, root);
             EditsFile.Save(EditsPath, root);
             SaveCount++;
-            _seenEdits = Stat();
-            ReloadGroups();
+            if (changes.Count > 0) PushUndo(new UndoRecord(description ?? msg, changes));
+            AfterSave(sw);
             Say($"saved ({msg})");
             return true;
         }
@@ -290,6 +300,23 @@ public partial class EditorMode : Node
             return false;
         }
     }
+
+    /// <summary>Everything that follows a write: remember the file state, refresh groups, let the watcher do objects instantly.</summary>
+    void AfterSave(System.Diagnostics.Stopwatch sw)
+    {
+        _seenEdits = Stat();
+        ReloadGroups();
+        var instant0 = Watcher?.InstantCount ?? 0;
+        Watcher?.NotifySaved();
+        LastSaveInstant = (Watcher?.InstantCount ?? 0) > instant0;
+        LastSaveMs = sw.Elapsed.TotalMilliseconds;
+        _panelDirty = true;
+    }
+
+    /// <summary>Wall time of the last save from reading the file to the objects being instanced (when instant), milliseconds.</summary>
+    public double LastSaveMs { get; private set; }
+    /// <summary>True when the last save was applied in process (objects only, no parcel-run).</summary>
+    public bool LastSaveInstant { get; private set; }
 
     (DateTime, long) Stat()
     {
@@ -336,12 +363,14 @@ public partial class EditorMode : Node
         switch (e)
         {
             case InputEventMouseMotion mm when _looking:
+                _rmbMoved = true;
                 _yaw -= mm.Relative.X * 0.0025f;
                 _pitch = Mathf.Clamp(_pitch - mm.Relative.Y * 0.0025f, -1.5698f, 1.5698f);
                 ApplyCamRotation();
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right }:
                 _looking = true;
+                _rmbMoved = false;
                 Input.MouseMode = Input.MouseModeEnum.Captured;
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp }:
@@ -354,11 +383,17 @@ public partial class EditorMode : Node
                 if (RayToGround(FlyCam.ProjectRayOrigin(mb.Position), FlyCam.ProjectRayNormal(mb.Position), out var gp)) GateBegin(gp);
                 else Say("click on the ground near the fence", true);
                 break;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && PlacementAsset != null:
+                GetViewport().GuiReleaseFocus();
+                if (RayToGround(FlyCam.ProjectRayOrigin(mb.Position), FlyCam.ProjectRayNormal(mb.Position), out var pp)) PlaceAt(pp, mb.CtrlPressed);
+                else Say("click on the ground", true);
+                break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking:
-                var hit = PickScreen(mb.Position, out _);
-                Click(hit?.Id, mb.ShiftPressed);
+                GetViewport().GuiReleaseFocus();
+                LeftPress(mb.Position, mb.ShiftPressed);
                 break;
             case InputEventKey { Pressed: true, Echo: false } k:
+                if (HandleObjectKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 switch (k.Keycode)
                 {
                     case Key.G: GroupSelected(); break;
@@ -367,7 +402,10 @@ public partial class EditorMode : Node
                         if (GetViewport().GuiGetFocusOwner() is not (LineEdit or TextEdit)) Apply();
                         break;
                     case Key.Escape:
-                        if (GateArmed) CancelGate(); else Click(null, false);
+                        if (PlacementAsset != null) DisarmPlacement();
+                        else if (GateArmed) CancelGate();
+                        else if (SelectedObjectId != null) SelectObject(null);
+                        else Click(null, false);
                         break;
                 }
                 break;
@@ -381,7 +419,10 @@ public partial class EditorMode : Node
         {
             _looking = false;
             Input.MouseMode = Input.MouseModeEnum.Visible;
+            if (!_rmbMoved && PlacementAsset != null) DisarmPlacement(); // a right click (no look drag) leaves placement mode
         }
+        if (Active && Dragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
+            EndDrag();
         if (Active && GateDragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
             GateEnd();
     }
@@ -394,6 +435,7 @@ public partial class EditorMode : Node
         Fly((float)delta);
         UpdateHover();
         UpdateGateDrag();
+        UpdateObjectTools();
         _pollT += delta;
         if (_pollT > 0.5)
         {
@@ -411,6 +453,7 @@ public partial class EditorMode : Node
 
     void Fly(float dt)
     {
+        if (Input.IsKeyPressed(Key.Ctrl)) return; // Ctrl+D, Ctrl+Z ... are editor commands, not flying
         var dir = Vector3.Zero;
         var fwd = -FlyCam.GlobalBasis.Z;
         if (Mathf.Abs(fwd.Y) > 0.98f) fwd = FlyCam.GlobalBasis.Y; // looking straight down: W goes screen-up
@@ -614,9 +657,7 @@ public partial class EditorMode : Node
         box.AddChild(new HSeparator());
         BuildTreesSection(Section(box, "Trees", true));
         box.AddChild(new HSeparator());
-        var objects = Lbl(15, new Color(0.6f, 0.62f, 0.66f));
-        objects.Text = "> Objects   (Editor 7)";
-        box.AddChild(objects);
+        BuildObjectsSection(Section(box, "Objects", true));
 
         _statusBar = new PanelContainer { Name = "StatusBar" };
         _statusBar.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = new Color(0.07f, 0.08f, 0.10f, 0.86f), ContentMarginLeft = 12, ContentMarginRight = 12, ContentMarginTop = 5, ContentMarginBottom = 5 });
@@ -694,5 +735,37 @@ public partial class EditorMode : Node
         _btnRemove.Disabled = gids.Count == 0;
         _btnDissolve.Disabled = gids.Count != 1;
         RefreshEditPanel();
+        RefreshObjectsPanel();
+    }
+}
+
+public partial class EditorMode
+{
+    /// <summary>Editor shortcuts for objects and undo; true when the key was used. Not reached while a text field has the focus.</summary>
+    bool HandleObjectKey(InputEventKey k)
+    {
+        var mouse = GetViewport().GetMousePosition();
+        var overViewport = !OverUi(mouse);
+        if (k.CtrlPressed)
+        {
+            switch (k.Keycode)
+            {
+                case Key.Z: if (k.ShiftPressed) Redo(); else Undo(); return true;
+                case Key.Y: Redo(); return true;
+                case Key.D: DuplicateSelected(); return true;
+            }
+            return false;
+        }
+        switch (k.Keycode)
+        {
+            case Key.R when PlacementAsset != null: RotateGhost(k.ShiftPressed ? -RotateSnap : RotateSnap); return true;
+            case Key.R when SelectedObjectId != null: RotateSelected(k.ShiftPressed ? -RotateSnap : RotateSnap); return true;
+            case Key.Delete when SelectedObjectId != null: DeleteSelected(); return true;
+            case Key.Left when SelectedObjectId != null && overViewport: NudgeScreen(-1, 0); return true;
+            case Key.Right when SelectedObjectId != null && overViewport: NudgeScreen(1, 0); return true;
+            case Key.Up when SelectedObjectId != null && overViewport: NudgeScreen(0, 1); return true;
+            case Key.Down when SelectedObjectId != null && overViewport: NudgeScreen(0, -1); return true;
+        }
+        return false;
     }
 }

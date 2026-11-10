@@ -284,7 +284,8 @@ viewing and headless servers are unaffected):
   in the `pipeline` directory (0.3 to 0.9 s) in a subprocess; edits that arrive during a run are coalesced into
   the next one. The viewer prints `edits applied: <ids> in <ms> ms`. A half-written or invalid file is ignored
   until it changes again, a failed `parcel-run` only prints its error. Writers must replace the file atomically
-  (temp file, then rename).
+  (temp file, then rename). When only placed `objects` changed (see Objects and undo) there is no subprocess:
+  the objects are re-instanced in process.
 - `editor-state.json` (written at most once a second while watching, an ignored build output):
   `{"camera": {"x": east, "y": north, "z": elevation, "yaw_deg": view direction counter-clockwise from east},
   "format_version": 1, "selected": []}`; x and y are in the map frame (local metres). `selected` is the list of
@@ -320,14 +321,15 @@ Options: `--edits PATH` (default `pipeline/config/edits.json`), `--state PATH` (
 | Shift + left click | add or remove that parcel in the selection |
 | G | create a property group (`G-NNNN`) from 2+ selected parcels |
 | T | snap to a top-down view above the cursor; again restores the previous camera |
-| Esc | clear the selection |
+| Esc | stop placing / deselect the object / clear the parcel selection (in that order) |
+| Ctrl+Z, Ctrl+Y (Ctrl+Shift+Z) | undo / redo the saves made in this session (see Objects and undo) |
 
 Hovering shows `P-0415 garden` (and `[G-0007]` when grouped) at the cursor. Outlines are unshaded ribbons draped
 0.25 m over the terrain: yellow for the selection, orange for property groups (edges shared by two members are
 not drawn, so a group reads as one shape), faint white for the hovered parcel. The right-hand panel shows the
 selection (ID, kind, area, cadastral reference, group), a collapsible Group section with the buttons Group
 selected, Add selected to group, Remove from group and Dissolve group, the Fence and Trees sections (below) and
-an Objects placeholder for Editor 7. The bottom line shows messages (`saved`, `regenerating P-0004...`, `applied in 480 ms`, errors) and the key hints.
+the Objects section (palette, selected object, undo; see Objects and undo). The bottom line shows messages (`saved`, `regenerating P-0004...`, `applied in 480 ms`, errors) and the key hints.
 
 Group operations rewrite `edits.json` atomically (temp file, then rename). The file is reloaded from disk
 right before every save, so a change by another writer (e.g. the MCP server) is kept, and everything not
@@ -375,7 +377,62 @@ group and multi-parcel edits, pending state across selections, gates (on the bou
 that really cuts the fence collider), fence none removing colliders through the watcher, reroll changing the
 regenerated trees, and reset restoring the original bytes.
 
-Classes: `EditorMode` (camera, picking, selection, outlines, UI, group operations; `EditorMode.Edit.cs`: the Fence and Trees panel, pending state, gate tool), `EditModel` (drafts, schema, applying pending changes), `EditsFile` (reader,
+### Objects and undo
+
+The Objects section holds Undo / Redo buttons, the **selected object** (below) and the **palette**: every asset of
+`assets/manifest.json` as a button in a collapsible group per category (car, slab, pot, flower, bush, tree, wall,
+fence, other; groups start collapsed), plus a filter box (name, id or category; groups without a match hide,
+the others open).
+
+* **Placing**: choosing an asset arms placement. A semi-transparent cyan **ghost** (red when the point is in no
+  parcel) follows the cursor on the ground, snapped to 0.5 m in absolute S-JTSK metres, or free while Ctrl is held.
+  `R` / `Shift+R` rotate the ghost +-15 degrees, a left click places it (appended to the `objects` of the parcel
+  under the point; refused with a status message when there is none), and placement stays armed. Esc or a right
+  click without a look drag disarms. New ids are `o-0001`, `o-0002`, ... (one above the highest `o-NNNN` in the file;
+  other id forms in the file are left alone). A placed entry is `id`, `asset`, `position` [x, y] (3 decimals),
+  `rotation_deg`; `scale` and `colour` appear only when set, `z` never (the terrain height is used).
+* **Selecting and moving**: a click on an object (ray against its box, grown by 15 cm) selects it and takes priority
+  over the parcel under it. A yellow box, a cyan **rotation ring** at its feet (unshaded, always visible) and an
+  arrow with a magenta knob showing `rotation_deg` are drawn. Drag the body to move it along the ground (0.5 m
+  grid, Ctrl = free; the grab point keeps its offset), drag the ring to rotate (15 degree steps, Ctrl = free,
+  angle counter-clockwise from east like `rotation_deg`). Arrow keys nudge 0.5 m in the camera's screen directions
+  (snapped to the map axes) while the mouse is over the viewport; `Delete` removes, `Ctrl+D` duplicates 1 m east
+  and selects the copy, `R` / `Shift+R` rotate the selected object by 15 degrees. Moving an object over a parcel
+  boundary re-homes it to the parcel it is in now (its entry moves to that parcel's `objects`); a move to a point
+  in no parcel is refused and the object snaps back.
+* **Fields**: asset (read-only), `x` / `y` in S-JTSK metres (3 decimals), `rotation`, `scale` (> 0), a `colour`
+  with a `set` box (committed when the picker closes), [Duplicate], [Delete]. Each committed edit is one save.
+* **One gesture, one save**: place, drag end, field commit, nudge, delete and duplicate each reload the file,
+  apply, validate with the Python validator's rules (`ObjectEdits.ValidateDocument`, it never writes a file
+  `edits.validate` rejects), and write it atomically in the canonical format.
+* **Instant objects**: when the watcher sees that, for the changed parcels, only the `objects` entries changed (no
+  fence, trees or group change), it does not run `parcel-run`: `MapLoader.ApplyObjects` re-instances those parcels'
+  objects straight from the file (S-JTSK minus `origin_epsg5514`, terrain height when `z` is absent), with the
+  same node names (`objects_<parcel>/object_<id>`) and ownership as a fragment, so a later fragment swap stays
+  consistent. The editor calls it right after saving (`EditsWatcher.NotifySaved`, about 1 to 3 ms from reading the
+  file to the nodes being in the tree); an external writer (MCP, a text editor) is picked up by the poll (at most
+  0.5 s). The watcher recognises its own write: the new state is the applied state, so nothing runs twice. Mixed
+  changes still go through `parcel-run`. Generated trees avoid placed objects, so a tree under a new object
+  only disappears at the next regeneration of that parcel (a fence or trees Apply, or a restart).
+* **Session undo/redo**: `Ctrl+Z`, `Ctrl+Y` / `Ctrl+Shift+Z` (or the buttons) undo and redo every save the
+  editor made since it opened: objects, group operations, Apply of fence and trees. Each save records the before
+  and after content of the top-level entries it touched (`parcels.<ID>`, `groups.<ID>`, absent included). Undo
+  reloads the file from disk, writes the before-entries back (absent deletes the entry), validates and saves; the
+  watcher (or the instant path) applies the effect. **Entries somebody else changed in the meantime are
+  overwritten only if this operation touched them**; everything else in the file stays. A new edit clears the
+  redo stack, the stacks live in memory only and hold at most 200 operations. The status line shows
+  `undo: <what>` / `redo: <what>`.
+
+`make viewer-objects-smoke` (`SMOKE_DIR=...`, `SHOTS=dir` for two windowed screenshots) drives all of this headless on
+a scratch export, through the editor APIs and key events: the palette against the manifest, the exact text of
+`edits.json` after each of 26 saves (checked again with `edits.validate`, `dump_text` and `plan_edits`), no
+`parcel-run` for object edits (the watcher counts them: `RunCount`, `InstantCount`), scene nodes against the file,
+objects still right after a group and a fence Apply, drag and rotate with snapping, cross-parcel re-homing,
+refusals, field edits, nudge, duplicate, delete, undo and redo of the whole sequence byte for byte, the 200 cap and
+the latency. Screenshot options: `--shot-object ID --shot-arm ASSET --shot-ghost X,Y --shot-ghost-rot DEG
+--shot-filter TEXT --shot-open car,pot` next to the `--editor-shot` ones.
+
+Classes: `EditorMode` (camera, picking, selection, outlines, UI, group operations; `EditorMode.Edit.cs`: the Fence and Trees panel, pending state, gate tool; `EditorMode.Objects.cs`: palette, ghost, gizmo, object gestures; `EditorMode.Undo.cs`: session undo), `ObjectEdits` (object entries, ids, C# validator), `EditModel` (drafts, schema, applying pending changes), `EditsFile` (reader,
 canonical writer and group operations for edits.json), `ParcelInfo` (now with `Rings`, `Bounds`, `AreaM2`, `Group`
 and `Contains`) and `ParcelIndex` / `MapLoader.ParcelAt(x, z)` (grid index over the parcel boxes; about 5 us per
 lookup).

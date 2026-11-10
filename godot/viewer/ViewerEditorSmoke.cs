@@ -272,6 +272,22 @@ public partial class Viewer
             ed.SetSectionOpen(title, false);
         if (_opts.GetValueOrDefault("shot-gate") is { } sg && int.TryParse(sg, out var gi)) ed.SelectGate(gi);
         if (_flags.Contains("shot-reroll")) ed.Reroll(); // leaves a pending change: shows the unsaved marker
+        foreach (var cat in (_opts.GetValueOrDefault("shot-open") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)) ed.SetPaletteGroupOpen(cat, true);
+        if (_opts.GetValueOrDefault("shot-filter") is { } sf) ed.SetPaletteFilter(sf);
+        if (_opts.GetValueOrDefault("shot-object") is { } so) Check(ed.SelectObject(so), $"shot object {so} selected");
+        if (_opts.GetValueOrDefault("shot-arm") is { } arm)
+        {
+            ed.ArmPlacement(arm);
+            if (_opts.TryGetValue("shot-ghost-rot", out var gr) && double.TryParse(gr, System.Globalization.CultureInfo.InvariantCulture, out var grd)) ed.RotateGhost(grd);
+            if (_opts.GetValueOrDefault("shot-ghost")?.Split(',') is { Length: 2 } gp
+                && float.TryParse(gp[0], System.Globalization.CultureInfo.InvariantCulture, out var gx)
+                && float.TryParse(gp[1], System.Globalization.CultureInfo.InvariantCulture, out var gy))
+            {
+                ed.GhostPinned = true;
+                ed.UpdateGhost(new Vector3(gx, _map.GroundHeightOrMean(gx, -gy), -gy), true);
+            }
+        }
+        ed.RefreshNow();
         var at = _opts.GetValueOrDefault("shot-at") ?? ids.FirstOrDefault();
         if (at != null && _map.Parcels.TryGetValue(at, out var info))
         {
