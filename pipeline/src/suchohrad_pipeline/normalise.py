@@ -150,10 +150,7 @@ def run_normalise(
     )
     write(
         "highways",
-        [
-            _feature(frame.to_local(f.geom), _highway_props(f))
-            for f in osm["highways"]
-        ],
+        [_feature(frame.to_local(f.geom), _highway_props(f)) for f in osm["highways"]],
     )
     write("trees", [_feature(frame.to_local(f.geom), {"osm_id": f.osm_id}) for f in osm["trees"]])
     write(

@@ -65,3 +65,24 @@ def load_rules(path: Path = DEFAULT_RULES) -> ParcelRules:
         chunk_size_m=float((data.get("chunking") or {}).get("size_m", d.chunk_size_m)),
         min_iou=float((data.get("registry") or {}).get("min_iou", d.min_iou)),
     )
+
+
+def _merge(base: dict, extra: dict) -> dict:
+    out = dict(base)
+    for key, value in extra.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def load_section(name: str, path: Path = DEFAULT_RULES) -> dict:
+    """A top-level section of rules.yaml, merged over the same section of the shipped rules.yaml.
+
+    The shipped file is the single source of defaults, so a custom file may be partial.
+    """
+    base = (yaml.safe_load(DEFAULT_RULES.read_text()) or {}).get(name) or {}
+    if path == DEFAULT_RULES or not path.is_file():
+        return base
+    return _merge(base, (yaml.safe_load(path.read_text()) or {}).get(name) or {})

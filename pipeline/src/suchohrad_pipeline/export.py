@@ -13,17 +13,17 @@ import trimesh
 
 from suchohrad_pipeline.buildings import DEFAULT_OVERRIDES
 from suchohrad_pipeline.config import DEFAULT_RAW_DIR, REPO_ROOT
-from suchohrad_pipeline.meshes import Mesh, building_mesh, collision_mesh
+from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
-from suchohrad_pipeline.rules import DEFAULT_RULES
+from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
+from suchohrad_pipeline.scene import build_scene
 
 DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 MAP_VERSION = "0.1.0-slice"
 ARTIFACT_FORMAT_VERSION = 1
-NOT_GENERATED_NOTE = (
-    "Terrain, roads, fences, trees, spawn candidates and roads.json are not generated yet; "
-    "chunk files contain only parcel building nodes."
-)
+WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
+               "props.json", "spawns.json")
+NOT_GENERATED_NOTE = "Textures, landmarks, navmesh and water surfaces are not generated."
 
 
 def to_gltf_axes(tris: np.ndarray) -> np.ndarray:
@@ -52,12 +52,17 @@ def chunk_name(ix: int, iy: int) -> str:
     return f"chunk_{ix}_{iy}"
 
 
-def build_chunk_scene(parcel_meshes: list[tuple[str, Mesh, Mesh]]) -> trimesh.Scene:
+def build_chunk_scene(
+    parcel_meshes: list[tuple[str, Mesh, Mesh]], extra: dict[str, Mesh] | None = None
+) -> trimesh.Scene:
+    """Nodes of one chunk: parcel nodes plus terrain, terrain_collision, roads, props, ..."""
     scene = trimesh.Scene()
     for pid, visual, collision in sorted(parcel_meshes, key=lambda t: t[0]):
         for suffix, mesh in (("visual", visual), ("collision", collision)):
             name = f"parcel_{pid}_{suffix}"
             scene.add_geometry(to_trimesh(mesh), node_name=name, geom_name=name)
+    for name, mesh in sorted((extra or {}).items()):
+        scene.add_geometry(to_trimesh(mesh), node_name=name, geom_name=name)
     return scene
 
 
@@ -87,15 +92,9 @@ def run_export(
     for old in chunks_dir.glob("chunk_*.glb"):
         old.unlink()
 
-    by_chunk: dict[tuple[int, int], list[tuple[str, Mesh, Mesh]]] = {}
+    scene = build_scene(work_dir, rules_path)
     parcels_out = []
     for p in sorted(parcels_doc["parcels"], key=lambda p: p["id"]):
-        ids = [bid for bid in p["buildings"] if bid in buildings]
-        if ids:
-            blds = [buildings[bid] for bid in sorted(ids)]
-            visual = Mesh.concat([building_mesh(b) for b in blds])
-            collision = Mesh.concat([collision_mesh(b) for b in blds])
-            by_chunk.setdefault(tuple(p["chunk"]), []).append((p["id"], visual, collision))
         parcels_out.append(
             {
                 "id": p["id"],
@@ -104,23 +103,37 @@ def run_export(
                 "polygon": p["polygon"],
                 "anchor": p["anchor"],
                 "chunk": p["chunk"],
-                "buildings": sorted(ids),
+                "buildings": sorted(bid for bid in p["buildings"] if bid in buildings),
             }
         )
 
     chunk_entries = []
-    for (ix, iy), items in sorted(by_chunk.items()):
+    for ix, iy in scene.chunks():
+        items = sorted(scene.parcels.get((ix, iy), []), key=lambda t: t[0])
+        extra = scene.nodes.get((ix, iy), {})
         rel = f"chunks/{chunk_name(ix, iy)}.glb"
-        data = build_chunk_scene(items).export(file_type="glb")
+        data = build_chunk_scene(items, extra).export(file_type="glb")
         (out_dir / rel).write_bytes(data)
+        triangles = {f"parcel_{pid}_{sfx}": m.face_count for pid, v, c in items
+                     for sfx, m in (("visual", v), ("collision", c))}
+        triangles.update({name: m.face_count for name, m in extra.items()})
         chunk_entries.append(
             {
                 "index": [ix, iy],
                 "file": rel,
                 "parcels": sorted(pid for pid, _, _ in items),
+                "triangles": dict(sorted(triangles.items())),
                 "sha256": hashlib.sha256(data).hexdigest(),
             }
         )
+
+    files = {}
+    if scene.graph is not None:
+        _dump(out_dir / "roads.json", scene.graph)
+        files["roads"] = "roads.json"
+    if scene.spawns is not None:
+        _dump(out_dir / "spawns.json", scene.spawns)
+        files["spawns"] = "spawns.json"
 
     _dump(
         out_dir / "parcels.json",
@@ -132,10 +145,33 @@ def run_export(
             "parcels": parcels_out,
         },
     )
+    generated = {"buildings"}
+    terrain_info = None
+    if scene.terrain is not None:
+        t = scene.terrain
+        generated |= {"terrain"}
+        terrain_info = {
+            "grid_step_m": round(t.step, 4),
+            "cells_per_chunk": t.n,
+            "collision_decimate": int(load_section("terrain", rules_path)["collision_decimate"]),
+            "elevation": "metres above the DMR vertical datum, as in the source (not rebased)",
+            "coverage": "meshed only where the DMR raster covers all four cell corners",
+        }
+        if scene.graph is not None:
+            generated |= {"roads", "roads_graph"}
+        if scene.props is not None:
+            generated |= {"fences", "trees"}
+        if scene.spawns is not None:
+            generated |= {"spawns"}
     inputs = {
         "raw": {f["file"]: f["sha256"] for f in raw_manifest.get("files", [])},
         "work/parcels.json": _sha256(work_dir / "parcels.json"),
         "work/buildings.json": _sha256(work_dir / "buildings.json"),
+        **{
+            f"work/{name}": _sha256(work_dir / name)
+            for name in WORK_INPUTS
+            if (work_dir / name).is_file()
+        },
         "config/rules.yaml": _sha256(rules_path),
         "config/overrides.yaml": _sha256(overrides_path),
     }
@@ -147,6 +183,9 @@ def run_export(
         "chunks": chunk_entries,
         "attribution": raw_manifest.get("attribution", []),
         "inputs": inputs,
+        "generated": sorted(generated),
+        "files": files,
+        "terrain": terrain_info,
         "not_generated": NOT_GENERATED_NOTE,
     }
     _dump(out_dir / "manifest.json", manifest)
