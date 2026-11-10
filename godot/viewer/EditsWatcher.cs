@@ -42,7 +42,15 @@ public partial class EditsWatcher : Node
     /// <summary>Raised when the edits file changed but could not be parsed.</summary>
     public event Action<string>? ParseFailed;
 
+    /// <summary>Raised on the main thread after an instant objects-only update (no parcel-run): parcel ids, milliseconds the update took.</summary>
+    public event Action<IReadOnlyList<string>, double>? InstantApplied;
+
     public int AppliedCount { get; private set; }
+    /// <summary>Number of objects-only updates done in process (no subprocess).</summary>
+    public int InstantCount { get; private set; }
+    /// <summary>Number of parcel-run subprocesses started. Stays flat while only placed objects change.</summary>
+    public int RunCount => _runCounter;
+    public double LastInstantMs { get; private set; }
     public int FailedCount { get; private set; }
     public int ParseFailedCount { get; private set; }
     public bool Busy => _run != null;
@@ -50,7 +58,7 @@ public partial class EditsWatcher : Node
 
     sealed record Snapshot(
         string Text, Dictionary<string, string> Parcels, Dictionary<string, string> Groups,
-        Dictionary<string, List<string>> Members);
+        Dictionary<string, List<string>> Members, Dictionary<string, string> NoObjects);
 
     sealed class Run
     {
@@ -62,7 +70,7 @@ public partial class EditsWatcher : Node
         public Process? Process;
     }
 
-    Snapshot _applied = new("", new(), new(), new());
+    Snapshot _applied = new("", new(), new(), new(), new());
     (DateTime mtime, long len) _seen;
     double _pollT, _stateT;
     bool _dirty;
@@ -132,13 +140,13 @@ public partial class EditsWatcher : Node
         return sb.ToString();
     }
 
-    static void CanonTo(JsonElement e, StringBuilder sb)
+    static void CanonTo(JsonElement e, StringBuilder sb, string? skipKey = null)
     {
         switch (e.ValueKind)
         {
             case JsonValueKind.Object:
                 sb.Append('{');
-                foreach (var p in e.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal))
+                foreach (var p in e.EnumerateObject().Where(p => p.Name != skipKey).OrderBy(p => p.Name, StringComparer.Ordinal))
                 {
                     sb.Append(JsonSerializer.Serialize(p.Name)).Append(':');
                     CanonTo(p.Value, sb);
@@ -170,8 +178,15 @@ public partial class EditsWatcher : Node
             var parcels = new Dictionary<string, string>();
             var groups = new Dictionary<string, string>();
             var members = new Dictionary<string, List<string>>();
+            var noObjects = new Dictionary<string, string>();
             if (doc.RootElement.TryGetProperty("parcels", out var p) && p.ValueKind == JsonValueKind.Object)
-                foreach (var kv in p.EnumerateObject()) parcels[kv.Name] = Canon(kv.Value);
+                foreach (var kv in p.EnumerateObject())
+                {
+                    parcels[kv.Name] = Canon(kv.Value);
+                    var sbn = new StringBuilder();
+                    CanonTo(kv.Value, sbn, "objects");
+                    noObjects[kv.Name] = sbn.ToString();
+                }
             if (doc.RootElement.TryGetProperty("groups", out var g) && g.ValueKind == JsonValueKind.Object)
                 foreach (var kv in g.EnumerateObject())
                 {
@@ -181,7 +196,7 @@ public partial class EditsWatcher : Node
                         ? m.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList()
                         : new();
                 }
-            snap = new Snapshot(text, parcels, groups, members);
+            snap = new Snapshot(text, parcels, groups, members, noObjects);
             error = "";
             return true;
         }
@@ -220,6 +235,99 @@ public partial class EditsWatcher : Node
         return affected;
     }
 
+    // ---- instant path: only placed objects changed ----
+
+    /// <summary>
+    /// The parcels whose placed objects changed when nothing else did: no group changed and every changed parcel
+    /// entry differs only in its "objects". Null when anything else changed (the parcel-run path then handles all).
+    /// </summary>
+    static SortedSet<string>? ObjectsOnlyDiff(Snapshot old, Snapshot now, Func<string, bool> known)
+    {
+        if (old.Groups.Count != now.Groups.Count) return null;
+        foreach (var (gid, text) in now.Groups)
+            if (!old.Groups.TryGetValue(gid, out var o) || o != text) return null;
+        var changed = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var pid in old.Parcels.Keys.Union(now.Parcels.Keys))
+        {
+            if (!known(pid)) continue; // entries of parcels that are not in the map are skipped anyway
+            old.Parcels.TryGetValue(pid, out var a);
+            now.Parcels.TryGetValue(pid, out var b);
+            if (a == b) continue;
+            old.NoObjects.TryGetValue(pid, out var na);
+            now.NoObjects.TryGetValue(pid, out var nb);
+            if ((na ?? "{}") != (nb ?? "{}")) return null;
+            changed.Add(pid);
+        }
+        return changed;
+    }
+
+    /// <summary>
+    /// Call right after writing the edits file: when only placed objects changed, update them now (no subprocess)
+    /// and remember the file as applied, so the poll does not redo it. False when nothing was done (something else
+    /// changed, a run is in flight, or the file is unreadable); the poll then handles the change as usual.
+    /// </summary>
+    public bool NotifySaved()
+    {
+        if (_run != null) return false;
+        if (!TryParse(out var snap, out _)) return false;
+        return TryInstant(snap!);
+    }
+
+    bool TryInstant(Snapshot snap)
+    {
+        if (_run != null || Map.OriginEpsg5514 is not { } origin) return false;
+        var changed = ObjectsOnlyDiff(_applied, snap, Map.Parcels.ContainsKey);
+        if (changed == null) return false;
+        var t0 = Stopwatch.StartNew();
+        var known = changed.ToList();
+        _seen = Stat();
+        _dirty = false;
+        if (known.Count == 0) { _applied = snap; return true; }
+        List<Suchohrad.MapLoader.PlacedObject> objects;
+        try { objects = ReadObjects(snap.Text, known, origin); }
+        catch (Exception e) { Fail($"reading the placed objects failed: {e.Message}"); _applied = snap; return true; }
+        Map.ApplyObjects(known, objects);
+        _applied = snap;
+        InstantCount++;
+        LastInstantMs = t0.Elapsed.TotalMilliseconds;
+        GD.Print($"objects updated: {string.Join(", ", known)} ({objects.Count} objects, no parcel-run) in {LastInstantMs:F1} ms");
+        InstantApplied?.Invoke(known, LastInstantMs);
+        return true;
+    }
+
+    /// <summary>The objects listed under the given parcels as map-local PlacedObjects (S-JTSK minus the map origin).</summary>
+    List<Suchohrad.MapLoader.PlacedObject> ReadObjects(string text, IReadOnlyCollection<string> parcels, (double X, double Y) origin)
+    {
+        var list = new List<Suchohrad.MapLoader.PlacedObject>();
+        using var doc = JsonDocument.Parse(text);
+        if (!doc.RootElement.TryGetProperty("parcels", out var all) || all.ValueKind != JsonValueKind.Object) return list;
+        foreach (var pid in parcels)
+        {
+            if (!all.TryGetProperty(pid, out var entry) || entry.ValueKind != JsonValueKind.Object
+                || !entry.TryGetProperty("objects", out var arr) || arr.ValueKind != JsonValueKind.Array) continue;
+            foreach (var o in arr.EnumerateArray())
+            {
+                var pos = o.GetProperty("position");
+                var x = (float)Math.Round(pos[0].GetDouble() - origin.X, 3);
+                var y = (float)Math.Round(pos[1].GetDouble() - origin.Y, 3);
+                list.Add(new Suchohrad.MapLoader.PlacedObject
+                {
+                    Id = o.GetProperty("id").GetString()!,
+                    Asset = o.GetProperty("asset").GetString() ?? "",
+                    X = x,
+                    Y = y,
+                    Z = o.TryGetProperty("z", out var z) && z.ValueKind == JsonValueKind.Number ? z.GetSingle() : null,
+                    RotationDeg = o.TryGetProperty("rotation_deg", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetSingle() : 0f,
+                    Scale = o.TryGetProperty("scale", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetSingle() : 1f,
+                    Colour = o.TryGetProperty("colour", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null,
+                    Parcel = Map.ParcelAt(x, -y)?.Id,
+                    Owner = pid,
+                });
+            }
+        }
+        return list;
+    }
+
     // ---- running parcel-run ----
 
     void StartIfChanged()
@@ -233,6 +341,7 @@ public partial class EditsWatcher : Node
             ParseFailed?.Invoke(err);
             return;
         }
+        if (TryInstant(snap!)) return;
         var affected = Diff(_applied, snap!);
         var known = affected.Where(Map.Parcels.ContainsKey).ToList();
         foreach (var unknown in affected.Except(known))

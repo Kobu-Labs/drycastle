@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: setup test fetch normalise parcels rules terrain roads props export parcel-run preview map viewer viewer-smoke viewer-edit-smoke viewer-editor-smoke viewer-panel-smoke viewer-shot assets-check netspike netspike-quick lint
+.PHONY: setup test fetch normalise parcels rules terrain roads props export parcel-run preview map viewer viewer-smoke viewer-edit-smoke viewer-editor-smoke viewer-panel-smoke viewer-objects-smoke viewer-shot assets-check netspike netspike-quick lint
 
 setup:
 	cd pipeline && uv sync
@@ -75,6 +75,13 @@ viewer-editor-smoke:
 # windowed screenshots of the panel (needs a display). Needs uv, dotnet and godot.
 viewer-panel-smoke:
 	python3 godot/viewer/panel_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),) $(if $(SHOTS),--shots $(SHOTS),)
+
+# Objects, gizmo and session undo end to end (headless): exports a slice map into a scratch dir, drives placement, drag,
+# rotate, cross-parcel moves, field edits, duplicate/delete, group + fence Apply and undo/redo through the editor APIs,
+# asserts the exact edits.json text of every step, that object edits run no parcel-run, and checks the saved files with
+# the Python validator. SHOTS=dir adds two windowed screenshots (needs a display). Needs uv, dotnet and godot.
+viewer-objects-smoke:
+	python3 godot/viewer/objects_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),) $(if $(SHOTS),--shots $(SHOTS),)
 
 # Loads every glTF in assets/manifest.json with GLTFDocument (headless); exits nonzero on failure.
 assets-check:
