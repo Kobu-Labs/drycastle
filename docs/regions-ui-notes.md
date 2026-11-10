@@ -33,7 +33,6 @@ the map through the existing watcher (`region-run`, Regions 2).
   (it ignored `--resolution` and `Window.Size`) and there is no Xvfb. The shots above are the real viewer at the size it got. Run
   `--shot-size 1280x720` / `3840x2160` (new option) on a machine whose window manager honours it.
 - **UI scale 75-150 %** is not offered; the editor chrome uses the fixed theme sizes like the other tools (a gap of the whole editor, not of this tool).
-- **Gamepad** is not supported anywhere in the editor yet.
 - **Loading state**: none. Region data is read from the in-memory edits file, so there is nothing to wait for; saving shows the status line ("saved (...)"). Error states shown: map without `origin_epsg5514`, refused shapes (inline), refused saves ("not saved: ...").
 - **Live colour preview** while the picker is open is not shown on the ground (the draped mesh comes from `region-run` after the save). The swatch, hex field and list show the colour.
 - **No corner insert/delete.** Corners can be dragged, nudged, and the whole region deleted; adding or removing a corner of a saved region is not in this issue's scope (the MCP tools do not have it either).
