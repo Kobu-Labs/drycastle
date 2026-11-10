@@ -254,7 +254,7 @@ replaces every visual material with a rough, non-metallic one that uses COLOR_0 
 
 ### Objects, parcel swap and hot reload
 
-The map folder (map version 0.3.0) also holds `objects.json` (the placed objects planned by the props
+The map folder (map version 0.4.0: `parcels.json` also carries `origin_epsg5514`, the local frame's origin in S-JTSK metres, and the manifest `edit_defaults`, the rule values the editor shows as defaults) also holds `objects.json` (the placed objects planned by the props
 stage from `pipeline/config/edits.json`; `files.objects` in `manifest.json`) and `prims/<name>.glb`, one
 flat-colour GLB per `prim:` primitive (`prims` in the manifest; same axes as the chunk files, standing on
 y = 0). The loader instances every object: `pack:<pack>/<model>` from `assets/manifest.json` (`file`,
@@ -325,9 +325,9 @@ Options: `--edits PATH` (default `pipeline/config/edits.json`), `--state PATH` (
 Hovering shows `P-0415 garden` (and `[G-0007]` when grouped) at the cursor. Outlines are unshaded ribbons draped
 0.25 m over the terrain: yellow for the selection, orange for property groups (edges shared by two members are
 not drawn, so a group reads as one shape), faint white for the hovered parcel. The right-hand panel shows the
-selection (ID, kind, area, cadastral reference, group) and the buttons Group selected, Add selected to group,
-Remove from group and Dissolve group; Fence, Trees and Objects are placeholders for Editor 6 and 7. The bottom
-line shows messages (`saved`, `regenerating P-0004...`, `applied in 480 ms`, errors) and the key hints.
+selection (ID, kind, area, cadastral reference, group), a collapsible Group section with the buttons Group
+selected, Add selected to group, Remove from group and Dissolve group, the Fence and Trees sections (below) and
+an Objects placeholder for Editor 7. The bottom line shows messages (`saved`, `regenerating P-0004...`, `applied in 480 ms`, errors) and the key hints.
 
 Group operations rewrite `edits.json` atomically (temp file, then rename). The file is reloaded from disk
 right before every save, so a change by another writer (e.g. the MCP server) is kept, and everything not
@@ -337,7 +337,45 @@ newline), so both writers give byte-identical files; `pipeline/tests/fixtures/ed
 for that. A parcel is in at most one group; `G` refuses (status line) when a selected parcel is already in one.
 The watcher then regenerates the affected parcels (the fence runs along a group's outer edge) by itself.
 
-Classes: `EditorMode` (camera, picking, selection, outlines, UI, group operations), `EditsFile` (reader,
+### Fence and Trees panel, Apply and gates
+
+The panel header names the **target**: `P-0084` (one parcel), `3 parcels` (several loose parcels; Fence and Trees
+apply to every one, labelled `applies to N parcels`) or `G-0001 (3 parcels)`. A selection that is exactly one
+property group's members targets the group: Fence goes to the group entry, Trees to each member parcel. With one
+grouped parcel selected, `Edit: whole group | this parcel` chooses (default group); "this parcel" writes the
+parcel's own fence override, which wins field by field over the group's.
+
+* **Fence**: `mode` auto | none | custom; `type` picket | wire | brick_wall (the table lives in `EditSchema`,
+  `EditModel.cs`, and `make viewer-panel-smoke` compares it with `edits.py`); `height`, `thickness` and `colour`
+  each have a `set` box: unset means the type's default, which is shown greyed. These fields and the gate list are
+  custom-only and disabled otherwise; switching to auto or none clears them, so the panel never writes a file the
+  Python validator rejects (it also checks what it writes before saving). `Reset` removes the fence entry (rules
+  again, or the group's fence for a member). The line under the mode says what the rules do in auto.
+* **Gates**: `Add gate` arms the tool (custom mode, one parcel or one group, a map exported with
+  `origin_epsg5514`, i.e. 0.4.0+). Click on the ground within 6 m of the target's fence boundary (a group's outer
+  perimeter, a parcel's own edges): the nearest boundary point is picked. Hold and drag: the width is twice the
+  distance from the picked point (the gate is centred there), snapped to 0.5 m, at least 1 m; a click without
+  drag gives 3 m. A cyan ribbon with two posts previews it, release adds the gate (`at` in absolute S-JTSK
+  metres, to 1 mm), Esc cancels. Existing gates are orange markers; `gate N` in the list selects (magenta), its
+  width spin changes it, `delete` removes it.
+* **Trees**: `rules (default)` | `density` (per 1000 m2) | `count`; the rules value for the parcel kind is shown
+  greyed. `seed offset` and `Reroll` (adds 1; from the rules it first switches to density with the rules' value,
+  because a seed alone is not expressible in `edits.json`). `Reset to rules` removes the `trees` entry.
+* **Apply**: changes are pending per target (`* unsaved changes` under the header, `N unsaved targets` at the
+  bottom; selecting something else keeps them). `Apply` (button, or Enter when no text field has focus) reloads
+  `edits.json`, writes every pending target in one atomic save in the canonical format and drops what became empty
+  (a parcel entry with nothing left disappears, so resetting returns the file to its original bytes); the watcher
+  then regenerates and the status line shows `saved`, `regenerating ...`, `applied in N ms`. `Revert` discards the
+  current target's pending changes, `Revert all` all of them. Pending values replace the target's fence/trees
+  entry as a whole, so an external change to that same entry made meanwhile is overwritten on Apply.
+
+`make viewer-panel-smoke` (`SMOKE_DIR=...`, `SHOTS=dir` for two windowed screenshots of the panel) drives the panel
+API headless on a scratch export: exact file contents after each Apply, the Python validator on every saved file,
+group and multi-parcel edits, pending state across selections, gates (on the boundary within 1 cm, widths, a gap
+that really cuts the fence collider), fence none removing colliders through the watcher, reroll changing the
+regenerated trees, and reset restoring the original bytes.
+
+Classes: `EditorMode` (camera, picking, selection, outlines, UI, group operations; `EditorMode.Edit.cs`: the Fence and Trees panel, pending state, gate tool), `EditModel` (drafts, schema, applying pending changes), `EditsFile` (reader,
 canonical writer and group operations for edits.json), `ParcelInfo` (now with `Rings`, `Bounds`, `AreaM2`, `Group`
 and `Contains`) and `ParcelIndex` / `MapLoader.ParcelAt(x, z)` (grid index over the parcel boxes; about 5 us per
 lookup).
@@ -347,7 +385,8 @@ starts the viewer headless with `--editor-smoke` and drives the editor through i
 snap, picking, selection, outlines (shared edges not drawn), creating and dissolving a group, saved file content
 checked byte for byte against `dump_edits`, `editor-state.json`. Screenshots of the editor mode (windowed, needs a
 GPU): `godot --path godot/viewer -- --map DIR --edits FILE --state FILE --editor-shot out.png --select P-0003
---shot-at P-0003 [--hover P-0005]`.
+--shot-at P-0003 [--hover P-0005] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-reroll] [--shot-focus X,Y --shot-dist D]`
+(`--shot-edits` writes that edits file first and waits for the regenerated parcels).
 
 ## Netcode spike
 

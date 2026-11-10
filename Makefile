@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: setup test fetch normalise parcels rules terrain roads props export parcel-run preview map viewer viewer-smoke viewer-edit-smoke viewer-editor-smoke viewer-shot assets-check netspike netspike-quick lint
+.PHONY: setup test fetch normalise parcels rules terrain roads props export parcel-run preview map viewer viewer-smoke viewer-edit-smoke viewer-editor-smoke viewer-panel-smoke viewer-shot assets-check netspike netspike-quick lint
 
 setup:
 	cd pipeline && uv sync
@@ -69,6 +69,12 @@ viewer-edit-smoke:
 # selection, groups, edits.json writes, outlines, editor-state.json, F2 round trip). Needs uv, dotnet and godot.
 viewer-editor-smoke:
 	python3 godot/viewer/editor_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
+
+# Fence and Trees panel end to end (headless): drives the panel API on a scratch export (Apply, pending state, gates,
+# groups, reroll, watcher round trip) and checks the saved files with the Python validator. SHOTS=dir adds two
+# windowed screenshots of the panel (needs a display). Needs uv, dotnet and godot.
+viewer-panel-smoke:
+	python3 godot/viewer/panel_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),) $(if $(SHOTS),--shots $(SHOTS),)
 
 # Loads every glTF in assets/manifest.json with GLTFDocument (headless); exits nonzero on failure.
 assets-check:

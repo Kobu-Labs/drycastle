@@ -260,12 +260,30 @@ public partial class Viewer
         ed.SetActive(true);
         var ids = (_opts.GetValueOrDefault("select") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
         for (var i = 0; i < ids.Length; i++) ed.Click(ids[i], i > 0);
+        // --shot-edits FILE: write it over the edits file first and wait for the regenerated parcels
+        if (_opts.GetValueOrDefault("shot-edits") is { } shotEdits)
+        {
+            PutEdits(ed.EditsPath, shotEdits);
+            await WaitIdle(90);
+            ed.ReloadGroups();
+        }
+        ed.RefreshNow();
+        foreach (var title in (_opts.GetValueOrDefault("shot-collapse") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+            ed.SetSectionOpen(title, false);
+        if (_opts.GetValueOrDefault("shot-gate") is { } sg && int.TryParse(sg, out var gi)) ed.SelectGate(gi);
+        if (_flags.Contains("shot-reroll")) ed.Reroll(); // leaves a pending change: shows the unsaved marker
         var at = _opts.GetValueOrDefault("shot-at") ?? ids.FirstOrDefault();
         if (at != null && _map.Parcels.TryGetValue(at, out var info))
         {
             var c = info.Bounds.GetCenter();
-            var target = new Vector3(c.X, _map.GroundHeightOrMean(c.X, c.Y), c.Y);
             var dist = Mathf.Max(60f, Mathf.Max(info.Bounds.Size.X, info.Bounds.Size.Y) * 1.6f);
+            // --shot-focus x,y (map metres, y north) and --shot-dist D look closer at one spot
+            if (_opts.GetValueOrDefault("shot-focus")?.Split(',') is { Length: 2 } fp
+                && float.TryParse(fp[0], System.Globalization.CultureInfo.InvariantCulture, out var fx)
+                && float.TryParse(fp[1], System.Globalization.CultureInfo.InvariantCulture, out var fy))
+                c = new Vector2(fx, -fy);
+            if (_opts.TryGetValue("shot-dist", out var sd) && float.TryParse(sd, System.Globalization.CultureInfo.InvariantCulture, out var sdv)) dist = sdv;
+            var target = new Vector3(c.X, _map.GroundHeightOrMean(c.X, c.Y), c.Y);
             var off = new Vector3(-0.15f, 1f, 0.55f).Normalized() * dist;
             var right = (-off).Cross(Vector3.Up).Normalized(); // camera right
             // the 300 px panel covers the right of the window: shift the view so the parcel sits in the left part

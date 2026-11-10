@@ -13,7 +13,7 @@ using Suchohrad.MapLoader;
 /// </summary>
 public partial class EditorMode : Node
 {
-    public const float PanelWidth = 300f;
+    public const float PanelWidth = 360f;
     const float StatusHeight = 58f;
     const float TopDownHeight = 120f;
 
@@ -39,6 +39,7 @@ public partial class EditorMode : Node
     readonly Dictionary<string, int> _segmentCounts = new();
     bool _outlinesDirty = true;
     bool _panelDirty = true;
+    SortedDictionary<string, object?>? _disk;
 
     float _yaw, _pitch;
     bool _looking;
@@ -81,6 +82,7 @@ public partial class EditorMode : Node
         if (on == Active && FlyCam.Current == on) return;
         Active = on;
         OutlineRoot.Visible = on;
+        MarkerRoot.Visible = on;
         _ui.Visible = on;
         _looking = false;
         if (on)
@@ -276,6 +278,7 @@ public partial class EditorMode : Node
             var (ok, msg) = op(root);
             if (!ok) { Say(msg, true); ReloadGroups(); return false; }
             EditsFile.Save(EditsPath, root);
+            SaveCount++;
             _seenEdits = Stat();
             ReloadGroups();
             Say($"saved ({msg})");
@@ -302,7 +305,7 @@ public partial class EditorMode : Node
     public void ReloadGroups()
     {
         Dictionary<string, string> member;
-        try { member = EditsFile.MembershipOf(EditsFile.Load(EditsPath)); }
+        try { _disk = EditsFile.Load(EditsPath); member = EditsFile.MembershipOf(_disk); }
         catch (Exception) { return; } // half-written or invalid: keep what we have
         foreach (var p in Map.Parcels.Values) p.Group = member.GetValueOrDefault(p.Id);
         _outlinesDirty = _panelDirty = true;
@@ -347,6 +350,10 @@ public partial class EditorMode : Node
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown }:
                 Speed = Mathf.Clamp(Speed / 1.25f, 1f, 800f);
                 break;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && GateArmed:
+                if (RayToGround(FlyCam.ProjectRayOrigin(mb.Position), FlyCam.ProjectRayNormal(mb.Position), out var gp)) GateBegin(gp);
+                else Say("click on the ground near the fence", true);
+                break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking:
                 var hit = PickScreen(mb.Position, out _);
                 Click(hit?.Id, mb.ShiftPressed);
@@ -356,7 +363,12 @@ public partial class EditorMode : Node
                 {
                     case Key.G: GroupSelected(); break;
                     case Key.T: ToggleTopDown(); break;
-                    case Key.Escape: Click(null, false); break;
+                    case Key.Enter or Key.KpEnter:
+                        if (GetViewport().GuiGetFocusOwner() is not (LineEdit or TextEdit)) Apply();
+                        break;
+                    case Key.Escape:
+                        if (GateArmed) CancelGate(); else Click(null, false);
+                        break;
                 }
                 break;
         }
@@ -370,6 +382,8 @@ public partial class EditorMode : Node
             _looking = false;
             Input.MouseMode = Input.MouseModeEnum.Visible;
         }
+        if (Active && GateDragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
+            GateEnd();
     }
 
     // ---- per frame ----
@@ -379,6 +393,7 @@ public partial class EditorMode : Node
         if (!Active) return;
         Fly((float)delta);
         UpdateHover();
+        UpdateGateDrag();
         _pollT += delta;
         if (_pollT > 0.5)
         {
@@ -567,9 +582,16 @@ public partial class EditorMode : Node
         _panel.AnchorLeft = 1; _panel.AnchorRight = 1; _panel.AnchorTop = 0; _panel.AnchorBottom = 1;
         _panel.OffsetLeft = -PanelWidth; _panel.OffsetRight = 0; _panel.OffsetTop = 0; _panel.OffsetBottom = 0;
         _ui.AddChild(_panel);
-        var box = new VBoxContainer();
+        var outer = new VBoxContainer();
+        outer.AddThemeConstantOverride("separation", 6);
+        _panel.AddChild(outer);
+        BuildPanelHeader(outer);
+        var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        outer.AddChild(scroll);
+        var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         box.AddThemeConstantOverride("separation", 8);
-        _panel.AddChild(box);
+        scroll.AddChild(box);
+        BuildPanelFooter(outer);
 
         box.AddChild(Header("Selection"));
         _selLabel = Lbl(15, new Color(0.95f, 0.95f, 0.95f));
@@ -577,23 +599,24 @@ public partial class EditorMode : Node
         box.AddChild(_selLabel);
 
         box.AddChild(new HSeparator());
-        box.AddChild(Header("Group"));
+        var groupBody = Section(box, "Group", false);
         _groupLabel = Lbl(15, new Color(0.95f, 0.95f, 0.95f));
         _groupLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        box.AddChild(_groupLabel);
+        groupBody.AddChild(_groupLabel);
         _btnGroup = Btn("Group selected (G)", GroupSelected);
         _btnAdd = Btn("Add selected to group", AddSelectedToGroup);
         _btnRemove = Btn("Remove from group", RemoveSelectedFromGroup);
         _btnDissolve = Btn("Dissolve group", DissolveGroup);
-        foreach (var b in new[] { _btnGroup, _btnAdd, _btnRemove, _btnDissolve }) box.AddChild(b);
+        foreach (var b in new[] { _btnGroup, _btnAdd, _btnRemove, _btnDissolve }) groupBody.AddChild(b);
 
         box.AddChild(new HSeparator());
-        foreach (var name in new[] { "Fence", "Trees", "Objects" })
-        {
-            var h = Lbl(15, new Color(0.6f, 0.62f, 0.66f));
-            h.Text = $"> {name}   (Editor 6/7)";
-            box.AddChild(h);
-        }
+        BuildFenceSection(Section(box, "Fence", true));
+        box.AddChild(new HSeparator());
+        BuildTreesSection(Section(box, "Trees", true));
+        box.AddChild(new HSeparator());
+        var objects = Lbl(15, new Color(0.6f, 0.62f, 0.66f));
+        objects.Text = "> Objects   (Editor 7)";
+        box.AddChild(objects);
 
         _statusBar = new PanelContainer { Name = "StatusBar" };
         _statusBar.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = new Color(0.07f, 0.08f, 0.10f, 0.86f), ContentMarginLeft = 12, ContentMarginRight = 12, ContentMarginTop = 5, ContentMarginBottom = 5 });
@@ -606,7 +629,7 @@ public partial class EditorMode : Node
         _statusLabel = Lbl(16, Colors.White);
         _statusLabel.CustomMinimumSize = new Vector2(0, 22);
         _hintLabel = Lbl(13, new Color(0.7f, 0.74f, 0.8f));
-        _hintLabel.Text = "WASD fly, Q/E down/up, RMB look, wheel speed, LMB select, Shift+LMB add, G group, T top-down, Esc clear, F2 walk";
+        _hintLabel.Text = "WASD fly, RMB look, wheel speed, LMB select, Shift+LMB add, G group, T top-down, Enter apply, Esc clear/cancel, F2 walk";
         sbox.AddChild(_statusLabel);
         sbox.AddChild(_hintLabel);
     }
@@ -670,5 +693,6 @@ public partial class EditorMode : Node
         _btnAdd.Disabled = gids.Count != 1 || sel.All(p => p.Group != null);
         _btnRemove.Disabled = gids.Count == 0;
         _btnDissolve.Disabled = gids.Count != 1;
+        RefreshEditPanel();
     }
 }

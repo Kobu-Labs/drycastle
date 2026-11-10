@@ -12,7 +12,9 @@ using Suchohrad.MapLoader;
 /// --view overview|oblique|street|player, --frames N, --assets DIR, --watch, --edits PATH,
 /// --area slice|village, --state PATH, --edit-smoke --edit-smoke-plan FILE,
 /// --editor (editor mode, implies --watch; F2 toggles walk/editor), --editor-smoke --editor-smoke-plan FILE,
-/// --editor-shot PNG [--select P-0001,P-0002] [--shot-at P-0001] (editor screenshot of the main window).
+/// --panel-smoke --panel-smoke-plan FILE (Fence/Trees panel),
+/// --editor-shot PNG [--select P-0001,P-0002] [--shot-at P-0001] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-reroll]
+/// (editor screenshot of the main window).
 /// Env: SUCHOHRAD_MAP, SUCHOHRAD_ASSETS, SUCHOHRAD_UV (the uv executable).
 /// --watch hot-reloads the edits file (see EditsWatcher) and writes editor-state.json.
 /// </summary>
@@ -68,7 +70,7 @@ public partial class Viewer : Node3D
         _player.Position = sp.Position + Vector3.Up * 1.0f;
         _player.LookYawPitch(rng.RandfRange(0, 360), 0);
 
-        var editorMode = _flags.Contains("editor") || _flags.Contains("editor-smoke") || _opts.ContainsKey("editor-shot");
+        var editorMode = _flags.Contains("editor") || _flags.Contains("editor-smoke") || _flags.Contains("panel-smoke") || _opts.ContainsKey("editor-shot");
         if (editorMode || _flags.Contains("watch") || _flags.Contains("edit-smoke")) StartWatcher(repo);
         if (editorMode)
         {
@@ -79,6 +81,7 @@ public partial class Viewer : Node3D
         }
 
         if (_flags.Contains("editor-smoke")) _ = RunEditorSmoke();
+        else if (_flags.Contains("panel-smoke")) _ = RunPanelSmoke();
         else if (_opts.ContainsKey("editor-shot")) _ = RunEditorShot();
         else if (_flags.Contains("edit-smoke")) _ = RunEditSmoke();
         else if (_flags.Contains("smoke")) _ = RunSmoke(rng);
@@ -90,7 +93,7 @@ public partial class Viewer : Node3D
     void StartWatcher(string repo)
     {
         var edits = _opts.GetValueOrDefault("edits") ?? Path.Combine(repo, "pipeline", "config", "edits.json");
-        // the map folder name carries the area: "0.3.0-slice" / "0.3.0-village"
+        // the map folder name carries the area: "0.4.0-slice" / "0.4.0-village"
         var fromMap = _map.MapVersion.Contains('-') ? _map.MapVersion[(_map.MapVersion.LastIndexOf('-') + 1)..] : "";
         var area = _opts.GetValueOrDefault("area") ?? (fromMap is "slice" or "village" ? fromMap : "slice");
         if (area is not ("slice" or "village")) { GD.PrintErr($"--area must be slice or village, got '{area}'"); area = "slice"; }

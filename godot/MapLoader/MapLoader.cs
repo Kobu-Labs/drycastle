@@ -31,6 +31,10 @@ public sealed partial class MapLoader
     public Node3D Root { get; } = new() { Name = "Map" };
     public string MapVersion { get; private set; } = "";
     public string RoadsJson { get; private set; } = "";
+    /// <summary>Origin of the local frame in S-JTSK (EPSG:5514) metres (east, north), from parcels.json (map 0.4.0+); null for older maps.</summary>
+    public (double X, double Y)? OriginEpsg5514 { get; private set; }
+    /// <summary>Rule values (fence and tree defaults) from the manifest (map 0.4.0+); null for older maps.</summary>
+    public EditDefaults? EditDefaults { get; private set; }
     public LoadStats Stats { get; } = new();
     /// <summary>Per-parcel props visuals and colliders by parcel ID (for the runtime props swap).</summary>
     public IReadOnlyDictionary<string, MeshInstance3D> PropsVisuals => _propsVisuals;
@@ -52,6 +56,7 @@ public sealed partial class MapLoader
 
         using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(mapDir, "manifest.json")));
         MapVersion = manifest.RootElement.GetProperty("map_version").GetString() ?? "";
+        if (manifest.RootElement.TryGetProperty("edit_defaults", out var ed)) EditDefaults = EditDefaults.Read(ed);
         ReadParcels(Path.Combine(mapDir, "parcels.json"));
         ParcelIndex = new ParcelIndex(_parcels.Values);
         ReadSpawns(Path.Combine(mapDir, "spawns.json"));
@@ -74,6 +79,8 @@ public sealed partial class MapLoader
     void ReadParcels(string path)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        if (doc.RootElement.TryGetProperty("origin_epsg5514", out var o) && o.ValueKind == JsonValueKind.Array && o.GetArrayLength() == 2)
+            OriginEpsg5514 = (o[0].GetDouble(), o[1].GetDouble());
         foreach (var p in doc.RootElement.GetProperty("parcels").EnumerateArray())
         {
             var id = p.GetProperty("id").GetString()!;
