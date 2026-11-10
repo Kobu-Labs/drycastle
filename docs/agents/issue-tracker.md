@@ -48,3 +48,7 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 - **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (see **Count open blockers**, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
 - **Claim**: `gh issue edit <n> --add-assignee @me`, the session's first write.
 - **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.
+
+## UI issues
+
+Any issue that adds or changes UI (menus, HUD, viewer, map editor, dev tools) carries the `ui` label and copies the section 10 checklist of `docs/standards/ui-ux.md` into its acceptance criteria. Reviewers reject UI PRs without the evidence listed there (keyboard-only walkthrough, screenshots at 1280x720 and 3840x2160).
