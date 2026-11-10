@@ -319,6 +319,7 @@ def run(
     edits: str | None = None,
     out: str | None = None,
     glb: str | None = None,
+    work: str | None = None,
 ) -> int:
     groups = groups or []
     if not parcels and not groups:
@@ -327,7 +328,7 @@ def run(
     edits_path = Path(edits) if edits else DEFAULT_EDITS
     try:
         fragment = run_parcel_run(
-            area_paths(area).work, area, parcels, groups, edits_path,
+            Path(work) if work else area_paths(area).work, area, parcels, groups, edits_path,
             glb_path=Path(glb) if glb else None,
         )
     except FileNotFoundError as exc:

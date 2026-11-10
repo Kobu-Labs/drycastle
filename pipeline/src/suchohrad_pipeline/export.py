@@ -15,13 +15,15 @@ from suchohrad_pipeline.buildings import DEFAULT_OVERRIDES
 from suchohrad_pipeline.config import DEFAULT_AREA, DEFAULT_RAW_DIR, REPO_ROOT, area_paths
 from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
+from suchohrad_pipeline.primitives import PRIMITIVES, build_primitive
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 from suchohrad_pipeline.scene import build_scene
 
 DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # 0.2.0: fences and trees of a parcel moved from the chunk-level props / props_collision nodes into
 # per-parcel nodes (props_layout "per_parcel"). Pre-1.0, a node-layout change bumps the minor part.
-MAP_VERSION_BASE = "0.2.0"
+# 0.3.0: manifest lists objects.json (files.objects) and one GLB per primitive (prims).
+MAP_VERSION_BASE = "0.3.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
@@ -77,6 +79,25 @@ def build_chunk_scene(
     for name, mesh in sorted((extra or {}).items()):
         scene.add_geometry(to_trimesh(mesh), node_name=name, geom_name=name)
     return scene
+
+
+def write_primitives(out_dir: Path) -> dict[str, dict]:
+    """``prims/<name>.glb`` for every ``prim:<name>``: flat colours, glTF axes like the chunk files.
+
+    The loader instances these like any glTF and never builds meshes itself. Returns the manifest
+    entries ``{name: {"file": ..., "sha256": ...}}``.
+    """
+    prims_dir = out_dir / "prims"
+    prims_dir.mkdir(parents=True, exist_ok=True)
+    for old in prims_dir.glob("*.glb"):
+        old.unlink()
+    entries = {}
+    for name in sorted(PRIMITIVES):
+        scene = build_chunk_scene([], {name: build_primitive(name)})
+        data = scene.export(file_type="glb")
+        (prims_dir / f"{name}.glb").write_bytes(data)
+        entries[name] = {"file": f"prims/{name}.glb", "sha256": hashlib.sha256(data).hexdigest()}
+    return entries
 
 
 def _sha256(path: Path) -> str:
@@ -145,6 +166,12 @@ def run_export(
         )
 
     files = {}
+    objects_src = work_dir / "objects.json"
+    if objects_src.is_file():
+        # placed objects (props stage); copied verbatim so the loader reads what the build planned
+        (out_dir / "objects.json").write_bytes(objects_src.read_bytes())
+        files["objects"] = "objects.json"
+    prims = write_primitives(out_dir)
     if scene.graph is not None:
         _dump(out_dir / "roads.json", scene.graph)
         files["roads"] = "roads.json"
@@ -203,6 +230,7 @@ def run_export(
         "inputs": inputs,
         "generated": sorted(generated),
         "files": files,
+        "prims": prims,
         "terrain": terrain_info,
         "not_generated": NOT_GENERATED_NOTE,
     }
@@ -210,12 +238,20 @@ def run_export(
     return manifest
 
 
-def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
+def run(
+    force: bool = False,
+    area: str = DEFAULT_AREA,
+    out: str | None = None,
+    work: str | None = None,
+    **_options: object,
+) -> int:
+    """``out`` and ``work`` override the area's map and work directories (experiments, tests)."""
     paths = area_paths(area)
+    out_dir = Path(out) if out else paths.out
     try:
-        manifest = run_export(paths.work, paths.out, paths.raw, area=area)
+        manifest = run_export(Path(work) if work else paths.work, out_dir, paths.raw, area=area)
     except FileNotFoundError as exc:
         print(f"export: error: missing input {Path(str(exc.filename)).name}; run earlier stages")
         return 1
-    print(f"export: {len(manifest['chunks'])} chunk file(s) written to {paths.out.relative_to(REPO_ROOT)}/")
+    print(f"export: {len(manifest['chunks'])} chunk file(s) written to {out_dir}/")
     return 0

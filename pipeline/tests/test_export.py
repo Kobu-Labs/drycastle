@@ -1,3 +1,4 @@
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -94,7 +95,7 @@ def test_parcels_and_manifest(workspace) -> None:
     assert [p["id"] for p in parcels] == ["P-0001", "P-0002", "P-0003"]
     assert parcels[0]["buildings"] == ["w1"] and parcels[2]["buildings"] == []
     m = json.loads((out / "manifest.json").read_text())
-    assert m["map_version"] == "0.2.0-slice"
+    assert m["map_version"] == "0.3.0-slice"
     assert m["attribution"] == ["A", "B"] and m["inputs"]["raw"] == {"osm.json": "ab"}
     assert m["props_layout"] == "per_parcel"
     assert "not generated" in m["not_generated"]
@@ -127,8 +128,8 @@ def test_village_area_manifest_and_lighter_props(tmp_path) -> None:
         return run_export(*args[:1], tmp_path / area, *args[2:], area=area)
 
     slice_m, village = counts("slice"), counts("village")
-    assert village["map_version"] == "0.2.0-village"
-    assert slice_m["map_version"] == "0.2.0-slice"
+    assert village["map_version"] == "0.3.0-village"
+    assert slice_m["map_version"] == "0.3.0-slice"
     def has_collision(m: dict) -> bool:
         return any(n.endswith("props_collision") for c in m["chunks"] for n in c["triangles"])
 
@@ -140,3 +141,53 @@ def test_village_area_manifest_and_lighter_props(tmp_path) -> None:
     assert files
     for p in files:
         assert p.read_bytes() == (tmp_path / "again" / p.relative_to(tmp_path / "village")).read_bytes()
+
+
+def test_export_writes_prim_glbs_and_manifest_entries(workspace) -> None:
+    from suchohrad_pipeline.primitives import PRIMITIVES
+
+    export(workspace)
+    out = workspace["out"]
+    m = json.loads((out / "manifest.json").read_text())
+    assert sorted(m["prims"]) == sorted(PRIMITIVES)
+    for name, entry in m["prims"].items():
+        assert entry["file"] == f"prims/{name}.glb"
+        data = (out / entry["file"]).read_bytes()
+        assert hashlib.sha256(data).hexdigest() == entry["sha256"]
+        scene = trimesh.load(out / entry["file"], force="scene")
+        assert list(scene.graph.nodes_geometry) == [name]
+        geom = scene.geometry[scene.graph[name][1]]
+        # same axes as the chunk files: y up, standing on y = 0, size matches the registry
+        lo, hi = geom.bounds
+        sx, sy, sz = PRIMITIVES[name].size_m
+        assert lo[1] == pytest.approx(0, abs=1e-3)
+        assert hi[1] - lo[1] == pytest.approx(sy, abs=0.02)
+        assert hi[0] - lo[0] == pytest.approx(sx, abs=0.02)
+        assert hi[2] - lo[2] == pytest.approx(sz, abs=0.02)
+        assert len(geom.visual.vertex_colors) == len(geom.vertices)
+
+
+def test_export_copies_objects_json_when_present(workspace) -> None:
+    export(workspace)
+    m = json.loads((workspace["out"] / "manifest.json").read_text())
+    assert "objects" not in m["files"] and not (workspace["out"] / "objects.json").exists()
+    doc = '{"format_version": 1, "objects": []}\n'
+    (workspace["work"] / "objects.json").write_text(doc)
+    export(workspace)
+    m = json.loads((workspace["out"] / "manifest.json").read_text())
+    assert m["files"]["objects"] == "objects.json"
+    assert (workspace["out"] / "objects.json").read_text() == doc
+
+
+
+def test_export_run_honours_out_and_work(workspace, tmp_path, monkeypatch) -> None:
+    from suchohrad_pipeline import export as export_mod
+    from suchohrad_pipeline.config import area_paths
+
+    paths = area_paths("slice")
+    monkeypatch.setattr(
+        export_mod, "area_paths", lambda area: paths.__class__(area, workspace["raw"], *paths[2:])
+    )
+    target = tmp_path / "custom_out"
+    assert export_mod.run(out=str(target), work=str(workspace["work"])) == 0
+    assert (target / "manifest.json").is_file()
