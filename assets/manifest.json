@@ -1,0 +1,811 @@
+{
+  "format_version": 1,
+  "note": "size_m is [x, y, z] in glTF axes (y up), metres, as imported in Godot. file is relative to the assets/ directory.",
+  "packs": [
+    {
+      "name": "kenney-car-kit",
+      "title": "Kenney Car Kit 3.1",
+      "url": "https://kenney.nl/assets/car-kit",
+      "download_url": "https://opengameart.org/sites/default/files/kenney_car-kit_3.1.zip",
+      "licence": "CC0",
+      "downloaded": "2026-11-10"
+    },
+    {
+      "name": "kenney-city-kit-suburban",
+      "title": "Kenney City Kit (Suburban) 2.0",
+      "url": "https://kenney.nl/assets/city-kit-suburban",
+      "download_url": "https://opengameart.org/sites/default/files/kenney_city-kit-suburban_2.0.zip",
+      "licence": "CC0",
+      "downloaded": "2026-11-10"
+    },
+    {
+      "name": "quaternius-stylized-nature-megakit",
+      "title": "Quaternius Stylized Nature MegaKit (Standard, free)",
+      "url": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "download_url": "https://opengameart.org/sites/default/files/stylized_nature_megakitstandard.zip",
+      "licence": "CC0",
+      "downloaded": "2026-11-10"
+    }
+  ],
+  "assets": [
+    {
+      "id": "pack:kenney-car-kit/ambulance",
+      "category": "car",
+      "name": "Ambulance",
+      "file": "kenney-car-kit/ambulance.glb",
+      "size_m": [
+        1.5,
+        1.8,
+        3.25
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/delivery",
+      "category": "car",
+      "name": "Delivery",
+      "file": "kenney-car-kit/delivery.glb",
+      "size_m": [
+        1.5,
+        1.65,
+        3.25
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/firetruck",
+      "category": "car",
+      "name": "Firetruck",
+      "file": "kenney-car-kit/firetruck.glb",
+      "size_m": [
+        1.5,
+        1.7,
+        3.4
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/garbage-truck",
+      "category": "car",
+      "name": "Garbage truck",
+      "file": "kenney-car-kit/garbage-truck.glb",
+      "size_m": [
+        1.6,
+        1.6,
+        3.45
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/hatchback-sports",
+      "category": "car",
+      "name": "Hatchback sports",
+      "file": "kenney-car-kit/hatchback-sports.glb",
+      "size_m": [
+        1.3,
+        1.1,
+        2.85
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/police",
+      "category": "car",
+      "name": "Police",
+      "file": "kenney-car-kit/police.glb",
+      "size_m": [
+        1.5,
+        1.3,
+        3.1
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/race",
+      "category": "car",
+      "name": "Race",
+      "file": "kenney-car-kit/race.glb",
+      "size_m": [
+        1.3,
+        0.733,
+        2.56
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/sedan",
+      "category": "car",
+      "name": "Sedan",
+      "file": "kenney-car-kit/sedan.glb",
+      "size_m": [
+        1.5,
+        1.3,
+        2.55
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/sedan-sports",
+      "category": "car",
+      "name": "Sedan sports",
+      "file": "kenney-car-kit/sedan-sports.glb",
+      "size_m": [
+        1.3,
+        1.1,
+        2.55
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/suv",
+      "category": "car",
+      "name": "Suv",
+      "file": "kenney-car-kit/suv.glb",
+      "size_m": [
+        1.5,
+        1.3,
+        2.7
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/suv-luxury",
+      "category": "car",
+      "name": "Suv luxury",
+      "file": "kenney-car-kit/suv-luxury.glb",
+      "size_m": [
+        1.5,
+        1.3,
+        2.85
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/taxi",
+      "category": "car",
+      "name": "Taxi",
+      "file": "kenney-car-kit/taxi.glb",
+      "size_m": [
+        1.5,
+        1.5,
+        2.75
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/tractor",
+      "category": "car",
+      "name": "Tractor",
+      "file": "kenney-car-kit/tractor.glb",
+      "size_m": [
+        1.342,
+        1.602,
+        2.202
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/truck",
+      "category": "car",
+      "name": "Truck",
+      "file": "kenney-car-kit/truck.glb",
+      "size_m": [
+        1.5,
+        1.3,
+        2.95
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/truck-flat",
+      "category": "car",
+      "name": "Truck flat",
+      "file": "kenney-car-kit/truck-flat.glb",
+      "size_m": [
+        1.5,
+        1.3,
+        2.745
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-car-kit/van",
+      "category": "car",
+      "name": "Van",
+      "file": "kenney-car-kit/van.glb",
+      "size_m": [
+        1.5,
+        1.35,
+        2.75
+      ],
+      "tags": [
+        "palette-texture",
+        "vehicle"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/car-kit",
+      "pack": "kenney-car-kit"
+    },
+    {
+      "id": "pack:kenney-city-kit-suburban/driveway-long",
+      "category": "slab",
+      "name": "Driveway long",
+      "file": "kenney-city-kit-suburban/driveway-long.glb",
+      "size_m": [
+        0.36,
+        0.01,
+        0.4
+      ],
+      "tags": [
+        "driveway",
+        "palette-texture",
+        "suburban"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/city-kit-suburban",
+      "pack": "kenney-city-kit-suburban"
+    },
+    {
+      "id": "pack:kenney-city-kit-suburban/driveway-short",
+      "category": "slab",
+      "name": "Driveway short",
+      "file": "kenney-city-kit-suburban/driveway-short.glb",
+      "size_m": [
+        0.36,
+        0.01,
+        0.2
+      ],
+      "tags": [
+        "driveway",
+        "palette-texture",
+        "suburban"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/city-kit-suburban",
+      "pack": "kenney-city-kit-suburban"
+    },
+    {
+      "id": "pack:kenney-city-kit-suburban/fence",
+      "category": "fence",
+      "name": "Fence",
+      "file": "kenney-city-kit-suburban/fence.glb",
+      "size_m": [
+        0.475,
+        0.27,
+        0.075
+      ],
+      "tags": [
+        "palette-texture",
+        "suburban"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/city-kit-suburban",
+      "pack": "kenney-city-kit-suburban"
+    },
+    {
+      "id": "pack:kenney-city-kit-suburban/fence-1x2",
+      "category": "fence",
+      "name": "Fence 1x2",
+      "file": "kenney-city-kit-suburban/fence-1x2.glb",
+      "size_m": [
+        0.875,
+        0.27,
+        0.438
+      ],
+      "tags": [
+        "palette-texture",
+        "suburban"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/city-kit-suburban",
+      "pack": "kenney-city-kit-suburban"
+    },
+    {
+      "id": "pack:kenney-city-kit-suburban/fence-2x2",
+      "category": "fence",
+      "name": "Fence 2x2",
+      "file": "kenney-city-kit-suburban/fence-2x2.glb",
+      "size_m": [
+        0.875,
+        0.27,
+        0.837
+      ],
+      "tags": [
+        "palette-texture",
+        "suburban"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/city-kit-suburban",
+      "pack": "kenney-city-kit-suburban"
+    },
+    {
+      "id": "pack:kenney-city-kit-suburban/fence-low",
+      "category": "fence",
+      "name": "Fence low",
+      "file": "kenney-city-kit-suburban/fence-low.glb",
+      "size_m": [
+        1.275,
+        0.17,
+        0.837
+      ],
+      "tags": [
+        "palette-texture",
+        "suburban"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/city-kit-suburban",
+      "pack": "kenney-city-kit-suburban"
+    },
+    {
+      "id": "pack:kenney-city-kit-suburban/path-long",
+      "category": "slab",
+      "name": "Path long",
+      "file": "kenney-city-kit-suburban/path-long.glb",
+      "size_m": [
+        0.2,
+        0.01,
+        0.4
+      ],
+      "tags": [
+        "palette-texture",
+        "path",
+        "suburban"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/city-kit-suburban",
+      "pack": "kenney-city-kit-suburban"
+    },
+    {
+      "id": "pack:kenney-city-kit-suburban/path-short",
+      "category": "slab",
+      "name": "Path short",
+      "file": "kenney-city-kit-suburban/path-short.glb",
+      "size_m": [
+        0.2,
+        0.01,
+        0.2
+      ],
+      "tags": [
+        "palette-texture",
+        "path",
+        "suburban"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/city-kit-suburban",
+      "pack": "kenney-city-kit-suburban"
+    },
+    {
+      "id": "pack:kenney-city-kit-suburban/path-stones-short",
+      "category": "slab",
+      "name": "Path stones short",
+      "file": "kenney-city-kit-suburban/path-stones-short.glb",
+      "size_m": [
+        0.14,
+        0.01,
+        0.2
+      ],
+      "tags": [
+        "palette-texture",
+        "path",
+        "suburban"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/city-kit-suburban",
+      "pack": "kenney-city-kit-suburban"
+    },
+    {
+      "id": "pack:kenney-city-kit-suburban/planter",
+      "category": "pot",
+      "name": "Planter",
+      "file": "kenney-city-kit-suburban/planter.glb",
+      "size_m": [
+        0.4,
+        0.177,
+        0.3
+      ],
+      "tags": [
+        "palette-texture",
+        "planter",
+        "suburban"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/city-kit-suburban",
+      "pack": "kenney-city-kit-suburban"
+    },
+    {
+      "id": "pack:kenney-city-kit-suburban/tree-large",
+      "category": "tree",
+      "name": "Tree large",
+      "file": "kenney-city-kit-suburban/tree-large.glb",
+      "size_m": [
+        0.21,
+        0.767,
+        0.243
+      ],
+      "tags": [
+        "palette-texture",
+        "suburban"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/city-kit-suburban",
+      "pack": "kenney-city-kit-suburban"
+    },
+    {
+      "id": "pack:kenney-city-kit-suburban/tree-small",
+      "category": "tree",
+      "name": "Tree small",
+      "file": "kenney-city-kit-suburban/tree-small.glb",
+      "size_m": [
+        0.21,
+        0.567,
+        0.243
+      ],
+      "tags": [
+        "palette-texture",
+        "suburban"
+      ],
+      "licence": "CC0",
+      "source": "https://kenney.nl/assets/city-kit-suburban",
+      "pack": "kenney-city-kit-suburban"
+    },
+    {
+      "id": "pack:quaternius-stylized-nature-megakit/Bush_Common",
+      "category": "bush",
+      "name": "Bush common",
+      "file": "quaternius-stylized-nature-megakit/Bush_Common.gltf",
+      "size_m": [
+        1.915,
+        1.582,
+        1.965
+      ],
+      "tags": [
+        "shrub",
+        "textured"
+      ],
+      "licence": "CC0",
+      "source": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "pack": "quaternius-stylized-nature-megakit"
+    },
+    {
+      "id": "pack:quaternius-stylized-nature-megakit/Bush_Common_Flowers",
+      "category": "bush",
+      "name": "Bush common flowers",
+      "file": "quaternius-stylized-nature-megakit/Bush_Common_Flowers.gltf",
+      "size_m": [
+        1.915,
+        1.582,
+        1.965
+      ],
+      "tags": [
+        "shrub",
+        "textured"
+      ],
+      "licence": "CC0",
+      "source": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "pack": "quaternius-stylized-nature-megakit"
+    },
+    {
+      "id": "pack:quaternius-stylized-nature-megakit/Clover_1",
+      "category": "other",
+      "name": "Clover 1",
+      "file": "quaternius-stylized-nature-megakit/Clover_1.gltf",
+      "size_m": [
+        0.796,
+        1.145,
+        0.764
+      ],
+      "tags": [
+        "plant",
+        "textured"
+      ],
+      "licence": "CC0",
+      "source": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "pack": "quaternius-stylized-nature-megakit"
+    },
+    {
+      "id": "pack:quaternius-stylized-nature-megakit/Fern_1",
+      "category": "other",
+      "name": "Fern 1",
+      "file": "quaternius-stylized-nature-megakit/Fern_1.gltf",
+      "size_m": [
+        2.827,
+        0.84,
+        2.652
+      ],
+      "tags": [
+        "plant",
+        "textured"
+      ],
+      "licence": "CC0",
+      "source": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "pack": "quaternius-stylized-nature-megakit"
+    },
+    {
+      "id": "pack:quaternius-stylized-nature-megakit/Flower_3_Group",
+      "category": "flower",
+      "name": "Flower 3 group",
+      "file": "quaternius-stylized-nature-megakit/Flower_3_Group.gltf",
+      "size_m": [
+        1.488,
+        2.055,
+        1.591
+      ],
+      "tags": [
+        "textured"
+      ],
+      "licence": "CC0",
+      "source": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "pack": "quaternius-stylized-nature-megakit"
+    },
+    {
+      "id": "pack:quaternius-stylized-nature-megakit/Flower_3_Single",
+      "category": "flower",
+      "name": "Flower 3 single",
+      "file": "quaternius-stylized-nature-megakit/Flower_3_Single.gltf",
+      "size_m": [
+        0.907,
+        2.068,
+        0.878
+      ],
+      "tags": [
+        "textured"
+      ],
+      "licence": "CC0",
+      "source": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "pack": "quaternius-stylized-nature-megakit"
+    },
+    {
+      "id": "pack:quaternius-stylized-nature-megakit/Flower_4_Group",
+      "category": "flower",
+      "name": "Flower 4 group",
+      "file": "quaternius-stylized-nature-megakit/Flower_4_Group.gltf",
+      "size_m": [
+        1.781,
+        2.487,
+        1.368
+      ],
+      "tags": [
+        "textured"
+      ],
+      "licence": "CC0",
+      "source": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "pack": "quaternius-stylized-nature-megakit"
+    },
+    {
+      "id": "pack:quaternius-stylized-nature-megakit/Flower_4_Single",
+      "category": "flower",
+      "name": "Flower 4 single",
+      "file": "quaternius-stylized-nature-megakit/Flower_4_Single.gltf",
+      "size_m": [
+        1.072,
+        2.419,
+        0.773
+      ],
+      "tags": [
+        "textured"
+      ],
+      "licence": "CC0",
+      "source": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "pack": "quaternius-stylized-nature-megakit"
+    },
+    {
+      "id": "pack:quaternius-stylized-nature-megakit/Grass_Common_Short",
+      "category": "other",
+      "name": "Grass common short",
+      "file": "quaternius-stylized-nature-megakit/Grass_Common_Short.gltf",
+      "size_m": [
+        0.639,
+        1.334,
+        0.737
+      ],
+      "tags": [
+        "plant",
+        "textured"
+      ],
+      "licence": "CC0",
+      "source": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "pack": "quaternius-stylized-nature-megakit"
+    },
+    {
+      "id": "pack:quaternius-stylized-nature-megakit/Grass_Common_Tall",
+      "category": "other",
+      "name": "Grass common tall",
+      "file": "quaternius-stylized-nature-megakit/Grass_Common_Tall.gltf",
+      "size_m": [
+        0.895,
+        1.873,
+        0.993
+      ],
+      "tags": [
+        "plant",
+        "textured"
+      ],
+      "licence": "CC0",
+      "source": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "pack": "quaternius-stylized-nature-megakit"
+    },
+    {
+      "id": "pack:quaternius-stylized-nature-megakit/Plant_1",
+      "category": "other",
+      "name": "Plant 1",
+      "file": "quaternius-stylized-nature-megakit/Plant_1.gltf",
+      "size_m": [
+        1.273,
+        1.014,
+        1.386
+      ],
+      "tags": [
+        "plant",
+        "textured"
+      ],
+      "licence": "CC0",
+      "source": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "pack": "quaternius-stylized-nature-megakit"
+    },
+    {
+      "id": "pack:quaternius-stylized-nature-megakit/Plant_1_Big",
+      "category": "other",
+      "name": "Plant 1 big",
+      "file": "quaternius-stylized-nature-megakit/Plant_1_Big.gltf",
+      "size_m": [
+        1.807,
+        2.348,
+        1.954
+      ],
+      "tags": [
+        "plant",
+        "textured"
+      ],
+      "licence": "CC0",
+      "source": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "pack": "quaternius-stylized-nature-megakit"
+    },
+    {
+      "id": "prim:pot",
+      "category": "pot",
+      "name": "Flower pot",
+      "file": null,
+      "size_m": [
+        0.4,
+        0.35,
+        0.4
+      ],
+      "tags": [
+        "cylinder",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/suchohrad_pipeline/primitives.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:slab",
+      "category": "slab",
+      "name": "Pavement slab",
+      "file": null,
+      "size_m": [
+        1.0,
+        0.1,
+        1.0
+      ],
+      "tags": [
+        "box",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/suchohrad_pipeline/primitives.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:wall",
+      "category": "wall",
+      "name": "Wall",
+      "file": null,
+      "size_m": [
+        3.0,
+        1.2,
+        0.2
+      ],
+      "tags": [
+        "box",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/suchohrad_pipeline/primitives.py)",
+      "pack": null
+    }
+  ]
+}

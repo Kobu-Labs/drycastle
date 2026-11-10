@@ -22,6 +22,7 @@ from shapely.geometry import LineString, MultiLineString, Point, Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, nearest_points, unary_union
 
+from suchohrad_pipeline.assets import load_manifest, validate_asset_ref
 from suchohrad_pipeline.buildings import footprint_polygon
 from suchohrad_pipeline.config import DEFAULT_AREA, area_paths
 from suchohrad_pipeline.edits import (
@@ -518,6 +519,24 @@ def plan_edits(
     return plan
 
 
+def unknown_asset_warnings(objects: list[dict]) -> list[str]:
+    """Warnings for placed objects whose asset id is not in ``assets/manifest.json``.
+
+    Output is unaffected: the objects are written anyway. Nothing is reported when there is no
+    manifest to check against.
+    """
+    try:
+        manifest = load_manifest()
+    except (OSError, ValueError):
+        return []
+    out = []
+    for obj in objects:
+        problem = validate_asset_ref(obj["asset"], manifest)
+        if problem:
+            out.append(f"objects {obj['id']}: {problem}")
+    return out
+
+
 def run_props(
     work_dir: Path = DEFAULT_WORK_DIR,
     rules_path: Path = DEFAULT_RULES,
@@ -533,7 +552,7 @@ def run_props(
     fcfg = load_section("props", rules_path, area)
     chunk_m = float(parcels_doc["chunk_size_m"])
     plan = plan_edits(load_edits(edits_path), parcels, parcels_doc.get("origin_epsg5514"), chunk_m)
-    for warning in plan.warnings:
+    for warning in plan.warnings + unknown_asset_warnings(plan.objects):
         print(f"props: warning: {warning}", file=sys.stderr)
     fences = make_fences(
         parcels, buildings, graph, terrain, fcfg["fences"], specs=plan.specs, groups=plan.groups
