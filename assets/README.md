@@ -36,7 +36,7 @@ were not used (not part of the free download).
 
 ## Style: flat colour, and what the packs really contain
 
-The brief is flat-colour low-poly. The result of `make assets-check` (see `IMPORT-CHECK.md`):
+The brief is flat-colour low-poly. `make assets-check` loads every asset headless in Godot (all 40 pass; the Kenney Car Kit GLBs load fine despite a forum report of failures elsewhere, Godot ignores their harmless `KHR_texture_transform`). Findings:
 
 - Kenney packs: geometry is flat shaded, but every GLB references one shared palette texture
   (`Textures/colormap.png`, a 12 KB swatch atlas), not per-material colours. Visually flat; technically
