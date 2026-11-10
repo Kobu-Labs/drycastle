@@ -26,6 +26,11 @@ public partial class NetClient : Node
     public double BotSeconds = 6;
     public bool Headless;
     public float KillY = float.NegativeInfinity;
+    /// <summary>Match smoke role: "alice" (kills bob with the debug command) or "bob" (fires after each spawn); empty = normal bot/player.</summary>
+    public string MatchBot = "";
+    /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
+    public readonly ClientMatchState Match = new();
+    public bool Dead { get; private set; }
 
     readonly ENetConnection _conn = new();
     ENetPacketPeer? _peer;
@@ -44,6 +49,12 @@ public partial class NetClient : Node
     float _maxErr;
     NVec3 _meMin = new(float.MaxValue), _meMax = new(float.MinValue);
     bool _done;
+    // match smoke
+    double _spawnAt, _fireStart, _spawnProtection = 99;
+    EntityState _myState;
+    bool _sawProtected, _earlyCounted;
+    int _deaths, _earlyEnds;
+    readonly MatchBotAlice _alice = new();
 
     public override void _Ready()
     {
@@ -121,10 +132,42 @@ public partial class NetClient : Node
                 break;
             case JoinMsg j: _names[j.PlayerId] = j.Name; GD.Print($"client: {j.Name} #{j.PlayerId} joined"); break;
             case LeaveMsg l:
-                _names.Remove(l.PlayerId); _dec.Remove(l.PlayerId);
+                _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Remove(l.PlayerId);
                 if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
                 break;
-            case EventMsg e: EventReceived?.Invoke((EventKind)e.Kind, e.Payload); break;
+            case EventMsg e:
+                OnMatchEvent((EventKind)e.Kind, e.Payload);
+                EventReceived?.Invoke((EventKind)e.Kind, e.Payload);
+                break;
+        }
+    }
+
+    double Now => Time.GetTicksMsec() / 1000.0;
+
+    void OnMatchEvent(EventKind kind, byte[] payload)
+    {
+        if (!Match.Apply(kind, payload, Now)) return;
+        switch (kind)
+        {
+            case EventKind.MatchState: GD.Print($"client {PlayerName}: {Match.ScoreboardText(Now)}"); break;
+            case EventKind.Kill:
+                var k = Match.KillFeed[^1];
+                GD.Print($"client {PlayerName}: kill feed: {Match.NameOf(k.Killer)} -> {Match.NameOf(k.Victim)} (weapon {k.Weapon})");
+                break;
+            case EventKind.Spawn:
+                var sp = Match.LastSpawn.Values.Last();
+                GD.Print($"client {PlayerName}: spawn #{sp.Id} protected {sp.Protection:F1}s");
+                if (sp.Id == _myId && _me != null)
+                {
+                    Dead = false; _gotSelf = false; _pending.Clear(); // the next snapshot carries the spawn position
+                    _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
+                }
+                break;
+            case EventKind.Death:
+                var d = Match.LastDeath.Values.Last();
+                GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
+                if (d.Victim == _myId) { Dead = true; _deaths++; }
+                break;
         }
     }
 
@@ -176,6 +219,9 @@ public partial class NetClient : Node
             return;
         }
         _me!.Health = rec.Health;
+        _myState = rec.State;
+        if (rec.State == EntityState.Protected) _sawProtected = true;
+        if (rec.State == EntityState.Alive && _fireStart > 0 && !_earlyCounted && Now - _fireStart < 0.6 && _fireStart - _spawnAt < _spawnProtection - 1.0) { _earlyEnds++; _earlyCounted = true; }
         var idx = _pending.FindIndex(p => p.Input.Seq == ack);
         if (idx < 0) return;
         var predicted = _pending[idx].After;
@@ -200,11 +246,24 @@ public partial class NetClient : Node
     {
         if (_done || !_welcomed || _me == null || _peer == null) return;
         _elapsed += delta;
-        if (Bot && _elapsed >= BotSeconds) { FinishBot(); return; }
+        if (Bot && _elapsed >= BotSeconds) { if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
         if (!_gotSelf) return; // wait for our spawn position
         var dt = (float)delta;
         MoveInput mi;
-        if (Bot)
+        if (Bot && MatchBot != "")
+        {
+            // idle; bob fires 1 s after every spawn (ends spawn protection early), alice runs her script
+            var btn = MoveButtons.None;
+            if (MatchBot == "bob" && !Dead && Now - _spawnAt >= 1.0)
+            {
+                btn = MoveButtons.Fire;
+                if (_fireStart == 0) _fireStart = Now;
+            }
+            mi = new MoveInput { Buttons = Dead ? MoveButtons.None : btn, SpeedScale = 1 };
+            if (MatchBot == "alice") MatchAliceStep();
+            else MatchBobCheck();
+        }
+        else if (Bot)
         {
             // scripted walk: forward, changing heading every 1.5 s, a jump now and then
             var t = _elapsed;
@@ -213,7 +272,7 @@ public partial class NetClient : Node
             var jump = ((int)(t * 30) % 45) == 0 ? MoveButtons.Jump : MoveButtons.None;
             mi = new MoveInput { MoveY = 1, Yaw = yaw, Buttons = jump, SpeedScale = 1 };
         }
-        else mi = _me.Sample();
+        else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
         _me.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, _me.Pitch, 0);
         _me.Simulate(ni.ToMove(), dt);
@@ -237,6 +296,92 @@ public partial class NetClient : Node
                 r.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 r.Node.Rotation = new Vector3(0, s.Yaw, 0);
             }
+    }
+
+    void Debug(ushort victim)
+    {
+        _peer!.Send(Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, MatchCodec.EncodeDebugKill(victim))), (int)ENetPacketPeer.FlagReliable);
+        _conn.Flush();
+    }
+
+    sealed class MatchBotAlice
+    {
+        public ushort Victim;
+        public bool Attempted, Verified, Killed;
+        public double AttemptAt;
+        public int KillsBefore, KillsSent, Attempts;
+        public bool WasDead;
+    }
+
+    int MyKills() => Match.Rows.FirstOrDefault(r => r.Id == _myId).Kills;
+
+    void MatchAliceStep()
+    {
+        var a = _alice;
+        var now = Now;
+        if (Match.Restarts > 0) { MatchBotFinishAlice(); return; }
+        if (Match.Phase != MatchPhase.Running) return;
+        if (a.Victim == 0)
+        {
+            var row = Match.Rows.FirstOrDefault(r => r.Name == "bob");
+            if (row.Name == null) return;
+            a.Victim = row.Id;
+        }
+        if (!_dec.States.TryGetValue(a.Victim, out var v)) return;
+        switch (v.State)
+        {
+            case EntityState.Dead: a.Attempted = a.Verified = a.Killed = false; break;
+            case EntityState.Protected when !a.Attempted:
+                a.Attempted = true; a.AttemptAt = now; a.KillsBefore = MyKills(); a.Attempts++;
+                GD.Print($"client alice: trying to kill protected bob (attempt {a.Attempts})");
+                Debug(a.Victim);
+                break;
+            case EntityState.Protected when a.Attempted && !a.Verified && now - a.AttemptAt >= 0.4:
+                if (MyKills() != a.KillsBefore) { MatchFail("kill landed on a protected player"); return; }
+                a.Verified = true;
+                break;
+            case EntityState.Alive when !a.Killed && Match.Phase == MatchPhase.Running:
+                a.Killed = true; a.KillsSent++;
+                GD.Print($"client alice: killing unprotected bob (kill {a.KillsSent})");
+                Debug(a.Victim);
+                break;
+        }
+        // a respawn must take at least the announced delay
+        if (Match.DiedAt.TryGetValue(a.Victim, out var died) && Match.SpawnedAt.TryGetValue(a.Victim, out var sp) && sp > died && Match.LastDeath.TryGetValue(a.Victim, out var dm)
+            && sp - died < dm.RespawnDelay - 0.2 && !_respawnFailed)
+        { _respawnFailed = true; MatchFail($"respawn after {sp - died:F2}s, expected {dm.RespawnDelay:F1}s"); }
+    }
+
+    bool _respawnFailed;
+
+    void MatchBotFinishAlice()
+    {
+        var a = _alice;
+        var ok = Match.RoundsEnded == 1 && Match.Restarts == 1 && Match.Rows.All(r => r.Kills == 0 && r.Deaths == 0)
+                 && a.KillsSent >= 2 && a.Attempts >= 2 && !_respawnFailed;
+        GD.Print($"client alice: kills sent {a.KillsSent}, protection attempts {a.Attempts}, rounds ended {Match.RoundsEnded}, restarts {Match.Restarts}");
+        MatchResult(ok, ok ? "" : "round did not play out as expected");
+    }
+
+    void MatchBobCheck()
+    {
+        if (Match.Restarts > 0)
+        {
+            var ok = _deaths >= 2 && _sawProtected && _earlyEnds >= 1 && Match.RoundsEnded == 1;
+            GD.Print($"client bob: deaths {_deaths}, saw protection {_sawProtected}, early protection ends {_earlyEnds}, rounds ended {Match.RoundsEnded}");
+            MatchResult(ok, ok ? "" : "bob did not observe the expected events");
+        }
+    }
+
+    void MatchFail(string why) => MatchResult(false, why);
+
+    void MatchResult(bool ok, string why)
+    {
+        if (_done) return;
+        _done = true;
+        if (!ok) GD.PrintErr($"client {PlayerName}: match smoke failure: {why}");
+        GD.Print(ok ? "SHOOTER_MATCH_CLIENT_OK" : "SHOOTER_MATCH_CLIENT_FAIL");
+        GetTree().Quit(ok ? 0 : 2);
     }
 
     void FinishBot()

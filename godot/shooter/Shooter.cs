@@ -9,6 +9,9 @@ namespace Suchohrad.Shooter;
 ///   --map DIR                 map folder (else SUCHOHRAD_MAP, else ../../out/map relative to the project)
 ///   --connect HOST[:PORT] --name NAME   join a server (default port 27015); --headless-bot [--bot-seconds N] scripts a walk
 ///   --port N                  server listen port (default 27015); --quit-after SECONDS ends the server with a verdict
+///   --match-set k=v,k=v       server: override match.json values (score_goal, time_limit, respawn_delay, spawn_protection, end_screen_time, min_spawn_distance, min_players)
+///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
+///   --match-bot alice|bob     client: scripted match smoke role (alice kills bob with the debug command, bob fires after each spawn)
 ///   --smoke-move              client only: scripted movement check on the map collision (SHOOTER_SMOKE_MOVE_OK, exit 0; else exit 2)
 ///   --smoke                   load everything, print SHOOTER_SMOKE_OK and exit 0 (exit 2 on failure)
 /// No gameplay yet: this only boots the role on the loaded map.
@@ -19,6 +22,7 @@ public partial class Shooter : Node3D
     bool _smoke;
     bool _smokeMove;
     readonly Random _rng = new();
+    GameData _data = null!;
     int _frames;
 
     public override void _Ready()
@@ -30,7 +34,7 @@ public partial class Shooter : Node3D
         try
         {
             if (role is not ("server" or "client")) throw new InvalidOperationException($"unknown role {role} (server|client)");
-            var data = LoadData();
+            var data = _data = LoadData();
             GD.Print($"data: {data.Weapons.Weapons.Count} weapons, score goal {data.Match.ScoreGoal}, {data.Vehicles.Vehicles.Count} vehicle types");
             LoadMap(cfg);
             if (role == "server" && !_smoke) BuildServer(cfg);
@@ -85,11 +89,35 @@ public partial class Shooter : Node3D
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var server = new NetServer
         {
-            World = this, PickSpawn = () => RandomSpawn() + Vector3.Up * 0.1f, KillY = killY,
+            World = this, KillY = killY,
+            Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
+            MatchConfig = ApplyOverrides(_data.Match, cfg.Str("match-set")),
+            MatchSmoke = cfg.Flag("match-smoke"), DebugCommands = cfg.Flag("debug-cmds") || cfg.Flag("match-smoke"),
             Port = int.TryParse(cfg.Str("port", "27015"), out var port) ? port : 27015,
             QuitAfter = double.TryParse(cfg.Str("quit-after", "0"), out var q) ? q : 0,
         };
         AddChild(server);
+    }
+
+    static MatchConfig ApplyOverrides(MatchConfig m, string spec)
+    {
+        foreach (var kv in spec.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var p = kv.Split('=');
+            if (p.Length != 2 || !float.TryParse(p[1], System.Globalization.CultureInfo.InvariantCulture, out var v)) throw new InvalidOperationException($"bad --match-set entry {kv}");
+            switch (p[0])
+            {
+                case "score_goal": m.ScoreGoal = (int)v; break;
+                case "time_limit": m.TimeLimit = v; break;
+                case "respawn_delay": m.RespawnDelay = v; break;
+                case "spawn_protection": m.SpawnProtection = v; break;
+                case "end_screen_time": m.EndScreenTime = v; break;
+                case "min_spawn_distance": m.MinSpawnDistance = v; break;
+                case "min_players": m.MinPlayers = (int)v; break;
+                default: throw new InvalidOperationException($"unknown match key {p[0]}");
+            }
+        }
+        return m;
     }
 
     /// <summary>Networked client: light/sky, then prediction and interpolation via <see cref="NetClient"/>.</summary>
@@ -107,6 +135,7 @@ public partial class Shooter : Node3D
         {
             World = this, Host = host, Port = port, PlayerName = cfg.Str("name", "player"), Bot = bot, KillY = killY,
             BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6,
+            MatchBot = cfg.Str("match-bot"),
         });
     }
 

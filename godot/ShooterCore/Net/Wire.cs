@@ -13,6 +13,9 @@ public enum EventKind : byte
     Kill = 4,
     MatchState = 5,
     Explosion = 6,
+    Death = 7,
+    /// <summary>Client to server developer commands (only honoured when the server runs with --debug-cmds).</summary>
+    Debug = 8,
 }
 
 public abstract record ReliableMsg;
