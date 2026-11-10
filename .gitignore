@@ -1,0 +1,16 @@
+# data caches and generated output
+data/
+out/
+.venv/
+__pycache__/
+*.pyc
+# godot / dotnet
+.godot/
+.mono/
+bin/
+obj/
+*.translation
+# editor
+.idea/
+.vscode/
+answers.md
