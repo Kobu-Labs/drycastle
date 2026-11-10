@@ -84,13 +84,19 @@ public partial class EditorMode
     /// <summary>Regions in the file as last read, sorted by ID.</summary>
     public List<RegionInfo> Regions()
     {
+        var disk = Disk(); // _disk is replaced on every reload, so its identity keys the cache
+        if (ReferenceEquals(disk, _regionsFor) && _regionsCache != null) return new(_regionsCache);
         var list = new List<RegionInfo>();
-        if (RegionsOf(Disk()) is not { } ro) return list;
+        _regionsFor = disk;
+        _regionsCache = list;
+        if (RegionsOf(disk) is not { } ro) return new(list);
         foreach (var (id, e) in ro)
             if (e is Obj r && r.GetValueOrDefault("colour") is string c && ParsePolygon(r.GetValueOrDefault("polygon")) is { } ring)
                 list.Add(new RegionInfo(id, c, ring));
-        return list;
+        return new(list);
     }
+    Obj? _regionsFor;
+    List<RegionInfo>? _regionsCache;
 
     public RegionInfo? Region(string id) => Regions().FirstOrDefault(r => r.Id == id);
 
@@ -256,7 +262,10 @@ public partial class EditorMode
 
     /// <summary>The region under a map point; where regions overlap the higher ID wins, as it does on the ground.</summary>
     public string? RegionAt(double x, double y)
-        => Regions().Where(r => PointInRing(r.Points, x, y)).Select(r => r.Id).OrderBy(i => i, StringComparer.Ordinal).LastOrDefault();
+        => Regions().Where(r => PointInRing(r.Points, x, y)).Select(r => r.Id).OrderBy(i => RegionNumber(i)).ThenBy(i => i, StringComparer.Ordinal).LastOrDefault();
+
+    /// <summary>Numeric part of R-NNNN (R-10000 outranks R-9999); matches regions.region_rank.</summary>
+    static long RegionNumber(string id) => id.StartsWith("R-") && long.TryParse(id.AsSpan(2), out var n) ? n : -1;
 
     static bool PointInRing(List<(double x, double y)> ring, double x, double y)
     {

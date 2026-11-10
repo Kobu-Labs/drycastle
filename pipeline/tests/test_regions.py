@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+import shapely
 import trimesh
 from shapely.geometry import Polygon
 
@@ -20,10 +21,12 @@ from suchohrad_pipeline.edits import (
 )
 from suchohrad_pipeline.export import run_export
 from suchohrad_pipeline.regions import (
+    _terrain_triangles,
     drape,
     overlapping,
     plan_regions,
     region_meshes,
+    region_rank,
     road_layers,
     visible_area,
 )
@@ -374,3 +377,46 @@ def test_cli_region_run(ws, tmp_path, monkeypatch, capsys) -> None:
     assert "R-1" in capsys.readouterr().err
     monkeypatch.setattr(region_run, "area_paths", lambda area: SimpleNamespace(work=tmp_path / "missing"))
     assert cli.main(["region-run", "--edits", str(ws["edits"])]) == 1
+
+
+# --- review fixes ---------------------------------------------------------------------------
+
+
+def test_road_layers_do_not_depend_on_the_region_bbox() -> None:
+    def edge(eid, a, b, pts, width, highway):
+        return {"id": eid, "from": a, "to": b, "polyline": pts, "width": width,
+                "highway": highway, "surface": "asphalt", "length_m": 100.0, "oneway": False, "osm_id": eid}
+
+    nodes = [{"id": f"N-{k}", "x": x, "y": y} for k, (x, y) in enumerate([(20, 100), (160, 100), (20, 30)], 1)]
+    graph = {
+        "nodes": nodes,
+        "edges": [
+            edge("E-1", "N-1", "N-2", [[20, 100], [160, 100]], 3.0, "residential"),  # narrow, in the bbox
+            edge("E-2", "N-1", "N-3", [[20, 100], [20, 30]], 10.0, "residential"),  # wide arm, outside it
+        ],
+    }
+    layers = road_layers(graph, make_terrain(), ROADS, (100, 90, 130, 110))
+    outline = shapely.union_all([g for g, _ in layers])
+    # the junction patch has the widest arm's radius (5 m), not the narrow arm's
+    assert outline.contains(shapely.Point(22, 104))
+
+
+def test_higher_id_is_numeric_for_five_digit_ids() -> None:
+    plan = plan_of(**{"R-9999": region(polygon=sq(50, 120, 90, 150)), "R-10000": region("#ff0000", sq(70, 130, 110, 170))})
+    assert visible_area(plan, "R-10000").equals(plan.regions["R-10000"].polygon)
+    assert visible_area(plan, "R-9999").area == pytest.approx(40 * 30 - 20 * 20)
+    assert region_rank("R-10000") > region_rank("R-9999")
+
+
+def test_terrain_triangles_skip_cells_chunk_mesh_does_not_mesh() -> None:
+    t = make_terrain()
+    poly = Polygon([(60, 60), (80, 60), (80, 80), (60, 80)])
+    full = len(_terrain_triangles(t, poly))
+    i = j = int(60 // t.step) + 1
+    t.valid[j, i] = False  # a corner shared by four cells
+    assert len(_terrain_triangles(t, poly)) == full - 8
+    mesh = drape(poly, [1, 2, 3], t, [], RCFG["lift_m"], RCFG["road_lift_m"])
+    vx = i * t.step
+    hole = Polygon([(vx - t.step + 0.1, vx - t.step + 0.1), (vx + t.step - 0.1, vx - t.step + 0.1),
+                    (vx + t.step - 0.1, vx + t.step - 0.1), (vx - t.step + 0.1, vx + t.step - 0.1)])
+    assert footprint(mesh).intersection(hole).area < 1e-6

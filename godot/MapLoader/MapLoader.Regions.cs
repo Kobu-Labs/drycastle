@@ -42,6 +42,19 @@ public sealed partial class MapLoader
     /// or the GLB cannot be read. Baked nodes are hidden, never freed (they belong to the chunk files); regenerated
     /// ones are detached and queued for freeing exactly once.
     /// </summary>
+    /// <summary>Parse a region-run summary and its GLB without changing the map; throws exactly when ApplyRegions would before touching anything.</summary>
+    public void ValidateRegions(string summaryJsonPath)
+    {
+        string glbPath;
+        using (var doc = JsonDocument.Parse(File.ReadAllText(summaryJsonPath)))
+        {
+            var r = doc.RootElement;
+            _ = r.GetProperty("replaces").EnumerateArray().Select(e => e.GetString()!).ToList();
+            glbPath = r.TryGetProperty("glb", out var g) && g.ValueKind == JsonValueKind.String ? g.GetString()! : "";
+        }
+        if (glbPath != "") LoadGltf(glbPath).Free();
+    }
+
     public RegionResult ApplyRegions(string summaryJsonPath)
     {
         string glbPath;

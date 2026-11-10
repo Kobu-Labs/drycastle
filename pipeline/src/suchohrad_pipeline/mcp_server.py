@@ -59,6 +59,7 @@ from suchohrad_pipeline.edits import (
     resolve_fence,
     validate,
 )
+from suchohrad_pipeline.regions import region_rank
 from suchohrad_pipeline.roads import edge_lines
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 
@@ -345,6 +346,14 @@ def _read_edits(path: Path) -> Edits:
         ) from exc
 
 
+def _edits_doc(edits: Edits) -> dict:
+    """The edits as the document ``validate`` checks (regions included when present)."""
+    doc: dict = {"version": 1, "parcels": edits.parcels, "groups": edits.groups}
+    if edits.regions:
+        doc["regions"] = edits.regions
+    return doc
+
+
 def _empty_parcel_cleanup(edits: Edits) -> None:
     for pid in [p for p, e in edits.parcels.items() if not e]:
         del edits.parcels[pid]
@@ -470,10 +479,7 @@ class ParcelEditTools:
             edits = _read_edits(path)
             result = change(edits)
             _empty_parcel_cleanup(edits)
-            doc: dict = {"version": 1, "parcels": edits.parcels, "groups": edits.groups}
-            if edits.regions:
-                doc["regions"] = edits.regions
-            errors = validate(doc)
+            errors = validate(_edits_doc(edits))
             if errors:
                 raise ToolError(
                     "refused: the change would make edits.json invalid, nothing was written:\n"
@@ -1172,7 +1178,7 @@ class ParcelEditTools:
             else:
                 edits.parcels[owner]["objects"][edits.parcels[owner]["objects"].index(obj)] = new
             _empty_parcel_cleanup(edits)
-            errors = validate({"version": 1, "parcels": edits.parcels, "groups": edits.groups})
+            errors = validate(_edits_doc(edits))
             if errors:
                 raise ToolError(
                     "refused: the change would make edits.json invalid, nothing was written:\n"
@@ -1313,7 +1319,7 @@ class ParcelEditTools:
                 continue
             op = Polygon(region_ring(other["polygon"]))
             if op.is_valid and mine.intersection(op).area > 0.01:
-                winner = max(rid, oid)
+                winner = max(rid, oid, key=region_rank)
                 out.append(f"overlaps region {oid}; where they overlap {winner} wins (higher ID)")
         return out
 

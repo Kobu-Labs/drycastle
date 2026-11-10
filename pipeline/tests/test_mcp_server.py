@@ -610,3 +610,20 @@ def test_through_mcp_session(env):
 
     asyncio.run(run())
     canonical(settings)
+
+
+def test_validation_doc_includes_regions(env):
+    from suchohrad_pipeline.mcp_server import _edits_doc
+
+    tools, settings, _ = env
+    tools.create_region("#111111", polygon=SQUARE)
+    doc = _edits_doc(load_edits(settings.edits_path))
+    assert "R-0001" in doc["regions"]
+
+
+def test_region_overlap_winner_is_numeric(env):
+    tools, settings, _ = env
+    edits = load_edits(settings.edits_path)
+    edits.regions["R-9999"] = {"colour": "#111111", "polygon": SQUARE}
+    edits.regions["R-10000"] = {"colour": "#222222", "polygon": SQUARE}
+    assert "R-10000 wins" in type(tools)._overlap_warnings(edits, "R-9999")[0]

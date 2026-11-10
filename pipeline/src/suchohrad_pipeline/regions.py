@@ -89,10 +89,16 @@ def plan_regions(edits: Edits, origin: list[float] | None, terrain: Terrain | No
     return plan
 
 
+def region_rank(rid: str) -> tuple[int, str]:
+    """Sort key for "higher ID wins": numeric, so R-10000 beats R-9999 (IDs have 4+ digits)."""
+    tail = rid[2:] if rid.startswith("R-") else ""
+    return (int(tail), rid) if tail.isdigit() else (-1, rid)
+
+
 def visible_area(plan: RegionPlan, rid: str) -> BaseGeometry:
     """The polygon of ``rid`` minus every region with a higher ID (the higher ID wins)."""
     geom = plan.regions[rid].polygon
-    higher = [r.polygon for other, r in plan.regions.items() if other > rid]
+    higher = [r.polygon for other, r in plan.regions.items() if region_rank(other) > region_rank(rid)]
     if higher:
         geom = geom.difference(shapely.union_all(higher))
     return geom
@@ -135,7 +141,8 @@ def road_layers(
             edges.append(e)
     if not edges:
         return []
-    mesh = road_mesh({**graph, "edges": edges}, terrain, roads_cfg)
+    # junction patches depend on every edge at a node, so they come from the full graph
+    mesh = road_mesh(graph, terrain, roads_cfg, only={e["id"] for e in edges})
     if not mesh.face_count:
         return []
     base, ranks = float(roads_cfg["lift_m"]), len(roads_cfg["order"])
@@ -166,6 +173,8 @@ def _terrain_triangles(terrain: Terrain, geom: BaseGeometry) -> list[Polygon]:
     x0, y0 = (terrain.i0 + ci) * s, (terrain.j0 + cj) * s
     shapely.prepare(geom)
     near = shapely.intersects(geom, shapely.box(x0, y0, x0 + s, y0 + s))
+    v = terrain.valid  # cells chunk_mesh does not mesh (any invalid corner) get no triangles
+    near &= v[cj, ci] & v[cj, ci + 1] & v[cj + 1, ci] & v[cj + 1, ci + 1]
     h = terrain.heights
     tris: list[Polygon] = []
     for i, j, x, y in zip(ci[near], cj[near], x0[near], y0[near], strict=True):

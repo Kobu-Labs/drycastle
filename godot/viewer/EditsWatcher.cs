@@ -73,7 +73,7 @@ public partial class EditsWatcher : Node
 
     sealed class Run
     {
-        public Task<(int code, string err)> Task = null!;
+        public Task<(int code, string err, string tool)> Task = null!;
         public Snapshot Snap = null!;
         public List<string> Ids = new();
         public List<string> RegionIds = new();
@@ -492,14 +492,14 @@ public partial class EditsWatcher : Node
         run.Task = Task.Run(() =>
         {
             var log = new StringBuilder();
-            foreach (var psi in new[] { parcelPsi, regionPsi })
+            foreach (var (psi, tool) in new[] { (parcelPsi, "parcel-run"), (regionPsi, "region-run") })
             {
                 if (psi == null) continue;
                 var (code, err) = RunProcess(run, psi);
                 log.Append(err);
-                if (code != 0) return (code, log.ToString());
+                if (code != 0) return (code, log.ToString(), tool);
             }
-            return (0, log.ToString());
+            return (0, log.ToString(), "");
         });
         _run = run;
         GD.Print($"edits changed: regenerating {string.Join(", ", ids.Concat(regionIds))}");
@@ -509,18 +509,21 @@ public partial class EditsWatcher : Node
     void Finish(Run run)
     {
         _run = null;
-        var (code, err) = run.Task.Result;
+        var (code, err, failedTool) = run.Task.Result;
         try
         {
             if (code != 0)
             {
-                Fail($"{(run.Ids.Count > 0 ? "parcel-run" : "region-run")} failed for {string.Join(", ", run.Ids.Concat(run.RegionIds))} (exit {code}): {err.Trim()}");
+                Fail($"{failedTool} failed for {string.Join(", ", run.Ids.Concat(run.RegionIds))} (exit {code}): {err.Trim()}");
                 return;
             }
             Suchohrad.MapLoader.FragmentResult result = new(Array.Empty<string>(), 0, 0);
             Suchohrad.MapLoader.RegionResult? regions = null;
             try
             {
+                // applied together or not at all: parse the region result first (it changes nothing),
+                // so neither apply below can fail after the other has already swapped nodes
+                if (run.RegionIds.Count > 0) Map.ValidateRegions(run.RegionSummary);
                 if (run.Ids.Count > 0) result = Map.ApplyFragment(run.Fragment);
                 if (run.RegionIds.Count > 0) regions = Map.ApplyRegions(run.RegionSummary);
             }
