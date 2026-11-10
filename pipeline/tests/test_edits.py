@@ -458,7 +458,7 @@ def test_objects_json_content_and_order(ws, tmp_path, capsys) -> None:
                     "objects": [
                         {
                             "id": "z-bench",
-                            "asset": "prim:box",
+                            "asset": "prim:slab",
                             "position": [ORIGIN[0] + 120, ORIGIN[1] + 60],
                             "colour": "#334455",
                         }
@@ -468,7 +468,7 @@ def test_objects_json_content_and_order(ws, tmp_path, capsys) -> None:
                     "objects": [
                         {
                             "id": "car-1",
-                            "asset": "pack:cars/sedan",
+                            "asset": "pack:kenney-car-kit/sedan",
                             "position": [ORIGIN[0] + 50.25, ORIGIN[1] + 50],
                             "z": 101.5,
                             "rotation_deg": 90,
@@ -486,7 +486,7 @@ def test_objects_json_content_and_order(ws, tmp_path, capsys) -> None:
     car, bench = doc["objects"]
     assert car == {
         "id": "car-1",
-        "asset": "pack:cars/sedan",
+        "asset": "pack:kenney-car-kit/sedan",
         "position": [50.25, 50.0],
         "z": 101.5,
         "rotation_deg": 90.0,
