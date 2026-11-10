@@ -1,0 +1,5 @@
+# Copy to slice.local.yaml (gitignored) and fill in your own values.
+# The slice is a square around the centroid of one OSM way (for example a building).
+osm_way: 1234567890   # placeholder: OSM way id whose centroid is the slice centre
+radius_m: 100         # half-side of the slice in metres (default 100)
+margin_m: 25          # extra metres fetched around the slice (default 25)
