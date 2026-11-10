@@ -7,7 +7,7 @@ A GTA-like open-world game set in the real village of Suchohrad (Slovakia), in a
 | Path | What it is |
 | --- | --- |
 | `pipeline/` | Python (uv) project that generates the base map. Package `suchohrad_pipeline`, one stub per stage. |
-| `pipeline/config/` | Rules and manual overrides for the pipeline (explanatory stubs for now). |
+| `pipeline/config/` | Rules, manual building overrides and hand edits (`edits.json`) for the pipeline. |
 | `godot/MapLoader/` | C# class library, shared runtime loader for chunk glTF and parcel replacement. |
 | `godot/netspike/` | Godot C# project, 64-client headless netcode spike (issue #18); report in `docs/spikes/netcode-spike.md`. |
 | `godot/viewer/` | Godot 4.7 C# project for looking at the generated map. |
@@ -189,6 +189,14 @@ and of gardens near buildings (seeded per parcel, a gate gap on road frontage, n
 buildings or the carriageway), OSM trees and seeded rule-based trees in gardens, plots and forests
 (blocky box canopy, or stacked pyramids in forests). Fences also get a simple closed-box
 collision node; trees have no collision in v1.
+
+**Hand edits** (`pipeline/config/edits.json`, read by the props stage; `--edits PATH` overrides the
+file): per-parcel fence mode (`auto`, `none`, `custom` with a type, height, colour and gaps),
+property groups (`G-NNNN`: one fence around the members' combined outer edge), tree density or
+count with a seed offset, and placed objects (`pack:` or `prim:` assets, absolute S-JTSK metres).
+Objects go to `work/objects.json`. The format and validator are documented in
+`pipeline/src/suchohrad_pipeline/edits.py`. Entries for parcels that no longer exist are skipped
+with a warning; schema errors fail the stage.
 
 **Spawns**: `out/map/spawns.json` has a seeded subset (default 60) of points on roads and on
 garden, field and other parcels, at least `min_building_distance_m` from any building, with
