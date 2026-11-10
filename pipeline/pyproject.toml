@@ -11,10 +11,12 @@ dependencies = [
     "rasterio",
     "requests",
     "pyyaml",
+    "mapbox-earcut>=2.1.0",
 ]
 
 [dependency-groups]
 dev = [
+    "matplotlib>=3.11.2",
     "pytest",
     "ruff",
 ]

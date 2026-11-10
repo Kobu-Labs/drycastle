@@ -1,8 +1,7 @@
 # Parcel kind and building rules for the base map.
 #
-# Later stages will add default building heights, roof types and facade colour palettes here.
-# The rules are read by the `parcels` stage (and the later rules stage); changing a value and
-# re-running the pipeline regenerates the map.
+# Read by the `parcels` stage (parcel kinds, chunking) and the `rules` stage (`buildings` section
+# at the end). Changing a value and re-running the pipeline regenerates the map.
 
 # --- Parcel registry matching ---------------------------------------------------------------
 registry:
@@ -61,3 +60,68 @@ chunking:
   # Edge of a square chunk in metres, on a grid anchored at the local origin (slice centre).
   # A parcel belongs to the chunk containing its anchor point.
   size_m: 250
+
+# --- Buildings (rules stage) ----------------------------------------------------------------
+# One entry per building in data/work/buildings.json. Order of precedence for every value:
+#   1. pipeline/config/overrides.yaml (see there)
+#   2. OSM tags: height, building:levels, roof:shape, roof:levels
+#   3. `types`: class chosen by the OSM building=<value> tag
+#   4. `areas`: class chosen by footprint area (first entry whose max_area_m2 >= area)
+# Everything else (jitter, hipped-or-gabled, colours) comes from a random generator seeded with
+# sha256(parcel id + ":" + building id), so the same input always gives the same map.
+buildings:
+  # building:levels -> height. height_m is to the top of the roof (as in OSM), the eave
+  # (wall top) is height_m minus the roof rise.
+  metres_per_level: 3.0
+  # roof:levels -> roof rise, per roof level.
+  metres_per_roof_level: 1.5
+  # Walls never get lower than this; a pitched roof is flattened to fit.
+  min_eave_height_m: 2.4
+  # Pitched roofs rise at most this much; a rise below min_roof_rise_m becomes a flat roof.
+  max_roof_rise_m: 5.0
+  min_roof_rise_m: 0.5
+  # A pitched roof needs the footprint to fill at least this fraction of its minimum rotated
+  # rectangle (the ridge runs along the rectangle's longest side). L- and U-shapes get a flat roof.
+  min_roof_fill: 0.8
+  # Heights from classes get a random offset in +-height_jitter_m (rounded to 0.1 m).
+  height_jitter_m: 0.6
+  # OSM roof:shape -> our roof type (flat, gabled, hipped). Unlisted shapes are ignored.
+  roof_shapes:
+    flat: flat
+    skillion: flat   # mono-pitch is not modelled
+    gabled: gabled
+    gable: gabled
+    hipped: hipped
+    half-hipped: hipped
+    pyramidal: hipped
+  # Class fields: height_m (to the roof top), roof (flat | gabled | hipped, or a mapping of
+  # type -> weight, e.g. {gabled: 3, hipped: 1}), pitch_deg (pitched roofs; default 30).
+  types:
+    shed: {height_m: 3.0, roof: flat}
+    hut: {height_m: 3.0, roof: flat}
+    carport: {height_m: 3.0, roof: flat}
+    garage: {height_m: 3.2, roof: flat}
+    garages: {height_m: 3.2, roof: flat}
+    roof: {height_m: 3.5, roof: flat}
+    barn: {height_m: 8.0, roof: gabled, pitch_deg: 20}
+    farm_auxiliary: {height_m: 6.0, roof: gabled, pitch_deg: 20}
+    stable: {height_m: 5.5, roof: gabled, pitch_deg: 20}
+    industrial: {height_m: 8.0, roof: flat}
+    warehouse: {height_m: 8.0, roof: flat}
+    commercial: {height_m: 7.0, roof: flat}
+    retail: {height_m: 6.5, roof: flat}
+    apartments: {height_m: 12.0, roof: flat}
+    church: {height_m: 11.0, roof: gabled, pitch_deg: 35}
+    chapel: {height_m: 7.0, roof: gabled, pitch_deg: 35}
+  # Fallback classes by footprint area in m2, checked top to bottom; the last has no limit.
+  areas:
+    - {name: tiny, max_area_m2: 25, height_m: 3.0, roof: flat}
+    - {name: small, max_area_m2: 60, height_m: 4.5, roof: gabled}
+    - {name: house, max_area_m2: 300, height_m: 6.5, roof: {gabled: 3, hipped: 1}}
+    - {name: large, height_m: 8.0, roof: gabled, pitch_deg: 15}
+  # Flat colours as #rrggbb. Wall and roof are picked from these lists by the seeded generator.
+  # Muted warm walls; red/brown/grey roofs. Flat roofs use the `flat` list.
+  colours:
+    walls: ["#e8dcc0", "#d9c7a0", "#cfb48c", "#e6cfc0", "#d8c0b0", "#ece4d0", "#c9b8a0", "#dcd2b8"]
+    roofs: ["#a8442f", "#b5523a", "#8c3a2a", "#7a4a35", "#6b5a4c", "#5e5e63", "#7c7f86"]
+    flat_roofs: ["#6a6a6e", "#7c7f86", "#8a8478", "#5c5f66"]
