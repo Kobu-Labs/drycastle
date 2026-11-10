@@ -428,40 +428,13 @@ public partial class EditorMode
     CheckBox _radioRules = null!, _radioDensity = null!, _radioCount = null!;
     HBoxContainer _scopeRow = null!;
     string _gapRowsKey = "";
-    readonly Dictionary<string, Control> _sectionBodies = new();
 
-    static readonly Color Grey = new(0.62f, 0.64f, 0.68f);
+    static readonly Color Grey = EditorTheme.Dim;
 
-    VBoxContainer Section(VBoxContainer parent, string title, bool open)
-    {
-        var body = new VBoxContainer();
-        body.AddThemeConstantOverride("separation", 6);
-        var head = new Button { Flat = true, Alignment = HorizontalAlignment.Left, FocusMode = Control.FocusModeEnum.None };
-        head.AddThemeFontSizeOverride("font_size", 17);
-        head.AddThemeColorOverride("font_color", new Color(1f, 0.92f, 0.4f));
-        void Set(bool o) { body.Visible = o; head.Text = (o ? "v " : "> ") + title; }
-        head.Pressed += () => Set(!body.Visible);
-        Set(open);
-        parent.AddChild(head);
-        parent.AddChild(body);
-        _sectionBodies[title] = body;
-        _sectionHeads[title] = Set;
-        return body;
-    }
-
-    readonly Dictionary<string, Action<bool>> _sectionHeads = new();
-
-    /// <summary>Open or close a panel section by title (Selection stays; Group, Fence, Trees); used by screenshots.</summary>
-    public void SetSectionOpen(string title, bool open)
-    {
-        if (_sectionHeads.TryGetValue(title, out var set)) set(open);
-    }
-
-    static Label Note(string text = "", int size = 14)
+    static Label Note(string text = "")
     {
         var l = new Label { Text = text, AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
-        l.AddThemeFontSizeOverride("font_size", size);
-        l.AddThemeColorOverride("font_color", Grey);
+        l.ThemeTypeVariation = "Dim";
         return l;
     }
 
@@ -469,7 +442,6 @@ public partial class EditorMode
     {
         var r = new HBoxContainer();
         var l = new Label { Text = label, CustomMinimumSize = new Vector2(labelWidth, 0) };
-        l.AddThemeFontSizeOverride("font_size", 15);
         r.AddChild(l);
         field.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         r.AddChild(field);
@@ -479,7 +451,6 @@ public partial class EditorMode
     static SpinBox Spin(double min, double max, double step, string suffix = "")
     {
         var s = new SpinBox { MinValue = min, MaxValue = max, Step = step, Suffix = suffix, AllowGreater = false, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        s.GetLineEdit().AddThemeFontSizeOverride("font_size", 15);
         // after Enter in the field, release the focus so the next Enter applies the changes
         s.GetLineEdit().TextSubmitted += _ => s.GetLineEdit().ReleaseFocus();
         return s;
@@ -488,19 +459,16 @@ public partial class EditorMode
     CheckBox SetBox(string text = "set")
     {
         var c = new CheckBox { Text = text, FocusMode = Control.FocusModeEnum.None };
-        c.AddThemeFontSizeOverride("font_size", 13);
         return c;
     }
 
     void BuildPanelHeader(VBoxContainer outer)
     {
         _hdrLabel = new Label { Text = "Nothing selected", MouseFilter = Control.MouseFilterEnum.Ignore };
-        _hdrLabel.AddThemeFontSizeOverride("font_size", 20);
-        _hdrLabel.AddThemeColorOverride("font_color", Colors.White);
+        _hdrLabel.ThemeTypeVariation = "Title";
         outer.AddChild(_hdrLabel);
         _dirtyLabel = new Label { Text = "* unsaved changes", Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore };
-        _dirtyLabel.AddThemeFontSizeOverride("font_size", 15);
-        _dirtyLabel.AddThemeColorOverride("font_color", new Color(1f, 0.65f, 0.2f));
+        _dirtyLabel.ThemeTypeVariation = "Warn";
         outer.AddChild(_dirtyLabel);
         _scopeRow = new HBoxContainer { Visible = false };
         _scopeOpt = new OptionButton { FocusMode = Control.FocusModeEnum.None };
@@ -516,7 +484,7 @@ public partial class EditorMode
 
     void BuildPanelFooter(VBoxContainer outer)
     {
-        _footLabel = Note("no unsaved changes", 14);
+        _footLabel = Note("no unsaved changes");
         outer.AddChild(_footLabel);
         var r = new HBoxContainer();
         _btnApply = Btn("Apply (Enter)", () => Apply());
@@ -568,7 +536,7 @@ public partial class EditorMode
         var cr = Row("colour", _colourBtn); cr.AddChild(_colourChk); body.AddChild(cr);
 
         var gh = new Label { Text = "Gates" };
-        gh.AddThemeFontSizeOverride("font_size", 15);
+        gh.ThemeTypeVariation = "Header";
         body.AddChild(gh);
         _gapsBox = new VBoxContainer();
         body.AddChild(_gapsBox);
@@ -588,7 +556,6 @@ public partial class EditorMode
         CheckBox Radio(string text, string kind)
         {
             var c = new CheckBox { Text = text, ButtonGroup = group, FocusMode = Control.FocusModeEnum.None };
-            c.AddThemeFontSizeOverride("font_size", 15);
             c.Toggled += on => { if (on && !_syncing) SetTreesKind(kind); };
             return c;
         }
@@ -720,7 +687,6 @@ public partial class EditorMode
                 var idx = i;
                 var row = new HBoxContainer { Name = $"gap{i}" };
                 var pick = new Button { Text = $"gate {i + 1}", FocusMode = Control.FocusModeEnum.None, ToggleMode = true };
-                pick.AddThemeFontSizeOverride("font_size", 14);
                 pick.Pressed += () => SelectGate(idx);
                 var w = Spin(EditSchema.GateMin, 30, EditSchema.GateSnap, " m");
                 w.ValueChanged += v => { if (!_syncing) SetGapWidth(idx, v); };

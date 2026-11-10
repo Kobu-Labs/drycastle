@@ -558,7 +558,7 @@ public partial class EditorMode
     SpinBox _objX = null!, _objY = null!, _objRot = null!, _objScale = null!;
     CheckBox _objColourChk = null!;
     ColorPickerButton _objColour = null!;
-    Button _btnUndo = null!, _btnRedo = null!;
+    Button _btnUndo = null!, _btnRedo = null!; // the rail buttons (EditorUi.cs)
     readonly List<(AssetInfo info, Button btn)> _palButtons = new();
     readonly Dictionary<string, (Button head, VBoxContainer body, int count)> _palGroups = new();
     readonly Dictionary<string, bool> _palOpen = new();
@@ -578,11 +578,6 @@ public partial class EditorMode
         };
         BuildGizmo();
 
-        var ur = new HBoxContainer();
-        _btnUndo = Btn("Undo (Ctrl+Z)", () => Undo());
-        _btnRedo = Btn("Redo (Ctrl+Y)", () => Redo());
-        foreach (var b in new[] { _btnUndo, _btnRedo }) { b.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; ur.AddChild(b); }
-        body.AddChild(ur);
         _undoInfo = Note();
         body.AddChild(_undoInfo);
         _objCount = Note();
@@ -590,10 +585,8 @@ public partial class EditorMode
 
         // selected object
         _objBox = new VBoxContainer { Visible = false };
-        _objBox.AddThemeConstantOverride("separation", 4);
         var head = new Label { Text = "Selected object" };
-        head.AddThemeFontSizeOverride("font_size", 15);
-        head.AddThemeColorOverride("font_color", new Color(1f, 0.92f, 0.4f));
+        head.ThemeTypeVariation = "Header";
         _objBox.AddChild(head);
         _objAsset = Note("");
         _objBox.AddChild(_objAsset);
@@ -625,13 +618,11 @@ public partial class EditorMode
 
         // palette
         var ph = new Label { Text = "Palette" };
-        ph.AddThemeFontSizeOverride("font_size", 15);
-        ph.AddThemeColorOverride("font_color", new Color(1f, 0.92f, 0.4f));
+        ph.ThemeTypeVariation = "Header";
         body.AddChild(ph);
         _objStatus = Note("");
         body.AddChild(_objStatus);
         _filterEdit = new LineEdit { PlaceholderText = "filter (name, id, category)", ClearButtonEnabled = true };
-        _filterEdit.AddThemeFontSizeOverride("font_size", 15);
         _filterEdit.TextChanged += t => SetPaletteFilter(t);
         body.AddChild(_filterEdit);
 
@@ -643,11 +634,9 @@ public partial class EditorMode
             if (items.Count == 0) continue;
             var gbody = new VBoxContainer();
             var grid = new GridContainer { Columns = 2 };
-            grid.AddThemeConstantOverride("h_separation", 4);
-            grid.AddThemeConstantOverride("v_separation", 4);
             gbody.AddChild(grid);
             var ghead = new Button { Flat = true, Alignment = HorizontalAlignment.Left, FocusMode = Control.FocusModeEnum.None };
-            ghead.AddThemeFontSizeOverride("font_size", 16);
+            ghead.ThemeTypeVariation = "FlatButton";
             var capture = cat;
             ghead.Pressed += () => SetPaletteGroupOpen(capture, !GroupOpen(capture));
             body.AddChild(ghead);
@@ -656,7 +645,6 @@ public partial class EditorMode
             {
                 var info = a;
                 var b = new Button { Text = a.Name, ToggleMode = true, FocusMode = Control.FocusModeEnum.None, ClipText = true, TooltipText = a.Id, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 26) };
-                b.AddThemeFontSizeOverride("font_size", 13);
                 b.Pressed += () => { if (PlacementAsset == info.Id) DisarmPlacement(); else ArmPlacement(info.Id); };
                 grid.AddChild(b);
                 _palButtons.Add((a, b));
@@ -752,6 +740,6 @@ public partial class EditorMode
             ? "placing: LMB place, R / Shift+R rotate, Ctrl free position, Esc or RMB stop, Ctrl+Z undo"
             : SelectedObjectId != null
                 ? "object: drag moves, drag the ring rotates, arrows nudge, Del delete, Ctrl+D duplicate, R rotate, Ctrl+Z undo, Esc deselect"
-                : "WASD fly, RMB look, LMB select, Shift+LMB add, G group, T top-down, Enter apply, Ctrl+Z undo, Esc clear, F2 walk";
+                : "WASD fly, RMB look, LMB select, Shift+LMB add, G group, T top-down, Enter apply, Ctrl+Z undo, Esc back, F1 controls, F2 walk";
     }
 }

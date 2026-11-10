@@ -27,7 +27,18 @@ public partial class EditorMode : Node
     public Camera3D CurrentCamera => Active ? FlyCam : Player.Camera;
     public SortedSet<string> Selection { get; } = new(StringComparer.Ordinal);
     public string? HoverId { get; private set; }
-    public float Speed { get; private set; } = 25f;
+    public float Speed { get; private set; } = 40f;
+    const float MinSpeed = 1f, MaxSpeed = 800f;
+    static double SliderToSpeed(double v) => MinSpeed * Math.Pow(MaxSpeed / MinSpeed, v / 100.0);
+    static double SpeedToSlider(double s) => 100.0 * Math.Log(s / MinSpeed) / Math.Log(MaxSpeed / MinSpeed);
+
+    /// <summary>Set the fly speed in m/s (clamped); keeps the slider in sync.</summary>
+    public void SetSpeed(float speed, bool fromSlider = false)
+    {
+        Speed = Mathf.Clamp(speed, MinSpeed, MaxSpeed);
+        if (!fromSlider && _speedSlider != null) _speedSlider.SetValueNoSignal(SpeedToSlider(Speed));
+        if (_speedLabel != null) _speedLabel.Text = $"{Speed:F0} m/s";
+    }
     public string StatusMessage { get; private set; } = "";
     public Node3D OutlineRoot { get; private set; } = null!;
     public bool TopDown => _savedCam != null;
@@ -49,6 +60,7 @@ public partial class EditorMode : Node
 
     CanvasLayer _ui = null!;
     PanelContainer _panel = null!, _statusBar = null!;
+    HSlider _speedSlider = null!;
     Label _hudLabel = null!, _hoverLabel = null!, _statusLabel = null!, _hintLabel = null!;
     Label _selLabel = null!, _groupLabel = null!;
     Button _btnGroup = null!, _btnAdd = null!, _btnRemove = null!, _btnDissolve = null!;
@@ -191,7 +203,8 @@ public partial class EditorMode : Node
         => PickRay(FlyCam.ProjectRayOrigin(screen), FlyCam.ProjectRayNormal(screen), out point);
 
     bool OverUi(Vector2 mouse)
-        => _ui.Visible && (_panel.GetGlobalRect().HasPoint(mouse) || _statusBar.GetGlobalRect().HasPoint(mouse));
+        => _ui.Visible && ((_panel.Visible && _panel.GetGlobalRect().HasPoint(mouse)) || _rail.GetGlobalRect().HasPoint(mouse)
+            || _statusBar.GetGlobalRect().HasPoint(mouse) || (_cheat.Visible && _cheat.GetGlobalRect().HasPoint(mouse)));
 
     // ---- selection ----
 
@@ -199,18 +212,32 @@ public partial class EditorMode : Node
     public void Click(string? parcelId, bool shift)
     {
         var before = string.Join(",", Selection);
+        var unit = parcelId == null ? new List<string>() : GroupUnit(parcelId);
         if (shift)
         {
-            if (parcelId != null && !Selection.Remove(parcelId)) Selection.Add(parcelId);
+            if (unit.Count > 0)
+            {
+                // a group is one thing: toggle all of its members together
+                if (unit.Any(Selection.Contains)) foreach (var m in unit) Selection.Remove(m);
+                else foreach (var m in unit) Selection.Add(m);
+            }
         }
         else
         {
             Selection.Clear();
-            if (parcelId != null) Selection.Add(parcelId);
+            foreach (var m in unit) Selection.Add(m);
         }
         if (string.Join(",", Selection) == before) return;
         _outlinesDirty = _panelDirty = true;
         SelectionChanged?.Invoke();
+    }
+
+    /// <summary>The parcel itself, or all members of its property group (a group is shown and picked as one shape).</summary>
+    List<string> GroupUnit(string parcelId)
+    {
+        var g = Group(parcelId);
+        if (g == null) return new List<string> { parcelId };
+        return Map.Parcels.Values.Where(p => p.Group == g).Select(p => p.Id).OrderBy(x => x, StringComparer.Ordinal).ToList();
     }
 
     // ---- groups ----
@@ -373,11 +400,11 @@ public partial class EditorMode : Node
                 _rmbMoved = false;
                 Input.MouseMode = Input.MouseModeEnum.Captured;
                 break;
-            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp }:
-                Speed = Mathf.Clamp(Speed * 1.25f, 1f, 800f);
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp } wu when !OverUi(wu.Position):
+                SetSpeed(Speed * 1.25f);
                 break;
-            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown }:
-                Speed = Mathf.Clamp(Speed / 1.25f, 1f, 800f);
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown } wd when !OverUi(wd.Position):
+                SetSpeed(Speed / 1.25f);
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && GateArmed:
                 if (RayToGround(FlyCam.ProjectRayOrigin(mb.Position), FlyCam.ProjectRayNormal(mb.Position), out var gp)) GateBegin(gp);
@@ -394,18 +421,22 @@ public partial class EditorMode : Node
                 break;
             case InputEventKey { Pressed: true, Echo: false } k:
                 if (HandleObjectKey(k)) { GetViewport().SetInputAsHandled(); break; }
+                if (!k.CtrlPressed && !k.AltPressed && HandleToolKey(k.Keycode)) { GetViewport().SetInputAsHandled(); break; }
                 switch (k.Keycode)
                 {
+                    case Key.F1: ToggleCheatSheet(); break;
                     case Key.G: GroupSelected(); break;
                     case Key.T: ToggleTopDown(); break;
                     case Key.Enter or Key.KpEnter:
                         if (GetViewport().GuiGetFocusOwner() is not (LineEdit or TextEdit)) Apply();
                         break;
                     case Key.Escape:
-                        if (PlacementAsset != null) DisarmPlacement();
+                        if (_cheat.Visible) _cheat.Visible = false;
+                        else if (PlacementAsset != null) DisarmPlacement();
                         else if (GateArmed) CancelGate();
                         else if (SelectedObjectId != null) SelectObject(null);
-                        else Click(null, false);
+                        else if (Selection.Count > 0) Click(null, false);
+                        else if (Tool != EditorTool.None) SelectTool(EditorTool.None);
                         break;
                 }
                 break;
@@ -446,7 +477,7 @@ public partial class EditorMode : Node
         if (_outlinesDirty) RebuildOutlines();
         if (_panelDirty) RefreshPanel();
         var c = FlyCam.GlobalPosition;
-        _hudLabel.Text = $"EDITOR   speed {Speed:F0} m/s (wheel, Shift x3)   x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}";
+        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (_dirtyLabel.Visible ? "  |  * UNSAVED" : "");
         if (Time.GetTicksMsec() / 1000.0 > _statusUntil && _statusLabel.Text != "")
             _statusLabel.Text = "";
     }
@@ -464,8 +495,10 @@ public partial class EditorMode : Node
         if (Input.IsKeyPressed(Key.A)) dir -= right;
         if (Input.IsKeyPressed(Key.E)) dir += Vector3.Up;
         if (Input.IsKeyPressed(Key.Q)) dir += Vector3.Down;
+        if (Input.IsKeyPressed(Key.Space)) dir += Vector3.Up;
+        if (Input.IsKeyPressed(Key.Shift)) dir += Vector3.Down;
         if (dir == Vector3.Zero) return;
-        var speed = Speed * (Input.IsKeyPressed(Key.Shift) ? 3f : 1f);
+        var speed = Speed * (Input.IsKeyPressed(Key.Alt) ? 3f : 1f);
         FlyCam.GlobalPosition += dir.Normalized() * speed * dt;
     }
 
@@ -497,7 +530,9 @@ public partial class EditorMode : Node
         }
         if (id == null) { _hoverLabel.Visible = false; return; }
         var info = Map.Parcels[id];
-        _hoverLabel.Text = $"{id} {info.Kind}" + (info.Group != null ? $" [{info.Group}]" : "");
+        _hoverLabel.Text = info.Group != null
+            ? $"{info.Group} ({GroupUnit(id).Count} parcels)"
+            : $"{id} {info.Kind}";
         _hoverLabel.Position = mouse + new Vector2(16, 20);
         _hoverLabel.Visible = true;
     }
@@ -514,11 +549,26 @@ public partial class EditorMode : Node
         var groups = Map.Parcels.Values.Where(p => p.Group != null).GroupBy(p => p.Group!);
         var groupSegs = new List<(Vector2, Vector2)>();
         foreach (var g in groups) groupSegs.AddRange(GroupPerimeter(g.ToList()));
-        var selSegs = Selection.Where(Map.Parcels.ContainsKey).SelectMany(id => AllEdges(Map.Parcels[id])).ToList();
-        var hoverSegs = HoverId != null && !Selection.Contains(HoverId) ? AllEdges(Map.Parcels[HoverId]).ToList() : new();
+        var selSegs = UnitSegments(Selection.Where(Map.Parcels.ContainsKey));
+        var hoverSegs = HoverId != null && !Selection.Contains(HoverId) ? UnitSegments(new[] { HoverId }) : new();
         SetOutline(OutlineHover, hoverSegs, new Color(1f, 1f, 1f, 0.55f), 0.25f, 0.30f);
         SetOutline(OutlineGroup, groupSegs, new Color(1f, 0.55f, 0.1f), 0.27f, 0.55f);
         SetOutline(OutlineSelected, selSegs, new Color(1f, 0.92f, 0.1f), 0.29f, 0.55f);
+    }
+
+    /// <summary>Outline of parcels where a property group counts as one shape (outer perimeter only).</summary>
+    List<(Vector2, Vector2)> UnitSegments(IEnumerable<string> ids)
+    {
+        var segs = new List<(Vector2, Vector2)>();
+        var seen = new HashSet<string>();
+        foreach (var id in ids)
+        {
+            var g = Group(id);
+            if (g == null) { segs.AddRange(AllEdges(Map.Parcels[id])); continue; }
+            if (!seen.Add(g)) continue;
+            segs.AddRange(GroupPerimeter(Map.Parcels.Values.Where(p => p.Group == g).ToList()));
+        }
+        return segs;
     }
 
     static IEnumerable<(Vector2, Vector2)> AllEdges(ParcelInfo p)
@@ -603,106 +653,6 @@ public partial class EditorMode : Node
         return mesh;
     }
 
-    // ---- UI ----
-
-    void BuildUi()
-    {
-        _ui = new CanvasLayer { Name = "EditorUi", Layer = 10, Visible = false };
-        AddChild(_ui);
-        var bg = new StyleBoxFlat { BgColor = new Color(0.07f, 0.08f, 0.10f, 0.86f), ContentMarginLeft = 12, ContentMarginRight = 12, ContentMarginTop = 10, ContentMarginBottom = 10 };
-
-        _hudLabel = Lbl(15, new Color(1, 1, 1, 0.95f), outline: true);
-        _hudLabel.Position = new Vector2(12, 8);
-        _ui.AddChild(_hudLabel);
-
-        _hoverLabel = new Label { Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore };
-        _hoverLabel.AddThemeFontSizeOverride("font_size", 16);
-        _hoverLabel.AddThemeStyleboxOverride("normal", new StyleBoxFlat { BgColor = new Color(0, 0, 0, 0.75f), ContentMarginLeft = 8, ContentMarginRight = 8, ContentMarginTop = 3, ContentMarginBottom = 3 });
-        _ui.AddChild(_hoverLabel);
-
-        _panel = new PanelContainer { Name = "Panel" };
-        _panel.AddThemeStyleboxOverride("panel", bg);
-        _panel.AnchorLeft = 1; _panel.AnchorRight = 1; _panel.AnchorTop = 0; _panel.AnchorBottom = 1;
-        _panel.OffsetLeft = -PanelWidth; _panel.OffsetRight = 0; _panel.OffsetTop = 0; _panel.OffsetBottom = 0;
-        _ui.AddChild(_panel);
-        var outer = new VBoxContainer();
-        outer.AddThemeConstantOverride("separation", 6);
-        _panel.AddChild(outer);
-        BuildPanelHeader(outer);
-        var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
-        outer.AddChild(scroll);
-        var box = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        box.AddThemeConstantOverride("separation", 8);
-        scroll.AddChild(box);
-        BuildPanelFooter(outer);
-
-        box.AddChild(Header("Selection"));
-        _selLabel = Lbl(15, new Color(0.95f, 0.95f, 0.95f));
-        _selLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        box.AddChild(_selLabel);
-
-        box.AddChild(new HSeparator());
-        var groupBody = Section(box, "Group", false);
-        _groupLabel = Lbl(15, new Color(0.95f, 0.95f, 0.95f));
-        _groupLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        groupBody.AddChild(_groupLabel);
-        _btnGroup = Btn("Group selected (G)", GroupSelected);
-        _btnAdd = Btn("Add selected to group", AddSelectedToGroup);
-        _btnRemove = Btn("Remove from group", RemoveSelectedFromGroup);
-        _btnDissolve = Btn("Dissolve group", DissolveGroup);
-        foreach (var b in new[] { _btnGroup, _btnAdd, _btnRemove, _btnDissolve }) groupBody.AddChild(b);
-
-        box.AddChild(new HSeparator());
-        BuildFenceSection(Section(box, "Fence", true));
-        box.AddChild(new HSeparator());
-        BuildTreesSection(Section(box, "Trees", true));
-        box.AddChild(new HSeparator());
-        BuildObjectsSection(Section(box, "Objects", true));
-
-        _statusBar = new PanelContainer { Name = "StatusBar" };
-        _statusBar.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = new Color(0.07f, 0.08f, 0.10f, 0.86f), ContentMarginLeft = 12, ContentMarginRight = 12, ContentMarginTop = 5, ContentMarginBottom = 5 });
-        _statusBar.AnchorLeft = 0; _statusBar.AnchorRight = 1; _statusBar.AnchorTop = 1; _statusBar.AnchorBottom = 1;
-        _statusBar.OffsetLeft = 0; _statusBar.OffsetRight = -PanelWidth; _statusBar.OffsetTop = -StatusHeight; _statusBar.OffsetBottom = 0;
-        _statusBar.GrowVertical = Control.GrowDirection.Begin;
-        _ui.AddChild(_statusBar);
-        var sbox = new VBoxContainer();
-        _statusBar.AddChild(sbox);
-        _statusLabel = Lbl(16, Colors.White);
-        _statusLabel.CustomMinimumSize = new Vector2(0, 22);
-        _hintLabel = Lbl(13, new Color(0.7f, 0.74f, 0.8f));
-        _hintLabel.Text = "WASD fly, RMB look, wheel speed, LMB select, Shift+LMB add, G group, T top-down, Enter apply, Esc clear/cancel, F2 walk";
-        sbox.AddChild(_statusLabel);
-        sbox.AddChild(_hintLabel);
-    }
-
-    static Label Lbl(int size, Color colour, bool outline = false)
-    {
-        var l = new Label { MouseFilter = Control.MouseFilterEnum.Ignore };
-        l.AddThemeFontSizeOverride("font_size", size);
-        l.AddThemeColorOverride("font_color", colour);
-        if (outline)
-        {
-            l.AddThemeColorOverride("font_outline_color", Colors.Black);
-            l.AddThemeConstantOverride("outline_size", 4);
-        }
-        return l;
-    }
-
-    static Label Header(string text)
-    {
-        var l = Lbl(17, new Color(1f, 0.92f, 0.4f));
-        l.Text = text;
-        return l;
-    }
-
-    static Button Btn(string text, Action onPress)
-    {
-        var b = new Button { Text = text, FocusMode = Control.FocusModeEnum.None };
-        b.AddThemeFontSizeOverride("font_size", 15);
-        b.Pressed += onPress;
-        return b;
-    }
-
     /// <summary>Texts shown in the panel (for the smoke test).</summary>
     public string PanelSelectionText => _selLabel.Text;
     public string PanelGroupText => _groupLabel.Text;
@@ -712,7 +662,11 @@ public partial class EditorMode : Node
     {
         _panelDirty = false;
         var sel = Selection.Where(Map.Parcels.ContainsKey).Select(id => Map.Parcels[id]).ToList();
+        var wholeGroup = sel.Count > 0 && sel[0].Group is { } wg && sel.All(p => p.Group == wg)
+            && sel.Count == Map.Parcels.Values.Count(p => p.Group == wg) ? wg : null;
         if (sel.Count == 0) _selLabel.Text = "Nothing selected.\nClick a parcel; Shift+click adds.";
+        else if (wholeGroup != null)
+            _selLabel.Text = $"{wholeGroup}  (property group)\n{sel.Count} parcels\narea: {sel.Sum(p => p.AreaM2):F0} m2\nDissolve the group to edit its parts.";
         else if (sel.Count == 1)
         {
             var p = sel[0];

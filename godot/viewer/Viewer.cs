@@ -13,7 +13,7 @@ using Suchohrad.MapLoader;
 /// --area slice|village, --state PATH, --edit-smoke --edit-smoke-plan FILE,
 /// --editor (editor mode, implies --watch; F2 toggles walk/editor), --editor-smoke --editor-smoke-plan FILE,
 /// --panel-smoke --panel-smoke-plan FILE (Fence/Trees panel), --objects-smoke --objects-smoke-plan FILE (objects, gizmo, undo),
-/// --editor-shot PNG [--select P-0001,P-0002] [--shot-at P-0001] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-reroll]
+/// --editor-shot PNG [--select P-0001,P-0002] [--shot-at P-0001] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-reroll] [--shot-tool Select|Group|Fence|Trees|Objects|View]
 /// [--shot-object ID] [--shot-arm ASSET --shot-ghost x,y --shot-ghost-rot DEG] [--shot-filter TEXT] [--shot-open car,pot]
 /// (editor screenshot of the main window).
 /// Env: SUCHOHRAD_MAP, SUCHOHRAD_ASSETS, SUCHOHRAD_UV (the uv executable).
