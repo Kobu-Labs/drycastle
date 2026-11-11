@@ -131,6 +131,17 @@ public sealed partial class MapLoader
             }
         Root.AddChild(body);
         BoundaryWalls = n;
+        // a spawn within the capsule's reach of the rim would start inside a wall: drop those
+        var dropped = _spawns.RemoveAll(sp =>
+        {
+            for (var k = 0; k < 8; k++)
+            {
+                var a = k * Mathf.Tau / 8;
+                if (float.IsNaN(GroundHeight(sp.Position.X + Mathf.Cos(a) * 2f, sp.Position.Z + Mathf.Sin(a) * 2f))) return true;
+            }
+            return false;
+        });
+        if (dropped > 0) GD.Print($"map: dropped {dropped} spawn points within 2 m of the terrain rim");
     }
 
     void ReadParcels(string path)
