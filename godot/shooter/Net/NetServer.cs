@@ -52,6 +52,8 @@ public partial class NetServer : Node
         public float Throttle, Steer;
         public PlayerProfile? Profile;
         public ProfileLoad? Loading;
+        /// <summary>The profile token from the hello ("" = guest). One live session per token.</summary>
+        public string Token = "";
         public int PacketsThisTick;
         public double SaveTokens = 10;
         public long BytesOut;
@@ -363,6 +365,8 @@ public partial class NetServer : Node
         c.Id = _nextId++;
         c.Name = string.IsNullOrWhiteSpace(h.Name) ? $"player{c.Id}" : h.Name.Trim();
         SandboxOnHello(c, h.Flags);
+        c.Token = h.Token;
+        DropSessionsWithToken(c); // a quick reconnect wins over its ghost, which would otherwise run on the same profile until its peer times out
         StartProfileLoad(c, h.Token); // joins once the profile is in (or the wait times out)
         GD.Print($"server: {c.Name} #{c.Id} hello, loading profile");
     }
@@ -416,6 +420,18 @@ public partial class NetServer : Node
         foreach (var o in _clients.Values.Where(o => o.Joined)) Send(o, new LeaveMsg(c.Id));
         _match.RemovePlayer(c.Id);
         GD.Print($"server: {c.Name} #{c.Id} left");
+    }
+
+    /// <summary>Drops every other client that uses <paramref name="keep"/>'s token, so a profile never has two live sessions.</summary>
+    void DropSessionsWithToken(Client keep)
+    {
+        if (keep.Token.Length == 0) return;
+        foreach (var o in _clients.Values.Where(o => o != keep && o.Token == keep.Token).ToList())
+        {
+            GD.Print($"server: {o.Name} #{o.Id} replaced by a new session with the same token");
+            Drop(o.Peer);
+            o.Peer.PeerDisconnectLater(0);
+        }
     }
 
     void Tx(ENetPacketPeer peer, int chan, byte[] data, int flags)
