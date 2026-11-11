@@ -141,9 +141,12 @@ netspike-quick:
 # shooter-server runs headless; add SMOKE=1 to boot, load and exit cleanly.
 SHOOTER_MAP = $(if $(MAP),--map $(abspath $(MAP)),)
 
+# TARGETS: stationary target dummies planted for testing (issue #148); 0 turns them off. docs/shooter-server.md.
+TARGETS ?= 24
+
 shooter-server:
 	dotnet build godot/shooter/shooter.csproj
-	godot --headless --path godot/shooter -- --role server $(if $(SMOKE),--smoke,) $(SHOOTER_MAP)
+	godot --headless --path godot/shooter -- --role server --targets $(TARGETS) $(if $(SMOKE),--smoke,) $(SHOOTER_MAP)
 
 shooter-client:
 	dotnet build godot/shooter/shooter.csproj

@@ -38,6 +38,8 @@ public enum KillCause : byte { Standard = 0, Headshot = 1, Roadkill = 2 }
 /// <summary>Killer == Victim for suicides.</summary>
 public sealed record PlayerKilled(ushort Killer, ushort Victim, byte Weapon, KillCause Cause = KillCause.Standard) : MatchEvent;
 public sealed record PlayerDied(ushort Victim, ushort Killer, float RespawnDelay) : MatchEvent;
+/// <summary>A target dummy (#148) was killed: no roster change, no round end.</summary>
+public sealed record TargetKilled(ushort Killer, TargetDummies.Dummy Target, byte Weapon, KillCause Cause) : MatchEvent;
 
 public enum PlayerLife : byte { Unspawned, Alive, Dead }
 
@@ -152,6 +154,19 @@ public sealed class MatchSim
         if (credited != null && credited.Kills >= _cfg.ScoreGoal) End();
         Emit(new ScoreboardChanged());
         return DamageResult.Killed;
+    }
+
+    /// <summary>
+    /// A target dummy died to <paramref name="killer"/> (#148): the shooter gets +1 kill on the scoreboard. The score goal
+    /// does not end the round on a target kill, and nobody spawns or dies because of it. Ignored outside a running round
+    /// or for an unknown shooter.
+    /// </summary>
+    public void CreditTargetKill(ushort killer, TargetDummies.Dummy target, byte weapon, KillCause cause = KillCause.Standard)
+    {
+        if (Phase != MatchPhase.Running || !_players.TryGetValue(killer, out var a)) return;
+        a.Kills++;
+        Emit(new TargetKilled(killer, target, weapon, cause));
+        Emit(new ScoreboardChanged());
     }
 
     public void Update()

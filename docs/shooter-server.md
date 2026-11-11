@@ -61,6 +61,7 @@ Flags (after `--`):
 | `--day-length MIN` | real minutes for one 24-hour day; overrides `day_length_minutes` in `environment.json` (default `24`) |
 | `--freeze-time` | hold the clock at its start time (or at `--time`), so the sky does not move |
 | `--match-set k=v,k=v` | override match options, see below |
+| `--targets N` | plant N stationary target dummies ("Target 01" ...) around the spawn area, 0-64; default 0 from `match.json`. The dummies are not players: they are outside the roster, the player cap, the score goal and the round end, and they respawn 3 s after a kill on the same spot. Parsed and planned in `ShooterCore` (`TargetDummies`, `TargetPlacement`, `MatchSim.CreditTargetKill`); the netcode does not spawn them yet (issue #148, see `docs/shooter-v2.md`). `make shooter-server` passes `TARGETS` (default 24; `make shooter-server TARGETS=0` for none) |
 | `--debug-cmds` | honour the client debug kill command and give every player the full weapon list on the hotbar (dev aid); leave off on a public server |
 | `--quit-after SECONDS` | end the server with a verdict (testing only) |
 
