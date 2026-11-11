@@ -4,7 +4,7 @@ Curated, redistributable 3D assets for placed objects (cars, flowers, bushes, fe
 pavement, pots, walls). Placed objects reference an asset by id (see `pipeline/src/suchohrad_pipeline/edits.py`):
 
 - `pack:<pack>/<model>`: a glTF/GLB in `assets/<pack>/`, for example `pack:kenney-car-kit/sedan`.
-- `prim:<name>`: a pipeline primitive with no file (`wall`, `slab`, `pot`, `radio_tower`), built by
+- `prim:<name>`: a pipeline primitive with no file (`wall`, `slab`, `pot`, `radio_tower`, `bunker`), built by
   `pipeline/src/suchohrad_pipeline/primitives.py`.
 
 `manifest.json` (format_version 1) is the index: per asset `id`, `category`

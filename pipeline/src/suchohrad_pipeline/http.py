@@ -42,6 +42,7 @@ class PoliteClient:
         *,
         params: dict | None = None,
         data: dict | None = None,
+        headers: dict | None = None,
     ) -> tuple[requests.Response, str]:
         """Send the request, rotating through ``urls`` on retry. Returns (response, url used)."""
         candidates = [urls] if isinstance(urls, str) else list(urls)
@@ -53,7 +54,7 @@ class PoliteClient:
             self._throttle()
             try:
                 resp = self.session.request(
-                    method, url, params=params, data=data, timeout=self.timeout
+                    method, url, params=params, data=data, headers=headers, timeout=self.timeout
                 )
             except requests.RequestException as exc:
                 last_error = type(exc).__name__

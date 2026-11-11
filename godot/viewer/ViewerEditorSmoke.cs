@@ -168,9 +168,7 @@ public partial class Viewer
         Check(ed.OutlineNode(EditorMode.OutlineHover)?.Mesh != null && ed.SegmentCount(EditorMode.OutlineHover) == plan.GetProperty("c_segments").GetInt32(),
             "hovered parcel has a (subtle) outline");
         ed.SetHover(null);
-        var baseGroupSegs = ed.SegmentCount(EditorMode.OutlineGroup);
-        Check(baseGroupSegs == plan.GetProperty("existing_group_segments").GetInt32(),
-            $"existing group outlined as one shape ({baseGroupSegs} segments)");
+        Check(ed.OutlineRoot.GetChildren().All(n => n.Name != "outline_group"), "no always-on group outline (groups show like parcel borders: on hover/selection only)");
 
         // ---- refusals ----
         var fileBefore = File.ReadAllText(editsPath);
@@ -200,11 +198,10 @@ public partial class Viewer
         Check(keptStale, "unknown parcel entries and other groups preserved");
         await Physics(2);
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        var gseg = ed.SegmentCount(EditorMode.OutlineGroup);
-        var expectGroup = baseGroupSegs + plan.GetProperty("group_ab_segments").GetInt32();
-        Check(gseg == expectGroup && gseg < baseGroupSegs + plan.GetProperty("sel_segments").GetInt32() && plan.GetProperty("shared_edges").GetInt32() > 0
-              && ed.OutlineNode(EditorMode.OutlineGroup)?.Mesh != null,
-            $"group outline drawn without shared edges: {gseg} segments (members alone would give {baseGroupSegs + plan.GetProperty("sel_segments").GetInt32()}, shared edges {plan.GetProperty("shared_edges").GetInt32()})");
+        ed.RebuildOutlines();
+        var gseg = ed.SegmentCount(EditorMode.OutlineSelected);
+        Check(gseg == plan.GetProperty("group_ab_segments").GetInt32() && gseg < plan.GetProperty("sel_segments").GetInt32() && plan.GetProperty("shared_edges").GetInt32() > 0,
+            $"selected group outlined as one shape without shared edges: {gseg} segments (members alone would give {plan.GetProperty("sel_segments").GetInt32()}, shared edges {plan.GetProperty("shared_edges").GetInt32()})");
 
         // watcher regenerates the new group's parcels by itself
         var ok = await WaitUntil(() => _watcher.AppliedCount > applied0 || _watcher.FailedCount > 0, 40);
@@ -231,7 +228,6 @@ public partial class Viewer
             "dissolve reloaded the file first (other writer's P-8888 kept), group gone, canonical");
         await Physics(2);
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        Check(ed.SegmentCount(EditorMode.OutlineGroup) == baseGroupSegs, "group outline gone after dissolve");
 
         // ---- state with a cleared selection, then wait for the watcher to settle ----
         ed.Click(null, false);
@@ -340,7 +336,7 @@ public partial class Viewer
         var frames = _opts.TryGetValue("frames", out var f) && int.TryParse(f, out var fi) ? fi : 60;
         for (var i = 0; i < frames; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
-        GD.Print($"outline segments: selected={ed.SegmentCount(EditorMode.OutlineSelected)} group={ed.SegmentCount(EditorMode.OutlineGroup)} hover={ed.SegmentCount(EditorMode.OutlineHover)}");
+        GD.Print($"outline segments: selected={ed.SegmentCount(EditorMode.OutlineSelected)} hover={ed.SegmentCount(EditorMode.OutlineHover)}");
         var path = _opts["editor-shot"];
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         var err = GetViewport().GetTexture().GetImage().SavePng(path);

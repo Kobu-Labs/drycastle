@@ -1,0 +1,21 @@
+# P-1135. One Street View frame supplied by the author (long street wall, looking along it).
+# Edge 7 (34.5 m, 6 m from the road) is the street wall. Seen from outside, edges run left -> right in
+# the photo, so at_m grows from the near (left, barred windows) end to the far (right, small windows) end.
+# Positions are rough (strong foreshortening): low confidence.
+id: w378900330
+source: "Street View 2022-09, one oblique frame supplied by the author"
+overhang_m: 0.4
+frame_colour: "#f0eee8"
+openings:
+  - {id: a1, kind: window, edge: 7, at_m: 33.15, width_m: 0.75, height_m: 1.3, sill_m: 1.2, recess_m: 0.12, confidence: low}
+  - {id: a2, kind: window, edge: 7, at_m: 31.55, width_m: 0.75, height_m: 1.3, sill_m: 1.2, recess_m: 0.12, confidence: low}
+  - {id: a3, kind: window, edge: 7, at_m: 29.85, width_m: 0.75, height_m: 1.3, sill_m: 1.2, recess_m: 0.12, confidence: low}
+  - {id: a4, kind: window, edge: 7, at_m: 28.15, width_m: 0.75, height_m: 1.3, sill_m: 1.2, recess_m: 0.12, confidence: low}
+  - {id: a5, kind: window, edge: 7, at_m: 26.15, width_m: 0.75, height_m: 1.3, sill_m: 1.2, recess_m: 0.12, confidence: low}
+  - {id: a6, kind: window, edge: 7, at_m: 24.05, width_m: 0.75, height_m: 1.3, sill_m: 1.2, recess_m: 0.12, confidence: low}
+  - {id: b1, kind: window, edge: 7, at_m: 21.5, width_m: 1.0, height_m: 1.7, sill_m: 1.0, recess_m: 0.12, confidence: low}
+  - {id: b2, kind: window, edge: 7, at_m: 19.3, width_m: 1.0, height_m: 1.7, sill_m: 1.0, recess_m: 0.12, confidence: low}
+  - {id: c1, kind: window, edge: 7, at_m: 16.3, width_m: 1.2, height_m: 1.9, sill_m: 1.0, recess_m: 0.12, confidence: low}
+  - {id: d1, kind: window, edge: 7, at_m: 7.35, width_m: 1.15, height_m: 2.2, sill_m: 0.95, recess_m: 0.12, colour: "#3a3a3e", confidence: low}
+  - {id: d2, kind: window, edge: 7, at_m: 4.15, width_m: 1.15, height_m: 2.2, sill_m: 0.95, recess_m: 0.12, colour: "#3a3a3e", confidence: low}
+  - {id: d3, kind: window, edge: 7, at_m: 0.95, width_m: 1.15, height_m: 2.2, sill_m: 0.95, recess_m: 0.12, colour: "#3a3a3e", confidence: low}

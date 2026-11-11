@@ -145,3 +145,13 @@ def test_radio_tower_is_a_tall_lattice_on_a_cabin() -> None:
     assert mesh.face_count > 1000  # lattice members, not a solid block
     taller = bbox(build_primitive("radio_tower", {"height_m": 50}))[1]
     assert taller[2] == pytest.approx(50.0)
+
+
+def test_bunker_is_a_low_dome_with_door_facing_front() -> None:
+    mesh = build_primitive("bunker")
+    lo, hi = bbox(mesh)
+    assert (hi - lo)[:2] == pytest.approx([6.6, 4.3])
+    assert hi[2] == pytest.approx(2.677, abs=0.01)
+    assert signed_volume(mesh) > 0
+    door = mesh.tris.reshape(-1, 3)
+    assert door[:, 1].min() < -2.1  # door and slit boxes stand proud of the -y wall

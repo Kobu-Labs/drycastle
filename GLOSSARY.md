@@ -171,3 +171,15 @@ _Avoid_: object, prop, actor
 **Protocol version**:
 The number in the hello and welcome messages. A client and a server must match, or the server refuses the client with both numbers in the message.
 _Avoid_: build number, version (alone)
+**Region**:
+A hand-drawn shape of any form, independent of parcel boundaries, painted in one colour over the ground inside it. It changes only colour: parcels, roads, buildings and everything standing on the ground are unaffected.
+_Avoid_: zone, area (an "area" is the slice or the village)
+
+**Building detail**:
+A hand-written description of one real building's geometry beyond its OSM footprint (`pipeline/config/buildings/<OSM id>.yaml`): wall openings, roof overhang, read from reference photos. The shell stays the rule-generated one; the detail adds to it and never changes the footprint.
+
+**Opening**:
+A window, door or garage door in a wall of a building with a detail: a real hole in the wall with recessed reveals, located by footprint edge, distance along it, size and sill height. Each carries a confidence (low/medium/high) for how well the photos pin it down.
+
+**Window pane**:
+The glass of a window opening, exported as its own node `window_<building>_<id>` and listed in `windows.json` (position, size, facade, `breakable`), so the game can make it transparent or breakable later. Doors and garage doors are part of the building and have no pane node.

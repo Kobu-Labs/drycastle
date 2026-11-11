@@ -1502,7 +1502,7 @@ def build_server(settings: Settings) -> Any:
 
     @server.tool(description=f"List assets that place_object can use. Each has id (use as `asset`), "
                  f"category (car, slab, pot, flower, bush, tree, wall, fence, other), name, size_m "
-                 f"and tags; primitives (prim:wall, prim:slab, prim:pot, prim:radio_tower) are included. "
+                 f"and tags; primitives (prim:wall, prim:slab, prim:pot, prim:radio_tower, prim:bunker) are included. "
                  f"Optional filter `category`. {_ASSET_NOTE}")
     def list_assets(category: str | None = None) -> dict:
         return tools.list_assets(category)

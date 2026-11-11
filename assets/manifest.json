@@ -823,6 +823,26 @@
       "pack": "quaternius-stylized-nature-megakit"
     },
     {
+      "id": "prim:bunker",
+      "category": "other",
+      "name": "WW2 bunker (pillbox)",
+      "file": null,
+      "size_m": [
+        6.6,
+        2.67727,
+        4.3
+      ],
+      "tags": [
+        "bunker",
+        "concrete",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/suchohrad_pipeline/primitives.py)",
+      "pack": null
+    },
+    {
       "id": "prim:pot",
       "category": "pot",
       "name": "Flower pot",

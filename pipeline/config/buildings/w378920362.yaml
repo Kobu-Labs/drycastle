@@ -1,0 +1,23 @@
+# P-0030. Read from two close Street View frames (head-on street view and 3/4 view of the right gable).
+#
+# Edge 3 (13.3 m, direction 112 deg) is the STREET wall: it is parallel to the tertiary road E-0013 and to
+# the roof ridge, 5.7 m from the road, outward side facing it. Edge 4 (11.7 m) is the right GABLE end.
+# Walking edge 3 from its start is left -> right as seen from the street. The OSM polygon is 1.84 m longer
+# than the house at the left (the neighbour's wall: house 11.46 m + corner pillar 0.85 m = 12.3 m of 13.3 m),
+# so every `at_m` below is the position measured from the house's left corner (photo) plus 1.84 m.
+# Positions: scale from the front door (~2.1 m high) and the eave-to-ground height, perspective corrected.
+#
+# Not modelled yet: the recessed attic loggia on the right gable (edge 4: flower box, dark door,
+# satellite dish).
+id: w378920362
+source: "Street View 2022-09, two close frames supplied by the author (street view + 3/4 right gable)"
+overhang_m: 0.35
+frame_colour: "#f6f6f3"
+openings:
+  # two small windows left of the entrance bay, white frames, flower boxes below
+  - {id: wa, kind: window, edge: 3, at_m: 2.45, width_m: 0.68, height_m: 0.8, sill_m: 1.05, recess_m: 0.1, confidence: medium}
+  - {id: wb, kind: window, edge: 3, at_m: 4.31, width_m: 0.98, height_m: 1.05, sill_m: 0.9, recess_m: 0.1, confidence: medium}
+  # entrance bay clad in dark brown wood, set back from the facade; the paving runs into it
+  - {id: bay, kind: recess, edge: 3, at_m: 6.26, width_m: 6.23, height_m: 2.7, sill_m: 0.0, recess_m: 0.6, colour: "#3b2a24", confidence: medium}
+  - {id: door, kind: door, edge: 3, at_m: 7.01, width_m: 0.84, height_m: 2.1, sill_m: 0.0, recess_m: 0.08, colour: "#f5f5f3", parent: bay, confidence: medium}
+  - {id: wc, kind: window, edge: 3, at_m: 9.2, width_m: 1.85, height_m: 1.5, sill_m: 1.0, recess_m: 0.1, parent: bay, confidence: medium}

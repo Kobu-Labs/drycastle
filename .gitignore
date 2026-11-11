@@ -22,3 +22,6 @@ answers.md
 .claude/worktrees/
 .claude/settings.local.json
 pipeline/config/slice.local.yaml
+
+# local secrets
+.env

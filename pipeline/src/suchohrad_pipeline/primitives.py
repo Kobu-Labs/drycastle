@@ -168,6 +168,20 @@ def radio_tower_mesh(params: dict | None = None) -> Mesh:
     return _mesh(tris, cols)
 
 
+def bunker_prim_mesh(params: dict | None = None) -> Mesh:
+    """WW2 pillbox: rounded concrete dome on a chamfered rectangle, door facing -y (the object's
+    front), firing slits, weathering streaks. Long axis along x."""
+    from suchohrad_pipeline.bunker import bunker_mesh
+
+    p = {**PRIMITIVES["bunker"].params, **(params or {})}
+    hl, hw, ch = float(p["length_m"]) / 2, float(p["width_m"]) / 2, float(p["chamfer_m"])
+    ring = [  # counter-clockwise, corners cut by ``ch``
+        (-hl + ch, -hw), (hl - ch, -hw), (hl, -hw + ch), (hl, hw - ch),
+        (hl - ch, hw), (-hl + ch, hw), (-hl, hw - ch), (-hl, -hw + ch),
+    ]
+    return bunker_mesh(ring, (0.0, -1.0))
+
+
 @dataclass(frozen=True)
 class Primitive:
     builder: Callable[[dict | None], Mesh]
@@ -203,6 +217,12 @@ PRIMITIVES: dict[str, Primitive] = {
         },
         (0.4, 0.35, 0.4),
         "#b5623c",
+    ),
+    "bunker": Primitive(
+        bunker_prim_mesh,
+        {"length_m": 6.5, "width_m": 4.2, "chamfer_m": 1.0},
+        (6.6, 2.67727, 4.3),
+        "#a9a698",
     ),
     "radio_tower": Primitive(
         radio_tower_mesh,

@@ -1,6 +1,633 @@
 {
- "groups": {},
+ "groups": {
+  "G-0001": {
+   "fence": {
+    "colour": "#b53aa2",
+    "mode": "custom",
+    "type": "brick_wall"
+   },
+   "parcels": [
+    "P-0026",
+    "P-0027",
+    "P-0028",
+    "P-0029"
+   ]
+  },
+  "G-0002": {
+   "parcels": [
+    "P-0505",
+    "P-0506"
+   ]
+  },
+  "G-0003": {
+   "fence": {
+    "colour": "#b53ab0",
+    "height_m": 10.0,
+    "mode": "custom",
+    "type": "brick_wall"
+   },
+   "parcels": [
+    "P-0889",
+    "P-0890",
+    "P-0891"
+   ]
+  },
+  "G-0004": {
+   "parcels": [
+    "P-0187",
+    "P-1164"
+   ]
+  },
+  "G-0005": {
+   "parcels": [
+    "P-0423",
+    "P-0428",
+    "P-0436"
+   ]
+  },
+  "G-0006": {
+   "parcels": [
+    "P-0438",
+    "P-0440"
+   ]
+  }
+ },
  "parcels": {
+  "P-0026": {
+   "objects": [
+    {
+     "asset": "pack:kenney-car-kit/suv-luxury",
+     "id": "o-0002",
+     "position": [
+      -589059.5,
+      -1250153.0
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:kenney-car-kit/suv-luxury",
+     "id": "o-0003",
+     "position": [
+      -589060.5,
+      -1250150.5
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:kenney-car-kit/suv-luxury",
+     "id": "o-0004",
+     "position": [
+      -589061.5,
+      -1250148.0
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Plant_1_Big",
+     "id": "o-0007",
+     "position": [
+      -589057.0,
+      -1250150.0
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Grass_Common_Short",
+     "id": "o-0015",
+     "position": [
+      -589055.5,
+      -1250151.0
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Grass_Common_Short",
+     "id": "o-0020",
+     "position": [
+      -589054.5,
+      -1250148.0
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Grass_Common_Short",
+     "id": "o-0021",
+     "position": [
+      -589057.5,
+      -1250148.0
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/tree-large",
+     "id": "o-0022",
+     "position": [
+      -589059.0,
+      -1250148.0
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Bush_Common",
+     "id": "o-0024",
+     "position": [
+      -589058.5,
+      -1250150.0
+     ],
+     "rotation_deg": 285.0
+    }
+   ],
+   "trees": {
+    "count": 20
+   }
+  },
+  "P-0027": {
+   "objects": [
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Flower_4_Group",
+     "id": "o-0001",
+     "position": [
+      -589042.5,
+      -1250148.5
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Plant_1_Big",
+     "id": "o-0008",
+     "position": [
+      -589046.0,
+      -1250148.5
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Grass_Common_Short",
+     "id": "o-0016",
+     "position": [
+      -589050.0,
+      -1250147.0
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Grass_Common_Short",
+     "id": "o-0017",
+     "position": [
+      -589047.0,
+      -1250145.5
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Grass_Common_Short",
+     "id": "o-0018",
+     "position": [
+      -589046.5,
+      -1250144.0
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Grass_Common_Short",
+     "id": "o-0019",
+     "position": [
+      -589052.5,
+      -1250147.5
+     ],
+     "rotation_deg": 285.0
+    }
+   ],
+   "trees": {
+    "count": 20
+   }
+  },
+  "P-0028": {
+   "trees": {
+    "count": 20
+   }
+  },
+  "P-0029": {
+   "objects": [
+    {
+     "asset": "pack:kenney-car-kit/hatchback-sports",
+     "id": "o-0010",
+     "position": [
+      -589064.0,
+      -1250143.5
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/tree-small",
+     "id": "o-0023",
+     "position": [
+      -589060.5,
+      -1250145.0
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Bush_Common",
+     "id": "o-0025",
+     "position": [
+      -589060.5,
+      -1250141.5
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/driveway-long",
+     "id": "o-0026",
+     "position": [
+      -589059.5,
+      -1250145.0
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/driveway-long",
+     "id": "o-0027",
+     "position": [
+      -589059.5,
+      -1250145.5
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/driveway-long",
+     "id": "o-0028",
+     "position": [
+      -589060.0,
+      -1250145.0
+     ],
+     "rotation_deg": 135.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/driveway-long",
+     "id": "o-0029",
+     "position": [
+      -589060.0,
+      -1250145.5
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/driveway-long",
+     "id": "o-0030",
+     "position": [
+      -589060.5,
+      -1250145.0
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/driveway-long",
+     "id": "o-0031",
+     "position": [
+      -589060.5,
+      -1250145.5
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/driveway-long",
+     "id": "o-0032",
+     "position": [
+      -589061.0,
+      -1250145.0
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/driveway-long",
+     "id": "o-0033",
+     "position": [
+      -589061.0,
+      -1250145.5
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/path-long",
+     "id": "o-0034",
+     "position": [
+      -589060.5,
+      -1250143.5
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/path-long",
+     "id": "o-0035",
+     "position": [
+      -589060.5,
+      -1250144.0
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "prim:slab",
+     "id": "o-0036",
+     "position": [
+      -589061.5,
+      -1250142.0
+     ],
+     "rotation_deg": 285.0
+    }
+   ],
+   "trees": {
+    "count": 20
+   }
+  },
+  "P-0030": {
+   "fence": {
+    "mode": "custom",
+    "type": "wire"
+   }
+  },
+  "P-0040": {
+   "trees": {
+    "count": 8,
+    "seed_offset": 4
+   }
+  },
+  "P-0076": {
+   "trees": {
+    "count": 5000
+   }
+  },
+  "P-0096": {
+   "trees": {
+    "count": 2000
+   }
+  },
+  "P-0105": {
+   "objects": [
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Plant_1_Big",
+     "id": "o-0009",
+     "position": [
+      -589070.0,
+      -1250161.5
+     ],
+     "rotation_deg": 0.0
+    }
+   ]
+  },
+  "P-0146": {
+   "objects": [
+    {
+     "asset": "pack:kenney-car-kit/garbage-truck",
+     "id": "o-0006",
+     "position": [
+      -589067.0,
+      -1250145.5
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:kenney-car-kit/hatchback-sports",
+     "id": "o-0011",
+     "position": [
+      -589064.0,
+      -1250154.0
+     ],
+     "rotation_deg": 195.0
+    },
+    {
+     "asset": "pack:kenney-car-kit/police",
+     "id": "o-0012",
+     "position": [
+      -589065.5,
+      -1250151.5
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:kenney-car-kit/taxi",
+     "id": "o-0013",
+     "position": [
+      -589069.5,
+      -1250146.5
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "prim:wall",
+     "id": "o-0014",
+     "position": [
+      -589062.0,
+      -1250157.5
+     ],
+     "rotation_deg": 285.0
+    },
+    {
+     "asset": "pack:kenney-car-kit/suv-luxury",
+     "id": "o-0005",
+     "position": [
+      -589068.0,
+      -1250141.5
+     ],
+     "rotation_deg": 315.0
+    }
+   ]
+  },
+  "P-0347": {
+   "objects": [
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Bush_Common_Flowers",
+     "id": "o-0038",
+     "position": [
+      -588588.952,
+      -1249633.774
+     ],
+     "rotation_deg": 140.455,
+     "scale": 0.8
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Bush_Common",
+     "id": "o-0039",
+     "position": [
+      -588595.121,
+      -1249628.68
+     ],
+     "rotation_deg": 140.455,
+     "scale": 0.9
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Bush_Common_Flowers",
+     "id": "o-0040",
+     "position": [
+      -588606.801,
+      -1249637.495
+     ],
+     "rotation_deg": 140.455,
+     "scale": 1.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Bush_Common",
+     "id": "o-0041",
+     "position": [
+      -588607.608,
+      -1249629.048
+     ],
+     "rotation_deg": 140.455,
+     "scale": 1.1
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Flower_3_Group",
+     "id": "o-0042",
+     "position": [
+      -588592.706,
+      -1249632.075
+     ],
+     "rotation_deg": 140.455,
+     "scale": 0.35
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Flower_4_Group",
+     "id": "o-0043",
+     "position": [
+      -588591.158,
+      -1249633.502
+     ],
+     "rotation_deg": 140.455,
+     "scale": 0.35
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Flower_3_Single",
+     "id": "o-0044",
+     "position": [
+      -588596.578,
+      -1249632.016
+     ],
+     "rotation_deg": 140.455,
+     "scale": 0.3
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Flower_4_Single",
+     "id": "o-0045",
+     "position": [
+      -588607.204,
+      -1249633.272
+     ],
+     "rotation_deg": 140.455,
+     "scale": 0.3
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Fern_1",
+     "id": "o-0046",
+     "position": [
+      -588602.075,
+      -1249634.913
+     ],
+     "rotation_deg": 140.455,
+     "scale": 0.5
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Fern_1",
+     "id": "o-0047",
+     "position": [
+      -588611.5,
+      -1249635.0
+     ],
+     "rotation_deg": 140.455,
+     "scale": 0.6
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Plant_1_Big",
+     "id": "o-0048",
+     "position": [
+      -588611.527,
+      -1249640.078
+     ],
+     "rotation_deg": 140.455,
+     "scale": 0.7
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Plant_1",
+     "id": "o-0049",
+     "position": [
+      -588611.562,
+      -1249632.267
+     ],
+     "rotation_deg": 140.455,
+     "scale": 0.7
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Grass_Common_Tall",
+     "id": "o-0050",
+     "position": [
+      -588607.303,
+      -1249639.674
+     ],
+     "rotation_deg": 140.455,
+     "scale": 0.5
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Grass_Common_Short",
+     "id": "o-0051",
+     "position": [
+      -588607.339,
+      -1249631.864
+     ],
+     "rotation_deg": 140.455,
+     "scale": 0.6
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Clover_1",
+     "id": "o-0052",
+     "position": [
+      -588597.703,
+      -1249633.425
+     ],
+     "rotation_deg": 140.455,
+     "scale": 0.5
+    }
+   ],
+   "trees": {
+    "density_per_1000m2": 28.0
+   }
+  },
+  "P-0376": {
+   "trees": {
+    "count": 2000
+   }
+  },
+  "P-0378": {
+   "trees": {
+    "count": 2000
+   }
+  },
+  "P-0383": {
+   "objects": [
+    {
+     "asset": "prim:wall",
+     "id": "o-0037",
+     "position": [
+      -588596.0,
+      -1249675.5
+     ],
+     "rotation_deg": 0.0
+    }
+   ],
+   "trees": {
+    "count": 8
+   }
+  },
+  "P-0390": {
+   "fence": {
+    "colour": "#0a49dd",
+    "mode": "custom",
+    "type": "wire"
+   }
+  },
+  "P-0509": {
+   "trees": {
+    "count": 22
+   }
+  },
   "P-0510": {
    "objects": [
     {
@@ -11,6 +638,113 @@
       -1249679.4
      ],
      "rotation_deg": 81.94
+    }
+   ]
+  },
+  "P-0829": {
+   "objects": [
+    {
+     "asset": "prim:bunker",
+     "id": "o-0073",
+     "position": [
+      -589035.367,
+      -1250413.328
+     ],
+     "rotation_deg": 273.241
+    }
+   ]
+  },
+  "P-0831": {
+   "trees": {
+    "count": 2000
+   }
+  },
+  "P-0891": {
+   "objects": [
+    {
+     "asset": "pack:kenney-city-kit-suburban/planter",
+     "id": "o-0053",
+     "position": [
+      -588933.0,
+      -1249747.5
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Bush_Common_Flowers",
+     "id": "o-0054",
+     "position": [
+      -588936.5,
+      -1249749.5
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Bush_Common_Flowers",
+     "id": "o-0055",
+     "position": [
+      -588934.5,
+      -1249746.5
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Bush_Common_Flowers",
+     "id": "o-0056",
+     "position": [
+      -588934.0,
+      -1249748.5
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Bush_Common_Flowers",
+     "id": "o-0057",
+     "position": [
+      -588934.5,
+      -1249751.0
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:quaternius-stylized-nature-megakit/Bush_Common_Flowers",
+     "id": "o-0058",
+     "position": [
+      -588933.0,
+      -1249761.0
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/fence-2x2",
+     "id": "o-0059",
+     "position": [
+      -588936.0,
+      -1249756.0
+     ],
+     "rotation_deg": 0.0
+    }
+   ]
+  },
+  "P-0969": {
+   "objects": [
+    {
+     "asset": "pack:kenney-city-kit-suburban/fence",
+     "id": "o-0060",
+     "position": [
+      -589058.0,
+      -1249835.0
+     ],
+     "rotation_deg": 0.0
+    },
+    {
+     "asset": "pack:kenney-city-kit-suburban/fence",
+     "id": "o-0061",
+     "position": [
+      -589061.0,
+      -1249836.0
+     ],
+     "rotation_deg": 0.0
     }
    ]
   },
@@ -126,6 +860,27 @@
   }
  },
  "regions": {
+  "R-0001": {
+   "colour": "#1f7d0c",
+   "polygon": [
+    [
+     -588642.0,
+     -1250228.5
+    ],
+    [
+     -588648.5,
+     -1250187.0
+    ],
+    [
+     -588731.0,
+     -1250194.5
+    ],
+    [
+     -588732.0,
+     -1250238.0
+    ]
+   ]
+  },
   "R-0002": {
    "colour": "#7aa656",
    "polygon": [

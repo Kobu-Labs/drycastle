@@ -8,6 +8,8 @@
 #            (`w123456`, one building). Parcel entries apply first, OSM id entries after them.
 #   fields   any of the building fields below; unknown fields are an error.
 #              height_m      total height to the roof top, metres
+#              roof_height_m rise from the eave to the ridge, metres (else from the roof pitch, capped);
+#                            the eave is then height_m - roof_height_m
 #              levels        number of storeys
 #              roof          flat | gabled | hipped (no footprint-fill fallback is applied)
 #              ridge_dir     ridge direction in radians (counter-clockwise from east, 0..pi)
@@ -32,3 +34,36 @@ buildings:
     model: church
     model_axis: 0.9890
 
+
+  # P-0030, from two close Street View frames: pale yellow-cream walls, orange-red ceramic tile, a steep
+  # (about 45 degrees) roof, so about 9.2 m to the ridge instead of the generated 7. Openings and overhang
+  # are in config/buildings/w378920362.yaml.
+  w378920362:
+    wall_colour: "#e8d4a2"
+    roof_colour: "#b8532f"
+    levels: 1
+    height_m: 9.2
+    roof_height_m: 5.6  # measured: steep roof, eave 3.6 m, ridge 9.2 m
+
+  # WW2 pillboxes (P-0876, P-0823): the real footprint with a rounded concrete dome, door and firing
+  # slits (pipeline/src/suchohrad_pipeline/bunker.py). model_axis is the bearing the door faces:
+  # towards the parcel's road side.
+  w378900225:
+    model: bunker
+    model_axis: 0.6905
+  w378900206:
+    model: bunker
+    model_axis: -2.4043
+
+  # P-0675 (Kultúrny dom): flat roof, about 4.4 m, white-grey render. Openings in config/buildings/.
+  w378900226:
+    wall_colour: "#e6e4dc"
+    roof_colour: "#5c5f66"
+    levels: 1
+    height_m: 4.4
+    roof: flat
+
+  # P-1135: long hall with a red tile roof, pale grey-cream render. Openings in config/buildings/.
+  w378900330:
+    wall_colour: "#d9d4c6"
+    roof_colour: "#b4502f"

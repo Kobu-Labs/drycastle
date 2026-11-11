@@ -279,8 +279,22 @@ def church_solids(detail: bool = True) -> _Solids:
 MODELS: dict[str, Callable[[bool], _Solids]] = {"church": church_solids}
 
 
+def _bunker(b: dict, detail: bool) -> Mesh:
+    """Pillbox on the real footprint; ``model_axis`` is the bearing the door faces."""
+    from suchohrad_pipeline.bunker import bunker_mesh
+
+    a = float(b["model_axis"])
+    return bunker_mesh(b["footprint"]["exterior"], (math.cos(a), math.sin(a)), detail)
+
+
+# Models built straight on the footprint (map metres) instead of in a local frame.
+FOOTPRINT_MODELS: dict[str, Callable[[dict, bool], Mesh]] = {"bunker": _bunker}
+
+
 def build_landmark(b: dict, detail: bool = True) -> Mesh:
     """Mesh of the landmark model named by ``b["model"]``, placed on the footprint of ``b``."""
+    if b["model"] in FOOTPRINT_MODELS:
+        return FOOTPRINT_MODELS[b["model"]](b, detail)
     solids = MODELS[b["model"]](detail)
     ring = np.array(b["footprint"]["exterior"], float)
     origin = ring.mean(axis=0)

@@ -44,8 +44,8 @@ when a page is full, the DMR raster in WCS tiles of at most 1000 m per side (cac
 `dmr_tiles/`) that are mosaicked into `dmr5.tif`. All are cached; `--force` refetches.
 
 `rules.yaml` has an `areas.<name>` overlay that is merged over a section only for that area. The
-village profile uses fewer fences without collision boxes, fewer trees (`props.trees.max_per_chunk`
-caps rule-based trees per chunk) and more spawn candidates, to keep chunk files small for 16-64
+village profile uses fewer fences without collision boxes, lower tree densities (the per-chunk tree cap
+`props.trees.max_per_chunk` is available but set to 0 = off) and more spawn candidates, to keep chunk files small for 16-64
 players on weak GPUs. `make preview AREA=village` also writes `overview.png`: the parcels and
 buildings with the 250 m chunk grid and chunk indices.
 

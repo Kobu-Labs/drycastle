@@ -1,0 +1,19 @@
+- allow developers to run a map explorer
+- this explorer will allow developers to manage parcels
+- why?
+- it is more than often that two parcels belong to the same owner, and are in reality only one parcel with fence going on its perimeter
+- change parcel properties
+    - fence type
+    - fence layout
+    - trees
+    - place random pre-built objects
+        - cars
+        - pavement (concrete slabs/ blocks)
+        - flower pots, flowers, bushes, garden patches
+        - walls (with basic textures)
+- these special rules should be preserved in the pipeline or the build and appleid afterwards, if we have consistent reference to downloaded parcels, this should not be an issue
+- alternatively a MCP should be build
+    - this will have access to pre-build assest (we can use an low poly asset, not do everything ourselves )
+    - the editor could allow a prompt window where user specifies parcel and the changes
+    - the mcp would directly add these changes
+    - this should be live without needing a world rebuild, so the changes would "pop-in" and it would allow fast iteration

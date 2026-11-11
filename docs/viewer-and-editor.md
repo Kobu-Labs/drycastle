@@ -112,8 +112,9 @@ Options: `--edits PATH` (default `pipeline/config/edits.json`), `--state PATH` (
 | Ctrl+Z, Ctrl+Y (Ctrl+Shift+Z) | undo / redo the saves made in this session (see Objects and undo) |
 
 Hovering shows `P-0415 garden` (and `[G-0007]` when grouped) at the cursor. Outlines are unshaded ribbons draped
-0.25 m over the terrain: yellow for the selection, orange for property groups (edges shared by two members are
-not drawn, so a group reads as one shape), faint white for the hovered parcel. The right-hand panel shows the
+0.25 m over the terrain: yellow for the selection, faint white for the hovered parcel. Nothing is drawn by default: a property group
+outlines only when one of its members is hovered or selected, and then as one shape (edges shared by two members are
+not drawn). The right-hand panel shows the
 selection (ID, kind, area, cadastral reference, group), a collapsible Group section with the buttons Group
 selected, Add selected to group, Remove from group and Dissolve group, the Fence and Trees sections (below) and
 the Objects section (palette, selected object, undo; see Objects and undo). The bottom line shows messages (`saved`, `regenerating P-0004...`, `applied in 480 ms`, errors) and the key hints.

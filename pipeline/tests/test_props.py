@@ -194,7 +194,7 @@ def test_area_overlay_only_applies_to_that_area(tmp_path) -> None:
     village = load_section("props", area="village")
     assert slice_props == load_section("props")
     assert slice_props["fences"]["collision"] is True and slice_props["trees"]["max_per_chunk"] == 0
-    assert village["fences"]["collision"] is False and village["trees"]["max_per_chunk"] > 0
+    assert village["fences"]["collision"] is False and village["trees"]["max_per_chunk"] == 0
     # keys the overlay does not mention keep their value
     assert village["fences"]["height_m"] == slice_props["fences"]["height_m"]
     custom = tmp_path / "r.yaml"

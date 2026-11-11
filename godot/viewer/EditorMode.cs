@@ -45,7 +45,7 @@ public partial class EditorMode : Node
     public event Action? SelectionChanged;
 
     // outline kinds: node name -> segments last built (ground xz pairs)
-    public const string OutlineSelected = "outline_selected", OutlineGroup = "outline_group", OutlineHover = "outline_hover";
+    public const string OutlineSelected = "outline_selected", OutlineHover = "outline_hover";
     readonly Dictionary<string, MeshInstance3D> _outlines = new();
     readonly Dictionary<string, int> _segmentCounts = new();
     bool _outlinesDirty = true;
@@ -574,13 +574,9 @@ public partial class EditorMode : Node
     public void RebuildOutlines()
     {
         _outlinesDirty = false;
-        var groups = Map.Parcels.Values.Where(p => p.Group != null).GroupBy(p => p.Group!);
-        var groupSegs = new List<(Vector2, Vector2)>();
-        foreach (var g in groups) groupSegs.AddRange(GroupPerimeter(g.ToList()));
         var selSegs = UnitSegments(Selection.Where(Map.Parcels.ContainsKey));
         var hoverSegs = HoverId != null && !Selection.Contains(HoverId) ? UnitSegments(new[] { HoverId }) : new();
         SetOutline(OutlineHover, hoverSegs, new Color(1f, 1f, 1f, 0.55f), 0.25f, 0.30f);
-        SetOutline(OutlineGroup, groupSegs, new Color(1f, 0.55f, 0.1f), 0.27f, 0.55f);
         SetOutline(OutlineSelected, selSegs, new Color(1f, 0.92f, 0.1f), 0.29f, 0.55f);
     }
 

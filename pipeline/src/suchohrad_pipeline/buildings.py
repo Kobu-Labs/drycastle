@@ -29,6 +29,7 @@ BUILDINGS_FORMAT_VERSION = 1
 ROOFS = ("flat", "gabled", "hipped")
 OVERRIDE_FIELDS = (
     "height_m",
+    "roof_height_m",
     "levels",
     "roof",
     "ridge_dir",
@@ -123,13 +124,16 @@ def load_overrides(path: Path = DEFAULT_OVERRIDES) -> dict[str, dict]:
         for name, value in fields.items():
             if name not in OVERRIDE_FIELDS:
                 raise RulesError(f"overrides: {key}: unknown field {name}")
+            if name == "roof_height_m" and not (isinstance(value, int | float) and value > 0):
+                raise RulesError(f"overrides: {key}: roof_height_m must be a positive number")
             if name == "roof" and value not in ROOFS:
                 raise RulesError(f"overrides: {key}: roof must be one of {ROOFS}")
             if name == "model":
-                from suchohrad_pipeline.landmarks import MODELS
+                from suchohrad_pipeline.landmarks import FOOTPRINT_MODELS, MODELS
 
-                if value not in MODELS:
-                    raise RulesError(f"overrides: {key}: model must be one of {sorted(MODELS)}")
+                known = sorted({*MODELS, *FOOTPRINT_MODELS})
+                if value not in known:
+                    raise RulesError(f"overrides: {key}: model must be one of {known}")
             if name == "model_axis" and not isinstance(value, int | float):
                 raise RulesError(f"overrides: {key}: model_axis must be a number (radians)")
             if name.endswith("_colour") and not _COLOUR.match(str(value)):
@@ -263,6 +267,8 @@ def derive_building(
         else:
             rise = b * math.tan(math.radians(cls.pitch_deg))
         rise = min(rise, rules.max_roof_rise_m)
+    if roof != "flat" and ov.get("roof_height_m"):
+        rise = float(ov["roof_height_m"])  # measured rise from eave to ridge, no pitch or cap
     if height_tag:
         total = float(height_tag)
     elif levels_tag:

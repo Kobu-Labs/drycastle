@@ -88,3 +88,21 @@ def load_slice_config(path: Path = DEFAULT_CONFIG, area: str = DEFAULT_AREA) -> 
     if v_radius <= 0 or v_margin < 0:
         raise ConfigError(f"{path.name}: village radius_m must be > 0, margin_m >= 0")
     return SliceConfig(osm_way=way, radius_m=v_radius, margin_m=v_margin)
+
+
+def load_dotenv(path: Path | None = None) -> None:
+    """Load KEY=VALUE lines from the repo-root ``.env`` (gitignored) into the environment.
+
+    Variables already set in the environment win.
+    """
+    import os
+
+    path = path or REPO_ROOT / ".env"
+    if not path.is_file():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        os.environ.setdefault(name.strip(), value.strip().strip("'\""))

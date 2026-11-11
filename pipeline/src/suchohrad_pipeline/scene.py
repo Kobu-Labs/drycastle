@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import shapely
 
+from suchohrad_pipeline.building_detail import build_detail, load_details
 from suchohrad_pipeline.buildings import hex_to_rgb
 from suchohrad_pipeline.edits import DEFAULT_EDITS, load_edits
 from suchohrad_pipeline.landmarks import build_landmark
@@ -67,6 +68,7 @@ class MapScene:
     trees: list[dict] | None = None  # tree records as exported (z with the exaggeration), for trees.json
     spawns: dict | None = None
     warnings: list[str] = field(default_factory=list)  # stale or unusable edits entries
+    windows: list[dict] = field(default_factory=list)  # tagged window panes, see building_detail
 
     def chunks(self) -> list[Chunk]:
         return sorted(set(self.parcels) | set(self.nodes) | set(self.parcel_props))
@@ -107,6 +109,7 @@ def build_scene(
         b["id"]: b for b in json.loads((work_dir / "buildings.json").read_text())["buildings"]
     }
     scene = MapScene()
+    details = load_details()
     k = exaggeration
     if (work_dir / "terrain.json").is_file():
         scene.terrain, elev = load_terrain(work_dir)
@@ -122,7 +125,18 @@ def build_scene(
             dz = scene.building_elevation.get(bid, 0.0)
             b = buildings[bid]
             for meshes, fn in ((vis, building_mesh), (col, collision_mesh)):
-                if b.get("model"):  # hand-modelled landmark: detailed visual, plain-massing collision
+                if bid in details and not b.get("model"):
+                    if fn is collision_mesh:
+                        m = fn(b)
+                    else:
+                        m, tags = build_detail(b, details[bid])
+                        for tag in tags:
+                            tag.meta["centre"][2] += dz
+                            scene.windows.append({**tag.meta, "parcel": p["id"]})
+                            scene.nodes.setdefault(tuple(p["chunk"]), {})[tag.node] = Mesh(
+                                tag.mesh.tris + [0, 0, dz], tag.mesh.colours
+                            )
+                elif b.get("model"):  # hand-modelled landmark: detailed visual, plain-massing collision
                     m = build_landmark(b, detail=fn is building_mesh)
                 else:
                     m = fn(b)

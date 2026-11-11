@@ -236,6 +236,12 @@ def run_export(
         # street lamp positions (props stage); copied verbatim, the game builds the lamps from them
         (out_dir / "lamps.json").write_bytes(lamps_src.read_bytes())
         files["lamps"] = "lamps.json"
+    stale_windows = out_dir / "windows.json"
+    stale_windows.unlink(missing_ok=True)
+    if scene.windows:
+        # tagged window panes (building_detail): node name, position, size, facade, breakable
+        _dump(stale_windows, {"version": 1, "windows": sorted(scene.windows, key=lambda w: w["node"])})
+        files["windows"] = "windows.json"
 
     parcels_file = {
         "version": ARTIFACT_FORMAT_VERSION,

@@ -289,6 +289,6 @@ areas:
         collision: false
       trees:
         density_per_1000m2: {garden: 1.0, building_plot: 0.5, forest: 4.0, field: 0.0, other: 0.2}
-        max_per_chunk: 150
+        max_per_chunk: 0
     spawns:
       count: 150
