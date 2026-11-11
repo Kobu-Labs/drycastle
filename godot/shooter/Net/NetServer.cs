@@ -52,6 +52,11 @@ public partial class NetServer : Node
         public float Throttle, Steer;
         public PlayerProfile? Profile;
         public ProfileLoad? Loading;
+        /// <summary>Server time of the connect, for the hello deadline.</summary>
+        public double ConnectedAt;
+        public CatchUpBudget CatchUp;
+        /// <summary>The profile token from the hello ("" = guest). One live session per token.</summary>
+        public string Token = "";
         public int PacketsThisTick;
         public double SaveTokens = 10;
         public long BytesOut;
@@ -92,7 +97,7 @@ public partial class NetServer : Node
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, Client> _clients = new();
     uint _tick;
-    ushort _nextId = 1;
+    readonly PlayerIds _ids = new();
     double _elapsed;
     int _peakPlayers;
     readonly Dictionary<string, float> _movedByName = new();
@@ -174,6 +179,8 @@ public partial class NetServer : Node
         foreach (var cl in _clients.Values) cl.PacketsThisTick = 0;
         Poll();
         CompleteProfileLoads();
+        CompleteSaves();
+        DropSilentPeers();
         _match.Update();
         _match.Entities.Tick((float)delta);
         StreakTick((float)delta);
@@ -189,7 +196,7 @@ public partial class NetServer : Node
         TickTelemetry(tickStartUs, delta);
         LossTickEnd(tickStartUs);
         if (_clients.Count > _peakPlayers) _peakPlayers = _clients.Count;
-        foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved;
+        if (QuitAfter > 0) foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved; // only the smoke verdict reads it; a production server keeps no per-name history
         if (_tick % (Wire.TickRate * 2) == 0 && _clients.Count > 0)
             GD.Print($"server: tick {_tick}, players {string.Join(", ", _clients.Values.Where(c => c.Joined).Select(c => $"{c.Name}#{c.Id}@({c.Body.GlobalPosition.X:F1},{c.Body.GlobalPosition.Y:F1},{c.Body.GlobalPosition.Z:F1}) ack={c.Ack}"))}");
         if (BazookaSmoke)
@@ -308,7 +315,7 @@ public partial class NetServer : Node
             {
                 case ENetConnection.EventType.Connect:
                     if (_clients.Count >= MaxPeers) Reject(new Client { Peer = peer }, $"The server is full ({MaxPeers} players). Try again later.");
-                    else _clients[peer] = new Client { Peer = peer };
+                    else _clients[peer] = new Client { Peer = peer, ConnectedAt = _elapsed };
                     break;
                 case ENetConnection.EventType.Disconnect: Drop(peer); break;
                 case ENetConnection.EventType.Receive:
@@ -341,7 +348,7 @@ public partial class NetServer : Node
         {
             _scratch.Clear();
             if (!Wire.TryDecodeInputs(d, _scratch, out var snapTick)) return;
-            if (snapTick != Wire.NoTick && (c.SnapAck == Wire.NoTick || snapTick > c.SnapAck)) c.SnapAck = snapTick; // an older input's ack arriving late changes nothing
+            if (snapTick != Wire.NoTick && snapTick <= _tick && _sentStates.Has(snapTick) && (c.SnapAck == Wire.NoTick || snapTick > c.SnapAck)) c.SnapAck = snapTick; // an older input's ack arriving late changes nothing
             foreach (var i in _scratch)
             {
                 // redundant copies of already-seen inputs are skipped
@@ -360,9 +367,13 @@ public partial class NetServer : Node
             Reject(c, $"Protocol mismatch: this server speaks protocol {Wire.ProtocolVersion}, your game speaks {h.Version}. Update the game to the server's build.");
             return;
         }
-        c.Id = _nextId++;
-        c.Name = string.IsNullOrWhiteSpace(h.Name) ? $"player{c.Id}" : h.Name.Trim();
+        c.Id = _ids.Allocate(id => _clients.Values.Any(o => o.Id == id) || _byId.ContainsKey(id));
+        if (c.Id == 0) { Reject(c, "The server is full."); return; }
+        var name = LoadoutRules.SanitizePlayerName(h.Name);
+        c.Name = name.Length == 0 ? $"player{c.Id}" : name;
         SandboxOnHello(c, h.Flags);
+        c.Token = h.Token;
+        DropSessionsWithToken(c); // a quick reconnect wins over its ghost, which would otherwise run on the same profile until its peer times out
         StartProfileLoad(c, h.Token); // joins once the profile is in (or the wait times out)
         GD.Print($"server: {c.Name} #{c.Id} hello, loading profile");
     }
@@ -416,6 +427,31 @@ public partial class NetServer : Node
         foreach (var o in _clients.Values.Where(o => o.Joined)) Send(o, new LeaveMsg(c.Id));
         _match.RemovePlayer(c.Id);
         GD.Print($"server: {c.Name} #{c.Id} left");
+    }
+
+    /// <summary>Drops every other client that uses <paramref name="keep"/>'s token, so a profile never has two live sessions.</summary>
+    void DropSessionsWithToken(Client keep)
+    {
+        if (keep.Token.Length == 0) return;
+        foreach (var o in _clients.Values.Where(o => o != keep && o.Token == keep.Token).ToList())
+        {
+            GD.Print($"server: {o.Name} #{o.Id} replaced by a new session with the same token");
+            Drop(o.Peer);
+            o.Peer.PeerDisconnectLater(0);
+        }
+    }
+
+    /// <summary>How long a connection may stay without a hello before it is dropped (#197); it holds one of <see cref="MaxPeers"/> slots.</summary>
+    public const double HelloDeadlineSeconds = 5;
+
+    void DropSilentPeers()
+    {
+        foreach (var c in _clients.Values.Where(c => c.Id == 0 && _elapsed - c.ConnectedAt > HelloDeadlineSeconds).ToList())
+        {
+            GD.Print("server: dropping a connection that sent no hello");
+            Drop(c.Peer);
+            c.Peer.PeerDisconnectLater(0);
+        }
     }
 
     void Tx(ENetPacketPeer peer, int chan, byte[] data, int flags)
@@ -519,7 +555,7 @@ public partial class NetServer : Node
     void SimulateClient(Client c, float dt)
     {
         // normally one input per tick; if the queue backs up (jitter), catch up with a second one
-        var n = c.Inputs.Count > 3 ? 2 : 1;
+        var n = c.CatchUp.Steps(c.Inputs.Count); // a second input only while the catch-up credit lasts (#197)
         for (var k = 0; k < n && c.Inputs.Count > 0; k++)
         {
             var i = c.Inputs.Dequeue();

@@ -184,3 +184,50 @@ public class ProfileHandshakeTests
 
     static IReadOnlyDictionary<string, int> Empty() => new Dictionary<string, int>();
 }
+
+/// <summary>Server hardening (#197): player ids, name cleaning and the catch-up budget.</summary>
+public class ServerHardeningTests
+{
+    [Fact]
+    public void PlayerIdsStayBelowTheVehicleRangeAndSkipIdsInUse()
+    {
+        var ids = new PlayerIds();
+        var used = new HashSet<ushort> { 2 };
+        Assert.Equal(1, ids.Allocate(used.Contains));
+        Assert.Equal(3, ids.Allocate(used.Contains)); // 2 is taken
+        for (var i = 0; i < 100_000; i++)
+        {
+            var id = ids.Allocate(_ => false);
+            Assert.InRange(id, PlayerIds.First, PlayerIds.Last);
+        }
+        Assert.True(PlayerIds.Last < VehicleRecord.FirstId);
+    }
+
+    [Fact]
+    public void PlayerIdsReturnZeroWhenEveryIdIsInUse() => Assert.Equal(0, new PlayerIds().Allocate(_ => true));
+
+    [Theory]
+    [InlineData("  Bob  ", "Bob")]
+    [InlineData("[SANDBOX] Eve", "SANDBOX Eve")]
+    [InlineData("a\u0007b\nc", "abc")]
+    [InlineData("   ", "")]
+    [InlineData(null, "")]
+    public void PlayerNamesAreCleaned(string? raw, string expected) => Assert.Equal(expected, LoadoutRules.SanitizePlayerName(raw));
+
+    [Fact]
+    public void PlayerNamesAreCutToTheLimit() =>
+        Assert.Equal(LoadoutRules.MaxNameChars, LoadoutRules.SanitizePlayerName(new string('x', 200)).Length);
+
+    [Fact]
+    public void CatchUpAllowsABurstButNotSustainedDoubleSpeed()
+    {
+        var b = new CatchUpBudget();
+        var burst = 0;
+        for (var t = 0; t < 7; t++) burst += b.Steps(8) - 1; // a stalled client's backlog drains at two inputs per tick
+        Assert.Equal(7, burst);
+        var extra = 0;
+        for (var t = 0; t < 400; t++) extra += b.Steps(8) - 1; // a client that keeps the queue full
+        Assert.InRange(extra, 90, 110); // about RefillPerTick (0.25) of the ticks
+        Assert.Equal(1, new CatchUpBudget().Steps(3)); // a short queue never double-steps
+    }
+}

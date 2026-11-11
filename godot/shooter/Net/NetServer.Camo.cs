@@ -38,7 +38,7 @@ public partial class NetServer
             return;
         }
         p.Camos[slot] = spec;
-        if (p.Persist) _ = Progression!.Camo.SaveAsync(p.DbId, slot, spec);
+        if (p.Persist) AfterWrite(Progression!.Camo.SaveAsync(p.DbId, slot, spec), ok => { if (!ok) Send(c, new ErrorMsg("Could not save your camouflage, try again in a moment.")); }, c);
         SendProfile(c);
         if (slot == p.Active) BroadcastAppearance(c);
     }
