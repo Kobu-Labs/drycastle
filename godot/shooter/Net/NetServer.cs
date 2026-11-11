@@ -31,6 +31,7 @@ public partial class NetServer : Node
         /// <summary>The player's perk values. Neutral until the loadout ticket sets them from the player's loadout.</summary>
         public PerkModifiers Perks = PerkModifiers.None;
         public readonly SnapshotEncoder Enc = new();
+        public readonly WorldSnapshotEncoder WEnc = new();
         public Vector3 Start;
         public float MaxMoved;
         public ServerCar? Car;
@@ -102,6 +103,9 @@ public partial class NetServer : Node
         if (ArenaMode) BuildArena();
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
+        _match.Entities.Log = s => GD.PrintErr($"server: {s}");
+        _match.Entities.Spawned += w => BroadcastEvent(EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State));
+        _match.Entities.Despawned += w => BroadcastEvent(EventKind.WorldDespawn, WorldCodec.EncodeDespawn(w.Id, w.Reason));
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 28, Acceleration = 9, Steering = 1.7f, Mass = 1200 } } };
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");
@@ -128,6 +132,7 @@ public partial class NetServer : Node
         Poll();
         CompleteProfileLoads();
         _match.Update();
+        _match.Entities.Tick((float)delta);
         foreach (var c in _clients.Values.ToList()) if (c.Joined) SimulateClient(c, (float)delta);
         StepRockets((float)delta);
         StepVehicles((float)delta);
@@ -318,6 +323,7 @@ public partial class NetServer : Node
             Send(c, new JoinMsg(o.Id, o.Name));
             if (o != c) Send(o, new JoinMsg(c.Id, c.Name));
         }
+        foreach (var w in _match.Entities.Snapshot()) Send(c, new EventMsg((byte)EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State)));
         _match.AddPlayer(c.Id, c.Name); // spawns the player (event) and broadcasts the scoreboard
         _host.Flush();
         GD.Print($"server: {c.Name} joined as #{c.Id} ({_clients.Count(x => x.Value.Joined)} players)");
@@ -632,6 +638,9 @@ public partial class NetServer : Node
             if (!c.Joined) continue;
             foreach (var pkt in c.Enc.Encode(_tick, c.Ack, ents)) Tx(c.Peer, Wire.ChanData, pkt, 0);
         }
+        var world = _match.Entities.Snapshot();
+        foreach (var c in _clients.Values)
+            if (c.Joined) foreach (var pkt in c.WEnc.Encode(_tick, world)) Tx(c.Peer, Wire.ChanData, pkt, 0);
         LossLogStates(ents);
         _host.Flush();
     }
