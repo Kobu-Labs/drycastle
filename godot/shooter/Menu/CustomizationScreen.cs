@@ -5,8 +5,8 @@ namespace Suchohrad.Shooter;
 
 /// <summary>
 /// The camouflage customiser (ticket #141; docs/standards/ui-ux.md sections 1 to 5). One look per loadout slot: five slot
-/// tabs, a live turntable preview (drag or arrows, prone toggle), four groups of controls built from the camo.json
-/// parameters (suit colours, pattern, foliage, face paint) with a preset picker for the suit and the face, randomize,
+/// tabs, a live turntable preview (drag or arrows, prone toggle), five groups of controls built from the camo.json
+/// parameters (character, suit colours, pattern, foliage, face paint) with a preset picker for the suit and the face, randomize,
 /// reset, undo (Ctrl+Z), a share code (copy and paste, base64 of the CamoSpec), Revert and Apply. Apply sends the look for
 /// the open slot; the server answers with the profile. Esc goes one level up; unsaved edits ask first, the same as the
 /// loadout editor. The draft lives on this screen until Apply, so nothing reaches the server by accident.
@@ -31,10 +31,10 @@ public partial class CustomizationScreen : MenuScreen
     readonly record struct Row(CamoParam P, Control Input, Label Value);
     readonly List<Row> _rows = new();
 
-    static readonly string[] GroupKeys = { "camo.group.suit", "camo.group.pattern", "camo.group.foliage", "camo.group.face" };
+    static readonly string[] GroupKeys = { "camo.group.character", "camo.group.suit", "camo.group.pattern", "camo.group.foliage", "camo.group.face" };
     readonly Button[] _slotTabs = new Button[Loadout.SlotCount];
-    readonly Button[] _groupTabs = new Button[4];
-    readonly Control[] _groupPanes = new Control[4];
+    readonly Button[] _groupTabs = new Button[GroupKeys.Length];
+    readonly Control[] _groupPanes = new Control[GroupKeys.Length];
     Label _level = null!, _note = null!, _empty = null!;
     Control _body = null!;
     LineEdit _code = null!;
@@ -175,8 +175,8 @@ public partial class CustomizationScreen : MenuScreen
         {
             var pane = Ui.VBox();
             pane.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            if (g == 0) pane.AddChild(PresetRow(true));
-            if (g == 3) pane.AddChild(PresetRow(false));
+            if ((CamoGroup)g == CamoGroup.SuitColours) pane.AddChild(PresetRow(true));
+            if ((CamoGroup)g == CamoGroup.FacePaint) pane.AddChild(PresetRow(false));
             foreach (var p in _params.Where(p => p.Group == (CamoGroup)g)) pane.AddChild(ParamRow(p));
             _groupPanes[g] = pane;
             stack.AddChild(pane);
@@ -296,6 +296,9 @@ public partial class CustomizationScreen : MenuScreen
     {
         "suit_pattern" => _camo.SuitPatterns,
         "face_pattern" => _camo.FacePatterns,
+        "body" => _camo.Bodies.Select(b => b.Name).ToList(),
+        "skin_tone" => _camo.SkinTones.Select(s => s.Name).ToList(),
+        "headgear" => _camo.Headgear.Select(h => Strings.T("camo.headgear." + h)).ToList(),
         _ => _camo.Vegetation,
     };
 

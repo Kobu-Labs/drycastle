@@ -6,17 +6,27 @@ namespace Suchohrad.ShooterCore;
 public readonly record struct Rgb(byte R, byte G, byte B);
 
 /// <summary>
-/// A player's camouflage: the suit (colours, pattern, foliage tufts) and the face paint. Every field is a plain number,
+/// A player's look: the character (body model, skin tone, headgear), the camouflage suit (colours, pattern, foliage tufts) and the face paint. Every field is a plain number,
 /// colour or index into <c>camo.json</c>, so a new look is data only. Stored in the profile (ADR 0003) and sent to every
 /// client in an <see cref="EventKind.Appearance"/> event, so the codec is fixed-size and small (<see cref="EncodedSize"/> bytes).
 /// Byte-valued ranges are normalised to 0..1 by the renderer (see <see cref="Unit"/>).
 /// </summary>
 public sealed record CamoSpec
 {
-    /// <summary>Codec version, the first byte of every encoded spec. Bump when the layout changes.</summary>
-    public const byte CodecVersion = 1;
+    /// <summary>Codec version, the first byte of every encoded spec. Bump when the layout changes. Version 1 (30 bytes) had no character fields; it still decodes, with <see cref="Body"/>, <see cref="SkinTone"/> and <see cref="Headgear"/> at 0.</summary>
+    public const byte CodecVersion = 2;
     /// <summary>Fixed encoded length in bytes (well under the 64-byte budget of the camo ticket).</summary>
-    public const int EncodedSize = 30;
+    public const int EncodedSize = 33;
+    /// <summary>Encoded length of a version 1 spec, still read from stored profiles.</summary>
+    public const int EncodedSizeV1 = 30;
+
+    // Character
+    /// <summary>Index into <c>bodies</c> in camo.json: which character model is worn.</summary>
+    public byte Body { get; init; }
+    /// <summary>Index into <c>skin_tones</c> in camo.json.</summary>
+    public byte SkinTone { get; init; }
+    /// <summary>Index into <c>headgear</c> in camo.json: the helmet as modelled, covered in the suit pattern, or none.</summary>
+    public byte Headgear { get; init; }
 
     // Suit
     public Rgb SuitBase { get; init; } = new(0x4b, 0x5a, 0x32);
@@ -71,13 +81,15 @@ public sealed record CamoSpec
         b[at++] = FacePattern;
         Put(b, ref at, FaceColourA); Put(b, ref at, FaceColourB); Put(b, ref at, FaceColourC);
         b[at++] = FaceCoverage;
+        b[at++] = Body; b[at++] = SkinTone; b[at++] = Headgear;
         return b;
     }
 
-    /// <summary>Decodes an encoded spec. Null when the length or the codec version is wrong. Indices are not checked here; see <see cref="Validate"/>.</summary>
+    /// <summary>Decodes an encoded spec (version 2, or a stored version 1). Null when the length or the codec version is wrong. Indices are not checked here; see <see cref="Validate"/>.</summary>
     public static CamoSpec? TryDecode(ReadOnlySpan<byte> d)
     {
-        if (d.Length != EncodedSize || d[0] != CodecVersion) return null;
+        var v1 = d.Length == EncodedSizeV1 && d.Length > 0 && d[0] == 1;
+        if (!v1 && (d.Length != EncodedSize || d[0] != CodecVersion)) return null;
         var at = 1;
         var spec = new CamoSpec
         {
@@ -89,6 +101,7 @@ public sealed record CamoSpec
             FaceColourA = Get(d, ref at), FaceColourB = Get(d, ref at), FaceColourC = Get(d, ref at),
             FaceCoverage = d[at++],
         };
+        if (!v1) spec = spec with { Body = d[at++], SkinTone = d[at++], Headgear = d[at++] };
         return spec;
     }
 
@@ -101,6 +114,9 @@ public sealed record CamoSpec
         if (SuitPattern >= data.SuitPatterns.Count) return $"suit pattern {SuitPattern} is not in camo.json";
         if (FacePattern >= data.FacePatterns.Count) return $"face pattern {FacePattern} is not in camo.json";
         if (Vegetation >= data.Vegetation.Count) return $"vegetation {Vegetation} is not in camo.json";
+        if (Body >= data.Bodies.Count) return $"body {Body} is not in camo.json";
+        if (SkinTone >= data.SkinTones.Count) return $"skin tone {SkinTone} is not in camo.json";
+        if (Headgear >= data.Headgear.Count) return $"headgear {Headgear} is not in camo.json";
         if (TuftLayers > data.TuftMaxLayers) return $"tuft layers {TuftLayers} exceed the maximum {data.TuftMaxLayers}";
         return null;
     }

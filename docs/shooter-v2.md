@@ -226,8 +226,18 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 
 ## 6. Camouflage and customisation
 
-- `camo.json` (version 1): suit presets, face paint patterns, vegetation looks, tuft settings and the concealment numbers
-  (`CamoSpec`, codec version 1, 30 bytes on the wire).
+- `camo.json` (version 1): bodies, skin tones, headgear looks, suit presets, face paint patterns, vegetation looks, tuft settings and the
+  concealment numbers (`CamoSpec`, codec version 2, 33 bytes on the wire; stored version 1 specs of 30 bytes still decode, with the default character).
+- Character layer: `bodies` lists the player models (`assets/animated-characters`: Soldier M/F, Rifleman, Operator; unverified licence, see
+  `assets/README.md`). They share one rig, so animation and the weapon grip are the same for all. Each model is flat-colour surfaces named by
+  material; a body entry says which materials are the `suit` (camo shader), the `gear` (vest and belts, a dark tint of the suit's secondary colour),
+  the `headgear` (helmet: as modelled, covered in the suit pattern, or hidden, `headgear` list order is fixed) and the `hair`. `Skin` and `Face` take
+  the chosen skin tone (the boots, which the model puts in `Skin`, are darkened by a vertex colour added when the model loads). The model has a blank
+  face plate, so two dark eyes are added on the head bone. Foliage tufts are scattered on the actual suit, gear and headgear triangles (seeded by
+  the spec) and ride on the bones, so they follow the animation. Face paint is a Decal on the face plate.
+- Arms: the rig has no rifle clips, so `ArmsReadyPose` (a skeleton modifier) poses both arms on the weapon over any clip with a two-bone solve
+  (right hand at the chest, left hand on the foregrip); pistols use the right arm only, a knife swing plays `SwordSlash`.
+- Hit volume: `PlayerHitBox` is measured from these models (3.147 units tall in their T-pose, scaled to 1.8 m); the 0.56 m radius is unchanged.
 - Customiser UI (`CustomizationScreen.cs`, `CamoPreview.cs`) edits the look per loadout slot (#141).
 - Prone stance (#139): a prone latch toggled by the prone key (a move button bit); crouch now has a transition time.
 - Concealment is a number only; it is not applied in the tick, the name tags or the kill cam (section 8).
@@ -300,8 +310,8 @@ Server and persistence:
 
 ## 9. Wire protocol
 
-Protocol version: **13** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
-versions. Version 13 (#160) adds each tracer's speed (u16 m/s) and length (u16 cm) to GunshipShots (tracer 29 bytes, was 25).
+Protocol version: **14** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
+versions. Version 14 grows the camo spec to 33 bytes (codec 2: body, skin tone, headgear; migration 0006). Version 13 (#160) adds each tracer's speed (u16 m/s) and length (u16 cm) to GunshipShots (tracer 29 bytes, was 25).
 Version 12 (#159) coalesces the gunship FX: the per-round Shot, ImpactFx and Ac130Blast of the turrets are replaced by
 GunshipShots (121), GunshipImpacts (122) and GunshipBlasts (123), one per gunner (or per tick) per server tick, and kind 120 is
 retired. The Explosion payload grew by a f32 blast radius (21 bytes), so a gunship rocket's 8 m reaches the clients. Layouts are in

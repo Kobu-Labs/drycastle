@@ -1,0 +1,11 @@
+LICENCE UNVERIFIED.
+
+soldier-male.glb, soldier-female.glb, rifleman-male.glb and operator.glb come from a "glTF-...-001.zip" archive of 50 low-poly
+animated characters (one shared 23-bone "CharacterArmature" rig, 17 clips) that the project owner downloaded and provided as a
+local file. They are the archive's Soldier_Male, Soldier_Female, BlueSoldier_Male and Ninja_Sand models, repacked one-to-one from
+glTF (embedded buffer) to GLB with no change to geometry, materials or animation. The archive has no licence file and no source
+page was recorded; the style matches the Quaternius character packs but that is NOT confirmed, and the files are NOT claimed to
+be CC0. Before any release or public distribution the owner must confirm the author, licence and required attribution, then
+replace this notice with the real licence text (or remove the files).
+
+The models are flat-colour (no textures, no UVs): materials Skin, Face, Main, Black, DarkGreen, Grey, Details, Helmet, Hair.

@@ -19,9 +19,11 @@ public class GameData
     /// <summary>camo.json (camouflage presets, tuft and concealment rules). A built-in minimal file when absent.</summary>
     public CamoFile Camo { get; init; } = CamoFile.Parse(MinimalCamoJson);
 
-    /// <summary>Used when camo.json is absent (headless hosts and old data directories): one suit, one face preset, no tufts.</summary>
+    /// <summary>Used when camo.json is absent (headless hosts and old data directories): one body, one skin tone, one suit, one face preset, no tufts.</summary>
     const string MinimalCamoJson = """
-        {"version":1,"suit_patterns":["blotch"],"face_patterns":["bars"],"vegetation":["grass"],"tuft_max_layers":0,
+        {"version":1,"suit_patterns":["blotch"],"face_patterns":["bars"],"vegetation":["grass"],"headgear":["standard","suit_cover","none"],
+        "bodies":[{"id":"soldier_m","name":"Soldier (M)","model":"animated-characters/soldier-male.glb","suit":["Main","DarkGreen"],"gear":["Black"],"headgear":["Helmet"]}],
+        "skin_tones":[{"id":"light","name":"Light","colour":"#e0ac84"}],"tuft_max_layers":0,
         "tuft_size_m":[0,0],"tuft_sway_m":[0,0],"pattern_scale_per_m":[1,1],"spotting_min_multiplier":0.35,
         "concealment":{"stand":0.3,"crouch":0.6,"prone":0.9,"stillness_weight":0.7,"full_speed_mps":6},
         "suit_presets":[{"id":"olive","name":"Olive","base":"#4b5a32","secondary":"#2e3a1f","pattern":"blotch","vegetation":"grass"}],

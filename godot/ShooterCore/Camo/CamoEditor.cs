@@ -1,7 +1,7 @@
 namespace Suchohrad.ShooterCore;
 
 /// <summary>Which panel of the customiser a parameter sits in.</summary>
-public enum CamoGroup { SuitColours, Pattern, Foliage, FacePaint }
+public enum CamoGroup { Character, SuitColours, Pattern, Foliage, FacePaint }
 
 /// <summary>How the customiser edits a parameter: a 0..255 slider, an index into a camo.json list, or a colour.</summary>
 public enum CamoParamKind { Byte, Choice, Colour }
@@ -14,7 +14,7 @@ public sealed record CamoParam(string Key, CamoGroup Group, CamoParamKind Kind, 
 
 /// <summary>
 /// The customiser's logic without any Godot types: the parameter list (built from camo.json, so it follows the data),
-/// the random roll, presets applied to one part of the look, and the share code (base64 of the 30-byte CamoSpec).
+/// the random roll, presets applied to one part of the look, and the share code (base64 of the 33-byte CamoSpec).
 /// </summary>
 public static class CamoEditor
 {
@@ -30,6 +30,10 @@ public static class CamoEditor
 
         return new List<CamoParam>
         {
+            Choice("body", CamoGroup.Character, data.Bodies.Count, s => s.Body, (s, v) => s with { Body = v }),
+            Choice("skin_tone", CamoGroup.Character, data.SkinTones.Count, s => s.SkinTone, (s, v) => s with { SkinTone = v }),
+            Choice("headgear", CamoGroup.Character, data.Headgear.Count, s => s.Headgear, (s, v) => s with { Headgear = v }),
+
             Colour("suit_base", CamoGroup.SuitColours, s => s.SuitBase, (s, c) => s with { SuitBase = c }),
             Colour("suit_secondary", CamoGroup.SuitColours, s => s.SuitSecondary, (s, c) => s with { SuitSecondary = c }),
 
@@ -60,6 +64,7 @@ public static class CamoEditor
     {
         var spec = new CamoSpec
         {
+            Body = (byte)rng.Next(data.Bodies.Count), SkinTone = (byte)rng.Next(data.SkinTones.Count), Headgear = (byte)rng.Next(data.Headgear.Count),
             SuitBase = RandomRgb(rng), SuitSecondary = RandomRgb(rng),
             SuitPattern = (byte)rng.Next(data.SuitPatterns.Count),
             PatternScale = RandomByte(rng), Contrast = RandomByte(rng),
@@ -91,7 +96,7 @@ public static class CamoEditor
         FaceColourC = preset.FaceColourC, FaceCoverage = preset.FaceCoverage,
     };
 
-    /// <summary>The share code: base64 of the encoded CamoSpec (40 characters).</summary>
+    /// <summary>The share code: base64 of the encoded CamoSpec (44 characters).</summary>
     public static string ShareCode(CamoSpec spec) => Convert.ToBase64String(spec.Encode());
 
     /// <summary>

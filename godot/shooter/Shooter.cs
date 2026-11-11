@@ -143,11 +143,11 @@ public partial class Shooter : Node3D
     void ShowMain()
     {
         Sfx.MenuMusic(true);
-        _shell.Reset(new MainMenu(() => _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n))), () => _shell.Push(new SettingsScreen(false)),
-            () => _shell.Push(NewLoadouts()), () => _shell.Push(NewCustomization(-1))));
+        // Loadouts and camouflage live on the server, so they are not offered before joining: they are in the pause menu and on the respawn screen.
+        _shell.Reset(new MainMenu(() => _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n))), () => _shell.Push(new SettingsScreen(false))));
     }
 
-    /// <summary>The loadout editor, from the main menu (no connection: it says to join a server) or from pause or the respawn screen.</summary>
+    /// <summary>The loadout editor, from pause or the respawn screen.</summary>
     LoadoutScreen NewLoadouts() => new(() => _client, () => _data ??= LoadData()) { CustomizeFactory = slot => NewCustomization(slot) };
 
     /// <summary>The camouflage customiser for one loadout slot (-1: the active one), from the main menu or the loadout editor (#141).</summary>

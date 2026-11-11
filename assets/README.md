@@ -34,6 +34,14 @@ The source page and licence are **not confirmed** and they are not claimed to be
 pipeline tests and the editor). Used by `godot/shooter` as the motorcycle and bicycle (`data/vehicles.json`); the raw models are authored at 1/100 scale
 (node scale 100, rotated -90 about X), so vehicles.json carries the fit (scale, yaw, offset). The motorcycle faces +Z (turned 180 degrees), the bicycle -Z.
 
+**Unverified, user-provided (2026-11-11):** `animated-characters/` holds four player bodies picked from a 50-model archive of low-poly animated characters the
+owner downloaded (`soldier-male`, `soldier-female`, `rifleman-male` = BlueSoldier_Male, `operator` = Ninja_Sand), repacked from glTF to GLB without changes.
+All share one 23-bone rig authored in a T-pose (about 3.15 units tall; arms along x) with 17 clips (Idle, Walk, Run, Death, SwordSlash, ...). They are flat
+colour with no textures or UVs: the `Face` surface is a blank plate and `Skin` is a dark grey that also covers the hands, head and boots, so
+`godot/shooter` recolours them (skin tone, suit camouflage, headgear) per `data/camo.json` `bodies`. The author and licence are **not confirmed** (see
+`animated-characters/NOTICE.txt`); they are in the manifest's `unverified_models`. They replace the KayKit placeholder as the remote player body
+(`CharacterFx.cs`); the KayKit file stays for its licence record and as the fallback is the capsule.
+
 kenney.nl answered automated requests with HTTP 403, and Quaternius distributes through itch.io or
 Patreon pages. Neither was circumvented. The same CC0 archives are published openly by their creators
 on OpenGameArt.org (`opengameart.org/content/car-kit`, `/city-kit-suburban`, `/stylized-nature-megakit`),

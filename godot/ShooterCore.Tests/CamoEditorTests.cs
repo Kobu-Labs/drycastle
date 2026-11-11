@@ -33,7 +33,7 @@ public class CamoEditorTests
         // the customiser must reach every field: a field nobody can tweak is a broken promise in the ticket
         var parms = CamoEditor.Params(Camo);
         var groups = parms.Select(p => p.Group).Distinct().ToList();
-        Assert.Equal(4, groups.Count);
+        Assert.Equal(5, groups.Count);
         Assert.Contains(parms, p => p.Key == "suit_base" && p.Kind == CamoParamKind.Colour);
         Assert.Contains(parms, p => p.Key == "tuft_layers" && p.Max == Camo.TuftMaxLayers);
         Assert.Contains(parms, p => p.Key == "face_colour_c" && p.Group == CamoGroup.FacePaint);
@@ -56,7 +56,7 @@ public class CamoEditorTests
     {
         var spec = CamoEditor.Randomize(Camo, new Random(7));
         var code = CamoEditor.ShareCode(spec);
-        Assert.Equal(40, code.Length); // 30 bytes in base64
+        Assert.Equal(44, code.Length); // 33 bytes in base64
         Assert.Equal(spec, CamoEditor.ParseShareCode(code, Camo, out var reason));
         Assert.Null(reason);
         Assert.Equal(spec, CamoEditor.ParseShareCode("  " + code + "\n", Camo, out _)); // pasted with whitespace

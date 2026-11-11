@@ -16,9 +16,11 @@ varying float variation;
 void vertex() {
 	// QuadMesh UVs run from the top (v = 0) to the root (v = 1), so the tip is 1 - UV.y
 	tip = 1.0 - UV.y;
-	vec3 root = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-	variation = fract(sin(dot(root.xz, vec2(12.9898, 78.233))) * 43758.5453);
-	float phase = root.x * 1.7 + root.z * 2.3;
+	// per-tuft values come from the instance index, so they stay fixed while the player moves, turns or animates
+	// (they used to come from the world position, which made every tuft's colour flicker as the body moved)
+	float id = float(INSTANCE_ID);
+	variation = fract(sin(id * 12.9898) * 43758.5453);
+	float phase = id * 1.7;
 	VERTEX.x += sin(TIME * 1.8 + phase) * sway_amount * tip * tip;
 }
 

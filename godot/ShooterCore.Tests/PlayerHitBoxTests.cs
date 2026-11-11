@@ -5,7 +5,7 @@ using Xunit;
 namespace Suchohrad.ShooterCore.Tests;
 
 /// <summary>
-/// The player and dummy hit volume against the drawn model (measured from the GLB: 1.899 m tall, 1.175 m wide, 1.118 m deep).
+/// The player and dummy hit volume against the drawn model (measured from the GLB: 3.147 units tall in its T-pose, scaled to 1.8 m).
 /// Each pose is shot at the head, chest, feet, hand height, just beside and just above the body.
 /// </summary>
 public class PlayerHitBoxTests

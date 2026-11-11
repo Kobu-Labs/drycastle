@@ -101,8 +101,8 @@ The pellets of one shotgun shot, sent as a seed and an aim so every client rebui
 _Avoid_: spread (alone), buckshot
 
 **Camouflage**:
-A loadout's suit look and face paint (`camo.json`): a base colour, a pattern and ghillie tufts. Chosen in the customiser and stored per loadout slot.
-_Avoid_: skin, outfit, cosmetic
+A loadout's look (`camo.json`): the character (body model, skin tone, headgear), the suit's base colour and pattern, ghillie tufts and face paint. Chosen in the customiser and stored per loadout slot.
+_Avoid_: outfit, cosmetic
 
 **Shot-only cover**:
 Collision that stops bullets, pellets, rockets and sight lines but not players or cars: tree crowns and bushes. Tree trunks and placed solids are solid for everyone.

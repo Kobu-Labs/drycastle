@@ -3,6 +3,47 @@
   "suit_patterns": ["blotch", "stripes", "leaf", "flecktarn"],
   "face_patterns": ["bars", "streaks", "dots"],
   "vegetation": ["grass", "fern", "bush"],
+  "headgear": ["standard", "suit_cover", "none"],
+  "bodies": [
+    {
+      "id": "soldier_m",
+      "name": "Soldier (M)",
+      "model": "animated-characters/soldier-male.glb",
+      "suit": ["Main", "DarkGreen"],
+      "gear": ["Black"],
+      "headgear": ["Helmet"]
+    },
+    {
+      "id": "soldier_f",
+      "name": "Soldier (F)",
+      "model": "animated-characters/soldier-female.glb",
+      "suit": ["Main", "DarkGreen"],
+      "gear": ["Black"],
+      "hair": ["Hair"]
+    },
+    {
+      "id": "rifleman",
+      "name": "Rifleman",
+      "model": "animated-characters/rifleman-male.glb",
+      "suit": ["Main"],
+      "gear": ["Black", "Grey"],
+      "headgear": ["Helmet"]
+    },
+    {
+      "id": "operator",
+      "name": "Operator",
+      "model": "animated-characters/operator.glb",
+      "suit": ["Main", "Grey"],
+      "gear": ["Details"]
+    }
+  ],
+  "skin_tones": [
+    { "id": "fair", "name": "Fair", "colour": "#f0c8a4" },
+    { "id": "light", "name": "Light", "colour": "#e0ac84" },
+    { "id": "tan", "name": "Tan", "colour": "#c68e5f" },
+    { "id": "brown", "name": "Brown", "colour": "#8d5a3a" },
+    { "id": "dark", "name": "Dark", "colour": "#5b3924" }
+  ],
   "tuft_max_layers": 3,
   "tuft_size_m": [0.03, 0.22],
   "tuft_sway_m": [0.0, 0.06],

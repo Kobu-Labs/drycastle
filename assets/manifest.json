@@ -1941,6 +1941,85 @@
       "pack": "zsky-vehicles",
       "provided": "2026-11-11",
       "used_for": "godot/shooter vehicles (data/vehicles.json)"
+    },
+    {
+      "id": "shooter:animated-characters/soldier-male",
+      "name": "Soldier (male)",
+      "file": "animated-characters/soldier-male.glb",
+      "original_filename": "glTF-20261111T120134Z-1-001.zip / Soldier_Male.gltf",
+      "size_note": "skinned T-pose rest mesh, about 3.15 units tall (feet at y 0); godot/shooter scales it by PlayerHitBox.DrawScale to the 1.8 m stand height",
+      "materials": [
+        "Skin",
+        "Main",
+        "Black",
+        "DarkGreen",
+        "Face",
+        "Helmet"
+      ],
+      "licence": "UNVERIFIED",
+      "source": "User-provided archive of 50 animated characters; author, source page and licence not confirmed (the style matches Quaternius). The user must confirm the licence and attribution before any release.",
+      "pack": "animated-characters",
+      "provided": "2026-11-11",
+      "used_for": "godot/shooter remote player bodies (data/camo.json bodies)"
+    },
+    {
+      "id": "shooter:animated-characters/soldier-female",
+      "name": "Soldier (female)",
+      "file": "animated-characters/soldier-female.glb",
+      "original_filename": "glTF-20261111T120134Z-1-001.zip / Soldier_Female.gltf",
+      "size_note": "skinned T-pose rest mesh, about 3.15 units tall (feet at y 0); godot/shooter scales it by PlayerHitBox.DrawScale to the 1.8 m stand height",
+      "materials": [
+        "Skin",
+        "Main",
+        "Black",
+        "DarkGreen",
+        "Face",
+        "Hair"
+      ],
+      "licence": "UNVERIFIED",
+      "source": "User-provided archive of 50 animated characters; author, source page and licence not confirmed (the style matches Quaternius). The user must confirm the licence and attribution before any release.",
+      "pack": "animated-characters",
+      "provided": "2026-11-11",
+      "used_for": "godot/shooter remote player bodies (data/camo.json bodies)"
+    },
+    {
+      "id": "shooter:animated-characters/rifleman-male",
+      "name": "Rifleman (male)",
+      "file": "animated-characters/rifleman-male.glb",
+      "original_filename": "glTF-20261111T120134Z-1-001.zip / BlueSoldier_Male.gltf",
+      "size_note": "skinned T-pose rest mesh, about 3.15 units tall (feet at y 0); godot/shooter scales it by PlayerHitBox.DrawScale to the 1.8 m stand height",
+      "materials": [
+        "Skin",
+        "Main",
+        "Black",
+        "Grey",
+        "Face",
+        "Helmet"
+      ],
+      "licence": "UNVERIFIED",
+      "source": "User-provided archive of 50 animated characters; author, source page and licence not confirmed (the style matches Quaternius). The user must confirm the licence and attribution before any release.",
+      "pack": "animated-characters",
+      "provided": "2026-11-11",
+      "used_for": "godot/shooter remote player bodies (data/camo.json bodies)"
+    },
+    {
+      "id": "shooter:animated-characters/operator",
+      "name": "Operator",
+      "file": "animated-characters/operator.glb",
+      "original_filename": "glTF-20261111T120134Z-1-001.zip / Ninja_Sand.gltf",
+      "size_note": "skinned T-pose rest mesh, about 3.15 units tall (feet at y 0); godot/shooter scales it by PlayerHitBox.DrawScale to the 1.8 m stand height",
+      "materials": [
+        "Skin",
+        "Main",
+        "Details",
+        "Grey",
+        "Face"
+      ],
+      "licence": "UNVERIFIED",
+      "source": "User-provided archive of 50 animated characters; author, source page and licence not confirmed (the style matches Quaternius). The user must confirm the licence and attribution before any release.",
+      "pack": "animated-characters",
+      "provided": "2026-11-11",
+      "used_for": "godot/shooter remote player bodies (data/camo.json bodies)"
     }
   ],
   "ui_icons": {

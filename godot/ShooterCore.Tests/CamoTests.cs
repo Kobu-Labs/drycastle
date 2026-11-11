@@ -14,6 +14,7 @@ public class CamoTests
 
     static CamoSpec Varied() => new()
     {
+        Body = 3, SkinTone = 4, Headgear = 2,
         SuitBase = new Rgb(1, 2, 3), SuitSecondary = new Rgb(250, 251, 252), SuitPattern = 2, PatternScale = 7, Contrast = 200,
         TuftLayers = 3, TuftSize = 99, TuftHead = 10, TuftChest = 20, TuftArms = 30, TuftLegs = 40,
         TuftColourVariation = 50, TuftSway = 60, Vegetation = 1,
@@ -30,6 +31,29 @@ public class CamoTests
             Assert.True(bytes.Length <= 64);
             Assert.Equal(spec, CamoSpec.TryDecode(bytes));
         }
+    }
+
+    [Fact]
+    public void StoredVersion1SpecsStillDecodeWithTheDefaultCharacter()
+    {
+        var v2 = Varied().Encode();
+        var v1 = v2.AsSpan(0, CamoSpec.EncodedSizeV1).ToArray();
+        v1[0] = 1; // a profile saved before the character fields existed
+        var spec = CamoSpec.TryDecode(v1);
+        Assert.NotNull(spec);
+        Assert.Equal(Varied() with { Body = 0, SkinTone = 0, Headgear = 0 }, spec);
+        Assert.Null(CamoSpec.TryDecode(v2.AsSpan(0, CamoSpec.EncodedSizeV1))); // a v2 prefix of the same length is not a v1 spec
+    }
+
+    [Fact]
+    public void CharacterIndicesAreCheckedAgainstCamoJson()
+    {
+        Assert.True(Camo.Bodies.Count >= 2 && Camo.SkinTones.Count >= 2 && Camo.Headgear.Count == 3);
+        Assert.Null(CamoSpec.Default.Validate(Camo));
+        Assert.NotNull((CamoSpec.Default with { Body = (byte)Camo.Bodies.Count }).Validate(Camo));
+        Assert.NotNull((CamoSpec.Default with { SkinTone = (byte)Camo.SkinTones.Count }).Validate(Camo));
+        Assert.NotNull((CamoSpec.Default with { Headgear = (byte)Camo.Headgear.Count }).Validate(Camo));
+        Assert.All(Camo.Bodies, b => Assert.NotEmpty(b.Suit));
     }
 
     [Fact]
@@ -172,6 +196,26 @@ public class CamoTests
 
         await store.Camo.SaveAsync(player.Id, 2, CamoSpec.Default);
         Assert.Equal((2, CamoSpec.Default), (await store.Camo.GetAllAsync(player.Id))[0]);
+    }
+
+    [Fact]
+    public void TheCharacterMigrationKeepsOldRowsAndAllowsTheLongerSpec()
+    {
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        conn.Open();
+        void Run(string sql) { using var c = conn.CreateCommand(); c.CommandText = sql; c.ExecuteNonQuery(); }
+        Run("CREATE TABLE players (id INTEGER PRIMARY KEY);");
+        Run("INSERT INTO players (id) VALUES (1);");
+        Run("CREATE TABLE loadout_camo (player_id INTEGER NOT NULL REFERENCES players (id), slot INTEGER NOT NULL CHECK (slot BETWEEN 0 AND 4), spec BLOB NOT NULL CHECK (length(spec) = 30), PRIMARY KEY (player_id, slot));");
+        Run("INSERT INTO loadout_camo (player_id, slot, spec) VALUES (1, 0, zeroblob(30));");
+        using var stream = typeof(SqliteProgressionStore).Assembly.GetManifestResourceStream("migrations/0006_camo_character.sql");
+        Assert.NotNull(stream);
+        Run(new StreamReader(stream!).ReadToEnd());
+        Run("INSERT INTO loadout_camo (player_id, slot, spec) VALUES (1, 1, zeroblob(33));");
+        Assert.ThrowsAny<Exception>(() => Run("INSERT INTO loadout_camo (player_id, slot, spec) VALUES (1, 2, zeroblob(31));"));
+        using var q = conn.CreateCommand();
+        q.CommandText = "SELECT COUNT(*) FROM loadout_camo;";
+        Assert.Equal(2L, (long)q.ExecuteScalar()!);
     }
 
     public static IEnumerable<object[]> Backends => new[] { new object[] { "memory" }, new object[] { "sqlite" } };

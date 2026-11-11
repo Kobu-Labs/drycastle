@@ -6,6 +6,18 @@ namespace Suchohrad.ShooterCore;
 public sealed record CamoPreset(string Id, string Name, CamoSpec Spec);
 
 /// <summary>
+/// A character model in camo.json: the GLB (relative to the asset library) and which of its materials play which part.
+/// <see cref="Suit"/> surfaces carry the camouflage pattern, <see cref="Gear"/> (vests, belts) takes a dark tint of the suit colour,
+/// <see cref="Headgear"/> is the helmet (shown as modelled, covered in the suit pattern, or hidden, see <see cref="CamoSpec.Headgear"/>),
+/// <see cref="Hair"/> keeps its modelled colour. <c>Skin</c> and <c>Face</c> always take the skin tone. Material names that are not
+/// listed keep their modelled colour.
+/// </summary>
+public sealed record CamoBody(string Id, string Name, string Model, IReadOnlyList<string> Suit, IReadOnlyList<string> Gear, IReadOnlyList<string> Headgear, IReadOnlyList<string> Hair);
+
+/// <summary>A skin tone in camo.json.</summary>
+public sealed record SkinToneEntry(string Id, string Name, Rgb Colour);
+
+/// <summary>
 /// Concealment rules from camo.json: how much a stance hides a player (0..1) and how much moving gives back.
 /// </summary>
 public sealed record ConcealmentRules(float Stand, float Crouch, float Prone, float StillnessWeight, float FullSpeedMps)
@@ -35,6 +47,12 @@ public sealed class CamoFile : IVersioned
     public IReadOnlyList<string> FacePatterns { get; private init; } = Array.Empty<string>();
     /// <summary>Tuft looks by name. A spec's <see cref="CamoSpec.Vegetation"/> indexes this list.</summary>
     public IReadOnlyList<string> Vegetation { get; private init; } = Array.Empty<string>();
+    /// <summary>The character models a player can wear. A spec's <see cref="CamoSpec.Body"/> indexes this list.</summary>
+    public IReadOnlyList<CamoBody> Bodies { get; private init; } = Array.Empty<CamoBody>();
+    /// <summary>Skin tones. A spec's <see cref="CamoSpec.SkinTone"/> indexes this list.</summary>
+    public IReadOnlyList<SkinToneEntry> SkinTones { get; private init; } = Array.Empty<SkinToneEntry>();
+    /// <summary>Headgear looks by name, in the order the renderer knows: 0 as modelled, 1 covered in the suit pattern, 2 none. A spec's <see cref="CamoSpec.Headgear"/> indexes this list.</summary>
+    public IReadOnlyList<string> Headgear { get; private init; } = Array.Empty<string>();
     public int TuftMaxLayers { get; private init; }
     /// <summary>Tuft length range in metres (255 maps to the max).</summary>
     public (float Min, float Max) TuftSizeM { get; private init; }
@@ -67,6 +85,14 @@ public sealed class CamoFile : IVersioned
         var suit = Names(raw.SuitPatterns, f, "suit_patterns");
         var face = Names(raw.FacePatterns, f, "face_patterns");
         var veg = Names(raw.Vegetation, f, "vegetation");
+        var headgear = Names(raw.Headgear, f, "headgear");
+        var bodies = (raw.Bodies ?? new List<BodyRaw>()).Select(b => BuildBody(b, f)).ToList();
+        if (bodies.Count == 0) throw new DataFileException($"{f}: no bodies");
+        if (bodies.Count > byte.MaxValue + 1) throw new DataFileException($"{f}: bodies holds at most 256 entries");
+        if (bodies.Select(b => b.Id).Distinct().Count() != bodies.Count) throw new DataFileException($"{f}: bodies needs unique ids");
+        var tones = (raw.SkinTones ?? new List<SkinToneRaw>()).Select(s => new SkinToneEntry(s.Id ?? "", s.Name ?? s.Id ?? "", Hex(s.Colour, $"{f}: skin tone \"{s.Id}\"", "colour"))).ToList();
+        if (tones.Count == 0) throw new DataFileException($"{f}: no skin_tones");
+        if (tones.Count > byte.MaxValue + 1) throw new DataFileException($"{f}: skin_tones holds at most 256 entries");
         if (raw.TuftMaxLayers is < 0 or > 8) throw new DataFileException($"{f}: tuft_max_layers must be 0 to 8");
         var concealment = raw.Concealment ?? throw new DataFileException($"{f}: field \"concealment\" is required");
         foreach (var (name, v) in new[] { ("stand", concealment.Stand), ("crouch", concealment.Crouch), ("prone", concealment.Prone), ("stillness_weight", concealment.StillnessWeight) })
@@ -80,6 +106,9 @@ public sealed class CamoFile : IVersioned
             SuitPatterns = suit,
             FacePatterns = face,
             Vegetation = veg,
+            Bodies = bodies,
+            SkinTones = tones,
+            Headgear = headgear,
             TuftMaxLayers = raw.TuftMaxLayers,
             TuftSizeM = ParseRange(raw.TuftSizeM, f, "tuft_size_m"),
             TuftSwayM = ParseRange(raw.TuftSwayM, f, "tuft_sway_m"),
@@ -94,6 +123,14 @@ public sealed class CamoFile : IVersioned
         CheckUniqueIds(file.SuitPresets, f, "suit_presets");
         CheckUniqueIds(file.FacePresets, f, "face_presets");
         return file;
+    }
+
+    static CamoBody BuildBody(BodyRaw b, string f)
+    {
+        var where = $"{f}: body \"{b.Id}\"";
+        if (string.IsNullOrWhiteSpace(b.Id)) throw new DataFileException($"{f}: a body has no id");
+        if (string.IsNullOrWhiteSpace(b.Model)) throw new DataFileException($"{where}: model is required");
+        return new CamoBody(b.Id, b.Name ?? b.Id, b.Model, b.Suit ?? new List<string>(), b.Gear ?? new List<string>(), b.Headgear ?? new List<string>(), b.Hair ?? new List<string>());
     }
 
     static CamoPreset BuildSuitPreset(CamoFile file, SuitPresetRaw p)
@@ -187,6 +224,9 @@ public sealed class CamoFile : IVersioned
         public List<string>? SuitPatterns { get; set; }
         public List<string>? FacePatterns { get; set; }
         public List<string>? Vegetation { get; set; }
+        public List<string>? Headgear { get; set; }
+        public List<BodyRaw>? Bodies { get; set; }
+        public List<SkinToneRaw>? SkinTones { get; set; }
         public int TuftMaxLayers { get; set; }
         public List<float>? TuftSizeM { get; set; }
         public List<float>? TuftSwayM { get; set; }
@@ -195,6 +235,24 @@ public sealed class CamoFile : IVersioned
         public ConcealmentRaw? Concealment { get; set; }
         public List<SuitPresetRaw>? SuitPresets { get; set; }
         public List<FacePresetRaw>? FacePresets { get; set; }
+    }
+
+    internal sealed class BodyRaw
+    {
+        public string? Id { get; set; }
+        public string? Name { get; set; }
+        public string? Model { get; set; }
+        public List<string>? Suit { get; set; }
+        public List<string>? Gear { get; set; }
+        public List<string>? Headgear { get; set; }
+        public List<string>? Hair { get; set; }
+    }
+
+    internal sealed class SkinToneRaw
+    {
+        public string? Id { get; set; }
+        public string? Name { get; set; }
+        public string? Colour { get; set; }
     }
 
     internal sealed class ConcealmentRaw

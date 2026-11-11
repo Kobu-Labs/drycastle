@@ -32,7 +32,7 @@ public sealed class CamoPreview
         };
         viewport.AddChild(new WorldEnvironment { Environment = env });
         viewport.AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-40, 30, 0), LightEnergy = 1.1f });
-        viewport.AddChild(new Camera3D { Position = new Vector3(0, 1.0f, 3.4f), RotationDegrees = new Vector3(-8, 0, 0), Fov = 40, Current = true });
+        viewport.AddChild(new Camera3D { Position = new Vector3(0, 0.95f, 4.0f), RotationDegrees = Vector3.Zero, Fov = 40, Current = true });
         viewport.AddChild(_turntable);
         _view = CharacterView.Make();
         _turntable.AddChild(_view);
