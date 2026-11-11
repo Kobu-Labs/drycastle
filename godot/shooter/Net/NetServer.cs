@@ -182,6 +182,7 @@ public partial class NetServer : Node
         CompleteSaves();
         DropSilentPeers();
         _match.Update();
+        if (_tick % Wire.TickRate == 0 && _clients.Count > 0) BroadcastEvent(EventKind.MatchState, MatchCodec.Encode(BuildMatchState())); // about once a second, so the scoreboard ping is not stale
         _match.Entities.Tick((float)delta);
         StreakTick((float)delta);
         foreach (var c in _clients.Values.ToList()) if (c.Joined) SimulateClient(c, (float)delta);

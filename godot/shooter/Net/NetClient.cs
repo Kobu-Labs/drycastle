@@ -217,7 +217,7 @@ public partial class NetClient : Node
         RenderMissilePov();
         RenderWater();
         UpdateViewmodel();
-        UpdateShake();
+        UpdateShake(delta);
         UpdateHud();
     }
 

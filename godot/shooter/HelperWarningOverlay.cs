@@ -66,7 +66,7 @@ public partial class HelperWarningOverlay : CanvasLayer
         // the camera looks down -Z: a point with Z >= 0 is behind it, so it is shown in its direction from the centre
         var target = local.Z < 0 ? cam.UnprojectPosition(p) : centre + new Vector2(local.X, -local.Y) * size.Length();
 
-        var inset = EdgeInsetPx * Math.Clamp(size.Y / 1080f, 0.5f, 3f);
+        var inset = EdgeInsetPx * ShooterTheme.ScreenScale(size);
         var half = size / 2f - new Vector2(inset, inset);
         var dir = target - centre;
         if (Math.Abs(dir.X) <= half.X && Math.Abs(dir.Y) <= half.Y) return target;
@@ -91,7 +91,7 @@ public partial class HelperWarningOverlay : CanvasLayer
         public override void _Draw()
         {
             var font = ThemeDB.FallbackFont;
-            var s = Math.Clamp(Size.Y / 1080f, 0.5f, 3f);
+            var s = ShooterTheme.ScreenScale(Size);
             var body = (int)Math.Round(ShooterTheme.FontBody * s);
             var pad = ShooterTheme.Space * s;
             var top = ShooterTheme.Margin * s;

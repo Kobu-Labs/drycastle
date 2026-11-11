@@ -13,7 +13,6 @@ namespace Suchohrad.Shooter;
 public partial class Hud : CanvasLayer
 {
     const int Slots = 3, FeedRows = HudLogic.FeedMax, BoardRows = 16, Indicators = 4;
-    const float RefHeight = 1080f, MinBaseScale = 0.8f;
     const float CrossThick = 3, CrossLen = 12, CrossMinGap = 8;
 
     public GameSettings Settings { get; private set; } = new();
@@ -21,6 +20,8 @@ public partial class Hud : CanvasLayer
     public ushort MyId { get; set; }
     /// <summary>Held-Tab input; the screenshot mode overrides it.</summary>
     public bool? ForceScoreboard { get; set; }
+    /// <summary>Display name of a weapons.json index in a kill message (the killer's weapon, not the viewer's hotbar); null when unknown.</summary>
+    public Func<byte, string?>? KillWeaponName { get; set; }
     /// <summary>Crosshair spread in degrees (set by the owner on shots and weapon changes; the crosshair reads it each frame).</summary>
     public Func<float>? Spread { get; set; }
     /// <summary>True while a scope is up (sniper zoom): the dark ring and thin reticle replace the crosshair.</summary>
@@ -48,6 +49,7 @@ public partial class Hud : CanvasLayer
     readonly Line2D[] _hitLines = new Line2D[4];
     double _hitUntil, _hitFade;
     readonly Control[] _ind = new Control[Indicators];
+    readonly Polygon2D[] _indTri = new Polygon2D[Indicators];
     readonly double[] _indAt = new double[Indicators];
     int _indNext;
     // health
@@ -149,6 +151,7 @@ public partial class Hud : CanvasLayer
         ApplyMinimapSettings();
         _gap = -1;
         _hintMode = null;
+        foreach (var tri in _indTri) tri.Color = ShooterTheme.Danger; // read at build time otherwise; the palette may have switched
         if (_crossRoot != null) _crossRoot.Visible = Settings.ShowCrosshair;
     }
 
@@ -188,10 +191,14 @@ public partial class Hud : CanvasLayer
         _root.Scale = new Vector2(s, s);
         _root.Position = Vector2.Zero;
         _root.Size = vp / s;
+        // the feed sits beside _root, so it follows the same resolution and UI scale itself
+        _feedRoot.Scale = new Vector2(s, s);
+        _feedRoot.Position = Vector2.Zero;
+        _feedRoot.Size = vp / s;
         _gap = -1;
     }
 
-    float UiFactor() => Math.Max(MinBaseScale, GetViewport().GetVisibleRect().Size.Y / RefHeight) * HudLogic.ClampUiScale(Settings.UiScale);
+    float UiFactor() => HudLogic.ScreenScale(GetViewport().GetVisibleRect().Size.Y, Settings.UiScale);
 
     // ---- build ----
 
@@ -229,7 +236,7 @@ public partial class Hud : CanvasLayer
             var back = new Polygon2D { Color = ShooterTheme.Outline, Polygon = new[] { new Vector2(0, -216), new Vector2(-28, -176), new Vector2(28, -176) } };
             var tri = new Polygon2D { Color = ShooterTheme.Danger, Polygon = new[] { new Vector2(0, -208), new Vector2(-20, -180), new Vector2(20, -180) } };
             pivot.AddChild(back); pivot.AddChild(tri);
-            _root.AddChild(pivot); _ind[i] = pivot;
+            _root.AddChild(pivot); _ind[i] = pivot; _indTri[i] = tri;
         }
     }
 
@@ -408,7 +415,6 @@ public partial class Hud : CanvasLayer
     {
         // the feed sits beside the panels root, not under it, so a control session can hide the panels and keep the feed (ticket #154)
         _feedRoot = new Control { Theme = _root.Theme, MouseFilter = Control.MouseFilterEnum.Ignore };
-        _feedRoot.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(_feedRoot);
         var v = Place(new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore }, 1, 0, -ShooterTheme.Margin, ShooterTheme.Margin, 480, FeedRows * 40 + (FeedRows - 1) * 4);
         v.PivotOffset = new Vector2(480, 0); // the compact feed shrinks towards the top right corner
@@ -720,17 +726,19 @@ public partial class Hud : CanvasLayer
             var mine = k.Killer == MyId || k.Victim == MyId;
             var suicide = k.Killer == k.Victim;
             _feed[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
-            Set(_feedKiller[i], suicide ? victim : killer);
+            // your own rows say so in words as well as colour (as the scoreboard does)
+            Set(_feedKiller[i], WithYou(suicide ? victim : killer, k.Killer == MyId));
             Set(_feedWeapon[i], $"[{(k.Cause == KillCause.Roadkill ? Strings.T("feed.roadkill") : WeaponName(k.Weapon))}]");
-            Set(_feedVictim[i], suicide ? "" : victim);
+            Set(_feedVictim[i], suicide ? "" : WithYou(victim, k.Victim == MyId));
             _feed[i].Visible = true;
         }
     }
 
+    static string WithYou(string name, bool mine) => mine ? Strings.F("score.you", name) : name;
+
     string WeaponName(byte id)
     {
-        if (id < _weapons.Count) return _weapons.Names[id];
-        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Drown => Strings.T("weapon.drown"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), SpecialWeapons.VehicleGun => Strings.T("weapon.vehicle_gun"), SpecialWeapons.Moab => Strings.T("weapon.moab"), SpecialWeapons.Missile => Strings.T("weapon.attack_missile"), SpecialWeapons.Turret => Strings.T("weapon.turret"), SpecialWeapons.AttackHelicopter => Strings.T("heli.weapon"), SpecialWeapons.Ac130 => Strings.T("ac130.kill"), SpecialWeapons.Helper => Strings.T("helper.weapon"), _ => Strings.T("weapon.unknown") };
+        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Drown => Strings.T("weapon.drown"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), SpecialWeapons.VehicleGun => Strings.T("weapon.vehicle_gun"), SpecialWeapons.Moab => Strings.T("weapon.moab"), SpecialWeapons.Missile => Strings.T("weapon.attack_missile"), SpecialWeapons.Turret => Strings.T("weapon.turret"), SpecialWeapons.AttackHelicopter => Strings.T("heli.weapon"), SpecialWeapons.Ac130 => Strings.T("ac130.kill"), SpecialWeapons.Helper => Strings.T("helper.weapon"), _ => KillWeaponName?.Invoke(id) ?? Strings.T("weapon.unknown") };
     }
 
     /// <summary>Black outside a centred circle with a thin cross, drawn over the zoomed view.</summary>
