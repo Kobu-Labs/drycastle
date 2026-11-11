@@ -188,3 +188,23 @@ shooter-hud-shots:
 shooter-menu-shots:
 	dotnet build godot/shooter/shooter.csproj
 	godot --path godot/shooter -- --menu-shots $(abspath $(or $(DIR),out/menu))
+
+# Export presets (godot/shooter/export_presets.cfg) into out/shooter/. Needs the Godot 4.7.2 mono export templates
+# (Editor > Manage Export Templates); not downloaded here. The map folder is NOT bundled; assets/ is copied as a sidecar.
+.PHONY: shooter-export shooter-export-check
+SHOOTER_TEMPLATES = $(HOME)/.local/share/godot/export_templates/4.7.2.stable.mono
+
+shooter-export-check:
+	@test -f godot/shooter/export_presets.cfg || { echo "missing godot/shooter/export_presets.cfg"; exit 1; }
+	@echo "$$(grep -c '^name=' godot/shooter/export_presets.cfg) export presets found"
+	@if [ -d "$(SHOOTER_TEMPLATES)" ] && [ -n "$$(ls -A $(SHOOTER_TEMPLATES) 2>/dev/null)" ]; then echo "export templates: OK ($(SHOOTER_TEMPLATES))"; \
+	else echo "export templates: MISSING at $(SHOOTER_TEMPLATES) (install the 4.7.2 mono templates: Editor > Manage Export Templates)"; exit 1; fi
+
+shooter-export: shooter-export-check
+	dotnet build godot/shooter/shooter.csproj
+	mkdir -p out/shooter/windows/assets out/shooter/linux-client/assets out/shooter/linux-server/assets
+	godot --headless --path godot/shooter --export-release "Windows Client"
+	godot --headless --path godot/shooter --export-release "Linux Client"
+	godot --headless --path godot/shooter --export-release "Linux Server"
+	for d in windows linux-client linux-server; do cp -r assets/. out/shooter/$$d/assets/; done
+	@echo "exported to out/shooter/. Run with SUCHOHRAD_ASSETS=<dir>/assets and the map via --map or SUCHOHRAD_MAP (see docs/shooter-server.md)"
