@@ -49,10 +49,10 @@ public partial class LoadoutScreen : MenuScreen
 
     Button _useNext = null!;
     Glyph _useNextStar = null!;
-    Label _useNextText = null!, _level = null!, _className = null!, _status = null!, _hint = null!, _pickHint = null!;
+    Label _useNextText = null!, _level = null!, _className = null!, _hint = null!, _pickHint = null!;
     Label _pickTitle = null!, _cmpTitle = null!, _cmpNote = null!, _empty = null!;
     LineEdit _nameEdit = null!;
-    Button _undo = null!, _rename = null!, _reset = null!, _copy = null!, _emptyBack = null!;
+    Button _emptyBack = null!;
     Control _body = null!, _classView = null!, _pickView = null!;
     GridContainer _grid = null!;
     CamoPreview _preview = null!;
@@ -138,7 +138,6 @@ public partial class LoadoutScreen : MenuScreen
         body.AddChild(Ui.Gap(ShooterTheme.Space * 2));
         body.AddChild(BuildColumns());
         body.AddChild(Ui.Gap(ShooterTheme.Space * 2));
-        body.AddChild(BuildBottomBar());
         body.AddChild(Ui.Gap(ShooterTheme.Space));
         _hint = Ui.Lbl(Strings.T("loadout.hint"), "HudSmall");
         _pickHint = Ui.Lbl(Strings.T("loadout.hint.pick"), "HudSmall");
@@ -267,7 +266,6 @@ public partial class LoadoutScreen : MenuScreen
         col.AddChild(_nameEdit);
         _preview = new CamoPreview(new Vector2(CentreWidth, 400));
         col.AddChild(_preview.Root);
-        col.AddChild(Ui.Lbl(Strings.T("camo.turn.hint"), "HudSmall", 0, true));
         return col;
     }
 
@@ -350,24 +348,6 @@ public partial class LoadoutScreen : MenuScreen
         _cmpNote = Ui.Lbl("", "HudDim", 0, true);
         col.AddChild(_cmpNote);
         return col;
-    }
-
-    Control BuildBottomBar()
-    {
-        var bar = Ui.HBox();
-        _status = Ui.Lbl("", "HudDim");
-        _status.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        bar.AddChild(_status);
-        _undo = Ui.Btn(Strings.T("loadout.undo"), Undo, null, 200);
-        _rename = Ui.Btn(Strings.T("loadout.rename"), StartRename, null, 160);
-        _reset = Ui.Btn(Strings.T("loadout.reset"), ConfirmReset, "MenuDanger", 220);
-        _copy = Ui.Btn(Strings.T("loadout.copy"), ConfirmCopy, null, 180);
-        bar.AddChild(_undo);
-        bar.AddChild(_rename);
-        bar.AddChild(_reset);
-        bar.AddChild(_copy);
-        bar.AddChild(Ui.Btn(Strings.T("dialog.back"), Back, null, 160));
-        return bar;
     }
 
     /// <summary>A large weapon: the image, the name and the category badge.</summary>
@@ -539,7 +519,6 @@ public partial class LoadoutScreen : MenuScreen
         _className.Visible = true;
         if (name == null) Shell.Toast(Strings.F("loadout.name.invalid", error ?? ""), ToastKind.Error);
         else if (name != Draft.Name) Autosave?.Edit(Draft with { Name = name }, Now());
-        if (refocus) _rename.CallDeferred(Control.MethodName.GrabFocus);
         Sync();
     }
 
@@ -549,7 +528,6 @@ public partial class LoadoutScreen : MenuScreen
         _renaming = false;
         _nameEdit.Visible = false;
         _className.Visible = true;
-        _rename.CallDeferred(Control.MethodName.GrabFocus);
         Sync();
     }
 
@@ -647,26 +625,8 @@ public partial class LoadoutScreen : MenuScreen
         _preview.Show(camo, data.Camo);
         _preview.ShowWeapon(d.PrimaryWeapon);
 
-        RefreshStatus();
-        _undo.Disabled = Autosave?.CanUndo(_tab) != true;
-        _rename.Disabled = Autosave == null;
-        _reset.Disabled = _net == null;
-        _copy.Disabled = _net == null;
         if (_picker >= 0) RebuildPicker();
         Refresh();
-    }
-
-    void RefreshStatus()
-    {
-        var state = Autosave?.StateOf(_tab) ?? AutosaveState.Saved;
-        var reason = Autosave?.RejectReason(_tab) ?? "";
-        (_status.Text, _status.ThemeTypeVariation) = state switch
-        {
-            AutosaveState.Pending or AutosaveState.Saving => (Strings.T("loadout.state.saving"), "HudDim"),
-            AutosaveState.Retrying => (Strings.F("loadout.state.retry", reason), "HudWarn"),
-            AutosaveState.Rejected => (Strings.F("loadout.state.error", reason), "MenuError"),
-            _ => (Strings.T("loadout.state.saved"), "MenuOk"),
-        };
     }
 
     void RefreshRows(Loadout d, GameData data)

@@ -131,7 +131,6 @@ public partial class CustomizationScreen : MenuScreen
         _prone = new CheckButton { Text = Strings.T("camo.prone"), FocusMode = Control.FocusModeEnum.All };
         _prone.Toggled += on => _preview.SetProne(on);
         col.AddChild(_prone);
-        col.AddChild(Ui.Lbl(Strings.T("camo.turn.hint"), "HudSmall", 0, true));
         return col;
     }
 
