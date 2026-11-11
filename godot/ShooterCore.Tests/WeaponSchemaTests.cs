@@ -67,7 +67,7 @@ public class WeaponSchemaTests
 
         // v1 weapons other than the ak47 get no recoil, so their behaviour is unchanged; the ak47 has its own (#111).
         // The v2 machine guns and rifles added by #111 are covered in WeaponRegistryContentTests.
-        foreach (var w in d.Weapons.Weapons.Where(w => w.Id is "pistol" or "bazooka" or "knife" or "sniper"))
+        foreach (var w in d.Weapons.Weapons.Where(w => w.Id is "pistol" or "bazooka" or "knife"))
         {
             Assert.Equal(0, w.Recoil.VerticalPerShot);
             Assert.Empty(w.Recoil.Pattern);

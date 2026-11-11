@@ -18,6 +18,7 @@ public partial class NetClient
     int _pMag = -1, _pMagAfter, _pSlot;
     double _shakeAmp, _shakeUntil;
     RecoilState _recoil = new(0);
+    BreathState _breath = new(0);
 
     bool PredictionOn => !Bot && ShotFx.Enabled && Weapons != null;
 
@@ -37,6 +38,24 @@ public partial class NetClient
         if (_me == null || CurrentWeapon is not { } w) return;
         _recoil.Tick(Now, mi.Has(MoveButtons.Fire), w.Recoil);
         _me.AimKick = new Vector2(_recoil.PitchRad, _recoil.YawRad);
+    }
+
+    /// <summary>Advances the sniper breath (the server runs the same state from the same input) and shows the cosmetic sway on the camera.</summary>
+    void TickBreath(MoveInput mi)
+    {
+        if (_me == null || CurrentWeapon is not { } w) return;
+        var scoped = mi.Has(MoveButtons.Aim) && w.ZoomFov > 0;
+        _breath.Tick(Now, scoped, mi.Has(MoveButtons.Sprint), w, Perks.HoldBreathTime);
+        var v = BreathState.VisualSway(Now, _breath.SwayDegrees(w));
+        _me.ViewSway = GameSettings.Current.ReduceMotion ? Vector2.Zero : new Vector2(v.X, v.Y);
+    }
+
+    /// <summary>The breath meter while scoped with a breath hold (the HUD reads it each frame).</summary>
+    (bool Show, float Meter, BreathState.BreathPhase Phase) BreathView()
+    {
+        if (_me is not { ZoomFov: > 0 } || CurrentWeapon is not { } w || BreathState.BudgetSeconds(w, Perks.HoldBreathTime) <= 0)
+            return (false, 0f, BreathState.BreathPhase.Ready);
+        return (true, _breath.Meter, _breath.Phase);
     }
 
     /// <summary>Predicts this tick's trigger pull / reload key; plays sounds and own-shot effects at once.</summary>
@@ -74,6 +93,7 @@ public partial class NetClient
             // same offset step as the server's shot; the viewmodel kicks by the same (ADS / crouch scaled) climb
             var mult = RecoilState.Multiplier(w.Recoil, mi.Has(MoveButtons.Aim), _me.State.Crouching);
             _recoil.Shot(w.Recoil, mult);
+            _breath.AimError(_breath.SwayDegrees(w)); // the server's per-shot aim error; kept in step (the tracer follows the camera, like recoil)
             _viewmodel?.Kick(w.Recoil.VerticalPerShot * mult);
         }
         if (FxDemo != "") GD.Print($"fx-demo: predicted {w.Id} shot, mag {_pMag}");

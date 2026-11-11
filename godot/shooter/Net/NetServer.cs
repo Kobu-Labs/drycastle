@@ -21,6 +21,8 @@ public partial class NetServer : Node
         public Player Body = null!;
         /// <summary>Recoil of this player's trigger hand; the server fires hitscan shots with its offset.</summary>
         public RecoilState Recoil = new(0);
+        /// <summary>Sniper breath hold of this player; the server adds its per-shot aim error to hitscan shots.</summary>
+        public BreathState Breath = new(0);
         public readonly Queue<NetInput> Inputs = new();
         public ushort Ack;
         public bool HasAck;
@@ -305,6 +307,7 @@ public partial class NetServer : Node
         // health, death and respawn belong to the match state machine, not the body
         c.W = new PlayerWeapons(Weapons, c.Perks);
         c.Recoil = new RecoilState(c.Id);
+        c.Breath = new BreathState(c.Id);
         c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}" };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
@@ -394,6 +397,7 @@ public partial class NetServer : Node
                     sc.Inputs.Clear(); sc.Start = sc.Body.GlobalPosition; sc.MaxMoved = 0;
                     sc.W.Reset(_elapsed);
                     sc.Recoil.Reset();
+                    sc.Breath.Reset();
                     SendAmmo(sc);
                 }
                 BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(s.Id, s.Position, s.ProtectionSeconds)));
@@ -444,6 +448,9 @@ public partial class NetServer : Node
             c.Body.Pitch = Quant.Pitch(i.Pitch);
             c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
             c.Recoil.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Fire) != 0, c.W.Current.Recoil);
+            // breath hold: sprint is cancelled while aiming, so the sprint bit with aim held is the breath key
+            c.Breath.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Aim) != 0 && c.W.Current.ZoomFov > 0,
+                (i.Buttons & (ushort)MoveButtons.Sprint) != 0, c.W.Current, c.Perks.HoldBreathTime);
             var wi = new WeaponInput((i.Buttons & (ushort)MoveButtons.Fire) != 0, (i.Buttons & (ushort)MoveButtons.Reload) != 0, i.Slot, (i.Buttons & (ushort)MoveButtons.Switch) != 0);
             if (c.W.Update(_elapsed, wi) is { } shot) FireWeapon(c, i, shot);
             if (c.W.Changed) SendAmmo(c);
@@ -503,7 +510,8 @@ public partial class NetServer : Node
         else if (w.Kind == WeaponKind.Hitscan)
         {
             var kick = c.Recoil.Shot(w.Recoil, RecoilState.Multiplier(w.Recoil, (i.Buttons & (ushort)MoveButtons.Aim) != 0, c.Body.State.Crouching));
-            var d = HitMath.SpreadDirection(yaw + kick.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad), shot.SpreadDegrees, _rng);
+            var sway = c.Breath.AimError(c.Breath.SwayDegrees(w));
+            var d = HitMath.SpreadDirection(yaw + kick.YawRad + sway.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad + sway.PitchRad), shot.SpreadDegrees, _rng);
             var dir = new Vector3(d.X, d.Y, d.Z);
             var range = w.Range > 0 ? w.Range : MaxShotRange;
             var wall = WorldHit(eye, dir, range, out var shotCar);

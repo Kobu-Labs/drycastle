@@ -1,6 +1,47 @@
 {
   "version": 1,
-  "xp_to_reach": [0, 150, 310, 490, 680, 890, 1120, 1370, 1640, 1940, 2270, 2630, 3020, 3440, 3900, 4400, 4950, 5550, 6200, 6910, 7680, 8520, 9440, 10440, 11530, 12720, 14010, 15420, 16960, 18640, 20470, 22460, 24630, 26990, 29570, 32380, 35440, 38780, 42420, 46390],
+  "xp_to_reach": [
+    0,
+    150,
+    310,
+    490,
+    680,
+    890,
+    1120,
+    1370,
+    1640,
+    1940,
+    2270,
+    2630,
+    3020,
+    3440,
+    3900,
+    4400,
+    4950,
+    5550,
+    6200,
+    6910,
+    7680,
+    8520,
+    9440,
+    10440,
+    11530,
+    12720,
+    14010,
+    15420,
+    16960,
+    18640,
+    20470,
+    22460,
+    24630,
+    26990,
+    29570,
+    32380,
+    35440,
+    38780,
+    42420,
+    46390
+  ],
   "awards": {
     "kill": 100,
     "headshot": 25,
@@ -12,23 +53,155 @@
     "assist_window_seconds": 10
   },
   "unlocks": [
-    { "level": 0, "kind": "weapon", "id": "ak47" },
-    { "level": 0, "kind": "weapon", "id": "pistol" },
-    { "level": 0, "kind": "perk", "id": "fleet_foot" },
-    { "level": 0, "kind": "perk", "id": "quick_hands" },
-    { "level": 2, "kind": "weapon", "id": "m4a1" },
-    { "level": 3, "kind": "weapon", "id": "rpk" },
-    { "level": 3, "kind": "perk", "id": "flak_jacket" },
-    { "level": 4, "kind": "weapon", "id": "g36" },
-    { "level": 5, "kind": "weapon", "id": "sniper" },
-    { "level": 5, "kind": "perk", "id": "swift_swap" },
-    { "level": 6, "kind": "weapon", "id": "aug" },
-    { "level": 8, "kind": "weapon", "id": "pkm" },
-    { "level": 8, "kind": "perk", "id": "tank_hunter" },
-    { "level": 10, "kind": "weapon", "id": "m249" },
-    { "level": 12, "kind": "weapon", "id": "m60" },
-    { "level": 12, "kind": "perk", "id": "hot_streak" },
-    { "level": 15, "kind": "perk", "id": "steady_lung" },
-    { "level": 20, "kind": "perk", "id": "ghost" }
+    {
+      "level": 0,
+      "kind": "weapon",
+      "id": "ak47"
+    },
+    {
+      "level": 0,
+      "kind": "weapon",
+      "id": "pistol"
+    },
+    {
+      "level": 0,
+      "kind": "perk",
+      "id": "fleet_foot"
+    },
+    {
+      "level": 0,
+      "kind": "perk",
+      "id": "quick_hands"
+    },
+    {
+      "level": 2,
+      "kind": "weapon",
+      "id": "m4a1"
+    },
+    {
+      "level": 3,
+      "kind": "weapon",
+      "id": "glock17"
+    },
+    {
+      "level": 3,
+      "kind": "weapon",
+      "id": "rpk"
+    },
+    {
+      "level": 3,
+      "kind": "perk",
+      "id": "flak_jacket"
+    },
+    {
+      "level": 4,
+      "kind": "weapon",
+      "id": "g36"
+    },
+    {
+      "level": 4,
+      "kind": "weapon",
+      "id": "ump45"
+    },
+    {
+      "level": 5,
+      "kind": "weapon",
+      "id": "deagle"
+    },
+    {
+      "level": 5,
+      "kind": "weapon",
+      "id": "sniper"
+    },
+    {
+      "level": 5,
+      "kind": "perk",
+      "id": "swift_swap"
+    },
+    {
+      "level": 6,
+      "kind": "weapon",
+      "id": "aug"
+    },
+    {
+      "level": 6,
+      "kind": "weapon",
+      "id": "mp5"
+    },
+    {
+      "level": 7,
+      "kind": "weapon",
+      "id": "m82"
+    },
+    {
+      "level": 7,
+      "kind": "weapon",
+      "id": "remington870"
+    },
+    {
+      "level": 8,
+      "kind": "weapon",
+      "id": "pkm"
+    },
+    {
+      "level": 8,
+      "kind": "weapon",
+      "id": "spas12"
+    },
+    {
+      "level": 8,
+      "kind": "perk",
+      "id": "tank_hunter"
+    },
+    {
+      "level": 9,
+      "kind": "weapon",
+      "id": "p90"
+    },
+    {
+      "level": 9,
+      "kind": "weapon",
+      "id": "svd"
+    },
+    {
+      "level": 10,
+      "kind": "weapon",
+      "id": "benelli_m4"
+    },
+    {
+      "level": 10,
+      "kind": "weapon",
+      "id": "m249"
+    },
+    {
+      "level": 11,
+      "kind": "weapon",
+      "id": "awm"
+    },
+    {
+      "level": 12,
+      "kind": "weapon",
+      "id": "m60"
+    },
+    {
+      "level": 12,
+      "kind": "perk",
+      "id": "hot_streak"
+    },
+    {
+      "level": 14,
+      "kind": "weapon",
+      "id": "aa12"
+    },
+    {
+      "level": 15,
+      "kind": "perk",
+      "id": "steady_lung"
+    },
+    {
+      "level": 20,
+      "kind": "perk",
+      "id": "ghost"
+    }
   ]
 }

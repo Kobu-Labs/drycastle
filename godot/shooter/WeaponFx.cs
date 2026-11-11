@@ -16,6 +16,12 @@ public static class WeaponFx
         ["ak47"] = ("quaternius-ultimate-gun-pack/assault-rifle-1.glb", 0.8f),
         ["sniper"] = ("quaternius-ultimate-gun-pack/sniper-rifle.glb", 1.15f),
         ["knife"] = ("quaternius-ultimate-gun-pack/bayonet.glb", 0.32f),
+        // shooter v2 pistols and snipers: placeholder models from the same pack until their own models are chosen
+        ["glock17"] = ("quaternius-ultimate-gun-pack/pistol-1.glb", 0.22f),
+        ["deagle"] = ("quaternius-ultimate-gun-pack/pistol-1.glb", 0.3f),
+        ["m82"] = ("quaternius-ultimate-gun-pack/sniper-rifle.glb", 1.3f),
+        ["awm"] = ("quaternius-ultimate-gun-pack/sniper-rifle.glb", 1.2f),
+        ["svd"] = ("quaternius-ultimate-gun-pack/sniper-rifle.glb", 1.2f),
     };
 
     /// <summary>Node meta: height of the weapon's top (iron sight) above its origin, in metres; the viewmodel lowers the gun by this much to aim down sights.</summary>
