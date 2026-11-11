@@ -30,9 +30,9 @@ services:
         condition: service_healthy
     environment:
       SUCHOHRAD_DB: postgres://shooter:${POSTGRES_PASSWORD}@db:5432/shooter
-    # Extra server flags (match options, time of day, ...) go here; see docs/shooter-server.md. Leave out --unlock-all,
-    # --allow-sandbox and --debug-cmds on a public server.
-    command: []
+    # Extra server flags (match options, time of day, ...) go here; see docs/shooter-server.md. --allow-sandbox is on by choice
+    # (sandbox players are not scored and write nothing to the database); leave out --unlock-all and --debug-cmds on a public server.
+    command: ["--allow-sandbox"]
     ports:
       - "${GAME_PORT:-27015}:27015/udp"
 

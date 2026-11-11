@@ -48,7 +48,7 @@ in the host and provider firewalls (and SSH). Nothing else is exposed (Postgres 
 3. Check: `ssh user@host 'cd /opt/suchohrad/deploy && docker compose logs server'` should show
    `server: progression db postgres shooter@db:5432/shooter` and the map line.
 
-The server flags are the compose `command:` (see `docs/shooter-server.md`); keep `--unlock-all`, `--allow-sandbox` and `--debug-cmds` off.
+The server flags are the compose `command:` (see `docs/shooter-server.md`). The production server runs with `--allow-sandbox` on purpose (sandbox players are not scored and nothing of theirs is saved); keep `--unlock-all` and `--debug-cmds` off.
 The database URL comes from `SUCHOHRAD_DB`, so the password is never on a command line. `GAME_PORT` in `.env` changes the host port.
 
 - **Backups:** `docker compose exec -T db pg_dump -U shooter shooter > shooter-$(date +%F).sql` (cron it). Deleting the `pgdata` volume
