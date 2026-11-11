@@ -13,7 +13,7 @@ public sealed class InMemoryProgressionStore : IProgressionStore
     readonly Dictionary<long, int> _activeSlot = new();
     readonly Dictionary<long, HashSet<Unlock>> _unlocks = new();
     readonly Dictionary<long, StatsRow> _stats = new();
-    readonly Dictionary<long, CamoSpec> _camo = new();
+    readonly Dictionary<(long Player, int Slot), CamoSpec> _camo = new();
     readonly LevelCurve _curve;
     long _nextId = 1;
 
@@ -91,15 +91,17 @@ public sealed class InMemoryProgressionStore : IProgressionStore
 
     sealed class CamoRepo(InMemoryProgressionStore s) : ICamoRepository
     {
-        public Task<CamoSpec?> GetAsync(long playerId)
-        {
-            lock (s._gate) return Task.FromResult<CamoSpec?>(s._camo.TryGetValue(playerId, out var c) ? c : null);
-        }
-
-        public Task SaveAsync(long playerId, CamoSpec spec)
+        public Task<IReadOnlyList<(int Slot, CamoSpec Spec)>> GetAllAsync(long playerId)
         {
             lock (s._gate)
-                if (s._byId.ContainsKey(playerId)) s._camo[playerId] = spec;
+                return Task.FromResult<IReadOnlyList<(int Slot, CamoSpec Spec)>>(s._camo
+                    .Where(kv => kv.Key.Player == playerId).OrderBy(kv => kv.Key.Slot).Select(kv => (kv.Key.Slot, kv.Value)).ToList());
+        }
+
+        public Task SaveAsync(long playerId, int slot, CamoSpec spec)
+        {
+            lock (s._gate)
+                if (s._byId.ContainsKey(playerId)) s._camo[(playerId, slot)] = spec;
             return Task.CompletedTask;
         }
     }

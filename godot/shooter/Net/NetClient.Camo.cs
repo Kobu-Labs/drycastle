@@ -19,11 +19,14 @@ public partial class NetClient
     /// <summary>Fired when a player's look arrives or changes (including this player's own).</summary>
     public event Action<ushort, CamoSpec>? AppearanceChanged;
 
-    /// <summary>Asks the server to replace this player's camouflage. Answered like <see cref="SaveLoadout"/>.</summary>
-    public void SaveCamo(CamoSpec spec)
+    /// <summary>
+    /// Asks the server to replace one loadout slot's camouflage (#141). Answered with the new <see cref="ProfileMsg"/>
+    /// (its <c>Camos</c> carry the saved look), and, for the active slot, an appearance broadcast; or an error.
+    /// </summary>
+    public void SaveCamo(int slot, CamoSpec spec)
     {
         if (_peer == null || !_welcomed) return;
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(new SaveCamoMsg(spec)), (int)ENetPacketPeer.FlagReliable);
+        Tx(_peer, Wire.ChanReliable, Wire.Encode(new SaveCamoMsg(slot, spec)), (int)ENetPacketPeer.FlagReliable);
         _conn.Flush();
     }
 
