@@ -26,6 +26,8 @@ Where the numbers come from:
 Not modelled: satellite dishes, the aerial and the vent pipes on the roof, lamps, the intercom, the low
 steel barriers along the pavement, and anything behind the glass. The east gable was not photographed and
 mirrors the west one. Window panes are part of the mesh (no ``window_`` nodes, unlike ``building_detail``).
+
+The twin house on P-0562 (``w378900223``, the same outline) uses this model unchanged.
 """
 
 import math

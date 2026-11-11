@@ -123,3 +123,15 @@ buildings:
     roof: gabled
     height_m: 7.15
     roof_height_m: 1.7
+
+  # P-0562: the twin of Suchohrad 295 in the same property group (G-0097), the same cadastral outline
+  # (22.35 x 9.13 m, the same stepped front) one row to the north. Not photographed: it reuses the model
+  # of 295 as it is, including that house's door colours and the closet on the west terrace.
+  w378900223:
+    model: flats
+    wall_colour: "#ece6cc"
+    roof_colour: "#5f5650"
+    levels: 2
+    roof: gabled
+    height_m: 7.15
+    roof_height_m: 1.7
