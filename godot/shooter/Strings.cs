@@ -106,7 +106,7 @@ public static class Strings
         ("loadout.equipped", "Equipped: {0}"), ("loadout.new", "NEW"), ("loadout.kills", "{0} kills needed"),
         ("loadout.camo", "Camouflage"), ("loadout.compare", "Compare"),
         ("loadout.use_next", "Use on next spawn"), ("loadout.use_next.on", "On next spawn"), ("loadout.star.tip", "Used when you next spawn"),
-        ("loadout.rename", "Rename"), ("loadout.reset", "Reset to Default"), ("loadout.copy", "Copy Class"),
+        ("loadout.rename", "Rename"), ("loadout.undo", "Undo"), ("loadout.reset", "Reset to Default"), ("loadout.copy", "Copy Class"),
         ("loadout.name.placeholder", "Class name, 1 to 24 characters"), ("loadout.name.invalid", "Name not saved: {0}"),
         ("loadout.state.saving", "Saving"), ("loadout.state.saved", "Saved"), ("loadout.state.error", "Error: {0}"),
         ("loadout.state.retry", "Error: {0}, retrying"),

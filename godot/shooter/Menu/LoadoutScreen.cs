@@ -49,9 +49,12 @@ public partial class LoadoutScreen : MenuScreen
 
     Button _useNext = null!;
     Glyph _useNextStar = null!;
-    Label _useNextText = null!, _level = null!, _className = null!, _hint = null!, _pickHint = null!;
+    Label _useNextText = null!, _level = null!, _status = null!, _className = null!, _hint = null!, _pickHint = null!;
     Label _pickTitle = null!, _cmpTitle = null!, _cmpNote = null!, _empty = null!;
     LineEdit _nameEdit = null!;
+    ScrollContainer _fit = null!;
+    Control _content = null!;
+    Button _undoBtn = null!;
     Button _emptyBack = null!;
     Control _body = null!, _classView = null!, _pickView = null!;
     GridContainer _grid = null!;
@@ -101,6 +104,7 @@ public partial class LoadoutScreen : MenuScreen
     public override void _Process(double delta)
     {
         base._Process(delta);
+        FitToViewport();
         if (Autosave == null || _profile == null) return;
         var key = $"{_tab}|{Autosave.StateOf(_tab)}|{Autosave.RejectReason(_tab)}|{Autosave.CanUndo(_tab)}";
         if (key == _shownStatus) return;
@@ -108,15 +112,31 @@ public partial class LoadoutScreen : MenuScreen
         Sync();
     }
 
+    /// <summary>The card is wider than a small viewport at a high UI scale: cap it to the screen and scroll the rest.</summary>
+    void FitToViewport()
+    {
+        if (_fit.GetParent() is not Control host) return;
+        var avail = host.Size - new Vector2(ShooterTheme.Margin * 2, ShooterTheme.Margin * 2);
+        var want = _content.GetCombinedMinimumSize();
+        var size = new Vector2(Mathf.Min(want.X, avail.X), Mathf.Min(want.Y, avail.Y));
+        if (_fit.CustomMinimumSize != size) _fit.CustomMinimumSize = size;
+    }
+
     protected override Control Build()
     {
         _icons = new IconRegistry(_data());
         var v = Ui.VBox();
         v.CustomMinimumSize = new Vector2(1500, 0);
+        _content = v;
+        _fit = new ScrollContainer { FollowFocus = true, HorizontalScrollMode = ScrollContainer.ScrollMode.Auto, VerticalScrollMode = ScrollContainer.ScrollMode.Auto };
+        _fit.AddChild(v);
 
         var head = Ui.HBox();
         head.AddChild(Ui.Lbl(Strings.T("loadout.title"), "HudDisplay"));
         head.AddChild(Ui.Fill());
+        _status = Ui.Lbl("", "HudDim");
+        head.AddChild(_status);
+        head.AddChild(Ui.Gap(ShooterTheme.Space * 2));
         _level = Ui.Lbl("", "HudDim");
         head.AddChild(_level);
         v.AddChild(head);
@@ -135,6 +155,8 @@ public partial class LoadoutScreen : MenuScreen
         v.AddChild(_body);
         var body = (VBoxContainer)_body;
         body.AddChild(BuildTabStrip());
+        body.AddChild(Ui.Gap(ShooterTheme.Space));
+        body.AddChild(BuildActions());
         body.AddChild(Ui.Gap(ShooterTheme.Space * 2));
         body.AddChild(BuildColumns());
         body.AddChild(Ui.Gap(ShooterTheme.Space * 2));
@@ -144,7 +166,7 @@ public partial class LoadoutScreen : MenuScreen
         _pickHint.Visible = false;
         body.AddChild(_hint);
         body.AddChild(_pickHint);
-        return v;
+        return _fit;
     }
 
     protected override Control? FirstFocusTarget() => _profile != null ? _tabs[_tab] : _emptyBack;
@@ -177,6 +199,22 @@ public partial class LoadoutScreen : MenuScreen
         _useNextStar.Visible = false;
         _useNext.AddChild(nextContent);
         row.AddChild(_useNext);
+        return row;
+    }
+
+    /// <summary>Rename, Reset, Copy and Undo for the open class; each uses the existing method (confirms, undo and rename rules live there).</summary>
+    Control BuildActions()
+    {
+        var row = Ui.HBox();
+        row.AddChild(Ui.Fill());
+        row.AddChild(Ui.Btn(Strings.T("loadout.rename"), StartRename, null, 160));
+        row.AddChild(Ui.Gap(ShooterTheme.Space));
+        row.AddChild(Ui.Btn(Strings.T("loadout.reset"), ConfirmReset, null, 200));
+        row.AddChild(Ui.Gap(ShooterTheme.Space));
+        row.AddChild(Ui.Btn(Strings.T("loadout.copy"), ConfirmCopy, null, 180));
+        row.AddChild(Ui.Gap(ShooterTheme.Space));
+        _undoBtn = Ui.Btn(Strings.T("loadout.undo"), Undo, null, 120);
+        row.AddChild(_undoBtn);
         return row;
     }
 
@@ -617,6 +655,14 @@ public partial class LoadoutScreen : MenuScreen
         _useNextText.Text = Strings.T(onNext ? "loadout.use_next.on" : "loadout.use_next");
         _useNextStar.Visible = onNext;
         _className.Text = NameOf(_tab);
+        _undoBtn.Disabled = Autosave?.CanUndo(_tab) != true;
+        _status.Text = Autosave == null ? "" : Autosave.StateOf(_tab) switch
+        {
+            AutosaveState.Saved => Strings.T("loadout.state.saved"),
+            AutosaveState.Pending or AutosaveState.Saving => Strings.T("loadout.state.saving"),
+            AutosaveState.Retrying => Strings.F("loadout.state.retry", Autosave.RejectReason(_tab)),
+            _ => Strings.F("loadout.state.error", Autosave.RejectReason(_tab)),
+        };
 
         var d = Draft;
         RefreshRows(d, data);
