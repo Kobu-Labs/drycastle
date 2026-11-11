@@ -386,7 +386,7 @@ public partial class NetClient : Node
             mi = new MoveInput { MoveY = 1, Yaw = yaw, Buttons = jump, SpeedScale = 1 };
         }
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
-        if (!Bot) ReadSlotKeys();
+        if (!Bot) { ReadSlotKeys(); ApplyScope(); }
         FxDemoInput(ref mi);
         PredictFire(mi);
         _me.Yaw = mi.Yaw;
@@ -551,10 +551,20 @@ public partial class NetClient : Node
     float SpeedFor(byte slot) =>
         Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].MoveSpeedMultiplier : 1f;
 
+    /// <summary>Holding zoom with a scoped weapon (sniper) narrows the camera; never while dead or with the mouse released.</summary>
+    void ApplyScope()
+    {
+        if (_me == null) return;
+        var slot = Ammo?.Slot ?? _wantSlot;
+        var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
+        var on = zoom > 0 && !Dead && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
+        _me.ZoomFov = on ? zoom : 0f;
+    }
+
     void ReadSlotKeys()
     {
         if (Dead || Input.MouseMode != Input.MouseModeEnum.Captured) return;
-        for (var k = 0; k < 4; k++)
+        for (var k = 0; k < 5; k++)
             if (Input.IsActionPressed($"slot_{k + 1}")) _wantSlot = k + 1;
     }
 

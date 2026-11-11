@@ -58,7 +58,24 @@ public partial class Player : CharacterBody3D
 
     public override void _ExitTree() => GameSettings.Changed -= ApplyFov;
 
-    void ApplyFov() => _camera.Fov = GameSettings.Current.Fov;
+    /// <summary>Scope: the vertical FOV wanted while zooming (0 = not scoped). The camera eases toward it and mouse sensitivity scales with the FOV.</summary>
+    public float ZoomFov { get; set; }
+
+    float _fovNow;
+
+    void ApplyFov() { _fovNow = GameSettings.Current.Fov; _camera.Fov = _fovNow; }
+
+    public override void _Process(double delta)
+    {
+        if (!_camera.IsInsideTree()) return;
+        var target = ZoomFov > 0 ? ZoomFov : GameSettings.Current.Fov;
+        if (Mathf.IsEqualApprox(_fovNow, target)) return;
+        _fovNow = Mathf.Lerp(_fovNow, target, 1f - Mathf.Exp(-18f * (float)delta));
+        _camera.Fov = _fovNow;
+    }
+
+    /// <summary>Mouse look scale: tan(fov/2) ratio while the camera is zoomed so the crosshair sweeps the same screen distance.</summary>
+    float LookScale() => Mathf.Tan(Mathf.DegToRad(_camera.Fov) / 2) / Mathf.Tan(Mathf.DegToRad(GameSettings.Current.Fov) / 2);
 
     public void Teleport(Vector3 feet)
     {
@@ -109,7 +126,7 @@ public partial class Player : CharacterBody3D
         if (e is InputEventMouseMotion m && Input.MouseMode == Input.MouseModeEnum.Captured)
         {
             var gs = GameSettings.Current;
-            var k = GameSettings.BaseSensitivity * gs.Sensitivity;
+            var k = GameSettings.BaseSensitivity * gs.Sensitivity * Mathf.Min(1f, LookScale());
             _yaw -= m.Relative.X * k;
             _pitch = Mathf.Clamp(_pitch - m.Relative.Y * k * (gs.InvertY ? -1 : 1), -1.55f, 1.55f);
             _camera.Rotation = new Vector3(_pitch, _yaw, 0);

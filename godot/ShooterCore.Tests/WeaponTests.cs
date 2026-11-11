@@ -31,8 +31,8 @@ public class WeaponTests
         var r = new Rig();
         Assert.Equal(1, r.W.Slot);
         Assert.Equal("pistol", r.W.Current.Id);
-        for (var s = 1; s <= 4; s++) { Assert.Equal(File.Weapons[s - 1].MagazineSize, r.W.Mag(s)); Assert.Equal(File.Weapons[s - 1].ReserveAmmo, r.W.Reserve(s)); }
-        Assert.Equal(4, r.W.Hotbar.Count);
+        for (var s = 1; s <= 5; s++) { Assert.Equal(File.Weapons[s - 1].MagazineSize, r.W.Mag(s)); Assert.Equal(File.Weapons[s - 1].ReserveAmmo, r.W.Reserve(s)); }
+        Assert.Equal(5, r.W.Hotbar.Count);
         Assert.Equal("bazooka", r.W.Hotbar[2].Id);
     }
 
@@ -59,14 +59,10 @@ public class WeaponTests
     }
 
     [Fact]
-    public void SwitchTimeBlocksFireAndSwitchCancelsReload()
+    public void SwitchCancelsReload()
     {
         var r = new Rig();
         r.Tick(slot: 2);
-        Assert.Null(r.Tick(true, slot: 2));            // 0.033 s after switching to the AK (0.5 s switch)
-        r.Idle(0.4);
-        Assert.Null(r.Tick(true, slot: 2));
-        r.Idle(0.15);
         Assert.NotNull(r.Tick(true, slot: 2));
         r.Tick(false, true, 2);
         Assert.True(r.W.Reloading);
@@ -319,6 +315,18 @@ public class WeaponTests
         var m = WeaponCodec.BuildAmmo(r.W, r.T);
         Assert.Equal(1, m.Slot);
         Assert.Equal(((ushort)14, (ushort)60), m.Slots[0]);
-        Assert.Equal(4, m.Slots.Count);
+        Assert.Equal(5, m.Slots.Count);
+    }
+
+    [Fact]
+    public void SniperIsABoltActionOneShotHeadshotWithAScope()
+    {
+        var w = File.Find("sniper")!;
+        Assert.Equal(WeaponKind.Hitscan, w.Kind);
+        Assert.False(w.FullAuto);
+        Assert.True(w.Damage * w.HeadshotMultiplier >= 100, "a headshot kills in one shot");
+        Assert.True(w.Damage < 100, "a body shot does not");
+        Assert.True(w.Range > 300 && w.ZoomFov is > 0 and < 60);
+        Assert.Equal(1.4f, w.FireInterval);
     }
 }

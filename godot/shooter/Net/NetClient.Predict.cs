@@ -7,14 +7,14 @@ namespace Suchohrad.Shooter;
 /// <summary>
 /// Immediate feedback for the own weapon. The server stays authoritative, but sound, muzzle flash and tracer must
 /// not wait a round trip, so the client predicts the trigger pull from the last ammo message, the weapon's
-/// fire_interval and switch_time, and a locally counted magazine. Each predicted shot is remembered; the matching
+/// fire_interval, and a locally counted magazine. Each predicted shot is remembered; the matching
 /// server Shot/Launch event (same owner) is then swallowed instead of playing everything twice. Own reload and
 /// dry-fire clicks use the same prediction.
 /// </summary>
 public partial class NetClient
 {
     readonly Queue<double> _predShots = new();
-    double _pNextFire, _pReadyAt, _pReloadUntil, _pDryAt;
+    double _pNextFire, _pReloadUntil, _pDryAt;
     int _pMag = -1, _pMagAfter, _pSlot;
     double _shakeAmp, _shakeUntil;
 
@@ -24,7 +24,7 @@ public partial class NetClient
     void PredictOnAmmo(AmmoMsg a)
     {
         if (!PredictionOn || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count) return;
-        if (a.Slot != _pSlot) { _pSlot = a.Slot; _pReadyAt = Now + Weapons.Weapons[a.Slot - 1].SwitchTime; }
+        if (a.Slot != _pSlot) _pSlot = a.Slot;
         while (_predShots.Count > 0 && Now - _predShots.Peek() > 0.6) _predShots.Dequeue();
         var inFlight = _predShots.Count(t => Now - t < 0.25); // shots sent but not yet counted by this message
         _pMag = Math.Max(0, a.Slots[a.Slot - 1].Mag - inFlight);
@@ -46,7 +46,7 @@ public partial class NetClient
         if (!mi.Has(MoveButtons.Fire)) { if (!w.FullAuto) _pHeld = false; return; }
         var pull = w.FullAuto || !_pHeld;
         _pHeld = true;
-        if (!pull || reloading || now < _pReadyAt || now < _pNextFire - 0.0033) return;
+        if (!pull || reloading || now < _pNextFire - 0.0033) return;
 
         if (ranged && _pMag <= 0)
         {
@@ -169,8 +169,48 @@ public partial class NetClient
         if (t > 17) GetTree().Quit();
     }
 
+    // drive demo (<c>--fx-demo drive:dir</c> on a real-map server with --debug-cmds): stands 4 m from the nearest vehicle, looks at it, presses E, drives ahead with a turn, brakes and exits; screenshots + positions in the log
+    static readonly double[] DriveShots = { 3.5, 6.0, 8.0, 10.5, 13.0, 16.0 };
+    int _ddShot; ushort _ddCar; NVec3 _ddStart;
+
+    void FxDriveDemoInput(ref MoveInput mi)
+    {
+        if (_me == null || _peer == null || _cars.Count == 0) return;
+        var dir = FxDemo["drive:".Length..];
+        if (_demoStart == 0) { _demoStart = Now; System.IO.Directory.CreateDirectory(dir); }
+        var t = Now - _demoStart;
+        if (!_demoTp)
+        {
+            if (t < 1.5) return; // let a few snapshots in
+            _demoTp = true;
+            var me0 = _me.State.Position;
+            var pick = _cars.OrderBy(c => NVec3.Distance(c.Value.Pos, me0)).First();
+            _ddCar = pick.Key; _ddStart = pick.Value.Pos;
+            var at = pick.Value.Pos + new NVec3(0, 0.3f, 4.5f); // behind the car's rear is +Z for yaw 0; stand there, look at it
+            var yaw = pick.Value.Yaw;
+            var side = new NVec3(MathF.Sin(yaw), 0, MathF.Cos(yaw)) * 4.5f; // behind the car (it faces -Z at yaw 0)
+            at = pick.Value.Pos + side + new NVec3(0, 0.3f, 0);
+            _ddYaw = yaw;
+            GD.Print($"drive-demo: nearest vehicle {pick.Key} kind {pick.Value.Kind} at {pick.Value.Pos}, teleport to {at}, distance before {NVec3.Distance(pick.Value.Pos, me0):F0} m");
+            Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(_myId, at))), (int)ENetPacketPeer.FlagReliable);
+            _conn.Flush();
+        }
+        if (!_driving) mi.Yaw = _ddYaw;
+        if (!_driving) _me.Pitch = -0.1f;
+        if (_ddShot < DriveShots.Length && t >= DriveShots[_ddShot]) _ = DemoShot(dir, DriveShots[_ddShot++]);
+        var pos = _cars.TryGetValue(_ddCar, out var cv) ? cv.Pos : _ddStart;
+        if (t is > 4.5 and < 4.6) { mi.Buttons |= MoveButtons.Use; GD.Print($"drive-demo: E pressed, hint='{Strings.F("hud.vehicle.enter", InputBindings.Name("interact"))}' driving={_driving}"); }
+        if (t > 5 && t < 12) { mi.MoveY = 1; mi.MoveX = t > 8 && t < 10 ? 0.6f : 0f; }
+        if (t is > 12 and < 13.4) mi.Buttons |= MoveButtons.Jump; // handbrake
+        if (t is > 14 and < 14.1) mi.Buttons |= MoveButtons.Use;  // exit
+        if (t > 6 && (int)(t * 2) != _ddLog) { _ddLog = (int)(t * 2); GD.Print($"drive-demo: t={t:F1} driving={_driving} car {pos} moved {NVec3.Distance(pos, _ddStart):F1} m kmh {(_cars.TryGetValue(_ddCar, out var c2) ? c2.Kmh : 0):F0}"); }
+        if (t > 16.5) GetTree().Quit();
+    }
+    float _ddYaw; int _ddLog;
+
     void FxDemoInput(ref MoveInput mi)
     {
+        if (FxDemo.StartsWith("drive:")) { FxDriveDemoInput(ref mi); return; }
         if (FxDemo.StartsWith("vehicle:")) { FxVehicleDemoInput(ref mi); return; }
         if (FxDemo == "" || _me == null) return;
         if (_demoStart == 0) { _demoStart = Now; System.IO.Directory.CreateDirectory(FxDemo); }

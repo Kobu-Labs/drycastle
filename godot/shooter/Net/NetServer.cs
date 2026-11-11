@@ -477,13 +477,14 @@ public partial class NetServer : Node
         {
             var d = HitMath.SpreadDirection(yaw, pitch, shot.SpreadDegrees, _rng);
             var dir = new Vector3(d.X, d.Y, d.Z);
-            var wall = WorldHit(eye, dir, MaxShotRange, out var shotCar);
-            var hit = HitMath.Raycast(N(eye), d, MaxShotRange, wall, targets, c.Id);
-            if (hit == null && HitMath.Raycast(N(eye), d, MaxShotRange, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
-            var end = eye + dir * (hit?.Distance ?? Math.Min(wall, MaxShotRange));
+            var range = w.Range > 0 ? w.Range : MaxShotRange;
+            var wall = WorldHit(eye, dir, range, out var shotCar);
+            var hit = HitMath.Raycast(N(eye), d, range, wall, targets, c.Id);
+            if (hit == null && HitMath.Raycast(N(eye), d, range, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
+            var end = eye + dir * (hit?.Distance ?? Math.Min(wall, range));
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
             if (hit is { } h) Deal(c.Id, (byte)shot.WeaponIndex, h.Id, HitMath.HitscanDamage(w, h.Distance, h.Head), h.Head, false);
-            else if (shotCar != null && Vehicles != null && wall <= MaxShotRange)
+            else if (shotCar != null && Vehicles != null && wall <= range)
                 DamageVehicle(shotCar, HitMath.HitscanDamage(w, wall, false) * Vehicles.BulletDamageMultiplier, c.Id, (byte)shot.WeaponIndex, 0);
         }
         else if (w.Kind == WeaponKind.Projectile)

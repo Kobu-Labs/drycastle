@@ -12,7 +12,7 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class Hud : CanvasLayer
 {
-    const int Slots = 4, FeedRows = HudLogic.FeedMax, BoardRows = 16, Indicators = 4;
+    const int Slots = 5, FeedRows = HudLogic.FeedMax, BoardRows = 16, Indicators = 4;
     const float RefHeight = 1080f, MinBaseScale = 0.8f;
     const float CrossThick = 3, CrossLen = 12, CrossMinGap = 8;
 
@@ -23,6 +23,9 @@ public partial class Hud : CanvasLayer
     public bool? ForceScoreboard { get; set; }
     /// <summary>Crosshair spread in degrees (set by the owner on shots and weapon changes; the crosshair reads it each frame).</summary>
     public Func<float>? Spread { get; set; }
+    /// <summary>True while a scope is up (sniper zoom): the dark ring and thin reticle replace the crosshair.</summary>
+    public Func<bool>? Scoped { get; set; }
+    Control _scope = null!;
 
     Control _root = null!;
     // crosshair, hit marker, indicators
@@ -89,6 +92,9 @@ public partial class Hud : CanvasLayer
         _root = new Control { Theme = ShooterTheme.Build(), MouseFilter = Control.MouseFilterEnum.Ignore };
         AddChild(_root);
         BuildProtection();
+        _scope = new ScopeOverlay { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
+        _scope.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        _root.AddChild(_scope);
         BuildCrosshair();
         BuildHealth();
         BuildAmmo();
@@ -598,8 +604,30 @@ public partial class Hud : CanvasLayer
         return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), _ => Strings.T("weapon.unknown") };
     }
 
+    /// <summary>Black outside a centred circle with a thin cross, drawn over the zoomed view.</summary>
+    sealed partial class ScopeOverlay : Control
+    {
+        public override void _Draw()
+        {
+            var s = Size; var c = s / 2; var r = Mathf.Min(s.X, s.Y) * 0.46f;
+            var outer = c.Length();
+            var w = outer - r + 4;
+            DrawArc(c, r + w / 2, 0, Mathf.Tau, 128, Colors.Black, w);
+            DrawArc(c, r, 0, Mathf.Tau, 128, new Color(0, 0, 0, 0.9f), 3);
+            var line = new Color(0, 0, 0, 0.85f);
+            DrawLine(new Vector2(c.X - r, c.Y), new Vector2(c.X + r, c.Y), line, 1.5f);
+            DrawLine(new Vector2(c.X, c.Y - r), new Vector2(c.X, c.Y + r), line, 1.5f);
+            DrawCircle(c, 2f, new Color(0.9f, 0.1f, 0.1f));
+        }
+
+        public override void _Notification(int what) { if (what == NotificationResized) QueueRedraw(); }
+    }
+
     void UpdateCrosshair()
     {
+        var scoped = Scoped?.Invoke() ?? false;
+        if (_scope.Visible != scoped) { _scope.Visible = scoped; _scope.QueueRedraw(); _crossRoot.Visible = Settings.ShowCrosshair && !scoped; }
+        if (scoped) return;
         var deg = Spread?.Invoke() ?? 0f;
         var gap = HudLogic.CrosshairGap(deg, Settings.Fov, GetViewport().GetVisibleRect().Size.Y, CrossMinGap * UiFactor()) / UiFactor();
         if (Math.Abs(gap - _gap) < 0.25f) return;

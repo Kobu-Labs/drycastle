@@ -160,7 +160,8 @@ public static class InputBindings
         ("jump", Binding.Key((int)Key.Space)), ("sprint", Binding.Key((int)Key.Shift)), ("crouch", Binding.Key((int)Key.Ctrl)),
         ("fire", Binding.MouseButton((int)MouseButton.Left)),
         ("reload", Binding.Key((int)Key.R)), ("interact", Binding.Key((int)Key.E)), ("scoreboard", Binding.Key((int)Key.Tab)),
-        ("slot_1", Binding.Key((int)Key.Key1)), ("slot_2", Binding.Key((int)Key.Key2)), ("slot_3", Binding.Key((int)Key.Key3)), ("slot_4", Binding.Key((int)Key.Key4)),
+        ("slot_1", Binding.Key((int)Key.Key1)), ("slot_2", Binding.Key((int)Key.Key2)), ("slot_3", Binding.Key((int)Key.Key3)), ("slot_4", Binding.Key((int)Key.Key4)), ("slot_5", Binding.Key((int)Key.Key5)),
+        ("zoom", Binding.MouseButton((int)MouseButton.Right)),
     };
 
     public static BindingMap NewMap() => new(Defaults);

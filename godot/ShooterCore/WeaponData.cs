@@ -42,7 +42,6 @@ public class WeaponDef
     public int MagazineSize { get; set; }
     public int ReserveAmmo { get; set; }
     public float ReloadTime { get; set; }
-    public float SwitchTime { get; set; }
     public float MoveSpeedMultiplier { get; set; } = 1;
 
     // Hitscan range model: full damage to FalloffStart m, linear to FalloffMultiplier at FalloffEnd m.
@@ -55,6 +54,11 @@ public class WeaponDef
     public float SpreadPerShot { get; set; }
     public float SpreadMax { get; set; }
     public float SpreadRecovery { get; set; }
+
+    /// <summary>Hitscan range in metres; 0 uses the server default (300).</summary>
+    public float Range { get; set; }
+    /// <summary>Vertical FOV in degrees while scoped (hold zoom); 0 = no scope.</summary>
+    public float ZoomFov { get; set; }
 
     // Melee
     public float Reach { get; set; }

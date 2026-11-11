@@ -16,7 +16,7 @@ public class DataFileTests
         Assert.Equal(3, d.Match.RespawnDelay);
         Assert.Equal(3, d.Match.SpawnProtection);
 
-        Assert.Equal(new[] { "pistol", "ak47", "bazooka", "knife" }, d.Weapons.Weapons.Select(w => w.Id));
+        Assert.Equal(new[] { "pistol", "ak47", "bazooka", "knife", "sniper" }, d.Weapons.Weapons.Select(w => w.Id));
         Assert.Equal("pistol", d.Weapons.StartingWeapon);
         var ak = d.Weapons.Find("ak47")!;
         Assert.Equal(WeaponKind.Hitscan, ak.Kind);

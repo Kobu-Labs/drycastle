@@ -18,7 +18,7 @@ public sealed class PlayerWeapons
 
     readonly WeaponsFile _file;
     readonly int[] _mag, _reserve;
-    double _nextFire, _switchReady, _reloadDone, _lastNow;
+    double _nextFire, _reloadDone, _lastNow;
     bool _prevFire;
     float _spreadExtra;
 
@@ -54,7 +54,7 @@ public sealed class PlayerWeapons
         for (var i = 0; i < _mag.Length; i++) { _mag[i] = _file.Weapons[i].MagazineSize; _reserve[i] = _file.Weapons[i].ReserveAmmo; }
         Slot = Math.Max(1, _file.Weapons.FindIndex(w => w.Id == _file.StartingWeapon) + 1);
         Reloading = false; _spreadExtra = 0; _prevFire = false;
-        _nextFire = _switchReady = _reloadDone = now; _lastNow = now;
+        _nextFire = _reloadDone = now; _lastNow = now;
         Changed = true;
     }
 
@@ -81,7 +81,7 @@ public sealed class PlayerWeapons
         _prevNext = input.Next;
         if (want != Slot)
         {
-            Slot = want; Reloading = false; _switchReady = now + Current.SwitchTime; _prevFire = input.Fire; Changed = true;
+            Slot = want; Reloading = false; _prevFire = input.Fire; Changed = true;
         }
         var w = Current;
 
@@ -93,7 +93,7 @@ public sealed class PlayerWeapons
 
         var pull = w.FullAuto ? input.Fire : input.Fire && !_prevFire;
         _prevFire = input.Fire;
-        if (!pull || Reloading || now + Eps < _switchReady || now + Eps < _nextFire) return null;
+        if (!pull || Reloading || now + Eps < _nextFire) return null;
 
         switch (w.Kind)
         {
