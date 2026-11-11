@@ -170,6 +170,7 @@ public class VehicleTypesTests
     {
         var jeep = Type("jeep"); var car = Vector3.Zero;
         var s = new VehicleSeat(2);
+        Assert.Equal(0, s.NearestFreeSeat(jeep, car, 0, new Vector3(0, 0, 3.5f), 4f)); // an empty vehicle: the first in is the driver, wherever they stand
         // standing beside the car: the driver's seat (the centre) is no further than the roof, so the lower index wins
         Assert.Equal(0, s.NearestFreeSeat(jeep, car, 0, new Vector3(2, 0, 0), 4f));
         s.TryEnter(9, 0);

@@ -123,10 +123,11 @@ public sealed class VehicleSeat
 
     /// <summary>
     /// The free seat of <paramref name="def"/> nearest to <paramref name="from"/> (horizontal distance, metres), within <paramref name="range"/>;
-    /// -1 if none. Ties go to the lower seat index, so the driver's seat wins when the player stands at the centre.
+    /// -1 if none. An empty vehicle always gives the driver's seat; ties go to the lower seat index.
     /// </summary>
     public int NearestFreeSeat(VehicleDef def, Vector3 carPos, float yaw, Vector3 from, float range)
     {
+        if (!Occupied && _occupant.Length > 0) return 0; // an empty vehicle: whoever gets in first is the driver, wherever they stand
         var best = -1; var bd = range;
         for (var i = 0; i < _occupant.Length && i < def.Seats.Count; i++)
         {
@@ -266,23 +267,21 @@ public struct CarState
 public static class CarModel
 {
     /// <summary>
-    /// Turn radius (m) at a speed: the steering lock radius at low speed, growing with v² once the lateral grip
-    /// (<see cref="VehicleDef.MaxLateralAccel"/>) is what limits the turn. Smooth: R = hypot(TurnRadius, v² / grip).
+    /// Turn radius (m) at a speed: the steering lock radius at a standstill, widening linearly with the fraction of top speed
+    /// to <see cref="VehicleDef.HighSpeedRadiusFactor"/> times that at top speed. The yaw rate (v / radius) then eases up with
+    /// speed instead of collapsing, so the car stays responsive when fast.
     /// </summary>
     public static float TurnRadiusAt(VehicleDef def, float speed)
     {
-        var grip = MathF.Max(0.1f, def.MaxLateralAccel);
-        var lat = speed * speed / grip;
-        return MathF.Sqrt(def.TurnRadius * def.TurnRadius + lat * lat);
+        var t = Math.Clamp(MathF.Abs(speed) / MathF.Max(0.1f, def.TopSpeed), 0f, 1f);
+        return def.TurnRadius * (1f + (def.HighSpeedRadiusFactor - 1f) * t);
     }
-
-    
 
     /// <summary>
     /// One tick. <paramref name="throttle"/> and <paramref name="steer"/> are -1..1 (forward, right), <paramref name="handbrake"/> is Jump.
     /// Longitudinal: acceleration to top speed, boosted near a standstill (<see cref="VehicleHandling.LaunchBoost"/>) (reverse capped by the handling), brake against travel, coast when idle.
     /// Lateral: yaw rate is speed / <see cref="TurnRadiusAt"/>, so it is zero when standing still, tight at walking pace and
-    /// capped at high speed; the actual yaw rate chases that target at a limited slew rate.
+    /// only moderately wider at top speed; the actual yaw rate chases that target at a limited slew rate.
     /// <paramref name="onWater"/> is set while the vehicle floats: an amphibious then drives at its water speed, and a boat has its drive
     /// (with planing); a boat not on water has none and coasts to a stop at its land deceleration.
     /// </summary>

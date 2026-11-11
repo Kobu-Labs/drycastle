@@ -142,9 +142,11 @@ public class VehicleTests
     {
         var def = Cfg().Vehicles[0];
         Assert.Equal(def.TurnRadius, CarModel.TurnRadiusAt(def, 0), 3);
-        Assert.InRange(CarModel.TurnRadiusAt(def, 2), def.TurnRadius, def.TurnRadius + 0.1f);
-        Assert.True(CarModel.TurnRadiusAt(def, 28) > 80f, "lateral grip limits the turn at speed");
+        Assert.InRange(CarModel.TurnRadiusAt(def, 2), def.TurnRadius, def.TurnRadius * 1.3f);
+        Assert.True(CarModel.TurnRadiusAt(def, 28) > CarModel.TurnRadiusAt(def, 2));
         Assert.True(CarModel.TurnRadiusAt(def, 44) > CarModel.TurnRadiusAt(def, 28));
+        Assert.Equal(def.TurnRadius * def.HighSpeedRadiusFactor, CarModel.TurnRadiusAt(def, def.TopSpeed), 3);
+        Assert.True(CarModel.TurnRadiusAt(def, def.TopSpeed) <= def.TurnRadius * 8f, "top-speed circle stays within a few times the lock");
     }
 
     [Fact]

@@ -37,6 +37,7 @@ public class VehiclesFile : IVersioned
             if (v.Hp <= 0) throw new DataFileException($"vehicles.json: {v.Id}: hp must be positive");
             if (v.TopSpeed <= 0 || v.Acceleration <= 0 || v.Brake <= 0 || v.TurnRadius <= 0 || v.MaxLateralAccel <= 0)
                 throw new DataFileException($"vehicles.json: {v.Id}: top_speed, acceleration, brake, turn_radius and max_lateral_accel must be positive");
+            if (v.HighSpeedRadiusFactor < 1) throw new DataFileException($"vehicles.json: {v.Id}: high_speed_radius_factor must be at least 1");
             if (v.Hood.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: hood is [x, y, z]");
             if (v.Variants is < 1 or > 16) throw new DataFileException($"vehicles.json: {v.Id}: variants must be 1..16");
             if (v.Paints.Count > 0 && v.PaintMaterial == "") throw new DataFileException($"vehicles.json: {v.Id}: paints need paint_material");
@@ -170,8 +171,10 @@ public class VehicleDef
     public float Brake { get; set; } = 9;
     /// <summary>Tightest circle at low speed (the steering lock), metres. Turning circle diameter is twice this.</summary>
     public float TurnRadius { get; set; } = 5.5f;
-    /// <summary>Lateral acceleration the tyres (or the lean) hold, m/s². Past the speed where v²/this beats TurnRadius, the turn widens with speed.</summary>
+    /// <summary>Lateral acceleration the tyres (or the lean) hold, m/s². No longer shapes the steering (see <see cref="HighSpeedRadiusFactor"/>); kept for the data files.</summary>
     public float MaxLateralAccel { get; set; } = 8;
+    /// <summary>How many times wider the turn circle is at top speed than at a standstill (1 = same circle at every speed). Widens linearly with speed in between.</summary>
+    public float HighSpeedRadiusFactor { get; set; } = 6;
     /// <summary>Shared driving knobs (coast, handbrake, reverse, steering slew). Overridable per type with a "handling" block.</summary>
     public VehicleHandling Handling { get; set; } = new();
     public float Mass { get; set; }

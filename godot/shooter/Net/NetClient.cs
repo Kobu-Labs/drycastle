@@ -484,8 +484,8 @@ public partial class NetClient : Node
             {
                 r.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 r.Node.Rotation = new Vector3(0, s.Yaw, 0);
-                r.Node.Visible = r.State != EntityState.InVehicle;
-                r.View?.SetStance(r.Stance);
+                r.Node.Visible = true; // riders are drawn in their seat (the server puts the body there), seated rather than standing
+                r.View?.SetStance(r.State == EntityState.InVehicle ? Stance.Crouch : r.Stance);
                 AnimateRemote(r, s.Pos);
             }
     }
