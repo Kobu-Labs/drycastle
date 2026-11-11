@@ -174,4 +174,56 @@ public class PropCollidersTests
         Assert.Equal(CollisionLayers.World, wall[0].Layer);
         Assert.Equal(2.5f, wall[0].Z1);
     }
+
+    [Fact]
+    public void TreeGridGivesTheSameSurfaceAsTheLinearScan()
+    {
+        // deterministic scatter of trees over 400 m, with a few sizes; the grid must answer every probe as the scan does
+        var seed = 12345u;
+        float Next(float max) { seed = seed * 1664525u + 1013904223u; return (seed >> 8) / (float)(1 << 24) * max; }
+        var trees = new List<TreeInstance>();
+        for (var i = 0; i < 600; i++)
+            trees.Add(new TreeInstance(Next(400f), Next(400f), 0f, 0.6f + Next(1.2f), Next(6.28f), false, 0, 0));
+        var grid = new TreeColliders.Index(trees, Model);
+        var hits = 0;
+        for (var i = 0; i < 4000; i++)
+        {
+            var near = trees[i % trees.Count]; // probes around trees, so most of them land on a trunk or a crown
+            var p = new Vector3(near.X + Next(3f) - 1.5f, near.Y + Next(3f) - 1.5f, 0.9f);
+            var linear = TreeColliders.GroupAt(trees, Model, p);
+            Assert.Equal(linear, grid.GroupAt(p));
+            if (linear != null) hits++;
+        }
+        Assert.True(hits > 100, $"the probes should land on trees often enough to mean something (got {hits})");
+    }
+
+    [Fact]
+    public void TreesOfEqualScaleShareShapeKeysWhateverTheirPlaceAndYaw()
+    {
+        var a = TreeColliders.Parts(new TreeInstance(10, 20, 5, 1.1f, 0.2f, false, 0, 0), Model);
+        var b = TreeColliders.Parts(new TreeInstance(-300, 7, 9, 1.1f, 2.5f, false, 3, 1), Model);
+        for (var i = 0; i < a.Count; i++) Assert.Equal(SolidShapeKeys.Of(a[i]), SolidShapeKeys.Of(b[i]));
+
+        var c = TreeColliders.Parts(new TreeInstance(10, 20, 5, 1.2f, 0.2f, false, 0, 0), Model);
+        Assert.NotEqual(SolidShapeKeys.Of(a[0]), SolidShapeKeys.Of(c[0]));
+    }
+
+    [Fact]
+    public void ConiferCrownKeysAreRelativeSoAPositionDoesNotSplitThem()
+    {
+        var a = TreeColliders.Parts(new TreeInstance(10, 20, 5, 0.9f, 0f, true, 0, 0), Model);
+        var b = TreeColliders.Parts(new TreeInstance(50, 60, 12.5f, 0.9f, 1.3f, true, 0, 0), Model);
+        Assert.Equal(PartShape.Pyramid, a[1].Shape);
+        Assert.Equal(SolidShapeKeys.Of(a[1]), SolidShapeKeys.Of(b[1]));
+        Assert.Equal(SolidShapeKeys.Of(a[2]), SolidShapeKeys.Of(b[2]));
+    }
+
+    [Fact]
+    public void ShapeSizesQuantiseToMillimetres()
+    {
+        Assert.Equal(1000L, SolidShapeKeys.Quantise(1.0004f));
+        Assert.Equal(1001L, SolidShapeKeys.Quantise(1.0006f));
+        var box = new SolidPart(PartRole.Trunk, PartShape.Box, 0, 0, 0, 2, 0.5f, 0.25f, 0);
+        Assert.Equal(new SolidShapeKeys.Key(0, 1000, 2000, 500), SolidShapeKeys.Of(box));
+    }
 }

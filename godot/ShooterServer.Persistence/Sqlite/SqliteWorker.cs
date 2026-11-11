@@ -1,57 +1,80 @@
-using System.Collections.Concurrent;
-using System.Reflection;
 using Microsoft.Data.Sqlite;
 
 namespace Suchohrad.ShooterServer.Persistence.Sqlite;
 
 /// <summary>
-/// One SQLite connection owned by one background thread. Every read and write is queued and runs there, so
-/// nothing touches the database on the game tick. Work runs in FIFO order.
+/// The SQLite database behind the store: a write connection and a read connection, each on its own thread (WAL lets the
+/// reader run while the writer commits). Every read and write is queued and runs on one of those threads, so nothing touches
+/// the database on the game tick. Writes run in FIFO order; reads never wait behind them (T2-12).
 /// </summary>
 internal sealed class SqliteWorker : IDisposable
 {
-    readonly SqliteConnection _conn;
-    readonly Action<string> _log;
-    readonly BlockingCollection<Action<SqliteConnection>> _queue = new();
-    readonly Thread _thread;
+    /// <summary>How long Dispose waits for the queued writes before it gives up on them (T3-027).</summary>
+    static readonly TimeSpan ShutdownWait = TimeSpan.FromSeconds(5);
 
-    SqliteWorker(SqliteConnection conn, Action<string> log)
+    readonly ThrottledLog _log;
+    readonly WriteBudget _budget;
+    public int QueueDepth => _writer.Depth + _reader.Depth;
+
+    readonly DbLane<SqliteConnection> _writer;
+    readonly DbLane<SqliteConnection> _reader;
+
+    SqliteWorker(SqliteConnection writer, SqliteConnection reader, Action<string> log)
     {
-        _conn = conn;
-        _log = log;
-        _thread = new Thread(Loop) { IsBackground = true, Name = "shooter-db" };
-        _thread.Start();
+        _log = new ThrottledLog(log);
+        _budget = new WriteBudget(_log);
+        _writer = new DbLane<SqliteConnection>(writer, "shooter-db", _log);
+        _reader = new DbLane<SqliteConnection>(reader, "shooter-db-read", _log);
     }
 
-    /// <summary>Opens the file, turns on foreign keys, applies pending migrations, and starts the writer. Throws if the database cannot be opened or migrated.</summary>
+    /// <summary>Opens the file, turns on foreign keys, applies pending migrations, and starts the workers. Throws if the database cannot be opened or migrated.</summary>
     public static SqliteWorker Open(string path, Action<string> log)
     {
         var full = Path.GetFullPath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-        var conn = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = full, ForeignKeys = true }.ToString());
+        var writer = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = full, ForeignKeys = true }.ToString());
+        SqliteConnection? reader = null;
         try
         {
-            conn.Open();
-            using (var pragma = conn.CreateCommand())
+            writer.Open();
+            using (var pragma = writer.CreateCommand())
             {
                 pragma.CommandText = "PRAGMA journal_mode=WAL;";
                 pragma.ExecuteNonQuery();
             }
-            Migrations.Apply(conn);
-            return new SqliteWorker(conn, log);
+            // WAL with NORMAL: a commit no longer waits for the disk on every write. A power cut can lose the last few
+            // commits but never corrupts the file (T2-13).
+            using (var pragma = writer.CreateCommand())
+            {
+                pragma.CommandText = "PRAGMA synchronous=NORMAL;";
+                pragma.ExecuteNonQuery();
+            }
+            Migrations.Apply(writer);
+            reader = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = full, ForeignKeys = true, Mode = SqliteOpenMode.ReadOnly }.ToString());
+            reader.Open();
+            return new SqliteWorker(writer, reader, log);
         }
         catch
         {
-            conn.Dispose();
+            reader?.Dispose();
+            writer.Dispose();
             throw;
         }
     }
 
-    /// <summary>Runs a query or a write that returns a value. Exceptions propagate to the awaiting caller.</summary>
-    public Task<T> Read<T>(Func<SqliteConnection, T> work)
+    /// <summary>Runs a query on the read connection. Exceptions propagate to the awaiting caller.</summary>
+    public Task<T> Read<T>(Func<SqliteConnection, T> work) => Run(_reader, work);
+
+    /// <summary>
+    /// Runs work that reads and writes and returns a value (a new profile's insert and read). It waits its turn behind the queued
+    /// writes, so it sees them. Exceptions propagate to the awaiting caller.
+    /// </summary>
+    public Task<T> Mutate<T>(Func<SqliteConnection, T> work) => Run(_writer, work);
+
+    static Task<T> Run<T>(DbLane<SqliteConnection> lane, Func<SqliteConnection, T> work)
     {
         var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!_queue.TryAdd(c =>
+        if (!lane.TryAdd(c =>
             {
                 try { tcs.SetResult(work(c)); }
                 catch (Exception e) { tcs.SetException(e); }
@@ -60,33 +83,39 @@ internal sealed class SqliteWorker : IDisposable
         return tcs.Task;
     }
 
-    /// <summary>Fire-and-forget write. A failure is logged and never thrown, so a DB problem cannot crash the match.</summary>
+    /// <summary>
+    /// Fire-and-forget write. A failure is logged (rate-limited) and never thrown, so a DB problem cannot crash the match.
+    /// Past the write budget the write is dropped and counted instead (T2-14).
+    /// </summary>
     public Task Write(string what, Action<SqliteConnection> work)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!_queue.TryAdd(c =>
+        if (!_budget.TryReserve(what))
+        {
+            tcs.SetResult();
+            return tcs.Task;
+        }
+        if (!_writer.TryAdd(c =>
             {
                 try { work(c); }
-                catch (Exception e) { _log($"db write failed ({what}): {e.Message}"); }
+                catch (Exception e) { _log.Write($"db write failed ({what}): {e.Message}"); }
+                finally { _budget.Release(); }
                 tcs.SetResult();
             }))
         {
-            _log($"db write dropped, store is closed ({what})");
+            _budget.Release();
+            _log.Write($"db write dropped, store is closed ({what})");
             tcs.SetResult();
         }
         return tcs.Task;
     }
 
-    void Loop()
-    {
-        foreach (var work in _queue.GetConsumingEnumerable()) work(_conn);
-        _conn.Dispose();
-    }
-
     public void Dispose()
     {
-        _queue.CompleteAdding();
-        if (Thread.CurrentThread != _thread) _thread.Join();
+        _writer.Complete();
+        _reader.Complete();
+        _writer.Join(ShutdownWait);
+        _reader.Join(ShutdownWait);
     }
 }
 

@@ -1,28 +1,36 @@
-using System.Collections.Concurrent;
 using Npgsql;
 
 namespace Suchohrad.ShooterServer.Persistence.Postgres;
 
 /// <summary>
-/// One PostgreSQL connection owned by one background thread (same model as the SQLite worker): every read and write is queued and
-/// runs there in FIFO order, so nothing touches the database on the game tick. A dropped connection is reopened before the next job.
+/// The PostgreSQL database behind the store: a write connection and a read connection, each on its own thread (same model as
+/// the SQLite worker). Every read and write is queued and runs on one of those threads, so nothing touches the database on the
+/// game tick. Writes run in FIFO order; reads never wait behind them (T2-12). A dropped connection is reopened before the next
+/// job, with a growing pause while the database is down (T2-14).
 /// </summary>
 internal sealed class PostgresWorker : IDisposable
 {
-    readonly NpgsqlConnection _conn;
-    readonly Action<string> _log;
-    readonly BlockingCollection<Action<NpgsqlConnection>> _queue = new();
-    readonly Thread _thread;
+    /// <summary>How long Dispose waits for the queued writes before it gives up on them (T3-027).</summary>
+    static readonly TimeSpan ShutdownWait = TimeSpan.FromSeconds(5);
 
-    PostgresWorker(NpgsqlConnection conn, Action<string> log)
+    readonly ThrottledLog _log;
+    readonly WriteBudget _budget;
+    public int QueueDepth => _writer.Depth + _reader.Depth;
+
+    readonly DbLane<NpgsqlConnection> _writer;
+    readonly DbLane<NpgsqlConnection> _reader;
+
+    PostgresWorker(NpgsqlConnection writer, NpgsqlConnection reader, Action<string> log)
     {
-        _conn = conn;
-        _log = log;
-        _thread = new Thread(Loop) { IsBackground = true, Name = "shooter-db" };
-        _thread.Start();
+        _log = new ThrottledLog(log);
+        _budget = new WriteBudget(_log);
+        var writeUp = new Reconnector(_log);
+        var readUp = new Reconnector(_log);
+        _writer = new DbLane<NpgsqlConnection>(writer, "shooter-db", _log, c => writeUp.Ensure(c, "write"));
+        _reader = new DbLane<NpgsqlConnection>(reader, "shooter-db-read", _log, c => readUp.Ensure(c, "read"));
     }
 
-    /// <summary>Connects (retrying while the database starts), applies pending migrations and starts the worker. Throws if it cannot.</summary>
+    /// <summary>Connects (retrying while the database starts), applies pending migrations and starts the workers. Throws if it cannot.</summary>
     public static PostgresWorker Open(string connectionString, Action<string> log, int attempts = 30, int delayMs = 2000)
     {
         var conn = new NpgsqlConnection(connectionString);
@@ -36,22 +44,34 @@ internal sealed class PostgresWorker : IDisposable
             }
             catch { conn.Dispose(); throw; }
         }
+        NpgsqlConnection? reader = null;
         try
         {
             PgMigrations.Apply(conn);
-            return new PostgresWorker(conn, log);
+            reader = new NpgsqlConnection(connectionString); // opened by its first job, see Reconnector
+            return new PostgresWorker(conn, reader, log);
         }
         catch
         {
+            reader?.Dispose();
             conn.Dispose();
             throw;
         }
     }
 
-    public Task<T> Read<T>(Func<NpgsqlConnection, T> work)
+    /// <summary>Runs a query on the read connection. Exceptions propagate to the awaiting caller.</summary>
+    public Task<T> Read<T>(Func<NpgsqlConnection, T> work) => Run(_reader, work);
+
+    /// <summary>
+    /// Runs work that reads and writes and returns a value (a new profile's insert and read). It waits its turn behind the queued
+    /// writes, so it sees them. Exceptions propagate to the awaiting caller.
+    /// </summary>
+    public Task<T> Mutate<T>(Func<NpgsqlConnection, T> work) => Run(_writer, work);
+
+    static Task<T> Run<T>(DbLane<NpgsqlConnection> lane, Func<NpgsqlConnection, T> work)
     {
         var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!_queue.TryAdd(c =>
+        if (!lane.TryAdd(c =>
             {
                 try { tcs.SetResult(work(c)); }
                 catch (Exception e) { tcs.SetException(e); }
@@ -60,41 +80,39 @@ internal sealed class PostgresWorker : IDisposable
         return tcs.Task;
     }
 
-    /// <summary>Fire-and-forget write. A failure is logged and never thrown, so a database problem cannot crash the match.</summary>
+    /// <summary>
+    /// Fire-and-forget write. A failure is logged (rate-limited) and never thrown, so a database problem cannot crash the match.
+    /// Past the write budget the write is dropped and counted instead (T2-14).
+    /// </summary>
     public Task Write(string what, Action<NpgsqlConnection> work)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!_queue.TryAdd(c =>
+        if (!_budget.TryReserve(what))
+        {
+            tcs.SetResult();
+            return tcs.Task;
+        }
+        if (!_writer.TryAdd(c =>
             {
                 try { work(c); }
-                catch (Exception e) { _log($"db write failed ({what}): {e.Message}"); }
+                catch (Exception e) { _log.Write($"db write failed ({what}): {e.Message}"); }
+                finally { _budget.Release(); }
                 tcs.SetResult();
             }))
         {
-            _log($"db write dropped, store is closed ({what})");
+            _budget.Release();
+            _log.Write($"db write dropped, store is closed ({what})");
             tcs.SetResult();
         }
         return tcs.Task;
     }
 
-    void Loop()
-    {
-        foreach (var work in _queue.GetConsumingEnumerable())
-        {
-            if (_conn.State != System.Data.ConnectionState.Open)
-            {
-                try { _conn.Open(); _log("db connection restored"); }
-                catch (Exception e) { _log($"db connection down: {e.Message}"); }
-            }
-            work(_conn);
-        }
-        _conn.Dispose();
-    }
-
     public void Dispose()
     {
-        _queue.CompleteAdding();
-        if (Thread.CurrentThread != _thread) _thread.Join();
+        _writer.Complete();
+        _reader.Complete();
+        _writer.Join(ShutdownWait);
+        _reader.Join(ShutdownWait);
     }
 }
 

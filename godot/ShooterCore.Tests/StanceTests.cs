@@ -172,14 +172,14 @@ public class StanceTests
     {
         var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
         var prone = EntityRecord.Make(7, EntityType.Player, new Vector3(1, 0, 2), 0.5f, 0.1f, 80, EntityState.Protected, 3, Stance.Prone);
-        var pkts = enc.Encode(10, 1, new[] { prone });
+        var pkts = enc.Encode(10, 1, Wire.NoTick, new[] { prone });
         foreach (var p in pkts) Assert.True(dec.Apply(p, out _));
         Assert.Equal(Stance.Prone, dec.States[7].Stance);
         Assert.Equal(EntityState.Protected, dec.States[7].State);
         Assert.Equal(3, dec.States[7].Weapon);
 
         var stand = prone; stand.Stance = Stance.Stand;
-        foreach (var p in enc.Encode(11, 2, new[] { stand })) Assert.True(dec.Apply(p, out _));
+        foreach (var p in enc.Encode(11, 2, 10, new[] { stand })) Assert.True(dec.Apply(p, out _));
         Assert.Equal(Stance.Stand, dec.States[7].Stance);
     }
 

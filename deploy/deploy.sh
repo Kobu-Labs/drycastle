@@ -17,5 +17,5 @@ $SSH "$host" "mkdir -p '$dir/out/shooter/linux-server' '$dir/deploy'"
 rsync -az -e "$SSH" --delete "$export_dir/" "$host:$dir/out/shooter/linux-server/"
 rsync -az -e "$SSH" "$here/Dockerfile" "$here/docker-compose.yml" "$here/.env.example" "$host:$dir/deploy/"
 
-$SSH "$host" "cd '$dir/deploy' && if [ ! -f .env ]; then cp .env.example .env && sed -i \"s/change-me/\$(openssl rand -hex 24)/\" .env && echo 'created .env with a random database password'; fi && docker compose up -d --build && docker compose ps"
-echo "deployed. Open UDP 27015 in the firewall. Logs: ssh $host 'cd $dir/deploy && docker compose logs -f server'"
+$SSH "$host" "cd '$dir/deploy' && if [ ! -f .env ]; then cp .env.example .env && sed -i \"s/change-me/\$(openssl rand -hex 24)/\" .env && echo 'created .env with a random database password'; fi && docker compose up -d --build --wait && docker compose ps && docker image prune -f"
+echo "deployed (server healthy: map loaded, listening). Open UDP 27015 in the firewall. Logs: ssh $host 'cd $dir/deploy && docker compose logs -f server'"

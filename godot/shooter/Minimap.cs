@@ -136,27 +136,45 @@ public sealed partial class Minimap : Control
         if (MinimapView.NeedsRebuild(_side, wanted)) Rasterise(wanted);
     }
 
-    /// <summary>Rasterises the parcel fills into a square of <paramref name="side"/> texels, with mipmaps.</summary>
+    /// <summary>The last terrain texture, kept for its map and side: a second join on the same map does not rasterise again (#170, T2-19).</summary>
+    static Suchohrad.MapLoader.MapLoader? _cachedMap;
+    static int _cachedSide;
+    static ImageTexture? _cachedTex;
+    readonly List<float> _crossings = new();
+    readonly List<(int From, int To)> _spans = new();
+
+    static byte[] Rgba(Color c) => new[] { (byte)Math.Round(c.R * 255f), (byte)Math.Round(c.G * 255f), (byte)Math.Round(c.B * 255f), (byte)Math.Round(c.A * 255f) };
+
+    /// <summary>Rasterises the parcel fills into a square of <paramref name="side"/> texels, with mipmaps. Each row takes its edge crossings once (scanline fill), and the image is built from one byte buffer.</summary>
     void Rasterise(int side)
     {
         _side = side;
         _metresPerTexel = _sideMetres / side;
-        var img = Image.CreateEmpty(side, side, false, Image.Format.Rgba8);
-        img.Fill(Terrain);
+        if (_cachedTex != null && ReferenceEquals(_cachedMap, _map) && _cachedSide == side) { _base = _cachedTex; return; }
+        var px = new byte[side * side * 4];
+        var terrain = Rgba(Terrain);
+        for (var i = 0; i < px.Length; i += 4) Buffer.BlockCopy(terrain, 0, px, i, 4);
         foreach (var parcel in _map!.Parcels.Values)
         {
-            var colour = ParcelColour(parcel.Kind);
+            var colour = Rgba(ParcelColour(parcel.Kind));
+            var rings = parcel.Rings.Select(r => r.Select(v => new NVector2(v.X, v.Y)).ToArray()).ToList();
             var b = parcel.Bounds;
             var u0 = Math.Clamp((int)Math.Floor((b.Position.X - _origin.X) / _metresPerTexel), 0, side - 1);
             var u1 = Math.Clamp((int)Math.Ceiling((b.End.X - _origin.X) / _metresPerTexel), 0, side - 1);
             var v0 = Math.Clamp((int)Math.Floor((b.Position.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
             var v1 = Math.Clamp((int)Math.Ceiling((b.End.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
             for (var v = v0; v <= v1; v++)
-                for (var u = u0; u <= u1; u++)
-                    if (parcel.Contains(TexelCentre(u, v))) img.SetPixel(u, v, colour);
+            {
+                ScanlineFill.Crossings(rings, _origin.Y + (v + 0.5f) * _metresPerTexel, _crossings);
+                ScanlineFill.Spans(_crossings, _origin.X, _metresPerTexel, u0, u1, _spans);
+                foreach (var (from, to) in _spans)
+                    for (var u = from; u <= to; u++) Buffer.BlockCopy(colour, 0, px, (v * side + u) * 4, 4);
+            }
         }
+        using var img = Image.CreateFromData(side, side, false, Image.Format.Rgba8, px);
         img.GenerateMipmaps();
         _base = ImageTexture.CreateFromImage(img);
+        _cachedMap = _map; _cachedSide = side; _cachedTex = _base;
     }
 
     public override void _Process(double delta)
@@ -245,8 +263,6 @@ public sealed partial class Minimap : Control
         var p = MinimapMath.ClampToSquare(MinimapMath.ToScreen(d, theta, pxPerMetre), inner);
         return new Vector2(p.X, p.Y);
     }
-
-    Vector2 TexelCentre(int u, int v) => _origin + new Vector2((u + 0.5f) * _metresPerTexel, (v + 0.5f) * _metresPerTexel);
 
     static readonly Color Backdrop = new(0.05f, 0.06f, 0.08f, 0.85f);
     static readonly Color Terrain = new(0.20f, 0.23f, 0.19f);

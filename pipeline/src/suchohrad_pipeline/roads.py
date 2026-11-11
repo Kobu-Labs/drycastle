@@ -153,9 +153,11 @@ def ribbon_sides(pts: np.ndarray, width: float) -> tuple[np.ndarray, np.ndarray]
     return pts + off * half, pts - off * half
 
 
-def _terrain_triangles(terrain: Terrain, bounds: tuple[float, float, float, float]):
+def _terrain_triangles(terrain: Terrain, bounds: tuple[float, float, float, float], area=None):
     """Terrain mesh triangles (3x3 vertex arrays) of the cells touching ``bounds``.
 
+    With ``area`` (a geometry, prepared here) only the cells that touch it are yielded; a triangle
+    of a cell that misses ``area`` would clip to nothing, so the result for ``area`` is the same.
     Cells are split along the same diagonal as in ``Terrain.chunk_mesh`` / ``Terrain.surface``.
     """
     st, h = terrain.step, terrain.heights
@@ -163,21 +165,29 @@ def _terrain_triangles(terrain: Terrain, bounds: tuple[float, float, float, floa
     c1 = min(int(math.floor(bounds[2] / st)) - terrain.i0, terrain.ncols - 1)
     r0 = max(int(math.floor(bounds[1] / st)) - terrain.j0, 0)
     r1 = min(int(math.floor(bounds[3] / st)) - terrain.j0, terrain.nrows - 1)
-    for cj in range(r0, r1 + 1):
-        for ci in range(c0, c1 + 1):
-            if not terrain.valid[cj : cj + 2, ci : ci + 2].all():
-                continue  # no terrain mesh here
-            x, y = (terrain.i0 + ci) * st, (terrain.j0 + cj) * st
-            v00 = (x, y, h[cj, ci])
-            v10 = (x + st, y, h[cj, ci + 1])
-            v01 = (x, y + st, h[cj + 1, ci])
-            v11 = (x + st, y + st, h[cj + 1, ci + 1])
-            if abs(v10[2] - v01[2]) < abs(v00[2] - v11[2]):
-                yield np.array([v00, v10, v01])
-                yield np.array([v10, v11, v01])
-            else:
-                yield np.array([v00, v10, v11])
-                yield np.array([v00, v11, v01])
+    if area is not None and r1 >= r0 and c1 >= c0:
+        shapely.prepare(area)
+        cj_all, ci_all = np.meshgrid(np.arange(r0, r1 + 1), np.arange(c0, c1 + 1), indexing="ij")
+        cj_all, ci_all = cj_all.ravel(), ci_all.ravel()  # row-major: the same order as the loops below
+        x_all, y_all = (terrain.i0 + ci_all) * st, (terrain.j0 + cj_all) * st
+        touch = shapely.intersects(area, shapely.box(x_all, y_all, x_all + st, y_all + st))
+        cells = list(zip(cj_all[touch].tolist(), ci_all[touch].tolist()))
+    else:
+        cells = [(cj, ci) for cj in range(r0, r1 + 1) for ci in range(c0, c1 + 1)]
+    for cj, ci in cells:
+        if not terrain.valid[cj : cj + 2, ci : ci + 2].all():
+            continue  # no terrain mesh here
+        x, y = (terrain.i0 + ci) * st, (terrain.j0 + cj) * st
+        v00 = (x, y, h[cj, ci])
+        v10 = (x + st, y, h[cj, ci + 1])
+        v01 = (x, y + st, h[cj + 1, ci])
+        v11 = (x + st, y + st, h[cj + 1, ci + 1])
+        if abs(v10[2] - v01[2]) < abs(v00[2] - v11[2]):
+            yield np.array([v00, v10, v01])
+            yield np.array([v10, v11, v01])
+        else:
+            yield np.array([v00, v10, v11])
+            yield np.array([v00, v11, v01])
 
 
 def _area2(t) -> float:
@@ -206,7 +216,7 @@ def ribbon_mesh(
     ]
     foot = shapely.unary_union([q.buffer(0) for q in quads if q.area > 1e-9])
     tris = []
-    for tri in _terrain_triangles(terrain, foot.bounds):
+    for tri in _terrain_triangles(terrain, foot.bounds, foot):
         piece = foot.intersection(Polygon(tri[:, :2]))
         if piece.is_empty:
             continue

@@ -771,14 +771,19 @@ public partial class Hud : CanvasLayer
         if (_breath.Visible != b.Show) _breath.Visible = b.Show;
         if (!b.Show) return;
         _breathBar.Set(b.Meter, b.Phase);
-        var key = InputBindings.Name("sprint");
+        // the label's words depend only on the phase, whether the breath is empty and the bound key: text is built when one changes (#173, T3-032)
+        var state = (b.Phase, Empty: b.Meter <= 0.01f, Key: InputBindings.Name("sprint"));
+        if (state == _breathState) return;
+        _breathState = state;
         Set(_breathLabel, b.Phase switch
         {
             BreathState.BreathPhase.Holding => Strings.T("hud.breath.held"),
             BreathState.BreathPhase.Exhaled => Strings.T("hud.breath.exhaled"),
-            _ => b.Meter <= 0.01f ? Strings.T("hud.breath.empty") : Strings.F("hud.breath.ready", key),
+            _ => state.Empty ? Strings.T("hud.breath.empty") : Strings.F("hud.breath.ready", state.Key),
         });
     }
+
+    (BreathState.BreathPhase Phase, bool Empty, string Key)? _breathState;
 
     /// <summary>Breath bar: fill = breath left. Blue while held, amber when low, red while forced out, green otherwise.</summary>
     sealed partial class BreathBar : Control

@@ -34,14 +34,14 @@ public partial class NetClient
     void OnMissileSpawned(WorldReplica.Entity e)
     {
         if (e.Type != AttackMissileRules.TypeId) return;
-        _missiles[e.Id] = new Rocket { Node = RocketFx.Make(World), Born = Now, At = Now };
+        _missiles[e.Id] = new Rocket { Node = RocketFx.Make(Owned), Born = Now, At = Now };
     }
 
     void OnMissileDespawned(ushort id)
     {
         if (!_missiles.Remove(id, out var r)) return;
         r.Snd?.Release();
-        RocketFx.Retire(World, r.Node);
+        RocketFx.Retire(Owned, r.Node);
     }
 
     /// <summary>Owner-only: the streak was used. The attack missile hands the owner its point of view.</summary>
@@ -99,7 +99,7 @@ public partial class NetClient
             return;
         }
         _povCam ??= new Camera3D { Fov = 75, Far = 2000 };
-        if (!_povCam.IsInsideTree()) World.AddChild(_povCam);
+        if (!_povCam.IsInsideTree()) Owned.AddChild(_povCam);
         var s = e.State;
         var p = s.Position;
         _povCam.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
@@ -121,9 +121,9 @@ public partial class NetClient
     void OnMissileBlast(MissileBlastInfo b)
     {
         var at = new Vector3(b.Position.X, b.Position.Y, b.Position.Z);
-        if (_missiles.Remove(b.Id, out var r)) { r.Snd?.Release(); RocketFx.Retire(World, r.Node); }
+        if (_missiles.Remove(b.Id, out var r)) { r.Snd?.Release(); RocketFx.Retire(Owned, r.Node); }
         if (Sfx.Enabled) Sfx.Play3D(SoundRules.Event("explosion", "bazooka"), at); // the bazooka's blast sound until the missile has its own
-        RocketFx.Explode(World, at, b.Radius);
+        RocketFx.Explode(Owned, at, b.Radius);
         ShakeFor(at, b.Radius);
         if (b.Owner == _myId) _pov?.Impact();
     }

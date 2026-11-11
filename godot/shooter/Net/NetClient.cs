@@ -19,6 +19,19 @@ public partial class NetClient : Node
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
 
     public Node3D World = null!;
+    Node3D? _owned;
+    /// <summary>
+    /// The node under <see cref="World"/> that holds everything this client adds to the persistent world (effects, pools,
+    /// corpses, crates, turrets, aircraft, missiles, the POV camera). <see cref="FreeOwned"/> frees it all on leave (#169, T2-17).
+    /// </summary>
+    Node3D Owned
+    {
+        get
+        {
+            if (_owned == null || !GodotObject.IsInstanceValid(_owned)) { _owned = new Node3D { Name = "ClientOwned" }; World.AddChild(_owned); }
+            return _owned;
+        }
+    }
     public string Host = "127.0.0.1";
     public int Port = 27015;
     public string PlayerName = "player";
@@ -58,6 +71,8 @@ public partial class NetClient : Node
     readonly List<(double T, HitMsg M)> _hitLog = new();
     readonly List<(double T, LaunchMsg M)> _launchLog = new();
     readonly List<(double T, ExplosionMsg M)> _explosionLog = new();
+    /// <summary>The event logs are read only by the scripted bots (the weapons, bazooka, blast and car checks), so a normal match keeps none of them: they grew for the whole match (#173, T3-028).</summary>
+    bool KeepEventLogs => WeaponsBot != "" || BazookaBot != "" || BlastBot != "" || CarBot != "";
     sealed class Rocket { public double Born; public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; }
     readonly Dictionary<ushort, Rocket> _rockets = new();
     readonly HashSet<ushort> _deadRockets = new();
@@ -107,7 +122,11 @@ public partial class NetClient : Node
         GD.Print($"client: connecting to {Host}:{Port} as {PlayerName}");
     }
 
-    public override void _ExitTree() => _conn.Destroy();
+    public override void _ExitTree()
+    {
+        _conn.Destroy();
+        FreeOwned(); // also when the client leaves without Teardown
+    }
 
     /// <summary>Menu mode: raised instead of quitting when the connection fails or drops (the reason is short, for the error message).</summary>
     public Action<string, bool>? OnFailed;
@@ -128,6 +147,19 @@ public partial class NetClient : Node
         _cars.Clear();
         if (_me != null && GodotObject.IsInstanceValid(_me)) _me.QueueFree();
         _me = null;
+        FreeOwned();
+    }
+
+    /// <summary>Frees everything this client put under <see cref="Owned"/> (effects, pools, props, missiles), so a leave and a rejoin leave no nodes behind (#169, T2-17).</summary>
+    void FreeOwned()
+    {
+        if (_owned != null && GodotObject.IsInstanceValid(_owned)) _owned.QueueFree();
+        _owned = null;
+        _missiles.Clear();
+        _impacts = null; Array.Clear(_impactNext);
+        _rings = null; _ringNext = 0; _ringMesh = null;
+        _dust = null; _dustNext = 0;
+        _povCam = null;
     }
 
     void Fail(string why)
@@ -249,7 +281,7 @@ public partial class NetClient : Node
                 break;
             case JoinMsg j: _names[j.PlayerId] = j.Name; GD.Print($"client: {j.Name} #{j.PlayerId} joined"); break;
             case LeaveMsg l:
-                _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Remove(l.PlayerId);
+                _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
                 if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
                 break;
             case EventMsg e:
@@ -277,7 +309,7 @@ public partial class NetClient : Node
                 SfxPhase(Match.Phase);
                 if (Match.Restarts != _hudRestarts) { _hudRestarts = Match.Restarts; _hud?.ClearKills(); }
                 _hud?.SetMatch(Match.Phase, Match.TimeRemaining(Now), Match.Rows, Match.Winners, Match.NameOf);
-                GD.Print($"client {PlayerName}: {Match.ScoreboardText(Now)}"); break;
+                break;
             case EventKind.Kill:
                 var k = Match.KillFeed[^1];
                 _hud?.AddKill(k, Match.NameOf(k.Killer), Match.NameOf(k.Victim));
@@ -315,7 +347,7 @@ public partial class NetClient : Node
         LossOnSnapshot(h);
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         DayNightCycle.Current?.SetServerTick(h.Tick);
-        foreach (var id in _dec.RemoveStale(h.Tick, 90)) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); } }
+        foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); } }
         foreach (var (id, rec) in _dec.States)
         {
             if (id == _myId) { OnSelf(rec, h.Ack); continue; }
@@ -339,7 +371,7 @@ public partial class NetClient : Node
         if (!_rockets.TryGetValue(id, out var r))
         {
             var speed = Weapons != null && rec.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[rec.Weapon].ProjectileSpeed : 40f;
-            r = new Rocket { Node = RocketFx.Make(World), Born = Now, Speed = speed }; _rockets[id] = r;
+            r = new Rocket { Node = RocketFx.Make(Owned), Born = Now, Speed = speed }; _rockets[id] = r;
         }
         r.Pos = rec.Position; r.Dir = dir; r.At = Now;
     }
@@ -469,7 +501,7 @@ public partial class NetClient : Node
         if (_pending.Count > 120) _pending.RemoveAt(0);
         var recent = new NetInput[Math.Min(3, _pending.Count)];
         for (var i = 0; i < recent.Length; i++) recent[i] = _pending[_pending.Count - recent.Length + i].Input;
-        Tx(_peer, Wire.ChanData, Wire.EncodeInputs(recent), 0);
+        Tx(_peer, Wire.ChanData, Wire.EncodeInputs(recent, _dec.AckTick), 0); // the inputs name the snapshot tick they follow (the server's delta baseline)
         _conn.Flush();
         var p = _me.State.Position;
         _meMin = NVec3.Min(_meMin, p); _meMax = NVec3.Max(_meMax, p);
@@ -715,7 +747,7 @@ public partial class NetClient : Node
                 OnPelletFan(pf);
                 break;
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
-                _launchLog.Add((Now, l));
+                if (KeepEventLogs) _launchLog.Add((Now, l));
                 if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
                 // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the bazooka's)
                 if (_rockets.TryGetValue(l.Id, out var known)) known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length();
@@ -723,20 +755,20 @@ public partial class NetClient : Node
                 {
                     // show the rocket at once from the launch event; snapshots take over
                     var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);
-                    _rockets[l.Id] = new Rocket { Node = RocketFx.Make(World), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length() };
+                    _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length() };
                 }
                 if (!EchoOfPredicted(l.Owner)) { SfxLaunch(l); if (l.Owner == _myId) _viewmodel?.Flash(0.5f); else if (_remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f); }
                 break;
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
-                _explosionLog.Add((Now, ex));
-                if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(World, rk.Node); }
+                if (KeepEventLogs) _explosionLog.Add((Now, ex));
+                if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(Owned, rk.Node); }
                 SfxExplosion(ex);
-                _dec.Remove(ex.Id);
+                _dec.Forget(ex.Id);
                 _deadRockets.Add(ex.Id);
                 if (_deadRockets.Count > 256) _deadRockets.Clear();
                 var exR = ex.Radius > 0 ? ex.Radius : 6f; // the blast the server used (a gunship rocket's is 8 m)
                 var exAt = new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z);
-                RocketFx.Explode(World, exAt, exR);
+                RocketFx.Explode(Owned, exAt, exR);
                 ShakeFor(exAt, exR);
                 break;
             case EventKind.VehicleExplosion when WeaponCodec.DecodeVehicleExplosion(payload) is { } vx:
@@ -764,10 +796,9 @@ public partial class NetClient : Node
                 OnHelperWarning(hw);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
-                _hitLog.Add((Now, h));
+                if (KeepEventLogs) _hitLog.Add((Now, h));
                 SfxHit(h);
                 HudHit(h);
-                GD.Print($"client {PlayerName}: hit #{h.Attacker} -> #{h.Victim} {h.Damage}{(h.Headshot ? " head" : "")}{(h.Backstab ? " backstab" : "")}{(h.Kill ? " kill" : "")}");
                 break;
         }
     }

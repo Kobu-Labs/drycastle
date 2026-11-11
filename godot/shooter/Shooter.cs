@@ -86,7 +86,12 @@ public partial class Shooter : Node3D
             var data = _data = LoadData();
             GD.Print($"data: {data.Weapons.Weapons.Count} weapons, score goal {data.Match.ScoreGoal}, {data.Vehicles.Vehicles.Count} vehicle types");
             LoadMap(cfg);
-            if (role == "server" && !_smoke) BuildServer(cfg);
+            if (role == "server" && !_smoke)
+            {
+                SetReadyMarker(false);
+                BuildServer(cfg);
+                SetReadyMarker(true);
+            }
             if (role == "client" && cfg.Str("connect") != "") BuildNetClient(cfg);
             else if (role == "client") BuildClientView();
             if (role == "client" && _smokeMove) _smoke = false;
@@ -106,6 +111,20 @@ public partial class Shooter : Node3D
     {
         _progression?.Dispose();
         _progression = null;
+    }
+
+    /// <summary>Written once the dedicated server is listening; the container healthcheck in deploy/docker-compose.yml tests for it (#177).</summary>
+    const string ReadyMarker = "/tmp/suchohrad-ready";
+
+    static void SetReadyMarker(bool ready)
+    {
+        try
+        {
+            if (ready) File.WriteAllText(ReadyMarker, "ready\n");
+            else if (File.Exists(ReadyMarker)) File.Delete(ReadyMarker);
+        }
+        catch (IOException e) { GD.PrintErr($"ready marker: {e.Message}"); }
+        catch (UnauthorizedAccessException e) { GD.PrintErr($"ready marker: {e.Message}"); }
     }
 
     public override void _Process(double delta)
@@ -159,6 +178,33 @@ public partial class Shooter : Node3D
         for (var i = 0; i < 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
     }
 
+    /// <summary>
+    /// Parses the held-weapon, character and vehicle models and loads the shaders a match would otherwise load on first use
+    /// (T2-18). One step each, so the loading screen keeps drawing between them.
+    /// </summary>
+    async Task WarmAssets(LoadingScreen ld)
+    {
+        var steps = new List<Action>();
+        foreach (var f in WeaponFx.ModelFiles) { var file = f; steps.Add(() => ModelLib.Warm(file)); }
+        steps.Add(() => ModelLib.Warm(CharacterView.DefaultModel));
+        foreach (var v in _data!.Vehicles.Vehicles)
+        {
+            if (v.Model == "") continue;
+            var model = v.Model;
+            steps.Add(() => CarFx.Warm(model));
+        }
+        foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, UnderwaterView.ShaderPath, DayNightCycle.SkyShaderPath })
+        {
+            var path = sh;
+            steps.Add(() => GD.Load<Shader>(path));
+        }
+        foreach (var warm in steps)
+        {
+            warm();
+            await Step(ld, "loading.world", 0.75f);
+        }
+    }
+
     async Task BeginGame(string host, int port, string name)
     {
         var ld = new LoadingScreen($"{host}:{port}");
@@ -176,6 +222,7 @@ public partial class Shooter : Node3D
                 foreach (var f in LoadMapSteps(_cfg)) await Step(ld, "loading.map", 0.15f + 0.60f * f);
                 _mapLoaded = true;
             }
+            await WarmAssets(ld);
             await Step(ld, "loading.world", 0.75f);
             if (!_worldLit) { AddLightAndSky(); _worldLit = true; }
             await Step(ld, "loading.connect", 0.85f);
@@ -251,12 +298,13 @@ public partial class Shooter : Node3D
         var dir = GamePaths.Map(cfg.Str("map", ""));
         if (!Directory.Exists(dir)) throw new InvalidOperationException($"map folder not found: {dir} (pass --map DIR or set SUCHOHRAD_MAP)");
         AddChild(_map.Root);
+        _map.CollisionOnly = cfg.Str("role", "client") == "server"; // the server never draws the map
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Suchohrad.ShooterCore.Water.Empty : Suchohrad.ShooterCore.Water.Parse(_map.WaterJson);
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
         var s = _map.Stats;
         // Lamps are solid, so the server gets the same pole colliders as the client (map 0.5.0+; none on older maps).
-        if (_map.Lamps.Count > 0) AddChild(new StreetLamps { Bases = _map.Lamps.Select(l => l.Position).ToList() });
+        if (_map.Lamps.Count > 0) AddChild(new StreetLamps { Bases = _map.Lamps.Select(l => l.Position).ToList(), CollisionOnly = _map.CollisionOnly });
         GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} load={s.LoadSeconds:F2}s");
     }
 
@@ -297,7 +345,9 @@ public partial class Shooter : Node3D
         if (server.AllowSandbox) GD.Print("server: sandbox mode allowed (--allow-sandbox, #156)");
         if (server.UnlockAll) GD.Print("server: dev mode, every unlock on (not saved to the database)");
         if (server.Sim != null) GD.Print($"server: net-sim {server.Sim}");
-        if (server.LossTest > 0 || server.Sim != null) Engine.MaxFps = 200; // delayed packets are released at frame rate
+        // The dedicated server idles at the tick rate instead of spinning a core; the test modes release delayed packets at frame rate.
+        Engine.MaxFps = server.LossTest > 0 || server.Sim != null ? 200 : 60;
+        Engine.MaxPhysicsStepsPerFrame = 2; // a slow tick drops simulation time instead of spiralling
         AddChild(server);
     }
 

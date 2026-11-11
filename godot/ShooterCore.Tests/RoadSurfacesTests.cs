@@ -85,4 +85,16 @@ public class RoadSurfacesTests
         Assert.Equal(SurfaceKind.Foliage, SurfaceClassifier.Classify(false, false, false, "foliage"));
         Assert.Equal(SurfaceKind.Road, SurfaceClassifier.Classify(false, false, false, ImpactGroups.For(true, null, 0f)));
     }
+
+    [Fact]
+    public void ALongSegmentIsFoundAcrossItsWholeLengthThroughTheGrid()
+    {
+        // one 3 km road: its box spans many grid cells, and a point far along it must still be on it
+        const string Long = """{"edges": [{"width": 8.0, "polyline": [[0, 0], [3000, 0]]}]}""";
+        var roads = RoadSurfaces.Parse(Long);
+        Assert.True(roads.Contains(2950f, 3f));
+        Assert.True(roads.Contains(17f, -3.9f));
+        Assert.False(roads.Contains(2950f, 6f));
+        Assert.False(roads.Contains(3100f, 0f));
+    }
 }

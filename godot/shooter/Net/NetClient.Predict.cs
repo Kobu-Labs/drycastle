@@ -134,14 +134,14 @@ public partial class NetClient
             // the predicted shot stops on a car: the tracer ends on its hit box, the hole rides the car's node
             var vat = ToWorld(car, G(vh.Local));
             var vnormal = car.Node.GlobalTransform.Basis * G(vh.LocalNormal);
-            ShotFx.Spawn(World, muzzle, vat, false, true, vnormal);
+            ShotFx.Spawn(Owned, muzzle, vat, false, true, vnormal);
             Sfx.Play3D("impact", vat);
-            BulletHoles.PlaceOn(World, car.Node, G(vh.Local), G(vh.LocalNormal));
+            BulletHoles.PlaceOn(Owned, car.Node, G(vh.Local), G(vh.LocalNormal));
             return;
         }
         var end = hit.Count > 0 ? hit["position"].AsVector3() : from + dir * 300f;
-        ShotFx.Spawn(World, muzzle, end, false, true, hit.Count > 0 ? hit["normal"].AsVector3() : null);
-        if (hit.Count > 0) { Sfx.Play3D("impact", end); if (hit["collider"].AsGodotObject() is CollisionObject3D { CollisionLayer: var l } && (l & CollisionLayers.WorldShots) != 0) BulletHoles.Place(World, end, hit["normal"].AsVector3()); }
+        ShotFx.Spawn(Owned, muzzle, end, false, true, hit.Count > 0 ? hit["normal"].AsVector3() : null);
+        if (hit.Count > 0) { Sfx.Play3D("impact", end); if (hit["collider"].AsGodotObject() is CollisionObject3D { CollisionLayer: var l } && (l & CollisionLayers.WorldShots) != 0) BulletHoles.Place(Owned, end, hit["normal"].AsVector3()); }
     }
 
     /// <summary>True when this server event is the echo of a shot already shown by prediction (consumes one prediction).</summary>

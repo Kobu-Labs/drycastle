@@ -44,6 +44,7 @@ public sealed class Aircraft : IWorldEntity
     readonly float _angularRate;
     readonly float _lifetime;
     readonly float _phase;
+    readonly float _bankRad;
     float _age;
 
     /// <param name="centreOnGround">Circle centre; its Y is the ground under it. The aircraft flies <see cref="AircraftKindDef.AltitudeM"/> above.</param>
@@ -60,6 +61,7 @@ public sealed class Aircraft : IWorldEntity
         _direction = clockwise ? -1f : 1f;
         _angularRate = def.SpeedMps / def.RadiusM;
         _lifetime = lifetimeS ?? def.LifetimeS;
+        _bankRad = ComputeBank(def, _direction);
         Owner = owner;
     }
 
@@ -84,42 +86,35 @@ public sealed class Aircraft : IWorldEntity
     float Angle => _phase + _direction * _angularRate * _age;
 
     /// <summary>Current position: on the circle, <see cref="AircraftKindDef.AltitudeM"/> above the ground under the centre.</summary>
-    public Vector3 Position
-    {
-        get
-        {
-            var a = Angle;
-            return new Vector3(_centre.X + _def.RadiusM * MathF.Cos(a), _centre.Y + _def.AltitudeM, _centre.Z + _def.RadiusM * MathF.Sin(a));
-        }
-    }
+    public Vector3 Position => PositionAt(Angle);
 
     /// <summary>Heading in the engine's yaw convention (forward is -Z at yaw 0, as <see cref="HitMath.Forward"/>): along the circle.</summary>
-    public float YawRad
-    {
-        get
-        {
-            var a = Angle;
-            // tangent of the circle in the direction of travel
-            var dx = -_direction * MathF.Sin(a);
-            var dz = _direction * MathF.Cos(a);
-            return MathF.Atan2(-dx, -dz);
-        }
-    }
+    public float YawRad => YawAt(Angle);
 
     /// <summary>
     /// Bank toward the centre of the turn: atan(v^2 / (r g)), clamped to the kind's maximum. Positive is the right wing down.
-    /// Only the model uses it (it is on the wire for the client).
+    /// Only the model uses it (it is on the wire for the client). Fixed for the aircraft's life, so it is computed once.
     /// </summary>
-    public float BankRad
+    public float BankRad => _bankRad;
+
+    static float ComputeBank(AircraftKindDef def, float direction)
     {
-        get
-        {
-            var v = _def.SpeedMps;
-            var raw = MathF.Atan(v * v / (_def.RadiusM * Gravity));
-            var max = _def.MaxBankDeg * MathF.PI / 180f;
-            // the centre lies to the right of a clockwise traveller (seen from above)
-            return _direction * -MathF.Min(raw, max);
-        }
+        var v = def.SpeedMps;
+        var raw = MathF.Atan(v * v / (def.RadiusM * Gravity));
+        var max = def.MaxBankDeg * MathF.PI / 180f;
+        // the centre lies to the right of a clockwise traveller (seen from above)
+        return direction * -MathF.Min(raw, max);
+    }
+
+    Vector3 PositionAt(float a) =>
+        new(_centre.X + _def.RadiusM * MathF.Cos(a), _centre.Y + _def.AltitudeM, _centre.Z + _def.RadiusM * MathF.Sin(a));
+
+    float YawAt(float a)
+    {
+        // tangent of the circle in the direction of travel
+        var dx = -_direction * MathF.Sin(a);
+        var dz = _direction * MathF.Cos(a);
+        return MathF.Atan2(-dx, -dz);
     }
 
     public void Tick(float dt)
@@ -133,7 +128,7 @@ public sealed class Aircraft : IWorldEntity
 
     public WorldState Serialize()
     {
-        var p = Position;
-        return WorldState.Make(p, YawRad, 0, Owner, AircraftState.Pack(_kind, BankRad), 0);
+        var a = Angle; // one angle for position and yaw
+        return WorldState.Make(PositionAt(a), YawAt(a), 0, Owner, AircraftState.Pack(_kind, _bankRad), 0);
     }
 }

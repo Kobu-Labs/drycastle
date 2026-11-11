@@ -11,7 +11,7 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class WaterSurfaces : Node3D
 {
-    const string ShaderPath = "res://shaders/water_surface.gdshader";
+    public const string ShaderPath = "res://shaders/water_surface.gdshader";
 
     readonly ShaderMaterial _mat = new();
 

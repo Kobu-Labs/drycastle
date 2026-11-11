@@ -12,7 +12,7 @@ namespace Suchohrad.Shooter;
 public sealed partial class CharacterView : Node3D
 {
     /// <summary>The model worn until a look arrives: the first body of camo.json (the default look).</summary>
-    const string DefaultModel = "animated-characters/soldier-male.glb";
+    public const string DefaultModel = "animated-characters/soldier-male.glb";
     /// <summary>The model is 3.147 units tall as authored (measured, see <see cref="PlayerHitBox"/>); scaled to the 1.8 m stand height so the drawn body matches the hit volume.</summary>
     const float Scale = PlayerHitBox.DrawScale;
     AnimationPlayer? _anim;

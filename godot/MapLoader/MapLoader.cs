@@ -38,6 +38,13 @@ public sealed partial class MapLoader
     /// <summary>Rule values (fence and tree defaults) from the manifest (map 0.4.0+); null for older maps.</summary>
     public EditDefaults? EditDefaults { get; private set; }
     public LoadStats Stats { get; } = new();
+    /// <summary>
+    /// Counts changes to the physics of the map (placed objects, parcel and props swaps, regions). A cached ray result
+    /// is valid only for the version it was cast in.
+    /// </summary>
+    public int GeometryVersion { get; private set; }
+    /// <summary>Records a change of the map's physics; called by every method that adds or removes colliders.</summary>
+    void GeometryChanged() => GeometryVersion++;
     /// <summary>Per-parcel props visuals and colliders by parcel ID (for the runtime props swap).</summary>
     public IReadOnlyDictionary<string, MeshInstance3D> PropsVisuals => _propsVisuals;
     public IReadOnlyDictionary<string, List<CollisionShape3D>> PropsShapes => _propsShapes;
@@ -48,6 +55,13 @@ public sealed partial class MapLoader
 
     /// <summary>The parcel containing the ground point (Godot x, z); null when none.</summary>
     public ParcelInfo? ParcelAt(float x, float z) => ParcelIndex.At(x, z);
+
+    /// <summary>
+    /// Headless (server) load: only the collision meshes and the data the server reads are kept. Visual nodes are freed
+    /// as they load (no materials, no triangle count, no region or props visuals), and placed objects get no model.
+    /// Set before <see cref="LoadSteps"/>. The bodies of the <c>_collision</c> nodes stay, they are their children.
+    /// </summary>
+    public bool CollisionOnly { get; set; }
 
     /// <summary>Load a map folder. The path is an OS path, not res://. Throws on failure.</summary>
     public void Load(string mapDir)
@@ -259,6 +273,13 @@ public sealed partial class MapLoader
                 BuildCollider(mi, name);
                 continue;
             }
+            if (CollisionOnly)
+            {
+                // A visual freed before its children are visited (an earlier, freed ancestor) is not valid any more.
+                // A visual with a collision mesh under it is kept: freeing it would take the collider with it.
+                if (GodotObject.IsInstanceValid(mi) && !HasCollisionDescendant(mi)) mi.Free();
+                continue;
+            }
             FixMaterials(mi);
             Stats.Triangles += TriangleCount(mi.Mesh);
             if (name.StartsWith("parcel_") && name.EndsWith("_props"))
@@ -287,6 +308,9 @@ public sealed partial class MapLoader
         }
     }
 
+    static bool HasCollisionDescendant(Node n)
+        => Descendants(n).Any(d => d is MeshInstance3D m && m.Name.ToString().EndsWith("_collision"));
+
     static int TriangleCount(Mesh m)
     {
         var n = 0;
@@ -299,10 +323,17 @@ public sealed partial class MapLoader
         return n;
     }
 
+    /// <summary>
+    /// The one flat colour material every map mesh shares (vertex colours drive albedo, fully rough, no specular). Shared rather than
+    /// built per node: the map has about a thousand visual nodes with identical parameters (#171, T2-20). Nothing mutates a chunk
+    /// node's MaterialOverride, so one instance is safe.
+    /// </summary>
+    static StandardMaterial3D? _flatMaterial;
+
     /// <summary>Flat colour look: vertex colours drive albedo, fully rough, no specular.</summary>
     static void FixMaterials(MeshInstance3D mi)
     {
-        mi.MaterialOverride = new StandardMaterial3D
+        mi.MaterialOverride = _flatMaterial ??= new StandardMaterial3D
         {
             VertexColorUseAsAlbedo = true,
             VertexColorIsSrgb = true,
@@ -455,6 +486,7 @@ public sealed partial class MapLoader
         if (!_parcels.TryGetValue(parcelId, out var info))
             throw new KeyNotFoundException($"unknown parcel {parcelId}");
         RestoreParcel(parcelId);
+        GeometryChanged();
         if (_visuals.TryGetValue(parcelId, out var vis)) vis.Visible = false;
         if (_shapes.TryGetValue(parcelId, out var shapes))
             foreach (var s in shapes) s.SetDeferred(CollisionShape3D.PropertyName.Disabled, true);
@@ -472,6 +504,7 @@ public sealed partial class MapLoader
     /// <summary>Undo ReplaceParcel: free the replacement, show the visual, re-enable collision.</summary>
     public void RestoreParcel(string parcelId)
     {
+        GeometryChanged();
         if (_replacements.Remove(parcelId, out var inst)) inst.QueueFree();
         if (_visuals.TryGetValue(parcelId, out var vis)) vis.Visible = true;
         if (_shapes.TryGetValue(parcelId, out var shapes))

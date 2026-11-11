@@ -18,6 +18,13 @@ public static class ModelLib
         return t?.Duplicate() as Node3D;
     }
 
+    /// <summary>Parses the model into the cache without copying it, so its first use in a match costs nothing (#170, T2-18).</summary>
+    public static void Warm(string relPath)
+    {
+        if (!ShotFx.Enabled || Cache.ContainsKey(relPath)) return;
+        Cache[relPath] = Load(relPath);
+    }
+
     /// <summary>Absolute path of a file in the asset library (assets/, or SUCHOHRAD_ASSETS).</summary>
     public static string AssetPath(string relPath)
     {

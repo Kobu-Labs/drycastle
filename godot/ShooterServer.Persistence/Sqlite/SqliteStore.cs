@@ -30,6 +30,7 @@ public sealed class SqliteProgressionStore : IProgressionStore
     /// </summary>
     public static SqliteProgressionStore Open(string path, Action<string> log, LevelCurve curve) => new(SqliteWorker.Open(path, log), curve);
 
+    public int QueueDepth => _db.QueueDepth;
     public void Dispose() => _db.Dispose();
 
     static string Stamp(DateTime utc) => utc.ToString("O", CultureInfo.InvariantCulture);
@@ -63,7 +64,7 @@ public sealed class SqliteProgressionStore : IProgressionStore
         public Task<Profile> GetOrCreateAsync(string token)
         {
             if (string.IsNullOrWhiteSpace(token)) throw new ArgumentException("token is required", nameof(token));
-            return db.Read(c =>
+            return db.Mutate(c => // writes (a new profile), so it runs on the write connection behind the queued writes
             {
                 using var tx = c.BeginTransaction();
                 var now = Stamp(DateTime.UtcNow);

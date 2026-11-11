@@ -29,6 +29,9 @@ public partial class StreetLamps : Node3D
     /// <summary>Foot of each pole on the ground (Godot axes, Y up).</summary>
     public IReadOnlyList<Vector3> Bases { get; init; } = Array.Empty<Vector3>();
 
+    /// <summary>Headless server: the pole colliders only, no visuals, light pool or per-frame work.</summary>
+    public bool CollisionOnly { get; init; }
+
     Vector3[] _heads = Array.Empty<Vector3>();
     Num.Vector3[] _headsNum = Array.Empty<Num.Vector3>();
     readonly OmniLight3D[] _lights = new OmniLight3D[PoolSize];
@@ -42,6 +45,7 @@ public partial class StreetLamps : Node3D
     public override void _Ready()
     {
         if (Bases.Count == 0) { SetProcess(false); return; }
+        if (CollisionOnly) { SetProcess(false); BuildCollision(); return; }
         _heads = Bases.Select(b => b + Vector3.Up * (PoleHeight - 0.04f)).ToArray();
         _headsNum = _heads.Select(h => new Num.Vector3(h.X, h.Y, h.Z)).ToArray();
         BuildVisuals();
@@ -49,6 +53,7 @@ public partial class StreetLamps : Node3D
         BuildPool();
         Array.Fill(_slots, -1);
         Array.Fill(_shown, -2);
+        if (DisplayServer.GetName() == "headless") SetProcess(false); // the light pool is visual only; the headless server keeps the collision
     }
 
     public override void _Process(double delta)

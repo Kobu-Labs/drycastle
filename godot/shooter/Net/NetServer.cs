@@ -38,7 +38,10 @@ public partial class NetServer : Node
         public PerkModifiers Perks = PerkModifiers.None;
         /// <summary>XP granted to this player since the round began (the end-of-round summary).</summary>
         public readonly List<XpGrant> RoundXp = new();
-        public readonly SnapshotEncoder Enc = new();
+        /// <summary>Entity snapshots for this client, against the states the server kept (set in Join).</summary>
+        public SnapshotEncoder Enc = null!;
+        /// <summary>The newest snapshot tick this client has committed (from its inputs), the baseline for its deltas; NoTick until then.</summary>
+        public uint SnapAck = Wire.NoTick;
         public readonly WorldSnapshotEncoder WEnc = new();
         public Vector3 Start;
         public float MaxMoved;
@@ -49,6 +52,9 @@ public partial class NetServer : Node
         public float Throttle, Steer;
         public PlayerProfile? Profile;
         public ProfileLoad? Loading;
+        public int PacketsThisTick;
+        public double SaveTokens = 10;
+        public long BytesOut;
     }
 
     public Node3D World = null!;
@@ -92,6 +98,10 @@ public partial class NetServer : Node
     readonly Dictionary<string, float> _movedByName = new();
     readonly List<NetInput> _scratch = new();
     readonly Dictionary<ushort, Client> _byId = new();
+    /// <summary>The entity states of the recent ticks, shared by every client's encoder (the baselines of their deltas).</summary>
+    readonly SnapshotHistory _sentStates = new();
+    Godot.Collections.Array<Rid> _playerRids = new();
+    bool _playerRidsDirty = true;
     MatchSim _match = null!;
     // match smoke bookkeeping
     int _kills, _roundsEnded, _restarts, _ignoredHits, _earlyProtectionEnds;
@@ -115,7 +125,8 @@ public partial class NetServer : Node
 
     public override void _Ready()
     {
-        var err = _host.CreateHostBound("*", Port, 32, Wire.Channels, 0, 0);
+        // one peer slot more than the players allowed: the connection past the limit is seen and told the server is full (T3-020)
+        var err = _host.CreateHostBound("*", Port, MaxPeers + 1, Wire.Channels, 0, 0);
         if (err != Error.Ok)
         {
             GD.PrintErr($"server: cannot listen on port {Port}: {err}");
@@ -135,6 +146,7 @@ public partial class NetServer : Node
         InitAircraft();
         BuildCarePackages();
         BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
+        WarmSurfaceIndexes(); // roads.json and the tree grid, so no impact pays for them on a tick (T3-003, T3-004)
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");
@@ -150,6 +162,7 @@ public partial class NetServer : Node
     public override void _PhysicsProcess(double delta)
     {
         var tickStartUs = Time.GetTicksUsec();
+        var catchUp = CatchUpTick(tickStartUs);
         if (Sim != null && Sim.Pump()) _host.Flush();
         _tick++;
         if (!_spawnsChecked)
@@ -158,6 +171,7 @@ public partial class NetServer : Node
             return; // not accepting connections until the spawn list is validated
         }
         _elapsed += delta;
+        foreach (var cl in _clients.Values) cl.PacketsThisTick = 0;
         Poll();
         CompleteProfileLoads();
         _match.Update();
@@ -170,7 +184,9 @@ public partial class NetServer : Node
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
-        SendSnapshots();
+        if (catchUp && LossTest == 0) _skippedSnapshots++; // the next regular tick sends the current state
+        else SendSnapshots();
+        TickTelemetry(tickStartUs, delta);
         LossTickEnd(tickStartUs);
         if (_clients.Count > _peakPlayers) _peakPlayers = _clients.Count;
         foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved;
@@ -290,10 +306,18 @@ public partial class NetServer : Node
             var peer = (ENetPacketPeer)r[1].AsGodotObject();
             switch (ev)
             {
-                case ENetConnection.EventType.Connect: _clients[peer] = new Client { Peer = peer }; break;
+                case ENetConnection.EventType.Connect:
+                    if (_clients.Count >= MaxPeers) Reject(new Client { Peer = peer }, $"The server is full ({MaxPeers} players). Try again later.");
+                    else _clients[peer] = new Client { Peer = peer };
+                    break;
                 case ENetConnection.EventType.Disconnect: Drop(peer); break;
                 case ENetConnection.EventType.Receive:
-                    while (peer.GetAvailablePacketCount() > 0) OnPacket(peer, peer.GetPacket());
+                    while (peer.GetAvailablePacketCount() > 0)
+                    {
+                        var pkt = peer.GetPacket();
+                        if (_clients.TryGetValue(peer, out var rc) && ++rc.PacketsThisTick > PacketsPerTick) { _droppedPackets++; continue; }
+                        OnPacket(peer, pkt);
+                    }
                     break;
             }
         }
@@ -316,7 +340,8 @@ public partial class NetServer : Node
         else if (c.Joined && d[0] == Wire.TInput)
         {
             _scratch.Clear();
-            if (!Wire.TryDecodeInputs(d, _scratch)) return;
+            if (!Wire.TryDecodeInputs(d, _scratch, out var snapTick)) return;
+            if (snapTick != Wire.NoTick && (c.SnapAck == Wire.NoTick || snapTick > c.SnapAck)) c.SnapAck = snapTick; // an older input's ack arriving late changes nothing
             foreach (var i in _scratch)
             {
                 // redundant copies of already-seen inputs are skipped
@@ -355,6 +380,8 @@ public partial class NetServer : Node
         c.Joined = true;
         foreach (var car in _cars) car.AddCollisionExceptionWith(c.Body);
         _byId[c.Id] = c;
+        _playerRidsDirty = true;
+        c.Enc = new SnapshotEncoder(_sentStates);
         SendProfile(c);
         SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick,
@@ -373,14 +400,19 @@ public partial class NetServer : Node
         GD.Print($"server: {c.Name} joined as #{c.Id} ({_clients.Count(x => x.Value.Joined)} players)");
     }
 
+    /// <summary>Players the server takes; the ENet host has one more slot, so a connection past this is told the server is full.</summary>
+    public const int MaxPeers = 32;
+
     void Drop(ENetPacketPeer peer)
     {
         if (!_clients.Remove(peer, out var c)) return;
         if (!c.Joined) return;
         StreakLeave(c.Id);
         if (c.Car != null) { c.Car.Seat.Exit(c.Id); c.Car = null; }
+        foreach (var car in _cars) car.RemoveCollisionExceptionWith(c.Body); // the exception outlives the freed body otherwise (T3-014)
         c.Body.QueueFree();
         _byId.Remove(c.Id);
+        _playerRidsDirty = true;
         foreach (var o in _clients.Values.Where(o => o.Joined)) Send(o, new LeaveMsg(c.Id));
         _match.RemovePlayer(c.Id);
         GD.Print($"server: {c.Name} #{c.Id} left");
@@ -388,6 +420,7 @@ public partial class NetServer : Node
 
     void Tx(ENetPacketPeer peer, int chan, byte[] data, int flags)
     {
+        if (_clients.TryGetValue(peer, out var c)) c.BytesOut += data.Length;
         if (Sim != null) Sim.Send(peer, chan, data, flags); else peer.Send(chan, data, flags);
     }
 
@@ -396,8 +429,10 @@ public partial class NetServer : Node
     /// <summary>Broadcast an event envelope to every joined client (shot, hit, kill, ... from later issues).</summary>
     public void BroadcastEvent(EventKind kind, byte[] payload)
     {
-        var m = new EventMsg((byte)kind, payload);
-        foreach (var c in _clients.Values.Where(c => c.Joined)) Send(c, m);
+        ReliableMsg m = new EventMsg((byte)kind, payload);
+        var bytes = Wire.Encode(m); // encoded once: every recipient gets the same bytes (Tx copies them into the packet)
+        foreach (var c in _clients.Values)
+            if (c.Joined) Tx(c.Peer, Wire.ChanReliable, bytes, (int)ENetPacketPeer.FlagReliable);
     }
 
     void OnDebug(Client c, byte[] payload)
@@ -545,9 +580,26 @@ public partial class NetServer : Node
 
     static NVec3 N(Vector3 v) => new(v.X, v.Y, v.Z);
 
-    List<HitTarget> LiveTargets() =>
-        _byId.Values.Where(o => _match.Get(o.Id)?.Life == PlayerLife.Alive)
-            .Select(o => new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw)).Concat(TargetHitTargets()).ToList();
+    List<HitTarget> LiveTargets()
+    {
+        // A fresh list each call on purpose: callers nest (an explosion can detonate a car, which explodes again) and each
+        // holds its list while it iterates, so one shared buffer would be cleared under them.
+        var list = new List<HitTarget>(_byId.Count);
+        foreach (var o in _byId.Values)
+            if (_match.Get(o.Id)?.Life == PlayerLife.Alive) list.Add(new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw));
+        list.AddRange(TargetHitTargets());
+        return list;
+    }
+
+    /// <summary>The player bodies' RIDs for ray exclusion, rebuilt only after a join or a drop (T2-02) instead of per ray.</summary>
+    Godot.Collections.Array<Rid> PlayerRids()
+    {
+        if (!_playerRidsDirty) return _playerRids;
+        _playerRids = new Godot.Collections.Array<Rid>();
+        foreach (var o in _byId.Values) _playerRids.Add(o.Body.GetRid());
+        _playerRidsDirty = false;
+        return _playerRids;
+    }
 
     /// <summary>Distance from <paramref name="from"/> along <paramref name="dir"/> to the first world collider (player bodies excluded), or infinity.</summary>
     float WorldDistance(Vector3 from, Vector3 dir, float max) => WorldHit(from, dir, max, out _);
@@ -558,9 +610,7 @@ public partial class NetServer : Node
         car = null;
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
         q.CollisionMask = CollisionLayers.Bullets; // world (1), vehicles (2) and shot-only cover (tree crowns): bullets and rockets stop on them
-        var ex = new Godot.Collections.Array<Rid>();
-        foreach (var o in _byId.Values) ex.Add(o.Body.GetRid());
-        q.Exclude = ex;
+        q.Exclude = PlayerRids();
         var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         if (r.Count == 0) return float.PositiveInfinity;
         car = r["collider"].As<GodotObject>() as ServerCar;
@@ -640,7 +690,6 @@ public partial class NetServer : Node
         else if (attacker != null) Send(attacker, msg);
         if (_byId.TryGetValue(victim, out var v) && v != attacker) Send(v, msg);
         if (kill && victim != attackerId && attacker != null) { attacker.W.RefillReserves(); _refills++; }
-        GD.Print($"server: hit #{attackerId} -> #{victim} {damage:F0}{(head ? " head" : "")}{(backstab ? " backstab" : "")}{(kill ? " KILL" : "")}");
         return r;
     }
 
@@ -719,7 +768,7 @@ public partial class NetServer : Node
         foreach (var c in _clients.Values)
         {
             if (!c.Joined) continue;
-            foreach (var pkt in c.Enc.Encode(_tick, c.Ack, ents)) Tx(c.Peer, Wire.ChanData, pkt, 0);
+            foreach (var pkt in c.Enc.Encode(_tick, c.Ack, c.SnapAck, ents)) Tx(c.Peer, Wire.ChanData, pkt, 0);
         }
         var world = _match.Entities.Snapshot();
         foreach (var c in _clients.Values)

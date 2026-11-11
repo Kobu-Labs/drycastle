@@ -31,7 +31,7 @@ public partial class NetClient
                 GD.Print($"client {PlayerName}: MOAB armed by {owner}, {m.Seconds:F0} s");
                 break;
             case MoabPhase.Detonated:
-                RocketFx.Explode(World, at, MoabBlastRadius);
+                RocketFx.Explode(Owned, at, MoabBlastRadius);
                 if (Sfx.Enabled) Sfx.Play3D("explosion.vehicle", at);
                 if (!GameSettings.Current.ReduceMotion) ShakeFor(at, MoabBlastRadius);
                 _moabBanner.Blast(owner);

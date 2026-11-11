@@ -206,13 +206,90 @@ public static class TreeColliders
     {
         foreach (var t in trees)
         {
-            var reach = m.CanopyM * t.Scale * 1.6f + 0.5f; // no part of this tree lies further out
+            var reach = Reach(m, t);
             if (MathF.Abs(p.X - t.X) > reach || MathF.Abs(p.Y - t.Y) > reach) continue;
             foreach (var part in Parts(t, m))
                 if (part.Contains(p, tolerance)) return part.Group;
         }
         return null;
     }
+
+    /// <summary>No part of this tree lies further out than this, metres from its trunk.</summary>
+    static float Reach(TreeModel m, TreeInstance t) => m.CanopyM * t.Scale * 1.6f + 0.5f;
+
+    /// <summary>
+    /// The trees bucketed into a uniform grid (ticket perf T3-003), so a surface lookup reads the few trees near a point
+    /// instead of all 12,000. Same answer as <see cref="GroupAt"/>, including which tree wins where two overlap (the earlier one).
+    /// Built once at load.
+    /// </summary>
+    public sealed class Index
+    {
+        /// <summary>Grid cell edge, metres. Larger than a tree's reach, so a tree touches at most a few cells.</summary>
+        public const float CellM = 32f;
+
+        readonly IReadOnlyList<TreeInstance> _trees;
+        readonly TreeModel _model;
+        readonly Dictionary<(int, int), List<int>> _cells = new();
+
+        public Index(IReadOnlyList<TreeInstance> trees, TreeModel m)
+        {
+            _trees = trees;
+            _model = m;
+            for (var i = 0; i < trees.Count; i++)
+            {
+                var t = trees[i];
+                var r = Reach(m, t);
+                for (var cx = Cell(t.X - r); cx <= Cell(t.X + r); cx++)
+                    for (var cy = Cell(t.Y - r); cy <= Cell(t.Y + r); cy++)
+                    {
+                        if (!_cells.TryGetValue((cx, cy), out var list)) _cells[(cx, cy)] = list = new List<int>();
+                        list.Add(i);
+                    }
+            }
+        }
+
+        static int Cell(float v) => (int)MathF.Floor(v / CellM);
+
+        /// <summary><see cref="TreeColliders.GroupAt"/>, looking only at the trees registered in the point's cell.</summary>
+        public string? GroupAt(Vector3 p, float tolerance = 0.05f)
+        {
+            if (!_cells.TryGetValue((Cell(p.X), Cell(p.Y)), out var candidates)) return null;
+            string? group = null;
+            var best = int.MaxValue;
+            foreach (var i in candidates)
+            {
+                if (i >= best) continue; // the earliest tree in the list wins, as in GroupAt
+                var t = _trees[i];
+                var reach = Reach(_model, t);
+                if (MathF.Abs(p.X - t.X) > reach || MathF.Abs(p.Y - t.Y) > reach) continue;
+                foreach (var part in Parts(t, _model))
+                    if (part.Contains(p, tolerance)) { group = part.Group; best = i; break; }
+            }
+            return group;
+        }
+    }
+}
+
+/// <summary>
+/// Which solids can share one Godot shape resource: the shape's size (box) or its base half-size and height (pyramid),
+/// quantised to 1 mm. The position and yaw are the solid's own transform, so they do not take part. Trees are scaled by a
+/// few hundred distinct values, so the trunks and crowns of the map share a few thousand shapes instead of one each.
+/// </summary>
+public static class SolidShapeKeys
+{
+    /// <summary>Kind 0 is a box (A = width, B = height, C = depth); kind 1 a pyramid (A = base half-size, B = height, C unused). Values in millimetres.</summary>
+    public readonly record struct Key(byte Kind, long A, long B, long C);
+
+    public static Key Of(SolidPart p)
+    {
+        var height = Quantise(p.Z1 - p.Z0);
+        return p.Shape == PartShape.Pyramid
+            ? new Key(1, Quantise(p.HalfU), height, 0)
+            : new Key(0, Quantise(2 * p.HalfU), height, Quantise(2 * p.HalfV));
+    }
+
+    /// <summary>Metres to whole millimetres, rounded to nearest.</summary>
+    public static long Quantise(float metres) => (long)MathF.Round(metres * 1000f);
 }
 
 /// <summary>

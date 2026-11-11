@@ -12,7 +12,7 @@ public partial class DayNightCycle : Node3D
 {
     /// <summary>Azimuth of the sun's arc (degrees, Y rotation). The moon is on the opposite side.</summary>
     public const float SunAzimuthDeg = 30f;
-    const string SkyShaderPath = "res://shaders/sky_daynight.gdshader";
+    public const string SkyShaderPath = "res://shaders/sky_daynight.gdshader";
 
     /// <summary>The live cycle in the scene (null before it enters the tree or after it leaves).</summary>
     public static DayNightCycle? Current { get; private set; }

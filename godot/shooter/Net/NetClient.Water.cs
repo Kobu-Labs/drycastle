@@ -14,6 +14,7 @@ public partial class NetClient
     bool _meInWater;
     readonly Dictionary<ushort, bool> _remoteInWater = new();
     readonly Dictionary<ushort, bool> _rocketInWater = new();
+    readonly List<ushort> _staleWater = new(); // reused each frame to drop the swimmers who left (#173, T3-033)
 
     void RenderWater()
     {
@@ -36,7 +37,12 @@ public partial class NetClient
             // swimming (deep enough to swim): lowered into the water, leaned forward, the slow walk; wading stays upright
             r.View?.SetSwim(depth >= WaterConsts.SwimDepth);
         }
-        foreach (var id in _remoteInWater.Keys.Where(k => !_remotes.ContainsKey(k)).ToList()) _remoteInWater.Remove(id);
+        if (_remoteInWater.Count > 0)
+        {
+            _staleWater.Clear();
+            foreach (var k in _remoteInWater.Keys) if (!_remotes.ContainsKey(k)) _staleWater.Add(k);
+            foreach (var k in _staleWater) _remoteInWater.Remove(k);
+        }
         foreach (var (id, rk) in _rockets)
         {
             if (rk.Node == null || !GodotObject.IsInstanceValid(rk.Node)) continue;
@@ -54,7 +60,7 @@ public partial class NetClient
     {
         var surface = Water.SurfaceY(p.X, p.Z);
         if (float.IsNaN(surface)) return;
-        WaterFx.Splash(World, new Vector3(p.X, surface, p.Z), size);
+        WaterFx.Splash(Owned, new Vector3(p.X, surface, p.Z), size);
     }
 
     /// <summary>A bullet that crosses a lake surface on its way to the target: a small splash where it meets the water.</summary>
@@ -62,6 +68,6 @@ public partial class NetClient
     {
         if (Water.Bodies.Count == 0) return;
         if (UnderwaterFx.FirstSurfaceCrossing(Water, new NVec3(from.X, from.Y, from.Z), new NVec3(to.X, to.Y, to.Z), out var hit))
-            WaterFx.Splash(World, new Vector3(hit.X, hit.Y, hit.Z), 0.4f);
+            WaterFx.Splash(Owned, new Vector3(hit.X, hit.Y, hit.Z), 0.4f);
     }
 }

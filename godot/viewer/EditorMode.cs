@@ -49,7 +49,17 @@ public partial class EditorMode : Node
     readonly Dictionary<string, MeshInstance3D> _outlines = new();
     readonly Dictionary<string, int> _segmentCounts = new();
     bool _outlinesDirty = true;
+    // which outline kinds need a rebuild: a hover change does not regroup the groups or redraw the selection
+    bool _hoverOutlineDirty = true, _selOutlineDirty = true, _groupOutlineDirty = true;
     bool _panelDirty = true;
+    // members of each property group and its outer perimeter; both are rebuilt in ReloadGroups only
+    readonly Dictionary<string, List<ParcelInfo>> _groupMembers = new();
+    readonly Dictionary<string, List<(Vector2, Vector2)>> _perimeters = new();
+    // the last ground ray: reused within the same process frame while the map's physics has not changed
+    ulong _rayFrame = ulong.MaxValue;
+    int _rayVersion = -1;
+    Vector3 _rayOrigin, _rayDir, _rayPoint;
+    bool _rayHit;
     SortedDictionary<string, object?>? _disk;
 
     float _yaw, _pitch;
@@ -113,7 +123,8 @@ public partial class EditorMode : Node
             _savedCam = null;
             FlyCam.MakeCurrent();
             Input.MouseMode = Input.MouseModeEnum.Visible;
-            _outlinesDirty = _panelDirty = true;
+            MarkAllOutlines();
+            _panelDirty = true;
             ReloadGroups();
         }
         else
@@ -192,6 +203,20 @@ public partial class EditorMode : Node
     /// </summary>
     public bool RayToGround(Vector3 origin, Vector3 dir, out Vector3 point)
     {
+        // hover, ghost, gate drag and the region tool cast the same mouse ray several times a frame
+        var frame = Engine.GetProcessFrames();
+        if (frame == _rayFrame && _rayVersion == Map.GeometryVersion && origin == _rayOrigin && dir == _rayDir)
+        {
+            point = _rayPoint;
+            return _rayHit;
+        }
+        var hit = CastGroundRay(origin, dir, out point);
+        (_rayFrame, _rayVersion, _rayOrigin, _rayDir, _rayPoint, _rayHit) = (frame, Map.GeometryVersion, origin, dir, point, hit);
+        return hit;
+    }
+
+    bool CastGroundRay(Vector3 origin, Vector3 dir, out Vector3 point)
+    {
         var q = PhysicsRayQueryParameters3D.Create(origin, origin + dir * 3000f);
         q.CollideWithBodies = true;
         q.Exclude = new Godot.Collections.Array<Rid> { Player.GetRid() };
@@ -242,7 +267,8 @@ public partial class EditorMode : Node
             foreach (var m in unit) Selection.Add(m);
         }
         if (string.Join(",", Selection) == before) return;
-        _outlinesDirty = _panelDirty = true;
+        // the hover outline depends on the selection too (a selected parcel is not drawn as hover)
+        _selOutlineDirty = _hoverOutlineDirty = _outlinesDirty = _panelDirty = true;
         SelectionChanged?.Invoke();
     }
 
@@ -251,7 +277,16 @@ public partial class EditorMode : Node
     {
         var g = Group(parcelId);
         if (g == null) return new List<string> { parcelId };
-        return Map.Parcels.Values.Where(p => p.Group == g).Select(p => p.Id).OrderBy(x => x, StringComparer.Ordinal).ToList();
+        return Members(g).Select(p => p.Id).OrderBy(x => x, StringComparer.Ordinal).ToList();
+    }
+
+    IReadOnlyList<ParcelInfo> Members(string group) => _groupMembers.TryGetValue(group, out var l) ? l : Array.Empty<ParcelInfo>();
+
+    /// <summary>Outer perimeter of a property group, computed once until the groups are reloaded.</summary>
+    List<(Vector2, Vector2)> Perimeter(string group)
+    {
+        if (!_perimeters.TryGetValue(group, out var segs)) _perimeters[group] = segs = GroupPerimeter(Members(group));
+        return segs;
     }
 
     // ---- groups ----
@@ -376,7 +411,16 @@ public partial class EditorMode : Node
         try { _disk = EditsFile.Load(EditsPath); member = EditsFile.MembershipOf(_disk); }
         catch (Exception) { return; } // half-written or invalid: keep what we have
         foreach (var p in Map.Parcels.Values) p.Group = member.GetValueOrDefault(p.Id);
-        _outlinesDirty = _panelDirty = true;
+        _groupMembers.Clear();
+        _perimeters.Clear();
+        foreach (var p in Map.Parcels.Values)
+            if (p.Group is { } g)
+            {
+                if (!_groupMembers.TryGetValue(g, out var l)) _groupMembers[g] = l = new();
+                l.Add(p);
+            }
+        MarkAllOutlines();
+        _panelDirty = true;
     }
 
     // ---- messages ----
@@ -536,7 +580,7 @@ public partial class EditorMode : Node
     public void SetHover(string? id)
     {
         _hoverForced = id != null;
-        if (id != HoverId) { HoverId = id; _outlinesDirty = true; }
+        if (id != HoverId) { HoverId = id; MarkHoverOutline(); }
     }
 
     void UpdateHover()
@@ -554,7 +598,7 @@ public partial class EditorMode : Node
         if (id != HoverId)
         {
             HoverId = id;
-            _outlinesDirty = true;
+            MarkHoverOutline();
         }
         if (id == null) { _hoverLabel.Visible = false; return; }
         var info = Map.Parcels[id];
@@ -570,14 +614,26 @@ public partial class EditorMode : Node
     public int SegmentCount(string kind) => _segmentCounts.GetValueOrDefault(kind);
     public MeshInstance3D? OutlineNode(string kind) => _outlines.GetValueOrDefault(kind);
 
-    /// <summary>Rebuild the outline meshes now (normally done on the next frame after a change).</summary>
+    void MarkAllOutlines() => _outlinesDirty = _hoverOutlineDirty = _selOutlineDirty = _groupOutlineDirty = true;
+
+    void MarkHoverOutline() { _hoverOutlineDirty = true; _outlinesDirty = true; }
+
+    /// <summary>Rebuild the outline meshes now (normally done on the next frame after a change). Only the kinds that changed are rebuilt.</summary>
     public void RebuildOutlines()
     {
         _outlinesDirty = false;
-        var selSegs = UnitSegments(Selection.Where(Map.Parcels.ContainsKey));
-        var hoverSegs = HoverId != null && !Selection.Contains(HoverId) ? UnitSegments(new[] { HoverId }) : new();
-        SetOutline(OutlineHover, hoverSegs, new Color(1f, 1f, 1f, 0.55f), 0.25f, 0.30f);
-        SetOutline(OutlineSelected, selSegs, new Color(1f, 0.92f, 0.1f), 0.29f, 0.55f);
+        if (_hoverOutlineDirty)
+        {
+            _hoverOutlineDirty = false;
+            var hoverSegs = HoverId != null && !Selection.Contains(HoverId) ? UnitSegments(new[] { HoverId }) : new();
+            SetOutline(OutlineHover, hoverSegs, new Color(1f, 1f, 1f, 0.55f), 0.25f, 0.30f);
+        }
+        if (_selOutlineDirty)
+        {
+            _selOutlineDirty = false;
+            var selSegs = UnitSegments(Selection.Where(Map.Parcels.ContainsKey));
+            SetOutline(OutlineSelected, selSegs, new Color(1f, 0.92f, 0.1f), 0.29f, 0.55f);
+        }
     }
 
     /// <summary>Outline of parcels where a property group counts as one shape (outer perimeter only).</summary>
@@ -590,7 +646,7 @@ public partial class EditorMode : Node
             var g = Group(id);
             if (g == null) { segs.AddRange(AllEdges(Map.Parcels[id])); continue; }
             if (!seen.Add(g)) continue;
-            segs.AddRange(GroupPerimeter(Map.Parcels.Values.Where(p => p.Group == g).ToList()));
+            segs.AddRange(Perimeter(g));
         }
         return segs;
     }

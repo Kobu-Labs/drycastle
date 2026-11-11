@@ -83,20 +83,41 @@ public sealed partial class MapLoader
         return body;
     }
 
-    /// <summary>The Godot shape of one solid part: a box with the part's yaw, or a convex pyramid from its five points.</summary>
-    static CollisionShape3D SolidShape(SolidPart p)
+    // Shape resources shared by every solid with the same SolidShapeKeys key (one per distinct size, not one per part).
+    readonly Dictionary<SolidShapeKeys.Key, Shape3D> _solidShapes = new();
+
+    /// <summary>The Godot shape of one solid part: a box with the part's yaw, or a convex pyramid. Shapes are shared by key.</summary>
+    CollisionShape3D SolidShape(SolidPart p)
     {
-        if (p.Shape == PartShape.Pyramid)
+        var key = SolidShapeKeys.Of(p);
+        if (!_solidShapes.TryGetValue(key, out var shape))
         {
-            var pts = p.Points().Select(v => ToGodot(v.X, v.Y, v.Z)).ToArray();
-            return new CollisionShape3D { Shape = new ConvexPolygonShape3D { Points = pts } };
+            shape = key.Kind == 1 ? PyramidShape(key) : BoxShape(key);
+            _solidShapes[key] = shape;
         }
+        var basis = Basis.Identity.Rotated(GVector3.Up, p.Yaw);
+        if (p.Shape == PartShape.Pyramid)
+            // the pyramid is built around its base centre, in the solid's yawed frame
+            return new CollisionShape3D { Shape = shape, Transform = new Transform3D(basis, ToGodot(p.X, p.Y, p.Z0)) };
         var mid = (p.Z0 + p.Z1) / 2;
-        return new CollisionShape3D
+        // a rotation about Godot's up axis by the map yaw maps the box's X onto the map u axis (cos, sin)
+        return new CollisionShape3D { Shape = shape, Transform = new Transform3D(basis, ToGodot(p.X, p.Y, mid)) };
+    }
+
+    static BoxShape3D BoxShape(SolidShapeKeys.Key k)
+        => new() { Size = new GVector3(k.A / 1000f, k.B / 1000f, k.C / 1000f) };
+
+    // Local points (no yaw, base centre at the origin): the base ring at y = 0 and the apex above it. The
+    // CollisionShape3D transform yaws and places it; the ring is the same as PropColliders' ring rotated by the yaw.
+    static ConvexPolygonShape3D PyramidShape(SolidShapeKeys.Key k)
+    {
+        var h = k.A / 1000f;
+        var height = k.B / 1000f;
+        var pts = new[]
         {
-            Shape = new BoxShape3D { Size = new GVector3(2 * p.HalfU, p.Z1 - p.Z0, 2 * p.HalfV) },
-            // a rotation about Godot's up axis by the map yaw maps the box's X onto the map u axis (cos, sin)
-            Transform = new Transform3D(Basis.Identity.Rotated(GVector3.Up, p.Yaw), ToGodot(p.X, p.Y, mid)),
+            new GVector3(-h, 0, h), new GVector3(h, 0, h), new GVector3(h, 0, -h), new GVector3(-h, 0, -h),
+            new GVector3(0, height, 0),
         };
+        return new ConvexPolygonShape3D { Points = pts };
     }
 }

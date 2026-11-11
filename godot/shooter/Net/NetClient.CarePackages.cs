@@ -60,7 +60,7 @@ public partial class NetClient
         };
         node.AddChild(box);
         node.AddChild(canopy);
-        World.AddChild(node);
+        Owned.AddChild(node);
         _crates[e.Id] = new CrateView { Node = node, Canopy = canopy };
     }
 
