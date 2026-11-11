@@ -361,7 +361,7 @@ public partial class EditorMode : Node
             var (ok, msg) = op(root);
             if (!ok) { Say(msg, true); ReloadGroups(); return false; }
             var errors = ObjectEdits.ValidateDocument(root);
-            if (errors.Count > 0) { Say("not saved: " + errors[0], true); ReloadGroups(); return false; }
+            if (errors.Count > 0) { Say("not saved: " + ObjectEdits.Summarise(errors), true); ReloadGroups(); return false; }
             var changes = DiffEntries(before, root);
             EditsFile.Save(EditsPath, root);
             SaveCount++;

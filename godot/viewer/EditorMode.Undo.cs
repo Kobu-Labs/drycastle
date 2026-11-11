@@ -134,7 +134,7 @@ public partial class EditorMode
                 ApplyChange(root, c, undo ? c.Before : c.After);
             }
             var errors = ObjectEdits.ValidateDocument(root);
-            if (errors.Count > 0) { Say($"cannot {word}: the file changed since ({errors[0]})", true); return false; }
+            if (errors.Count > 0) { Say($"cannot {word}: the file changed since ({ObjectEdits.Summarise(errors)})", true); return false; }
             EditsFile.Save(EditsPath, root);
             SaveCount++;
             from.RemoveAt(from.Count - 1);

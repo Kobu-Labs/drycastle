@@ -67,8 +67,10 @@ public static class ObjectEdits
     public static void Add(Obj root, string pid, Obj o)
     {
         var parcels = Parcels(root);
-        if (parcels.GetValueOrDefault(pid) is not Obj entry) parcels[pid] = entry = EditsFile.NewObject();
-        if (entry.GetValueOrDefault("objects") is not List<object?> list) entry["objects"] = list = new List<object?>();
+        if (parcels.TryGetValue(pid, out var existing) && existing is not Obj) throw new InvalidOperationException($"parcels.{pid} in the file is not an object");
+        if (existing is not Obj entry) parcels[pid] = entry = EditsFile.NewObject();
+        if (entry.TryGetValue("objects", out var existingList) && existingList is not List<object?>) throw new InvalidOperationException($"parcels.{pid}.objects in the file is not a list");
+        if (existingList is not List<object?> list) entry["objects"] = list = new List<object?>();
         list.Add(o);
     }
 
@@ -118,6 +120,10 @@ public static class ObjectEdits
         foreach (var (k, v) in o) c[k] = Clone(v);
         return c;
     }
+
+    /// <summary>One status line for validation errors: the first few with their paths, then how many more.</summary>
+    public static string Summarise(List<string> errors, int show = 3)
+        => string.Join("; ", errors.Take(show)) + (errors.Count > show ? $" (+{errors.Count - show} more)" : "");
 
     // ---- the validator ----
 
