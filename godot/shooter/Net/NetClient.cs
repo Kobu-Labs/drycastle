@@ -144,12 +144,13 @@ public partial class NetClient : Node
         if (Sim != null) Sim.Send(peer, chan, data, flags); else peer.Send(chan, data, flags);
     }
 
-    /// <summary>Asks the server to replace a loadout slot. The server answers with the new profile, or with <see cref="ServerError"/>.</summary>
-    public void SaveLoadout(Loadout loadout)
+    /// <summary>Asks the server to replace a loadout slot. The server answers with a <see cref="LoadoutAckInfo"/> (matched by seq) and the new profile. False when not connected.</summary>
+    public bool SaveLoadout(Loadout loadout, uint seq)
     {
-        if (_peer == null || !_welcomed) return;
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(new SaveLoadoutMsg(loadout)), (int)ENetPacketPeer.FlagReliable);
+        if (_peer == null || !_welcomed) return false;
+        Tx(_peer, Wire.ChanReliable, Wire.Encode(new SaveLoadoutMsg(loadout, seq)), (int)ENetPacketPeer.FlagReliable);
         _conn.Flush();
+        return true;
     }
 
     /// <summary>Asks the server to make a loadout slot the active one. Answered like <see cref="SaveLoadout"/>.</summary>
@@ -171,6 +172,7 @@ public partial class NetClient : Node
             if (_connectElapsed > 10) Fail("connect timeout");
             return;
         }
+        PumpAutosave(); // loadout saves whose debounce ran out go out here, whichever screen is open (#145)
         RenderRemotes();
         RenderCorpses();
         RenderCarePackages();

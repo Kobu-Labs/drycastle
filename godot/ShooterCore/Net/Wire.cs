@@ -60,6 +60,12 @@ public enum EventKind : byte
     Ac130Blast = 120,
     /// <summary>Server to the one player a helicopter helper is about to fire on: red-dot warning (<see cref="HelperWarningCodec"/>). Kinds 110-119 belong to the helicopter helper.</summary>
     HelperWarning = 110,
+    /// <summary>Client to server: copy one loadout slot (and its camouflage) into another (<see cref="LoadoutEvents"/>). Kinds 130-139 belong to the loadout editor (#145).</summary>
+    CopyLoadout = 130,
+    /// <summary>Client to server: restore one loadout slot to the starter kit (<see cref="LoadoutEvents"/>).</summary>
+    ResetLoadout = 131,
+    /// <summary>Server to the editing player: the answer to a SaveLoadout, ok or the reason (<see cref="LoadoutEvents"/>).</summary>
+    LoadoutAck = 132,
 }
 
 public abstract record ReliableMsg;
@@ -79,7 +85,8 @@ public sealed record EventMsg(byte Kind, byte[] Payload) : ReliableMsg;
 /// <summary>The camouflage of each loadout slot (<see cref="Camos"/>, index = slot) rides along, five entries.</summary>
 public sealed record ProfileMsg(string Name, int Xp, int Level, int ActiveSlot, IReadOnlyList<Loadout> Loadouts, IReadOnlyList<Unlock> Unlocks, IReadOnlyList<CamoSpec>? Camos = null) : ReliableMsg;
 /// <summary>Client to server: replace one loadout slot. The server validates it; invalid changes get an <see cref="ErrorMsg"/>.</summary>
-public sealed record SaveLoadoutMsg(Loadout Loadout) : ReliableMsg;
+/// <summary>Seq is the client's save number; the server echoes it in <see cref="LoadoutEvents"/>'s ack so autosave can match answers.</summary>
+public sealed record SaveLoadoutMsg(Loadout Loadout, uint Seq = 0) : ReliableMsg;
 /// <summary>Client to server: make a loadout slot the active one (switched to on death).</summary>
 public sealed record SelectSlotMsg(int Slot) : ReliableMsg;
 /// <summary>Client to server: replace one loadout slot's camouflage (ticket #141). The server validates it against camo.json; invalid changes get an <see cref="ErrorMsg"/>.</summary>
@@ -98,7 +105,7 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 ///   Event(5):   u8 kind, u16 len, payload
 ///   Profile(6): u8 nameLen, name, u32 xp, u16 level, u8 activeSlot, u8 loadoutCount, loadouts (u8 slot, 6 strings),
 ///               u16 unlockCount, unlocks (2 strings: kind, item id)
-///   SaveLoadout(7): u8 slot, 6 strings (primary, secondary, perk, streak1..3)
+///   SaveLoadout(7): u8 slot, 6 strings (primary, secondary, perk, streak1..3), string name, u32 seq (#145)
 ///   SelectSlot(8):  u8 slot
 ///   Error(9):   u8 reasonLen, reason
 ///   SaveCamo(10): u8 slot, then the fixed-size CamoSpec encoding (<see cref="CamoSpec"/>)
@@ -118,7 +125,7 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 public static class Wire
 {
     /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them).</summary>
-    public const byte ProtocolVersion = 6;
+    public const byte ProtocolVersion = 7;
     public const byte TickRate = 30;
     public const int ChanReliable = 0, ChanData = 1, Channels = 2;
     public const int KeyEvery = 30;
@@ -158,6 +165,7 @@ public static class Wire
         o.Add((byte)l.Slot);
         WriteStr(o, l.PrimaryWeapon); WriteStr(o, l.SecondaryWeapon); WriteStr(o, l.Perk);
         WriteStr(o, l.Streak1); WriteStr(o, l.Streak2); WriteStr(o, l.Streak3);
+        WriteStr(o, l.Name);
     }
 
     /// <summary>Bounds-checked cursor over a reliable message; out-of-range reads throw and DecodeReliable returns null.</summary>
@@ -180,7 +188,7 @@ public static class Wire
         public Loadout Loadout()
         {
             var slot = U8();
-            return new Loadout(slot, Str(), Str(), Str(), Str(), Str(), Str());
+            return new Loadout(slot, Str(), Str(), Str(), Str(), Str(), Str(), Str());
         }
         /// <summary>A fixed-size camo spec. A bad version throws, which DecodeReliable turns into null.</summary>
         public CamoSpec Camo()
@@ -236,7 +244,10 @@ public static class Wire
                 o.Add((byte)camos.Count);
                 foreach (var cs in camos) o.AddRange(cs.Encode());
                 break;
-            case SaveLoadoutMsg sl: o.Add(TSaveLoadout); WriteLoadout(o, sl.Loadout); break;
+            case SaveLoadoutMsg sl:
+                o.Add(TSaveLoadout); WriteLoadout(o, sl.Loadout);
+                BinaryPrimitives.WriteUInt32LittleEndian(t, sl.Seq); o.AddRange(t.ToArray());
+                break;
             case SelectSlotMsg ss: o.Add(TSelectSlot); o.Add((byte)ss.Slot); break;
             case SaveCamoMsg sc: o.Add(TSaveCamo); o.Add((byte)sc.Slot); o.AddRange(sc.Spec.Encode()); break;
             case ErrorMsg er: o.Add(TError); WriteStr(o, er.Reason); break;
@@ -286,7 +297,12 @@ public static class Wire
                     for (var i = 0; i < camos.Length; i++) camos[i] = r.Camo();
                     return new ProfileMsg(name, xp, level, active, loadouts, unlocks, camos);
                 }
-                case TSaveLoadout: return new SaveLoadoutMsg(new Reader(d).Loadout());
+                case TSaveLoadout:
+                {
+                    var r = new Reader(d);
+                    var l = r.Loadout();
+                    return new SaveLoadoutMsg(l, r.U32());
+                }
                 case TSelectSlot: return new SelectSlotMsg(d[1]);
                 case TSaveCamo: return CamoSpec.TryDecode(d[2..]) is { } cs ? new SaveCamoMsg(d[1], cs) : null;
                 case TError: return new ErrorMsg(new Reader(d).Str());

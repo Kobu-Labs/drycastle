@@ -151,12 +151,12 @@ public sealed class SqliteProgressionStore : IProgressionStore
         public Task<IReadOnlyList<Loadout>> GetAllAsync(long playerId) => db.Read<IReadOnlyList<Loadout>>(c =>
         {
             using var cmd = c.CreateCommand();
-            cmd.CommandText = "SELECT slot, primary_weapon, secondary_weapon, perk, streak1, streak2, streak3 FROM loadouts WHERE player_id = $id ORDER BY slot;";
+            cmd.CommandText = "SELECT slot, primary_weapon, secondary_weapon, perk, streak1, streak2, streak3, name FROM loadouts WHERE player_id = $id ORDER BY slot;";
             cmd.Parameters.AddWithValue("$id", playerId);
             using var r = cmd.ExecuteReader();
             var list = new List<Loadout>();
             while (r.Read())
-                list.Add(new Loadout(r.GetInt32(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), r.GetString(5), r.GetString(6)));
+                list.Add(new Loadout(r.GetInt32(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), r.GetString(5), r.GetString(6), r.GetString(7)));
             return list;
         });
 
@@ -164,9 +164,9 @@ public sealed class SqliteProgressionStore : IProgressionStore
         {
             RequireSlot(l.Slot);
             return db.Write("save loadout", c => Exec(c,
-                "UPDATE loadouts SET primary_weapon = $p, secondary_weapon = $s, perk = $k, streak1 = $r1, streak2 = $r2, streak3 = $r3 WHERE player_id = $id AND slot = $slot;",
+                "UPDATE loadouts SET primary_weapon = $p, secondary_weapon = $s, perk = $k, streak1 = $r1, streak2 = $r2, streak3 = $r3, name = $n WHERE player_id = $id AND slot = $slot;",
                 ("$p", l.PrimaryWeapon), ("$s", l.SecondaryWeapon), ("$k", l.Perk),
-                ("$r1", l.Streak1), ("$r2", l.Streak2), ("$r3", l.Streak3), ("$id", playerId), ("$slot", l.Slot)));
+                ("$r1", l.Streak1), ("$r2", l.Streak2), ("$r3", l.Streak3), ("$n", l.Name), ("$id", playerId), ("$slot", l.Slot)));
         }
 
         public Task<int> GetActiveSlotAsync(long playerId) => db.Read(c =>

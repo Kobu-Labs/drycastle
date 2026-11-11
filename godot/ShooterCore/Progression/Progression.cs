@@ -10,7 +10,7 @@ public sealed record Profile(long Id, string Token, string Name, int Xp, int Lev
 /// One of a player's loadout slots (five per player). Item ids are weapon/perk/killstreak ids from the data files;
 /// an empty string means "not set". The server validates ids against the data files, not this type.
 /// </summary>
-public sealed record Loadout(int Slot, string PrimaryWeapon, string SecondaryWeapon, string Perk, string Streak1, string Streak2, string Streak3)
+public sealed record Loadout(int Slot, string PrimaryWeapon, string SecondaryWeapon, string Perk, string Streak1, string Streak2, string Streak3, string Name = "")
 {
     public const int SlotCount = 5;
     public const int MaxSlot = SlotCount - 1;
