@@ -53,7 +53,7 @@ public class KillstreakTests
     static KillstreakFile Custom(string streaksJson) => KillstreakFile.Parse("{\"version\":1,\"streaks\":[" + streaksJson + "]}");
 
     const string Uav = "{\"id\":\"uav\",\"name\":\"UAV\",\"kills_required\":4,\"unlock_level\":0,\"duration_seconds\":60,\"control\":\"none\"}";
-    const string Missile = "{\"id\":\"attack_missile\",\"name\":\"Missile\",\"kills_required\":5,\"unlock_level\":4,\"control\":\"pov\",\"missile\":{\"speed_mps\":45,\"turn_rate_deg\":60,\"life_seconds\":20,\"spawn_height\":150,\"spawn_pitch_deg\":-70,\"damage\":100,\"edge_damage\":30,\"full_damage_radius\":3,\"splash_radius\":12,\"self_damage_multiplier\":0.5,\"knockback_speed\":6}}";
+    const string Missile = "{\"id\":\"attack_missile\",\"name\":\"Missile\",\"kills_required\":5,\"unlock_level\":4,\"control\":\"pov\",\"missile\":{\"speed_mps\":64,\"turn_rate_deg\":60,\"life_seconds\":60,\"spawn_height\":450,\"spawn_pitch_deg\":-45,\"pitch_min_deg\":-10,\"pitch_max_deg\":-80,\"damage\":100,\"edge_damage\":30,\"full_damage_radius\":3,\"splash_radius\":12,\"self_damage_multiplier\":0.5,\"knockback_speed\":6}}";
 
     // ---- killstreaks.json ------------------------------------------------------------------------------------------
 

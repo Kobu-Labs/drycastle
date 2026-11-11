@@ -141,7 +141,7 @@ The 4-kill killstreak: for 60 seconds the owner receives enemy pings on the mini
 _Avoid_: drone, radar
 
 **Attack missile**:
-The 5-kill killstreak: a steered rocket the owner flies from its point of view until it hits or its 20 seconds run out.
+The 5-kill killstreak: a rocket dropped high above the owner that the owner steers from an infrared point of view. It can only dive (never level, never straight down), so it reaches the ground within about 7 to 40 seconds and detonates there.
 _Avoid_: rocket (alone), missile strike
 
 **Helicopter helper**:
