@@ -162,7 +162,7 @@ public static class HitMath
 
     /// <summary>
     /// Nearest target hit by the ray, or null. <paramref name="wallDistance"/> is where the world blocks the ray
-    /// (infinity if nothing); targets behind it are not hit. A hit is a headshot when the ray also passes through the head sphere.
+    /// (infinity if nothing); targets behind it are not hit. A hit is a headshot when the ray also passes through the head sphere, no more than one body radius behind the point it entered the body.
     /// </summary>
     public static RayHit? Raycast(Vector3 origin, Vector3 dir, float maxDistance, float wallDistance, IEnumerable<HitTarget> targets, ushort shooter)
     {
@@ -174,7 +174,9 @@ public static class HitMath
             var (p0, p1) = Axis(t);
             if (RayCapsule(origin, dir, p0, p1, PlayerHitBox.Radius) is not { } d || d > limit) continue;
             if (best is { } b && b.Distance <= d) continue;
-            var head = RaySphere(origin, dir, HeadCenter(t), HeadRadius) is not null;
+            // the head sphere only counts when the ray reaches it soon after entering the body: a shot into the feet or back of
+            // a prone player passes the whole body first (an upright head sits inside the capsule, so its entry is within one radius)
+            var head = RaySphere(origin, dir, HeadCenter(t), HeadRadius) is { } hd && hd - d <= PlayerHitBox.Radius;
             best = new RayHit(t.Id, d, head);
         }
         return best;
