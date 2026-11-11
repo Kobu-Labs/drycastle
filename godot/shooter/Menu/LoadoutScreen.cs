@@ -29,7 +29,10 @@ public partial class LoadoutScreen : MenuScreen
     readonly Label[] _statName = new Label[4], _statVal = new Label[4];
     Label _level = null!, _statTitle = null!, _note = null!, _empty = null!, _hint = null!;
     Control _body = null!, _tabRow = null!;
-    Button _save = null!, _discard = null!, _makeActive = null!, _emptyBack = null!;
+    Button _save = null!, _discard = null!, _makeActive = null!, _emptyBack = null!, _customize = null!;
+
+    /// <summary>Opens the camouflage customiser for a slot (#141). Set by the shooter; the button is hidden without it.</summary>
+    public Func<int, MenuScreen>? CustomizeFactory { get; set; }
 
     /// <param name="client">The live connection (null on the main menu: the screen then says to join a server).</param>
     /// <param name="data">The data files, for the weapon and perk names and stats.</param>
@@ -119,7 +122,13 @@ public partial class LoadoutScreen : MenuScreen
 
         _hint = Ui.Lbl(Strings.T("loadout.hint"), "HudSmall");
         body.AddChild(_hint);
-        body.AddChild(Ui.Btn(Strings.T("dialog.back"), Back, null, 160));
+        var foot = Ui.HBox();
+        _customize = Ui.Btn(Strings.T("loadout.customize"), () => { if (CustomizeFactory is { } f) Shell.Push(f(_tab)); }, null, 200);
+        _customize.Visible = CustomizeFactory != null;
+        foot.AddChild(_customize);
+        foot.AddChild(Ui.Fill());
+        foot.AddChild(Ui.Btn(Strings.T("dialog.back"), Back, null, 160));
+        body.AddChild(foot);
         return v;
     }
 
