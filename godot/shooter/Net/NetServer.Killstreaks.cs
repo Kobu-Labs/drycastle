@@ -41,6 +41,7 @@ public partial class NetServer
     /// <summary>The Killstreak key was pressed (its press edge): use the next held streak while the owner is alive.</summary>
     void StreakActivate(Client c)
     {
+        if (SandboxStreakKey(c)) return; // a sandbox player's held streak goes first (#156)
         var p = c.Body.GlobalPosition;
         _streaks.Activate(c.Id, _elapsed, new System.Numerics.Vector3(p.X, p.Y, p.Z));
     }

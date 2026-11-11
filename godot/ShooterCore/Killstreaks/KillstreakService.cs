@@ -43,6 +43,8 @@ public sealed class KillstreakService
     readonly Action<string> _log;
     readonly Dictionary<ushort, Life> _lives = new();
     readonly List<KillstreakUse> _active = new();
+    /// <summary>Sandbox mode (#156): the one streak each sandbox owner holds, used from the panel or the activation key.</summary>
+    readonly Dictionary<ushort, string> _sandboxHeld = new();
     /// <summary>The use that holds the point-of-view control of each owner.</summary>
     readonly Dictionary<ushort, KillstreakUse> _control = new();
     /// <summary>The use whose <see cref="IKillstreak.Activate"/> is running; an End during it is finished by <see cref="Start"/>.</summary>
@@ -131,12 +133,14 @@ public sealed class KillstreakService
     {
         EndAllFor(owner, KillstreakEndReason.OwnerLeft);
         _lives.Remove(owner);
+        _sandboxHeld.Remove(owner);
     }
 
     /// <summary>The round ended or began: every instance ends and every counter resets.</summary>
     public void Reset()
     {
         foreach (var use in _active.ToList()) Finish(use, KillstreakEndReason.RoundReset);
+        _sandboxHeld.Clear();
         foreach (var life in _lives.Values)
         {
             life.Kills = 0;
@@ -168,6 +172,26 @@ public sealed class KillstreakService
         }
         return false;
     }
+
+    /// <summary>
+    /// Sandbox (#156): puts <paramref name="streakId"/> into the owner's held slot, replacing any held one. A running instance
+    /// of that streak is ended (<see cref="KillstreakEndReason.Replaced"/>). Returns false for an unknown streak.
+    /// </summary>
+    public bool SandboxHold(ushort owner, string streakId)
+    {
+        if (_data.Find(streakId) == null) return false;
+        foreach (var use in _active.Where(u => u.Owner == owner && u.StreakId == streakId && u.IsOpen).ToList())
+            Finish(use, KillstreakEndReason.Replaced);
+        _sandboxHeld[owner] = streakId;
+        return true;
+    }
+
+    /// <summary>The sandbox streak the owner holds, or null.</summary>
+    public string? SandboxHeldOf(ushort owner) => _sandboxHeld.TryGetValue(owner, out var id) ? id : null;
+
+    /// <summary>Uses the owner's held sandbox streak now (it stays held: repeat uses are unlimited). False when nothing is held.</summary>
+    public bool SandboxActivateHeld(ushort owner, double now, Vector3 position) =>
+        SandboxHeldOf(owner) is { } id && SandboxActivate(owner, id, now, position);
 
     /// <summary>
     /// Sandbox use (#156): the owner gets <paramref name="streakId"/> at once. No kill requirement, no held slot, no use cap,

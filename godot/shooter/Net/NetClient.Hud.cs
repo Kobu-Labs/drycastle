@@ -17,6 +17,7 @@ public partial class NetClient
         if (!ShotFx.Enabled || _hud != null) return; // headless runs have no HUD
         _hud = new Hud { MyId = _myId, Scoped = () => _me is { ZoomFov: > 0 }, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Spread = () => CurrentWeapon is { } w ? HitMath.StanceSpread(_spread.Degrees(w, Now), w, _me?.State.Stance ?? Stance.Stand) : 0f, StanceOf = () => _me?.State.Stance ?? Stance.Stand };
         AddChild(_hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
+        _hud.SetSandbox(SandboxGranted, SandboxHeldStreak); // the SANDBOX badge (#156)
         WireLoadoutHud(_hud);
         _hud.Minimap.Build(Map); // once per connection; the texture comes from the map's parcels and roads (ticket #119)
     }

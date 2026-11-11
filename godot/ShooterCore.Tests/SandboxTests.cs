@@ -213,6 +213,104 @@ public class SandboxTests
     }
 
     [Fact]
+    public void HeldSandboxStreakIsReplacedAndUsedAgainAndAgain()
+    {
+        var sent = new List<(ushort Owner, EventKind Kind, byte[] Payload)>();
+        var service = new KillstreakService(Shipped.Killstreaks,
+            Shipped.Killstreaks.Streaks.Select(s => (IKillstreak)new LoggingKillstreak(s.Id)),
+            (o, k, p) => sent.Add((o, k, p)), _ => { });
+        service.Arm(7, new[] { "", "", "" }, 0);
+        Assert.Null(service.SandboxHeldOf(7));
+        Assert.False(service.SandboxActivateHeld(7, 0, Vector3.Zero)); // nothing held yet
+
+        Assert.True(service.SandboxHold(7, "uav"));
+        Assert.Equal("uav", service.SandboxHeldOf(7));
+        Assert.True(service.SandboxActivateHeld(7, 0, Vector3.Zero));
+        Assert.True(service.SandboxActivateHeld(7, 1, Vector3.Zero)); // still held: repeat use
+        Assert.Equal("uav", service.SandboxHeldOf(7));
+
+        Assert.True(service.SandboxHold(7, "turret")); // another streak replaces the held one
+        Assert.Equal("turret", service.SandboxHeldOf(7));
+        Assert.False(service.SandboxHold(7, "no_such_streak"));
+        Assert.Equal("turret", service.SandboxHeldOf(7));
+
+        service.Reset(); // a new round clears the held slot
+        Assert.Null(service.SandboxHeldOf(7));
+    }
+
+    [Fact]
+    public void HoldingAStreakEndsItsRunningInstance()
+    {
+        var sent = new List<(ushort Owner, EventKind Kind, byte[] Payload)>();
+        var service = new KillstreakService(Shipped.Killstreaks,
+            Shipped.Killstreaks.Streaks.Select(s => (IKillstreak)new LoggingKillstreak(s.Id)),
+            (o, k, p) => sent.Add((o, k, p)), _ => { });
+        service.Arm(7, new[] { "", "", "" }, 0);
+        service.SandboxHold(7, "uav");
+        service.SandboxActivateHeld(7, 0, Vector3.Zero);
+        service.SandboxHold(7, "uav"); // granting the running one again ends it cleanly
+        Assert.Equal(0, service.ActiveCount(7, "uav"));
+        Assert.Contains(sent, s => s.Kind == EventKind.StreakEnded && s.Payload[^1] == (byte)KillstreakEndReason.Replaced);
+    }
+
+    [Fact]
+    public void PanelCodecsRoundTrip()
+    {
+        Assert.Equal((SandboxAction.SpawnVehicle, (byte)3), SandboxEvents.DecodeAction(SandboxEvents.EncodeAction(SandboxAction.SpawnVehicle, 3)));
+        Assert.Null(SandboxEvents.DecodeAction(new byte[] { 0, 0 })); // not a defined action
+        Assert.Null(SandboxEvents.DecodeAction(new byte[] { 5 })); // truncated
+        Assert.Equal((ushort)4242, SandboxEvents.DecodeState(SandboxEvents.EncodeState(4242, true))!.Value.Id);
+        Assert.True(SandboxEvents.DecodeState(SandboxEvents.EncodeState(4242, true))!.Value.On);
+        Assert.False(SandboxEvents.DecodeState(SandboxEvents.EncodeState(4242, false))!.Value.On);
+        Assert.Equal("uav", SandboxEvents.DecodeText(SandboxEvents.EncodeText("uav")));
+        Assert.Equal("", SandboxEvents.DecodeText(SandboxEvents.EncodeText("")));
+        Assert.Null(SandboxEvents.DecodeText(new byte[] { 9, 1 }));
+    }
+
+    [Fact]
+    public void RefillFillsEveryMagazineAndReserve()
+    {
+        var weapons = Shipped.Weapons;
+        var ak = weapons.Find("ak47")!;
+        var slot = weapons.Weapons.FindIndex(x => x.Id == "ak47") + 1;
+        var w = new PlayerWeapons(weapons);
+        for (var i = 0; i < 5; i++) w.Update(i * 1.0, new WeaponInput(Fire: true, Reload: false, Slot: slot, Next: false));
+        Assert.True(w.Mag(slot) < ak.MagazineSize);
+        w.Refill();
+        Assert.Equal(ak.MagazineSize, w.Mag(slot));
+        Assert.Equal(ak.ReserveAmmo, w.Reserve(slot));
+    }
+
+    [Fact]
+    public void HealRestoresAliveHealthOnly()
+    {
+        var r = new Rig();
+        r.M.AddPlayer(1, "hurt");
+        r.M.AddPlayer(2, "shooter");
+        r.Settle();
+        r.M.ApplyDamage(1, 2, 0, 60);
+        Assert.True(r.M.Get(1)!.Health < MoveConsts.MaxHealth);
+        Assert.True(r.M.Heal(1));
+        Assert.Equal(MoveConsts.MaxHealth, r.M.Get(1)!.Health);
+        Assert.False(r.M.Heal(99)); // unknown player
+    }
+
+    [Fact]
+    public void TargetDummiesStayDownWhenRespawnIsOff()
+    {
+        var spot = new TargetSpot(new Vector3(0, 0, 0), 0, Stance.Stand, 10);
+        var dummies = new TargetDummies(new[] { spot }, TargetDummies.RespawnDelay) { Respawns = false };
+        var id = TargetDummies.FirstId;
+        dummies.Damage(id, 1000, 0);
+        Assert.False(dummies.Get(id)!.Alive);
+        dummies.Update(TargetDummies.RespawnDelay + 10);
+        Assert.False(dummies.Get(id)!.Alive);
+        dummies.Respawns = true;
+        dummies.Update(TargetDummies.RespawnDelay + 20);
+        Assert.True(dummies.Get(id)!.Alive);
+    }
+
+    [Fact]
     public void SandboxRefusesAnUnknownStreak()
     {
         var service = new KillstreakService(Shipped.Killstreaks,

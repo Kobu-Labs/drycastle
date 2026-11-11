@@ -54,6 +54,7 @@ public partial class ConnectScreen : MenuScreen
         _form.AddChild(Ui.Lbl(Strings.T("connect.recent"), "HudHead"));
         _recentBox = Ui.VBox();
         _form.AddChild(_recentBox);
+        if (DevUi.Enabled) AddAdvanced(_form);
         _form.AddChild(Ui.Gap(ShooterTheme.Space));
         var row = Ui.HBox();
         row.AddChild(Ui.Btn(Strings.T("dialog.back"), Back, null, 160));
@@ -94,6 +95,17 @@ public partial class ConnectScreen : MenuScreen
         return card;
     }
 
+
+    /// <summary>Dev builds and --dev-ui only: the sandbox mode request, remembered for the next connect (#156).</summary>
+    static void AddAdvanced(VBoxContainer into)
+    {
+        into.AddChild(Ui.Gap(ShooterTheme.Space));
+        into.AddChild(Ui.Lbl(Strings.T("connect.advanced"), "HudHead"));
+        var sandbox = new CheckBox { Text = Strings.T("sandbox.connect"), ButtonPressed = GameSettings.LoadConnect("sandbox", "0") == "1" };
+        sandbox.Toggled += on => GameSettings.SaveConnect("sandbox", on ? "1" : "0");
+        into.AddChild(sandbox);
+        into.AddChild(Ui.Lbl(Strings.T("sandbox.connect.hint"), "HudDim", 0, true));
+    }
 
     LineEdit Field(VBoxContainer into, string labelKey, string text, string? placeholderKey, out Label err)
     {

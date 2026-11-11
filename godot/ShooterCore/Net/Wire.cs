@@ -75,6 +75,14 @@ public enum EventKind : byte
     SandboxStatus = 150,
     /// <summary>Client to server: use one killstreak now, sandbox owners only (<see cref="SandboxEvents"/>).</summary>
     SandboxGrant = 151,
+    /// <summary>Client to server: a sandbox action from the panel (<see cref="SandboxAction"/>, <see cref="SandboxEvents"/>).</summary>
+    SandboxAction = 152,
+    /// <summary>Server to everyone: a player is in sandbox mode (u16 player id, u8 on). Sent to the joiner for everyone already in it.</summary>
+    SandboxState = 153,
+    /// <summary>Server to the owner: the held sandbox streak (empty = none). Sent after every grant and on join.</summary>
+    SandboxHeld = 154,
+    /// <summary>Server to the owner: why a sandbox action was refused (a short English line, shown as a toast).</summary>
+    SandboxNotice = 155,
 }
 
 public abstract record ReliableMsg;
@@ -141,7 +149,7 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 /// </summary>
 public static class Wire
 {
-    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-151 (sandbox status and grant, #156).</summary>
+    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-155 (sandbox status, grant, action, state, held streak and notice, #156).</summary>
     public const byte ProtocolVersion = 10;
     public const byte TickRate = 30;
     public const int ChanReliable = 0, ChanData = 1, Channels = 2;

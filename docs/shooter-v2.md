@@ -245,7 +245,7 @@ Server and persistence:
 ## 9. Wire protocol
 
 Protocol version: **10** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
-versions. Version 10 (#156) added the hello flags byte (bit 0: sandbox requested), event kinds 150 (SandboxStatus, server to the joining player) and 151 (SandboxGrant, client to server). Version 9 (#151) retired the care package's PerkGained (kind 51) and added StreakGranted (kind 23). Version 6 was bumped in #133 because the killstreak, aircraft, turret, missile, care package, corpse and MOAB
+versions. Version 10 (#156) added the hello flags byte (bit 0: sandbox requested), event kinds 150 (SandboxStatus, server to the joining player), 151 (SandboxGrant: hold a streak), 152 (SandboxAction: heal, teleport, vehicle, target respawn, use the held streak), 153 (SandboxState: the [SANDBOX] name tags), 154 (SandboxHeld) and 155 (SandboxNotice). The F4 panel (sandbox_panel, rebindable) is client-side only. Version 9 (#151) retired the care package's PerkGained (kind 51) and added StreakGranted (kind 23). Version 6 was bumped in #133 because the killstreak, aircraft, turret, missile, care package, corpse and MOAB
 events and world entity types are new. Version 7 added the target dummies (#148: entity type 3 and event kind 140). Version 8
 added the loadout editor's autosave, rename, copy and reset (#145: event kinds 130-132, and `SaveLoadout` carries the name
 and the sequence number). Before 6, the last bump was 5 (camo per loadout slot).

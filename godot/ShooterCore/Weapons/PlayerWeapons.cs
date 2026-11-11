@@ -108,6 +108,13 @@ public sealed class PlayerWeapons
         Changed = true;
     }
 
+    /// <summary>Sandbox (#156): every magazine and reserve back to full. Timers and the selected weapon are kept.</summary>
+    public void Refill()
+    {
+        for (var i = 0; i < _mag.Length; i++) { _mag[i] = _file.Weapons[i].MagazineSize; _reserve[i] = _file.Weapons[i].ReserveAmmo; }
+        Changed = true;
+    }
+
     /// <summary>A kill refills the reserves of every weapon (magazines stay as they are).</summary>
     public void RefillReserves()
     {

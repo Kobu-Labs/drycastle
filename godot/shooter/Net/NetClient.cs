@@ -363,7 +363,7 @@ public partial class NetClient : Node
         node.AddChild(view);
         node.AddChild(new Label3D
         {
-            Text = _names.TryGetValue(id, out var n) ? n : $"#{id}",
+            Text = _names.TryGetValue(id, out var n) ? NameTag(id, n) : $"#{id}", // [SANDBOX] tag for sandbox players (#156)
             Modulate = target ? TargetTint : Colors.White, // orange name tag for target dummies (#148)
             Position = new Vector3(0, MoveConsts.CapsuleHeight + 0.3f, 0),
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
@@ -645,6 +645,7 @@ public partial class NetClient : Node
 
     public override void _UnhandledInput(InputEvent e)
     {
+        if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
         if (Bot || Weapons == null || Dead || ChooserOpen || Input.MouseMode != Input.MouseModeEnum.Captured) return;
         if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {

@@ -206,6 +206,7 @@ public static class InputBindings
         ("zoom", Binding.MouseButton((int)MouseButton.Right)),
         ("headlights", Binding.Key((int)Key.H)),
         ("killstreak", Binding.Key((int)Key.Q)),
+        ("sandbox_panel", Binding.Key((int)Key.F4)),
     };
 
     public static BindingMap NewMap() => new(Defaults);

@@ -16,6 +16,7 @@ namespace Suchohrad.Shooter;
 ///   --targets N               server: plant N stationary target dummies around the spawn area (0-64; default from match.json, 0; make shooter-server uses 24)
 ///   --allow-sandbox           server: grant sandbox mode (godmode, unlimited ammo, every killstreak on demand, no XP or score) to clients that ask (#156); dev only, make SANDBOX=1
 ///   --sandbox                 client: ask the server for sandbox mode (also SUCHOHRAD_SANDBOX=1); the server may refuse
+///   --dev-ui                  client: show the dev-only UI (the Advanced section of the connect screen); debug builds always show it
 ///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
 ///   --match-bot alice|bob     client: scripted match smoke role (alice kills bob with the debug command, bob fires after each spawn)
 ///   --blast-smoke             server: flat arena with three cars, judges vehicle damage stages, the blast and the chain reaction; --blast-bot a|b client roles (ticket #103)
@@ -56,6 +57,7 @@ public partial class Shooter : Node3D
         _smoke = cfg.Flag("smoke");
         _smokeMove = cfg.Flag("smoke-move");
         _cfg = cfg;
+        DevUi.Enabled = OS.IsDebugBuild() || cfg.Flag("dev-ui");
         GameSettings.Apply(GameSettings.Current, false);
         if (cfg.Str("model-shots") != "") { _ = ModelShots.Run(this, cfg.Str("model-shots")); return; }
         if (cfg.Str("hud-shots") != "") { _ = HudShots.Run(this, cfg.Str("hud-shots")); return; }
@@ -188,6 +190,8 @@ public partial class Shooter : Node3D
             client.MenuOpen = () => _shell.Top != null;
             client.LevelUpReceived += lu => _shell.Toast(Strings.F("progress.levelup", lu.Level));
             client.SandboxAnswered += a => _shell.Toast(a.Reason, a.Granted ? ToastKind.Info : ToastKind.Warn);
+            client.SandboxNoticed += text => _shell.Toast(text, ToastKind.Warn);
+            client.OpenSandbox = () => _shell.Push(new SandboxScreen(client, () => _data ??= LoadData()));
             AddChild(client);
             failure = await done.Task;
         }
@@ -352,7 +356,8 @@ public partial class Shooter : Node3D
     /// <summary>Networked client: light/sky, then prediction and interpolation via <see cref="NetClient"/>.</summary>
     /// <summary>--sandbox or SUCHOHRAD_SANDBOX=1: the client asks for sandbox mode (#156).</summary>
     static bool SandboxAsked(Config cfg) =>
-        cfg.Flag("sandbox") || System.Environment.GetEnvironmentVariable("SUCHOHRAD_SANDBOX") is "1" or "true";
+        cfg.Flag("sandbox") || System.Environment.GetEnvironmentVariable("SUCHOHRAD_SANDBOX") is "1" or "true"
+        || (DevUi.Enabled && GameSettings.LoadConnect("sandbox", "0") == "1"); // the connect screen's checkbox (dev builds)
 
     void BuildNetClient(Config cfg)
     {
@@ -366,7 +371,7 @@ public partial class Shooter : Node3D
         _smoke = false;
         AddChild(new NetClient
         {
-            World = this, Host = host, Port = port, PlayerName = cfg.Str("name", "player"), Bot = bot, KillY = killY,
+            World = this, Host = host, Port = port, PlayerName = cfg.Str("name", "player"), Bot = bot, KillY = killY, SandboxRequested = SandboxAsked(cfg),
             BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6,
             Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"),
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,

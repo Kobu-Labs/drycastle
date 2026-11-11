@@ -132,6 +132,7 @@ public partial class Hud : CanvasLayer
         BuildMinimap();
         BuildStreaks();
         BuildUav();
+        BuildSandbox();
         ApplyMinimapSettings();
         Relayout();
         GetViewport().SizeChanged += Relayout;

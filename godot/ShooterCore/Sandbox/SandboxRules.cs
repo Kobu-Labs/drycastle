@@ -22,9 +22,55 @@ public static class SandboxRules
     }
 }
 
-/// <summary>Payloads of the sandbox events (kinds 150 and 151).</summary>
+/// <summary>The panel's one-shot actions (event kind 152: u8 action, u8 argument).</summary>
+public enum SandboxAction : byte
+{
+    /// <summary>Health and every magazine and reserve back to full.</summary>
+    Heal = 1,
+    /// <summary>Move to a random player spawn point. Argument unused.</summary>
+    Teleport = 2,
+    /// <summary>Spawn a vehicle in front. Argument: index into vehicles.json.</summary>
+    SpawnVehicle = 3,
+    /// <summary>Target dummies respawn after a kill. Argument: 1 on, 0 off. The whole server, not just this player.</summary>
+    TargetRespawn = 4,
+    /// <summary>Use the held streak now.</summary>
+    Activate = 5,
+}
+
+/// <summary>Payloads of the sandbox events (kinds 150-155).</summary>
 public static class SandboxEvents
 {
+    public static byte[] EncodeAction(SandboxAction action, byte arg = 0) => new[] { (byte)action, arg };
+
+    public static (SandboxAction Action, byte Arg)? DecodeAction(ReadOnlySpan<byte> d) =>
+        d.Length < 2 || !Enum.IsDefined((SandboxAction)d[0]) ? null : ((SandboxAction)d[0], d[1]);
+
+    /// <summary>SandboxState: u16 player id, u8 on.</summary>
+    public static byte[] EncodeState(ushort id, bool on)
+    {
+        var o = new byte[3];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(o, id);
+        o[2] = (byte)(on ? 1 : 0);
+        return o;
+    }
+
+    public static (ushort Id, bool On)? DecodeState(ReadOnlySpan<byte> d) =>
+        d.Length < 3 ? null : (System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d), d[2] != 0);
+
+    /// <summary>SandboxHeld and SandboxNotice: a u8-length UTF-8 string (the streak id, or the notice text).</summary>
+    public static byte[] EncodeText(string text)
+    {
+        var b = System.Text.Encoding.UTF8.GetBytes(text);
+        var n = Math.Min(b.Length, 255);
+        var o = new byte[1 + n];
+        o[0] = (byte)n;
+        Array.Copy(b, 0, o, 1, n);
+        return o;
+    }
+
+    public static string? DecodeText(ReadOnlySpan<byte> d) =>
+        d.Length < 1 || d.Length < 1 + d[0] ? null : System.Text.Encoding.UTF8.GetString(d.Slice(1, d[0]));
+
     /// <summary>SandboxStatus: u8 granted, then the reason as a u8-length UTF-8 string.</summary>
     public static byte[] EncodeStatus(SandboxAnswer a)
     {
@@ -43,17 +89,8 @@ public static class SandboxEvents
         return new SandboxAnswer(d[0] != 0, System.Text.Encoding.UTF8.GetString(d.Slice(2, d[1])));
     }
 
-    /// <summary>SandboxGrant: a u8-length UTF-8 streak id.</summary>
-    public static byte[] EncodeGrant(string streakId)
-    {
-        var id = System.Text.Encoding.UTF8.GetBytes(streakId);
-        var n = Math.Min(id.Length, 255);
-        var o = new byte[1 + n];
-        o[0] = (byte)n;
-        Array.Copy(id, 0, o, 1, n);
-        return o;
-    }
+    /// <summary>SandboxGrant: a u8-length UTF-8 streak id (the same text codec as <see cref="EncodeText"/>).</summary>
+    public static byte[] EncodeGrant(string streakId) => EncodeText(streakId);
 
-    public static string? DecodeGrant(ReadOnlySpan<byte> d) =>
-        d.Length < 1 || d.Length < 1 + d[0] ? null : System.Text.Encoding.UTF8.GetString(d.Slice(1, d[0]));
+    public static string? DecodeGrant(ReadOnlySpan<byte> d) => DecodeText(d);
 }

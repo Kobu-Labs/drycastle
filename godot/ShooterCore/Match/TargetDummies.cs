@@ -81,6 +81,8 @@ public sealed class TargetDummies
 
     readonly List<Dummy> _all = new();
     readonly float _respawnDelay;
+    /// <summary>Sandbox (#156): when false a killed dummy stays down until the round restarts.</summary>
+    public bool Respawns { get; set; } = true;
 
     public TargetDummies(IReadOnlyList<TargetSpot> spots, float respawnDelay)
     {
@@ -129,7 +131,7 @@ public sealed class TargetDummies
         var up = new List<ushort>();
         foreach (var d in _all)
         {
-            if (d.Alive || now < d.RespawnAt) continue;
+            if (d.Alive || now < d.RespawnAt || !Respawns) continue;
             d.Alive = true;
             d.Health = MaxHealth;
             up.Add(d.Id);

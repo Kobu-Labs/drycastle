@@ -111,6 +111,14 @@ public sealed class MatchSim
     public List<MatchPlayer> Ranking() =>
         _players.Values.OrderBy(p => p.Sandbox).ThenByDescending(p => p.Kills).ThenBy(p => p.Deaths).ThenBy(p => p.Id).ToList();
 
+    /// <summary>Sandbox (#156): full health for a living player. False when the player is not alive.</summary>
+    public bool Heal(ushort id)
+    {
+        if (!_players.TryGetValue(id, out var p) || p.Life != PlayerLife.Alive) return false;
+        p.Health = MoveConsts.MaxHealth;
+        return true;
+    }
+
     public void SetPosition(ushort id, Vector3 pos) { if (_players.TryGetValue(id, out var p)) p.Position = pos; }
 
     public void AddPlayer(ushort id, string name, bool sandbox = false)

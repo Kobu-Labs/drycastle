@@ -165,6 +165,7 @@ public static class Strings
         var tr = new Translation { Locale = "en" };
         foreach (var (k, v) in Table) tr.AddMessage(k, v);
         foreach (var (k, v) in Hud2Strings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in SandboxStrings.Table) tr.AddMessage(k, v);
         TranslationServer.AddTranslation(tr);
         TranslationServer.SetLocale("en");
     }
