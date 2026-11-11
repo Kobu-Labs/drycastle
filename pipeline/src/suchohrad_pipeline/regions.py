@@ -202,18 +202,15 @@ def drape(
     """
     if geom.is_empty:
         return Mesh.empty()
-    tris: list[np.ndarray] = []
+    # 2D triangles and their lift, collected first: the terrain height is then read in one call for all of them
+    flat: list[np.ndarray] = []
+    aboves: list[float] = []
 
     def emit(piece: BaseGeometry, above: float) -> None:
         for poly in _polygons(piece):
             for tri in triangulate(poly):
-                xy = np.array(tri, float)
-                z = terrain.surface(xy[:, 0], xy[:, 1]) + above
-                v = np.column_stack([xy, z])
-                if np.cross(v[1] - v[0], v[2] - v[0])[2] < 0:
-                    v = v[[0, 2, 1]]
-                if abs(np.cross(v[1] - v[0], v[2] - v[0])[2]) > 1e-12:
-                    tris.append(v)
+                flat.append(np.array(tri, float))
+                aboves.append(above)
 
     for cell in _terrain_triangles(terrain, geom):
         piece = geom.intersection(cell)
@@ -224,9 +221,22 @@ def drape(
                 emit(piece.intersection(outline), road_top + road_lift)
                 piece = piece.difference(outline)
         emit(piece, lift)
-    if not tris:
+    if not flat:
         return Mesh.empty()
-    return Mesh(np.array(tris), np.tile(np.array(colour, np.uint8), (len(tris), 1)))
+    xy = np.stack(flat)  # (n, 3, 2)
+    n = len(flat)
+    ground = terrain.surface(xy[:, :, 0].ravel(), xy[:, :, 1].ravel()).reshape(n, 3)
+    v = np.concatenate([xy, (ground + np.array(aboves)[:, None])[:, :, None]], axis=2)  # (n, 3, 3)
+    # the orientation and the sliver test read only the x and y components, so they are the same per triangle
+    e1, e2 = v[:, 1] - v[:, 0], v[:, 2] - v[:, 0]
+    cz = np.cross(e1, e2)[:, 2]
+    flip = cz < 0
+    v[flip] = v[flip][:, [0, 2, 1]]
+    keep = np.abs(cz) > 1e-12
+    tris = v[keep]
+    if len(tris) == 0:
+        return Mesh.empty()
+    return Mesh(tris, np.tile(np.array(colour, np.uint8), (len(tris), 1)))
 
 
 def region_meshes(

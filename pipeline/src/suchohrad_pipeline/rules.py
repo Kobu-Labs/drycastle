@@ -1,9 +1,16 @@
 """Loader for ``config/rules.yaml``. Every value has a default so the file may be partial."""
 
+import copy
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
+
+try:  # the C loader when libyaml is present: same documents, much faster than the pure-Python one
+    _YamlLoader = yaml.CSafeLoader
+except AttributeError:
+    _YamlLoader = yaml.SafeLoader
 
 from suchohrad_pipeline.config import PIPELINE_DIR
 
@@ -77,6 +84,17 @@ def _merge(base: dict, extra: dict) -> dict:
     return out
 
 
+@lru_cache(maxsize=8)
+def _parsed(path: str, mtime_ns: int, size: int) -> dict:
+    """The parsed file, keyed by its stat so an edited rules file is read again. Never handed out: callers get copies."""
+    return yaml.load(Path(path).read_text(), Loader=_YamlLoader) or {}
+
+
+def _document(path: Path) -> dict:
+    st = path.stat()
+    return _parsed(str(path), st.st_mtime_ns, st.st_size)
+
+
 def load_section(name: str, path: Path = DEFAULT_RULES, area: str | None = None) -> dict:
     """A top-level section of rules.yaml, merged over the same section of the shipped rules.yaml.
 
@@ -84,14 +102,15 @@ def load_section(name: str, path: Path = DEFAULT_RULES, area: str | None = None)
     ``area`` the section is further overlaid by ``areas.<area>.<name>`` (shipped file first, then
     the custom one), so the village can use lighter settings than the slice.
     """
-    shipped = yaml.safe_load(DEFAULT_RULES.read_text()) or {}
+    shipped = _document(DEFAULT_RULES)
     docs = [shipped]
     if path != DEFAULT_RULES and path.is_file():
-        docs.append(yaml.safe_load(path.read_text()) or {})
+        docs.append(_document(path))
     out: dict = {}
     for doc in docs:
         out = _merge(out, doc.get(name) or {})
     if area:
         for doc in docs:
             out = _merge(out, ((doc.get("areas") or {}).get(area) or {}).get(name) or {})
-    return out
+    # _merge shares the leaf values with the cached documents: hand out a copy
+    return copy.deepcopy(out)
