@@ -1,4 +1,5 @@
 using Godot;
+using Suchohrad.ShooterCore;
 
 namespace Suchohrad.Shooter;
 
@@ -29,15 +30,16 @@ public static class ShooterTheme
     public static readonly Color Line = new(0.45f, 0.49f, 0.58f);
     public static readonly Color Text = new(0.96f, 0.97f, 0.98f);
     public static readonly Color Dim = new(0.76f, 0.79f, 0.85f);
-    public static readonly Color Accent = new(0.40f, 0.82f, 1f);
+    public static readonly Color Accent = new(StatePalette.Accent.R, StatePalette.Accent.G, StatePalette.Accent.B);
     public static readonly Color Hover = new(0.19f, 0.23f, 0.31f, 0.95f);
     public static readonly Color Backdrop = new(0.05f, 0.06f, 0.09f);
     public static readonly Color DisabledText = new(0.58f, 0.61f, 0.68f);
-    // good / danger swap to a blue / orange pair (distinguishable with red-green colour blindness) when the accessibility flag is on
+    // good / warn / danger swap to a blue-green / yellow / vermillion set (distinguishable with red-green colour blindness, and from the cyan accent) when the accessibility flag is on
     public static bool ColorBlind { get; private set; }
-    public static Color Good => ColorBlind ? new Color(0.35f, 0.70f, 1f) : new Color(0.45f, 0.90f, 0.55f);
-    public static readonly Color Warn = new(1f, 0.74f, 0.30f);
-    public static Color Danger => ColorBlind ? new Color(1f, 0.62f, 0.10f) : new Color(1f, 0.42f, 0.38f);
+    public static Color Good => From(StatePalette.Good(ColorBlind));
+    public static Color Warn => From(StatePalette.Warn(ColorBlind));
+    public static Color Danger => From(StatePalette.Danger(ColorBlind));
+    static Color From(StatePalette.Rgb c) => new(c.R, c.G, c.B);
     public static readonly Color Outline = new(0f, 0f, 0f, 0.85f);
     public static readonly Color Scrim = new(0f, 0f, 0f, 0.60f);
 

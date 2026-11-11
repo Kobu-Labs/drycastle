@@ -88,3 +88,41 @@ public class HudLogicTests
         Assert.Equal(1f, s.Degrees(w, 3), 3);
     }
 }
+
+public class StatePaletteTests
+{
+    // CIE76 colour difference between two sRGB triples
+    static double DeltaE(StatePalette.Rgb a, StatePalette.Rgb b)
+    {
+        static (double L, double A, double B) Lab(StatePalette.Rgb c)
+        {
+            static double Lin(double u) => u <= 0.04045 ? u / 12.92 : Math.Pow((u + 0.055) / 1.055, 2.4);
+            static double F(double v) => v > 0.008856 ? Math.Cbrt(v) : 7.787 * v + 16.0 / 116;
+            double r = Lin(c.R), g = Lin(c.G), bl = Lin(c.B);
+            var x = F((0.4124 * r + 0.3576 * g + 0.1805 * bl) / 0.95047);
+            var y = F(0.2126 * r + 0.7152 * g + 0.0722 * bl);
+            var z = F((0.0193 * r + 0.1192 * g + 0.9505 * bl) / 1.08883);
+            return (116 * y - 16, 500 * (x - y), 200 * (y - z));
+        }
+        var (l1, a1, b1) = Lab(a); var (l2, a2, b2) = Lab(b);
+        return Math.Sqrt((l1 - l2) * (l1 - l2) + (a1 - a2) * (a1 - a2) + (b1 - b2) * (b1 - b2));
+    }
+
+    [Fact]
+    public void ColorBlindStateColoursAreAllDistinct()
+    {
+        var set = new[] { StatePalette.Accent, StatePalette.Good(true), StatePalette.Warn(true), StatePalette.Danger(true) };
+        for (var i = 0; i < set.Length; i++)
+            for (var j = i + 1; j < set.Length; j++)
+                Assert.True(DeltaE(set[i], set[j]) >= 40, $"colour-blind colours {i} and {j} are too close ({DeltaE(set[i], set[j]):F1})");
+    }
+
+    [Fact]
+    public void DefaultStateColoursAreDistinct()
+    {
+        var set = new[] { StatePalette.Good(false), StatePalette.Warn(false), StatePalette.Danger(false) };
+        for (var i = 0; i < set.Length; i++)
+            for (var j = i + 1; j < set.Length; j++)
+                Assert.True(DeltaE(set[i], set[j]) >= 20);
+    }
+}

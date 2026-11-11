@@ -50,6 +50,7 @@ public partial class Hud : CanvasLayer
     readonly Line2D[] _hitLines = new Line2D[4];
     double _hitUntil, _hitFade;
     readonly Control[] _ind = new Control[Indicators];
+    readonly Polygon2D[] _indTri = new Polygon2D[Indicators];
     readonly double[] _indAt = new double[Indicators];
     int _indNext;
     // health
@@ -151,6 +152,7 @@ public partial class Hud : CanvasLayer
         ApplyMinimapSettings();
         _gap = -1;
         _hintMode = null;
+        foreach (var tri in _indTri) tri.Color = ShooterTheme.Danger; // read at build time otherwise; the palette may have switched
         if (_crossRoot != null) _crossRoot.Visible = Settings.ShowCrosshair;
     }
 
@@ -231,7 +233,7 @@ public partial class Hud : CanvasLayer
             var back = new Polygon2D { Color = ShooterTheme.Outline, Polygon = new[] { new Vector2(0, -216), new Vector2(-28, -176), new Vector2(28, -176) } };
             var tri = new Polygon2D { Color = ShooterTheme.Danger, Polygon = new[] { new Vector2(0, -208), new Vector2(-20, -180), new Vector2(20, -180) } };
             pivot.AddChild(back); pivot.AddChild(tri);
-            _root.AddChild(pivot); _ind[i] = pivot;
+            _root.AddChild(pivot); _ind[i] = pivot; _indTri[i] = tri;
         }
     }
 
@@ -722,12 +724,15 @@ public partial class Hud : CanvasLayer
             var mine = k.Killer == MyId || k.Victim == MyId;
             var suicide = k.Killer == k.Victim;
             _feed[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
-            Set(_feedKiller[i], suicide ? victim : killer);
+            // your own rows say so in words as well as colour (as the scoreboard does)
+            Set(_feedKiller[i], WithYou(suicide ? victim : killer, k.Killer == MyId));
             Set(_feedWeapon[i], $"[{(k.Cause == KillCause.Roadkill ? Strings.T("feed.roadkill") : WeaponName(k.Weapon))}]");
-            Set(_feedVictim[i], suicide ? "" : victim);
+            Set(_feedVictim[i], suicide ? "" : WithYou(victim, k.Victim == MyId));
             _feed[i].Visible = true;
         }
     }
+
+    static string WithYou(string name, bool mine) => mine ? Strings.F("score.you", name) : name;
 
     string WeaponName(byte id)
     {
