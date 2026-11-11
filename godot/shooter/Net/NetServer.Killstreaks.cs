@@ -42,11 +42,14 @@ public partial class NetServer
         _streaks.Activate(c.Id, _elapsed, new System.Numerics.Vector3(p.X, p.Y, p.Z));
     }
 
-    /// <summary>A kill for the Streak counter. Returns whether a streak's own weapon made it (the XP streak award).</summary>
+    /// <summary>
+    /// A kill for the Streak counter. Returns whether a streak's own weapon made it (the XP streak award). A streak's own
+    /// weapon never advances the counter; the kill-feed id list (ticket #143) also covers the aircraft and the vehicle gun.
+    /// </summary>
     bool StreakKill(PlayerKilled k)
     {
         var fromStreak = _streaks.IsStreakWeapon(WeaponKey(k.Weapon));
-        _streaks.OnKill(k.Killer, k.Victim, fromStreak);
+        _streaks.OnKill(k.Killer, k.Victim, fromStreak || StreakWeapons.Is(k.Weapon));
         return fromStreak;
     }
 

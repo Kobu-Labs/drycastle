@@ -119,6 +119,7 @@ public partial class Hud : CanvasLayer
         BuildAir();
         BuildStance();
         BuildAmmo();
+        BuildProgress(); // level, XP bar and perk above the ammo block (ticket #143)
         BuildHotbar();
         BuildTop();
         BuildFeed();
@@ -129,6 +130,7 @@ public partial class Hud : CanvasLayer
         BuildMinimap();
         BuildStreaks();
         BuildUav();
+        ApplyMinimapSettings();
         Relayout();
         GetViewport().SizeChanged += Relayout;
         SetHealth(100);
@@ -141,6 +143,7 @@ public partial class Hud : CanvasLayer
     {
         Settings = GameSettings.Current;
         Relayout();
+        ApplyMinimapSettings();
         _gap = -1;
         _hintMode = null;
         if (_crossRoot != null) _crossRoot.Visible = Settings.ShowCrosshair;

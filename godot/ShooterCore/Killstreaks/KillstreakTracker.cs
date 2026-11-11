@@ -50,8 +50,11 @@ public sealed class KillstreakTracker
         for (var i = 0; i < KillstreakService.Slots; i++) _loadout[i] = i < loadoutStreaks.Count ? loadoutStreaks[i] ?? "" : "";
     }
 
-    /// <summary>One of the owner's kills (not a suicide). Streak-weapon kills do not count; no streak has a weapon yet.</summary>
-    public void OnKill() => _kills++;
+    /// <summary>One of the owner's kills (not a suicide). A kill made with a streak's own weapon does not count (ticket #143).</summary>
+    public void OnKill(bool fromStreak = false)
+    {
+        if (!fromStreak) _kills++;
+    }
 
     /// <summary>The server earned a streak; <paramref name="kills"/> is the server's counter at that moment.</summary>
     public void OnEarned(string streakId, int kills)

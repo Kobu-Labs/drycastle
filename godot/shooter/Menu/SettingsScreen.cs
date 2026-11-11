@@ -189,6 +189,9 @@ public partial class SettingsScreen : MenuScreen
         Toggle("gameplay.invert", _draft.InvertY, on => _draft.InvertY = on);
         Slider("gameplay.fov", SettingsRanges.FovMin, SettingsRanges.FovMax, 1, _draft.Fov, v => Strings.F("fmt.degrees", (int)v), v => _draft.Fov = v);
         Toggle("gameplay.crosshair", _draft.ShowCrosshair, on => _draft.ShowCrosshair = on);
+        Slider("hud2.set.minimap.size", MinimapSettings.SizeMin, MinimapSettings.SizeMax, 16, _draft.MinimapSize, v => Strings.F("hud2.fmt.px", (int)v), v => _draft.MinimapSize = v);
+        Slider("hud2.set.minimap.opacity", MinimapSettings.OpacityMin * 100, MinimapSettings.OpacityMax * 100, 5, _draft.MinimapOpacity * 100, v => Strings.F("fmt.percent", (int)v), v => _draft.MinimapOpacity = v / 100f);
+        Slider("hud2.set.minimap.zoom", MinimapSettings.ZoomMin, MinimapSettings.ZoomMax, 5, _draft.MinimapZoom, v => Strings.F("hud2.fmt.metres", (int)v), v => _draft.MinimapZoom = v);
     }
 
     void BuildAccess()
