@@ -95,6 +95,7 @@ public partial class NetClient
         {
             if (_povCam is { Current: true }) { _povCam.Current = false; _me.Camera.Current = true; }
             _pov.SetOn(false);
+            _pov.SetMarkers(null, null);
             return;
         }
         _povCam ??= new Camera3D { Fov = 75, Far = 2000 };
@@ -107,6 +108,7 @@ public partial class NetClient
         _me.Camera.Current = false;
         _povCam.Current = true;
         _pov.SetOn(true);
+        _pov.SetMarkers(_povCam, EnemyMarkerPoints());
         // the estimate: height over the speed's downward part, on flat ground at the body's height (the ground under it is not sent)
         var alt = p.Y - _me.GlobalPosition.Y;
         var missile = Killstreaks?.Find(AttackMissileStreak.StreakId)?.Missile;

@@ -88,13 +88,13 @@ public partial class GunshipOverlay : CanvasLayer
         string? _selector;
         ulong _hitAtMs;
         bool _hitKill, _hitHead;
+        static readonly List<Vector3> EmptyPoints = new();
+
         /// <summary>How long the hit marker stays, in ms: the HUD's marker is 0.15 s plus a 0.25 s fade.</summary>
         const ulong HitMarkerMs = 400;
 
         Camera3D? _camera;
         List<Vector3>? _points;
-        /// <summary>Corners of one diamond, reused every draw (no allocation per frame).</summary>
-        readonly Vector2[] _diamond = new Vector2[5];
 
         /// <summary>Starts the hit marker; redraws each frame until it has faded.</summary>
         public void Hit(bool headshot, bool kill)
@@ -131,60 +131,6 @@ public partial class GunshipOverlay : CanvasLayer
             }
         }
 
-        /// <summary>
-        /// The enemy markers: a diamond outline on each visible point, sized by distance (clamped), the one nearest the reticle
-        /// brighter and larger (a pulse unless reduce motion). Points behind the camera or off the screen are not drawn.
-        /// </summary>
-        void DrawEnemyMarkers(Vector2 centre, float s)
-        {
-            if (_camera == null || _points == null || _points.Count == 0) return;
-            var size = Size;
-            var pulse = GameSettings.Current.ReduceMotion ? 1f : 0.5f + 0.5f * Mathf.Sin((float)(Time.GetTicksMsec() / 1000.0 * Mathf.Tau * 1.5));
-            // pass 1: the visible points, and the one nearest the reticle (the aimed one)
-            var aimedIndex = -1; var aimedD = float.MaxValue;
-            for (var i = 0; i < _points.Count; i++)
-            {
-                if (ProjectVisible(_points[i], size) is not { } at) continue;
-                var d = at.DistanceTo(centre);
-                if (d < aimedD) { aimedD = d; aimedIndex = i; }
-            }
-            // pass 2: draw them; the aimed one brighter and larger
-            for (var i = 0; i < _points.Count; i++)
-            {
-                if (ProjectVisible(_points[i], size) is not { } at) continue;
-                var half = HalfSize(_points[i], s);
-                if (i == aimedIndex && aimedD <= AimRadiusPx * s) DrawDiamond(at, half * 1.35f, true, pulse);
-                else DrawDiamond(at, half, false, pulse);
-            }
-        }
-
-        /// <summary>The screen position of a point, or null when it is behind the camera or off the screen.</summary>
-        Vector2? ProjectVisible(Vector3 p, Vector2 size)
-        {
-            if (_camera!.IsPositionBehind(p)) return null;
-            var at = _camera.UnprojectPosition(p);
-            return at.X < 0 || at.Y < 0 || at.X > size.X || at.Y > size.Y ? null : at;
-        }
-
-        /// <summary>Half the diamond's diagonal for a point: MarkerScaleM over its distance, clamped to the min and max (scaled by screen height).</summary>
-        float HalfSize(Vector3 p, float s)
-        {
-            var dist = _camera!.GlobalPosition.DistanceTo(p);
-            return Mathf.Clamp(MarkerScaleM / Mathf.Max(dist, 1f), MarkerMinPx, MarkerMaxPx) * s;
-        }
-
-        /// <summary>One diamond outline around <paramref name="at"/>; <paramref name="aimed"/> draws it brighter and thicker.</summary>
-        void DrawDiamond(Vector2 at, float half, bool aimed, float pulse)
-        {
-            _diamond[0] = at + new Vector2(0, -half);
-            _diamond[1] = at + new Vector2(half, 0);
-            _diamond[2] = at + new Vector2(0, half);
-            _diamond[3] = at + new Vector2(-half, 0);
-            _diamond[4] = _diamond[0];
-            var width = (aimed ? 3f : 2f) * (0.8f + 0.2f * pulse);
-            DrawPolyline(_diamond, aimed ? Colors.White.Lerp(ShooterTheme.Danger, 0.35f) : ShooterTheme.Danger, width, true);
-        }
-
         public void Set(string title, string zoom, string ammo, string hint, string? selector)
         {
             _title = title; _zoom = zoom; _ammo = ammo; _hint = hint; _selector = selector;
@@ -198,11 +144,6 @@ public partial class GunshipOverlay : CanvasLayer
             QueueRedraw();
         }
 
-        // marker sizing (pixels at 1080 p): the diamond's half-diagonal is MarkerScaleM / distance, clamped
-        const float MarkerScaleM = 900f, MarkerMinPx = 6f, MarkerMaxPx = 22f;
-        /// <summary>A diamond counts as the aimed one only within this distance of the reticle (pixels at 1080 p).</summary>
-        const float AimRadiusPx = 60f;
-
         public override void _Draw()
         {
             var font = ThemeDB.FallbackFont;
@@ -213,7 +154,7 @@ public partial class GunshipOverlay : CanvasLayer
             var m = ShooterTheme.Margin * s;
             var centre = size / 2f;
 
-            DrawEnemyMarkers(centre, s);
+            if (_camera != null) EnemyMarkers.Draw(this, _camera, _points ?? EmptyPoints, centre, size, s);
 
             // reticle: a ring, four ticks with a gap at the centre
             DrawArc(centre, 14f * s, 0, Mathf.Tau, 48, ShooterTheme.Text, ShooterTheme.BorderStrong * s);

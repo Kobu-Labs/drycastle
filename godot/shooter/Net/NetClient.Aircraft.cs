@@ -103,7 +103,7 @@ public partial class NetClient
             // the timed streak's clock: the helicopter's, or the AC-130's time left (whole seconds, its kills are not counted here)
             var (timer, kills) = _ac130Active ? (Strings.F("ac130.timer", (int)Math.Ceiling(Ac130SecondsLeft)), "") : HeliClock();
             _gunOverlay.SetClock(timer, kills);
-            _gunOverlay.SetMarkers(_me.Camera, EnemyMarkers());
+            _gunOverlay.SetMarkers(_me.Camera, EnemyMarkerPoints());
         }
         else if (_gunship != null) EndGunship();
 
@@ -117,7 +117,7 @@ public partial class NetClient
     /// Fills <see cref="_enemyMarkers"/> from the remote replicas (players and target dummies share them): every one but the owner
     /// and the dead (a dummy's Defeat pose, a player's body). Positions are the replicas' feet plus the chest height.
     /// </summary>
-    List<Vector3> EnemyMarkers()
+    List<Vector3> EnemyMarkerPoints()
     {
         _enemyMarkers.Clear();
         foreach (var (id, r) in _remotes)

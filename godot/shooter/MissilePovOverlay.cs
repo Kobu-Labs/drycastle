@@ -19,6 +19,7 @@ public partial class MissilePovOverlay : CanvasLayer
     ColorRect _thermal = null!;
     ColorRect _static = null!;
     Label _alt = null!, _time = null!, _eta = null!;
+    readonly MarkerLayer _markers = new();
     int _shownAlt = int.MinValue, _shownTime = int.MinValue, _shownEta = int.MinValue;
     double _impactAt = double.NegativeInfinity;
 
@@ -37,6 +38,11 @@ public partial class MissilePovOverlay : CanvasLayer
         _thermal.Material = grade;
         _thermal.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _root.AddChild(_thermal);
+
+        // the enemy markers (ticket #159): the same red diamonds as the gunship overlay, over the infrared view
+        _markers.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        _markers.MouseFilter = Control.MouseFilterEnum.Ignore;
+        _root.AddChild(_markers);
 
         _static = new ColorRect { Color = new Color(0.82f, 0.84f, 0.88f, 0f), MouseFilter = Control.MouseFilterEnum.Ignore };
         _static.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -78,6 +84,12 @@ public partial class MissilePovOverlay : CanvasLayer
         return l;
     }
 
+    /// <summary>
+    /// The enemy markers for this frame (the POV camera that projects them and the world points; the overlay keeps no copy).
+    /// Null or empty hides them. Call every frame while the missile is controlled.
+    /// </summary>
+    public void SetMarkers(Camera3D? camera, List<Vector3>? points) => _markers.Set(camera, points);
+
     /// <summary>Shows or hides the whole overlay (the static, when it is still fading, is part of it).</summary>
     public void SetOn(bool on) => _root.Visible = on;
 
@@ -97,6 +109,29 @@ public partial class MissilePovOverlay : CanvasLayer
 
     /// <summary>The missile hit: the screen goes to static and clears over <see cref="StaticSeconds"/>.</summary>
     public void Impact() => _impactAt = Time.GetTicksMsec() / 1000.0;
+
+    /// <summary>The marker drawing: one Control, redrawn only while it has points to track.</summary>
+    sealed partial class MarkerLayer : Control
+    {
+        Camera3D? _camera;
+        List<Vector3>? _points;
+
+        public void Set(Camera3D? camera, List<Vector3>? points)
+        {
+            _camera = camera; _points = points;
+            SetProcess(_camera != null && _points is { Count: > 0 });
+            QueueRedraw();
+        }
+
+        public override void _Process(double delta) => QueueRedraw(); // the markers track the view and pulse
+
+        public override void _Draw()
+        {
+            if (_camera == null || _points == null) return;
+            var s = Math.Clamp(Size.Y / 1080f, 0.5f, 3f);
+            EnemyMarkers.Draw(this, _camera, _points, Size / 2f, Size, s);
+        }
+    }
 
     public override void _Process(double delta)
     {
