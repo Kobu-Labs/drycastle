@@ -51,10 +51,14 @@ public sealed class MatchSim
     readonly SortedDictionary<ushort, MatchPlayer> _players = new();
     double _roundStart, _endsAt;
 
-    public MatchSim(MatchConfig cfg, Func<double> clock, IReadOnlyList<Vector3> spawnCandidates, Random? rng = null)
+    public MatchSim(MatchConfig cfg, Func<double> clock, IReadOnlyList<Vector3> spawnCandidates, Random? rng = null, WorldEntityRegistry? worldTypes = null)
     {
         _cfg = cfg; _now = clock; _spawns = spawnCandidates; _rng = rng ?? new Random();
+        Entities = new WorldEntityManager(worldTypes);
     }
+
+    /// <summary>World entities (turrets, missiles, ...) of this match. Cleared at each round start. The server ticks it.</summary>
+    public WorldEntityManager Entities { get; }
 
     public MatchPhase Phase { get; private set; } = MatchPhase.Waiting;
     public IReadOnlyList<ushort> Winners { get; private set; } = Array.Empty<ushort>();
@@ -156,6 +160,7 @@ public sealed class MatchSim
     void StartRound()
     {
         foreach (var p in _players.Values) { p.Kills = 0; p.Deaths = 0; p.Life = PlayerLife.Unspawned; }
+        Entities.Clear();
         Winners = Array.Empty<ushort>();
         _roundStart = _now();
         Phase = MatchPhase.Running;

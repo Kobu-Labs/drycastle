@@ -72,6 +72,8 @@ public partial class NetClient : Node
     ushort _seq;
     readonly List<Pending> _pending = new();
     readonly SnapshotDecoder _dec = new();
+    /// <summary>Replicated world entities (turrets, missiles, ...). Subscribe to Spawned/Despawned for visuals.</summary>
+    public readonly WorldReplica WorldEntities = new();
     readonly Dictionary<ushort, string> _names = new();
     readonly Dictionary<ushort, Remote> _remotes = new();
     uint _lastTick;
@@ -199,6 +201,7 @@ public partial class NetClient : Node
         if (d.Length == 0) return;
         if (d[0] < Wire.TInput) OnReliable(Wire.DecodeReliable(d));
         else if (d[0] == Wire.TSnapshot) OnSnapshot(d);
+        else if (d[0] == Wire.TWorldSnapshot) WorldEntities.Apply(d);
     }
 
     void OnReliable(ReliableMsg? m)
@@ -233,6 +236,7 @@ public partial class NetClient : Node
             case EventMsg e:
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
+                WorldEntities.OnEvent((EventKind)e.Kind, e.Payload);
                 EventReceived?.Invoke((EventKind)e.Kind, e.Payload);
                 break;
         }

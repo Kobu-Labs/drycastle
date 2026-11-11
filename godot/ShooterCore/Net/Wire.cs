@@ -24,6 +24,10 @@ public enum EventKind : byte
     VehicleExplosion = 11,
     /// <summary>Server broadcast: a shotgun fired its pellet fan (shooter, weapon, origin, aim, seed). Clients expand the seed into the same pellets for FX.</summary>
     PelletFan = 12,
+    /// <summary>Server broadcast: a world entity was spawned (id, type, full state). See <see cref="WorldCodec"/>.</summary>
+    WorldSpawn = 13,
+    /// <summary>Server broadcast: a world entity was despawned (id, reason). See <see cref="WorldCodec"/>.</summary>
+    WorldDespawn = 14,
 }
 
 public abstract record ReliableMsg;
@@ -71,6 +75,7 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 ///     Rot(4):      u16 yaw, i16 pitch
 ///     Status(8):   u8 health, u8 state, u8 weapon
 ///   Unchanged entities are omitted; a keyframe (all of the above, absolute) is sent for new entities and every 30 ticks.
+/// ch1 server to client, WorldSnapshot(21): world entities (turrets, missiles, ...), see <see cref="WorldReplica"/> and <see cref="WorldCodec"/>.
 /// </summary>
 public static class Wire
 {
@@ -85,8 +90,10 @@ public static class Wire
     public const int InputBytes = 11;
 
     public const byte THello = 1, TWelcome = 2, TJoin = 3, TLeave = 4, TEvent = 5, TProfile = 6, TSaveLoadout = 7, TSelectSlot = 8, TError = 9;
-    public const byte TInput = 10, TSnapshot = 20;
-    public const byte FPosAbs = 1, FPosDelta = 2, FRot = 4, FStatus = 8;
+    public const byte TInput = 10, TSnapshot = 20, TWorldSnapshot = 21;
+    public const byte FPosAbs = 1, FPosDelta = 2, FRot = 4, FStatus = 8, FHp = 16;
+    /// <summary>Flags that make a snapshot record a keyframe (world entities; players and vehicles use the same three).</summary>
+    public const byte FKey = FPosAbs | FRot | FStatus;
 
     /// <summary>Cuts <paramref name="n"/> to at most <paramref name="maxBytes"/> utf8 bytes without splitting a character.</summary>
     static string Fit(string n, int maxBytes)
