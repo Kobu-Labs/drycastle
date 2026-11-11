@@ -33,5 +33,23 @@ public sealed partial class WeaponViewmodel : Node3D
     /// <summary>Flash the current weapon's muzzle (no-op for melee / nothing shown).</summary>
     public void Flash(float scale) { if (Current is { Visible: true } n) MuzzleFlash.Of(n)?.Flash(scale); }
 
-    public override void _Ready() { Position = new Vector3(0.24f, -0.22f, -0.5f); }
+    static readonly Vector3 HipPosition = new(0.24f, -0.22f, -0.5f);
+    const float AdsDepth = -0.42f, AdsRate = 14f;
+    float _aim;
+
+    /// <summary>Holding aim-down-sights: the gun eases to the screen centre so its iron sight sits on the crosshair point.</summary>
+    public bool Aiming { get; set; }
+    /// <summary>0 = hip, 1 = fully aimed (eased, so the HUD can fade the crosshair with it).</summary>
+    public float AimAmount => _aim;
+
+    public override void _Ready() { Position = HipPosition; }
+
+    public override void _Process(double delta)
+    {
+        var target = Aiming ? 1f : 0f;
+        if (Mathf.IsEqualApprox(_aim, target) && _aim == target) return;
+        _aim = Mathf.MoveToward(Mathf.Lerp(_aim, target, 1f - Mathf.Exp(-AdsRate * (float)delta)), target, 0.002f);
+        var sight = Current is { } n && n.HasMeta(WeaponFx.SightHeightMeta) ? (float)n.GetMeta(WeaponFx.SightHeightMeta) : 0.1f;
+        Position = HipPosition.Lerp(new Vector3(0, -sight, AdsDepth), _aim);
+    }
 }

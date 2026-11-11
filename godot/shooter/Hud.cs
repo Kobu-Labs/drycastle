@@ -25,6 +25,9 @@ public partial class Hud : CanvasLayer
     public Func<float>? Spread { get; set; }
     /// <summary>True while a scope is up (sniper zoom): the dark ring and thin reticle replace the crosshair.</summary>
     public Func<bool>? Scoped { get; set; }
+    /// <summary>Iron-sight aim amount 0..1; the crosshair fades out as it rises (the weapon's own sight takes over).</summary>
+    public Func<float>? Aim { get; set; }
+    float _crossAlpha = 1;
     Control _scope = null!;
 
     Control _root = null!;
@@ -628,6 +631,8 @@ public partial class Hud : CanvasLayer
         var scoped = Scoped?.Invoke() ?? false;
         if (_scope.Visible != scoped) { _scope.Visible = scoped; _scope.QueueRedraw(); _crossRoot.Visible = Settings.ShowCrosshair && !scoped; }
         if (scoped) return;
+        var alpha = 1f - Math.Clamp(Aim?.Invoke() ?? 0f, 0f, 1f);
+        if (Math.Abs(alpha - _crossAlpha) > 0.004f) { _crossAlpha = alpha; _crossRoot.Modulate = new Color(1, 1, 1, alpha); }
         var deg = Spread?.Invoke() ?? 0f;
         var gap = HudLogic.CrosshairGap(deg, Settings.Fov, GetViewport().GetVisibleRect().Size.Y, CrossMinGap * UiFactor()) / UiFactor();
         if (Math.Abs(gap - _gap) < 0.25f) return;

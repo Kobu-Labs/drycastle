@@ -559,6 +559,11 @@ public partial class NetClient : Node
         var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
         var on = zoom > 0 && !Dead && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
         _me.ZoomFov = on ? zoom : 0f;
+        // iron sights: any non-scoped, non-melee weapon while zoom is held
+        var kind = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Kind : WeaponKind.Melee;
+        if (_viewmodel != null)
+            _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && !_driving && _myState != EntityState.InVehicle
+                && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
     }
 
     void ReadSlotKeys()

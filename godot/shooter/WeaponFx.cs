@@ -18,6 +18,9 @@ public static class WeaponFx
         ["knife"] = ("quaternius-ultimate-gun-pack/bayonet.glb", 0.32f),
     };
 
+    /// <summary>Node meta: height of the weapon's top (iron sight) above its origin, in metres; the viewmodel lowers the gun by this much to aim down sights.</summary>
+    public const string SightHeightMeta = "sight_height";
+
     /// <summary>The weapon node for <paramref name="weaponId"/>, or null when headless / unknown id.</summary>
     public static Node3D? Make(string weaponId)
     {
@@ -32,8 +35,9 @@ public static class WeaponFx
             model.Position = new Vector3(-(box.Position.X + box.Size.X * 0.3f), -(box.Position.Y + box.Size.Y * 0.8f), -(box.Position.Z + box.Size.Z * 0.5f));
             holder.AddChild(model);
             root.AddChild(holder);
+            root.SetMeta(SightHeightMeta, box.Size.Y * 0.2f * s); // top of the model (its iron sight) above the grip origin
         }
-        else if (weaponId == "bazooka") BuildTube(root);
+        else if (weaponId == "bazooka") { BuildTube(root); root.SetMeta(SightHeightMeta, 0.05f); }
         else return null;
         // muzzle marker: the barrel tip (0.7 of the length in front of the grip; the tube ends at -0.81)
         var z = weaponId == "bazooka" ? -0.82f : Models.TryGetValue(weaponId, out var mm) ? -mm.Length * 0.7f : -0.3f;
