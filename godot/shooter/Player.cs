@@ -166,6 +166,7 @@ public partial class Player : CharacterBody3D
         if (Input.IsActionPressed("zoom")) b |= MoveButtons.Aim;
         if (Input.IsActionPressed("reload")) b |= MoveButtons.Reload;
         if (Input.IsActionPressed("interact")) b |= MoveButtons.Use;
+        if (Input.IsActionPressed("headlights")) b |= MoveButtons.Headlights;
         var captured = Input.MouseMode == Input.MouseModeEnum.Captured;
         return new MoveInput
         {

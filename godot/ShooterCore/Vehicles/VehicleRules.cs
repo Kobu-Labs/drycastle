@@ -115,10 +115,14 @@ public static class VehicleRecord
 {
     public const ushort FirstId = 0x4000;
 
-    /// <summary>The Health byte of a vehicle record carries the damage stage (0..3); a destroyed vehicle is State Dead.</summary>
-    public static EntityRecord Make(ushort id, Vector3 pos, float yaw, ushort driver, byte colourAndKind, int stage = 0, bool destroyed = false)
+    /// <summary>Health byte bit 0x80: headlights on (one bit, see <see cref="Headlights"/>). Bits 0..1 are the damage stage.</summary>
+    public const byte LightsBit = 0x80, StageMask = 0x03;
+
+    /// <summary>The Health byte of a vehicle record carries the damage stage (0..3) and the headlights bit; a destroyed vehicle is State Dead.</summary>
+    public static EntityRecord Make(ushort id, Vector3 pos, float yaw, ushort driver, byte colourAndKind, int stage = 0, bool destroyed = false, bool lights = false)
     {
-        var r = EntityRecord.Make(id, EntityType.Vehicle, pos, yaw, 0, stage, destroyed ? EntityState.Dead : driver != 0 ? EntityState.InVehicle : EntityState.Alive, colourAndKind);
+        var health = (stage & StageMask) | (lights ? LightsBit : 0);
+        var r = EntityRecord.Make(id, EntityType.Vehicle, pos, yaw, 0, health, destroyed ? EntityState.Dead : driver != 0 ? EntityState.InVehicle : EntityState.Alive, colourAndKind);
         r.Pitch = unchecked((short)driver);
         return r;
     }
@@ -127,7 +131,8 @@ public static class VehicleRecord
     public static byte Pack(int kind, byte colour) => (byte)((kind << 4) | (colour & 0xF));
 
     public static ushort Driver(in EntityRecord r) => unchecked((ushort)r.Pitch);
-    public static int Stage(in EntityRecord r) => r.Health;
+    public static int Stage(in EntityRecord r) => r.Health & StageMask;
+    public static bool Lights(in EntityRecord r) => (r.Health & LightsBit) != 0;
     public static byte Colour(in EntityRecord r) => (byte)(r.Weapon & 0xF);
     public static int Kind(in EntityRecord r) => r.Weapon >> 4;
 }
