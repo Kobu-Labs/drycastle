@@ -151,9 +151,12 @@ shooter-icons:
 	godot --path godot/shooter --script res://tools/render_icons.gd
 	python3 godot/shooter/tools/make_icons.py
 
+# TARGETS: stationary target dummies planted for testing (issue #148); 0 turns them off. docs/shooter-server.md.
+TARGETS ?= 24
+
 shooter-server:
 	dotnet build godot/shooter/shooter.csproj
-	godot --headless --path godot/shooter -- --role server $(if $(SMOKE),--smoke,) $(UNLOCK_ARG) $(SHOOTER_MAP)
+	godot --headless --path godot/shooter -- --role server --targets $(TARGETS) $(if $(SMOKE),--smoke,) $(UNLOCK_ARG) $(SHOOTER_MAP)
 
 shooter-client:
 	dotnet build godot/shooter/shooter.csproj

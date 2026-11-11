@@ -383,6 +383,7 @@ public partial class NetServer
     {
         var dmg = RunOver.Damage(Vehicles!, car.State.Speed, Vehicles!.RunOverScale(car.Def));
         if (dmg <= 0) return;
+        RunOverTargets(car, driver, dmg); // target dummies (#148)
         var fwd = car.Forward;
         var right = new Vector3(Mathf.Cos(car.State.Yaw), 0, -Mathf.Sin(car.State.Yaw));
         foreach (var t in _byId.Values)

@@ -38,6 +38,8 @@ public enum KillCause : byte { Standard = 0, Headshot = 1, Roadkill = 2 }
 /// <summary>Killer == Victim for suicides.</summary>
 public sealed record PlayerKilled(ushort Killer, ushort Victim, byte Weapon, KillCause Cause = KillCause.Standard) : MatchEvent;
 public sealed record PlayerDied(ushort Victim, ushort Killer, float RespawnDelay) : MatchEvent;
+/// <summary>A target dummy (#148) was killed: no roster change, no round end.</summary>
+public sealed record TargetKilled(ushort Killer, TargetDummies.Dummy Target, byte Weapon, KillCause Cause) : MatchEvent;
 
 public enum PlayerLife : byte { Unspawned, Alive, Dead }
 
@@ -79,6 +81,10 @@ public sealed class MatchSim
     public IReadOnlyList<ushort> Winners { get; private set; } = Array.Empty<ushort>();
     public IReadOnlyCollection<MatchPlayer> Players => _players.Values;
     public MatchConfig Config => _cfg;
+    /// <summary>The target dummies of this match (#148); empty until <see cref="SetTargets"/>. Not in <see cref="Players"/>.</summary>
+    public TargetDummies Targets { get; private set; } = new(Array.Empty<TargetSpot>(), TargetDummies.RespawnDelay);
+
+    public void SetTargets(IReadOnlyList<TargetSpot> spots) => Targets = new TargetDummies(spots, TargetDummies.RespawnDelay);
     public event Action<MatchEvent>? Event;
 
     public MatchPlayer? Get(ushort id) => _players.GetValueOrDefault(id);
@@ -136,6 +142,7 @@ public sealed class MatchSim
     /// </summary>
     public DamageResult ApplyDamage(ushort victim, ushort attacker, byte weapon, float amount, bool ignoreProtection = false, KillCause cause = KillCause.Standard)
     {
+        if (TargetDummies.IsDummyId(victim)) return ApplyTargetDamage(victim, attacker, weapon, amount, cause);
         if (Phase != MatchPhase.Running || amount <= 0) return DamageResult.Ignored;
         if (!_players.TryGetValue(victim, out var v) || v.Life != PlayerLife.Alive) return DamageResult.Ignored;
         if (!ignoreProtection && IsProtected(victim)) return DamageResult.Ignored;
@@ -154,9 +161,32 @@ public sealed class MatchSim
         return DamageResult.Killed;
     }
 
+    /// <summary>
+    /// A target dummy died to <paramref name="killer"/> (#148): the shooter gets +1 kill on the scoreboard. The score goal
+    /// does not end the round on a target kill, and nobody spawns or dies because of it. Ignored outside a running round
+    /// or for an unknown shooter.
+    /// </summary>
+    public void CreditTargetKill(ushort killer, TargetDummies.Dummy target, byte weapon, KillCause cause = KillCause.Standard)
+    {
+        if (Phase != MatchPhase.Running || !_players.TryGetValue(killer, out var a)) return;
+        a.Kills++;
+        Emit(new TargetKilled(killer, target, weapon, cause));
+        Emit(new ScoreboardChanged());
+    }
+
+    /// <summary>A target dummy takes a hit from every weapon path. A kill credits the shooter (<see cref="CreditTargetKill"/>).</summary>
+    DamageResult ApplyTargetDamage(ushort id, ushort attacker, byte weapon, float amount, KillCause cause)
+    {
+        if (Phase != MatchPhase.Running || amount <= 0) return DamageResult.Ignored;
+        var r = Targets.Damage(id, amount, _now());
+        if (r == DamageResult.Killed) CreditTargetKill(attacker, Targets.Get(id)!, weapon, cause);
+        return r;
+    }
+
     public void Update()
     {
         var now = _now();
+        Targets.Update(now);
         switch (Phase)
         {
             case MatchPhase.Running:
@@ -176,6 +206,7 @@ public sealed class MatchSim
     {
         foreach (var p in _players.Values) { p.Kills = 0; p.Deaths = 0; p.Life = PlayerLife.Unspawned; }
         Entities.Clear();
+        Targets.ResetAll();
         Winners = Array.Empty<ushort>();
         _roundStart = _now();
         Phase = MatchPhase.Running;

@@ -250,6 +250,7 @@ public partial class NetClient : Node
                 if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
                 break;
             case EventMsg e:
+                if ((EventKind)e.Kind == EventKind.TargetRoster) OnTargetRoster(e.Payload); // target dummies' names (#148)
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 OnProgressionEvent((EventKind)e.Kind, e.Payload);
@@ -316,8 +317,8 @@ public partial class NetClient : Node
             if (id == _myId) { OnSelf(rec, h.Ack); continue; }
             if (rec.Type == EntityType.Projectile) { OnRocketState(id, rec); continue; }
             if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
-            if (rec.Type != EntityType.Player) continue;
-            if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id); _remotes[id] = r; }
+            if (rec.Type is not (EntityType.Player or EntityType.Target)) continue;
+            if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); _remotes[id] = r; }
             r.State = rec.State; r.Stance = rec.Stance; r.Slot = rec.Weapon;
             r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
@@ -351,7 +352,7 @@ public partial class NetClient : Node
         }
     }
 
-    Remote MakeRemote(ushort id)
+    Remote MakeRemote(ushort id, bool target = false)
     {
         var node = new Node3D { Name = $"Remote{id}" };
         var view = CharacterView.Make();
@@ -360,6 +361,7 @@ public partial class NetClient : Node
         node.AddChild(new Label3D
         {
             Text = _names.TryGetValue(id, out var n) ? n : $"#{id}",
+            Modulate = target ? TargetTint : Colors.White, // orange name tag for target dummies (#148)
             Position = new Vector3(0, MoveConsts.CapsuleHeight + 0.3f, 0),
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
             PixelSize = 0.005f, NoDepthTest = true,

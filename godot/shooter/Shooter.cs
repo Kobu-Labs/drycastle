@@ -13,6 +13,7 @@ namespace Suchohrad.Shooter;
 ///   --loss-test N [--loss-measure S] [--loss-out DIR]   server: loss/latency test round for N bots (use with --match-set min_players=N); --loss-bot walker|shooter on the bots (make shooter-loss-test)
 ///   --match-set k=v,k=v       server: override match.json values (score_goal, time_limit, respawn_delay, spawn_protection, end_screen_time, min_spawn_distance, min_players)
 ///   --unlock-all              server: dev mode, every weapon, perk, killstreak and level-gated item unlocked (also SUCHOHRAD_UNLOCK_ALL=1); nothing is saved (issue #149)
+///   --targets N               server: plant N stationary target dummies around the spawn area (0-64; default from match.json, 0; make shooter-server uses 24)
 ///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
 ///   --match-bot alice|bob     client: scripted match smoke role (alice kills bob with the debug command, bob fires after each spawn)
 ///   --blast-smoke             server: flat arena with three cars, judges vehicle damage stages, the blast and the chain reaction; --blast-bot a|b client roles (ticket #103)
@@ -260,7 +261,7 @@ public partial class Shooter : Node3D
         {
             World = this, KillY = killY, Water = _water, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, CamoData = _data.Camo, Turret = _data.Turret,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
-            MatchConfig = ApplyOverrides(_data.Match, cfg.Str("match-set")),
+            MatchConfig = WithTargets(ApplyOverrides(_data.Match, cfg.Str("match-set")), cfg.Str("targets")),
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")),
             RoadSpawns = _map.SpawnPoints.Where(sp => sp.Kind == "road").OrderBy(sp => sp.Highway is "path" or "footway" or "steps" or "track" ? 1 : 0)
                 .Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
@@ -311,6 +312,15 @@ public partial class Shooter : Node3D
             }
         }
         return v;
+    }
+
+    /// <summary>--targets N: how many stationary target dummies the server plants (0-64, #148). Absent keeps match.json's value.</summary>
+    static MatchConfig WithTargets(MatchConfig m, string spec)
+    {
+        if (spec == "") return m;
+        if (!int.TryParse(spec, out var n) || n < 0 || n > 64) throw new InvalidOperationException($"bad --targets {spec} (0-64)");
+        m.Targets = n;
+        return m;
     }
 
     static MatchConfig ApplyOverrides(MatchConfig m, string spec)

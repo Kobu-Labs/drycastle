@@ -28,6 +28,8 @@ public enum EventKind : byte
     WorldSpawn = 13,
     /// <summary>Server broadcast: a world entity was despawned (id, reason). See <see cref="WorldCodec"/>.</summary>
     WorldDespawn = 14,
+    /// <summary>Server to one player on join: the target dummies' ids and names (<see cref="TargetCodec"/>). Kinds 140-149 belong to the target dummies (#148); 141-149 are free.</summary>
+    TargetRoster = 140,
     /// <summary>Server to one player: the player reached a new level (<see cref="ProgressionEvents"/>).</summary>
     LevelUp = 15,
     /// <summary>Server to one player at the end of a round: XP earned in it, with the reasons (<see cref="ProgressionEvents"/>).</summary>
@@ -117,8 +119,8 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 /// </summary>
 public static class Wire
 {
-    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them).</summary>
-    public const byte ProtocolVersion = 6;
+    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140).</summary>
+    public const byte ProtocolVersion = 7;
     public const byte TickRate = 30;
     public const int ChanReliable = 0, ChanData = 1, Channels = 2;
     public const int KeyEvery = 30;
