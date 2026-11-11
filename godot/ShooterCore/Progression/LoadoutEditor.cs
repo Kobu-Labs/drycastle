@@ -19,7 +19,9 @@ public readonly record struct WeaponStat(string Key, float Value, float Share);
 public static class LoadoutEditor
 {
     public const string StatDamage = "damage", StatRate = "rate", StatMagazine = "magazine", StatMobility = "mobility";
+    public const string StatRange = "range", StatRecoil = "recoil";
     public static readonly string[] StatKeys = { StatDamage, StatRate, StatMagazine, StatMobility };
+    public static readonly string[] CompareKeys = { StatDamage, StatRate, StatRange, StatRecoil, StatMobility };
 
     /// <summary>The rows of one picker: "none" first (perk and streaks), then grouped by category, each group by unlock level then id.</summary>
     public static IReadOnlyList<PickerOption> Options(LoadoutPicker pick, WeaponsFile weapons, PerksFile perks,
@@ -65,6 +67,27 @@ public static class LoadoutEditor
             Stat(StatDamage, w.Damage, same.Max(x => x.Damage)),
             Stat(StatRate, RateOf(w), same.Max(RateOf)),
             Stat(StatMagazine, w.MagazineSize, same.Max(x => x.MagazineSize)),
+            Stat(StatMobility, w.MoveSpeedMultiplier, same.Max(x => x.MoveSpeedMultiplier)),
+        };
+    }
+
+    /// <summary>
+    /// The five bars of the picker's compare panel (ticket #147): damage, fire rate, range, recoil and mobility. Each share is
+    /// relative to the best weapon of the same slot, so a fuller bar is better everywhere. Recoil is inverted: the steadiest
+    /// weapon in the slot (the least vertical recoil per shot) fills its bar, and its value is that recoil per shot.
+    /// </summary>
+    public static IReadOnlyList<WeaponStat> CompareStats(WeaponDef w, WeaponsFile weapons)
+    {
+        var same = weapons.Weapons.Where(x => x.Slot == w.Slot).ToList();
+        var steadiest = same.Min(x => x.Recoil.VerticalPerShot);
+        var recoil = w.Recoil.VerticalPerShot;
+        var recoilShare = recoil > 0 ? Math.Clamp(steadiest / recoil, 0f, 1f) : 1f;
+        return new[]
+        {
+            Stat(StatDamage, w.Damage, same.Max(x => x.Damage)),
+            Stat(StatRate, RateOf(w), same.Max(RateOf)),
+            Stat(StatRange, w.Range, same.Max(x => x.Range)),
+            new WeaponStat(StatRecoil, recoil, recoilShare),
             Stat(StatMobility, w.MoveSpeedMultiplier, same.Max(x => x.MoveSpeedMultiplier)),
         };
     }
