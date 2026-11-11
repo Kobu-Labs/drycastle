@@ -13,7 +13,7 @@ namespace Suchohrad.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Stance Stance; public float Spin; public Vector3 Axis = Vector3.Right, TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
+    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -463,7 +463,7 @@ public partial class NetClient : Node
         if (_gunship == null) PredictFire(mi); // rounds from a turret are the server's alone
         var sentPitch = GunnerLook(ref mi); // at the turret the aim is sent (ground-stabilised, #160), and the player's own look is left alone
         if (_gunship == null) _me.Yaw = mi.Yaw;
-        var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(Weapons != null ? _wantSlot : 0), GunnerAim);
+        var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? _wantSlot : 0), GunnerAim);
         if (!_driving && !_controlling && _gunship == null) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         _pending.Add(new Pending { Input = ni, After = _me.State });
         if (_pending.Count > 120) _pending.RemoveAt(0);
@@ -494,30 +494,23 @@ public partial class NetClient : Node
     }
 
     /// <summary>
-    /// The ragdoll of a killed dummy: while it is thrown (it moves fast in the death pose) it tumbles about its middle, then settles
-    /// flat. Everything else is placed upright at its feet. Corpses do the same in <see cref="RenderCorpses"/>.
+    /// The ragdoll of a killed dummy: while it is thrown (dead and moving fast) it spins about its middle with its limbs flailing, then lies flat with
+    /// them loose. A dummy that fell where it stood plays the death clip; everything else stands upright at its feet. Corpses do the same in <see cref="RenderCorpses"/>.
     /// </summary>
     void TumbleRemote(Remote r, Vector3 at, float yaw, bool dummyDown, float dt)
     {
-        var v = dt > 0 ? (at - r.TumbleLast) / dt : Vector3.Zero;
+        var t = r.Tumble;
+        if (!dummyDown) { if (t.Thrown) { t.Reset(); r.View?.SetRagdoll(false); } }
+        else
+        {
+            var speed = dt > 0 ? (at - r.TumbleLast).Length() / dt : 0;
+            t.Update(at, speed > 2.5f && speed < 60f, dt);
+            if (t.Thrown) r.View?.SetRagdoll(true, t.Amount, t.AtRest);
+        }
         r.TumbleLast = at;
-        var flying = dummyDown && v.Length() > 2.5f && v.Length() < 60f;
-        if (flying)
-        {
-            var h = new Vector3(v.X, 0, v.Z);
-            if (h.LengthSquared() > 1e-4f) r.Axis = Vector3.Up.Cross(h.Normalized()).Normalized();
-            r.Spin += TumbleRate * dt;
-        }
-        else if (r.Spin != 0)
-        {
-            var whole = Mathf.Round(r.Spin / Mathf.Tau) * Mathf.Tau; // the nearest full turn: lying flat again
-            r.Spin = Mathf.MoveToward(r.Spin, whole, TumbleSettle * dt);
-            if (Mathf.Abs(r.Spin - whole) < 0.01f) r.Spin = 0;
-        }
-        var tumbling = r.Spin != 0;
-        if (r.View != null) r.View.Position = tumbling ? new Vector3(0, -BodyMid, 0) : Vector3.Zero;
-        r.Node.GlobalPosition = tumbling ? at + Vector3.Up * BodyMid : at;
-        r.Node.Basis = new Basis(r.Axis, r.Spin) * new Basis(Vector3.Up, yaw);
+        if (r.View != null) r.View.Position = t.Thrown ? new Vector3(0, -RagdollTumble.Half, 0) : Vector3.Zero;
+        r.Node.GlobalPosition = t.Thrown ? at + Vector3.Up * t.PivotHeight : at;
+        r.Node.Basis = t.Thrown ? t.BasisFor(yaw) : new Basis(Vector3.Up, yaw);
     }
 
     /// <summary>True while a corpse of player <paramref name="owner"/> is on the map.</summary>
@@ -677,6 +670,15 @@ public partial class NetClient : Node
         if (_viewmodel != null)
             _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && !_driving && _myState != EntityState.InVehicle
                 && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
+    }
+
+    /// <summary>At a turret the slot sent is the key held (1-5, 0 none), not the body's hotbar weapon: the turret reads it as its weapon number (the AC-130's 1-3).</summary>
+    byte TurretKey()
+    {
+        if (Dead || Input.MouseMode != Input.MouseModeEnum.Captured) return 0;
+        for (var k = 0; k < 5; k++)
+            if (Input.IsActionPressed($"slot_{k + 1}")) return (byte)(k + 1);
+        return 0;
     }
 
     void ReadSlotKeys()
