@@ -187,10 +187,10 @@ public class GunshipRoutingTests
     [Fact]
     public void Rounds_to_destroy_a_car_match_the_numbers_on_the_issue()
     {
-        Assert.Equal(34, RoundsToDestroyCar(Weapon("ac130", "gun25").Damage));      // 25 mm: 6 x 1.5 = 9
-        Assert.Equal(6, RoundsToDestroyCar(Weapon("ac130", "gun40").Damage));       // 40 mm: 36 x 1.5 = 54
+        Assert.Equal(4, RoundsToDestroyCar(Weapon("ac130", "gun25").Damage));       // 25 mm: 50 x 1.5 = 75
+        Assert.Equal(3, RoundsToDestroyCar(Weapon("ac130", "gun40").Damage));       // 40 mm: 80 x 1.5 = 120
         Assert.Equal(2, RoundsToDestroyCar(Weapon("ac130", "howitzer").Damage));    // 105 mm: 150 x 1.5 = 225
-        Assert.Equal(8, RoundsToDestroyCar(Weapon("gunship", "cannon").Damage));    // helicopter cannon: 25 x 1.5 = 37.5
+        Assert.Equal(3, RoundsToDestroyCar(Weapon("gunship", "cannon").Damage));    // helicopter cannon: 75 x 1.5 = 112.5
         Assert.Equal(2, RoundsToDestroyCar(100f));                                  // rocket (bazooka): 100 x 1.5 = 150
     }
 
@@ -200,6 +200,6 @@ public class GunshipRoutingTests
     {
         var def = Weapon(gun, weaponId);
         var dps = def.Damage / def.IntervalS;
-        Assert.InRange(dps, 100f, 200f); // a player has 100 hp: each gun kills in about a second of direct fire
+        Assert.InRange(dps, 100f, 1500f); // a player has 100 hp: every gun kills in about a second or less of direct fire (the user raised the damage: heli 75, 25 mm 50, 40 mm 80)
     }
 }

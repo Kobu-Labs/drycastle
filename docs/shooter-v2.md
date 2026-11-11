@@ -165,9 +165,9 @@ on a body (the hit point), and rounds to destroy a 300 hp car (direct hit, rocke
 
 | Weapon | Interval | Damage | Direct DPS | Blast radius | Car rounds |
 |---|---|---|---|---|---|
-| Helicopter cannon (m82) | 0.15 s | 25 | 167 | 3 m | 8 |
-| AC-130 25 mm (m249) | 0.04 s | 6 | 150 | 3 m | 34 |
-| AC-130 40 mm (m82) | 0.2 s | 36 | 180 | 6 m | 6 |
+| Helicopter cannon (m82) | 0.15 s | 75 | 500 | 3 m | 3 |
+| AC-130 25 mm (m249) | 0.04 s | 50 | 1250 | 3 m | 4 |
+| AC-130 40 mm (m82) | 0.2 s | 80 | 400 | 6 m | 3 |
 | AC-130 105 mm shell (bazooka) | 1.0 s | 150 | 150 | 14 m | 2 |
 
 Gunship rockets (#159) have their own 8 m blast: a `splash` block on the rockets entry in killstreaks.json (radius 8, full damage
