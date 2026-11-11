@@ -44,6 +44,8 @@ public enum EventKind : byte
     Hotbar = 21,
     /// <summary>Server broadcast: a player's camouflage (player id and <see cref="CamoSpec"/>), on join and after a change. See <see cref="AppearanceCodec"/>.</summary>
     Appearance = 22,
+    /// <summary>Server broadcast: a MOAB countdown armed, detonated or was cancelled (<see cref="MoabEvents"/>).</summary>
+    Moab = 70,
 }
 
 public abstract record ReliableMsg;
