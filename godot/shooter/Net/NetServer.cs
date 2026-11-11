@@ -436,7 +436,7 @@ public partial class NetServer : Node
     float WorldDistance(Vector3 from, Vector3 dir, float max)
     {
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
-        q.CollisionMask = 1; // world and players only: cars (layer 2) are shot through
+        q.CollisionMask = 3; // world (1) and vehicles (2): bullets and rockets stop on cars (vehicles have no health in v1)
         var ex = new Godot.Collections.Array<Rid>();
         foreach (var o in _byId.Values) ex.Add(o.Body.GetRid());
         q.Exclude = ex;
