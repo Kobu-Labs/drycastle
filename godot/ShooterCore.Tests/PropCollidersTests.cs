@@ -195,6 +195,9 @@ public class PropCollidersTests
             if (linear != null) hits++;
         }
         Assert.True(hits > 100, $"the probes should land on trees often enough to mean something (got {hits})");
+    }
+
+    [Fact]
     public void TreesOfEqualScaleShareShapeKeysWhateverTheirPlaceAndYaw()
     {
         var a = TreeColliders.Parts(new TreeInstance(10, 20, 5, 1.1f, 0.2f, false, 0, 0), Model);
