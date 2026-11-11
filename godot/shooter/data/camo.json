@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "suit_patterns": ["blotch", "stripes", "leaf", "flecktarn"],
+  "face_patterns": ["bars", "streaks", "dots"],
+  "vegetation": ["grass", "fern", "bush"],
+  "tuft_max_layers": 3,
+  "tuft_size_m": [0.03, 0.22],
+  "tuft_sway_m": [0.0, 0.06],
+  "pattern_scale_per_m": [0.6, 3.0],
+  "spotting_min_multiplier": 0.35,
+  "concealment": {
+    "stand": 0.3,
+    "crouch": 0.6,
+    "prone": 0.9,
+    "stillness_weight": 0.7,
+    "full_speed_mps": 6.0
+  },
+  "suit_presets": [
+    {
+      "id": "woodland",
+      "name": "Woodland",
+      "base": "#4b5a32",
+      "secondary": "#2e3a1f",
+      "pattern": "blotch",
+      "pattern_scale": 128,
+      "contrast": 140,
+      "tuft_layers": 2,
+      "tuft_size": 128,
+      "tuft_density": [0, 120, 160, 160],
+      "tuft_colour_variation": 96,
+      "tuft_sway": 96,
+      "vegetation": "grass"
+    },
+    {
+      "id": "ghillie_grass",
+      "name": "Ghillie (grass)",
+      "base": "#6b7a3c",
+      "secondary": "#3d4a22",
+      "pattern": "leaf",
+      "pattern_scale": 160,
+      "contrast": 110,
+      "tuft_layers": 3,
+      "tuft_size": 170,
+      "tuft_density": [200, 255, 255, 255],
+      "tuft_colour_variation": 150,
+      "tuft_sway": 120,
+      "vegetation": "grass"
+    },
+    {
+      "id": "desert_flecktarn",
+      "name": "Flecktarn (sand)",
+      "base": "#8a7a52",
+      "secondary": "#4c4330",
+      "pattern": "flecktarn",
+      "pattern_scale": 96,
+      "contrast": 160,
+      "tuft_layers": 0,
+      "tuft_size": 0,
+      "tuft_density": [0, 0, 0, 0],
+      "tuft_colour_variation": 0,
+      "tuft_sway": 0,
+      "vegetation": "grass"
+    }
+  ],
+  "face_presets": [
+    {
+      "id": "none",
+      "name": "None",
+      "pattern": "bars",
+      "colours": ["#1d2a14", "#5b6b3a", "#c8b98a"],
+      "coverage": 0
+    },
+    {
+      "id": "streaks",
+      "name": "Streaks",
+      "pattern": "streaks",
+      "colours": ["#1d2a14", "#5b6b3a", "#c8b98a"],
+      "coverage": 160
+    },
+    {
+      "id": "dots",
+      "name": "Dots",
+      "pattern": "dots",
+      "colours": ["#2b2b1c", "#6f7a4a", "#b8a878"],
+      "coverage": 110
+    }
+  ]
+}

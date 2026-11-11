@@ -24,6 +24,7 @@ public partial class NetServer
         public int Xp, Level = 1, Active;
         public Loadout[] Loadouts = new Loadout[Loadout.SlotCount];
         public List<Unlock> Unlocks = new();
+        public CamoSpec Camo = CamoSpec.Default;
     }
 
     /// <summary>A profile still being read on the database thread. Only the task is shared; the result is applied on the tick.</summary>
@@ -77,6 +78,7 @@ public partial class NetServer
         var rows = await store.Loadouts.GetAllAsync(p.Id);
         var active = await store.Loadouts.GetActiveSlotAsync(p.Id);
         var unlocks = await store.Unlocks.GetAllAsync(p.Id);
+        var camo = await store.Camo.GetAsync(p.Id);
         var slots = Enumerable.Range(0, Loadout.SlotCount).Select(Loadout.Empty).ToArray();
         foreach (var l in rows) if (l.Slot is >= 0 and <= Loadout.MaxSlot) slots[l.Slot] = l;
         for (var i = 0; i < slots.Length; i++)
@@ -88,7 +90,7 @@ public partial class NetServer
         return new PlayerProfile
         {
             DbId = p.Id, Persist = true, Name = p.Name, Xp = p.Xp, Level = p.Level,
-            Loadouts = slots, Active = Math.Clamp(active, 0, Loadout.MaxSlot), Unlocks = unlocks.ToList(),
+            Loadouts = slots, Active = Math.Clamp(active, 0, Loadout.MaxSlot), Unlocks = unlocks.ToList(), Camo = camo ?? CamoSpec.Default,
         };
     }
 
@@ -103,6 +105,7 @@ public partial class NetServer
     {
         if (p.Persist && p.Name != c.Name) _ = Progression!.Profiles.SetNameAsync(p.DbId, c.Name);
         p.Name = c.Name;
+        p.Camo = p.Camo.Validate(CamoData) == null ? p.Camo : CamoSpec.Default; // a stored look that camo.json no longer has falls back to the default
         c.Profile = p;
     }
 
@@ -126,6 +129,7 @@ public partial class NetServer
         {
             case SaveLoadoutMsg s: OnSaveLoadout(c, s.Loadout); break;
             case SelectSlotMsg sl: OnSelectSlot(c, sl.Slot); break;
+            case SaveCamoMsg sc: OnSaveCamo(c, sc.Spec); break;
         }
     }
 
