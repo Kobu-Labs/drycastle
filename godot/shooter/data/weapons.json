@@ -3,7 +3,8 @@
   "starting_weapon": "pistol",
   "category_defaults": {
     "pistol": { "move_speed_multiplier": 1.0, "spread_base": 0.4, "spread_per_shot": 0.3, "spread_max": 4, "spread_recovery": 0.4 },
-    "assault_rifle": { "move_speed_multiplier": 0.95, "spread_base": 1.0, "spread_per_shot": 0.25, "spread_max": 4, "spread_recovery": 0.6 },
+    "machine_gun": { "move_speed_multiplier": 0.7, "ads_move_speed_multiplier": 0.55, "spread_base": 1.4, "spread_per_shot": 0.12, "spread_max": 4.5, "spread_recovery": 0.5, "recoil": { "vertical_per_shot": 0.5, "horizontal_sway": 0.3, "recovery_rate": 4, "max_climb": 15 } },
+    "assault_rifle": { "move_speed_multiplier": 0.95, "spread_base": 1.0, "spread_per_shot": 0.25, "spread_max": 4, "spread_recovery": 0.6, "recoil": { "vertical_per_shot": 0.6, "horizontal_sway": 0.25, "recovery_rate": 6, "max_climb": 10 } },
     "sniper": { "move_speed_multiplier": 0.8, "spread_base": 0.02, "spread_per_shot": 0, "spread_max": 0.02, "spread_recovery": 0.5 }
   },
   "weapons": [
@@ -17,7 +18,8 @@
       "id": "ak47", "category": "assault_rifle", "slot": "primary", "unlock_level": 0, "kind": "hitscan", "full_auto": true,
       "damage": 30, "headshot_multiplier": 2, "fire_interval": 0.10,
       "magazine_size": 30, "reserve_ammo": 90, "reload_time": 2.5,
-      "falloff_start": 40, "falloff_end": 100, "falloff_multiplier": 0.6
+      "falloff_start": 40, "falloff_end": 100, "falloff_multiplier": 0.6,
+      "recoil": { "vertical_per_shot": 0.9, "pattern": [0.3, -0.4, 0.5, -0.3, 0.2, -0.5] }
     },
     {
       "id": "bazooka", "category": "launcher", "slot": "special", "unlock_level": 0, "kind": "projectile", "full_auto": false,
@@ -38,6 +40,48 @@
       "magazine_size": 5, "reserve_ammo": 15, "reload_time": 3.2,
       "range": 600, "scope_fov": 20, "zoom_levels": 1,
       "falloff_start": 600, "falloff_end": 600, "falloff_multiplier": 1.0
+    },
+    {
+      "id": "m4a1", "category": "assault_rifle", "slot": "primary", "unlock_level": 1, "kind": "hitscan", "full_auto": true,
+      "damage": 26, "headshot_multiplier": 2, "fire_interval": 0.0857,
+      "magazine_size": 30, "reserve_ammo": 90, "reload_time": 2.2,
+      "falloff_start": 45, "falloff_end": 110, "falloff_multiplier": 0.6, "spread_base": 0.8, "spread_per_shot": 0.2, "recoil": { "vertical_per_shot": 0.5, "horizontal_sway": 0.2 }
+    },
+    {
+      "id": "aug", "category": "assault_rifle", "slot": "primary", "unlock_level": 6, "kind": "hitscan", "full_auto": true,
+      "damage": 25, "headshot_multiplier": 2, "fire_interval": 0.0857,
+      "magazine_size": 30, "reserve_ammo": 90, "reload_time": 2.4,
+      "falloff_start": 50, "falloff_end": 120, "falloff_multiplier": 0.65, "spread_base": 0.7, "recoil": { "vertical_per_shot": 0.45, "horizontal_sway": 0.15, "recovery_rate": 7, "max_climb": 9 }
+    },
+    {
+      "id": "g36", "category": "assault_rifle", "slot": "primary", "unlock_level": 4, "kind": "hitscan", "full_auto": true,
+      "damage": 24, "headshot_multiplier": 2, "fire_interval": 0.08,
+      "magazine_size": 30, "reserve_ammo": 90, "reload_time": 2.3,
+      "falloff_start": 55, "falloff_end": 130, "falloff_multiplier": 0.7, "spread_base": 0.9
+    },
+    {
+      "id": "rpk", "category": "machine_gun", "slot": "primary", "unlock_level": 2, "kind": "hitscan", "full_auto": true,
+      "damage": 28, "headshot_multiplier": 2, "fire_interval": 0.1,
+      "magazine_size": 75, "reserve_ammo": 150, "reload_time": 5.0,
+      "falloff_start": 35, "falloff_end": 90, "falloff_multiplier": 0.65, "recoil": { "vertical_per_shot": 0.7 }
+    },
+    {
+      "id": "m249", "category": "machine_gun", "slot": "primary", "unlock_level": 10, "kind": "hitscan", "full_auto": true,
+      "damage": 22, "headshot_multiplier": 2, "fire_interval": 0.08,
+      "magazine_size": 100, "reserve_ammo": 200, "reload_time": 7.0,
+      "falloff_start": 30, "falloff_end": 80, "falloff_multiplier": 0.6, "recoil": { "vertical_per_shot": 0.45 }
+    },
+    {
+      "id": "m60", "category": "machine_gun", "slot": "primary", "unlock_level": 12, "kind": "hitscan", "full_auto": true,
+      "damage": 26, "headshot_multiplier": 2, "fire_interval": 0.109,
+      "magazine_size": 100, "reserve_ammo": 200, "reload_time": 7.5,
+      "falloff_start": 35, "falloff_end": 95, "falloff_multiplier": 0.65
+    },
+    {
+      "id": "pkm", "category": "machine_gun", "slot": "primary", "unlock_level": 8, "kind": "hitscan", "full_auto": true,
+      "damage": 26, "headshot_multiplier": 2, "fire_interval": 0.0923,
+      "magazine_size": 100, "reserve_ammo": 200, "reload_time": 6.5,
+      "falloff_start": 35, "falloff_end": 90, "falloff_multiplier": 0.65
     }
   ]
 }
