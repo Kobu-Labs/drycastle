@@ -209,7 +209,7 @@ Gunship rockets (#159) have their own 8 m blast: a `splash` block on the rockets
 to 2 m, edge 20, no self damage). The rocket sim takes it per launch (`Rocket.Blast`, `ProjectileMath.WithBlast`), so the bazooka
 keeps weapons.json's 6 m, and the explosion's radius rides the Explosion event (protocol 12).
 
-Gunship rocket flight (protocol 15): the rockets entry has `projectile_speed_mps` (250, default 250). A rocket launched with it flies
+Gunship rocket flight (protocol 16): the rockets entry has `projectile_speed_mps` (250, default 250). A rocket launched with it flies
 at that speed and lives out its whole range: its life is `RocketFlight.LifeFor(range_m, speed)` (range over speed, plus 0.5 s), carried
 in the server's `Rocket` (`Speed`, `Life`; zero keeps the weapon's own). Before this, a gunship rocket flew the bazooka's 40 m/s and
 expired after 3.75 s, about 150 m out, so it never reached a target 400 m or more away. The Launch event's velocity is the flight
