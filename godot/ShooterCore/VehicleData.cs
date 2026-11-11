@@ -18,6 +18,8 @@ public class VehiclesFile : IVersioned
     /// <summary>Weapon damage against vehicles is the weapon's damage times these (hitscan bullets, rockets and their splash).</summary>
     public float BulletDamageMultiplier { get; set; } = 0.5f;
     public float RocketDamageMultiplier { get; set; } = 1.5f;
+    /// <summary>Mass the run-over numbers above are tuned for (the car). A type with <see cref="VehicleDef.RunOverMass"/> scales its run-over damage by its mass over this.</summary>
+    public float RunOverReferenceMass { get; set; } = 1200;
     public VehicleExplosionDef Explosion { get; set; } = new();
     public List<VehicleDef> Vehicles { get; set; } = new();
 
@@ -44,12 +46,54 @@ public class VehiclesFile : IVersioned
                 if (l.Head.Concat(l.Tail).Any(p => p is null || p.Length != 3)) throw new DataFileException($"vehicles.json: {v.Id}: each lamp is [x, y, z]");
                 if (l.BeamRange <= 0 || l.BeamAngle <= 0 || l.BeamAngle >= 89) throw new DataFileException($"vehicles.json: {v.Id}: beam_range must be positive, beam_angle 1..88 degrees");
             }
+            if (v.Tint is { Length: not 3 } || v.Tint != null && v.Paints.Count > 0) throw new DataFileException($"vehicles.json: {v.Id}: tint is [r, g, b] and excludes paints");
+            if (v.Seats.Count is < 1 or > 4 || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..4 and the first is the driver");
+            foreach (var seat in v.Seats)
+            {
+                if (seat.Role is not ("driver" or "gunner" or "passenger")) throw new DataFileException($"vehicles.json: {v.Id}: seat role {seat.Role} is not driver, gunner or passenger");
+                if (seat.Role == "driver" && v.Seats.Count(x => x.Role == "driver") != 1) throw new DataFileException($"vehicles.json: {v.Id}: one driver seat");
+                if (seat.Offset.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: seat offset is [x, y, z]");
+            }
+            if (v.Gun is { } g)
+            {
+                if (g.Damage <= 0 || g.FireInterval <= 0 || g.Range <= 0 || g.Magazine < 1 || g.Reserve < 0 || g.ReloadTime < 0)
+                    throw new DataFileException($"vehicles.json: {v.Id}: gun damage, fire_interval, range and magazine must be positive, reserve and reload_time not negative");
+                if (!v.Seats.Any(x => x.Role == "gunner")) throw new DataFileException($"vehicles.json: {v.Id}: a gun needs a gunner seat");
+            }
+            if (v.RunOverMass is { } rm && rm <= 0) throw new DataFileException($"vehicles.json: {v.Id}: run_over_mass must be positive");
         }
         if (f.DamageStages.Count != 3 || f.DamageStages.Any(x => x <= 0 || x >= 1) || f.DamageStages[0] <= f.DamageStages[1] || f.DamageStages[1] <= f.DamageStages[2])
             throw new DataFileException("vehicles.json: damage_stages are three descending fractions between 0 and 1");
         if (f.Explosion.Splash.Radius <= 0) throw new DataFileException("vehicles.json: explosion.splash.radius must be positive");
+        if (f.RunOverReferenceMass <= 0) throw new DataFileException("vehicles.json: run_over_reference_mass must be positive");
         return f;
     }
+
+    /// <summary>Run-over damage multiplier of a type: its run_over_mass over the reference mass, or 1 when it has none (the v1 numbers).</summary>
+    public float RunOverScale(VehicleDef v) => v.RunOverMass is { } m ? m / RunOverReferenceMass : 1f;
+}
+
+/// <summary>One seat of a vehicle (vehicles.json "seats"). Seat 0 is always the driver. Offset is in the vehicle's frame, metres: x right, y up, z back (forward is -Z), origin on the ground at the car's centre.</summary>
+public class VehicleSeatDef
+{
+    /// <summary>"driver" (seat 0 only, drives), "gunner" (fires the vehicle's gun) or "passenger".</summary>
+    public string Role { get; set; } = "passenger";
+    public float[] Offset { get; set; } = { 0, 0, 0 };
+}
+
+/// <summary>A vehicle-mounted gun (vehicles.json "gun"), fired from a gunner seat. Hitscan with its own magazine and reserve.</summary>
+public class VehicleGunDef
+{
+    /// <summary>Damage of one round to a player (vehicles take it times bullet_damage_multiplier, as a rifle's does).</summary>
+    public float Damage { get; set; } = 14;
+    /// <summary>Seconds between rounds while the trigger is held.</summary>
+    public float FireInterval { get; set; } = 0.1f;
+    public float Range { get; set; } = 220;
+    public float SpreadDegrees { get; set; } = 1.2f;
+    public int Magazine { get; set; } = 60;
+    /// <summary>Rounds carried outside the magazine; a reload moves them in.</summary>
+    public int Reserve { get; set; } = 240;
+    public float ReloadTime { get; set; } = 2.5f;
 }
 
 /// <summary>
@@ -124,6 +168,14 @@ public class VehicleDef
     /// <summary>Half extents of the footprint (server collision box and run-over test), metres.</summary>
     public float HalfWidth { get; set; } = 1.1f;
     public float HalfLength { get; set; } = 2.15f;
+    /// <summary>Seats in order; seat 0 is the driver. Default: one driver seat.</summary>
+    public List<VehicleSeatDef> Seats { get; set; } = new() { new VehicleSeatDef { Role = "driver" } };
+    /// <summary>The gun a gunner seat fires. Null: no gun.</summary>
+    public VehicleGunDef? Gun { get; set; }
+    /// <summary>Mass (kg) for run-over damage. Unset: the v1 run-over numbers (see <see cref="VehiclesFile.RunOverScale"/>).</summary>
+    public float? RunOverMass { get; set; }
+    /// <summary>A single fixed body colour [r, g, b] (sRGB) for a type with one look (olive drab). Replaces the colour variants: such a type has one variant.</summary>
+    public float[]? Tint { get; set; }
     /// <summary>Model file relative to assets/ (empty: the code-built car with the Kenney sedan). Scale, yaw and offset fit the raw node to the game (forward -Z, origin at the ground centre).</summary>
     public string Model { get; set; } = "";
     public float ModelScale { get; set; } = 1;
@@ -136,5 +188,5 @@ public class VehicleDef
     public string PaintMaterial { get; set; } = "";
     public List<string> Paints { get; set; } = new();
     /// <summary>Number of colour variants: the model's paints, or the shared car palette.</summary>
-    public int Variants => Paints.Count > 0 ? Paints.Count : VehicleColours.Palette.Length;
+    public int Variants => Tint != null ? 1 : Paints.Count > 0 ? Paints.Count : VehicleColours.Palette.Length;
 }

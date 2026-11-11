@@ -5,10 +5,11 @@ namespace Suchohrad.ShooterCore;
 /// <summary>Run-over damage (ticket #77): above the minimum speed, a hit player takes damage per m/s over it, capped.</summary>
 public static class RunOver
 {
-    public static float Damage(VehiclesFile f, float speed)
+    /// <param name="massScale">A type's <see cref="VehiclesFile.RunOverScale"/> (1 for the v1 numbers).</param>
+    public static float Damage(VehiclesFile f, float speed, float massScale = 1f)
     {
         var over = MathF.Abs(speed) - f.RunOverMinSpeed;
-        return over <= 0 ? 0 : MathF.Min(f.RunOverMaxDamage, over * f.RunOverDamagePerSpeed);
+        return over <= 0 ? 0 : MathF.Min(f.RunOverMaxDamage, over * f.RunOverDamagePerSpeed * massScale);
     }
 }
 
@@ -48,29 +49,129 @@ public static class VehicleDamage
     }
 }
 
-/// <summary>Seat state machine of one vehicle: one driver only, no passengers.</summary>
+/// <summary>
+/// Seat state of one vehicle: one occupant per seat, seat 0 the driver (player ids start at 1, 0 = empty). The seat framework for
+/// every type: a type's seats come from its <see cref="VehicleDef.Seats"/> list, and <see cref="NearestFreeSeat"/> picks the seat for
+/// someone who presses enter. Pure logic; the server places the occupant at <see cref="SeatPosition"/>.
+/// </summary>
 public sealed class VehicleSeat
 {
-    /// <summary>Player id of the driver, 0 when empty (player ids start at 1).</summary>
-    public ushort Driver { get; private set; }
-    public bool Occupied => Driver != 0;
+    public const int MaxSeats = 4;
+    readonly ushort[] _occupant;
 
-    public bool TryEnter(ushort player)
+    public VehicleSeat(int seats = 1)
     {
-        if (player == 0 || Occupied) return false;
-        Driver = player;
+        if (seats < 1 || seats > MaxSeats) throw new ArgumentOutOfRangeException(nameof(seats));
+        _occupant = new ushort[seats];
+    }
+
+    public int Count => _occupant.Length;
+    /// <summary>Player id of the driver (seat 0), 0 when empty.</summary>
+    public ushort Driver => _occupant[0];
+    /// <summary>Player id in <paramref name="seat"/>, 0 when empty.</summary>
+    public ushort Occupant(int seat) => _occupant[seat];
+    public bool Occupied => _occupant.Any(p => p != 0);
+    public bool HasFree => _occupant.Any(p => p == 0);
+    public bool IsFree(int seat) => _occupant[seat] == 0;
+
+    /// <summary>The seat <paramref name="player"/> sits in, or -1.</summary>
+    public int SeatOf(ushort player)
+    {
+        if (player == 0) return -1;
+        for (var i = 0; i < _occupant.Length; i++) if (_occupant[i] == player) return i;
+        return -1;
+    }
+
+    /// <summary>Takes <paramref name="seat"/> (-1: the first free one). False for player 0, a taken seat, a player already seated or no free seat.</summary>
+    public bool TryEnter(ushort player, int seat = -1)
+    {
+        if (player == 0 || SeatOf(player) >= 0) return false;
+        if (seat < 0) seat = Array.FindIndex(_occupant, p => p == 0);
+        if (seat < 0 || seat >= _occupant.Length || _occupant[seat] != 0) return false;
+        _occupant[seat] = player;
         return true;
     }
 
-    /// <summary>The driver leaves (E, death, disconnect, round restart). False if <paramref name="player"/> is not the driver.</summary>
+    /// <summary>The player leaves (E, death, disconnect, round restart). False if <paramref name="player"/> is not seated here.</summary>
     public bool Exit(ushort player)
     {
-        if (!Occupied || Driver != player) return false;
-        Driver = 0;
+        var s = SeatOf(player);
+        if (s < 0) return false;
+        _occupant[s] = 0;
         return true;
     }
 
-    public void Clear() => Driver = 0;
+    public void Clear(int seat) => _occupant[seat] = 0;
+    public void Clear() => Array.Clear(_occupant);
+
+    /// <summary>World position of a seat: <paramref name="offset"/> in the vehicle's frame (forward -Z, yaw as in <see cref="CarState"/>) from the car's ground centre.</summary>
+    public static Vector3 SeatPosition(Vector3 carPos, float yaw, float[] offset)
+    {
+        var c = MathF.Cos(yaw); var s = MathF.Sin(yaw);
+        return new Vector3(carPos.X + offset[0] * c + offset[2] * s, carPos.Y + offset[1], carPos.Z - offset[0] * s + offset[2] * c);
+    }
+
+    /// <summary>
+    /// The free seat of <paramref name="def"/> nearest to <paramref name="from"/> (horizontal distance, metres), within <paramref name="range"/>;
+    /// -1 if none. Ties go to the lower seat index, so the driver's seat wins when the player stands at the centre.
+    /// </summary>
+    public int NearestFreeSeat(VehicleDef def, Vector3 carPos, float yaw, Vector3 from, float range)
+    {
+        var best = -1; var bd = range;
+        for (var i = 0; i < _occupant.Length && i < def.Seats.Count; i++)
+        {
+            if (_occupant[i] != 0) continue;
+            var p = SeatPosition(carPos, yaw, def.Seats[i].Offset);
+            var d = MathF.Sqrt((p.X - from.X) * (p.X - from.X) + (p.Z - from.Z) * (p.Z - from.Z));
+            if (d <= bd && (best < 0 || d < bd)) { best = i; bd = d; }
+        }
+        return best;
+    }
+}
+
+/// <summary>A vehicle gun's magazine, reserve and reload. Hitscan rounds are resolved by the server; this only says when a round leaves the barrel.</summary>
+public sealed class VehicleGun
+{
+    public VehicleGunDef Def { get; }
+    public int Magazine { get; private set; }
+    public int Reserve { get; private set; }
+    double _nextShot;
+    double _reloadDone = -1;
+
+    public VehicleGun(VehicleGunDef def)
+    {
+        Def = def;
+        Magazine = def.Magazine;
+        Reserve = def.Reserve;
+    }
+
+    public bool Reloading => _reloadDone >= 0;
+
+    /// <summary>Starts a reload: not when full, empty of reserve or already reloading.</summary>
+    public bool TryReload(double now)
+    {
+        if (Reloading || Magazine == Def.Magazine || Reserve == 0) return false;
+        _reloadDone = now + Def.ReloadTime;
+        return true;
+    }
+
+    /// <summary>
+    /// True when a round fires this tick: trigger held, not reloading, the fire interval has passed and the magazine has a round.
+    /// An empty magazine starts a reload instead.
+    /// </summary>
+    public bool TryFire(double now, bool trigger)
+    {
+        if (_reloadDone >= 0 && now >= _reloadDone)
+        {
+            var take = Math.Min(Def.Magazine - Magazine, Reserve);
+            Magazine += take; Reserve -= take; _reloadDone = -1;
+        }
+        if (!trigger || Reloading || now < _nextShot) return false;
+        if (Magazine == 0) { TryReload(now); return false; }
+        Magazine--;
+        _nextShot = now + Def.FireInterval;
+        return true;
+    }
 }
 
 /// <summary>Counts seconds a vehicle has stood empty; fires once when it reaches the return time.</summary>

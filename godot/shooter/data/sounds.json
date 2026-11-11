@@ -25,6 +25,7 @@
     { "id": "shot.rpk", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch": 0.92, "pitch_variance": 0.04, "max_distance": 200, "priority": 3 },
     { "id": "shot.m249", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch": 0.8, "pitch_variance": 0.04, "max_distance": 200, "priority": 3 },
     { "id": "shot.m60", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch": 0.85, "pitch_variance": 0.04, "max_distance": 200, "priority": 3 },
+    { "id": "shot.", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 200, "priority": 3 },
     { "id": "shot.pkm", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch": 0.75, "pitch_variance": 0.04, "max_distance": 200, "priority": 3 },
     { "id": "reload.m4a1", "files": ["suchohrad-generated-sounds/reload_ak47.ogg"], "bus": "SFX", "volume_db": -6, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
     { "id": "reload.aug", "files": ["suchohrad-generated-sounds/reload_ak47.ogg"], "bus": "SFX", "volume_db": -6, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },

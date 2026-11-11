@@ -166,9 +166,10 @@ public class VehicleTests
     public void ShippedFileHasCarMotorcycleAndBicycleWithTheAgreedSpawnCounts()
     {
         var f = Shipped();
-        Assert.Equal(new[] { "car", "motorcycle", "bicycle" }, f.Vehicles.Select(v => v.Id));
-        Assert.Equal(new[] { 12, 3, 3 }, f.Vehicles.Select(v => v.SpawnCount)); // 12 cars: clustered around the spawn areas (c2c7cc9)
-        Assert.All(f.Vehicles.Skip(1), v => { Assert.NotEqual("", v.Model); Assert.Equal(3, v.Variants); Assert.Contains(v.PaintMaterial, v.Paints); });
+        // the three v1 types keep their order and counts (the v2 jeep and quad are checked in VehicleTypesTests)
+        Assert.Equal(new[] { "car", "motorcycle", "bicycle" }, f.Vehicles.Take(3).Select(v => v.Id));
+        Assert.Equal(new[] { 12, 3, 3 }, f.Vehicles.Take(3).Select(v => v.SpawnCount)); // 12 cars: clustered around the spawn areas (c2c7cc9)
+        Assert.All(f.Vehicles.Skip(1).Take(2), v => { Assert.NotEqual("", v.Model); Assert.Equal(3, v.Variants); Assert.Contains(v.PaintMaterial, v.Paints); });
         Assert.Equal(VehicleColours.Palette.Length, f.Vehicles[0].Variants);
     }
 

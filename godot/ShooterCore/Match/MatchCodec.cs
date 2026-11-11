@@ -7,7 +7,8 @@ namespace Suchohrad.ShooterCore;
 public readonly record struct ScoreRow(ushort Id, string Name, int Kills, int Deaths, ushort Ping);
 
 public sealed record MatchStateMsg(MatchPhase Phase, float TimeRemaining, IReadOnlyList<ushort> Winners, IReadOnlyList<ScoreRow> Rows);
-public sealed record KillMsg(ushort Killer, ushort Victim, byte Weapon);
+/// <summary>A kill for the feed. <paramref name="Cause"/> travels as an optional sixth byte (old 5-byte messages decode as Standard).</summary>
+public sealed record KillMsg(ushort Killer, ushort Victim, byte Weapon, KillCause Cause = KillCause.Standard);
 public sealed record SpawnMsg(ushort Id, Vector3 Position, float Protection);
 public sealed record DeathMsg(ushort Victim, ushort Killer, float RespawnDelay);
 
@@ -64,15 +65,17 @@ public static class MatchCodec
 
     public static byte[] Encode(KillMsg m)
     {
-        var b = new byte[5];
+        var b = new byte[6];
         BinaryPrimitives.WriteUInt16LittleEndian(b, m.Killer);
         BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(2), m.Victim);
         b[4] = m.Weapon;
+        b[5] = (byte)m.Cause;
         return b;
     }
 
     public static KillMsg? DecodeKill(byte[] d) =>
-        d.Length < 5 ? null : new KillMsg(BinaryPrimitives.ReadUInt16LittleEndian(d), BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(2)), d[4]);
+        d.Length < 5 ? null : new KillMsg(BinaryPrimitives.ReadUInt16LittleEndian(d), BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(2)), d[4],
+            d.Length >= 6 && d[5] <= (byte)KillCause.Roadkill ? (KillCause)d[5] : KillCause.Standard);
 
     public static byte[] Encode(SpawnMsg m)
     {

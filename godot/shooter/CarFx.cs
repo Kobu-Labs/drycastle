@@ -41,9 +41,20 @@ public static class CarFx
                 var fit = new Node3D { Scale = Vector3.One * def.ModelScale, RotationDegrees = new Vector3(0, def.ModelYawDeg, 0) };
                 fit.AddChild(m);
                 root.AddChild(fit);
-                PaintVariant(m, def, colour);
+                if (def.Tint is { } fixedTint)
+                {
+                    var c = new Color(fixedTint[0], fixedTint[1], fixedTint[2]);
+                    foreach (var n in m.FindChildren("body", "Node3D", true, false)) Paint(n, c);
+                }
+                else PaintVariant(m, def, colour);
             }
             else root.AddChild(Box(def, new Color(0.6f, 0.6f, 0.6f)));
+            return root;
+        }
+        if (def.Tint is { } tint0)
+        {
+            // no model for this type: primitive meshes (a body and four wheels), in its one fixed colour
+            root.AddChild(Primitive(def, new Color(tint0[0], tint0[1], tint0[2])));
             return root;
         }
         var pal = VehicleColours.Palette[colour % VehicleColours.Palette.Length];
@@ -58,6 +69,25 @@ public static class CarFx
         }
         else root.AddChild(Box(def, tint));
         return root;
+    }
+
+    /// <summary>A vehicle with no model file (the quad bike): the body box with four wheel cylinders at its sides.</summary>
+    static Node3D Primitive(VehicleDef def, Color tint)
+    {
+        var n = new Node3D();
+        n.AddChild(Box(def, tint));
+        var wheel = new StandardMaterial3D { AlbedoColor = new Color(0.07f, 0.07f, 0.07f) };
+        const float r = 0.3f;
+        foreach (var side in new[] { -1f, 1f })
+        foreach (var front in new[] { -1f, 1f })
+            n.AddChild(new MeshInstance3D
+            {
+                Mesh = new CylinderMesh { TopRadius = r, BottomRadius = r, Height = 0.2f },
+                Position = new Vector3(side * (def.HalfWidth + 0.05f), r, front * def.HalfLength * 0.7f),
+                RotationDegrees = new Vector3(0, 0, 90),
+                MaterialOverride = wheel,
+            });
+        return n;
     }
 
     static MeshInstance3D Box(VehicleDef def, Color tint) =>

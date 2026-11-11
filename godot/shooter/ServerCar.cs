@@ -44,7 +44,10 @@ public partial class ServerCar : CharacterBody3D
     public byte Colour;
     public Vector3 OriginPos;
     public float OriginYaw;
-    public readonly VehicleSeat Seat = new();
+    /// <summary>Seats from the def (seat 0 the driver); built in <see cref="_Ready"/>.</summary>
+    public VehicleSeat Seat { get; private set; } = null!;
+    /// <summary>The gunner seat's gun, with its own magazine and reserve; refilled by a full <see cref="Reset"/>. Null when the type has none.</summary>
+    public VehicleGun? Gun { get; private set; }
     /// <summary>Headlights on (replicated as one bit, <see cref="VehicleRecord.Make"/>): set when a driver gets in at night, toggled by the H key, off when empty.</summary>
     public bool Lights;
     public readonly AbandonTimer Abandon = new();
@@ -67,6 +70,7 @@ public partial class ServerCar : CharacterBody3D
     {
         CollisionLayer = 2; CollisionMask = 1;
         Hp = Def.Hp;
+        Seat = new VehicleSeat(Def.Seats.Count);
         AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(HalfWidth * 2, BoxHeight, HalfLength * 2) }, Position = new Vector3(0, BoxHeight / 2, 0) });
         FloorSnapLength = 0.4f;
         FloorMaxAngle = Mathf.DegToRad(50);
@@ -92,6 +96,7 @@ public partial class ServerCar : CharacterBody3D
         {
             Hp = Def.Hp; LastAttacker = 0; LastWeapon = 0; DetonateAt = -1;
             Destroyed = false; CollisionLayer = 2;
+            Gun = Def.Gun is { } g ? new VehicleGun(g) : null;
         }
         GlobalPosition = OriginPos;
         State = new CarState { Yaw = OriginYaw, Speed = 0 };
