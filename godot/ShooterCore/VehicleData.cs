@@ -55,6 +55,7 @@ public class VehiclesFile : IVersioned
                 if (seat.Role == "driver" && v.Seats.Count(x => x.Role == "driver") != 1) throw new DataFileException($"vehicles.json: {v.Id}: one driver seat");
                 if (seat.Offset.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: seat offset is [x, y, z]");
             }
+            if (v.ExposedGunner && !v.Seats.Any(x => x.Role == "gunner")) throw new DataFileException($"vehicles.json: {v.Id}: exposed_gunner needs a gunner seat");
             if (v.Gun is { } g)
             {
                 if (g.Damage <= 0 || g.FireInterval <= 0 || g.Range <= 0 || g.Magazine < 1 || g.Reserve < 0 || g.ReloadTime < 0)
@@ -258,6 +259,11 @@ public class VehicleDef
     public List<VehicleSeatDef> Seats { get; set; } = new() { new VehicleSeatDef { Role = "driver" } };
     /// <summary>The gun a gunner seat fires. Null: no gun.</summary>
     public VehicleGunDef? Gun { get; set; }
+    /// <summary>
+    /// The gunner sits in the open (the flak truck's turret): shots that reach his body hit him, not the hull around him (<see cref="GunnerCover"/>).
+    /// False keeps every rider behind the hull, as the jeep's roof gunner is.
+    /// </summary>
+    public bool ExposedGunner { get; set; }
     /// <summary>An anti-aircraft turret worked from the gunner seat (the flak truck). Null: none. Excludes <see cref="Gun"/>.</summary>
     public VehicleFlakDef? Flak { get; set; }
     /// <summary>Mass (kg) for run-over damage. Unset: the v1 run-over numbers (see <see cref="VehiclesFile.RunOverScale"/>).</summary>

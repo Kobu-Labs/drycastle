@@ -17,11 +17,13 @@ public static class ProjectileMath
     /// <summary>
     /// Sweep the segment from <paramref name="from"/> along unit <paramref name="dir"/> for <paramref name="length"/>.
     /// <paramref name="wallDistance"/> is where the world blocks it (infinity if nothing). The owner is never hit directly.
-    /// A player at exactly the same distance as the wall counts as hit first.
+    /// A player at exactly the same distance as the wall counts as hit first. <paramref name="exposedGunner"/> is the exposed gunner of the vehicle the segment
+    /// stopped on, and <paramref name="wallPastHull"/> where the world stops it with that hull left out (<see cref="GunnerCover"/>).
     /// </summary>
-    public static SweepResult Sweep(Vector3 from, Vector3 dir, float length, float wallDistance, IEnumerable<HitTarget> targets, ushort owner)
+    public static SweepResult Sweep(Vector3 from, Vector3 dir, float length, float wallDistance, IEnumerable<HitTarget> targets, ushort owner,
+        HitTarget? exposedGunner = null, float wallPastHull = float.PositiveInfinity)
     {
-        var hit = HitMath.Raycast(from, dir, length, wallDistance, targets, owner);
+        var hit = GunnerCover.Raycast(from, dir, length, wallDistance, targets, owner, exposedGunner, wallPastHull);
         if (hit is { } h) return new SweepResult(ImpactKind.Player, h.Distance, h.Id);
         if (wallDistance <= length) return new SweepResult(ImpactKind.World, wallDistance, 0);
         return new SweepResult(ImpactKind.None, length, 0);

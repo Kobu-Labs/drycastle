@@ -149,7 +149,7 @@ A flying entity that circles the map at a set altitude and radius: the attack he
 _Avoid_: plane (for helicopters), drone
 
 **Flak truck**:
-A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun.
+A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every other vehicle.
 _Avoid_: AA gun, anti-air vehicle, SPAAG
 
 **Airburst**:

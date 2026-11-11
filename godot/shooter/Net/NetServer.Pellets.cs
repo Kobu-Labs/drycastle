@@ -20,19 +20,24 @@ public partial class NetServer
         var range = w.Range > 0 ? w.Range : MaxShotRange;
 
         // world and vehicle stops per pellet (one physics ray each; player bodies are excluded)
+        var targets = LiveTargets();
         var walls = new List<float>(dirs.Length);
         var cars = new List<ServerCar?>(dirs.Length);
         var dirsG = new List<Vector3>(dirs.Length);
+        var exposed = new List<HitTarget?>(dirs.Length); // a pellet that stopped on a vehicle with its gunner in the open may reach him (GunnerCover)
+        var pastHull = new List<float>(dirs.Length);
         foreach (var d in dirs)
         {
             var g = new Vector3(d.X, d.Y, d.Z);
             walls.Add(WorldHit(eye, g, range, out var car));
             cars.Add(car);
             dirsG.Add(g);
+            var (gunner, past) = ExposedGunnerBehind(car, eye, g, range, targets);
+            exposed.Add(gunner);
+            pastHull.Add(past);
         }
 
-        var targets = LiveTargets();
-        var totals = HitMath.ResolvePellets(w, N(eye), dirs, range, walls, targets, c.Id);
+        var totals = HitMath.ResolvePellets(w, N(eye), dirs, range, walls, targets, c.Id, exposed, pastHull);
         BroadcastEvent(EventKind.PelletFan, WeaponCodec.Encode(new PelletFanMsg(c.Id, weaponIdx, N(eye), aim, seed, cone)));
         foreach (var (id, t) in totals) Deal(c.Id, weaponIdx, id, t.Damage, t.Head, false);
 
@@ -42,7 +47,7 @@ public partial class NetServer
         for (var i = 0; i < dirs.Length; i++)
         {
             if (cars[i] is not { } car || walls[i] > range) continue;
-            if (HitMath.Raycast(N(eye), dirs[i], range, walls[i], targets, c.Id) != null) continue;
+            if (GunnerCover.Raycast(N(eye), dirs[i], range, walls[i], targets, c.Id, exposed[i], pastHull[i]) != null) continue;
             carDamage[car] = carDamage.GetValueOrDefault(car) + HitMath.PelletDamage(w, walls[i], false) * Vehicles.BulletDamageMultiplier;
         }
         foreach (var (car, amount) in carDamage) DamageVehicle(car, amount, c.Id, weaponIdx, 0);

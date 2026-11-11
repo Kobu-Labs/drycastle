@@ -163,14 +163,17 @@ public static class HitMath
     /// Resolves one pellet fan against the targets: pellet i flies along <paramref name="dirs"/>[i] for at most
     /// <paramref name="maxDistance"/> and stops at <paramref name="walls"/>[i] (the world distance, infinity if none). Each pellet
     /// hits the nearest target in its path with its own falloff; damage is summed per target. Walls and vehicles are the caller's business.
+    /// <paramref name="exposed"/> and <paramref name="wallsPastHull"/> (per pellet, null entries for none) let a pellet that stopped on a vehicle reach its exposed gunner (<see cref="GunnerCover"/>).
     /// </summary>
     public static Dictionary<ushort, PelletTotal> ResolvePellets(WeaponDef w, Vector3 origin, IReadOnlyList<Vector3> dirs, float maxDistance,
-        IReadOnlyList<float> walls, IReadOnlyList<HitTarget> targets, ushort shooter)
+        IReadOnlyList<float> walls, IReadOnlyList<HitTarget> targets, ushort shooter, IReadOnlyList<HitTarget?>? exposed = null, IReadOnlyList<float>? wallsPastHull = null)
     {
         var totals = new Dictionary<ushort, PelletTotal>();
         for (var i = 0; i < dirs.Count; i++)
         {
-            if (Raycast(origin, dirs[i], maxDistance, walls[i], targets, shooter) is not { } hit) continue;
+            // a pellet that stopped on a vehicle with an exposed gunner may still reach him (GunnerCover)
+            var found = exposed?[i] is { } g ? GunnerCover.Raycast(origin, dirs[i], maxDistance, walls[i], targets, shooter, g, wallsPastHull![i]) : Raycast(origin, dirs[i], maxDistance, walls[i], targets, shooter);
+            if (found is not { } hit) continue;
             var prev = totals.GetValueOrDefault(hit.Id);
             totals[hit.Id] = new PelletTotal(prev.Damage + PelletDamage(w, hit.Distance, hit.Head), prev.Head || hit.Head);
         }

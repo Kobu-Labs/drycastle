@@ -40,6 +40,28 @@ public partial class NetServer
         return _flakWeaponIndex[def] = i;
     }
 
+    /// <summary>
+    /// A ray, pellet or rocket segment stopped on <paramref name="hull"/>. When that vehicle's gunner sits in the open (vehicles.json exposed_gunner) and is
+    /// alive, returns him as a target and the world distance along the ray with the hull left out, so the shot can reach him through the hull
+    /// (<see cref="GunnerCover"/>); otherwise no gunner (every rider stays behind the hull).
+    /// </summary>
+    (HitTarget? Gunner, float PastHull) ExposedGunnerBehind(ServerCar? hull, Vector3 from, Vector3 dir, float max, IReadOnlyList<HitTarget> targets)
+    {
+        if (hull is not { Destroyed: false } || !hull.Def.ExposedGunner) return (null, float.PositiveInfinity);
+        var seat = hull.Def.Seats.FindIndex(s => s.Role == "gunner");
+        var id = seat >= 0 ? hull.Seat.Occupant(seat) : (ushort)0;
+        if (id == 0) return (null, float.PositiveInfinity);
+        HitTarget? gunner = null;
+        foreach (var t in targets) if (t.Id == id) { gunner = t; break; }
+        if (gunner == null) return (null, float.PositiveInfinity);
+        var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
+        q.CollisionMask = CollisionLayers.Bullets;
+        var exclude = new Godot.Collections.Array<Rid>(PlayerRids()) { hull.GetRid() };
+        q.Exclude = exclude;
+        var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        return (gunner, r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3()));
+    }
+
     /// <summary>The turret record of a flak vehicle for the snapshot: the world aim and the gunner's id.</summary>
     EntityRecord FlakRecordOf(ServerCar car)
     {

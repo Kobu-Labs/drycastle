@@ -683,7 +683,8 @@ public partial class NetServer : Node
             var dir = new Vector3(d.X, d.Y, d.Z);
             var range = w.Range > 0 ? w.Range : MaxShotRange;
             var wall = WorldHit(eye, dir, range, out var shotCar);
-            var hit = HitMath.Raycast(N(eye), d, range, wall, targets, c.Id);
+            var (exposedGunner, pastHull) = ExposedGunnerBehind(shotCar, eye, dir, range, targets);
+            var hit = GunnerCover.Raycast(N(eye), d, range, wall, targets, c.Id, exposedGunner, pastHull); // a flak gunner in the open is hit through his hull
             if (hit == null && HitMath.Raycast(N(eye), d, range, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
             var end = eye + dir * (hit?.Distance ?? Math.Min(wall, range));
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
@@ -750,7 +751,9 @@ public partial class NetServer : Node
             var life = r.Life > 0 ? r.Life : w.ProjectileLife;
             var len = speed * dt;
             var wall = WorldHit(r.Pos, r.Dir, len, out var hitCar);
-            var step = RocketFlight.Step(N(r.Pos), N(r.Dir), r.Age, speed, life, dt, wall, LiveTargets(), r.Owner);
+            var targets = LiveTargets();
+            var (exposedGunner, pastHull) = ExposedGunnerBehind(hitCar, r.Pos, r.Dir, len, targets);
+            var step = RocketFlight.Step(N(r.Pos), N(r.Dir), r.Age, speed, life, dt, wall, targets, r.Owner, exposedGunner, pastHull);
             switch (step.Outcome)
             {
                 case RocketOutcome.Player:
