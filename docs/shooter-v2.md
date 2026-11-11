@@ -176,10 +176,20 @@ compute the same point), or lies the longest weapon range out when it meets no g
 from the muzzle to that point (`GunshipAim.View`), so the orbit never moves the reticle. Only the pitch is limited (`pitch_min_deg`,
 `pitch_max_deg`); the airframe-relative yaw limit is gone (it pinned the view as the airframe turned, which was the bug). The mouse
 move is applied to the view on screen, zoom-scaled (`GunshipAim.Turn`: x4 is a quarter of the speed), and re-anchors the point; a
-still mouse keeps it. The owner's input carries the look, and the server anchors it at its own muzzle when the look changes, so the
-shot goes through the reticle's point (a latency-sized difference from the client's anchor, about 0.5 degrees at 1 km). The camera's
-yaw is unwrapped (`GunshipAim.Unwrap`) so it is continuous through +-pi and every heading; `GunshipGroundAimTests` sweeps the heading
-through 720 degrees and the aim through +-pi.
+still mouse keeps it. The camera's yaw is unwrapped (`GunshipAim.Unwrap`) so it is continuous through +-pi and every heading;
+`GunshipGroundAimTests` sweeps the heading through 720 degrees and the aim through +-pi.
+
+The aim is sent, not re-derived (#161). The client computes the point from its own muzzle (its interpolated, lagging aircraft) and
+sends it with every input while a turret is steered (`NetInput.HasAim`, the wire's flags byte; protocol 14). The server does not
+rebuild the point from the look angles: doing that from its own, later muzzle intersected the same ray from a point the platform
+had travelled on, so every round landed the platform's travel over the lag to one side of the reticle (about 10 m at 70 m/s and
+150 ms, which the old scheme shows in `GunshipAimLagTests`). `GunshipControl.OnInput` takes the point, bounds it (`GunshipAim.ClampAim`:
+no farther than the orbit's reach plus the longest weapon range plus a 50 m lag allowance, measured from the orbit centre, and never
+below the ground plane), and fires from its muzzle along the view to it. The bound is from the centre and not the muzzle on purpose:
+a stabilised point is out of range of the moving muzzle for part of every orbit, and a clamp to the muzzle would pull it off the
+reticle. A turret with no aim yet does not fire. Parallax remains: the rounds leave the server's muzzle, which is a few metres from
+the client's, so the ray differs by a few tenths of a degree, but the impact is on the reticle's point (the lag test: within 0.5 m).
+The helicopter gunner and the AC-130 share this path; the attack missile is steered by its own input and is unchanged.
 
 Tracers (#160): a cannon round's and a shell's tracer speed and length come from killstreaks.json (`tracer_speed_mps`, `tracer_length_m`;
 cannon 1500 m/s and 14 m, the 105 mm shell 1200 m/s, so it reaches 800 m in about 0.66 s). They ride the GunshipShots message and
@@ -310,8 +320,10 @@ Server and persistence:
 
 ## 9. Wire protocol
 
-Protocol version: **14** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
-versions. Version 14 grows the camo spec to 33 bytes (codec 2: body, skin tone, headgear; migration 0006). Version 13 (#160) adds each tracer's speed (u16 m/s) and length (u16 cm) to GunshipShots (tracer 29 bytes, was 25).
+Protocol version: **15** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
+versions. Version 15 (#161) gives the input a flags byte (bit 0: the gunner's aim follows, a ground point as three int32 quantised
+positions, 12 bytes). An input is 12 bytes, or 24 with the aim; the packet is up to 3 inputs. Only a steered turret sends an aim.
+Version 14 grows the camo spec to 33 bytes (codec 2: body, skin tone, headgear; migration 0006). Version 13 (#160) adds each tracer's speed (u16 m/s) and length (u16 cm) to GunshipShots (tracer 29 bytes, was 25).
 Version 12 (#159) coalesces the gunship FX: the per-round Shot, ImpactFx and Ac130Blast of the turrets are replaced by
 GunshipShots (121), GunshipImpacts (122) and GunshipBlasts (123), one per gunner (or per tick) per server tick, and kind 120 is
 retired. The Explosion payload grew by a f32 blast radius (21 bytes), so a gunship rocket's 8 m reaches the clients. Layouts are in
