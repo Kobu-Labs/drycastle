@@ -40,7 +40,7 @@ public class BazookaTests
     [Fact]
     public void SweepHitsPlayerBeforeWall()
     {
-        var t = new[] { new HitTarget(2, new Vector3(0, 0, -10), false, 0) };
+        var t = new[] { new HitTarget(2, new Vector3(0, 0, -10), Stance.Stand, 0) };
         var r = ProjectileMath.Sweep(new Vector3(0, 1, 0), -Vector3.UnitZ, 20, 15, t, 1);
         Assert.Equal(ImpactKind.Player, r.Kind); Assert.Equal(2, r.Victim); Assert.Equal(9.7f, r.Distance, 0.05f);
     }
@@ -48,7 +48,7 @@ public class BazookaTests
     [Fact]
     public void SweepStopsAtWallAndSkipsPlayersBehindIt()
     {
-        var t = new[] { new HitTarget(2, new Vector3(0, 0, -10), false, 0) };
+        var t = new[] { new HitTarget(2, new Vector3(0, 0, -10), Stance.Stand, 0) };
         var r = ProjectileMath.Sweep(new Vector3(0, 1, 0), -Vector3.UnitZ, 20, 5, t, 1);
         Assert.Equal(ImpactKind.World, r.Kind); Assert.Equal(5f, r.Distance);
     }
@@ -56,7 +56,7 @@ public class BazookaTests
     [Fact]
     public void SweepIgnoresOwnerAndShortSegments()
     {
-        var t = new[] { new HitTarget(1, new Vector3(0, 0, -2), false, 0), new HitTarget(2, new Vector3(0, 0, -10), false, 0) };
+        var t = new[] { new HitTarget(1, new Vector3(0, 0, -2), Stance.Stand, 0), new HitTarget(2, new Vector3(0, 0, -10), Stance.Stand, 0) };
         Assert.Equal(ImpactKind.None, ProjectileMath.Sweep(new Vector3(0, 1, 0), -Vector3.UnitZ, 1.33f, float.PositiveInfinity, t, 1).Kind);
         var r = ProjectileMath.Sweep(new Vector3(0, 1, -8), -Vector3.UnitZ, 1.8f, float.PositiveInfinity, t, 1);
         Assert.Equal(2, r.Victim);

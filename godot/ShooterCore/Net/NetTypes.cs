@@ -81,24 +81,26 @@ public struct EntityRecord : IEquatable<EntityRecord>
     public short Pitch;
     public byte Health;
     public EntityState State;
+    /// <summary>Body stance, sent in the high nibble of the status byte with <see cref="State"/> (no extra bytes).</summary>
+    public Stance Stance;
     public byte Weapon;
 
     public readonly Vector3 Position => new(Quant.Pos(X), Quant.Pos(Y), Quant.Pos(Z));
     public readonly float YawRad => Quant.Yaw(Yaw);
     public readonly float PitchRad => Quant.Pitch(Pitch);
 
-    public static EntityRecord Make(ushort id, EntityType type, Vector3 pos, float yaw, float pitch, float health, EntityState state, byte weapon) => new()
+    public static EntityRecord Make(ushort id, EntityType type, Vector3 pos, float yaw, float pitch, float health, EntityState state, byte weapon, Stance stance = Stance.Stand) => new()
     {
         Id = id, Type = type,
         X = Quant.Pos(pos.X), Y = Quant.Pos(pos.Y), Z = Quant.Pos(pos.Z),
         Yaw = Quant.Yaw(yaw), Pitch = Quant.Pitch(pitch),
         Health = (byte)Math.Clamp((int)MathF.Round(health), 0, 255),
-        State = state, Weapon = weapon,
+        State = state, Stance = stance, Weapon = weapon,
     };
 
     public readonly bool Equals(EntityRecord o) =>
         Id == o.Id && Type == o.Type && X == o.X && Y == o.Y && Z == o.Z && Yaw == o.Yaw && Pitch == o.Pitch
-        && Health == o.Health && State == o.State && Weapon == o.Weapon;
+        && Health == o.Health && State == o.State && Stance == o.Stance && Weapon == o.Weapon;
     public override readonly bool Equals(object? obj) => obj is EntityRecord r && Equals(r);
     public override readonly int GetHashCode() => HashCode.Combine(Id, X, Y, Z, Yaw, Pitch, Health);
 }

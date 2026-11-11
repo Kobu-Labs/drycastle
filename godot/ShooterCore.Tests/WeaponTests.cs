@@ -193,7 +193,7 @@ public class WeaponTests
         Assert.Equal(3, (int)Math.Ceiling(100 / HitMath.HitscanDamage(Def("pistol"), 5, true)));
     }
 
-    static HitTarget T(ushort id, float x, float y, float z, float yaw = 0, bool crouch = false) => new(id, new Vector3(x, y, z), crouch, yaw);
+    static HitTarget T(ushort id, float x, float y, float z, float yaw = 0, Stance stance = Stance.Stand) => new(id, new Vector3(x, y, z), stance, yaw);
 
     [Fact]
     public void RayHitsBodyAndHead()
@@ -230,8 +230,8 @@ public class WeaponTests
     public void CrouchingLowersTheHead()
     {
         var eye = new Vector3(0, 1.65f, 0);
-        Assert.Null(HitMath.Raycast(eye, new Vector3(0, 0, -1), 100, float.PositiveInfinity, new[] { T(2, 0, 0, -8, crouch: true) }, 1)); // passes over a crouched head
-        var h = HitMath.Raycast(new Vector3(0, 1.05f, 0), new Vector3(0, 0, -1), 100, float.PositiveInfinity, new[] { T(2, 0, 0, -8, crouch: true) }, 1);
+        Assert.Null(HitMath.Raycast(eye, new Vector3(0, 0, -1), 100, float.PositiveInfinity, new[] { T(2, 0, 0, -8, stance: Stance.Crouch) }, 1)); // passes over a crouched head
+        var h = HitMath.Raycast(new Vector3(0, 1.05f, 0), new Vector3(0, 0, -1), 100, float.PositiveInfinity, new[] { T(2, 0, 0, -8, stance: Stance.Crouch) }, 1);
         Assert.True(h!.Value.Head);
     }
 

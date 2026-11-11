@@ -107,7 +107,7 @@ public sealed class Water
         }
         s.WaterDepth = b.Depth;
         s.WaterSurfaceY = b.SurfaceY;
-        s.HeadUnder = feet.Y + MovementStep.EyeHeight(s.Crouching) < b.SurfaceY;
+        s.HeadUnder = feet.Y + MovementStep.EyeHeight(s.Stance) < b.SurfaceY;
     }
 
     /// <summary>

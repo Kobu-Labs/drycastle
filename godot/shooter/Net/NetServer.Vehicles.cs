@@ -134,7 +134,7 @@ public partial class NetServer
             if (d <= bd) { best = car; bd = d; }
         }
         if (best == null || !best.Seat.TryEnter(c.Id)) return false;
-        c.Car = best; c.Throttle = c.Steer = 0; c.Handbrake = false;
+        c.Car = best; c.Throttle = c.Steer = 0; c.Handbrake = false; c.Body.InVehicle = true;
         best.Lights = Headlights.OnEnterAt(Clock.HourAt(_elapsed)); // night: on as the driver gets in
         c.Body.Teleport(best.GlobalPosition);
         _carEnters++;
@@ -152,6 +152,7 @@ public partial class NetServer
         car.Seat.Exit(c.Id);
         car.Lights = false;
         c.Car = null;
+        c.Body.InVehicle = false;
         _carExits++;
         if (placeOnGround) c.Body.Teleport(FreeSide(c, car));
         GD.Print($"server: {c.Name} left {car.Def.Id} {car.Id}");
@@ -254,7 +255,7 @@ public partial class NetServer
         foreach (var t in LiveTargets())
         {
             if (driver != null && t.Id == driver.Id) continue;
-            var dist = ProjectileMath.DistanceToCapsule(N(at), t.Feet, HitMath.Height(t.Crouching), MoveConsts.CapsuleRadius);
+            var dist = ProjectileMath.DistanceToCapsule(N(at), t.Feet, HitMath.Height(t.Stance), MoveConsts.CapsuleRadius);
             var dmg = VehicleDamage.BlastDamage(e, dist);
             if (dmg <= 0) continue;
             var self = t.Id == attacker;
@@ -265,7 +266,7 @@ public partial class NetServer
             _blastHits++;
             if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v))
             {
-                var centre = t.Feet + new NVec3(0, HitMath.Height(t.Crouching) / 2, 0);
+                var centre = t.Feet + new NVec3(0, HitMath.Height(t.Stance) / 2, 0);
                 var k = ProjectileMath.Knockback(e.Splash.KnockbackSpeed, N(at), centre, dmg / e.Damage);
                 if (k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
             }

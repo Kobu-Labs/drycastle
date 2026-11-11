@@ -97,13 +97,13 @@ public class RecoilTests
     public void AdsAndCrouchScaleTheKick()
     {
         var def = new RecoilDef { VerticalPerShot = 2, AdsMultiplier = 0.5f, CrouchMultiplier = 0.25f };
-        Assert.Equal(1f, RecoilState.Multiplier(def, false, false));
-        Assert.Equal(0.5f, RecoilState.Multiplier(def, true, false));
-        Assert.Equal(0.25f, RecoilState.Multiplier(def, false, true));
-        Assert.Equal(0.125f, RecoilState.Multiplier(def, true, true));
+        Assert.Equal(1f, RecoilState.Multiplier(def, false, Stance.Stand));
+        Assert.Equal(0.5f, RecoilState.Multiplier(def, true, Stance.Stand));
+        Assert.Equal(0.25f, RecoilState.Multiplier(def, false, Stance.Crouch));
+        Assert.Equal(0.125f, RecoilState.Multiplier(def, true, Stance.Crouch));
 
         var r = new RecoilState(1);
-        var m = RecoilState.Multiplier(def, true, false);
+        var m = RecoilState.Multiplier(def, true, Stance.Stand);
         r.Shot(def, m);
         r.Shot(def, m);
         Assert.Equal(Deg(2), r.PitchRad, 4); // two ADS shots of 2 deg * 0.5

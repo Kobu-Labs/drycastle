@@ -31,7 +31,7 @@ public class WaterTests
     /// <summary>Feet at (x, feetY, z) in Godot axes, state sampled from the water like the client does each tick.</summary>
     static MoveState At(Water w, float x, float feetY, float z, bool crouching = false)
     {
-        var s = new MoveState { Position = new Vector3(x, feetY, z), OnFloor = false, Crouching = crouching, FallPeakY = feetY };
+        var s = new MoveState { Position = new Vector3(x, feetY, z), OnFloor = false, Stance = crouching ? Stance.Crouch : Stance.Stand, FallPeakY = feetY };
         w.Sample(ref s);
         return s;
     }
@@ -164,7 +164,7 @@ public class WaterTests
         var down = At(w, 20, 9.5f, -20);
         for (var k = 0; k < 30; k++) Tick(ref down, w, In(MoveButtons.Crouch));
         Assert.True(down.Position.Y < 9.0f);
-        Assert.True(down.Crouching);
+        Assert.Equal(Stance.Crouch, down.Stance);
         Assert.True(down.Velocity.Y < 0f);
     }
 

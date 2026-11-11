@@ -13,6 +13,8 @@ public sealed partial class CharacterView : Node3D
     /// <summary>The model is a head-and-torso figure about 1.1 m tall; scaled up so it fills the 1.8 m capsule (hit boxes are capsules).</summary>
     const float Scale = 1.6f;
     AnimationPlayer? _anim;
+    Node3D? _model;
+    Stance _stance;
     BoneAttachment3D? _hand;
     Node3D? _held;
     string _heldId = "";
@@ -38,6 +40,7 @@ public sealed partial class CharacterView : Node3D
         HasModel = true;
         m.Scale = Vector3.One * Scale;
         m.RotationDegrees = new Vector3(0, 180, 0); // glTF characters face +Z, the game's forward is -Z
+        _model = m;
         AddChild(m);
         _anim = m.FindChildren("*", "AnimationPlayer", true, false).FirstOrDefault() as AnimationPlayer;
         if (_anim != null)
@@ -50,6 +53,22 @@ public sealed partial class CharacterView : Node3D
         }
         Play("Idle");
     }
+
+    /// <summary>
+    /// Remote stance pose. Prone lays the figure face down (a quarter turn about its forward axis) and lowers it onto the ground;
+    /// stand and crouch keep the upright figure, since no crouch animation exists and the walk cycle reads well at crawl speed.
+    /// </summary>
+    public void SetStance(Stance stance)
+    {
+        if (stance == _stance || _model == null) { _stance = stance; return; }
+        _stance = stance;
+        var prone = stance == Stance.Prone;
+        _model.RotationDegrees = new Vector3(prone ? 90 : 0, 180, 0);
+        _model.Position = new Vector3(0, prone ? ProneLift : 0, 0);
+    }
+
+    /// <summary>Height the lying figure is lifted by so its front rests on the ground (half its thickness; a visual estimate).</summary>
+    const float ProneLift = 0.2f;
 
     /// <summary>Update from snapshot state: horizontal speed (m/s), whether it fired in the last moments, dead, and the weapon id it holds.</summary>
     public void Apply(float speed, bool firing, bool dead, string weaponId)
