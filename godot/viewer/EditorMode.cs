@@ -71,7 +71,7 @@ public partial class EditorMode : Node
     CanvasLayer _ui = null!;
     PanelContainer _panel = null!, _statusBar = null!;
     HSlider _speedSlider = null!;
-    Label _hudLabel = null!, _hoverLabel = null!, _statusLabel = null!, _hintLabel = null!;
+    Label _unsavedLabel = null!, _hudLabel = null!, _hoverLabel = null!, _statusLabel = null!, _hintLabel = null!;
     Label _selLabel = null!, _groupLabel = null!;
     Button _btnGroup = null!, _btnAdd = null!, _btnRemove = null!, _btnDissolve = null!;
     double _statusUntil;
@@ -86,6 +86,7 @@ public partial class EditorMode : Node
         AddChild(OutlineRoot);
         BuildUi();
         BuildRegionWorld();
+        GetTree().AutoAcceptQuit = false; // window close asks first when fence or tree edits are unapplied (_Notification)
         if (Watcher != null)
         {
             Watcher.Launched += ids => Say("regenerating " + string.Join(", ", ids.Take(3)) + "...");
@@ -380,6 +381,7 @@ public partial class EditorMode : Node
             if (!ok) { Say(msg, true); ReloadGroups(); return false; }
             var errors = ObjectEdits.ValidateDocument(root);
             if (errors.Count > 0) { Say("not saved: " + ObjectEdits.Summarise(errors), true); ReloadGroups(); return false; }
+            if (EditsFile.Dump(before) == EditsFile.Dump(root)) { Say("no changes to save"); return true; } // the file already says this
             var changes = DiffEntries(before, root);
             EditsFile.Save(EditsPath, root);
             SaveCount++;
@@ -441,6 +443,27 @@ public partial class EditorMode : Node
         _panelDirty = true;
     }
 
+    /// <summary>
+    /// Run <paramref name="proceed"/> now, or after a confirm when fence or tree edits are unapplied (they are
+    /// kept in memory only). Accepting discards them; Cancel stays here so Apply (Enter) can save them first.
+    /// </summary>
+    void GuardUnsaved(Action proceed, string okText = "Discard")
+    {
+        if (_pending.Count == 0) { proceed(); return; }
+        var n = _pending.Count;
+        ShowConfirm($"Discard {n} unsaved edit{(n == 1 ? "" : "s")}?",
+            $"Fence and tree edits for {string.Join(", ", _pending.Keys.Take(4))}{(n > 4 ? ", ..." : "")} are not applied yet and exist only in memory. Cancel, then press Enter to apply them.",
+            okText, () => { _pending.Clear(); AfterEdit(); proceed(); });
+    }
+
+    public override void _Notification(int what)
+    {
+        if (what != NotificationWMCloseRequest) return;
+        if (_pending.Count == 0) { GetTree().Quit(); return; }
+        if (!Active) SetActive(true); // the confirm needs the editor UI
+        GuardUnsaved(() => GetTree().Quit(), "Quit");
+    }
+
     // ---- messages ----
 
     public void Say(string message, bool error = false)
@@ -458,7 +481,7 @@ public partial class EditorMode : Node
     {
         if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F2 })
         {
-            SetActive(!Active);
+            if (Active) GuardUnsaved(() => SetActive(false)); else SetActive(true);
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -508,7 +531,7 @@ public partial class EditorMode : Node
                 switch (k.Keycode)
                 {
                     case Key.F1: ToggleCheatSheet(); break;
-                    case Key.F3: WalkFromHere(); break;
+                    case Key.F3: GuardUnsaved(WalkFromHere); break;
                     case Key.G: GroupSelected(); break;
                     case Key.T: ToggleTopDown(); break;
                     case Key.Enter or Key.KpEnter:
@@ -521,7 +544,7 @@ public partial class EditorMode : Node
                         else if (PlacementAsset != null) DisarmPlacement();
                         else if (GateArmed) CancelGate();
                         else if (SelectedObjectId != null) SelectObject(null);
-                        else if (Selection.Count > 0) Click(null, false);
+                        else if (Selection.Count > 0) GuardUnsaved(() => Click(null, false));
                         else if (Tool != EditorTool.None) SelectTool(EditorTool.None);
                         break;
                 }
@@ -565,8 +588,9 @@ public partial class EditorMode : Node
         }
         if (_outlinesDirty) RebuildOutlines();
         if (_panelDirty) RefreshPanel();
+        _unsavedLabel.Text = PendingCount == 0 ? "" : $"* {PendingCount} unsaved (Enter applies)";
         var c = FlyCam.GlobalPosition;
-        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedRegionId != null && Tool == EditorTool.Region ? $"  |  region {SelectedRegionId}" : "") + (_dirtyLabel.Visible || RegionDraftPending ? "  |  * UNSAVED" : "");
+        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedRegionId != null && Tool == EditorTool.Region ? $"  |  region {SelectedRegionId}" : "") + (PendingCount > 0 || RegionDraftPending ? $"  |  * {(PendingCount > 0 ? $"{PendingCount} UNSAVED" : "UNSAVED")}" : "");
         if (Time.GetTicksMsec() / 1000.0 > _statusUntil && _statusLabel.Text != "")
             _statusLabel.Text = "";
     }
