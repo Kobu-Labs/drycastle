@@ -56,6 +56,8 @@ public enum EventKind : byte
     MissileBlast = 30,
     /// <summary>Server to the owner of a gunship: weapon, ammo, heat, zoom (<see cref="GunshipCodec"/>). Kinds 60-69 belong to the aircraft streaks.</summary>
     GunshipStatus = 60,
+    /// <summary>Server broadcast: an impact on a surface from a gunship round or shell (<see cref="ImpactCodec"/>).</summary>
+    ImpactFx = 61,
     /// <summary>Server to the owner only: the UAV's enemy pulse and seconds left (<see cref="UavEvents"/>), every second while up.</summary>
     UavPing = 90,
     /// <summary>Server broadcast: an AC-130 shell burst (owner, centre, splash radius). See <see cref="Ac130Codec"/>. Kinds 120-129 belong to the AC-130 streak.</summary>

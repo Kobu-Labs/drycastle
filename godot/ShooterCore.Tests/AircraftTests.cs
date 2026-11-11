@@ -130,11 +130,11 @@ public class AircraftTests
     public void Aim_clamp_limits_yaw_to_the_swing_and_pitch_to_its_range()
     {
         var limit = Gun.YawLimitDeg * MathF.PI / 180f;
-        var (y, p) = GunshipAim.Clamp(0f, 2f, 0.5f, Gun);
+        var (y, p) = GunshipAim.Clamp(0f, 3.1f, 0.5f, Gun);
         Assert.Equal(limit, y, 0.001f);
         Assert.Equal(Gun.PitchMaxDeg * MathF.PI / 180f, p, 0.001f);
 
-        var (y2, p2) = GunshipAim.Clamp(0f, -2f, -3f, Gun);
+        var (y2, p2) = GunshipAim.Clamp(0f, -3.1f, -3f, Gun);
         Assert.Equal(-limit, y2, 0.001f);
         Assert.Equal(Gun.PitchMinDeg * MathF.PI / 180f, p2, 0.001f);
     }

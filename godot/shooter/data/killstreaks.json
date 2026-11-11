@@ -29,14 +29,14 @@
     { "id": "gunship", "name": "Gunship", "radius_m": 420, "altitude_m": 120, "speed_mps": 70, "max_bank_deg": 30, "lifetime_s": 60 }
   ],
   "gunship": {
-    "yaw_limit_deg": 75, "pitch_min_deg": -70, "pitch_max_deg": -5, "zoom_levels": [1, 2.5, 5],
+    "yaw_limit_deg": 150, "pitch_min_deg": -70, "pitch_max_deg": -5, "zoom_levels": [1, 2.5, 5],
     "weapons": [
       { "id": "cannon", "name": "Cannon", "kind": "cannon", "weapon_id": "m82", "damage": 40, "range_m": 400, "interval_s": 0.15, "spread_deg": 0.6, "ammo": 60, "heat_per_shot": 4, "heat_max": 100, "heat_cool_per_s": 10 },
       { "id": "rockets", "name": "Rockets", "kind": "rocket", "weapon_id": "bazooka", "damage": 0, "range_m": 600, "interval_s": 1.2, "spread_deg": 0.3, "ammo": 12, "heat_per_shot": 0, "heat_max": 100, "heat_cool_per_s": 0 }
     ]
   },
   "ac130": {
-    "yaw_limit_deg": 80, "pitch_min_deg": -75, "pitch_max_deg": -5, "zoom_levels": [1, 2.5, 4],
+    "yaw_limit_deg": 150, "pitch_min_deg": -75, "pitch_max_deg": -5, "zoom_levels": [1, 2.5, 4],
     "weapons": [
       { "id": "gun25", "name": "25 mm", "kind": "cannon", "weapon_id": "m249", "damage": 22, "range_m": 500, "interval_s": 0.1, "spread_deg": 1.2, "ammo": 200, "heat_per_shot": 3, "heat_max": 100, "heat_cool_per_s": 12 },
       { "id": "gun40", "name": "40 mm", "kind": "cannon", "weapon_id": "m82", "damage": 60, "range_m": 600, "interval_s": 0.5, "spread_deg": 0.8, "ammo": 60, "heat_per_shot": 12, "heat_max": 100, "heat_cool_per_s": 15 },

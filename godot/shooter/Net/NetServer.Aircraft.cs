@@ -102,6 +102,11 @@ public partial class NetServer
         var hit = HitMath.Raycast(shot.Origin, shot.Direction, range, wall, LiveTargets(), owner);
         var end = shot.Origin + shot.Direction * (hit?.Distance ?? Math.Min(wall, range));
         BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(owner, (byte)weapon, shot.Origin, end)));
+        if (hit != null || wall <= range) // an impact on something: the surface decides the particles (ticket #152)
+        {
+            var surface = SurfaceClassifier.Classify(hit != null, shotCar != null, Water.DepthAt(new System.Numerics.Vector3(end.X, end.Y, end.Z)) > 0, null);
+            BroadcastEvent(EventKind.ImpactFx, ImpactCodec.Encode(new ImpactInfo(new System.Numerics.Vector3(end.X, end.Y, end.Z), surface, SurfaceClassifier.SizeFor(def.Kind, def.Damage))));
+        }
         if (def.Kind == GunshipWeaponKind.Shell)
         {
             Ac130Detonate(owner, end, def, hit is { } sh ? sh.Id : null, shotCar as ServerCar);

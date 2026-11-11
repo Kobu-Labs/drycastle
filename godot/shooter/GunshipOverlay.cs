@@ -70,12 +70,46 @@ public partial class GunshipOverlay : CanvasLayer
 
     public void Dismiss() => Visible = false;
 
+    /// <summary>A gunner's hit on an enemy: the reticle's marker, the same as the HUD's (a kill is bigger and red, a headshot amber).</summary>
+    public void Hit(bool headshot, bool kill) => _panel.Hit(headshot, kill);
+
     /// <summary>The overlay's drawing: reticle and text, all in one Control so the frame costs one draw.</summary>
     sealed partial class GunshipPanel : Control
     {
         string _title = "", _zoom = "", _ammo = "", _heat = "", _state = "", _hint = "", _timer = "", _kills = "";
         string? _selector;
         float _heatFraction;
+        ulong _hitAtMs;
+        bool _hitKill, _hitHead;
+        /// <summary>How long the hit marker stays, in ms: the HUD's marker is 0.15 s plus a 0.25 s fade.</summary>
+        const ulong HitMarkerMs = 400;
+
+        /// <summary>Starts the hit marker; redraws each frame until it has faded.</summary>
+        public void Hit(bool headshot, bool kill)
+        {
+            _hitAtMs = Time.GetTicksMsec(); _hitHead = headshot; _hitKill = kill;
+            SetProcess(true);
+            QueueRedraw();
+        }
+
+        public override void _Process(double delta)
+        {
+            if (Time.GetTicksMsec() - _hitAtMs < HitMarkerMs) QueueRedraw();
+            else SetProcess(false);
+        }
+
+        void DrawHitMarker(Vector2 centre, float s)
+        {
+            if (_hitAtMs == 0 || Time.GetTicksMsec() - _hitAtMs >= HitMarkerMs) return;
+            var big = _hitKill ? 1.6f : _hitHead ? 1.25f : 1f;
+            var colour = _hitKill ? ShooterTheme.Danger : _hitHead ? ShooterTheme.Warn : ShooterTheme.Text;
+            var inner = 22f * s * big; var outer = 34f * s * big; var wd = (_hitKill || _hitHead ? 4f : 3f) * s;
+            foreach (var d in new[] { new Vector2(1, 1), new Vector2(-1, 1), new Vector2(1, -1), new Vector2(-1, -1) })
+            {
+                var dir = d.Normalized();
+                DrawLine(centre + dir * inner, centre + dir * outer, colour, wd);
+            }
+        }
 
         public void Set(string title, string zoom, string ammo, string heat, float heatFraction, string state, string hint, string? selector)
         {
@@ -108,6 +142,7 @@ public partial class GunshipOverlay : CanvasLayer
             DrawLine(centre - new Vector2(gap, 0), centre - new Vector2(gap + len, 0), ShooterTheme.Text, wd);
             DrawLine(centre + new Vector2(0, gap), centre + new Vector2(0, gap + len), ShooterTheme.Text, wd);
             DrawLine(centre - new Vector2(0, gap), centre - new Vector2(0, gap + len), ShooterTheme.Text, wd);
+            DrawHitMarker(centre, s);
             DrawString(font, new Vector2(centre.X - 60f * s, centre.Y + 40f * s), _zoom, HorizontalAlignment.Center, 120f * s, big, ShooterTheme.Text);
 
             // top left: the turret and the weapon
