@@ -47,6 +47,8 @@ public partial class NetServer : Node
     /// <summary>Spawn candidates (the map's pipeline spawn points); the match state machine picks among them.</summary>
     public List<System.Numerics.Vector3> Spawns = new();
     public MatchConfig MatchConfig = new();
+    /// <summary>The day/night clock the server owns; sent to each client in the welcome (snapshots carry the tick).</summary>
+    public DayClock Clock = new();
     /// <summary>Honour the client debug "kill" command (dev servers and the match smoke only).</summary>
     public bool DebugCommands;
     /// <summary>Match smoke mode: QuitAfter is a failure deadline; the server finishes itself after one full round and restart.</summary>
@@ -320,7 +322,8 @@ public partial class NetServer : Node
         foreach (var car in _cars) car.AddCollisionExceptionWith(c.Body);
         _byId[c.Id] = c;
         SendProfile(c);
-        Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick));
+        Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick,
+            (ushort)(Clock.StartMinute), (uint)Math.Round(Clock.DayLengthSeconds * 1000), Clock.Frozen));
         foreach (var o in _clients.Values.Where(o => o.Joined))
         {
             Send(c, new JoinMsg(o.Id, o.Name));

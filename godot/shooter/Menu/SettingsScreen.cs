@@ -158,6 +158,7 @@ public partial class SettingsScreen : MenuScreen
         });
         Toggle("graphics.vsync", _draft.VSync, on => _draft.VSync = on);
         Segmented("graphics.msaa", GameSettings.MsaaNames, _draft.Msaa, i => _draft.Msaa = i);
+        Slider("graphics.brightness", SettingsRanges.BrightnessMin * 100, SettingsRanges.BrightnessMax * 100, 5, _draft.Brightness * 100, v => Strings.F("fmt.percent", (int)v), v => _draft.Brightness = v / 100f);
     }
 
     /// <summary>Set by the screenshot mode: no timed dialogs.</summary>

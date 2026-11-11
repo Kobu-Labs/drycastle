@@ -9,8 +9,11 @@ public class GameData
     public required PerksFile Perks { get; init; }
     public required LevelsFile Levels { get; init; }
 
+    /// <summary>environment.json (day/night clock). Defaults when the file is absent from the parse call.</summary>
+    public EnvironmentConfig Environment { get; init; } = new();
+
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson)
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string environmentJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -21,6 +24,7 @@ public class GameData
             Vehicles = VehiclesFile.Validate(DataFile.Parse<VehiclesFile>(vehiclesJson, "vehicles.json")),
             Perks = perks,
             Levels = LevelsFile.Parse(levelsJson, weapons, perks),
+            Environment = environmentJson == "" ? new() : EnvironmentConfig.Parse(environmentJson),
         };
     }
 
@@ -35,6 +39,7 @@ public class GameData
             Vehicles = VehiclesFile.Load(Path.Combine(dir, "vehicles.json")),
             Perks = perks,
             Levels = LevelsFile.Load(Path.Combine(dir, "levels.json"), weapons, perks),
+            Environment = File.Exists(Path.Combine(dir, "environment.json")) ? EnvironmentConfig.Load(Path.Combine(dir, "environment.json")) : new(),
         };
     }
 }

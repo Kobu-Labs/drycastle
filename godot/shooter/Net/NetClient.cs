@@ -210,6 +210,7 @@ public partial class NetClient : Node
         {
             case WelcomeMsg w:
                 _myId = w.PlayerId; _welcomed = true;
+                DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
                 _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY };
                 World.AddChild(_me);
                 if (!Bot && ShotFx.Enabled) { _viewmodel = new WeaponViewmodel(); _me.Camera.AddChild(_viewmodel); }
@@ -288,6 +289,7 @@ public partial class NetClient : Node
         if (_lastTick != 0 && h.Tick < _lastTick) return;
         LossOnSnapshot(h);
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
+        DayNightCycle.Current?.SetServerTick(h.Tick);
         foreach (var id in _dec.RemoveStale(h.Tick, 90)) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); } }
         foreach (var (id, rec) in _dec.States)
         {
