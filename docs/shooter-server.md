@@ -57,9 +57,17 @@ Flags (after `--`):
 | `--port N` | UDP listen port, default 27015 |
 | `--map DIR` | map folder (else `SUCHOHRAD_MAP`) |
 | `--db PATH` | progression database file, default `./shooter.db` (relative to the working directory); created and migrated at start, the server refuses to start if it cannot be opened |
+| `--time HH:MM` | start time of day for the day/night clock; overrides `start_time` in `environment.json` (default `08:00`) |
+| `--day-length MIN` | real minutes for one 24-hour day; overrides `day_length_minutes` in `environment.json` (default `24`) |
+| `--freeze-time` | hold the clock at its start time (or at `--time`), so the sky does not move |
 | `--match-set k=v,k=v` | override match options, see below |
-| `--debug-cmds` | honour the client debug kill command; leave off on a public server |
+| `--debug-cmds` | honour the client debug kill command and give every player the full weapon list on the hotbar (dev aid); leave off on a public server |
 | `--quit-after SECONDS` | end the server with a verdict (testing only) |
+
+The clock flags are read in `Shooter.ServerClock` (`godot/shooter/Shooter.cs`) and resolved by `EnvironmentConfig.ToClock`
+(`godot/ShooterCore/Environment/EnvironmentConfig.cs`). The clock is owned by the server and sent to each client in the
+welcome message (protocol 3 and later), so clients never need the flags.
+Example: `./suchohrad-server.x86_64 --headless -- --role server --port 27015 --map /srv/suchohrad/map --db /srv/suchohrad/shooter.db --time 22:00 --freeze-time`.
 
 ### Match options (`--match-set`)
 
@@ -85,6 +93,42 @@ The dedicated server keeps profiles, loadouts, unlocks and stats in one SQLite f
 like any other data; deleting it wipes every player's progression. Writes run on a background thread and a failed write
 is logged to the server output, never thrown into the match. The netcode reads a profile at join (3 s timeout, then a guest profile), applies the active loadout at each spawn (perk, hotbar), writes XP and kill stats, and sends `LevelUp` and round XP summary events. Guests earn XP in memory only.
 Players are identified by a client-generated token, not an account (ADR 0003: anyone with the token is that player).
+
+Migrations shipped so far (applied in order, each once, recorded in the database): `0001_init.sql` (players, loadouts,
+unlocks, stats, weapon_kills), `0002_roadkills.sql`, `0003_camo.sql` (camo per player), `0004_loadout_camo.sql` (camo moved to
+each loadout slot). A new migration is the next number; never edit a shipped one.
+
+Running the database by hand: it is a plain SQLite 3 file, so `sqlite3 shooter.db '.tables'` lists the tables and
+`sqlite3 shooter.db '.backup shooter-backup.db'` takes a safe copy while the server runs (WAL mode; the `-wal` and `-shm`
+side files belong with the main file, never copy only one). To reset one player, stop the server, then delete their rows
+from `loadouts`, `unlocks`, `stats`, `weapon_kills`, `camo` and `loadout_camo` (keyed by `player_id`) and finally from
+`players`. The schema declares `ON DELETE CASCADE`, but the server does not switch on `PRAGMA foreign_keys`, so deleting a
+`players` row alone leaves the others behind (see `docs/shooter-v2.md`, known gaps). To reset everyone, stop the server and
+delete the file.
+
+### Data files (`godot/shooter/data/`, packaged into the `.pck` by `export_presets.cfg`)
+
+Every file has a `version` field that is checked at load; a bad value or key stops the server (or the client) with an error
+that names the file and the entry. The export presets pack `data/*.json`, and `make shooter-export-check` fails if any of the
+files below is missing.
+
+| File | What it holds | Read by |
+|---|---|---|
+| `weapons.json` (v2) | weapon registry: categories and their recoil defaults, every weapon's damage, falloff, fire interval, magazine, recoil, unlock level | `WeaponData.cs`, `PlayerWeapons` |
+| `perks.json` | the eight perks and the stat each one modifies | `PerkData.cs` |
+| `levels.json` | XP curve (`xp_to_reach`), XP awards, and the unlock table (weapons, perks and killstreaks by level) | `LevelsData.cs` |
+| `killstreaks.json` | streak table (kills, unlock level, duration, control), missile, helper, gunship and AC-130 tuning | `KillstreakData.cs`, `Aircraft` |
+| `turret.json` | sentry turret: hp, lifetime, placement, aim and fire numbers | `TurretEntity.cs` |
+| `camo.json` | camouflage presets, patterns, tuft (ghillie) settings and the concealment numbers | `CamoSpec.cs`, `CamoEditor.cs` |
+| `environment.json` | day/night clock start, day length and the minimum ambient light | `EnvironmentConfig.cs` |
+| `vehicles.json` | vehicle types: speed, handling, hp, seats, gun, `lights` blocks | `VehicleData.cs` |
+| `match.json` | round rules (see the match options table above) | `MatchData.cs` |
+| `sounds.json` | sound ids and file names (validated against `assets/` by the server) | `SoundData.cs` |
+
+Sounds, models and textures are not in the `.pck`; they are read from `assets/` on disk (section 2).
+Shaders (`godot/shooter/shaders/*.gdshader`) are compiled by Godot from the project resources, so they are in the export
+as long as they are loaded from a literal `res://` path. Water, camo and day/night shaders have not yet been compiled by
+a real Godot build (see `docs/shooter-v2.md`).
 
 ## 4. Firewall
 
