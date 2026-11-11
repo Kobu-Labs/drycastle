@@ -994,6 +994,386 @@
       "licence": "CC0",
       "source": "https://opengameart.org/content/low-poly-guns-pack",
       "pack": "quaternius-ultimate-gun-pack"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/assault-rifle-2",
+      "category": "other",
+      "name": "Assault rifle 2 (AssaultRifle_2)",
+      "file": "quaternius-ultimate-gun-pack/assault-rifle-2.glb",
+      "size_m": [
+        5.422,
+        1.601,
+        0.196
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id m4a1 (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/assault-rifle-3",
+      "category": "other",
+      "name": "Assault rifle 3 (AssaultRifle_3)",
+      "file": "quaternius-ultimate-gun-pack/assault-rifle-3.glb",
+      "size_m": [
+        3.431,
+        1.601,
+        0.196
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id rpk (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/assault-rifle-4",
+      "category": "other",
+      "name": "Assault rifle 4 (AssaultRifle_4)",
+      "file": "quaternius-ultimate-gun-pack/assault-rifle-4.glb",
+      "size_m": [
+        5.494,
+        1.601,
+        0.196
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id pkm (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/assault-rifle-5",
+      "category": "other",
+      "name": "Assault rifle 5 (AssaultRifle_5)",
+      "file": "quaternius-ultimate-gun-pack/assault-rifle-5.glb",
+      "size_m": [
+        5.422,
+        1.601,
+        0.196
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id m249 (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/assault-rifle2-1",
+      "category": "other",
+      "name": "Assault rifle 2-1 (AssaultRifle2_1)",
+      "file": "quaternius-ultimate-gun-pack/assault-rifle2-1.glb",
+      "size_m": [
+        5.169,
+        1.79,
+        0.346
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id g36 (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/assault-rifle2-3",
+      "category": "other",
+      "name": "Assault rifle 2-3 (AssaultRifle2_3)",
+      "file": "quaternius-ultimate-gun-pack/assault-rifle2-3.glb",
+      "size_m": [
+        3.753,
+        1.458,
+        0.346
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id m60 (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/bullpup-1",
+      "category": "other",
+      "name": "Bullpup 1",
+      "file": "quaternius-ultimate-gun-pack/bullpup-1.glb",
+      "size_m": [
+        5.248,
+        1.541,
+        0.31
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id aug (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/bullpup-2",
+      "category": "other",
+      "name": "Bullpup 2",
+      "file": "quaternius-ultimate-gun-pack/bullpup-2.glb",
+      "size_m": [
+        3.757,
+        1.518,
+        0.31
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id p90 (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/submachine-gun-1",
+      "category": "other",
+      "name": "Submachine gun 1",
+      "file": "quaternius-ultimate-gun-pack/submachine-gun-1.glb",
+      "size_m": [
+        2.771,
+        1.709,
+        0.319
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id mp5 (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/submachine-gun-2",
+      "category": "other",
+      "name": "Submachine gun 2",
+      "file": "quaternius-ultimate-gun-pack/submachine-gun-2.glb",
+      "size_m": [
+        4.044,
+        1.847,
+        0.319
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id ump45 (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/shotgun-1",
+      "category": "other",
+      "name": "Shotgun 1",
+      "file": "quaternius-ultimate-gun-pack/shotgun-1.glb",
+      "size_m": [
+        5.215,
+        0.943,
+        0.247
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id remington870 (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/shotgun-2",
+      "category": "other",
+      "name": "Shotgun 2",
+      "file": "quaternius-ultimate-gun-pack/shotgun-2.glb",
+      "size_m": [
+        5.785,
+        0.949,
+        0.247
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id spas12 (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/shotgun-3",
+      "category": "other",
+      "name": "Shotgun 3",
+      "file": "quaternius-ultimate-gun-pack/shotgun-3.glb",
+      "size_m": [
+        5.785,
+        0.943,
+        0.247
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id benelli_m4 (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/shotgun-4",
+      "category": "other",
+      "name": "Shotgun 4",
+      "file": "quaternius-ultimate-gun-pack/shotgun-4.glb",
+      "size_m": [
+        5.449,
+        0.927,
+        0.199
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id aa12 (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/pistol-2",
+      "category": "other",
+      "name": "Pistol 2",
+      "file": "quaternius-ultimate-gun-pack/pistol-2.glb",
+      "size_m": [
+        1.819,
+        1.162,
+        0.323
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id glock17 (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/pistol-3",
+      "category": "other",
+      "name": "Pistol 3",
+      "file": "quaternius-ultimate-gun-pack/pistol-3.glb",
+      "size_m": [
+        1.845,
+        1.293,
+        0.329
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id deagle (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/sniper-rifle-2",
+      "category": "other",
+      "name": "Sniper rifle 2",
+      "file": "quaternius-ultimate-gun-pack/sniper-rifle-2.glb",
+      "size_m": [
+        7.414,
+        1.507,
+        0.485
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id m82 (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/sniper-rifle-3",
+      "category": "other",
+      "name": "Sniper rifle 3",
+      "file": "quaternius-ultimate-gun-pack/sniper-rifle-3.glb",
+      "size_m": [
+        7.245,
+        1.201,
+        0.446
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id awm (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:quaternius-ultimate-gun-pack/sniper-rifle-4",
+      "category": "other",
+      "name": "Sniper rifle 4",
+      "file": "quaternius-ultimate-gun-pack/sniper-rifle-4.glb",
+      "size_m": [
+        6.336,
+        1.348,
+        0.459
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack",
+      "used_for": "held model of weapon id svd (godot/shooter WeaponFx.cs)"
     }
   ],
   "sounds": [
@@ -1404,6 +1784,114 @@
       "downloaded": "2026-11-11",
       "generated": true,
       "note": "PLACEHOLDER generated by a deterministic script kept outside the repo (noise, sine harmonics, decaying clicks); replace with a recording"
+    },
+    {
+      "id": "sfx:free-firearm-sound-library/ar15",
+      "name": "AR-15 (take D_32P)",
+      "file": "free-firearm-sound-library/ar15.ogg",
+      "used_for": "shot.m4a1 (shot.aug, shot.g36 at other pitches)",
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/the-free-firearm-sound-library",
+      "pack": "free-firearm-sound-library",
+      "downloaded": "2026-11-11",
+      "generated": false,
+      "note": "single shot cut from D_32P, AR-15, near-mid distance; leading silence trimmed, last 0.25 s faded, peak -1 dBFS, mono OGG 44.1 kHz"
+    },
+    {
+      "id": "sfx:free-firearm-sound-library/ppsh",
+      "name": "PPSh (take P_30P)",
+      "file": "free-firearm-sound-library/ppsh.ogg",
+      "used_for": "shot.mp5, shot.ump45, shot.p90 (pitched)",
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/the-free-firearm-sound-library",
+      "pack": "free-firearm-sound-library",
+      "downloaded": "2026-11-11",
+      "generated": false,
+      "note": "single shot cut from P_30P, PPSh, single shot from the mid-distance take; leading silence trimmed, last 0.25 s faded, peak -1 dBFS, mono OGG 44.1 kHz"
+    },
+    {
+      "id": "sfx:free-firearm-sound-library/model12",
+      "name": "Winchester Model 12 (take K_17P)",
+      "file": "free-firearm-sound-library/model12.ogg",
+      "used_for": "shot.remington870",
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/the-free-firearm-sound-library",
+      "pack": "free-firearm-sound-library",
+      "downloaded": "2026-11-11",
+      "generated": false,
+      "note": "single shot cut from K_17P, pump shotgun, mid distance; leading silence trimmed, last 0.25 s faded, peak -1 dBFS, mono OGG 44.1 kHz"
+    },
+    {
+      "id": "sfx:free-firearm-sound-library/nova",
+      "name": "Benelli Nova (take O_17P)",
+      "file": "free-firearm-sound-library/nova.ogg",
+      "used_for": "shot.spas12, shot.aa12 (pitched)",
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/the-free-firearm-sound-library",
+      "pack": "free-firearm-sound-library",
+      "downloaded": "2026-11-11",
+      "generated": false,
+      "note": "single shot cut from O_17P, pump shotgun, mid distance; leading silence trimmed, last 0.25 s faded, peak -1 dBFS, mono OGG 44.1 kHz"
+    },
+    {
+      "id": "sfx:free-firearm-sound-library/mossberg",
+      "name": "Mossberg (take N_26P)",
+      "file": "free-firearm-sound-library/mossberg.ogg",
+      "used_for": "shot.benelli_m4",
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/the-free-firearm-sound-library",
+      "pack": "free-firearm-sound-library",
+      "downloaded": "2026-11-11",
+      "generated": false,
+      "note": "single shot cut from N_26P, 12 gauge, mid distance; leading silence trimmed, last 0.25 s faded, peak -1 dBFS, mono OGG 44.1 kHz"
+    },
+    {
+      "id": "sfx:free-firearm-sound-library/walther_ppq",
+      "name": "Walther PPQ (take X_31P)",
+      "file": "free-firearm-sound-library/walther_ppq.ogg",
+      "used_for": "shot.glock17",
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/the-free-firearm-sound-library",
+      "pack": "free-firearm-sound-library",
+      "downloaded": "2026-11-11",
+      "generated": false,
+      "note": "single shot cut from X_31P, 9mm striker pistol, mid distance; leading silence trimmed, last 0.25 s faded, peak -1 dBFS, mono OGG 44.1 kHz"
+    },
+    {
+      "id": "sfx:free-firearm-sound-library/tikka",
+      "name": "Tikka T3 (take W_24P)",
+      "file": "free-firearm-sound-library/tikka.ogg",
+      "used_for": "shot.m82 (pitched down)",
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/the-free-firearm-sound-library",
+      "pack": "free-firearm-sound-library",
+      "downloaded": "2026-11-11",
+      "generated": false,
+      "note": "single shot cut from W_24P, bolt action .30-06, mid distance; leading silence trimmed, last 0.25 s faded, peak -1 dBFS, mono OGG 44.1 kHz"
+    },
+    {
+      "id": "sfx:free-firearm-sound-library/savage10",
+      "name": "Savage 10 (take T_17P)",
+      "file": "free-firearm-sound-library/savage10.ogg",
+      "used_for": "shot.awm (pitched down)",
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/the-free-firearm-sound-library",
+      "pack": "free-firearm-sound-library",
+      "downloaded": "2026-11-11",
+      "generated": false,
+      "note": "single shot cut from T_17P, bolt action, mid distance; leading silence trimmed, last 0.25 s faded, peak -1 dBFS, mono OGG 44.1 kHz"
+    },
+    {
+      "id": "sfx:free-firearm-sound-library/sks",
+      "name": "Norinco SKS (take U_14P)",
+      "file": "free-firearm-sound-library/sks.ogg",
+      "used_for": "shot.svd (pitched)",
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/the-free-firearm-sound-library",
+      "pack": "free-firearm-sound-library",
+      "downloaded": "2026-11-11",
+      "generated": false,
+      "note": "single shot cut from U_14P, semi automatic 7.62x39, near-mid distance; leading silence trimmed, last 0.25 s faded, peak -1 dBFS, mono OGG 44.1 kHz"
     }
   ],
   "unverified_models": [

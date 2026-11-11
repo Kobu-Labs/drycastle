@@ -5,6 +5,7 @@ namespace Suchohrad.Shooter;
 /// <summary>
 /// Held weapon visuals. Models come from the Quaternius Ultimate Gun Pack: pistol = Pistol_1, ak47 = AssaultRifle_1,
 /// knife = Bayonet (stand-in, the pack has no knife). The pack has no launcher, so the bazooka is a code-built tube.
+/// The shooter v2 weapons map to the other OBJ models of the same pack (see assets/README.md, "Shooter v2 weapons").
 /// Every model is returned with its muzzle toward -Z and its origin at the grip end.
 /// </summary>
 public static class WeaponFx
@@ -16,12 +17,27 @@ public static class WeaponFx
         ["ak47"] = ("quaternius-ultimate-gun-pack/assault-rifle-1.glb", 0.8f),
         ["sniper"] = ("quaternius-ultimate-gun-pack/sniper-rifle.glb", 1.15f),
         ["knife"] = ("quaternius-ultimate-gun-pack/bayonet.glb", 0.32f),
-        // shooter v2 pistols and snipers: placeholder models from the same pack until their own models are chosen
-        ["glock17"] = ("quaternius-ultimate-gun-pack/pistol-1.glb", 0.22f),
-        ["deagle"] = ("quaternius-ultimate-gun-pack/pistol-1.glb", 0.3f),
-        ["m82"] = ("quaternius-ultimate-gun-pack/sniper-rifle.glb", 1.3f),
-        ["awm"] = ("quaternius-ultimate-gun-pack/sniper-rifle.glb", 1.2f),
-        ["svd"] = ("quaternius-ultimate-gun-pack/sniper-rifle.glb", 1.2f),
+        // shooter v2 weapons, all from the same pack (the full OBJ set, converted one-to-one); the pack has no
+        // machine guns, so those use an assault rifle model
+        ["m4a1"] = ("quaternius-ultimate-gun-pack/assault-rifle-2.glb", 0.86f),
+        ["rpk"] = ("quaternius-ultimate-gun-pack/assault-rifle-3.glb", 1.0f),
+        ["pkm"] = ("quaternius-ultimate-gun-pack/assault-rifle-4.glb", 1.1f),
+        ["m249"] = ("quaternius-ultimate-gun-pack/assault-rifle-5.glb", 1.04f),
+        ["g36"] = ("quaternius-ultimate-gun-pack/assault-rifle2-1.glb", 0.99f),
+        ["m60"] = ("quaternius-ultimate-gun-pack/assault-rifle2-3.glb", 1.1f),
+        ["aug"] = ("quaternius-ultimate-gun-pack/bullpup-1.glb", 0.73f),
+        ["p90"] = ("quaternius-ultimate-gun-pack/bullpup-2.glb", 0.5f),
+        ["mp5"] = ("quaternius-ultimate-gun-pack/submachine-gun-1.glb", 0.6f),
+        ["ump45"] = ("quaternius-ultimate-gun-pack/submachine-gun-2.glb", 0.66f),
+        ["remington870"] = ("quaternius-ultimate-gun-pack/shotgun-1.glb", 1.0f),
+        ["spas12"] = ("quaternius-ultimate-gun-pack/shotgun-2.glb", 0.9f),
+        ["benelli_m4"] = ("quaternius-ultimate-gun-pack/shotgun-3.glb", 0.95f),
+        ["aa12"] = ("quaternius-ultimate-gun-pack/shotgun-4.glb", 0.9f),
+        ["glock17"] = ("quaternius-ultimate-gun-pack/pistol-2.glb", 0.22f),
+        ["deagle"] = ("quaternius-ultimate-gun-pack/pistol-3.glb", 0.3f),
+        ["m82"] = ("quaternius-ultimate-gun-pack/sniper-rifle-2.glb", 1.3f),
+        ["awm"] = ("quaternius-ultimate-gun-pack/sniper-rifle-3.glb", 1.2f),
+        ["svd"] = ("quaternius-ultimate-gun-pack/sniper-rifle-4.glb", 1.2f),
     };
 
     /// <summary>Node meta: height of the weapon's top (iron sight) above its origin, in metres; the viewmodel lowers the gun by this much to aim down sights.</summary>
