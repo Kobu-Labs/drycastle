@@ -23,7 +23,7 @@ public partial class NetClient
         SfxShot(sh, melee);
         if (!melee) { if (sh.Shooter == _myId) _viewmodel?.Flash(0.4f); else if (_remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
         // a gunship's impact is its own message (OnGunshipImpacts), so its tracer does not draw one too: no 300 m cut-off for a long round
-        ShotFx.Spawn(World, MuzzleOf(sh.Shooter, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV), endV, melee, impact: impact, speed: speed, length: length);
+        ShotFx.Spawn(Owned, MuzzleOf(sh.Shooter, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV), endV, melee, impact: impact, speed: speed, length: length);
         if (!melee) ShotHole(new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV);
         if (!melee) BulletSurfaceHit(new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV);
     }
@@ -51,7 +51,7 @@ public partial class NetClient
             var b = m.Blasts[i];
             var at = new Vector3(b.At.X, b.At.Y, b.At.Z);
             if (i == 0 && Sfx.Enabled) Sfx.Play3D(SoundRules.Event("explosion", "bazooka"), at);
-            RocketFx.Explode(World, at, b.Radius);
+            RocketFx.Explode(Owned, at, b.Radius);
             ShakeFor(at, b.Radius);
         }
         if (m.Owner == _myId && m.Hits != GunshipHitFlags.None) OnGunnerHits(m.Hits);

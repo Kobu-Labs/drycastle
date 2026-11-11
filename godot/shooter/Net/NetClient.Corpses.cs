@@ -56,7 +56,7 @@ public partial class NetClient
         var view = CharacterView.Make();
         view.Position = new Vector3(0, -BodyMid, 0); // the node sits at the body's middle, so a thrown body spins about its centre
         node.AddChild(view);
-        World.AddChild(node);
+        Owned.AddChild(node);
         _corpses[e.Id] = new CorpseView { Node = node, View = view };
     }
 

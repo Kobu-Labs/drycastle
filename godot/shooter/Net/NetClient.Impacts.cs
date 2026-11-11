@@ -11,18 +11,22 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class NetClient
 {
-    const int ImpactPool = 8, RingPool = 3, DustPool = 3;
+    const int ImpactPerSize = 4, RingPool = 3, DustPool = 3;
     const float ImpactLifeS = 2f;
     const int RingSegments = 24;
     const float RingInnerRadius = 0.85f;
 
-    CpuParticles3D[]? _impacts;
-    int _impactNext;
+    /// <summary>Impact emitters in one bank per size (the amount is fixed per emitter, so it never changes after build; #169, T3-053).</summary>
+    CpuParticles3D[][]? _impacts;
+    readonly int[] _impactNext = new int[3];
     MeshInstance3D[]? _rings;
     int _ringNext;
     CpuParticles3D[]? _dust;
     int _dustNext;
     ArrayMesh? _ringMesh;
+
+    /// <summary>Particles in one burst for a size.</summary>
+    static int SizeAmount(ImpactSize s) => s switch { ImpactSize.Puff => 10, ImpactSize.Burst => 26, _ => 60 };
 
     /// <summary>Surface colour and the burst's particle count and speed for a size (grass and earth for the terrain).</summary>
     static (Color Tint, int Amount, float Speed) ImpactLook(ImpactInfo i)
@@ -40,31 +44,35 @@ public partial class NetClient
         };
         return i.Size switch
         {
-            ImpactSize.Puff => (tint, 10, 2.5f),
-            ImpactSize.Burst => (tint, 26, 4.5f),
-            _ => (tint, 60, 8f),
+            ImpactSize.Puff => (tint, SizeAmount(i.Size), 2.5f),
+            ImpactSize.Burst => (tint, SizeAmount(i.Size), 4.5f),
+            _ => (tint, SizeAmount(i.Size), 8f),
         };
     }
 
     /// <summary>The splash scale for a water impact: a bullet's small splash, a rocket's larger one, a plume's full splash.</summary>
     static float SplashSize(ImpactSize s) => s switch { ImpactSize.Puff => 0.4f, ImpactSize.Burst => 0.8f, _ => 1f };
 
-    CpuParticles3D[] BuildImpactPool()
+    CpuParticles3D[][] BuildImpactPools()
     {
-        var pool = new CpuParticles3D[ImpactPool];
         var mat = new StandardMaterial3D { VertexColorUseAsAlbedo = true, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
-        for (var k = 0; k < pool.Length; k++)
+        var banks = new CpuParticles3D[3][];
+        for (var b = 0; b < banks.Length; b++)
         {
-            var p = new CpuParticles3D
+            banks[b] = new CpuParticles3D[ImpactPerSize];
+            for (var k = 0; k < ImpactPerSize; k++)
             {
-                Emitting = false, OneShot = true, Explosiveness = 1f, Lifetime = ImpactLifeS * 0.4f,
-                Direction = Vector3.Up, Spread = 70f, Gravity = new Vector3(0, -9.8f, 0),
-                Mesh = new BoxMesh { Size = new Vector3(0.12f, 0.12f, 0.12f), Material = mat },
-            };
-            World.AddChild(p);
-            pool[k] = p;
+                var p = new CpuParticles3D
+                {
+                    Emitting = false, OneShot = true, Explosiveness = 1f, Lifetime = ImpactLifeS * 0.4f, Amount = SizeAmount((ImpactSize)b),
+                    Direction = Vector3.Up, Spread = 70f, Gravity = new Vector3(0, -9.8f, 0),
+                    Mesh = new BoxMesh { Size = new Vector3(0.12f, 0.12f, 0.12f), Material = mat },
+                };
+                Owned.AddChild(p);
+                banks[b][k] = p;
+            }
         }
-        return pool;
+        return banks;
     }
 
     /// <summary>Dust that hangs and drifts up after a plume: soft, slow, larger than the debris.</summary>
@@ -81,7 +89,7 @@ public partial class NetClient
                 Gravity = new Vector3(0, 0.8f, 0), ScaleAmountMin = 0.8f, ScaleAmountMax = 1.6f,
                 Mesh = new SphereMesh { Radius = 0.45f, Height = 0.9f, RadialSegments = 6, Rings = 3, Material = mat },
             };
-            World.AddChild(p);
+            Owned.AddChild(p);
             pool[k] = p;
         }
         return pool;
@@ -93,16 +101,16 @@ public partial class NetClient
         var at = new Vector3(i.At.X, i.At.Y, i.At.Z);
         if (i.Surface == SurfaceKind.Water)
         {
-            WaterFx.Splash(World, at, SplashSize(i.Size)); // the proper splash, scaled by the round (ticket #154)
+            WaterFx.Splash(Owned, at, SplashSize(i.Size)); // the proper splash, scaled by the round (ticket #154)
             return;
         }
-        _impacts ??= BuildImpactPool();
-        var (tint, amount, speed) = ImpactLook(i);
-        var p = _impacts[_impactNext];
-        _impactNext = (_impactNext + 1) % _impacts.Length;
+        _impacts ??= BuildImpactPools();
+        var (tint, _, speed) = ImpactLook(i);
+        var bank = (int)i.Size;
+        var p = _impacts[bank][_impactNext[bank]];
+        _impactNext[bank] = (_impactNext[bank] + 1) % ImpactPerSize;
         p.GlobalPosition = at;
         p.Color = tint;
-        p.Amount = amount;
         p.InitialVelocityMin = speed * 0.5f;
         p.InitialVelocityMax = speed;
         p.Restart();
@@ -126,7 +134,7 @@ public partial class NetClient
                     Mesh = _ringMesh, Visible = false,
                     MaterialOverride = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, Transparency = BaseMaterial3D.TransparencyEnum.Alpha, CullMode = BaseMaterial3D.CullModeEnum.Disabled, AlbedoColor = new Color(0.9f, 0.85f, 0.7f, 0f) },
                 };
-                World.AddChild(m);
+                Owned.AddChild(m);
                 _rings[k] = m;
             }
         }

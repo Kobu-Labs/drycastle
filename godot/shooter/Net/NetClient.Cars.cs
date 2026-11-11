@@ -42,7 +42,7 @@ public partial class NetClient
     void OnVehicleState(ushort id, EntityRecord rec, uint tick)
     {
         if (Vehicles == null) return; // never let a missing table abort the rest of the snapshot
-        if (!_cars.TryGetValue(id, out var v)) { v = new CarView { Node = CarFx.Make(World, Vehicles!.Vehicles[Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1)], VehicleRecord.Colour(rec)), Kind = Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1), Pos = rec.Position, Yaw = rec.YawRad }; _cars[id] = v; }
+        if (!_cars.TryGetValue(id, out var v)) { v = new CarView { Node = CarFx.Make(Owned, Vehicles!.Vehicles[Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1)], VehicleRecord.Colour(rec)), Kind = Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1), Pos = rec.Position, Yaw = rec.YawRad }; _cars[id] = v; }
         v.Lamps ??= ShotFx.Enabled ? CarLights.Attach(v.Node, Vehicles!.Vehicles[v.Kind]) : null;
         v.Driver = VehicleRecord.Driver(rec);
         v.Lights = VehicleRecord.Lights(rec);
@@ -86,7 +86,7 @@ public partial class NetClient
         if (v.Smoke != null) { v.Smoke.Stop(); v.Smoke.QueueFree(); v.Smoke = null; } // freed with its particles, not just stopped: nothing of the smoke outlives the vehicle
         v.Destroyed = true; // the wreck is gone until the server returns it: a live record must not bring it back or its smoke
         v.Node.Visible = false;
-        VehicleFx.Explode(World, at, radius);
+        VehicleFx.Explode(Owned, at, radius);
         if (Sfx.Enabled) Sfx.Play3D("explosion.vehicle", at);
         ShakeFor(at, radius);
     }
@@ -195,10 +195,10 @@ public partial class NetClient
         if (len < 0.05f) return;
         if (VehicleAlong(from, d / len, len + 0.5f, out var car, out var hit) && hit.Distance >= len - 0.5f)
         {
-            BulletHoles.PlaceOn(World, car.Node, G(hit.Local), G(hit.LocalNormal));
+            BulletHoles.PlaceOn(Owned, car.Node, G(hit.Local), G(hit.LocalNormal));
             return;
         }
-        BulletHoles.PlaceFromShot(World, from, end);
+        BulletHoles.PlaceFromShot(Owned, from, end);
     }
 
     CarView? NearestFreeCar(Vector3 p)

@@ -32,17 +32,17 @@ public partial class NetClient
             if (VehicleAlong(from, ray, MathF.Min(range, worldDist), out var car, out var vh))
             {
                 // a pellet that stops on a car: the hole rides the car's node, the spark is where the car is drawn
-                BulletHoles.PlaceOn(World, car.Node, G(vh.Local), G(vh.LocalNormal));
+                BulletHoles.PlaceOn(Owned, car.Node, G(vh.Local), G(vh.LocalNormal));
                 var vat = ToWorld(car, G(vh.Local));
-                ShotFx.Spark(World, vat, car.Node.GlobalTransform.Basis * G(vh.LocalNormal));
+                ShotFx.Spark(Owned, vat, car.Node.GlobalTransform.Basis * G(vh.LocalNormal));
                 first ??= vat;
                 continue;
             }
             if (hit.Count == 0) continue;
             var at = hit["position"].AsVector3();
             var normal = hit["normal"].AsVector3();
-            BulletHoles.Place(World, at, normal);
-            ShotFx.Spark(World, at, normal);
+            BulletHoles.Place(Owned, at, normal);
+            ShotFx.Spark(Owned, at, normal);
             first ??= at;
         }
 
@@ -52,6 +52,6 @@ public partial class NetClient
             SfxShot(new ShotMsg(pf.Shooter, pf.Weapon, pf.Origin, new NVec3(end.X, end.Y, end.Z)), false);
             if (pf.Shooter == _myId) _viewmodel?.Flash(0.4f); else if (_remotes.TryGetValue(pf.Shooter, out var flasher)) flasher.View?.Flash();
         }
-        ShotFx.Spawn(World, MuzzleOf(pf.Shooter, from, end), end, false, impact: false);
+        ShotFx.Spawn(Owned, MuzzleOf(pf.Shooter, from, end), end, false, impact: false);
     }
 }

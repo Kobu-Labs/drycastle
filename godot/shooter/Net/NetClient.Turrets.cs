@@ -47,7 +47,7 @@ public partial class NetClient
         };
         var barrel = Part(node, new BoxMesh { Size = new Vector3(0.12f, 0.12f, 0.7f) }, new Vector3(0, 0.6f, -0.5f));  // barrel
         var smoke = VehicleFx.Damage.MakeAt(node, TurretSmokeAt);
-        World.AddChild(node);
+        Owned.AddChild(node);
         _turrets[e.Id] = new TurretView { Node = node, Barrel = barrel, Parts = new[] { parts[0], parts[1], barrel }, Smoke = smoke, Owner = e.State.Owner };
     }
 

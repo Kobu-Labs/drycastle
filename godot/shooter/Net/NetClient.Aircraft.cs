@@ -56,7 +56,7 @@ public partial class NetClient
         var index = AircraftState.Unpack(e.State.State).Kind;
         var kindId = kinds != null && index < kinds.Count ? kinds[index].Id : "helicopter";
         var model = AircraftModel.Build(kindId);
-        World.AddChild(model);
+        Owned.AddChild(model);
         var view = new AircraftView { Model = model, AltitudeM = kinds != null && index < kinds.Count ? kinds[index].AltitudeM : 0f };
         if (ShotFx.Enabled)
         {
