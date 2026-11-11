@@ -50,6 +50,8 @@ public enum EventKind : byte
     OpenCarePackage = 50,
     /// <summary>Server to the opener: the perk a care package gave until death (<see cref="CarePackageCodec"/>).</summary>
     PerkGained = 51,
+    /// <summary>Server broadcast: an attack missile blew up (id, owner, centre, splash radius). See <see cref="MissileCodec"/>.</summary>
+    MissileBlast = 30,
 }
 
 public abstract record ReliableMsg;

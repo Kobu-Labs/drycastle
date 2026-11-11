@@ -22,6 +22,7 @@ public partial class NetServer
             Killstreaks.Streaks.Select(s =>
                 s.Id == MoabStreak.StreakId ? (IKillstreak)new MoabStreak(OnMoabPhase) :
                 s.Id == CarePackageRules.StreakId ? CarePackageImpl() :
+                s.Id == AttackMissileStreak.StreakId ? MakeMissileStreak() :
                 new LoggingKillstreak(s.Id)),
             (owner, kind, payload) => { if (_byId.TryGetValue(owner, out var c)) Send(c, new EventMsg((byte)kind, payload)); },
             s => GD.Print($"server: {s}"));

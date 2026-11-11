@@ -97,6 +97,7 @@ public partial class NetClient : Node
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
         InitCorpses();
         InitCarePackages();
+        InitMissile();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
         _peer = _conn.ConnectToHost(Host, Port, Wire.Channels, 0);
@@ -173,6 +174,8 @@ public partial class NetClient : Node
         RenderCarePackages();
         RenderCars();
         RenderRockets();
+        RenderMissiles();
+        RenderMissilePov();
         RenderWater();
         UpdateViewmodel();
         UpdateShake();
@@ -379,7 +382,7 @@ public partial class NetClient : Node
             if (!inCar) { _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); _me.EndChase(_carYaw); }
             return;
         }
-        if (_driving) { _pending.Clear(); return; }
+        if (_driving || _controlling) { _pending.Clear(); return; }
         if (rec.State == EntityState.Protected) _sawProtected = true;
         if (rec.State == EntityState.Alive && _fireStart > 0 && !_earlyCounted && Now - _fireStart < 0.6 && _fireStart - _spawnAt < _spawnProtection - 1.0) { _earlyEnds++; _earlyCounted = true; }
         var idx = _pending.FindIndex(p => p.Input.Seq == ack);
@@ -445,7 +448,7 @@ public partial class NetClient : Node
         PredictFire(mi);
         _me.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, _me.Pitch, (byte)(Weapons != null ? _wantSlot : 0));
-        if (!_driving) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); }
+        if (!_driving && !_controlling) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile: the body stands still
         _pending.Add(new Pending { Input = ni, After = _me.State });
         if (_pending.Count > 120) _pending.RemoveAt(0);
         var recent = new NetInput[Math.Min(3, _pending.Count)];
@@ -478,7 +481,7 @@ public partial class NetClient : Node
         var slot = Ammo?.Slot ?? _wantSlot;
         var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
         _viewmodel.Show(id);
-        _viewmodel.Visible = !Dead && !_driving && _myState != EntityState.InVehicle && _me is not { ZoomFov: > 0 };
+        _viewmodel.Visible = !Dead && !_driving && !_controlling && _myState != EntityState.InVehicle && _me is not { ZoomFov: > 0 };
     }
 
     /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
@@ -692,6 +695,9 @@ public partial class NetClient : Node
                 break;
             case EventKind.Moab when MoabEvents.Decode(payload) is { } mo:
                 OnMoab(mo);
+                break;
+            case EventKind.MissileBlast when MissileCodec.DecodeBlast(payload) is { } mb:
+                OnMissileBlast(mb);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 _hitLog.Add((Now, h));

@@ -26,7 +26,7 @@ public partial class NetClient
         RefreshStreaks();
     }
 
-    /// <summary>StreakEarned, StreakUsed and StreakEnded from the server (owner only).</summary>
+    /// <summary>StreakEarned, StreakUsed and StreakEnded from the server (owner only). Used and ended also reach the streak's own view (the missile's POV).</summary>
     void OnStreakEvent(EventKind kind, byte[] payload)
     {
         if (_streaks == null) return;
@@ -37,9 +37,11 @@ public partial class NetClient
                 break;
             case EventKind.StreakUsed when KillstreakEvents.DecodeUsed(payload) is { } u:
                 _streaks.OnUsed(u.StreakId);
+                OnStreakUsed(u.StreakId);
                 break;
             case EventKind.StreakEnded when KillstreakEvents.DecodeEnded(payload) is { } x:
                 _streaks.OnEnded(x.StreakId);
+                OnStreakEnded(x.StreakId);
                 break;
             default:
                 return;

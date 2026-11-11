@@ -2,7 +2,13 @@
   "version": 1,
   "streaks": [
     { "id": "uav", "name": "UAV", "kills_required": 4, "unlock_level": 0, "max_active": 1, "duration_seconds": 60, "control": "none" },
-    { "id": "attack_missile", "name": "Attack Missile", "kills_required": 5, "unlock_level": 4, "max_active": 1, "duration_seconds": 0, "control": "pov" },
+    {
+      "id": "attack_missile", "name": "Attack Missile", "kills_required": 5, "unlock_level": 4, "max_active": 1, "duration_seconds": 0, "control": "pov",
+      "missile": {
+        "speed_mps": 45, "turn_rate_deg": 60, "life_seconds": 20, "spawn_height": 150, "spawn_pitch_deg": -70,
+        "damage": 100, "edge_damage": 30, "full_damage_radius": 3, "splash_radius": 12, "self_damage_multiplier": 0.5, "knockback_speed": 6
+      }
+    },
     { "id": "turret", "name": "Turret", "kills_required": 6, "unlock_level": 5, "max_active": 1, "duration_seconds": 0, "control": "none" },
     { "id": "care_package", "name": "Care Package", "kills_required": 6, "unlock_level": 6, "max_active": 1, "duration_seconds": 0, "control": "none",
       "perk_weights": { "fleet_foot": 22, "quick_hands": 22, "swift_swap": 16, "flak_jacket": 14, "steady_lung": 10, "tank_hunter": 8, "ghost": 5, "hot_streak": 3 } },

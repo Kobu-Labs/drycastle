@@ -106,6 +106,8 @@ public static class Strings
         ("xp.title", "Match XP"), ("xp.total", "Total: {0} XP"), ("xp.level", "Level {0}"), ("xp.line", "{0}   +{1} XP"),
         ("xp.reason.Kill", "Kill"), ("xp.reason.Headshot", "Headshot"), ("xp.reason.Roadkill", "Roadkill"), ("xp.reason.Assist", "Assist"),
         ("xp.reason.StreakKill", "Killstreak kill"), ("xp.reason.MatchWin", "Match win"), ("xp.reason.MatchTop3", "Top three finish"),
+        ("weapon.attack_missile", "Attack Missile"),
+        ("pov.title", "ATTACK MISSILE"), ("pov.alt", "ALT {0} m"), ("pov.time", "TIME {0} s"), ("pov.hint", "Mouse: steer the missile. It turns at a limited rate. Your body stays where it is."),
         ("toast.info", "Info:"), ("toast.warn", "Notice:"), ("toast.error", "Problem:"),
     };
 

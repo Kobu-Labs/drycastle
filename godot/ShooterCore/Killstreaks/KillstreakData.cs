@@ -22,6 +22,8 @@ public sealed class KillstreakDef
     /// The ids are checked against perks.json where the table is built (see <see cref="PerkTable"/>).
     /// </summary>
     public IReadOnlyDictionary<string, int> PerkWeights { get; init; } = new Dictionary<string, int>();
+    /// <summary>The attack missile's tuning (its "missile" block); null for every other streak.</summary>
+    public MissileTuning? Missile { get; init; }
 }
 
 /// <summary>
@@ -82,10 +84,13 @@ public sealed class KillstreakFile : IVersioned
             }
             if (r.Id == CarePackageRules.StreakId && weights.Count == 0)
                 throw new DataFileException($"{F}: {where}: field \"perk_weights\" is required for the care package");
+            var isMissile = r.Id == AttackMissileStreak.StreakId;
+            if (!isMissile && r.Missile != null) throw new DataFileException($"{F}: {where}: a \"missile\" block is only for the attack missile");
             streaks.Add(new KillstreakDef
             {
                 Id = r.Id, Name = r.Name, KillsRequired = kills, UnlockLevel = unlock, MaxActive = maxActive,
                 DurationSeconds = duration, Control = control, PerkWeights = weights,
+                Missile = isMissile ? MissileTuning.From(r.Missile, F, where) : null,
             });
         }
 
@@ -116,5 +121,6 @@ public sealed class KillstreakFile : IVersioned
         public double? DurationSeconds { get; set; }
         public string? Control { get; set; }
         public Dictionary<string, int>? PerkWeights { get; set; }
+        public MissileTuning.MissileRaw? Missile { get; set; }
     }
 }

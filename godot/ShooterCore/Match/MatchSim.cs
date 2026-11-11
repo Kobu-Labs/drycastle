@@ -15,6 +15,8 @@ public static class SpecialWeapons
     public const byte VehicleGun = 250;
     /// <summary>The MOAB's blast (ticket #129): its kills are streak kills.</summary>
     public const byte Moab = 249;
+    /// <summary>The attack missile's blast (killstreak "attack_missile"): the kill feed and the stats name it.</summary>
+    public const byte Missile = 248;
 }
 
 public abstract record MatchEvent;
