@@ -128,6 +128,25 @@ public class PerkTests
     }
 
     [Fact]
+    public void QuickHandsShortensEveryShellOfAShellReload()
+    {
+        var rem = Weapons.Find("remington870")!;
+        var slot = Weapons.Weapons.ToList().FindIndex(x => x.Id == "remington870") + 1;
+        double t = 10;
+        var w = Armed(Of("quick_hands"), t);
+        Tick(w, ref t, slot: slot);
+        Assert.Equal("remington870", w.Current.Id);
+        for (var i = 0; i < 400 && w.Mag(slot) > rem.MagazineSize - 2; i++) Tick(w, ref t, fire: i % 2 == 0, slot: slot);
+        Assert.Equal(rem.MagazineSize - 2, w.Mag(slot));
+        for (var i = 0; i < 400 && w.Reloading == false; i++) Tick(w, ref t, reload: true, slot: slot);
+        Assert.True(w.Reloading);
+        var start = w.Mag(slot);
+        for (var i = 0; i < 1000 && w.Mag(slot) == start; i++) Tick(w, ref t, slot: slot); // the first shell goes in
+        Assert.True(w.Reloading);
+        Assert.Equal(rem.ReloadTime / 1.33f, w.ReloadRemaining(t), 2 * Dt); // the second shell is quick too
+    }
+
+    [Fact]
     public void FleetFootScalesTheSpeedOfEveryWeapon()
     {
         var plain = Armed(null); var fast = Armed(Of("fleet_foot"));
