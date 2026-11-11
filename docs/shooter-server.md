@@ -62,7 +62,28 @@ Flags (after `--`):
 | `--freeze-time` | hold the clock at its start time (or at `--time`), so the sky does not move |
 | `--match-set k=v,k=v` | override match options, see below |
 | `--debug-cmds` | honour the client debug kill command and give every player the full weapon list on the hotbar (dev aid); leave off on a public server |
+| `--unlock-all` | dev mode: every item unlocked, see the next section. Also on when `SUCHOHRAD_UNLOCK_ALL` is `1` or `true`. Leave off on a public server |
 | `--quit-after SECONDS` | end the server with a verdict (testing only) |
+
+### Dev mode: everything unlocked (`--unlock-all`)
+
+For testing features that sit behind levels. With it on, the server:
+
+- counts every weapon (the bazooka and the knife are special and stay out), perk and killstreak as unlocked, for loadout
+  validation and for the profile sent at the handshake, so the loadout menu shows nothing locked;
+- gives each new or guest player five showcase loadouts (`DevUnlocks.DevKit`: assault rifle, sniper, shotgun, SMG and LMG
+  with the big streaks), so every class can be tried at once;
+- still runs XP, levels and stats normally;
+- never writes the fake unlocks or the showcase loadouts to the database. Stored loadouts are used as they are; a player
+  with no stored loadout gets the showcase kit each time they join until they save one of their own.
+
+The client shows "Dev: all unlocked" in the top-right corner of the loadout screen and the pause menu while the server reports it.
+
+Release default: **off**. A server started from an export without the flag or the variable behaves as before.
+The Makefile dev targets turn it on: `shooter-server` passes `--unlock-all`, and the `shooter-*-smoke` targets export
+`SUCHOHRAD_UNLOCK_ALL`. Set `UNLOCK_ALL=0` on the command line to turn it off (`make shooter-server UNLOCK_ALL=0`).
+`make shooter-client` has no server flag; the indicator comes from the server it joins. `make shooter-export-check` does not
+set it, and nothing in the export does.
 
 The clock flags are read in `Shooter.ServerClock` (`godot/shooter/Shooter.cs`) and resolved by `EnvironmentConfig.ToClock`
 (`godot/ShooterCore/Environment/EnvironmentConfig.cs`). The clock is owned by the server and sent to each client in the

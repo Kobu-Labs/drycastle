@@ -12,6 +12,7 @@ namespace Suchohrad.Shooter;
 ///   --net-sim latency_ms=50,jitter_ms=5,loss=0.03   server and client: delay every outgoing packet, drop that share of the unreliable ones (see NetSim.cs)
 ///   --loss-test N [--loss-measure S] [--loss-out DIR]   server: loss/latency test round for N bots (use with --match-set min_players=N); --loss-bot walker|shooter on the bots (make shooter-loss-test)
 ///   --match-set k=v,k=v       server: override match.json values (score_goal, time_limit, respawn_delay, spawn_protection, end_screen_time, min_spawn_distance, min_players)
+///   --unlock-all              server: dev mode, every weapon, perk, killstreak and level-gated item unlocked (also SUCHOHRAD_UNLOCK_ALL=1); nothing is saved (issue #149)
 ///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
 ///   --match-bot alice|bob     client: scripted match smoke role (alice kills bob with the debug command, bob fires after each spawn)
 ///   --blast-smoke             server: flat arena with three cars, judges vehicle damage stages, the blast and the chain reaction; --blast-bot a|b client roles (ticket #103)
@@ -123,7 +124,7 @@ public partial class Shooter : Node3D
     {
         _shell = new UiShell
         {
-            PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts())),
+            PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks)),
             WantsFreeMouse = () => _client is { Dead: true }, // the respawn screen releases the mouse so its buttons can be clicked
         };
         AddChild(_shell);
@@ -273,7 +274,9 @@ public partial class Shooter : Node3D
             LossTest = int.TryParse(cfg.Str("loss-test", "0"), out var lt) ? lt : 0,
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
             LossOut = cfg.Str("loss-out"),
+            UnlockAll = DevUnlocks.Enabled(cfg.Flag("unlock-all"), System.Environment.GetEnvironmentVariable(DevUnlocks.EnvVar)),
         };
+        if (server.UnlockAll) GD.Print("server: dev mode, every unlock on (not saved to the database)");
         if (server.Sim != null) GD.Print($"server: net-sim {server.Sim}");
         if (server.LossTest > 0 || server.Sim != null) Engine.MaxFps = 200; // delayed packets are released at frame rate
         AddChild(server);

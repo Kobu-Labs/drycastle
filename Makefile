@@ -140,10 +140,15 @@ netspike-quick:
 # Shooter v1 (godot/shooter + godot/ShooterCore). MAP=/path/to/out/map or SUCHOHRAD_MAP.
 # shooter-server runs headless; add SMOKE=1 to boot, load and exit cleanly.
 SHOOTER_MAP = $(if $(MAP),--map $(abspath $(MAP)),)
+# Dev mode (issue #149): every weapon, perk, killstreak and level-gated item unlocked on the dev servers. Nothing is saved
+# to the database. Release servers are never started with it (see docs/shooter-server.md). UNLOCK_ALL=0 turns it off.
+UNLOCK_ALL ?= 1
+UNLOCK_ARG = $(if $(filter 1 true,$(UNLOCK_ALL)),--unlock-all,)
+UNLOCK_ENV = SUCHOHRAD_UNLOCK_ALL=$(UNLOCK_ALL)
 
 shooter-server:
 	dotnet build godot/shooter/shooter.csproj
-	godot --headless --path godot/shooter -- --role server $(if $(SMOKE),--smoke,) $(SHOOTER_MAP)
+	godot --headless --path godot/shooter -- --role server $(if $(SMOKE),--smoke,) $(UNLOCK_ARG) $(SHOOTER_MAP)
 
 shooter-client:
 	dotnet build godot/shooter/shooter.csproj
@@ -152,34 +157,34 @@ shooter-client:
 # Headless server + 2 scripted bot clients: asserts both move and see each other.
 shooter-net-smoke:
 	dotnet build godot/shooter/shooter.csproj
-	python3 godot/shooter/run_net_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
+	$(UNLOCK_ENV) python3 godot/shooter/run_net_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
 
 # Headless server (kill goal 3, short timers) + alice/bob bots: kills, spawn protection, respawn, round end and restart.
 shooter-match-smoke:
 	dotnet build godot/shooter/shooter.csproj
-	python3 godot/shooter/run_match_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
+	$(UNLOCK_ENV) python3 godot/shooter/run_match_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
 
 # Headless server (flat test arena + wall) + alice/bob bots: AK damage and headshot, switch time, wall block, reload timing, knife backstab, ammo refill on kill.
 shooter-weapons-smoke:
 	dotnet build godot/shooter/shooter.csproj
-	python3 godot/shooter/run_weapons_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
+	$(UNLOCK_ENV) python3 godot/shooter/run_weapons_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
 
 # Same flat arena: bazooka rocket vs wall, splash falloff, direct hit, self damage and knockback, explosion events, reload and ammo refill.
 shooter-bazooka-smoke:
 	dotnet build godot/shooter/shooter.csproj
-	python3 godot/shooter/run_bazooka_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
+	$(UNLOCK_ENV) python3 godot/shooter/run_bazooka_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
 
 shooter-car-smoke:
 	dotnet build godot/shooter/shooter.csproj
-	python3 godot/shooter/run_car_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
+	$(UNLOCK_ENV) python3 godot/shooter/run_car_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
 
 shooter-blast-smoke:
 	dotnet build godot/shooter/shooter.csproj
-	python3 godot/shooter/run_blast_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
+	$(UNLOCK_ENV) python3 godot/shooter/run_blast_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
 
 shooter-bike-smoke:
 	dotnet build godot/shooter/shooter.csproj
-	python3 godot/shooter/run_car_smoke.py --kind motorcycle bicycle $(if $(MAP),--map $(abspath $(MAP)),)
+	$(UNLOCK_ENV) python3 godot/shooter/run_car_smoke.py --kind motorcycle bicycle $(if $(MAP),--map $(abspath $(MAP)),)
 
 # Netcode loss/latency gate (issue #93, docs/spikes/shooter-loss-test.md): one server + 16 headless bots per scenario, about 2 min each.
 # SCENARIOS=clean,rtt100 (also rtt200, loss10 or name=latency_ms=..,jitter_ms=..,loss=..), BOTS=16, MEASURE=30 (seconds). Results in out/shooter-loss/<timestamp>/.
