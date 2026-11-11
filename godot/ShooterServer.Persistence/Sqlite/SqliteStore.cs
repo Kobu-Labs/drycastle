@@ -15,12 +15,14 @@ public sealed class SqliteProgressionStore : IProgressionStore
         Loadouts = new LoadoutRepo(db);
         Unlocks = new UnlockRepo(db);
         Stats = new StatsRepo(db);
+        Camo = new CamoRepo(db);
     }
 
     public IProfileRepository Profiles { get; }
     public ILoadoutRepository Loadouts { get; }
     public IUnlockRepository Unlocks { get; }
     public IStatsRepository Stats { get; }
+    public ICamoRepository Camo { get; }
 
     /// <summary>
     /// Opens (creating if needed) and migrates the database. <paramref name="curve"/> (from levels.json) turns XP into the Level on read.
@@ -118,6 +120,25 @@ public sealed class SqliteProgressionStore : IProgressionStore
         Profile ReadProfile(SqliteDataReader r) => new(
             Id: r.GetInt64(0), Token: r.GetString(1), Name: r.GetString(2), Xp: r.GetInt32(3),
             Level: curve.LevelForXp(r.GetInt32(3)), CreatedUtc: ParseStamp(r.GetString(4)), LastSeenUtc: ParseStamp(r.GetString(5)));
+    }
+
+    sealed class CamoRepo(SqliteWorker db) : ICamoRepository
+    {
+        public Task<CamoSpec?> GetAsync(long playerId) => db.Read<CamoSpec?>(c =>
+        {
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = "SELECT spec FROM camo WHERE player_id = $id;";
+            cmd.Parameters.AddWithValue("$id", playerId);
+            return cmd.ExecuteScalar() is byte[] blob ? CamoSpec.TryDecode(blob) : null;
+        });
+
+        public Task SaveAsync(long playerId, CamoSpec spec)
+        {
+            var blob = spec.Encode();
+            return db.Write("save camo", c => Exec(c,
+                "INSERT INTO camo (player_id, spec) VALUES ($id, $spec) ON CONFLICT (player_id) DO UPDATE SET spec = excluded.spec;",
+                ("$id", playerId), ("$spec", blob)));
+        }
     }
 
     sealed class LoadoutRepo(SqliteWorker db) : ILoadoutRepository

@@ -347,6 +347,7 @@ public partial class NetServer : Node
             if (o != c) Send(o, new JoinMsg(c.Id, c.Name));
         }
         foreach (var w in _match.Entities.Snapshot()) Send(c, new EventMsg((byte)EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State)));
+        SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
         _match.AddPlayer(c.Id, c.Name); // spawns the player (event) and broadcasts the scoreboard
         _host.Flush();
         GD.Print($"server: {c.Name} joined as #{c.Id} ({_clients.Count(x => x.Value.Joined)} players)");

@@ -14,8 +14,20 @@ public class GameData
     /// <summary>environment.json (day/night clock). Defaults when the file is absent from the parse call.</summary>
     public EnvironmentConfig Environment { get; init; } = new();
 
+    /// <summary>camo.json (camouflage presets, tuft and concealment rules). A built-in minimal file when absent.</summary>
+    public CamoFile Camo { get; init; } = CamoFile.Parse(MinimalCamoJson);
+
+    /// <summary>Used when camo.json is absent (headless hosts and old data directories): one suit, one face preset, no tufts.</summary>
+    const string MinimalCamoJson = """
+        {"version":1,"suit_patterns":["blotch"],"face_patterns":["bars"],"vegetation":["grass"],"tuft_max_layers":0,
+        "tuft_size_m":[0,0],"tuft_sway_m":[0,0],"pattern_scale_per_m":[1,1],"spotting_min_multiplier":0.35,
+        "concealment":{"stand":0.3,"crouch":0.6,"prone":0.9,"stillness_weight":0.7,"full_speed_mps":6},
+        "suit_presets":[{"id":"olive","name":"Olive","base":"#4b5a32","secondary":"#2e3a1f","pattern":"blotch","vegetation":"grass"}],
+        "face_presets":[{"id":"none","name":"None","pattern":"bars","colours":["#1d2a14","#5b6b3a","#c8b98a"],"coverage":0}]}
+        """;
+
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string environmentJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string environmentJson = "", string camoJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -29,6 +41,7 @@ public class GameData
             Killstreaks = killstreaks,
             Levels = LevelsFile.Parse(levelsJson, weapons, perks, killstreaks.UnlockLevels),
             Environment = environmentJson == "" ? new() : EnvironmentConfig.Parse(environmentJson),
+            Camo = camoJson == "" ? CamoFile.Parse(MinimalCamoJson) : CamoFile.Parse(camoJson),
         };
     }
 
@@ -46,6 +59,7 @@ public class GameData
             Killstreaks = killstreaks,
             Levels = LevelsFile.Load(Path.Combine(dir, "levels.json"), weapons, perks, killstreaks.UnlockLevels),
             Environment = File.Exists(Path.Combine(dir, "environment.json")) ? EnvironmentConfig.Load(Path.Combine(dir, "environment.json")) : new(),
+            Camo = File.Exists(Path.Combine(dir, "camo.json")) ? CamoFile.Load(Path.Combine(dir, "camo.json")) : CamoFile.Parse(MinimalCamoJson),
         };
     }
 }

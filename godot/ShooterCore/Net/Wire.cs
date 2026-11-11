@@ -42,6 +42,8 @@ public enum EventKind : byte
     PickUpCorpse = 20,
     /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
     Hotbar = 21,
+    /// <summary>Server broadcast: a player's camouflage (player id and <see cref="CamoSpec"/>), on join and after a change. See <see cref="AppearanceCodec"/>.</summary>
+    Appearance = 22,
 }
 
 public abstract record ReliableMsg;
@@ -63,6 +65,8 @@ public sealed record ProfileMsg(string Name, int Xp, int Level, int ActiveSlot, 
 public sealed record SaveLoadoutMsg(Loadout Loadout) : ReliableMsg;
 /// <summary>Client to server: make a loadout slot the active one (switched to on death).</summary>
 public sealed record SelectSlotMsg(int Slot) : ReliableMsg;
+/// <summary>Client to server: replace the player's camouflage. The server validates it against camo.json; invalid changes get an <see cref="ErrorMsg"/>.</summary>
+public sealed record SaveCamoMsg(CamoSpec Spec) : ReliableMsg;
 /// <summary>Server to client: a human readable reason. Before the join it is followed by a disconnect (protocol mismatch etc.).</summary>
 public sealed record ErrorMsg(string Reason) : ReliableMsg;
 
@@ -80,8 +84,9 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 ///   SaveLoadout(7): u8 slot, 6 strings (primary, secondary, perk, streak1..3)
 ///   SelectSlot(8):  u8 slot
 ///   Error(9):   u8 reasonLen, reason
+///   SaveCamo(10): the fixed-size CamoSpec encoding (<see cref="CamoSpec"/>)
 ///   Strings are u8 length + utf8 (clamped to 255 bytes). Hello also carries u8 tokenLen, token after the name.
-/// ch1 client to server, Input(10): u8 count (1..3, newest last), count * 11 bytes:
+/// ch1 client to server, Input(11): u8 count (1..3, newest last), count * 11 bytes:
 ///   u16 seq, i8 mx, i8 my, u16 yaw, i16 pitch, u16 buttons, u8 slot
 /// ch1 server to client, Snapshot(20): u32 tick, u16 ackSeq, u8 count, then count entities:
 ///   u16 id, u8 type, u8 flags, then per flag
@@ -95,7 +100,7 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 public static class Wire
 {
     /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock).</summary>
-    public const byte ProtocolVersion = 3;
+    public const byte ProtocolVersion = 4;
     public const byte TickRate = 30;
     public const int ChanReliable = 0, ChanData = 1, Channels = 2;
     public const int KeyEvery = 30;
@@ -104,8 +109,8 @@ public static class Wire
     public const int MaxTokenBytes = 64;
     public const int InputBytes = 11;
 
-    public const byte THello = 1, TWelcome = 2, TJoin = 3, TLeave = 4, TEvent = 5, TProfile = 6, TSaveLoadout = 7, TSelectSlot = 8, TError = 9;
-    public const byte TInput = 10, TSnapshot = 20, TWorldSnapshot = 21;
+    public const byte THello = 1, TWelcome = 2, TJoin = 3, TLeave = 4, TEvent = 5, TProfile = 6, TSaveLoadout = 7, TSelectSlot = 8, TError = 9, TSaveCamo = 10;
+    public const byte TInput = 11, TSnapshot = 20, TWorldSnapshot = 21;
     public const byte FPosAbs = 1, FPosDelta = 2, FRot = 4, FStatus = 8, FHp = 16;
     /// <summary>Flags that make a snapshot record a keyframe (world entities; players and vehicles use the same three).</summary>
     public const byte FKey = FPosAbs | FRot | FStatus;
@@ -205,6 +210,7 @@ public static class Wire
                 break;
             case SaveLoadoutMsg sl: o.Add(TSaveLoadout); WriteLoadout(o, sl.Loadout); break;
             case SelectSlotMsg ss: o.Add(TSelectSlot); o.Add((byte)ss.Slot); break;
+            case SaveCamoMsg sc: o.Add(TSaveCamo); o.AddRange(sc.Spec.Encode()); break;
             case ErrorMsg er: o.Add(TError); WriteStr(o, er.Reason); break;
             default: throw new ArgumentException("unknown message");
         }
@@ -252,6 +258,7 @@ public static class Wire
                 }
                 case TSaveLoadout: return new SaveLoadoutMsg(new Reader(d).Loadout());
                 case TSelectSlot: return new SelectSlotMsg(d[1]);
+                case TSaveCamo: return CamoSpec.TryDecode(d[1..]) is { } cs ? new SaveCamoMsg(cs) : null;
                 case TError: return new ErrorMsg(new Reader(d).Str());
                 case TEvent:
                 {

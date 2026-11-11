@@ -244,6 +244,7 @@ public partial class NetClient : Node
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 OnProgressionEvent((EventKind)e.Kind, e.Payload);
+                OnAppearanceEvent((EventKind)e.Kind, e.Payload);
                 WorldEntities.OnEvent((EventKind)e.Kind, e.Payload);
                 EventReceived?.Invoke((EventKind)e.Kind, e.Payload);
                 break;
@@ -343,6 +344,7 @@ public partial class NetClient : Node
     {
         var node = new Node3D { Name = $"Remote{id}" };
         var view = CharacterView.Make();
+        if (Appearances.TryGetValue(id, out var look)) view.SetCamo(look, CamoData); // the look may arrive before the first snapshot (#140)
         node.AddChild(view);
         node.AddChild(new Label3D
         {

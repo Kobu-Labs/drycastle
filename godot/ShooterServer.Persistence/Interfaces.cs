@@ -38,6 +38,14 @@ public interface IStatsRepository
     Task RecordMatchAsync(long playerId);
 }
 
+/// <summary>A player's camouflage (ticket #140): one encoded <see cref="CamoSpec"/> per player. Validated against camo.json by the caller.</summary>
+public interface ICamoRepository
+{
+    /// <summary>The saved camouflage, or null when the player never saved one (the default look applies).</summary>
+    Task<CamoSpec?> GetAsync(long playerId);
+    Task SaveAsync(long playerId, CamoSpec spec);
+}
+
 /// <summary>One store = one database (or in-memory set). Disposing it stops the background writer.</summary>
 public interface IProgressionStore : IDisposable
 {
@@ -45,4 +53,5 @@ public interface IProgressionStore : IDisposable
     ILoadoutRepository Loadouts { get; }
     IUnlockRepository Unlocks { get; }
     IStatsRepository Stats { get; }
+    ICamoRepository Camo { get; }
 }
