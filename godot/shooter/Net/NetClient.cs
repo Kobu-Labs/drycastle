@@ -23,6 +23,10 @@ public partial class NetClient : Node
     public int Port = 27015;
     public string PlayerName = "player";
     public bool Bot;
+    /// <summary>Network impairment for the loss and latency test (--net-sim); null = none.</summary>
+    public NetSim? Sim;
+    /// <summary>Loss test role ("walker" or "shooter"); empty = off. See NetClient.LossBot.cs.</summary>
+    public string LossBot = "";
     public double BotSeconds = 6;
     public bool Headless;
     public float KillY = float.NegativeInfinity;
@@ -116,8 +120,14 @@ public partial class NetClient : Node
         _done = true;
     }
 
+    void Tx(ENetPacketPeer peer, int chan, byte[] data, int flags)
+    {
+        if (Sim != null) Sim.Send(peer, chan, data, flags); else peer.Send(chan, data, flags);
+    }
+
     public override void _Process(double delta)
     {
+        if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
         if (_done) return;
         Poll();
         if (!_welcomed)
@@ -144,7 +154,7 @@ public partial class NetClient : Node
             switch (ev)
             {
                 case ENetConnection.EventType.Connect:
-                    peer.Send(Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName)), (int)ENetPacketPeer.FlagReliable);
+                    Tx(peer, Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName)), (int)ENetPacketPeer.FlagReliable);
                     _conn.Flush();
                     break;
                 case ENetConnection.EventType.Disconnect:
@@ -236,6 +246,7 @@ public partial class NetClient : Node
     {
         if (_me == null || !_dec.Apply(d, out var h)) return;
         if (_lastTick != 0 && h.Tick < _lastTick) return;
+        LossOnSnapshot(h);
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         foreach (var id in _dec.RemoveStale(h.Tick, 90)) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); } }
         foreach (var (id, rec) in _dec.States)
@@ -249,6 +260,7 @@ public partial class NetClient : Node
             r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
         }
+        LossAfterSnapshot(h);
     }
 
     /// <summary>Rockets are drawn at the newest snapshot position and dead-reckoned along their direction (a 100 ms interpolation delay would make them vanish 4 m short of the blast).</summary>
@@ -316,6 +328,7 @@ public partial class NetClient : Node
         var predicted = _pending[idx].After;
         var err = (predicted.Position - sp).Length();
         _maxErr = MathF.Max(_maxErr, err);
+        LossOnPredictionError(err);
         _pending.RemoveRange(0, idx + 1);
         if (err <= ReconcileEpsilon) return;
         _recon++;
@@ -335,7 +348,8 @@ public partial class NetClient : Node
     {
         if (_done || !_welcomed || _me == null || _peer == null) return;
         _elapsed += delta;
-        if (Bot && _elapsed >= BotSeconds) { if (CarBot != "") CarResult(false, "timeout"); else if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
+        if (Bot && LossBot != "") { if (_elapsed >= BotSeconds) LossFail("timeout: round never reached its end"); }
+        else if (Bot && _elapsed >= BotSeconds) { if (CarBot != "") CarResult(false, "timeout"); else if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
         if (!_gotSelf) return; // wait for our spawn position
         var dt = (float)delta;
         MoveInput mi;
@@ -352,6 +366,7 @@ public partial class NetClient : Node
             if (MatchBot == "alice") MatchAliceStep();
             else MatchBobCheck();
         }
+        else if (Bot && LossBot != "") mi = LossBotStep();
         else if (Bot && CarBot != "") mi = CarBotStep();
         else if (Bot && WeaponsBot != "") mi = WeaponsBotStep();
         else if (Bot)
@@ -373,7 +388,7 @@ public partial class NetClient : Node
         if (_pending.Count > 120) _pending.RemoveAt(0);
         var recent = new NetInput[Math.Min(3, _pending.Count)];
         for (var i = 0; i < recent.Length; i++) recent[i] = _pending[_pending.Count - recent.Length + i].Input;
-        _peer.Send(Wire.ChanData, Wire.EncodeInputs(recent), 0);
+        Tx(_peer, Wire.ChanData, Wire.EncodeInputs(recent), 0);
         _conn.Flush();
         var p = _me.State.Position;
         _meMin = NVec3.Min(_meMin, p); _meMax = NVec3.Max(_meMax, p);
@@ -423,7 +438,7 @@ public partial class NetClient : Node
 
     void Debug(ushort victim)
     {
-        _peer!.Send(Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, MatchCodec.EncodeDebugKill(victim))), (int)ENetPacketPeer.FlagReliable);
+        Tx(_peer!, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, MatchCodec.EncodeDebugKill(victim))), (int)ENetPacketPeer.FlagReliable);
         _conn.Flush();
     }
 

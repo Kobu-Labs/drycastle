@@ -91,7 +91,7 @@ public partial class NetClient
 
     void Teleport(ushort id, NVec3 pos)
     {
-        _peer!.Send(Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(id, pos))), (int)ENetPacketPeer.FlagReliable);
+        Tx(_peer!, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(id, pos))), (int)ENetPacketPeer.FlagReliable);
         _conn.Flush();
     }
 

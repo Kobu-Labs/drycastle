@@ -47,6 +47,8 @@ public partial class NetServer : Node
     public bool WeaponsSmoke;
     public float KillY = float.NegativeInfinity;
     public int Port = 27015;
+    /// <summary>Network impairment for the loss and latency test (--net-sim); null = none.</summary>
+    public NetSim? Sim;
     /// <summary>Quit after this many seconds and report whether two players were seen moving (smoke test); 0 = run forever.</summary>
     public double QuitAfter;
 
@@ -96,8 +98,15 @@ public partial class NetServer : Node
 
     public override void _ExitTree() => _host.Destroy();
 
+    public override void _Process(double delta)
+    {
+        if (Sim != null && Sim.Pump()) _host.Flush(); // delayed packets go out at frame rate, not only on physics ticks
+    }
+
     public override void _PhysicsProcess(double delta)
     {
+        var tickStartUs = Time.GetTicksUsec();
+        if (Sim != null && Sim.Pump()) _host.Flush();
         _tick++;
         if (!_spawnsChecked)
         {
@@ -112,6 +121,7 @@ public partial class NetServer : Node
         StepVehicles((float)delta);
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
         SendSnapshots();
+        LossTickEnd(tickStartUs);
         if (_clients.Count > _peakPlayers) _peakPlayers = _clients.Count;
         foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved;
         if (_tick % (Wire.TickRate * 2) == 0 && _clients.Count > 0)
@@ -133,6 +143,7 @@ public partial class NetServer : Node
             if (_finishAt > 0 && _elapsed >= _finishAt) FinishMatch();
             else if (QuitAfter > 0 && _elapsed >= QuitAfter) FinishMatch();
         }
+        else if (LossTest > 0) { if (QuitAfter > 0 && _elapsed >= QuitAfter) LossEnd(false); }
         else if (QuitAfter > 0 && _elapsed >= QuitAfter) Finish();
     }
 
@@ -150,6 +161,7 @@ public partial class NetServer : Node
             return space.IntersectRay(q).Count == 0;
         });
         GD.Print($"server: {Spawns.Count}/{before} spawn candidates have ground");
+        LossClusterSpawns();
     }
 
     /// <summary>Flat floor (top at y 0) and a 14 x 4 m wall in the middle of nowhere, so the weapons smoke does not depend on the map layout.</summary>
@@ -293,7 +305,12 @@ public partial class NetServer : Node
         GD.Print($"server: {c.Name} #{c.Id} left");
     }
 
-    void Send(Client c, ReliableMsg m) => c.Peer.Send(Wire.ChanReliable, Wire.Encode(m), (int)ENetPacketPeer.FlagReliable);
+    void Tx(ENetPacketPeer peer, int chan, byte[] data, int flags)
+    {
+        if (Sim != null) Sim.Send(peer, chan, data, flags); else peer.Send(chan, data, flags);
+    }
+
+    void Send(Client c, ReliableMsg m) => Tx(c.Peer, Wire.ChanReliable, Wire.Encode(m), (int)ENetPacketPeer.FlagReliable);
 
     /// <summary>Broadcast an event envelope to every joined client (shot, hit, kill, ... from later issues).</summary>
     public void BroadcastEvent(EventKind kind, byte[] payload)
@@ -329,6 +346,7 @@ public partial class NetServer : Node
             case PhaseChanged { Phase: MatchPhase.Ending }: _roundsEnded++; GD.Print($"server: round over, winners {string.Join(",", _match.Winners)}"); break;
             case PhaseChanged { Phase: MatchPhase.Running }:
                 ResetCars();
+                LossRoundStart();
                 if (_roundsEnded > 0) { _restarts++; _finishAt = _elapsed + 1.5; }
                 GD.Print("server: round started");
                 break;
@@ -348,9 +366,10 @@ public partial class NetServer : Node
                 _kills += k.Killer != k.Victim ? 1 : 0;
                 if (WeaponsSmoke && _kills >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5;
                 if (BazookaSmoke && _kills >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.5;
+                LossKill(k.Killer, k.Victim);
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon)));
                 break;
-            case PlayerDied d: BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
+            case PlayerDied d: LossDeath(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
         }
     }
 
@@ -478,6 +497,7 @@ public partial class NetServer : Node
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
         _hitsLanded++;
+        LossHit(attackerId, victim, r == DamageResult.Killed);
         if (head) _headshots++;
         if (backstab) _backstabs++;
         var kill = r == DamageResult.Killed;
@@ -560,8 +580,9 @@ public partial class NetServer : Node
         foreach (var c in _clients.Values)
         {
             if (!c.Joined) continue;
-            foreach (var pkt in c.Enc.Encode(_tick, c.Ack, ents)) c.Peer.Send(Wire.ChanData, pkt, 0);
+            foreach (var pkt in c.Enc.Encode(_tick, c.Ack, ents)) Tx(c.Peer, Wire.ChanData, pkt, 0);
         }
+        LossLogStates(ents);
         _host.Flush();
     }
 }

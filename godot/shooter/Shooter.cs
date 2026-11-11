@@ -9,6 +9,8 @@ namespace Suchohrad.Shooter;
 ///   --map DIR                 map folder (else SUCHOHRAD_MAP, else ../../out/map relative to the project)
 ///   --connect HOST[:PORT] --name NAME   join a server (default port 27015); --headless-bot [--bot-seconds N] scripts a walk
 ///   --port N                  server listen port (default 27015); --quit-after SECONDS ends the server with a verdict
+///   --net-sim latency_ms=50,jitter_ms=5,loss=0.03   server and client: delay every outgoing packet, drop that share of the unreliable ones (see NetSim.cs)
+///   --loss-test N [--loss-measure S] [--loss-out DIR]   server: loss/latency test round for N bots (use with --match-set min_players=N); --loss-bot walker|shooter on the bots (make shooter-loss-test)
 ///   --match-set k=v,k=v       server: override match.json values (score_goal, time_limit, respawn_delay, spawn_protection, end_screen_time, min_spawn_distance, min_players)
 ///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
 ///   --match-bot alice|bob     client: scripted match smoke role (alice kills bob with the debug command, bob fires after each spawn)
@@ -144,7 +146,7 @@ public partial class Shooter : Node3D
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
-                World = this, Host = host, Port = port, PlayerName = name, KillY = killY, Weapons = _data.Weapons,
+                World = this, Host = host, Port = port, PlayerName = name, KillY = killY, Weapons = _data.Weapons, Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(null),
             };
             client.OnFailed = (why, joined) =>
@@ -228,7 +230,13 @@ public partial class Shooter : Node3D
             MatchSmoke = cfg.Flag("match-smoke"), DebugCommands = cfg.Flag("debug-cmds") || cfg.Flag("match-smoke"),
             Port = int.TryParse(cfg.Str("port", "27015"), out var port) ? port : 27015,
             QuitAfter = double.TryParse(cfg.Str("quit-after", "0"), out var q) ? q : 0,
+            Sim = NetSim.Parse(cfg.Str("net-sim")),
+            LossTest = int.TryParse(cfg.Str("loss-test", "0"), out var lt) ? lt : 0,
+            LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
+            LossOut = cfg.Str("loss-out"),
         };
+        if (server.Sim != null) GD.Print($"server: net-sim {server.Sim}");
+        if (server.LossTest > 0 || server.Sim != null) Engine.MaxFps = 200; // delayed packets are released at frame rate
         AddChild(server);
     }
 
@@ -284,6 +292,8 @@ public partial class Shooter : Node3D
         {
             World = this, Host = host, Port = port, PlayerName = cfg.Str("name", "player"), Bot = bot, KillY = killY,
             BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6,
+            Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"),
+            LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
             MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), BazookaBot = cfg.Str("bazooka-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, Vehicles = _data.Vehicles,
         });
     }

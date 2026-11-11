@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-loss-test
 
 setup:
 	cd pipeline && uv sync
@@ -176,6 +176,12 @@ shooter-car-smoke:
 shooter-bike-smoke:
 	dotnet build godot/shooter/shooter.csproj
 	python3 godot/shooter/run_car_smoke.py --kind motorcycle bicycle $(if $(MAP),--map $(abspath $(MAP)),)
+
+# Netcode loss/latency gate (issue #93, docs/spikes/shooter-loss-test.md): one server + 16 headless bots per scenario, about 2 min each.
+# SCENARIOS=clean,rtt100 (also rtt200, loss10 or name=latency_ms=..,jitter_ms=..,loss=..), BOTS=16, MEASURE=30 (seconds). Results in out/shooter-loss/<timestamp>/.
+shooter-loss-test:
+	dotnet build godot/shooter/shooter.csproj
+	python3 godot/shooter/run_loss_test.py $(if $(MAP),--map $(abspath $(MAP)),) $(if $(SCENARIOS),--scenarios $(SCENARIOS),) $(if $(BOTS),--bots $(BOTS),) $(if $(MEASURE),--measure $(MEASURE),)
 
 shooter-test:
 	dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj
