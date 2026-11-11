@@ -279,12 +279,13 @@ public partial class Shooter : Node3D
         var dir = GamePaths.Map(cfg.Str("map", ""));
         if (!Directory.Exists(dir)) throw new InvalidOperationException($"map folder not found: {dir} (pass --map DIR or set SUCHOHRAD_MAP)");
         AddChild(_map.Root);
+        _map.CollisionOnly = cfg.Str("role", "client") == "server"; // the server never draws the map
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Suchohrad.ShooterCore.Water.Empty : Suchohrad.ShooterCore.Water.Parse(_map.WaterJson);
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
         var s = _map.Stats;
         // Lamps are solid, so the server gets the same pole colliders as the client (map 0.5.0+; none on older maps).
-        if (_map.Lamps.Count > 0) AddChild(new StreetLamps { Bases = _map.Lamps.Select(l => l.Position).ToList() });
+        if (_map.Lamps.Count > 0) AddChild(new StreetLamps { Bases = _map.Lamps.Select(l => l.Position).ToList(), CollisionOnly = _map.CollisionOnly });
         GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} load={s.LoadSeconds:F2}s");
     }
 

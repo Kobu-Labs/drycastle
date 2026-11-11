@@ -180,7 +180,8 @@ public sealed partial class MapLoader
             _groupNodes[group] = container;
         }
         var node = new Node3D { Name = $"object_{SafeName(o.Id)}" };
-        node.AddChild(CreateObjectModel(o.Asset, o.Colour, out _));
+        // a headless load (CollisionOnly) builds the colliders alone: no model is loaded for the object
+        if (!CollisionOnly) node.AddChild(CreateObjectModel(o.Asset, o.Colour, out _));
         AddObjectColliders(node, o.Asset);
         container.AddChild(node);
         var y = o.Z ?? TerrainOrMean(o.X, -o.Y);

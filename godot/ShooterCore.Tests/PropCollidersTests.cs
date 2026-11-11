@@ -195,5 +195,32 @@ public class PropCollidersTests
             if (linear != null) hits++;
         }
         Assert.True(hits > 100, $"the probes should land on trees often enough to mean something (got {hits})");
+    public void TreesOfEqualScaleShareShapeKeysWhateverTheirPlaceAndYaw()
+    {
+        var a = TreeColliders.Parts(new TreeInstance(10, 20, 5, 1.1f, 0.2f, false, 0, 0), Model);
+        var b = TreeColliders.Parts(new TreeInstance(-300, 7, 9, 1.1f, 2.5f, false, 3, 1), Model);
+        for (var i = 0; i < a.Count; i++) Assert.Equal(SolidShapeKeys.Of(a[i]), SolidShapeKeys.Of(b[i]));
+
+        var c = TreeColliders.Parts(new TreeInstance(10, 20, 5, 1.2f, 0.2f, false, 0, 0), Model);
+        Assert.NotEqual(SolidShapeKeys.Of(a[0]), SolidShapeKeys.Of(c[0]));
+    }
+
+    [Fact]
+    public void ConiferCrownKeysAreRelativeSoAPositionDoesNotSplitThem()
+    {
+        var a = TreeColliders.Parts(new TreeInstance(10, 20, 5, 0.9f, 0f, true, 0, 0), Model);
+        var b = TreeColliders.Parts(new TreeInstance(50, 60, 12.5f, 0.9f, 1.3f, true, 0, 0), Model);
+        Assert.Equal(PartShape.Pyramid, a[1].Shape);
+        Assert.Equal(SolidShapeKeys.Of(a[1]), SolidShapeKeys.Of(b[1]));
+        Assert.Equal(SolidShapeKeys.Of(a[2]), SolidShapeKeys.Of(b[2]));
+    }
+
+    [Fact]
+    public void ShapeSizesQuantiseToMillimetres()
+    {
+        Assert.Equal(1000L, SolidShapeKeys.Quantise(1.0004f));
+        Assert.Equal(1001L, SolidShapeKeys.Quantise(1.0006f));
+        var box = new SolidPart(PartRole.Trunk, PartShape.Box, 0, 0, 0, 2, 0.5f, 0.25f, 0);
+        Assert.Equal(new SolidShapeKeys.Key(0, 1000, 2000, 500), SolidShapeKeys.Of(box));
     }
 }

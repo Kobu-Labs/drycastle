@@ -49,6 +49,13 @@ public sealed partial class MapLoader
     /// <summary>The parcel containing the ground point (Godot x, z); null when none.</summary>
     public ParcelInfo? ParcelAt(float x, float z) => ParcelIndex.At(x, z);
 
+    /// <summary>
+    /// Headless (server) load: only the collision meshes and the data the server reads are kept. Visual nodes are freed
+    /// as they load (no materials, no triangle count, no region or props visuals), and placed objects get no model.
+    /// Set before <see cref="LoadSteps"/>. The bodies of the <c>_collision</c> nodes stay, they are their children.
+    /// </summary>
+    public bool CollisionOnly { get; set; }
+
     /// <summary>Load a map folder. The path is an OS path, not res://. Throws on failure.</summary>
     public void Load(string mapDir)
     {
@@ -259,6 +266,13 @@ public sealed partial class MapLoader
                 BuildCollider(mi, name);
                 continue;
             }
+            if (CollisionOnly)
+            {
+                // A visual freed before its children are visited (an earlier, freed ancestor) is not valid any more.
+                // A visual with a collision mesh under it is kept: freeing it would take the collider with it.
+                if (GodotObject.IsInstanceValid(mi) && !HasCollisionDescendant(mi)) mi.Free();
+                continue;
+            }
             FixMaterials(mi);
             Stats.Triangles += TriangleCount(mi.Mesh);
             if (name.StartsWith("parcel_") && name.EndsWith("_props"))
@@ -286,6 +300,9 @@ public sealed partial class MapLoader
             foreach (var d in Descendants(c)) yield return d;
         }
     }
+
+    static bool HasCollisionDescendant(Node n)
+        => Descendants(n).Any(d => d is MeshInstance3D m && m.Name.ToString().EndsWith("_collision"));
 
     static int TriangleCount(Mesh m)
     {

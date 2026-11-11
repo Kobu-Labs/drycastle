@@ -271,6 +271,28 @@ public static class TreeColliders
 }
 
 /// <summary>
+/// Which solids can share one Godot shape resource: the shape's size (box) or its base half-size and height (pyramid),
+/// quantised to 1 mm. The position and yaw are the solid's own transform, so they do not take part. Trees are scaled by a
+/// few hundred distinct values, so the trunks and crowns of the map share a few thousand shapes instead of one each.
+/// </summary>
+public static class SolidShapeKeys
+{
+    /// <summary>Kind 0 is a box (A = width, B = height, C = depth); kind 1 a pyramid (A = base half-size, B = height, C unused). Values in millimetres.</summary>
+    public readonly record struct Key(byte Kind, long A, long B, long C);
+
+    public static Key Of(SolidPart p)
+    {
+        var height = Quantise(p.Z1 - p.Z0);
+        return p.Shape == PartShape.Pyramid
+            ? new Key(1, Quantise(p.HalfU), height, 0)
+            : new Key(0, Quantise(2 * p.HalfU), height, Quantise(2 * p.HalfV));
+    }
+
+    /// <summary>Metres to whole millimetres, rounded to nearest.</summary>
+    public static long Quantise(float metres) => (long)MathF.Round(metres * 1000f);
+}
+
+/// <summary>
 /// Collision solids of placed objects (objects.json), built from the asset's category and size (metres at scale 1, origin
 /// at the base centre). Parts are in the object's local frame (X and Y zero, yaw zero); the node carries position and yaw.
 /// </summary>
