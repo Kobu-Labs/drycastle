@@ -115,8 +115,16 @@ public partial class PauseScreen : MenuScreen
 {
     readonly Action _resume, _disconnect;
     readonly Action? _loadouts;
+    readonly Func<bool>? _unlockAll;
     Button _first = null!;
-    public PauseScreen(Action resume, Action disconnect, Action? loadouts = null) : base("HudScrim") { _resume = resume; _disconnect = disconnect; _loadouts = loadouts; }
+    /// <param name="unlockAll">True while the server runs in dev mode (<c>--unlock-all</c>): the corner indicator shows.</param>
+    public PauseScreen(Action resume, Action disconnect, Action? loadouts = null, Func<bool>? unlockAll = null) : base("HudScrim") { _resume = resume; _disconnect = disconnect; _loadouts = loadouts; _unlockAll = unlockAll; }
+
+    public override void _Ready()
+    {
+        base._Ready();
+        AddChild(DevBadge.Create(_unlockAll?.Invoke() ?? false));
+    }
 
     protected override Control Build()
     {

@@ -53,6 +53,9 @@ public sealed class LevelsFile
     /// <summary>Whether a profile at its current level may use the item. Unknown ids are never unlocked.</summary>
     public bool IsUnlocked(Profile profile, UnlockKind kind, string id) => Table.IsUnlocked(profile.Level, kind, id);
 
+    /// <summary><paramref name="unlockAll"/> is the dev-mode gate override (<see cref="DevUnlocks"/>): every known item counts as unlocked.</summary>
+    public bool IsUnlocked(Profile profile, UnlockKind kind, string id, bool unlockAll) => Table.IsUnlocked(profile.Level, kind, id, unlockAll);
+
     /// <param name="streakLevels">Killstreak id to its unlock level, from killstreaks.json (<see cref="KillstreakFile.UnlockLevels"/>). A streak line must name a listed id at the same level.</param>
     static LevelsFile Resolve(LevelsRaw raw, WeaponsFile weapons, PerksFile perks, IReadOnlyDictionary<string, int>? streakLevels)
     {
@@ -203,4 +206,8 @@ public sealed class UnlockTable
     public int? RequiredLevel(UnlockKind kind, string id) => _levels.TryGetValue((kind, id), out var l) ? l : null;
 
     public bool IsUnlocked(int level, UnlockKind kind, string id) => RequiredLevel(kind, id) is { } req && level >= req;
+
+    /// <summary>The dev-mode override: a known item is unlocked at any level. Unknown ids stay locked.</summary>
+    public bool IsUnlocked(int level, UnlockKind kind, string id, bool unlockAll) =>
+        RequiredLevel(kind, id) is { } req && (unlockAll || level >= req);
 }

@@ -27,7 +27,7 @@ public partial class LoadoutScreen : MenuScreen
     readonly List<string?>[] _ids = { new(), new(), new(), new(), new(), new() }; // item index -> id (null for a group heading)
     readonly ProgressBar[] _bar = new ProgressBar[4], _barSaved = new ProgressBar[4];
     readonly Label[] _statName = new Label[4], _statVal = new Label[4];
-    Label _level = null!, _statTitle = null!, _note = null!, _empty = null!, _hint = null!;
+    Label _level = null!, _statTitle = null!, _note = null!, _empty = null!, _hint = null!, _devBadge = null!;
     Control _body = null!, _tabRow = null!;
     Button _save = null!, _discard = null!, _makeActive = null!, _emptyBack = null!, _customize = null!;
 
@@ -43,6 +43,8 @@ public partial class LoadoutScreen : MenuScreen
     public override void _Ready()
     {
         base._Ready();
+        _devBadge = DevBadge.Create(false);
+        AddChild(_devBadge);
         _net = _client();
         _tab = LoadoutEditor.ClampTab(int.TryParse(GameSettings.LoadUi("loadout_tab", "0"), out var t) ? t : 0);
         if (_net != null) { _net.ProfileChanged += OnProfile; _net.ServerError += OnServerError; }
@@ -196,6 +198,7 @@ public partial class LoadoutScreen : MenuScreen
     void OnProfile(ProfileMsg p)
     {
         _hasProfile = true;
+        _devBadge.Visible = DevUnlocks.IsMarked(p.Unlocks);
         var before = _saved;
         _saved = ServerCopy(p, _tab);
         if (_draft == before) _draft = _saved;

@@ -36,6 +36,16 @@ public partial class NetServer
         public ulong StartedMs;
     }
 
+    /// <summary>Dev mode (issue #149, <c>--unlock-all</c>): every item unlocked, showcase starter loadouts, nothing of it saved. Set by the host.</summary>
+    public bool UnlockAll;
+
+    /// <summary>The starter loadout of one slot: the release default, or the dev kit in dev mode.</summary>
+    Loadout StarterLoadout(int slot) => UnlockAll ? DevUnlocks.DevKit(slot) : LoadoutRules.DefaultLoadout(slot, Weapons, Perks);
+
+    /// <summary>The unlock rows a player is told about and loadouts are validated against: the stored rows, or every item in dev mode.</summary>
+    IReadOnlyList<Unlock> ReportedUnlocks(PlayerProfile p) =>
+        UnlockAll ? DevUnlocks.Expand(p.Unlocks, Weapons, Perks, Killstreaks.UnlockLevels) : p.Unlocks;
+
     void StartProfileLoad(Client c, string token)
     {
         if (Progression == null || token.Length == 0)
@@ -44,7 +54,7 @@ public partial class NetServer
             Join(c);
             return;
         }
-        c.Loading = new ProfileLoad { Work = LoadProfileAsync(Progression, token, slot => LoadoutRules.DefaultLoadout(slot, Weapons, Perks)), StartedMs = Time.GetTicksMsec() };
+        c.Loading = new ProfileLoad { Work = LoadProfileAsync(Progression, token, StarterLoadout, saveDefaults: !UnlockAll), StartedMs = Time.GetTicksMsec() };
     }
 
     /// <summary>Joins every client whose profile arrived, or whose wait ran out (guest). Runs on the tick.</summary>
@@ -74,7 +84,7 @@ public partial class NetServer
     }
 
     /// <summary>Reads the profile. A slot with no primary was never set (a new profile): it gets the default kit, saved at once.</summary>
-    static async Task<PlayerProfile> LoadProfileAsync(IProgressionStore store, string token, Func<int, Loadout> defaults)
+    static async Task<PlayerProfile> LoadProfileAsync(IProgressionStore store, string token, Func<int, Loadout> defaults, bool saveDefaults)
     {
         var p = await store.Profiles.GetOrCreateAsync(token);
         var rows = await store.Loadouts.GetAllAsync(p.Id);
@@ -89,7 +99,7 @@ public partial class NetServer
         {
             if (slots[i].PrimaryWeapon != "") continue;
             slots[i] = defaults(i);
-            await store.Loadouts.SaveAsync(p.Id, slots[i]);
+            if (saveDefaults) await store.Loadouts.SaveAsync(p.Id, slots[i]);
         }
         return new PlayerProfile
         {
@@ -100,7 +110,7 @@ public partial class NetServer
 
     PlayerProfile GuestProfile()
     {
-        var slots = Enumerable.Range(0, Loadout.SlotCount).Select(i => LoadoutRules.DefaultLoadout(i, Weapons, Perks)).ToArray();
+        var slots = Enumerable.Range(0, Loadout.SlotCount).Select(StarterLoadout).ToArray();
         return new PlayerProfile { Persist = false, Level = 1, Loadouts = slots };
     }
 
@@ -117,7 +127,7 @@ public partial class NetServer
     void SendProfile(Client c)
     {
         var p = c.Profile!;
-        Send(c, new ProfileMsg(p.Name, p.Xp, p.Level, p.Active, p.Loadouts, p.Unlocks, p.Camos));
+        Send(c, new ProfileMsg(p.Name, p.Xp, p.Level, p.Active, p.Loadouts, ReportedUnlocks(p), p.Camos));
     }
 
     void Reject(Client c, string reason)
@@ -141,7 +151,7 @@ public partial class NetServer
     void OnSaveLoadout(Client c, Loadout l)
     {
         var p = c.Profile!;
-        if (LoadoutRules.ValidateLoadout(l, Weapons, p.Level, p.Unlocks, PerkLevels, Killstreaks.UnlockLevels) is { } err)
+        if (LoadoutRules.ValidateLoadout(l, Weapons, p.Level, ReportedUnlocks(p), PerkLevels, Killstreaks.UnlockLevels) is { } err)
         {
             Send(c, new ErrorMsg(err));
             return;

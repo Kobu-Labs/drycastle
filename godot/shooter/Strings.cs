@@ -50,7 +50,7 @@ public static class Strings
         ("quit.title", "Quit the game?"), ("quit.menu.body", "The game closes and returns to the desktop. Settings are already saved."),
         ("quit.game.body", "The game closes. You leave the match and your score for this round is lost."), ("quit.confirm", "Quit to desktop"),
         ("pause.title", "Paused"), ("pause.resume", "Resume"), ("pause.disconnect", "Disconnect"),
-        ("pause.hint", "Esc to resume"),
+        ("pause.hint", "Esc to resume"), ("dev.unlock_all", "Dev: all unlocked"),
         ("disconnect.title", "Leave the match?"), ("disconnect.body", "You disconnect from the server and return to the main menu. Your score for this round is lost."),
         ("connect.title", "Play"), ("connect.address", "Server address"), ("connect.address.hint", "host or IP, for example 192.168.1.20"),
         ("connect.port", "Port"), ("connect.name", "Player name"), ("connect.go", "Connect"), ("connect.retry", "Try again"),
