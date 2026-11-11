@@ -22,6 +22,8 @@ public enum EventKind : byte
     Launch = 10,
     /// <summary>Server broadcast: a vehicle blew up (vehicle id, who dealt the last damage, centre, radius).</summary>
     VehicleExplosion = 11,
+    /// <summary>Server broadcast: a shotgun fired its pellet fan (shooter, weapon, origin, aim, seed). Clients expand the seed into the same pellets for FX.</summary>
+    PelletFan = 12,
 }
 
 public abstract record ReliableMsg;

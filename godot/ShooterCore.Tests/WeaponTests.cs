@@ -32,7 +32,7 @@ public class WeaponTests
         Assert.Equal(1, r.W.Slot);
         Assert.Equal("pistol", r.W.Current.Id);
         for (var s = 1; s <= 5; s++) { Assert.Equal(File.Weapons[s - 1].MagazineSize, r.W.Mag(s)); Assert.Equal(File.Weapons[s - 1].ReserveAmmo, r.W.Reserve(s)); }
-        Assert.Equal(5, r.W.Hotbar.Count);
+        Assert.Equal(File.Weapons.Count, r.W.Hotbar.Count);
         Assert.Equal("bazooka", r.W.Hotbar[2].Id);
     }
 
@@ -315,7 +315,7 @@ public class WeaponTests
         var m = WeaponCodec.BuildAmmo(r.W, r.T);
         Assert.Equal(1, m.Slot);
         Assert.Equal(((ushort)14, (ushort)60), m.Slots[0]);
-        Assert.Equal(5, m.Slots.Count);
+        Assert.Equal(File.Weapons.Count, m.Slots.Count);
     }
 
     [Fact]

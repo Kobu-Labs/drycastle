@@ -4,6 +4,10 @@
   "category_defaults": {
     "pistol": { "move_speed_multiplier": 1.0, "spread_base": 0.4, "spread_per_shot": 0.3, "spread_max": 4, "spread_recovery": 0.4 },
     "assault_rifle": { "move_speed_multiplier": 0.95, "spread_base": 1.0, "spread_per_shot": 0.25, "spread_max": 4, "spread_recovery": 0.6 },
+    "smg": { "move_speed_multiplier": 1.05, "ads_move_speed_multiplier": 1.0, "spread_base": 0.8, "spread_per_shot": 0.45, "spread_max": 5, "spread_recovery": 0.4,
+      "recoil": { "vertical_per_shot": 0.5, "horizontal_sway": 0.4, "recovery_rate": 3.5, "max_climb": 6 } },
+    "shotgun": { "move_speed_multiplier": 0.95, "ads_move_speed_multiplier": 0.9,
+      "recoil": { "vertical_per_shot": 3, "horizontal_sway": 1, "recovery_rate": 6, "max_climb": 12 } },
     "sniper": { "move_speed_multiplier": 0.8, "spread_base": 0.02, "spread_per_shot": 0, "spread_max": 0.02, "spread_recovery": 0.5 }
   },
   "weapons": [
@@ -38,6 +42,56 @@
       "magazine_size": 5, "reserve_ammo": 15, "reload_time": 3.2,
       "range": 600, "scope_fov": 20, "zoom_levels": 1,
       "falloff_start": 600, "falloff_end": 600, "falloff_multiplier": 1.0
+    },
+    {
+      "id": "mp5", "category": "smg", "slot": "primary", "unlock_level": 0, "kind": "hitscan", "full_auto": true,
+      "damage": 22, "headshot_multiplier": 2, "fire_interval": 0.075,
+      "magazine_size": 30, "reserve_ammo": 120, "reload_time": 1.8,
+      "falloff_start": 12, "falloff_end": 35, "falloff_multiplier": 0.5
+    },
+    {
+      "id": "ump45", "category": "smg", "slot": "primary", "unlock_level": 0, "kind": "hitscan", "full_auto": true,
+      "damage": 26, "headshot_multiplier": 2, "fire_interval": 0.1,
+      "magazine_size": 25, "reserve_ammo": 100, "reload_time": 2.0,
+      "falloff_start": 10, "falloff_end": 30, "falloff_multiplier": 0.5
+    },
+    {
+      "id": "p90", "category": "smg", "slot": "primary", "unlock_level": 0, "kind": "hitscan", "full_auto": true,
+      "damage": 18, "headshot_multiplier": 2, "fire_interval": 0.066,
+      "magazine_size": 50, "reserve_ammo": 150, "reload_time": 2.3,
+      "falloff_start": 15, "falloff_end": 40, "falloff_multiplier": 0.5
+    },
+    {
+      "id": "remington870", "category": "shotgun", "slot": "primary", "unlock_level": 0, "kind": "hitscan", "full_auto": false,
+      "pump_action": true, "shell_reload": true,
+      "damage": 13, "headshot_multiplier": 1.5, "fire_interval": 0.85,
+      "pellets": 8, "pellet_spread": 3.0, "range": 60,
+      "magazine_size": 5, "reserve_ammo": 30, "reload_time": 0.55,
+      "falloff_start": 8, "falloff_end": 30, "falloff_multiplier": 0.4
+    },
+    {
+      "id": "spas12", "category": "shotgun", "slot": "primary", "unlock_level": 0, "kind": "hitscan", "full_auto": false,
+      "pump_action": true, "shell_reload": true,
+      "damage": 13, "headshot_multiplier": 1.5, "fire_interval": 0.7,
+      "pellets": 8, "pellet_spread": 3.0, "range": 60,
+      "magazine_size": 8, "reserve_ammo": 32, "reload_time": 0.5,
+      "falloff_start": 8, "falloff_end": 30, "falloff_multiplier": 0.4
+    },
+    {
+      "id": "benelli_m4", "category": "shotgun", "slot": "primary", "unlock_level": 0, "kind": "hitscan", "full_auto": false,
+      "shell_reload": true,
+      "damage": 13, "headshot_multiplier": 1.5, "fire_interval": 0.3,
+      "pellets": 8, "pellet_spread": 3.0, "range": 60,
+      "magazine_size": 7, "reserve_ammo": 35, "reload_time": 0.5,
+      "falloff_start": 8, "falloff_end": 30, "falloff_multiplier": 0.4
+    },
+    {
+      "id": "aa12", "category": "shotgun", "slot": "primary", "unlock_level": 0, "kind": "hitscan", "full_auto": true,
+      "shell_reload": true,
+      "damage": 10, "headshot_multiplier": 1.5, "fire_interval": 0.2,
+      "pellets": 8, "pellet_spread": 3.5, "range": 60,
+      "magazine_size": 20, "reserve_ammo": 60, "reload_time": 0.4,
+      "falloff_start": 8, "falloff_end": 30, "falloff_multiplier": 0.4
     }
   ]
 }

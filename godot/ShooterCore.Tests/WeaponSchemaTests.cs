@@ -65,7 +65,7 @@ public class WeaponSchemaTests
         Assert.Equal(WeaponSlot.Special, knife.Slot);
 
         // v1 weapons get no recoil, so their behaviour is unchanged until the category tickets add numbers.
-        foreach (var w in d.Weapons.Weapons)
+        foreach (var w in d.Weapons.Weapons.Where(x => x.Category is not (WeaponCategory.Smg or WeaponCategory.Shotgun)))
         {
             Assert.Equal(0, w.Recoil.VerticalPerShot);
             Assert.Empty(w.Recoil.Pattern);

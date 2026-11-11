@@ -46,6 +46,8 @@ public partial class NetClient
         if (!mi.Has(MoveButtons.Fire)) { if (!w.FullAuto) _pHeld = false; return; }
         var pull = w.FullAuto || !_pHeld;
         _pHeld = true;
+        // firing interrupts a shell reload once a shell is loaded (the server does the same)
+        if (w.ShellReload && reloading && pull && _pMag > 0 && now >= _pNextFire - 0.0033) { reloading = false; _pReloadUntil = 0; }
         if (!pull || reloading || now < _pNextFire - 0.0033) return;
 
         if (ranged && _pMag <= 0)
@@ -68,7 +70,8 @@ public partial class NetClient
     {
         if (w.ReloadTime <= 0 || Now < _pReloadUntil) return;
         _pReloadUntil = Now + w.ReloadTime;
-        _pMagAfter = Math.Min(w.MagazineSize, Math.Max(0, _pMag) + reserve);
+        // a shell reload predicts one shell; the server's ammo message after each shell re-syncs the rest
+        _pMagAfter = Math.Min(w.MagazineSize, Math.Max(0, _pMag) + (w.ShellReload ? 1 : reserve));
         Sfx.Play2D(SoundRules.Event("reload", w.Id));
     }
 

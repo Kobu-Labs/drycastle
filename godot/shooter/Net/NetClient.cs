@@ -605,6 +605,9 @@ public partial class NetClient : Node
                 ShotFx.Spawn(World, MuzzleOf(sh.Shooter, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV), endV, melee);
                 if (!melee) BulletHoles.PlaceFromShot(World, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV);
                 break;
+            case EventKind.PelletFan when WeaponCodec.DecodePelletFan(payload) is { } pf:
+                OnPelletFan(pf);
+                break;
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
                 _launchLog.Add((Now, l));
                 if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
