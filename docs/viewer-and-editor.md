@@ -116,8 +116,10 @@ Hovering shows `P-0415 garden` (and `[G-0007]` when grouped) at the cursor. Outl
 outlines only when one of its members is hovered or selected, and then as one shape (edges shared by two members are
 not drawn). The right-hand panel shows the
 selection (ID, kind, area, cadastral reference, group), a collapsible Group section with the buttons Group
-selected, Add selected to group, Remove from group and Dissolve group, the Fence and Trees sections (below) and
+selected, Add selected to group, Remove from group, Merge groups and Dissolve group, the Fence and Trees sections (below) and
 the Objects section (palette, selected object, undo; see Objects and undo). The bottom line shows messages (`saved`, `regenerating P-0004...`, `applied in 480 ms`, errors) and the key hints.
+
+Merge groups (button, or `G` when the marked parcels touch any group) puts all parcels of those groups, plus any marked ungrouped parcels, into one new group (so a group plus a loose parcel also works) (highest id + 1) and removes the old ones. The fence is the one the groups share, else the first group's (by id; the status line says so); parcel-level fence edits stay on the parcels. It is one undo step, and `EditsFile.MergeGroups` follows the same rules as the MCP server's `merge_groups`.
 
 Group operations rewrite `edits.json` atomically (temp file, then rename). The file is reloaded from disk
 right before every save, so a change by another writer (e.g. the MCP server) is kept, and everything not

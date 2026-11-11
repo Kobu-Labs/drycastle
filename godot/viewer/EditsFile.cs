@@ -271,6 +271,36 @@ public static class EditsFile
         return changed ? (true, "removed from group") : (false, "none of the selected parcels is in a group");
     }
 
+    /// <summary>
+    /// Merge groups (two or more, or one plus extra ungrouped parcels) into one new group and drop the old ones.
+    /// The fence is the one the groups share, else the first group's (by id); parcel-level fence edits stay on
+    /// the parcels. Same rules as the MCP server's merge_groups.
+    /// </summary>
+    public static (bool ok, string message, string? groupId) MergeGroups(SortedDictionary<string, object?> root, IReadOnlyCollection<string> groupIds, IReadOnlyCollection<string>? extraParcels = null)
+    {
+        var ids = groupIds.Distinct().OrderBy(x => x, StringComparer.Ordinal).ToList();
+        var extra = extraParcels ?? Array.Empty<string>();
+        if (ids.Count < 2 && !(ids.Count == 1 && extra.Count > 0)) return (false, "mark parcels from 2 or more groups, or a group and a loose parcel, to merge", null);
+        var groups = Groups(root);
+        var gone = ids.FirstOrDefault(i => !groups.ContainsKey(i));
+        if (gone != null) return (false, $"group {gone} no longer exists", null);
+        var member = MembershipOf(root);
+        var taken = extra.FirstOrDefault(p => member.TryGetValue(p, out var g) && !ids.Contains(g));
+        if (taken != null) return (false, $"{taken} is already in {member[taken]}", null);
+
+        var fences = ids.Select(i => (id: i, fence: (groups[i] as SortedDictionary<string, object?>)?.GetValueOrDefault("fence"))).Where(x => x.fence != null).ToList();
+        var distinct = fences.Select(x => Dump(new SortedDictionary<string, object?> { ["fence"] = x.fence })).Distinct().Count();
+        var members = ids.SelectMany(i => Members(groups[i])).Concat(extra).ToList();
+        foreach (var i in ids) groups.Remove(i);
+        var gid = NextGroupId(root);
+        var g2 = NewObject();
+        SetMembers(g2, members);
+        if (fences.Count > 0) g2["fence"] = fences[0].fence;
+        groups[gid] = g2;
+        var note = distinct > 1 ? $"; the groups had different fences, kept {fences[0].id}'s" : "";
+        return (true, $"merged {string.Join(" + ", ids)} into {gid}{note}", gid);
+    }
+
     public static (bool ok, string message) Dissolve(SortedDictionary<string, object?> root, string groupId)
         => Groups(root).Remove(groupId) ? (true, $"dissolved {groupId}") : (false, $"group {groupId} no longer exists");
 }

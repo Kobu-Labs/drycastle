@@ -229,6 +229,24 @@ public partial class Viewer
         await Physics(2);
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
 
+        {
+            // merging groups (pure document logic): union of members, shared or first fence, old groups gone
+            var md = EditsFile.Parse("{\"version\":1,\"parcels\":{},\"groups\":{"
+                + "\"G-0001\":{\"parcels\":[\"P-0001\",\"P-0002\"],\"fence\":{\"mode\":\"custom\",\"type\":\"wire\"}},"
+                + "\"G-0002\":{\"parcels\":[\"P-0003\",\"P-0004\"],\"fence\":{\"mode\":\"custom\",\"height_m\":2.0}},"
+                + "\"G-0003\":{\"parcels\":[\"P-0006\",\"P-0007\"]}}}");
+            var (mok, mmsg, mgid) = EditsFile.MergeGroups(md, new[] { "G-0002", "G-0001" }, new[] { "P-0005" });
+            var mg = mok ? (SortedDictionary<string, object?>)EditsFile.Groups(md)[mgid!]! : null;
+            Check(mok && mgid == "G-0002" && !EditsFile.Groups(md).ContainsKey("G-0001") && EditsFile.Groups(md).ContainsKey("G-0003")
+                  && mg != null && string.Join(",", EditsFile.Members(mg)) == "P-0001,P-0002,P-0003,P-0004,P-0005"
+                  && EditsFile.Dump(new SortedDictionary<string, object?> { ["f"] = mg["fence"] }).Contains("wire") && mmsg.Contains("different fences")
+                  && ObjectEdits.ValidateDocument(md).Count == 0,
+                $"merge groups: members united, first fence kept with a note, validates ({mmsg})");
+            Check(!EditsFile.MergeGroups(md, new[] { "G-0002" }).ok && !EditsFile.MergeGroups(md, new[] { "G-0002", "G-0099" }).ok
+                  && !EditsFile.MergeGroups(md, new[] { "G-0002", "G-0003" }, new[] { "P-0005" }).ok,
+                "merge groups refuses one group, an unknown group and a parcel that is in another group");
+        }
+
         // ---- state with a cleared selection, then wait for the watcher to settle ----
         ed.Click(null, false);
         await WaitUntil(() => StateSelected(statePath).Count == 0, 4);

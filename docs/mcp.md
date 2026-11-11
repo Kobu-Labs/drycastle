@@ -37,7 +37,7 @@ or check a `.mcp.json` into your own working copy (project scope):
 }
 ```
 
-Then `/mcp` in Claude Code should list `suchohrad-edits` with 17 tools. `make mcp` runs the same thing in a
+Then `/mcp` in Claude Code should list `suchohrad-edits` with 18 tools. `make mcp` runs the same thing in a
 terminal (it waits for JSON-RPC on stdin, so it is only useful for debugging); the repo does not ship a
 `.mcp.json`.
 
@@ -117,6 +117,7 @@ All inputs and outputs are JSON. Write tools return `summary`, `warnings` and th
 | `remove_object` | `id` | |
 | `move_object` | `id`, `parcel?`, `anchor?`, `offset_m?`, `position?`, `rotation_deg?`, `scale?`, `colour?` | a new anchor re-faces the road unless `rotation_deg` is given; a new `parcel` re-lists the object |
 | `create_group` | `parcels` (2+), `fence?` | new `G-NNNN`; a parcel can be in one group only; warns when the parcels do not touch |
+| `merge_groups` | `ids` (2+ groups, or 1 with `parcels`), `parcels?` (loose parcels, in no other group), `fence?` | merges the groups and parcels into a new `G-NNNN` and removes the old groups; parcel-level fence edits stay on the parcels; the fence is `fence` if given, else the shared one of the old groups, else the first group's (with a warning) |
 | `dissolve_group` | `id` | removes the group; members and their own fence edits stay |
 | `create_region` | `colour`, and either `polygon` `[[x,y],..]` or `parcel` + `points` `[[along,inward],..]` | new `R-NNNN`; see Regions |
 | `set_region_colour` | `id`, `colour` | |

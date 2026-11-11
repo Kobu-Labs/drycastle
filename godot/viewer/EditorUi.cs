@@ -175,10 +175,12 @@ public partial class EditorMode
         grp.AddChild(_btnGroup);
         grp.AddChild(new HSeparator());
         grp.AddChild(new Label { Text = "Existing groups", ThemeTypeVariation = "Header" });
+        _btnMerge = Btn("Merge marked groups and parcels into one group", MergeGroups);
+        _btnMerge.TooltipText = "Mark parcels from two or more groups, or a group and loose parcels (also G). Everything goes into one new group; the fence they share is kept, else the first group's. Ctrl+Z undoes it.";
         _btnAdd = Btn("Add the marked parcels to the group", AddSelectedToGroup);
         _btnRemove = Btn("Take the marked parcels out of their group", RemoveSelectedFromGroup);
         _btnDissolve = Btn("Dissolve the group", DissolveGroup);
-        foreach (var b in new[] { _btnAdd, _btnRemove, _btnDissolve }) grp.AddChild(b);
+        foreach (var b in new[] { _btnMerge, _btnAdd, _btnRemove, _btnDissolve }) grp.AddChild(b);
         grp.AddChild(new Label { Text = "Clear the marks with Esc.", ThemeTypeVariation = "Dim" });
 
         BuildFenceSection(Page(EditorTool.Fence));
@@ -256,7 +258,7 @@ public partial class EditorMode
         "Select\tLMB select, Shift+LMB add or remove, Esc clear\n" +
         "Walk\tF2 walk from where you were, F3 drop to the ground below the camera and walk\n" +
         "Tools\t1 Select, 2 Group, 3 Fence, 4 Trees, 5 Objects, 6 Region, 7 View (press again to hide)\n" +
-        "Group\tG group the selection\n" +
+        "Group\tG group the selection (marked groups merge)\n" +
         "Edit\tEnter apply, Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo\n" +
         "Objects\tLMB place, R / Shift+R rotate, Ctrl free position, Ctrl+D duplicate, Del delete, arrows nudge\n" +
         "Region\tN new region, LMB or C adds a corner, Enter closes, then choose the colour and Enter creates\n" +

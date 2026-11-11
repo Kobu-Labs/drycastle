@@ -73,7 +73,7 @@ public partial class EditorMode : Node
     HSlider _speedSlider = null!;
     Label _unsavedLabel = null!, _hudLabel = null!, _hoverLabel = null!, _statusLabel = null!, _hintLabel = null!;
     Label _selLabel = null!, _groupLabel = null!;
-    Button _btnGroup = null!, _btnAdd = null!, _btnRemove = null!, _btnDissolve = null!;
+    Button _btnGroup = null!, _btnMerge = null!, _btnAdd = null!, _btnRemove = null!, _btnDissolve = null!;
     double _statusUntil;
     (DateTime, long) _seenEdits;
     double _pollT;
@@ -319,17 +319,25 @@ public partial class EditorMode : Node
             Say($"already one group: {groups[0]}", true);
             return;
         }
-        if (groups.Count > 0)
-        {
-            var p = Selection.First(x => Group(x) != null);
-            Say($"{p} is already in {Group(p)}; remove it first", true);
-            return;
-        }
+        if (groups.Count >= 1) { MergeGroups(); return; } // marked parcels touch a group: grouping them makes one new group of everything
         var sel = Selection.ToList();
         Mutate(root =>
         {
             var (ok, msg, gid) = EditsFile.CreateGroup(root, sel);
             return (ok, ok ? $"created {gid}" : msg);
+        });
+    }
+
+    /// <summary>Merge the groups of the marked parcels, and marked ungrouped parcels, into one new group. Undoable.</summary>
+    public void MergeGroups()
+    {
+        var gids = Selection.Select(Group).Where(g => g != null).Select(g => g!).Distinct().ToList();
+        var extra = Selection.Where(p => Group(p) == null).ToList();
+        if (gids.Count < 2 && !(gids.Count == 1 && extra.Count > 0)) { Say("mark parcels from 2 or more groups, or a group and a loose parcel, to merge", true); return; }
+        Mutate(root =>
+        {
+            var (ok, msg, _) = EditsFile.MergeGroups(root, gids, extra);
+            return (ok, msg);
         });
     }
 
@@ -808,6 +816,7 @@ public partial class EditorMode : Node
         }
         _groupCount.Text = sel.Count == 0 ? "Nothing marked yet" : $"{sel.Count} parcel{(sel.Count == 1 ? "" : "s")} marked";
         _btnGroup.Disabled = sel.Count < 2;
+        _btnMerge.Disabled = !(gids.Count >= 2 || (gids.Count == 1 && sel.Any(p => p.Group == null)));
         _btnAdd.Disabled = gids.Count != 1 || sel.All(p => p.Group != null);
         _btnRemove.Disabled = gids.Count == 0;
         _btnDissolve.Disabled = gids.Count != 1;

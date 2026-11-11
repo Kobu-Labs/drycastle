@@ -396,6 +396,57 @@ def test_groups(tools, env):
         tools.dissolve_group("P-0001")
 
 
+def test_merge_groups(tools, env):
+    settings = env[1]
+    a = tools.create_group(["P-0001", "P-0002"], fence={"mode": "custom", "type": "wire"})["id"]
+    b = tools.create_group(["P-0004", "P-0005"])["id"]
+    c = tools.create_group(["P-0003", "P-0006"], fence={"mode": "custom", "height_m": 2.0})["id"]
+    tools.set_fence("P-0001", mode="custom", colour="#112233")  # parcel override stays put
+    out = tools.merge_groups([a, b])
+    assert out["id"] == "G-0004"
+    assert out["entry"] == {"fence": {"mode": "custom", "type": "wire"},
+                            "parcels": ["P-0001", "P-0002", "P-0004", "P-0005"]}
+    edits = load_edits(settings.edits_path)
+    assert sorted(edits.groups) == [c, "G-0004"]
+    assert edits.parcels["P-0001"]["fence"]["colour"] == "#112233"
+    canonical(settings)
+    out = tools.merge_groups(["G-0004", c], fence={"mode": "none"})
+    last = out["id"]
+    assert out["entry"]["fence"] == {"mode": "none"}
+    assert load_edits(settings.edits_path).groups[out["id"]]["parcels"] == [
+        "P-0001", "P-0002", "P-0003", "P-0004", "P-0005", "P-0006"]
+    with pytest.raises(ToolError, match="2 or more"):
+        tools.merge_groups([last])
+    with pytest.raises(ToolError, match="2 or more different"):
+        tools.merge_groups([last, last])
+    with pytest.raises(ToolError, match="no such group: G-0099"):
+        tools.merge_groups([last, "G-0099"])
+    with pytest.raises(ToolError, match="not a group ID"):
+        tools.merge_groups([last, "P-0001"])
+
+
+def test_merge_group_with_loose_parcels(tools, env):
+    a = tools.create_group(["P-0001", "P-0002"], fence={"mode": "custom", "type": "wire"})["id"]
+    other = tools.create_group(["P-0004", "P-0005"])["id"]
+    out = tools.merge_groups([a], parcels=["P-0003"])
+    assert out["entry"]["parcels"] == ["P-0001", "P-0002", "P-0003"]
+    assert out["entry"]["fence"] == {"mode": "custom", "type": "wire"}
+    assert a not in load_edits(env[1].edits_path).groups
+    with pytest.raises(ToolError, match="already in another group: P-0004"):
+        tools.merge_groups([out["id"]], parcels=["P-0004"])
+    with pytest.raises(ToolError, match="2 or more"):
+        tools.merge_groups([out["id"]])
+    assert other in load_edits(env[1].edits_path).groups
+
+
+def test_merge_groups_fence_conflict_warns(tools):
+    a = tools.create_group(["P-0001", "P-0002"], fence={"mode": "custom", "type": "wire"})["id"]
+    b = tools.create_group(["P-0004", "P-0005"], fence={"mode": "custom", "height_m": 2.0})["id"]
+    out = tools.merge_groups([a, b])
+    assert out["entry"]["fence"] == {"mode": "custom", "type": "wire"}
+    assert "different fences" in out["warnings"][0]
+
+
 # --- file handling ------------------------------------------------------------------------
 
 
@@ -589,7 +640,7 @@ def test_through_mcp_session(env):
             names = {t.name for t in (await client.list_tools()).tools}
             assert names == {
                 "list_assets", "find_parcels", "get_parcel", "set_fence", "reset_fence", "set_trees",
-                "reset_trees", "place_object", "remove_object", "move_object", "create_group",
+                "reset_trees", "place_object", "remove_object", "move_object", "create_group", "merge_groups",
                 "dissolve_group", "create_region", "set_region_colour", "move_region_point",
                 "delete_region", "list_regions",
             }
