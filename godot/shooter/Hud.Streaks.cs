@@ -14,9 +14,12 @@ public partial class Hud
     readonly ProgressBar[] _streakBar = new ProgressBar[KillstreakService.Slots];
     readonly string[] _streakVariation = new string[KillstreakService.Slots];
 
+    /// <summary>The streak tracker's panel; <see cref="ApplyMinimapSettings"/> moves it under the minimap.</summary>
+    Control _streakPanel = null!;
+
     void BuildStreaks()
     {
-        var p = Place(P("HudPanel"), 0, 0, ShooterTheme.Margin, ShooterTheme.Margin + 32 + 224 + ShooterTheme.Space, 304, 232);
+        var p = _streakPanel = Place(P("HudPanel"), 0, 0, ShooterTheme.Margin, ShooterTheme.Margin + 32 + 224 + ShooterTheme.Space, 304, 232);
         _root.AddChild(p);
         var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         v.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);

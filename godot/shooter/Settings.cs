@@ -27,6 +27,8 @@ public sealed class GameSettings
     public bool InvertY;
     public float Fov = 90;
     public bool ShowCrosshair = true;
+    /// <summary>Minimap side in pixels, opacity and zoom (ticket #143; ranges in <see cref="MinimapSettings"/>).</summary>
+    public float MinimapSize = MinimapSettings.DefaultSize, MinimapOpacity = MinimapSettings.DefaultOpacity, MinimapZoom = MinimapSettings.DefaultZoom;
     // accessibility
     public float UiScale = 1f;
     public bool ReduceMotion;
@@ -52,6 +54,7 @@ public sealed class GameSettings
     public bool SameAs(GameSettings o) =>
         Fullscreen == o.Fullscreen && VSync == o.VSync && Msaa == o.Msaa && Brightness == o.Brightness && Volume.SequenceEqual(o.Volume)
         && Sensitivity == o.Sensitivity && InvertY == o.InvertY && Fov == o.Fov && ShowCrosshair == o.ShowCrosshair
+        && MinimapSize == o.MinimapSize && MinimapOpacity == o.MinimapOpacity && MinimapZoom == o.MinimapZoom
         && UiScale == o.UiScale && ReduceMotion == o.ReduceMotion && ColorBlind == o.ColorBlind && Keys.SameAs(o.Keys);
 
     public static GameSettings Load()
@@ -70,6 +73,9 @@ public sealed class GameSettings
             s.InvertY = (bool)cf.GetValue("gameplay", "invert_y", false);
             s.Fov = SettingsRanges.ClampFov((float)(double)cf.GetValue("gameplay", "fov", 90.0));
             s.ShowCrosshair = (bool)cf.GetValue("gameplay", "crosshair", true);
+            s.MinimapSize = MinimapSettings.ClampSize((float)(double)cf.GetValue("gameplay", "minimap_size", (double)MinimapSettings.DefaultSize));
+            s.MinimapOpacity = MinimapSettings.ClampOpacity((float)(double)cf.GetValue("gameplay", "minimap_opacity", (double)MinimapSettings.DefaultOpacity));
+            s.MinimapZoom = MinimapSettings.ClampZoom((float)(double)cf.GetValue("gameplay", "minimap_zoom", (double)MinimapSettings.DefaultZoom));
             s.UiScale = HudLogic.ClampUiScale((float)(double)cf.GetValue("accessibility", "ui_scale", 1.0));
             s.ReduceMotion = (bool)cf.GetValue("accessibility", "reduce_motion", false);
             s.ColorBlind = (bool)cf.GetValue("accessibility", "colour_blind", false);
@@ -91,6 +97,9 @@ public sealed class GameSettings
         cf.SetValue("gameplay", "invert_y", InvertY);
         cf.SetValue("gameplay", "fov", (double)SettingsRanges.ClampFov(Fov));
         cf.SetValue("gameplay", "crosshair", ShowCrosshair);
+        cf.SetValue("gameplay", "minimap_size", (double)MinimapSettings.ClampSize(MinimapSize));
+        cf.SetValue("gameplay", "minimap_opacity", (double)MinimapSettings.ClampOpacity(MinimapOpacity));
+        cf.SetValue("gameplay", "minimap_zoom", (double)MinimapSettings.ClampZoom(MinimapZoom));
         cf.SetValue("accessibility", "ui_scale", (double)HudLogic.ClampUiScale(UiScale));
         cf.SetValue("accessibility", "reduce_motion", ReduceMotion);
         cf.SetValue("accessibility", "colour_blind", ColorBlind);
@@ -105,6 +114,9 @@ public sealed class GameSettings
         s.Brightness = SettingsRanges.ClampBrightness(s.Brightness);
         s.Sensitivity = SettingsRanges.ClampSens(s.Sensitivity);
         s.Fov = SettingsRanges.ClampFov(s.Fov);
+        s.MinimapSize = MinimapSettings.ClampSize(s.MinimapSize);
+        s.MinimapOpacity = MinimapSettings.ClampOpacity(s.MinimapOpacity);
+        s.MinimapZoom = MinimapSettings.ClampZoom(s.MinimapZoom);
         _cur = s;
         InputBindings.Apply(s.Keys);
         ShooterTheme.SetColorBlind(s.ColorBlind);

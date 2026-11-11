@@ -114,7 +114,7 @@ public partial class NetClient
         if (ChooserOpen && (Dead || _driving || _near != _chooser.Corpse)) _chooser.Close();
         if (use && !_useWas) { _useHeld = 0; _holdSent = false; }
         if (use) _useHeld += dt;
-        var near = _near;
+        var near = _crateNear != null ? null : _near; // a care package in reach owns the key (ticket #143)
         if (use && !_holdSent && !ChooserOpen && near is { } id && _useHeld >= CorpseHoldSeconds && CorpseWeapon(id) is { } w
             && CorpseRules.CanReplace(w, CorpseRules.PrimaryPos))
         {

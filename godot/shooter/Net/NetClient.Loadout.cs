@@ -38,6 +38,7 @@ public partial class NetClient
         Perks = PerkModifiers.Of(PerkData?.Find(active?.Perk ?? ""));
         if (Weapons != null && _hud != null) _hud.SetWeapons(_hotbar.Select(i => WeaponName(Weapons.Weapons[i].Id)).ToList());
         ArmStreaks(); // the HUD tracker's counter starts at this spawn (ticket #119)
+        RefreshProgress(); // the perk shown on the HUD follows the spawn's loadout (ticket #143)
     }
 
     /// <summary>Position of a weapons.json slot (1-based) on the hotbar, 0-based; -1 when it is not on the hotbar.</summary>
@@ -60,6 +61,7 @@ public partial class NetClient
     {
         ProfileChanged?.Invoke(p);
         _hud?.SetLoadoutRows(LoadoutRows(p));
+        RefreshProgress();
     }
 
     /// <summary>Hands the respawn screen its hooks: pick a slot (number keys or click), open the editor, and the rows now.</summary>
@@ -113,6 +115,7 @@ public partial class NetClient
                 break;
             case EventKind.LevelUp when ProgressionEvents.DecodeLevelUp(payload) is { } lu:
                 if (Profile is { } p) Profile = p with { Level = lu.Level, Xp = lu.Xp };
+                RefreshProgress();
                 GD.Print($"client {PlayerName}: level up to {lu.Level}");
                 LevelUpReceived?.Invoke(lu);
                 break;
@@ -122,6 +125,7 @@ public partial class NetClient
             case EventKind.XpSummary when ProgressionEvents.DecodeXpSummary(payload) is { } xs:
                 LastXpSummary = xs;
                 if (Profile is { } q) Profile = q with { Level = xs.Level, Xp = xs.Xp };
+                RefreshProgress();
                 GD.Print($"client {PlayerName}: round XP {xs.Total}, level {xs.Level}");
                 _hud?.SetXpSummary(xs);
                 XpSummaryReceived?.Invoke(xs);

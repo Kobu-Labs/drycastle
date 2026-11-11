@@ -49,11 +49,11 @@ public partial class NetClient
         RefreshStreaks();
     }
 
-    /// <summary>A kill from the match feed. The owner's own kills (not suicides) advance the counter.</summary>
+    /// <summary>A kill from the match feed. The owner's own kills (not suicides, not a streak's weapon) advance the counter.</summary>
     void OnStreakKill(KillMsg k)
     {
         if (_streaks == null || k.Killer != _myId || k.Killer == k.Victim) return;
-        _streaks.OnKill();
+        _streaks.OnKill(StreakWeapons.Is(k.Weapon));
         RefreshStreaks();
     }
 
