@@ -125,8 +125,9 @@ Running the database by hand: it is a plain SQLite 3 file, so `sqlite3 shooter.d
 `sqlite3 shooter.db '.backup shooter-backup.db'` takes a safe copy while the server runs (WAL mode; the `-wal` and `-shm`
 side files belong with the main file, never copy only one). To reset one player, stop the server, then delete their rows
 from `loadouts`, `unlocks`, `stats`, `weapon_kills`, `camo` and `loadout_camo` (keyed by `player_id`) and finally from
-`players`. The schema declares `ON DELETE CASCADE`, but the server does not switch on `PRAGMA foreign_keys`, so deleting a
-`players` row alone leaves the others behind (see `docs/shooter-v2.md`, known gaps). To reset everyone, stop the server and
+`players`. The schema declares `ON DELETE CASCADE` and the server switches on `PRAGMA foreign_keys` for its own connections, but
+the `sqlite3` shell does not unless you run `PRAGMA foreign_keys=ON;` first, so by hand deleting a `players` row alone
+leaves the others behind. To reset everyone, stop the server and
 delete the file.
 
 ### Data files (`godot/shooter/data/`, packaged into the `.pck` by `export_presets.cfg`)
