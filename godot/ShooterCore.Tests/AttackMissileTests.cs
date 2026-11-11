@@ -13,6 +13,9 @@ public class AttackMissileTests
 
     const ushort Owner = 7, Enemy = 8;
 
+    /// <summary>The fixture missile's own shallow limit (not the shipped one): the flying-fixture tests fly this dive.</summary>
+    const float FixtureShallowRad = -10f * MathF.PI / 180f;
+
     /// <summary>A world with no walls and no players unless the test says so; records every detonation.</summary>
     sealed class FakeWorld : IMissileWorld
     {
@@ -55,12 +58,12 @@ public class AttackMissileTests
         var t = new MissileTuning
         {
             SpeedMps = 45, TurnRateRad = turnDeg * MathF.PI / 180f, LifeSeconds = life, SpawnHeight = 150, SpawnPitchRad = -1.2f,
-            ShallowPitchRad = -10f * MathF.PI / 180f, SteepPitchRad = -80f * MathF.PI / 180f,
+            ShallowPitchRad = FixtureShallowRad, SteepPitchRad = -80f * MathF.PI / 180f,
             Damage = 100, EdgeDamage = 30, FullDamageRadius = 3, SplashRadius = 12, SelfDamageMultiplier = 0.5f, KnockbackSpeed = 6,
         };
         var w = new FakeWorld(NewManager());
         // starts on the shallowest dive: the missile never flies level, so the tests fly the dive
-        return (new AttackMissileEntity(Owner, t, w, Vector3.Zero, 0f, t.ShallowPitchRad), w);
+        return (new AttackMissileEntity(Owner, t, w, Vector3.Zero, 0f, FixtureShallowRad), w);
     }
 
     // ---- killstreaks.json: the missile block ------------------------------------------------------------------------
@@ -74,7 +77,7 @@ public class AttackMissileTests
         Assert.Equal(60f, t.LifeSeconds); // a safety cap only
         Assert.Equal(450f, t.SpawnHeight);
         Assert.Equal(-45f * MathF.PI / 180f, t.SpawnPitchRad, 1e-4f);
-        Assert.Equal(-10f * MathF.PI / 180f, t.ShallowPitchRad, 1e-4f);
+        Assert.Equal(-32f * MathF.PI / 180f, t.ShallowPitchRad, 1e-4f);
         Assert.Equal(-80f * MathF.PI / 180f, t.SteepPitchRad, 1e-4f);
         Assert.Equal(12f, t.SplashRadius);
         Assert.True(t.SplashRadius > Shipped.Weapons.Find("bazooka")!.Splash!.Radius);
@@ -198,7 +201,7 @@ public class AttackMissileTests
         var (m, _) = Flying();
         m.Aim(0, 0.5f); // aiming up
         for (var i = 0; i < 60; i++) m.Tick(0.1f);
-        Assert.Equal(Tuning.ShallowPitchRad, m.Pitch, 1e-4f); // the shallowest dive, not level
+        Assert.Equal(FixtureShallowRad, m.Pitch, 1e-4f); // the shallowest dive, not level
         Assert.True(m.Pitch < 0);
     }
 
@@ -218,7 +221,7 @@ public class AttackMissileTests
         var (m, _) = Flying(turnDeg: 60); // starts on the shallowest dive, -10 deg
         m.Aim(0, -MathF.PI / 4);
         m.Tick(0.1f);
-        Assert.Equal(Tuning.ShallowPitchRad - 6f * MathF.PI / 180f, m.Pitch, 1e-3f);
+        Assert.Equal(FixtureShallowRad - 6f * MathF.PI / 180f, m.Pitch, 1e-3f);
     }
 
     [Fact]
@@ -249,7 +252,7 @@ public class AttackMissileTests
     {
         var shallow = TimeToGround(Tuning.ShallowPitchRad);
         var steep = TimeToGround(Tuning.SteepPitchRad);
-        Assert.True(shallow > steep * 4, $"shallow {shallow} s vs steep {steep} s");
+        Assert.True(shallow > steep * 1.5f, $"shallow {shallow} s vs steep {steep} s"); // 13.3 s vs 7.1 s at -32 and -80
     }
 
     [Fact]
@@ -260,7 +263,7 @@ public class AttackMissileTests
         var expectSteep = Tuning.SpawnHeight / (Tuning.SpeedMps * MathF.Sin(-Tuning.SteepPitchRad));
         Assert.InRange(TimeToGround(Tuning.ShallowPitchRad), expectShallow * 0.99f, expectShallow * 1.01f);
         Assert.InRange(TimeToGround(Tuning.SteepPitchRad), expectSteep * 0.99f, expectSteep * 1.01f);
-        Assert.InRange(TimeToGround(Tuning.SpawnPitchRad), 9f, 11f); // the launch dive is about 10 s
+        Assert.InRange(TimeToGround(Tuning.SpawnPitchRad), 9f, 11f); // the launch dive at -45 deg is about 9.9 s
         Assert.True(expectSteep > 0 && expectShallow < Tuning.LifeSeconds, "the safety cap never cuts a flight short");
     }
 
@@ -285,7 +288,7 @@ public class AttackMissileTests
         var (m, _) = Flying();
         m.Tick(1f);
         // yaw 0 faces -Z; the pitch is the shallow dive, so 45 m along it
-        var dir = HitMath.Forward(0, Tuning.ShallowPitchRad);
+        var dir = HitMath.Forward(0, FixtureShallowRad);
         Assert.Equal(45f * dir.X, m.Position.X, 1e-3f);
         Assert.Equal(45f * dir.Y, m.Position.Y, 1e-3f);
         Assert.Equal(45f * dir.Z, m.Position.Z, 1e-3f);
@@ -324,7 +327,7 @@ public class AttackMissileTests
     public void ItDetonatesOnAPlayerAndNamesThemAsTheVictim()
     {
         var (m, w) = Flying();
-        var ahead = HitMath.Forward(0, Tuning.ShallowPitchRad) * 10f; // 10 m along the dive
+        var ahead = HitMath.Forward(0, FixtureShallowRad) * 10f; // 10 m along the dive
         w.Players.Add(new HitTarget(5, ahead, Stance.Stand, 0));
         m.Tick(0.5f); // 22.5 m: the player is 10 m away
         Assert.Equal(WorldDespawnReason.Destroyed, m.Ended);

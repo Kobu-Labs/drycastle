@@ -137,13 +137,22 @@ not a streak weapon, so its kills do count (correction on #133).
 | Streak | Kills | Unlock | Duration | Control | Notes |
 |---|---|---|---|---|---|
 | UAV | 4 | 0 | 60 s | none | enemy pings every second to the owner; no visible UAV model |
-| Attack Missile | 5 | 4 | dives to the ground (about 7-40 s, #155) | POV | steered missile from 450 m, dive limited to -10 to -80 deg, infrared view, 100 dmg, splash 12 m |
+| Attack Missile | 5 | 4 | dives to the ground (about 7-13 s, #155) | POV | steered missile from 450 m, dive limited to -32 to -80 deg, infrared view, 100 dmg, splash 12 m |
 | Sentry Turret | 6 | 5 | 15 s | none | placed on the ground, 500 hp, 12 dmg per shot |
 | Care Package | 6 | 6 | instant | none | drop lands, hold E 2 s opens it (crate gone), grants a random killstreak (weighted, section 3) |
 | Attack Helicopter | 10 | 9 | 45 s | POV | owner flies the helicopter (POV) for 45 s |
 | Helicopter Helper | 15 | 11 | 60 s | none | AI helicopter, bursts at enemies with a red-dot warning |
 | AC-130 | 18 | 14 | 40 s | POV | circling gunship, 25 mm / 40 mm / 105 mm |
 | MOAB | 24 | 20 | 5 s countdown | none | 5 s countdown, then a blast that kills everyone in range |
+
+Attack missile time to ground (450 m spawn, 64 m/s, flat ground, no steering = 450 / (64 x sin(pitch))):
+
+| Dive pitch | Time to ground |
+|---|---|
+| -10 deg (old shallowest, retired) | 40.5 s |
+| -32 deg (shallowest, shipped) | 13.3 s |
+| -45 deg (launch dive) | 9.9 s |
+| -80 deg (steepest) | 7.1 s |
 
 Shared aircraft code: `Aircraft` (circling path, replication, shared gunship control, #125).
 
