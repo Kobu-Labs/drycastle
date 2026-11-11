@@ -122,6 +122,8 @@ public partial class NetServer : Node
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");
         _match.Entities.Spawned += w => BroadcastEvent(EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State));
         _match.Entities.Despawned += w => BroadcastEvent(EventKind.WorldDespawn, WorldCodec.EncodeDespawn(w.Id, w.Reason));
+        CorpseRules.Register(WorldEntityRegistry.Shared);
+        _corpses = new CorpseBook(_match.Entities);
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");
@@ -290,6 +292,7 @@ public partial class NetServer : Node
             var m = Wire.DecodeReliable(d);
             if (m is HelloMsg h && c.Id == 0) OnHello(c, h);
             else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || ArenaMode)) OnDebug(c, e.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpse } pu) OnPickUpCorpse(c, pu.Payload);
             else if (c.Joined) OnProfileMessage(c, m);
         }
         else if (c.Joined && d[0] == Wire.TInput)
@@ -439,7 +442,7 @@ public partial class NetServer : Node
                 AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause), _elapsed));
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon, k.Cause)));
                 break;
-            case PlayerDied d: LossDeath(d.Victim); RecordDeath(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
+            case PlayerDied d: LossDeath(d.Victim); RecordDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
         }
     }
 

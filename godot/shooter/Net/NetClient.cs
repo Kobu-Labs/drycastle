@@ -95,6 +95,7 @@ public partial class NetClient : Node
     public override void _Ready()
     {
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
+        InitCorpses();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
         _peer = _conn.ConnectToHost(Host, Port, Wire.Channels, 0);
@@ -167,6 +168,7 @@ public partial class NetClient : Node
             return;
         }
         RenderRemotes();
+        RenderCorpses();
         RenderCars();
         RenderRockets();
         RenderWater();
@@ -430,7 +432,7 @@ public partial class NetClient : Node
             mi = new MoveInput { MoveY = 1, Yaw = yaw, Buttons = jump, SpeedScale = 1 };
         }
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
-        if (!Bot) { ReadSlotKeys(); ApplyScope(); }
+        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickCorpses(dt); }
         FxDemoInput(ref mi);
         TickRecoil(mi);
         TickBreath(mi);
@@ -616,14 +618,14 @@ public partial class NetClient : Node
 
     void ReadSlotKeys()
     {
-        if (Dead || Input.MouseMode != Input.MouseModeEnum.Captured) return;
+        if (Dead || Input.MouseMode != Input.MouseModeEnum.Captured || ChooserOpen) return;
         for (var k = 0; k < Math.Min(5, _hotbar.Length); k++)
             if (Input.IsActionPressed($"slot_{k + 1}")) _wantSlot = _hotbar[k] + 1;
     }
 
     public override void _UnhandledInput(InputEvent e)
     {
-        if (Bot || Weapons == null || Dead || Input.MouseMode != Input.MouseModeEnum.Captured) return;
+        if (Bot || Weapons == null || Dead || ChooserOpen || Input.MouseMode != Input.MouseModeEnum.Captured) return;
         if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {
             _wantSlot = CycleSlot(_wantSlot, b.ButtonIndex == MouseButton.WheelDown ? 1 : -1);

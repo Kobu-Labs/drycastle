@@ -46,6 +46,30 @@ public sealed class PlayerWeapons
         Reset(0);
     }
 
+    /// <summary>Number of hotbar positions (primary, secondary, knife).</summary>
+    public int HotbarCount => _hotbar.Length;
+    /// <summary>The weapons.json index on a 0-based hotbar position.</summary>
+    public int HotbarWeapon(int pos) => _hotbar[pos];
+    public bool HotbarHolds(int weapon) => Array.IndexOf(_hotbar, weapon) >= 0;
+    /// <summary>Magazine plus reserve of a weapons.json index.</summary>
+    public int RoundsOf(int weapon) => _mag[weapon] + _reserve[weapon];
+
+    /// <summary>
+    /// Puts <paramref name="weapon"/> on a 0-based hotbar position with a fresh magazine and half its reserve (corpse pickup).
+    /// Returns the weapon it replaced and that weapon's rounds (magazine plus reserve). A replaced selected weapon hands the
+    /// selection to the new one and cancels a reload.
+    /// </summary>
+    public void ReplaceHotbar(int pos, int weapon, out int replaced, out int rounds)
+    {
+        replaced = _hotbar[pos];
+        rounds = RoundsOf(replaced);
+        _hotbar[pos] = weapon;
+        _mag[weapon] = _file.Weapons[weapon].MagazineSize;
+        _reserve[weapon] = _file.Weapons[weapon].ReserveAmmo / 2;
+        if (Slot == replaced + 1) { Slot = weapon + 1; Reloading = false; _prevFire = false; }
+        Changed = true;
+    }
+
     /// <summary>Number of weapons in weapons.json (the ammo list on the wire has one entry per weapon).</summary>
     public int WeaponCount => _file.Weapons.Count;
     /// <summary>The hotbar weapons in hotbar order (the key order: 1, 2, 3 ...).</summary>

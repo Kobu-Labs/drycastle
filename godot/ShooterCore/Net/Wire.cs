@@ -32,6 +32,10 @@ public enum EventKind : byte
     LevelUp = 15,
     /// <summary>Server to one player at the end of a round: XP earned in it, with the reasons (<see cref="ProgressionEvents"/>).</summary>
     XpSummary = 16,
+    /// <summary>Client to server: take a corpse's weapon into a hotbar position (<see cref="CorpseCodec"/>).</summary>
+    PickUpCorpse = 17,
+    /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
+    Hotbar = 18,
 }
 
 public abstract record ReliableMsg;

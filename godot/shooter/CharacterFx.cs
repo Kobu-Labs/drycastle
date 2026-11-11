@@ -80,6 +80,13 @@ public sealed partial class CharacterView : Node3D
         if (_anim != null) _anim.SpeedScale = swimming ? 0.5f : 1f;
     }
 
+    /// <summary>A corpse (ticket #130): the death pose with the weapon it carries in the hand. <see cref="Apply"/> hides weapons while dead, so corpses use this.</summary>
+    public void ShowCorpse(string weaponId)
+    {
+        SetWeapon(weaponId);
+        Play("Defeat");
+    }
+
     /// <summary>Update from snapshot state: horizontal speed (m/s), whether it fired in the last moments, dead, and the weapon id it holds.</summary>
     public void Apply(float speed, bool firing, bool dead, string weaponId)
     {
