@@ -210,6 +210,8 @@ SHOOTER_TEMPLATES = $(HOME)/.local/share/godot/export_templates/4.7.2.stable.mon
 
 shooter-export-check:
 	@test -f godot/shooter/export_presets.cfg || { echo "missing godot/shooter/export_presets.cfg"; exit 1; }
+	@grep -q 'include_filter="data/\*.json"' godot/shooter/export_presets.cfg || { echo "export_presets.cfg does not pack data/*.json (#133)"; exit 1; }
+	@for f in weapons match vehicles sounds perks levels killstreaks turret environment camo; do test -f godot/shooter/data/$$f.json || { echo "missing godot/shooter/data/$$f.json"; exit 1; }; done
 	@echo "$$(grep -c '^name=' godot/shooter/export_presets.cfg) export presets found"
 	@if [ -d "$(SHOOTER_TEMPLATES)" ] && [ -n "$$(ls -A $(SHOOTER_TEMPLATES) 2>/dev/null)" ]; then echo "export templates: OK ($(SHOOTER_TEMPLATES))"; \
 	else echo "export templates: MISSING at $(SHOOTER_TEMPLATES) (install the 4.7.2 mono templates: Editor > Manage Export Templates)"; exit 1; fi

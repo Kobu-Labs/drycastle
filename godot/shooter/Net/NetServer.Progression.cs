@@ -19,7 +19,9 @@ public partial class NetServer
         var p = c.Profile!;
         var l = p.Loadouts[p.Active];
         c.Perks = PerkModifiers.Of(Perks.Find(l.Perk));
-        c.W = new PlayerWeapons(Weapons, c.Perks, LoadoutHotbar.Build(Weapons, l));
+        // Dev servers (smoke arenas, --debug-cmds) keep every weapon on the hotbar: the scripted bots and --fx-demo pick
+        // by weapons.json slot, e.g. the bazooka at slot 3 (#133). A public server (no debug commands) gets the loadout hotbar.
+        c.W = new PlayerWeapons(Weapons, c.Perks, ArenaMode || DebugCommands ? LoadoutHotbar.All(Weapons) : LoadoutHotbar.Build(Weapons, l));
         StreakArm(c, l);
     }
 

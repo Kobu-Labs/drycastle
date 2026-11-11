@@ -117,8 +117,8 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 /// </summary>
 public static class Wire
 {
-    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock).</summary>
-    public const byte ProtocolVersion = 5;
+    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them).</summary>
+    public const byte ProtocolVersion = 6;
     public const byte TickRate = 30;
     public const int ChanReliable = 0, ChanData = 1, Channels = 2;
     public const int KeyEvery = 30;
