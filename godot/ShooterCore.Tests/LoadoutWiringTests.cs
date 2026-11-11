@@ -86,14 +86,16 @@ public class LoadoutWiringTests
         var kit = LoadoutRules.DefaultLoadout(0, Shipped.Weapons, Shipped.Perks);
         Assert.Equal("fleet_foot", kit.Perk);
         Assert.Equal("uav", kit.Streak1);
-        Assert.Null(LoadoutRules.ValidateLoadout(kit, Shipped.Weapons, 1, Array.Empty<Unlock>(), levels, KillstreakIds.Placeholder));
+        Assert.Null(LoadoutRules.ValidateLoadout(kit, Shipped.Weapons, 1, Array.Empty<Unlock>(), levels, Shipped.Killstreaks.UnlockLevels));
     }
 
     [Fact]
     public void ShippedStreakTableIsTheMapsKillstreakList()
     {
-        Assert.Equal(new[] { "uav", "attack_missile", "turret", "care_package", "attack_helicopter", "helicopter_helper", "ac130", "moab" },
-            KillstreakIds.Placeholder.Keys);
+        // ids and kill thresholds from mods/shooter/v2/killstreaks.md
+        var table = Shipped.Killstreaks.Streaks.Select(s => (s.Id, s.KillsRequired)).ToList();
+        Assert.Equal(new[] { ("uav", 4), ("attack_missile", 5), ("turret", 6), ("care_package", 6), ("attack_helicopter", 10),
+            ("helicopter_helper", 15), ("ac130", 18), ("moab", 24) }, table);
     }
 
     // ---- XP event payloads ------------------------------------------------------------------------------------------

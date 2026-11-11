@@ -8,6 +8,10 @@ public class ProfileHandshakeTests
 {
     static Loadout Full(int slot = 2) => new(slot, "ak47", "pistol", "", "", "", "");
 
+    /// <summary>Streak id to unlock level, from the shipped killstreaks.json.</summary>
+    static IReadOnlyDictionary<string, int> ShippedStreaks =>
+        KillstreakFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "killstreaks.json")).UnlockLevels;
+
     static WeaponsFile Weapons() => WeaponsFile.Parse(
         "{\"version\":2,\"starting_weapon\":\"pistol\",\"category_defaults\":{},\"weapons\":[" +
         "{\"id\":\"pistol\",\"category\":\"pistol\",\"slot\":\"secondary\",\"kind\":\"hitscan\",\"damage\":10}," +
@@ -151,7 +155,7 @@ public class ProfileHandshakeTests
         Assert.Equal("pistol", d.SecondaryWeapon);
         Assert.Equal("fleet_foot", d.Perk); // the first perk open at level 0
         Assert.Equal(KillstreakIds.StarterStreak, d.Streak1);
-        Assert.Null(LoadoutRules.ValidateLoadout(d, w, 1, Array.Empty<Unlock>(), LevelsOf(perks), KillstreakIds.Placeholder));
+        Assert.Null(LoadoutRules.ValidateLoadout(d, w, 1, Array.Empty<Unlock>(), LevelsOf(perks), ShippedStreaks));
     }
 
     [Fact]
@@ -170,7 +174,7 @@ public class ProfileHandshakeTests
     {
         var w = Weapons();
         var twice = new Loadout(0, "ak47", "pistol", "", "uav", "", "uav");
-        Assert.Contains("\"uav\" is selected more than once", LoadoutRules.ValidateLoadout(twice, w, 1, Array.Empty<Unlock>(), Empty(), KillstreakIds.Placeholder));
+        Assert.Contains("\"uav\" is selected more than once", LoadoutRules.ValidateLoadout(twice, w, 1, Array.Empty<Unlock>(), Empty(), ShippedStreaks));
         var locked = new Dictionary<string, int> { ["uav"] = 4 };
         var streak = new Loadout(0, "ak47", "pistol", "", "uav", "", "");
         Assert.Equal("uav unlocks at level 4", LoadoutRules.ValidateLoadout(streak, w, 3, Array.Empty<Unlock>(), Empty(), locked));

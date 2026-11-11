@@ -41,6 +41,13 @@
     { "level": 12, "kind": "perk", "id": "hot_streak" },
     { "level": 14, "kind": "weapon", "id": "aa12" },
     { "level": 15, "kind": "perk", "id": "steady_lung" },
-    { "level": 20, "kind": "perk", "id": "ghost" }
+    { "level": 20, "kind": "perk", "id": "ghost" },
+    { "level": 4, "kind": "streak", "id": "attack_missile" },
+    { "level": 5, "kind": "streak", "id": "turret" },
+    { "level": 6, "kind": "streak", "id": "care_package" },
+    { "level": 9, "kind": "streak", "id": "attack_helicopter" },
+    { "level": 11, "kind": "streak", "id": "helicopter_helper" },
+    { "level": 14, "kind": "streak", "id": "ac130" },
+    { "level": 20, "kind": "streak", "id": "moab" }
   ]
 }

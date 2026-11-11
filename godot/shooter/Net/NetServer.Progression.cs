@@ -20,10 +20,12 @@ public partial class NetServer
         var l = p.Loadouts[p.Active];
         c.Perks = PerkModifiers.Of(Perks.Find(l.Perk));
         c.W = new PlayerWeapons(Weapons, c.Perks, LoadoutHotbar.Build(Weapons, l));
+        StreakArm(c, l);
     }
 
     void RoundStarted()
     {
+        StreakRoundReset();
         _xp.Reset();
         foreach (var c in _clients.Values) c.RoundXp.Clear();
     }
@@ -31,6 +33,7 @@ public partial class NetServer
     /// <summary>End of round: the win and top-three awards, one match counted per joined player, and each player's XP summary.</summary>
     void RoundEnded()
     {
+        StreakRoundReset();
         AwardXp(_xp.OnMatchEnd(_match.Winners, _match.Ranking().Select(p => p.Id).ToList()));
         foreach (var c in _clients.Values.Where(c => c.Joined))
         {

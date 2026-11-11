@@ -41,7 +41,7 @@ public partial class NetServer : Node
         public ServerCar? Car;
         /// <summary>Seat of <see cref="Car"/> this player sits in (0 = driver).</summary>
         public int CarSeat;
-        public bool UseHeld, LightsHeld, Handbrake;
+        public bool UseHeld, LightsHeld, Handbrake, StreakHeld;
         public float Throttle, Steer;
         public PlayerProfile? Profile;
         public ProfileLoad? Loading;
@@ -117,6 +117,7 @@ public partial class NetServer : Node
         }
         if (ArenaMode) BuildArena();
         _xp = new MatchXp(Levels.Awards);
+        BuildStreaks();
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");
@@ -149,6 +150,7 @@ public partial class NetServer : Node
         CompleteProfileLoads();
         _match.Update();
         _match.Entities.Tick((float)delta);
+        StreakTick();
         foreach (var c in _clients.Values.ToList()) if (c.Joined) SimulateClient(c, (float)delta);
         StepRockets((float)delta);
         StepVehicles((float)delta);
@@ -351,6 +353,7 @@ public partial class NetServer : Node
     {
         if (!_clients.Remove(peer, out var c)) return;
         if (!c.Joined) return;
+        StreakLeave(c.Id);
         if (c.Car != null) { c.Car.Seat.Exit(c.Id); c.Car = null; }
         c.Body.QueueFree();
         _byId.Remove(c.Id);
@@ -436,10 +439,11 @@ public partial class NetServer : Node
                 if (BazookaSmoke && _kills >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.5;
                 LossKill(k.Killer, k.Victim);
                 RecordKill(k);
-                AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause), _elapsed));
+                var fromStreak = StreakKill(k);
+                AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause, fromStreak), _elapsed));
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon, k.Cause)));
                 break;
-            case PlayerDied d: LossDeath(d.Victim); RecordDeath(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
+            case PlayerDied d: LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
         }
     }
 
@@ -464,7 +468,11 @@ public partial class NetServer : Node
             var useEdge = useDown && !c.UseHeld;
             c.UseHeld = useDown;
             var lightsEdge = Headlights.Edge((i.Buttons & (ushort)MoveButtons.Headlights) != 0, ref c.LightsHeld);
+            var streakDown = (i.Buttons & (ushort)MoveButtons.Killstreak) != 0;
+            var streakEdge = streakDown && !c.StreakHeld;
+            c.StreakHeld = streakDown;
             if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
+            if (streakEdge) StreakActivate(c);
             if (c.Car != null)
             {
                 // driving: the car is simulated in StepVehicles from the driver's inputs; no walking or weapon timers.

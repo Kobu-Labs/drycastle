@@ -59,6 +59,8 @@ public enum MoveButtons
     Headlights = 256,
     /// <summary>Prone key: a press (rising edge) toggles the prone latch.</summary>
     Prone = 512,
+    /// <summary>Killstreak key (Q by default), held: the server uses the next held streak on its press edge.</summary>
+    Killstreak = 1024,
 }
 
 /// <summary>One tick of player input: movement axes (x = strafe right, y = forward, each -1..1), look yaw in radians, buttons.</summary>
