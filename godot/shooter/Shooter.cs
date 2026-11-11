@@ -28,6 +28,9 @@ namespace Suchohrad.Shooter;
 ///   --smoke-move              client only: scripted movement check on the map collision (SHOOTER_SMOKE_MOVE_OK, exit 0; else exit 2)
 ///   --smoke                   load everything, print SHOOTER_SMOKE_OK and exit 0 (exit 2 on failure)
 ///   --db PATH                 server: SQLite progression database (default ./shooter.db); created and migrated at start (ADR 0003)
+///   --time HH:MM              server: start time of day (overrides environment.json start_time)
+///   --day-length MIN          server: real minutes for one 24 hour day (overrides environment.json day_length_minutes)
+///   --freeze-time             server: hold the clock at its start time (or --time)
 /// No gameplay yet: this only boots the role on the loaded map.
 /// </summary>
 public partial class Shooter : Node3D
@@ -207,7 +210,7 @@ public partial class Shooter : Node3D
         static string Read(string f) =>
             Godot.FileAccess.Open($"res://data/{f}", Godot.FileAccess.ModeFlags.Read)?.GetAsText()
             ?? throw new DataFileException($"{f}: cannot open ({Godot.FileAccess.GetOpenError()})");
-        return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"));
+        return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("environment.json"));
     }
 
     void LoadMap(Config cfg)
@@ -243,6 +246,7 @@ public partial class Shooter : Node3D
             CarSmoke = cfg.Flag("car-smoke"), BlastSmoke = cfg.Flag("blast-smoke"), SmokeKind = cfg.Str("car-kind", "car"),
             Weapons = _data.Weapons, WeaponsSmoke = cfg.Flag("weapons-smoke"), BazookaSmoke = cfg.Flag("bazooka-smoke"),
             MatchSmoke = cfg.Flag("match-smoke"), DebugCommands = cfg.Flag("debug-cmds") || cfg.Flag("match-smoke"),
+            Clock = ServerClock(cfg),
             Port = int.TryParse(cfg.Str("port", "27015"), out var port) ? port : 27015,
             QuitAfter = double.TryParse(cfg.Str("quit-after", "0"), out var q) ? q : 0,
             Sim = NetSim.Parse(cfg.Str("net-sim")),
@@ -253,6 +257,20 @@ public partial class Shooter : Node3D
         if (server.Sim != null) GD.Print($"server: net-sim {server.Sim}");
         if (server.LossTest > 0 || server.Sim != null) Engine.MaxFps = 200; // delayed packets are released at frame rate
         AddChild(server);
+    }
+
+    /// <summary>The server's day/night clock: environment.json, then --time, --day-length and --freeze-time.</summary>
+    DayClock ServerClock(Config cfg)
+    {
+        var time = cfg.Str("time");
+        var dayLength = cfg.Str("day-length");
+        double? minutes = null;
+        if (dayLength != "")
+        {
+            if (!double.TryParse(dayLength, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var m)) throw new InvalidOperationException($"bad --day-length {dayLength}");
+            minutes = m;
+        }
+        return _data.Environment.ToClock(time == "" ? null : time, minutes, cfg.Flag("freeze-time"));
     }
 
     static VehiclesFile ApplyVehicleOverrides(VehiclesFile v, string spec)
@@ -314,35 +332,14 @@ public partial class Shooter : Node3D
         });
     }
 
-    void AddLightAndSky()
-    {
-        AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-55, 30, 0), ShadowEnabled = true });
-        var sky = new ProceduralSkyMaterial();
-        AddChild(new WorldEnvironment
-        {
-            Environment = new Godot.Environment
-            {
-                BackgroundMode = Godot.Environment.BGMode.Sky,
-                Sky = new Sky { SkyMaterial = sky },
-                AmbientLightSource = Godot.Environment.AmbientSource.Sky,
-            },
-        });
-    }
+    /// <summary>Sun, moon, sky and fog for the world (the day/night cycle; the server clock drives it when networked).</summary>
+    void AddLightAndSky() =>
+        AddChild(new DayNightCycle { LocalClock = _data.Environment.ToClock(), MinAmbient = _data.Environment.MinAmbient });
 
     /// <summary>Client view: light, sky and the first-person player at a random spawn point.</summary>
     void BuildClientView()
     {
-        AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-55, 30, 0), ShadowEnabled = true });
-        var sky = new ProceduralSkyMaterial();
-        AddChild(new WorldEnvironment
-        {
-            Environment = new Godot.Environment
-            {
-                BackgroundMode = Godot.Environment.BGMode.Sky,
-                Sky = new Sky { SkyMaterial = sky },
-                AmbientLightSource = Godot.Environment.AmbientSource.Sky,
-            },
-        });
+        AddLightAndSky();
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var player = new Player { Name = "Player", KillY = killY, PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
         AddChild(player);

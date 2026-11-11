@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "start_time": "08:00",
+  "day_length_minutes": 24,
+  "min_ambient": 0.35
+}

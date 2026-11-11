@@ -18,6 +18,8 @@ public sealed class GameSettings
     public bool Fullscreen;
     public bool VSync = true;
     public int Msaa = 2; // index into MsaaNames: 0 off, 1 2x, 2 4x, 3 8x
+    /// <summary>Display brightness: exposure multiplier on the day/night lighting (1 = as designed).</summary>
+    public float Brightness = 1f;
     // audio (0..1 per bus, same order as Buses)
     public float[] Volume = { 0.8f, 0.7f, 0.8f, 0.8f };
     // gameplay
@@ -48,7 +50,7 @@ public sealed class GameSettings
     }
 
     public bool SameAs(GameSettings o) =>
-        Fullscreen == o.Fullscreen && VSync == o.VSync && Msaa == o.Msaa && Volume.SequenceEqual(o.Volume)
+        Fullscreen == o.Fullscreen && VSync == o.VSync && Msaa == o.Msaa && Brightness == o.Brightness && Volume.SequenceEqual(o.Volume)
         && Sensitivity == o.Sensitivity && InvertY == o.InvertY && Fov == o.Fov && ShowCrosshair == o.ShowCrosshair
         && UiScale == o.UiScale && ReduceMotion == o.ReduceMotion && ColorBlind == o.ColorBlind && Keys.SameAs(o.Keys);
 
@@ -61,6 +63,7 @@ public sealed class GameSettings
             s.Fullscreen = (bool)cf.GetValue("graphics", "fullscreen", false);
             s.VSync = (bool)cf.GetValue("graphics", "vsync", true);
             s.Msaa = Math.Clamp((int)cf.GetValue("graphics", "msaa", 2), 0, MsaaNames.Length - 1);
+            s.Brightness = SettingsRanges.ClampBrightness((float)(double)cf.GetValue("graphics", "brightness", 1.0));
             for (var i = 0; i < Buses.Length; i++)
                 s.Volume[i] = SettingsRanges.ClampVolume((float)(double)cf.GetValue("audio", Buses[i].ToLowerInvariant(), (double)s.Volume[i]));
             s.Sensitivity = SettingsRanges.ClampSens((float)(double)cf.GetValue("gameplay", "sensitivity", 1.0));
@@ -82,6 +85,7 @@ public sealed class GameSettings
         cf.SetValue("graphics", "fullscreen", Fullscreen);
         cf.SetValue("graphics", "vsync", VSync);
         cf.SetValue("graphics", "msaa", Msaa);
+        cf.SetValue("graphics", "brightness", (double)SettingsRanges.ClampBrightness(Brightness));
         for (var i = 0; i < Buses.Length; i++) cf.SetValue("audio", Buses[i].ToLowerInvariant(), (double)Volume[i]);
         cf.SetValue("gameplay", "sensitivity", (double)SettingsRanges.ClampSens(Sensitivity));
         cf.SetValue("gameplay", "invert_y", InvertY);
@@ -98,6 +102,7 @@ public sealed class GameSettings
     public static void Apply(GameSettings s, bool notify = true)
     {
         s.UiScale = HudLogic.ClampUiScale(s.UiScale);
+        s.Brightness = SettingsRanges.ClampBrightness(s.Brightness);
         s.Sensitivity = SettingsRanges.ClampSens(s.Sensitivity);
         s.Fov = SettingsRanges.ClampFov(s.Fov);
         _cur = s;

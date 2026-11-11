@@ -7,14 +7,17 @@ public class GameData
     public required MatchConfig Match { get; init; }
     public required VehiclesFile Vehicles { get; init; }
     public required PerksFile Perks { get; init; }
+    /// <summary>environment.json (day/night clock). Defaults when the file is absent from the parse call.</summary>
+    public EnvironmentConfig Environment { get; init; } = new();
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson) => new()
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string environmentJson = "") => new()
     {
         Weapons = WeaponsFile.Parse(weaponsJson),
         Match = DataFile.Parse<MatchConfig>(matchJson, "match.json"),
         Vehicles = VehiclesFile.Validate(DataFile.Parse<VehiclesFile>(vehiclesJson, "vehicles.json")),
         Perks = PerksFile.Parse(perksJson),
+        Environment = environmentJson == "" ? new() : EnvironmentConfig.Parse(environmentJson),
     };
 
     public static GameData Load(string dir) => new()

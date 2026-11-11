@@ -60,7 +60,7 @@ public static class Strings
         ("settings.unsaved.title", "Unsaved changes"), ("settings.unsaved.body", "You changed settings that are not saved yet. Apply keeps them; Discard goes back to the saved settings."), ("settings.discard", "Discard"),
         ("state.on", "On"), ("state.off", "Off"),
         ("fmt.percent", "{0}%"), ("fmt.times", "{0:0.00}x"), ("fmt.degrees", "{0} deg"),
-        ("graphics.fullscreen", "Fullscreen"), ("graphics.vsync", "Vertical sync"), ("graphics.msaa", "Anti-aliasing (MSAA)"),
+        ("graphics.fullscreen", "Fullscreen"), ("graphics.vsync", "Vertical sync"), ("graphics.msaa", "Anti-aliasing (MSAA)"), ("graphics.brightness", "Brightness"),
         ("display.title", "Keep these display settings?"), ("display.body", "The display changed. Reverting automatically in {0} s."), ("display.keep", "Keep"), ("display.revert", "Revert"),
         ("audio.master", "Master volume"), ("audio.music", "Music volume"), ("audio.sfx", "Effects volume"), ("audio.ui", "Interface volume"),
         ("audio.help", "The game has no sound assets yet; the buses and volumes are ready for them."),

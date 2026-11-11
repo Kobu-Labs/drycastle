@@ -144,4 +144,6 @@ public static class SettingsRanges
     public static float ClampSens(float v) => Math.Clamp(v, SensMin, SensMax);
     public static float ClampFov(float v) => Math.Clamp(v, FovMin, FovMax);
     public static float ClampVolume(float v) => Math.Clamp(v, 0f, 1f);
+    public const float BrightnessMin = 0.5f, BrightnessMax = 1.5f;
+    public static float ClampBrightness(float v) => Math.Clamp(v, BrightnessMin, BrightnessMax);
 }

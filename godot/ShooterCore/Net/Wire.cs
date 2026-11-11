@@ -28,7 +28,8 @@ public abstract record ReliableMsg;
 /// <summary>Client to server, first message after connecting. Token is the client-generated player token (ADR 0003); empty = guest.</summary>
 public sealed record HelloMsg(byte Version, string Name, string Token = "") : ReliableMsg;
 /// <summary>Server to client, tells the client which entity id it is and the tick rate.</summary>
-public sealed record WelcomeMsg(byte Version, ushort PlayerId, byte TickRate, uint ServerTick) : ReliableMsg;
+/// <summary>Server to the joining client. The last three fields are the server's day/night clock (<see cref="DayClock"/>): start minute, day length in ms, frozen.</summary>
+public sealed record WelcomeMsg(byte Version, ushort PlayerId, byte TickRate, uint ServerTick, ushort StartMinute = 0, uint DayLengthMs = 0, bool Frozen = false) : ReliableMsg;
 public sealed record JoinMsg(ushort PlayerId, string Name) : ReliableMsg;
 public sealed record LeaveMsg(ushort PlayerId) : ReliableMsg;
 /// <summary>Event envelope: a type byte plus an opaque payload decoded by the owner of that kind.</summary>
@@ -50,7 +51,7 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 ///
 /// ch0 messages: u8 type, then
 ///   Hello(1):   u8 version, u8 nameLen, name utf8, u8 tokenLen, token utf8
-///   Welcome(2): u8 version, u16 playerId, u8 tickRate, u32 serverTick
+///   Welcome(2): u8 version, u16 playerId, u8 tickRate, u32 serverTick, u16 startMinute, u32 dayLengthMs, u8 frozen
 ///   Join(3):    u16 playerId, u8 nameLen, name utf8
 ///   Leave(4):   u16 playerId
 ///   Event(5):   u8 kind, u16 len, payload
@@ -72,8 +73,8 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 /// </summary>
 public static class Wire
 {
-    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages).</summary>
-    public const byte ProtocolVersion = 2;
+    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock).</summary>
+    public const byte ProtocolVersion = 3;
     public const byte TickRate = 30;
     public const int ChanReliable = 0, ChanData = 1, Channels = 2;
     public const int KeyEvery = 30;
@@ -149,6 +150,9 @@ public static class Wire
                 BinaryPrimitives.WriteUInt16LittleEndian(t, w.PlayerId); o.AddRange(t[..2].ToArray());
                 o.Add(w.TickRate);
                 BinaryPrimitives.WriteUInt32LittleEndian(t, w.ServerTick); o.AddRange(t.ToArray());
+                BinaryPrimitives.WriteUInt16LittleEndian(t, w.StartMinute); o.AddRange(t[..2].ToArray());
+                BinaryPrimitives.WriteUInt32LittleEndian(t, w.DayLengthMs); o.AddRange(t.ToArray());
+                o.Add(w.Frozen ? (byte)1 : (byte)0);
                 break;
             case JoinMsg j:
                 o.Add(TJoin);
@@ -202,7 +206,8 @@ public static class Wire
                     return new HelloMsg(d[1], name, token);
                 }
                 case TWelcome:
-                    return new WelcomeMsg(d[1], BinaryPrimitives.ReadUInt16LittleEndian(d[2..]), d[4], BinaryPrimitives.ReadUInt32LittleEndian(d[5..]));
+                    return new WelcomeMsg(d[1], BinaryPrimitives.ReadUInt16LittleEndian(d[2..]), d[4], BinaryPrimitives.ReadUInt32LittleEndian(d[5..]),
+                        BinaryPrimitives.ReadUInt16LittleEndian(d[9..]), BinaryPrimitives.ReadUInt32LittleEndian(d[11..]), d[15] != 0);
                 case TJoin:
                 {
                     int n = d[3];
