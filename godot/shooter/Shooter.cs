@@ -36,6 +36,8 @@ namespace Suchohrad.Shooter;
 public partial class Shooter : Node3D
 {
     readonly Suchohrad.MapLoader.MapLoader _map = new();
+    /// <summary>The map's water (water.json), parsed when the map loads; Water.Empty on a dry map.</summary>
+    Suchohrad.ShooterCore.Water _water = Suchohrad.ShooterCore.Water.Empty;
     Suchohrad.ShooterServer.Persistence.IProgressionStore? _progression;
     bool _smoke;
     bool _smokeMove;
@@ -159,7 +161,7 @@ public partial class Shooter : Node3D
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
-                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(), KillY = killY, Weapons = _data.Weapons, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
+                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(), KillY = killY, Water = _water, Weapons = _data.Weapons, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(null),
             };
             client.OnFailed = (why, joined) =>
@@ -220,6 +222,7 @@ public partial class Shooter : Node3D
         if (!Directory.Exists(dir)) throw new InvalidOperationException($"map folder not found: {dir} (pass --map DIR or set SUCHOHRAD_MAP)");
         AddChild(_map.Root);
         _map.Load(Path.GetFullPath(dir));
+        _water = string.IsNullOrEmpty(_map.WaterJson) ? Suchohrad.ShooterCore.Water.Empty : Suchohrad.ShooterCore.Water.Parse(_map.WaterJson);
         var s = _map.Stats;
         GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} load={s.LoadSeconds:F2}s");
     }
@@ -237,7 +240,7 @@ public partial class Shooter : Node3D
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var server = new NetServer
         {
-            World = this, KillY = killY, Progression = _progression,
+            World = this, KillY = killY, Water = _water, Progression = _progression,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             MatchConfig = ApplyOverrides(_data.Match, cfg.Str("match-set")),
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")),
@@ -341,7 +344,7 @@ public partial class Shooter : Node3D
     {
         AddLightAndSky();
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
-        var player = new Player { Name = "Player", KillY = killY, PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
+        var player = new Player { Name = "Player", KillY = killY, Water = _water, PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
         AddChild(player);
         var spawn = RandomSpawn();
         player.Teleport(spawn + Vector3.Up * 0.1f);

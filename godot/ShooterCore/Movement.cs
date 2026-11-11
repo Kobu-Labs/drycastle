@@ -67,6 +67,14 @@ public struct MoveState
     /// <summary>Highest feet height of the current airborne period.</summary>
     public float FallPeakY;
     public bool WasSprinting;
+    /// <summary>Water depth at the feet (0 when dry or the feet are above the surface); set by <see cref="Water.Sample"/>.</summary>
+    public float WaterDepth;
+    /// <summary>Surface height of the water under the feet (NaN when dry); set by <see cref="Water.Sample"/>.</summary>
+    public float WaterSurfaceY;
+    /// <summary>Eyes below the water surface; set by <see cref="Water.Sample"/>, drives breath and the weapon lock.</summary>
+    public bool HeadUnder;
+    /// <summary>Seconds of breath used since the head last surfaced (0 = full breath); see <see cref="Breath"/>.</summary>
+    public float AirSpent;
 }
 
 /// <summary>
@@ -84,6 +92,10 @@ public static class MovementStep
     public static bool CanSprint(in MoveInput i, bool crouching) =>
         i.Has(MoveButtons.Sprint) && !crouching && i.MoveY > 0.1f && !i.Has(MoveButtons.Fire) && !i.Has(MoveButtons.Aim);
 
+    /// <summary>Swimming: the feet are under the surface in water at least <see cref="WaterConsts.SwimDepth"/> deep.</summary>
+    public static bool IsSwimming(in MoveState s) =>
+        s.WaterDepth >= WaterConsts.SwimDepth && s.Position.Y < s.WaterSurfaceY;
+
     /// <summary>Damage for a fall of <paramref name="drop"/> metres: none below 4 m, linear to death at 14 m.</summary>
     public static float FallDamage(float drop)
     {
@@ -99,7 +111,11 @@ public static class MovementStep
 
         var sprint = CanSprint(i, s.Crouching);
         s.WasSprinting = sprint;
-        var speed = s.Crouching ? MoveConsts.CrouchSpeed : sprint ? MoveConsts.SprintSpeed : MoveConsts.WalkSpeed;
+        var swimming = IsSwimming(s);
+        // in deep water crouch means dive (vertical, below), not a slow crouch walk
+        var speed = swimming ? (sprint ? WaterConsts.SwimSprintSpeed : WaterConsts.SwimSpeed)
+            : s.Crouching ? MoveConsts.CrouchSpeed : sprint ? MoveConsts.SprintSpeed : MoveConsts.WalkSpeed;
+        if (!swimming && s.WaterDepth > 0f) speed *= WaterConsts.WadeSpeedScale;
         speed *= i.SpeedScale > 0f ? i.SpeedScale : 1f;
 
         var (sin, cos) = MathF.SinCos(i.Yaw);
@@ -116,12 +132,22 @@ public static class MovementStep
         h += delta;
 
         var vy = s.Velocity.Y;
-        if (s.OnFloor)
+        if (swimming)
         {
-            vy = 0;
-            if (i.Has(MoveButtons.Jump) && !s.Crouching) { vy = MoveConsts.JumpSpeed; s.OnFloor = false; }
+            // buoyant: no gravity; vertical speed eases toward the input (crouch dives, jump rises, else holds)
+            var target = s.Crouching ? -WaterConsts.SwimVerticalSpeed : i.Has(MoveButtons.Jump) ? WaterConsts.SwimVerticalSpeed : 0f;
+            var step = WaterConsts.SwimVerticalAccel * dt;
+            vy += Math.Clamp(target - vy, -step, step);
         }
-        if (!s.OnFloor) vy -= MoveConsts.Gravity * dt;
+        else
+        {
+            if (s.OnFloor)
+            {
+                vy = 0;
+                if (i.Has(MoveButtons.Jump) && !s.Crouching) { vy = MoveConsts.JumpSpeed; s.OnFloor = false; }
+            }
+            if (!s.OnFloor) vy -= MoveConsts.Gravity * dt;
+        }
 
         s.Velocity = new Vector3(h.X, vy, h.Z);
     }
@@ -131,9 +157,10 @@ public static class MovementStep
 
     /// <summary>
     /// Record the result of the physics move (final position, velocity, floor contact) and track the fall.
-    /// Returns the fall damage dealt by a landing in this tick (0 if none).
+    /// Returns the fall damage dealt by a landing in this tick (0 if none). <paramref name="landingWaterDepth"/> is
+    /// <see cref="Water.DepthAt"/> for the new position: a landing in water at least swim-deep does no damage.
     /// </summary>
-    public static float PostMove(ref MoveState s, Vector3 position, Vector3 velocity, bool onFloor)
+    public static float PostMove(ref MoveState s, Vector3 position, Vector3 velocity, bool onFloor, float landingWaterDepth = 0f)
     {
         var wasOnFloor = s.OnFloor;
         s.Position = position;
@@ -146,7 +173,7 @@ public static class MovementStep
         }
         else
         {
-            if (!wasOnFloor) damage = FallDamage(s.FallPeakY - position.Y);
+            if (!wasOnFloor && landingWaterDepth < WaterConsts.SwimDepth) damage = FallDamage(s.FallPeakY - position.Y);
             s.FallPeakY = position.Y;
         }
         return damage;

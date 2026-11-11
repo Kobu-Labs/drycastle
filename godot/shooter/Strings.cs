@@ -10,7 +10,7 @@ public static class Strings
 {
     static readonly (string Key, string Text)[] Table =
     {
-        ("hud.health", "HEALTH"), ("hud.low", "LOW"),
+        ("hud.health", "HEALTH"), ("hud.low", "LOW"), ("hud.air", "AIR"),
         ("hud.reloading", "RELOADING"), ("hud.ammo.reserve", "/ {0}"), ("hud.ammo.none", "-"),
         ("hud.timer.waiting", "--:--"), ("hud.phase.waiting", "Waiting for players"), ("hud.phase.ending", "Round over"),
         ("hud.score.leading", "You lead: {0}"), ("hud.score.behind", "You {0}   Leader {1}: {2}"),
@@ -26,7 +26,7 @@ public static class Strings
         ("score.ping", "{0} ms"),
         ("weapon.pistol", "M1911"), ("weapon.ak47", "AK-47"), ("weapon.bazooka", "Bazooka"), ("weapon.knife", "Knife"), ("weapon.sniper", "Sniper"), ("weapon.glock17", "Glock 17"), ("weapon.deagle", "Desert Eagle"), ("weapon.m82", "Barrett M82"), ("weapon.awm", "AWM"), ("weapon.svd", "Dragunov SVD"),
         ("hud.breath.ready", "Breath: hold {0}"), ("hud.breath.held", "Breath held"), ("hud.breath.exhaled", "Breath out, steadying"), ("hud.breath.empty", "Breath empty, refilling"),
-        ("weapon.fall", "Fall"), ("weapon.void", "Void"), ("weapon.debug", "Debug"), ("weapon.vehicle", "Car"), ("weapon.unknown", "?"),
+        ("weapon.fall", "Fall"), ("weapon.drown", "Drowned"), ("weapon.void", "Void"), ("weapon.debug", "Debug"), ("weapon.vehicle", "Car"), ("weapon.unknown", "?"),
         ("player.unknown", "Player {0}"),
         ("app.title", "SUCHOHRAD"), ("app.subtitle", "Shooter"),
         ("menu.play", "Play"), ("menu.settings", "Settings"), ("menu.quit", "Quit"),

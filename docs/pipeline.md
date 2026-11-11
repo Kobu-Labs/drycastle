@@ -189,6 +189,17 @@ y north, chunk, building IDs), `roads.json`, `spawns.json` and `manifest.json` (
 attribution, input hashes including the work files). The output has no timestamp and is
 byte-identical for identical input.
 
+**Water bodies (`water.json`).** Written when the terrain exists, listed in `manifest.json` under
+`files.water`. One body per parcel of kind `water`: `{"id", "polygon", "surface_y", "bed_y"}`, with
+the polygon in the same geo-interface form as `parcels.json` (local metres, x east, y north) and the
+heights in metres on the terrain's datum (as `terrain.json`). The surface is the median terrain
+height along the parcel outline (the shoreline); the bed is the lowest terrain height on a 2 m grid
+inside. A water parcel with no terrain under its outline gets no body (a warning is printed). The
+shooter reads it as `ShooterCore.Water` (`Water.Parse`, format version 1): depth, surface and
+breath queries in Godot ground axes (x east, z = -north). The surface and bed are flat per body, so
+depth is one value per body (an approximation). The file is absent for a map without terrain.
+`"water"` is listed under `generated`; water surface meshes are not generated.
+
 `make preview` renders `out/preview/topdown.png` (parcels by kind, buildings in wall colour),
 `iso.png` (isometric view from the mesh data: terrain relief, roads, buildings, fences, trees;
 `make preview EXAG=5` changes the relief exaggeration, default 3) and `iso_close.png` (the same,

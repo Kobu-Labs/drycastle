@@ -37,6 +37,8 @@ public partial class NetClient : Node
     public double BotSeconds = 6;
     public bool Headless;
     public float KillY = float.NegativeInfinity;
+    /// <summary>The map's water (water.json), shared with the prediction so swimming matches the server.</summary>
+    public Suchohrad.ShooterCore.Water Water = Suchohrad.ShooterCore.Water.Empty;
     /// <summary>Match smoke role: "alice" (kills bob with the debug command) or "bob" (fires after each spawn); empty = normal bot/player.</summary>
     public string MatchBot = "";
     /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
@@ -211,7 +213,7 @@ public partial class NetClient : Node
             case WelcomeMsg w:
                 _myId = w.PlayerId; _welcomed = true;
                 DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
-                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY };
+                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water };
                 World.AddChild(_me);
                 if (!Bot && ShotFx.Enabled) { _viewmodel = new WeaponViewmodel(); _me.Camera.AddChild(_viewmodel); }
                 if (WeaponsBot != "" || CarBot != "" || FxDemo.StartsWith("vehicle:")) NetServer.AddArenaColliders(World);
