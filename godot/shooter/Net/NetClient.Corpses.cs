@@ -19,14 +19,11 @@ public partial class NetClient
         public Node3D Node = null!;
         public CharacterView View = null!;
         public string Weapon = "";
-        /// <summary>Tumble while thrown (the ragdoll): the angle about <see cref="Axis"/> (rad), the axis (horizontal, across the flight) and the last position, for the flight direction.</summary>
-        public float Spin;
-        public Vector3 Axis = Vector3.Right, Last;
-        public bool Seen;
+        /// <summary>The ragdoll: the spin, limb flail and settling of a body thrown by a blast or a car.</summary>
+        public readonly RagdollTumble Tumble = new();
+        /// <summary>The feet, from the last render (the node sits at the body's turning point).</summary>
+        public Vector3 Feet;
     }
-
-    /// <summary>Tumble speed of a thrown corpse (rad/s) and how fast it settles flat after landing.</summary>
-    const float TumbleRate = 9f, TumbleSettle = 10f, BodyMid = 0.9f;
 
     readonly Dictionary<ushort, CorpseView> _corpses = new();
     CorpseChooser _chooser = null!;
@@ -54,7 +51,7 @@ public partial class NetClient
         if (e.Type != CorpseRules.TypeId) return;
         var node = new Node3D { Name = $"Corpse{e.Id}" };
         var view = CharacterView.Make();
-        view.Position = new Vector3(0, -BodyMid, 0); // the node sits at the body's middle, so a thrown body spins about its centre
+        view.Position = new Vector3(0, -RagdollTumble.Half, 0); // the node sits at the body's middle, so a thrown body spins about its centre
         node.AddChild(view);
         World.AddChild(node);
         _corpses[e.Id] = new CorpseView { Node = node, View = view };
@@ -76,25 +73,20 @@ public partial class NetClient
             var s = e.State;
             var p = s.Position;
             var at = new Vector3(p.X, p.Y, p.Z);
-            var flying = s.PitchRad > CorpseRules.FlightPitch * 0.5f; // a thrown body (blast, car): the server flies it, we tumble it
-            if (v.Seen && flying)
-            {
-                var d = at - v.Last; d.Y = 0;
-                if (d.LengthSquared() > 1e-6f) v.Axis = Vector3.Up.Cross(d.Normalized()).Normalized(); // pitches the body forward along its flight
-            }
-            v.Last = at; v.Seen = true;
-            var dt = (float)GetProcessDeltaTime();
-            if (flying) v.Spin += TumbleRate * dt;
-            else if (v.Spin != 0)
-            {
-                var whole = Mathf.Round(v.Spin / Mathf.Tau) * Mathf.Tau; // the nearest full turn: lying flat again
-                v.Spin = Mathf.MoveToward(v.Spin, whole, TumbleSettle * dt);
-                if (Mathf.Abs(v.Spin - whole) < 0.01f) v.Spin = 0;
-            }
-            v.Node.GlobalPosition = at + Vector3.Up * BodyMid;
-            v.Node.Basis = new Basis(v.Axis, v.Spin) * new Basis(Vector3.Up, s.YawRad);
+            var flying = s.PitchRad > CorpseRules.FlightPitch * 0.5f; // a thrown body (blast, car): the server flies it, we turn it and flail its limbs
+            var t = v.Tumble;
+            var wasThrown = t.Thrown;
+            t.Update(at, flying, (float)GetProcessDeltaTime());
             var weapon = WeaponId(s.State);
-            if (weapon != v.Weapon) { v.Weapon = weapon; v.View.ShowCorpse(weapon); }
+            if (t.Thrown)
+            {
+                if (!wasThrown || weapon != v.Weapon) { v.Weapon = weapon; v.View.ShowThrown(weapon); }
+                v.View.SetRagdoll(true, t.Amount, t.AtRest);
+            }
+            else if (weapon != v.Weapon) { v.Weapon = weapon; v.View.ShowCorpse(weapon); }
+            v.Feet = at;
+            v.Node.GlobalPosition = at + Vector3.Up * t.PivotHeight;
+            v.Node.Basis = t.BasisFor(s.YawRad);
         }
         _near = NearestCorpseInReach();
     }
@@ -107,7 +99,7 @@ public partial class NetClient
         var at = _me.GlobalPosition;
         foreach (var (id, v) in _corpses)
         {
-            var d = (v.Node.GlobalPosition - Vector3.Up * BodyMid).DistanceTo(at);
+            var d = v.Feet.DistanceTo(at);
             if (d <= bd) { best = id; bd = d; }
         }
         return best;

@@ -25,6 +25,11 @@ public sealed partial class CharacterView : Node3D
     BoneAttachment3D? _hand;
     Node3D? _grip;
     ArmsReadyPose? _arms;
+    RagdollFlail? _flail;
+    /// <summary>A thrown body (the ragdoll): the limbs flail over a neutral clip instead of the death clip playing.</summary>
+    bool _ragdoll;
+    float _flailAmount;
+    bool _flailFrozen;
     Node3D? _aim;
     bool _aimed, _shooting;
     float _fireTimer;
@@ -79,6 +84,8 @@ public sealed partial class CharacterView : Node3D
             BuildHandSlot(_skeleton, _mesh.Skin);
             BuildEyes(_skeleton, _mesh);
         }
+        _flail = _skeleton != null ? RagdollFlail.Create(_skeleton) : null;
+        if (_flail != null) { _skeleton!.AddChild(_flail); ApplyFlail(); }
         _playing = "";
         ApplyPose();
         Apply(_lastSpeed, _lastFiring, _lastDead, _lastWeapon);
@@ -166,6 +173,32 @@ public sealed partial class CharacterView : Node3D
         if (_anim != null && _anim.HasAnimation("Death")) _anim.Seek(_anim.GetAnimation("Death").Length, true);
     }
 
+    /// <summary>
+    /// A thrown body (ticket: the ragdoll): the limbs flail by <paramref name="amount"/> (0..1) over a neutral clip, frozen once it lies still, with the
+    /// weapon it carries. Off again with <c>on = false</c> (the death clip or the normal clips play).
+    /// </summary>
+    public void SetRagdoll(bool on, float amount = 0, bool frozen = false)
+    {
+        _ragdoll = on; _flailAmount = on ? amount : 0; _flailFrozen = frozen;
+        ApplyFlail();
+        if (on) Play("Idle", 0);
+    }
+
+    void ApplyFlail()
+    {
+        if (_flail == null) return;
+        _flail.Amount = _flailAmount;
+        _flail.Frozen = _flailFrozen;
+    }
+
+    /// <summary>A thrown corpse: the weapon it carries in the hand and the limbs flailing (<see cref="SetRagdoll"/> drives them). <see cref="ShowCorpse"/> is for a body that fell where it stood.</summary>
+    public void ShowThrown(string weaponId)
+    {
+        SetWeapon(weaponId);
+        SetAimed(false);
+        SetRagdoll(true, _flailAmount, _flailFrozen);
+    }
+
     /// <summary>Update from snapshot state: horizontal speed (m/s), whether it fired in the last moments, dead, and the weapon id it holds.</summary>
     public void Apply(float speed, bool firing, bool dead, string weaponId)
     {
@@ -179,7 +212,7 @@ public sealed partial class CharacterView : Node3D
         if (_arms != null) _arms.TwoHanded = twoHanded;
         SetAimed(armed);
         _shooting = armed && firing;
-        Play(dead ? "Death"
+        Play(dead ? (_ragdoll ? "Idle" : "Death")
             : swing ? "SwordSlash"
             : _swim ? (speed > 0.6f ? "Walk" : "Idle") // no swim clip in the rig: the slow walk, see SetSwim
             : speed > 6.2f ? "Run" : speed > 0.6f ? "Walk" : "Idle");
