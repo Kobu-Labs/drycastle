@@ -74,6 +74,14 @@ public static class ShotFx
         Expire(world, p, 0.5f);
     }
 
+    /// <summary>Spark burst only (no tracer), for shotgun pellets that each end in the world.</summary>
+    public static void Spark(Node3D world, Vector3 at, Vector3 normal)
+    {
+        if (!Enabled || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree()) return;
+        Init();
+        Impact(world, at, normal);
+    }
+
     /// <summary>Frees <paramref name="n"/> after <paramref name="seconds"/>.</summary>
     public static void Expire(Node3D world, Node n, float seconds) => world.GetTree().CreateTimer(seconds).Timeout += () => { if (GodotObject.IsInstanceValid(n)) n.QueueFree(); };
 }

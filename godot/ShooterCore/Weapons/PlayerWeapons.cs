@@ -78,7 +78,7 @@ public sealed class PlayerWeapons
         var recovering = (float)Math.Max(0, now - Math.Max(_nextFire, _lastNow));
         _lastNow = now;
 
-        if (Reloading && now + Eps >= _reloadDone) FinishReload();
+        if (Reloading && now + Eps >= _reloadDone) { if (Current.ShellReload) LoadShell(now); else FinishReload(); }
 
         // switching: wanted slot or the next-weapon edge; cancels a reload
         var want = Slot;
@@ -101,6 +101,8 @@ public sealed class PlayerWeapons
 
         var pull = w.FullAuto ? input.Fire : input.Fire && !_prevFire;
         _prevFire = input.Fire;
+        // a shell reload is interrupted by a shot the moment it can fire (a shell is loaded)
+        if (pull && Reloading && w.ShellReload && _mag[Slot - 1] > 0 && now + Eps >= _nextFire) Reloading = false;
         if (!pull || Reloading || now + Eps < _nextFire || now + Eps < _swapReady) return null;
 
         switch (w.Kind)
@@ -130,6 +132,16 @@ public sealed class PlayerWeapons
     bool CanReload(WeaponDef w) => !Reloading && w.MagazineSize > 0 && w.ReloadTime > 0 && _mag[Slot - 1] < w.MagazineSize && _reserve[Slot - 1] > 0;
 
     void StartReload(double now, WeaponDef w) { Reloading = true; _reloadDone = now + w.ReloadTime / _perks.ReloadSpeed; Changed = true; }
+
+    /// <summary>Shell-by-shell reload: one shell per reload_time; the reload ends when the magazine is full or the reserve is empty.</summary>
+    void LoadShell(double now)
+    {
+        var i = Slot - 1;
+        _mag[i]++; _reserve[i]--;
+        Changed = true;
+        if (_mag[i] < Current.MagazineSize && _reserve[i] > 0) _reloadDone = now + Current.ReloadTime;
+        else Reloading = false;
+    }
 
     void FinishReload()
     {

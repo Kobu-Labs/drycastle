@@ -499,7 +499,8 @@ public partial class NetServer : Node
         var yaw = Quant.Yaw(i.Yaw); var pitch = Quant.Pitch(i.Pitch);
         var targets = LiveTargets();
         _shotsFired++;
-        if (w.Kind == WeaponKind.Hitscan)
+        if (w.Kind == WeaponKind.Hitscan && w.Pellets > 1) FirePellets(c, eye, yaw, pitch, w, (byte)shot.WeaponIndex);
+        else if (w.Kind == WeaponKind.Hitscan)
         {
             var kick = c.Recoil.Shot(w.Recoil, RecoilState.Multiplier(w.Recoil, (i.Buttons & (ushort)MoveButtons.Aim) != 0, c.Body.State.Crouching));
             var d = HitMath.SpreadDirection(yaw + kick.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad), shot.SpreadDegrees, _rng);

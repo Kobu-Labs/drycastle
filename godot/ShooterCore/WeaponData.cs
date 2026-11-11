@@ -105,6 +105,9 @@ public class WeaponsFile
         NonNegative(r.BreathRecoverSeconds, where, "breath_recover_seconds");
         NonNegative(r.QuickscopePenalty, where, "quickscope_penalty");
         if (r.Pellets is { } pellets && pellets < 1) throw Invalid(where, "pellets", "must be at least 1");
+        if (r.PumpAction == true && r.FullAuto == true) throw Invalid(where, "pump_action", "cannot be combined with full_auto");
+        if (r.ShellReload == true && (r.MagazineSize is not > 0 || r.ReloadTime is not > 0))
+            throw Invalid(where, "shell_reload", "needs magazine_size and reload_time > 0 (reload_time is then per shell)");
         if (r.ZoomLevels is { } levels && levels < 1) throw Invalid(where, "zoom_levels", "must be at least 1");
         if (category == WeaponCategory.Shotgun && r.Pellets is null) throw Invalid(where, "pellets", "is required for a shotgun");
 
@@ -120,6 +123,8 @@ public class WeaponsFile
             Slot = slot,
             UnlockLevel = r.UnlockLevel ?? 0,
             FullAuto = r.FullAuto ?? false,
+            PumpAction = r.PumpAction ?? false,
+            ShellReload = r.ShellReload ?? false,
             Damage = damage,
             HeadshotMultiplier = r.HeadshotMultiplier ?? 1,
             BackstabDamage = r.BackstabDamage ?? 0,
@@ -251,6 +256,8 @@ public class WeaponsFile
         public string? Slot { get; set; }
         public int? UnlockLevel { get; set; }
         public bool? FullAuto { get; set; }
+        public bool? PumpAction { get; set; }
+        public bool? ShellReload { get; set; }
         public float? Damage { get; set; }
         public float? HeadshotMultiplier { get; set; }
         public float? BackstabDamage { get; set; }
@@ -300,6 +307,10 @@ public class WeaponDef
     /// <summary>XP level that unlocks the weapon; 0 = available from the start.</summary>
     public int UnlockLevel { get; set; }
     public bool FullAuto { get; set; }
+    /// <summary>Pump action: the fire interval is the pump cycle, and the weapon is never full auto (validated). No other runtime effect yet.</summary>
+    public bool PumpAction { get; set; }
+    /// <summary>Shell-by-shell reload: reload_time is the time per shell. Firing with a shell loaded interrupts the reload.</summary>
+    public bool ShellReload { get; set; }
     public float Damage { get; set; }
     /// <summary>Hitscan headshot multiplier; 1 means no headshot bonus.</summary>
     public float HeadshotMultiplier { get; set; } = 1;

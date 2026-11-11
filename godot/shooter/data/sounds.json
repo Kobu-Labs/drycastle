@@ -55,6 +55,27 @@
     { "id": "ui.accept", "files": ["kenney-interface-sounds/confirmation_002.ogg"], "bus": "UI", "volume_db": -6, "max_distance": 0 },
     { "id": "ui.back", "files": ["kenney-interface-sounds/back_002.ogg"], "bus": "UI", "volume_db": -6, "max_distance": 0 },
     { "id": "ui.error", "files": ["kenney-interface-sounds/error_004.ogg"], "bus": "UI", "volume_db": -6, "max_distance": 0 },
-    { "id": "music.menu", "files": ["oga-chiptune-adventures/menu_stage_select.ogg"], "bus": "Music", "volume_db": -6, "max_distance": 0, "loop": true }
+    { "id": "music.menu", "files": ["oga-chiptune-adventures/menu_stage_select.ogg"], "bus": "Music", "volume_db": -6, "max_distance": 0, "loop": true },
+    { "id": "shot.mp5", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 150, "priority": 3 },
+    { "id": "shot.ump45", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 150, "priority": 3 },
+    { "id": "shot.p90", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 150, "priority": 3 },
+    { "id": "shot.remington870", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 180, "priority": 3 },
+    { "id": "shot.spas12", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 180, "priority": 3 },
+    { "id": "shot.benelli_m4", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 180, "priority": 3 },
+    { "id": "shot.aa12", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 180, "priority": 3 },
+    { "id": "reload.mp5", "files": ["suchohrad-generated-sounds/reload_ak47.ogg"], "bus": "SFX", "volume_db": -6, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
+    { "id": "reload.ump45", "files": ["suchohrad-generated-sounds/reload_ak47.ogg"], "bus": "SFX", "volume_db": -6, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
+    { "id": "reload.p90", "files": ["suchohrad-generated-sounds/reload_ak47.ogg"], "bus": "SFX", "volume_db": -6, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
+    { "id": "reload.remington870", "files": ["suchohrad-generated-sounds/reload_ak47.ogg"], "bus": "SFX", "volume_db": -6, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
+    { "id": "reload.spas12", "files": ["suchohrad-generated-sounds/reload_ak47.ogg"], "bus": "SFX", "volume_db": -6, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
+    { "id": "reload.benelli_m4", "files": ["suchohrad-generated-sounds/reload_ak47.ogg"], "bus": "SFX", "volume_db": -6, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
+    { "id": "reload.aa12", "files": ["suchohrad-generated-sounds/reload_ak47.ogg"], "bus": "SFX", "volume_db": -6, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
+    { "id": "dry.mp5", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.7, "pitch_variance": 0.03, "max_distance": 0 },
+    { "id": "dry.ump45", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.7, "pitch_variance": 0.03, "max_distance": 0 },
+    { "id": "dry.p90", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.7, "pitch_variance": 0.03, "max_distance": 0 },
+    { "id": "dry.remington870", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.7, "pitch_variance": 0.03, "max_distance": 0 },
+    { "id": "dry.spas12", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.7, "pitch_variance": 0.03, "max_distance": 0 },
+    { "id": "dry.benelli_m4", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.7, "pitch_variance": 0.03, "max_distance": 0 },
+    { "id": "dry.aa12", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.7, "pitch_variance": 0.03, "max_distance": 0 }
   ]
 }

@@ -46,7 +46,12 @@ public static class HitMath
     }
 
     /// <summary>Damage of a hitscan hit: full to the falloff start, linear to the falloff multiplier at the end, flat beyond.</summary>
-    public static float HitscanDamage(WeaponDef w, float distance, bool head)
+    public static float HitscanDamage(WeaponDef w, float distance, bool head) => Falloff(w, w.Damage, distance, head);
+
+    /// <summary>Damage of one shotgun pellet: the hitscan falloff applied to <see cref="WeaponDef.DamagePerPellet"/>. Rounded per pellet, at least 1.</summary>
+    public static float PelletDamage(WeaponDef w, float distance, bool head) => Falloff(w, w.DamagePerPellet, distance, head);
+
+    static float Falloff(WeaponDef w, float baseDamage, float distance, bool head)
     {
         var mult = 1f;
         if (distance > w.FalloffStart && w.FalloffEnd > w.FalloffStart)
@@ -54,8 +59,63 @@ public static class HitMath
             var t = Math.Min(1f, (distance - w.FalloffStart) / (w.FalloffEnd - w.FalloffStart));
             mult = 1f + (w.FalloffMultiplier - 1f) * t;
         }
-        var dmg = w.Damage * mult * (head ? Math.Max(1f, w.HeadshotMultiplier) : 1f);
+        var dmg = baseDamage * mult * (head ? Math.Max(1f, w.HeadshotMultiplier) : 1f);
         return MathF.Max(1f, MathF.Round(dmg));
+    }
+
+    /// <summary>Damage one target took from a pellet fan: the summed pellet damage, and whether any pellet hit the head.</summary>
+    public readonly record struct PelletTotal(float Damage, bool Head);
+
+    /// <summary>
+    /// Pellet directions of one shotgun shot: <paramref name="pellets"/> unit vectors uniform by area in a cone of half angle
+    /// <paramref name="coneDegrees"/> around <paramref name="aim"/>. Derived only from the seed, so the server and every client
+    /// get the same fan from one broadcast event.
+    /// </summary>
+    public static Vector3[] PelletDirections(Vector3 aim, float coneDegrees, int pellets, uint seed)
+    {
+        var f = Vector3.Normalize(aim);
+        var up = MathF.Abs(f.Y) > 0.99f ? Vector3.UnitX : Vector3.UnitY;
+        var right = Vector3.Normalize(Vector3.Cross(f, up));
+        var u = Vector3.Cross(right, f);
+        var maxAngle = coneDegrees * MathF.PI / 180f;
+        var state = (ulong)seed;
+        var dirs = new Vector3[Math.Max(0, pellets)];
+        for (var i = 0; i < dirs.Length; i++)
+        {
+            var angle = maxAngle * MathF.Sqrt(NextUnit(ref state));
+            var phi = NextUnit(ref state) * MathF.Tau;
+            dirs[i] = Vector3.Normalize(f * MathF.Cos(angle) + (right * MathF.Cos(phi) + u * MathF.Sin(phi)) * MathF.Sin(angle));
+        }
+        return dirs;
+    }
+
+    /// <summary>SplitMix64 step mapped to [0, 1). Fixed arithmetic, so the same seed gives the same numbers on every platform.</summary>
+    static float NextUnit(ref ulong state)
+    {
+        state += 0x9E3779B97F4A7C15UL;
+        var z = state;
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+        z ^= z >> 31;
+        return (z >> 40) * (1f / (1 << 24));
+    }
+
+    /// <summary>
+    /// Resolves one pellet fan against the targets: pellet i flies along <paramref name="dirs"/>[i] for at most
+    /// <paramref name="maxDistance"/> and stops at <paramref name="walls"/>[i] (the world distance, infinity if none). Each pellet
+    /// hits the nearest target in its path with its own falloff; damage is summed per target. Walls and vehicles are the caller's business.
+    /// </summary>
+    public static Dictionary<ushort, PelletTotal> ResolvePellets(WeaponDef w, Vector3 origin, IReadOnlyList<Vector3> dirs, float maxDistance,
+        IReadOnlyList<float> walls, IReadOnlyList<HitTarget> targets, ushort shooter)
+    {
+        var totals = new Dictionary<ushort, PelletTotal>();
+        for (var i = 0; i < dirs.Count; i++)
+        {
+            if (Raycast(origin, dirs[i], maxDistance, walls[i], targets, shooter) is not { } hit) continue;
+            var prev = totals.GetValueOrDefault(hit.Id);
+            totals[hit.Id] = new PelletTotal(prev.Damage + PelletDamage(w, hit.Distance, hit.Head), prev.Head || hit.Head);
+        }
+        return totals;
     }
 
     /// <summary>
