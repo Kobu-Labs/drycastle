@@ -704,6 +704,9 @@ public partial class NetClient : Node
             case EventKind.MissileBlast when MissileCodec.DecodeBlast(payload) is { } mb:
                 OnMissileBlast(mb);
                 break;
+            case EventKind.Ac130Blast when Ac130Codec.DecodeBlast(payload) is { } ab:
+                OnAc130Blast(ab);
+                break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 _hitLog.Add((Now, h));
                 SfxHit(h);

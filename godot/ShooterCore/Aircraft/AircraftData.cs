@@ -18,7 +18,15 @@ public sealed class AircraftKindDef
 }
 
 /// <summary>What a gunship weapon's shot is: a hitscan round or a rocket on the projectile sim.</summary>
-public enum GunshipWeaponKind : byte { Cannon, Rocket }
+public enum GunshipWeaponKind : byte
+{
+    /// <summary>A hitscan round from the turret (walls, players, vehicles).</summary>
+    Cannon,
+    /// <summary>A rocket on the player rocket sim (its splash is the weapons.json entry's).</summary>
+    Rocket,
+    /// <summary>A shell: a hitscan trace to the first wall, player or vehicle, then a blast with its own <see cref="GunshipWeaponDef.Splash"/>.</summary>
+    Shell,
+}
 
 /// <summary>
 /// One weapon a gunship's turret fires, with its own ammo and heat. <see cref="WeaponId"/> names a weapons.json entry: it
@@ -42,6 +50,8 @@ public sealed class GunshipWeaponDef
     public float HeatMax { get; init; }
     /// <summary>Heat lost per second. The lock lifts once heat falls to half of <see cref="HeatMax"/>.</summary>
     public float HeatCoolPerS { get; init; }
+    /// <summary>A shell's blast (its own tuning, not weapons.json). Null for the other kinds.</summary>
+    public SplashDef? Splash { get; init; }
 }
 
 /// <summary>The gunship turret: aim limits relative to the airframe, zoom levels, and its weapons (killstreaks.json "gunship").</summary>
@@ -98,6 +108,16 @@ public static class AircraftData
         public float? HeatPerShot { get; set; }
         public float? HeatMax { get; set; }
         public float? HeatCoolPerS { get; set; }
+        public SplashRaw? Splash { get; set; }
+    }
+
+    internal sealed class SplashRaw
+    {
+        public float? Radius { get; set; }
+        public float? FullDamageRadius { get; set; }
+        public float? EdgeDamage { get; set; }
+        public float? SelfDamageMultiplier { get; set; }
+        public float? KnockbackSpeed { get; set; }
     }
 
     static float Need(float? v, string where, string field, float min)
@@ -106,7 +126,14 @@ public static class AircraftData
         throw new DataFileException($"{F}: {where}: field \"{field}\" is required and must be {min} or more");
     }
 
-    internal static (IReadOnlyList<AircraftKindDef> Kinds, GunshipDef? Gunship) Resolve(List<AircraftRaw>? aircraft, GunshipRaw? gunship)
+    /// <summary>The aircraft kinds, the gunship turret and the AC-130's turret (its own section, same shape).</summary>
+    internal static (IReadOnlyList<AircraftKindDef> Kinds, GunshipDef? Gunship, GunshipDef? Ac130) Resolve(List<AircraftRaw>? aircraft, GunshipRaw? gunship, GunshipRaw? ac130)
+    {
+        var kinds = ResolveKinds(aircraft);
+        return (kinds, gunship is null ? null : Build(gunship, "gunship"), ac130 is null ? null : Build(ac130, "ac130"));
+    }
+
+    static IReadOnlyList<AircraftKindDef> ResolveKinds(List<AircraftRaw>? aircraft)
     {
         var kinds = new List<AircraftKindDef>();
         var ids = new HashSet<string>();
@@ -130,27 +157,50 @@ public static class AircraftData
         }
         if (kinds.Count > MaxKinds) throw new DataFileException($"{F}: at most {MaxKinds} aircraft kinds (the wire carries the kind in one bit)");
 
-        if (gunship is null) return (kinds, null);
+        return kinds;
+    }
+
+    /// <summary>One turret section ("gunship" or "ac130"): aim limits, zoom and weapons. Messages name the section.</summary>
+    static GunshipDef Build(GunshipRaw gunship, string section)
+    {
         var zoom = gunship.ZoomLevels is { Count: > 0 } z ? z.ToArray() : new[] { 1f };
-        if (zoom.Any(v => !float.IsFinite(v) || v < 1f)) throw new DataFileException($"{F}: gunship: field \"zoom_levels\" must hold values of 1 or more");
-        var pitchMin = gunship.PitchMinDeg ?? throw new DataFileException($"{F}: gunship: field \"pitch_min_deg\" is required");
-        var pitchMax = gunship.PitchMaxDeg ?? throw new DataFileException($"{F}: gunship: field \"pitch_max_deg\" is required");
-        if (pitchMin > pitchMax) throw new DataFileException($"{F}: gunship: \"pitch_min_deg\" must not be above \"pitch_max_deg\"");
+        if (zoom.Any(v => !float.IsFinite(v) || v < 1f)) throw new DataFileException($"{F}: {section}: field \"zoom_levels\" must hold values of 1 or more");
+        var pitchMin = gunship.PitchMinDeg ?? throw new DataFileException($"{F}: {section}: field \"pitch_min_deg\" is required");
+        var pitchMax = gunship.PitchMaxDeg ?? throw new DataFileException($"{F}: {section}: field \"pitch_max_deg\" is required");
+        if (pitchMin > pitchMax) throw new DataFileException($"{F}: {section}: \"pitch_min_deg\" must not be above \"pitch_max_deg\"");
         var weapons = new List<GunshipWeaponDef>();
         var wids = new HashSet<string>();
         foreach (var r in gunship.Weapons ?? new List<WeaponRaw>())
         {
-            if (string.IsNullOrEmpty(r.Id)) throw new DataFileException($"{F}: gunship weapon: field \"id\" is required");
-            if (!wids.Add(r.Id)) throw new DataFileException($"{F}: duplicate gunship weapon \"{r.Id}\"");
-            var where = $"gunship weapon \"{r.Id}\"";
+            if (string.IsNullOrEmpty(r.Id)) throw new DataFileException($"{F}: {section} weapon: field \"id\" is required");
+            if (!wids.Add(r.Id)) throw new DataFileException($"{F}: duplicate {section} weapon \"{r.Id}\"");
+            var where = $"{section} weapon \"{r.Id}\"";
             if (string.IsNullOrWhiteSpace(r.Name) || string.IsNullOrWhiteSpace(r.WeaponId))
                 throw new DataFileException($"{F}: {where}: fields \"name\" and \"weapon_id\" are required");
             var kind = r.Kind switch
             {
                 "cannon" => GunshipWeaponKind.Cannon,
                 "rocket" => GunshipWeaponKind.Rocket,
-                _ => throw new DataFileException($"{F}: {where}: field \"kind\" must be cannon or rocket"),
+                "shell" => GunshipWeaponKind.Shell,
+                _ => throw new DataFileException($"{F}: {where}: field \"kind\" must be cannon, rocket or shell"),
             };
+            SplashDef? splash = null;
+            if (kind == GunshipWeaponKind.Shell)
+            {
+                var s = r.Splash ?? throw new DataFileException($"{F}: {where}: a shell needs a \"splash\" block");
+                var radius = Need(s.Radius, where, "splash.radius", 0.1f);
+                var full = Need(s.FullDamageRadius, where, "splash.full_damage_radius", 0);
+                if (full >= radius) throw new DataFileException($"{F}: {where}: \"splash.full_damage_radius\" must be less than \"splash.radius\"");
+                splash = new SplashDef
+                {
+                    Radius = radius,
+                    FullDamageRadius = full,
+                    EdgeDamage = Need(s.EdgeDamage, where, "splash.edge_damage", 0),
+                    SelfDamageMultiplier = Need(s.SelfDamageMultiplier, where, "splash.self_damage_multiplier", 0),
+                    KnockbackSpeed = Need(s.KnockbackSpeed, where, "splash.knockback_speed", 0),
+                };
+            }
+            else if (r.Splash != null) throw new DataFileException($"{F}: {where}: a \"splash\" block is only for a shell");
             var ammo = r.Ammo ?? throw new DataFileException($"{F}: {where}: field \"ammo\" is required");
             if (ammo < 1) throw new DataFileException($"{F}: {where}: field \"ammo\" must be at least 1");
             var heatMax = Need(r.HeatMax, where, "heat_max", 1);
@@ -165,15 +215,15 @@ public static class AircraftData
                 SpreadDeg = Need(r.SpreadDeg, where, "spread_deg", 0),
                 Ammo = ammo, HeatPerShot = heatPerShot, HeatMax = heatMax,
                 HeatCoolPerS = Need(r.HeatCoolPerS, where, "heat_cool_per_s", 0),
+                Splash = splash,
             });
         }
-        if (weapons.Count == 0) throw new DataFileException($"{F}: gunship: at least one weapon is required");
-        var def = new GunshipDef
+        if (weapons.Count == 0) throw new DataFileException($"{F}: {section}: at least one weapon is required");
+        return new GunshipDef
         {
-            YawLimitDeg = Need(gunship.YawLimitDeg, "gunship", "yaw_limit_deg", 0),
+            YawLimitDeg = Need(gunship.YawLimitDeg, section, "yaw_limit_deg", 0),
             PitchMinDeg = pitchMin, PitchMaxDeg = pitchMax,
             ZoomLevels = zoom, Weapons = weapons,
         };
-        return (kinds, def);
     }
 }

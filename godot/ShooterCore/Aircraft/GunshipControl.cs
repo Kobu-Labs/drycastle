@@ -27,6 +27,7 @@ public sealed class GunshipControl
     readonly double[] _nextShot;
     double _coolAt = double.NaN;
     bool _aimWas, _reloadWas;
+    byte _slot;
 
     public GunshipControl(GunshipDef def, Aircraft aircraft, Action<GunshipShot> fire, Action<GunshipStatus> status, Random? rng = null)
     {
@@ -78,6 +79,12 @@ public sealed class GunshipControl
         if (aim && !_aimWas) { Zoom = (Zoom + 1) % _def.ZoomLevels.Count; changed = true; }
         if (reload && !_reloadWas) { Weapon = (Weapon + 1) % _def.Weapons.Count; changed = true; }
         _aimWas = aim; _reloadWas = reload;
+        // the hotbar key picks the weapon (key 1 is the first); only a change of the key counts, so Reload still cycles
+        if (input.Slot != _slot)
+        {
+            _slot = input.Slot;
+            if (input.Slot >= 1 && input.Slot <= _def.Weapons.Count && input.Slot - 1 != Weapon) { Weapon = input.Slot - 1; changed = true; }
+        }
 
         if (fire) changed |= TryFire(now);
         if (changed) _status(Status());

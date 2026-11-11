@@ -25,6 +25,7 @@ public partial class NetClient
     GunshipStatus _gunStatus;
     bool _gunDirty;
     GunshipOverlay _gunOverlay = null!;
+    int _gunShownSecs = -1;
 
 
     /// <summary>Called once from <see cref="_Ready"/>: follows aircraft entities, the owner's status events and builds the overlay.</summary>
@@ -88,7 +89,7 @@ public partial class NetClient
             if (_myId != 0 && e.State.Owner == _myId) mineId = id;
         }
 
-        if (mineId != 0 && _aircraft.TryGetValue(mineId, out var mine) && !Dead && _me != null && Killstreaks?.Gunship is { } gun)
+        if (mineId != 0 && _aircraft.TryGetValue(mineId, out var mine) && !Dead && _me != null && GunDef() is { } gun)
         {
             if (_gunship != mine) { _gunship = mine; _gunDirty = true; }
             if (WorldEntities.Entities.TryGetValue(mineId, out var me) && me.Buf.At(rt) is { } ms) _gunYaw = ms.Yaw;
@@ -96,7 +97,9 @@ public partial class NetClient
             var mount = mine.Model.GlobalPosition - Vector3.Up * GunshipControl.TurretDropM;
             _me.Turret(mount, yaw, pitch);
             _me.ZoomFov = GameSettings.Current.Fov / (_gunStatus.Zoom < gun.ZoomLevels.Count ? gun.ZoomLevels[_gunStatus.Zoom] : 1f);
-            if (_gunDirty) { _gunOverlay.Present(_gunStatus, gun); _gunDirty = false; }
+            // the AC-130's time left changes once a second: the overlay is presented again then, not every frame
+            var secs = _ac130Active ? (int)Math.Ceiling(Ac130SecondsLeft) : -1;
+            if (_gunDirty || secs != _gunShownSecs) { _gunOverlay.Present(_gunStatus, gun, _ac130Active, secs); _gunDirty = false; _gunShownSecs = secs; }
         }
         else if (_gunship != null) EndGunship();
 
@@ -118,7 +121,7 @@ public partial class NetClient
     /// </summary>
     void ClampGunnerView(ref MoveInput mi)
     {
-        if (_gunship == null || _me == null || Killstreaks?.Gunship is not { } gun) return;
+        if (_gunship == null || _me == null || GunDef() is not { } gun) return;
         var (yaw, pitch) = GunshipAim.Clamp(_gunYaw, mi.Yaw, _me.Pitch, gun);
         mi.Yaw = yaw;
         _me.Pitch = pitch;

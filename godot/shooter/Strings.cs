@@ -38,6 +38,7 @@ public static class Strings
         ("hud.turret.valid", "Turret: {0} or fire to place     {1} cancel"), ("hud.turret.invalid", "Turret: aim at flat ground within reach     {1} cancel"),
         ("gunship.title", "GUNSHIP"), ("gunship.zoom", "{0}x"), ("gunship.ammo", "AMMO {0} / {1}"), ("gunship.heat", "HEAT {0}%"),
         ("gunship.overheat", "OVERHEATED"), ("gunship.empty", "OUT OF AMMO"), ("gunship.hint", "{0}  Fire     {1}  Zoom     {2}  Next weapon"),
+        ("ac130.title", "AC-130"), ("ac130.kill", "AC-130"), ("ac130.timer", "TIME {0} s"), ("ac130.hint", "{0}  Fire     {1}  Zoom     1 2 3  Weapon"),
         ("app.title", "SUCHOHRAD"), ("app.subtitle", "Shooter"),
         ("menu.play", "Play"), ("menu.settings", "Settings"), ("menu.quit", "Quit"),
         ("menu.hint", "Up/Down or Tab to move   Enter to select   Esc to go back"),

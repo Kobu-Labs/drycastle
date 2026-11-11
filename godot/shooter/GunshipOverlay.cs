@@ -14,13 +14,14 @@ public partial class GunshipOverlay : CanvasLayer
     const string ShaderPath = "res://shaders/gunship_thermal.gdshader";
 
     readonly ColorRect _thermal = new() { MouseFilter = Control.MouseFilterEnum.Ignore };
+    ShaderMaterial _grade = null!;
     readonly GunshipPanel _panel = new();
 
     public override void _Ready()
     {
         Layer = 5; // under the HUD (layer 10), over the world
         Visible = false;
-        _thermal.Material = new ShaderMaterial { Shader = GD.Load<Shader>(ShaderPath) };
+        _thermal.Material = _grade = new ShaderMaterial { Shader = GD.Load<Shader>(ShaderPath) };
         _thermal.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(_thermal);
         _panel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -28,20 +29,38 @@ public partial class GunshipOverlay : CanvasLayer
         AddChild(_panel);
     }
 
-    /// <summary>Shows the overlay for a turret with this status. Call again when the status or the weapon changes, not every frame.</summary>
-    public void Present(GunshipStatus s, GunshipDef def)
+    /// <summary>
+    /// Shows the overlay for a turret with this status. Call again when the status or the weapon changes, not every frame.
+    /// The AC-130 (<paramref name="ac130"/>) draws its black-and-white view, its weapon selector (keys 1-3, the selected one
+    /// in brackets) and the streak's time left in whole seconds (<paramref name="secondsLeft"/>, below 0 for none).
+    /// </summary>
+    public void Present(GunshipStatus s, GunshipDef def, bool ac130 = false, int secondsLeft = -1)
     {
         var w = def.Weapons[Math.Min(s.Weapon, def.Weapons.Count - 1)];
         var zoom = def.ZoomLevels[Math.Min(s.Zoom, def.ZoomLevels.Count - 1)];
+        _grade.SetShaderParameter("mono", ac130 ? 1f : 0f);
         _panel.Set(
-            title: Strings.F("gunship.title") + "   " + w.Name,
+            title: Strings.T(ac130 ? "ac130.title" : "gunship.title") + "   " + w.Name,
             zoom: Strings.F("gunship.zoom", zoom.ToString("0.#")),
             ammo: Strings.F("gunship.ammo", s.Ammo, w.Ammo),
             heat: Strings.F("gunship.heat", s.HeatPercent),
             heatFraction: s.HeatPercent / 100f,
             state: s.Overheated ? Strings.T("gunship.overheat") : s.Empty ? Strings.T("gunship.empty") : "",
-            hint: Strings.F("gunship.hint", InputBindings.Name("fire"), InputBindings.Name("zoom"), InputBindings.Name("reload")));
+            hint: ac130
+                ? Strings.F("ac130.hint", InputBindings.Name("fire"), InputBindings.Name("zoom"))
+                : Strings.F("gunship.hint", InputBindings.Name("fire"), InputBindings.Name("zoom"), InputBindings.Name("reload")),
+            selector: ac130 ? WeaponSelector(def, s.Weapon) : null,
+            timer: ac130 && secondsLeft >= 0 ? Strings.F("ac130.timer", secondsLeft) : null);
         Visible = true;
+    }
+
+    /// <summary>"1 25 mm   2 [40 mm]   3 105 mm": the keys and the names, the selected weapon in brackets (not colour alone).</summary>
+    static string WeaponSelector(GunshipDef def, int selected)
+    {
+        var parts = new string[def.Weapons.Count];
+        for (var i = 0; i < parts.Length; i++)
+            parts[i] = i == selected ? $"{i + 1} [{def.Weapons[i].Name}]" : $"{i + 1} {def.Weapons[i].Name}";
+        return string.Join("    ", parts);
     }
 
     public void Dismiss() => Visible = false;
@@ -50,12 +69,13 @@ public partial class GunshipOverlay : CanvasLayer
     sealed partial class GunshipPanel : Control
     {
         string _title = "", _zoom = "", _ammo = "", _heat = "", _state = "", _hint = "";
+        string? _selector, _timer;
         float _heatFraction;
 
-        public void Set(string title, string zoom, string ammo, string heat, float heatFraction, string state, string hint)
+        public void Set(string title, string zoom, string ammo, string heat, float heatFraction, string state, string hint, string? selector, string? timer)
         {
             _title = title; _zoom = zoom; _ammo = ammo; _heat = heat; _heatFraction = Math.Clamp(heatFraction, 0f, 1f);
-            _state = state; _hint = hint;
+            _state = state; _hint = hint; _selector = selector; _timer = timer;
             QueueRedraw();
         }
 
@@ -80,6 +100,8 @@ public partial class GunshipOverlay : CanvasLayer
 
             // top left: the turret and the weapon
             DrawString(font, new Vector2(m, m + body), _title, HorizontalAlignment.Left, -1, body, ShooterTheme.Text);
+            if (_selector != null) DrawString(font, new Vector2(m, m + body * 2 + 8f * s), _selector, HorizontalAlignment.Left, -1, body, ShooterTheme.Text);
+            if (_timer != null) DrawString(font, new Vector2(size.X - m - 240f * s, m + big), _timer, HorizontalAlignment.Right, 240f * s, big, ShooterTheme.Text);
 
             // bottom right: state, ammo, heat bar with its percent
             var barW = 240f * s; var barH = 14f * s;
