@@ -41,7 +41,9 @@ public sealed class TurretStreak : IKillstreak
         var placed = false;
         use.OnEnded(_ => { if (!placed) _entities.Despawn(entityId, WorldDespawnReason.Removed); });
 
-        var prevFire = false; var prevUse = false; var prevKey = false;
+        // the activating key press is still held on the first routed input, and Fire or Use may be held too: each button
+        // counts as pressed until it has been released once
+        var prevFire = true; var prevUse = true; var prevKey = true;
         if (!use.TakeControl(entityId, input =>
             {
                 var buttons = (MoveButtons)input.Buttons;
