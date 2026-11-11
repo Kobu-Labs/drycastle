@@ -6,9 +6,10 @@ namespace Suchohrad.Shooter;
 /// <summary>
 /// The loadout editor (ticket #118; docs/standards/ui-ux.md sections 1, 2, 3, 4 and 5). Five slot tabs (the last one used
 /// reopens), six pickers grouped by category with locked rows shown as "unlocks at level N", stat bars that compare the
-/// draft weapon with the saved one, Save / Discard / Make active, and a confirm before unsaved edits are dropped (Esc and
-/// tab changes included). The server owns the data: Save and Make active send a request, and the screen redraws from the
-/// profile the server answers with. Rename is not offered, because a loadout has no name on the wire.
+/// draft weapon with the saved one, and Make active. Edits autosave (ticket #145): every change becomes the slot's draft,
+/// which the connection saves after a short quiet period, and the status line shows Saving / Saved / retrying / rejected.
+/// Undo (Ctrl+Z, or the button) steps back through the slot's edits. Leaving the screen flushes unsent edits. The server
+/// owns the data: the screen redraws from the profile the server answers with. Rename is not offered yet (the layout ticket).
 /// </summary>
 public partial class LoadoutScreen : MenuScreen
 {
@@ -16,8 +17,9 @@ public partial class LoadoutScreen : MenuScreen
     readonly Func<GameData> _data;
     NetClient? _net;
     int _tab;
-    Loadout _saved = Loadout.Empty(0), _draft = Loadout.Empty(0);
-    bool _hasProfile, _awaitingSave;
+    Loadout _saved = Loadout.Empty(0);
+    bool _hasProfile;
+    string _shownStatus = "";
     int _statPicker; // 0 primary, 1 secondary: whose stats the bars show
 
     static readonly string[] PickCaptions = { "loadout.primary", "loadout.secondary", "loadout.perk", "loadout.streak", "loadout.streak", "loadout.streak" };
@@ -29,7 +31,7 @@ public partial class LoadoutScreen : MenuScreen
     readonly Label[] _statName = new Label[4], _statVal = new Label[4];
     Label _level = null!, _statTitle = null!, _note = null!, _empty = null!, _hint = null!, _devBadge = null!;
     Control _body = null!, _tabRow = null!;
-    Button _save = null!, _discard = null!, _makeActive = null!, _emptyBack = null!, _customize = null!;
+    Button _undo = null!, _makeActive = null!, _emptyBack = null!, _customize = null!;
 
     /// <summary>Opens the camouflage customiser for a slot (#141). Set by the shooter; the button is hidden without it.</summary>
     public Func<int, MenuScreen>? CustomizeFactory { get; set; }
@@ -38,7 +40,11 @@ public partial class LoadoutScreen : MenuScreen
     /// <param name="data">The data files, for the weapon and perk names and stats.</param>
     public LoadoutScreen(Func<NetClient?> client, Func<GameData> data) { _client = client; _data = data; }
 
-    bool Dirty => _draft != _saved;
+    /// <summary>The connection's autosave (null offline). It outlives this screen, so a save in flight is still answered.</summary>
+    LoadoutAutosave? Autosave => _net?.Autosave;
+
+    /// <summary>What the editor shows for the open slot: the draft if there is one, else the server copy.</summary>
+    Loadout Draft => Autosave?.Effective(_tab) ?? _saved;
 
     public override void _Ready()
     {
@@ -47,15 +53,27 @@ public partial class LoadoutScreen : MenuScreen
         AddChild(_devBadge);
         _net = _client();
         _tab = LoadoutEditor.ClampTab(int.TryParse(GameSettings.LoadUi("loadout_tab", "0"), out var t) ? t : 0);
-        if (_net != null) { _net.ProfileChanged += OnProfile; _net.ServerError += OnServerError; }
+        if (_net != null) { _net.ProfileChanged += OnProfile; _net.LoadoutAcked += OnAck; }
         if (_net?.Profile is { } p) OnProfile(p);
         else Refresh();
     }
 
     public override void _ExitTree()
     {
-        if (_net != null) { _net.ProfileChanged -= OnProfile; _net.ServerError -= OnServerError; }
+        _net?.FlushAutosave(); // unsent edits go out now, not after the debounce
+        if (_net != null) { _net.ProfileChanged -= OnProfile; _net.LoadoutAcked -= OnAck; }
         base._ExitTree();
+    }
+
+    /// <summary>The status line and the undo button follow the autosave state; cheap, so it runs each frame and redraws only on change.</summary>
+    public override void _Process(double delta)
+    {
+        base._Process(delta);
+        if (Autosave == null || !_hasProfile) return;
+        var key = $"{Autosave.StateOf(_tab)}|{Autosave.RejectReason(_tab)}|{Autosave.CanUndo(_tab)}|{Autosave.HasUnconfirmed(_tab)}";
+        if (key == _shownStatus) return;
+        _shownStatus = key;
+        Sync();
     }
 
     protected override Control Build()
@@ -113,12 +131,10 @@ public partial class LoadoutScreen : MenuScreen
         _note = Ui.Lbl("", "HudDim", 0, true);
         _note.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         bottom.AddChild(_note);
-        _discard = Ui.Btn(Strings.T("loadout.discard"), DiscardDraft, null, 200);
+        _undo = Ui.Btn(Strings.T("loadout.undo"), Undo, null, 200);
         _makeActive = Ui.Btn(Strings.T("loadout.make_active"), MakeActive, null, 200);
-        _save = Ui.Btn(Strings.T("loadout.save"), Save, "MenuPrimary", 200);
-        bottom.AddChild(_discard);
+        bottom.AddChild(_undo);
         bottom.AddChild(_makeActive);
-        bottom.AddChild(_save);
         body.AddChild(bottom);
         body.AddChild(Ui.Gap(ShooterTheme.Space));
 
@@ -194,15 +210,15 @@ public partial class LoadoutScreen : MenuScreen
 
     // ---- server data ----
 
-    /// <summary>A new profile from the server: the open slot's saved copy moves, and the draft follows it unless the player is editing.</summary>
+    /// <summary>
+    /// A new profile from the server: the open slot's server copy moves. The draft is not touched: it stays on screen until
+    /// the server confirms it (the autosave holds it), so an echo of an older save cannot overwrite an edit in progress.
+    /// </summary>
     void OnProfile(ProfileMsg p)
     {
         _hasProfile = true;
         _devBadge.Visible = DevUnlocks.IsMarked(p.Unlocks);
-        var before = _saved;
         _saved = ServerCopy(p, _tab);
-        if (_draft == before) _draft = _saved;
-        if (_awaitingSave) { _awaitingSave = false; Shell.Toast(Strings.F("loadout.toast.saved", _tab + 1)); }
         _level.Text = Strings.F("loadout.level", p.Level);
         for (var i = 0; i < Loadout.SlotCount; i++)
             _tabs[i].Text = Strings.F("loadout.slot", i + 1) + (p.ActiveSlot == i ? "   " + Strings.T("loadout.active") : "");
@@ -210,11 +226,10 @@ public partial class LoadoutScreen : MenuScreen
         Sync();
     }
 
-    void OnServerError(string reason)
+    /// <summary>An answer to a save: a rejection is toasted (the status line keeps the reason). Accepted saves need no toast.</summary>
+    void OnAck(LoadoutAckInfo ack)
     {
-        if (!_awaitingSave) return;
-        _awaitingSave = false;
-        Shell.Toast(reason, ToastKind.Error);
+        if (!ack.Ok) Shell.Toast(Strings.F("loadout.invalid", ack.Reason), ToastKind.Error);
         Sync();
     }
 
@@ -222,12 +237,11 @@ public partial class LoadoutScreen : MenuScreen
 
     // ---- editing ----
 
+    /// <summary>Switching slots needs no confirm now: the left slot's edits keep saving on their own.</summary>
     void RequestTab(int slot)
     {
         if (slot == _tab) return;
-        if (!Dirty) { SwitchTo(slot); return; }
-        _tabs[_tab].ButtonPressed = true; // the open tab stays pressed until the player confirms
-        Shell.Push(Discard(() => SwitchTo(slot)));
+        SwitchTo(slot);
     }
 
     void SwitchTo(int slot)
@@ -236,21 +250,15 @@ public partial class LoadoutScreen : MenuScreen
         GameSettings.SaveUi("loadout_tab", slot.ToString());
         _tabs[slot].ButtonPressed = true;
         _saved = _net?.Profile is { } p ? ServerCopy(p, slot) : Loadout.Empty(slot);
-        _draft = _saved;
-        _awaitingSave = false;
         if (_net?.Profile is { } q) Fill(q);
         Sync();
     }
 
-    /// <summary>The confirm for unsaved edits: Cancel is focused (the destructive choice is not the default).</summary>
-    DialogScreen Discard(Action run) => new(Strings.T("loadout.discard.title"), Strings.F("loadout.discard.body", _tab + 1),
-        new[] { new DialogScreen.Choice(Strings.T("loadout.discard"), run, "MenuDanger") });
-
     void OnPicked(int picker, int index)
     {
-        if (index < 0 || index >= _ids[picker].Count || _ids[picker][index] is not { } id) return;
-        var d = _draft;
-        _draft = picker switch
+        if (Autosave == null || index < 0 || index >= _ids[picker].Count || _ids[picker][index] is not { } id) return;
+        var d = Draft;
+        var next = picker switch
         {
             0 => d with { PrimaryWeapon = id },
             1 => d with { SecondaryWeapon = id },
@@ -259,21 +267,15 @@ public partial class LoadoutScreen : MenuScreen
             4 => d with { Streak2 = id },
             _ => d with { Streak3 = id },
         };
+        Autosave.Edit(next, (long)Time.GetTicksMsec());
         if (picker < 2) _statPicker = picker;
         Sync();
     }
 
-    void DiscardDraft()
+    /// <summary>Steps the open slot back one edit (Ctrl+Z and the Undo button). The step saves like any edit.</summary>
+    void Undo()
     {
-        _draft = _saved;
-        Sync();
-    }
-
-    void Save()
-    {
-        if (_net == null || !Dirty || Reason() != null || _awaitingSave) return;
-        _awaitingSave = true;
-        _net.SaveLoadout(_draft);
+        if (Autosave == null || !Autosave.Undo(_tab, (long)Time.GetTicksMsec())) return;
         Sync();
     }
 
@@ -284,17 +286,23 @@ public partial class LoadoutScreen : MenuScreen
         Shell.Toast(Strings.F("loadout.toast.active", _tab + 1));
     }
 
-    /// <summary>Esc: one level up, but unsaved edits ask first (the same confirm as a tab change).</summary>
+    /// <summary>Esc: one level up. Unsent edits are flushed on the way out (they are never dropped).</summary>
     public override void Back()
     {
-        if (!_hasProfile || !Dirty) { base.Back(); return; }
-        Shell.Push(Discard(() => Shell.Pop()));
+        _net?.FlushAutosave();
+        base.Back();
     }
 
-    /// <summary>1-5 pick a slot tab, as on the respawn screen.</summary>
+    /// <summary>1-5 pick a slot tab, as on the respawn screen. Ctrl+Z undoes the last edit of the open slot.</summary>
     public override bool HandleInput(InputEvent e)
     {
         if (e is not InputEventKey { Pressed: true, Echo: false } k || !_hasProfile) return false;
+        if (k.Keycode == Key.Z && k.CtrlPressed && !k.ShiftPressed)
+        {
+            if (Autosave == null || !Autosave.CanUndo(_tab)) return false;
+            Undo();
+            return true;
+        }
         var slot = k.Keycode switch { Key.Key1 => 0, Key.Key2 => 1, Key.Key3 => 2, Key.Key4 => 3, Key.Key5 => 4, _ => -1 };
         if (slot < 0) return false;
         RequestTab(slot);
@@ -302,15 +310,6 @@ public partial class LoadoutScreen : MenuScreen
     }
 
     // ---- drawing ----
-
-    /// <summary>Why the draft cannot be saved (the same rules the server applies), or null when it can.</summary>
-    string? Reason()
-    {
-        if (_net?.Profile is not { } p) return null;
-        var data = _data();
-        var perkLevels = data.Perks.Perks.ToDictionary(x => x.Id, x => x.UnlockLevel);
-        return LoadoutRules.ValidateLoadout(_draft, data.Weapons, p.Level, p.Unlocks, perkLevels, data.Killstreaks.UnlockLevels);
-    }
 
     /// <summary>Rebuilds the six pickers from the data and the player's level and unlocks.</summary>
     void Fill(ProfileMsg p)
@@ -362,28 +361,31 @@ public partial class LoadoutScreen : MenuScreen
             var id = DraftId(i);
             _picks[i].Select(_ids[i].IndexOf(id));
         }
-        var reason = Reason();
-        _note.Text = _awaitingSave ? Strings.T("loadout.saving")
-            : reason != null ? Strings.F("loadout.invalid", reason)
-            : Dirty ? Strings.T("loadout.unsaved") : Strings.T("loadout.saved");
-        _note.ThemeTypeVariation = reason != null ? "MenuError" : Dirty ? "HudWarn" : "HudDim";
-        _save.Disabled = !Dirty || reason != null || _awaitingSave;
-        _discard.Disabled = !Dirty;
-        _makeActive.Disabled = _awaitingSave || _net?.Profile is not { } p || p.ActiveSlot == _tab;
+        // the status line words the autosave state (#145); the rules are checked by the server, which answers each save
+        var state = Autosave?.StateOf(_tab) ?? AutosaveState.Saved;
+        (_note.Text, _note.ThemeTypeVariation) = state switch
+        {
+            AutosaveState.Pending or AutosaveState.Saving => (Strings.T("loadout.saving"), "HudDim"),
+            AutosaveState.Retrying => (Strings.T("loadout.retrying"), "HudWarn"),
+            AutosaveState.Rejected => (Strings.F("loadout.invalid", Autosave!.RejectReason(_tab)), "MenuError"),
+            _ => (Strings.T("loadout.saved"), "HudDim"),
+        };
+        _undo.Disabled = !(Autosave?.CanUndo(_tab) ?? false);
+        _makeActive.Disabled = _net?.Profile is not { } p || p.ActiveSlot == _tab;
         UpdateStats();
         Refresh();
     }
 
     string DraftId(int picker) => picker switch
     {
-        0 => _draft.PrimaryWeapon, 1 => _draft.SecondaryWeapon, 2 => _draft.Perk,
-        3 => _draft.Streak1, 4 => _draft.Streak2, _ => _draft.Streak3,
+        0 => Draft.PrimaryWeapon, 1 => Draft.SecondaryWeapon, 2 => Draft.Perk,
+        3 => Draft.Streak1, 4 => Draft.Streak2, _ => Draft.Streak3,
     };
 
     void UpdateStats()
     {
         var data = _data().Weapons;
-        var draftId = _statPicker == 0 ? _draft.PrimaryWeapon : _draft.SecondaryWeapon;
+        var draftId = _statPicker == 0 ? Draft.PrimaryWeapon : Draft.SecondaryWeapon;
         var savedId = _statPicker == 0 ? _saved.PrimaryWeapon : _saved.SecondaryWeapon;
         _statTitle.Text = _statPicker == 0 ? Strings.T("loadout.primary") : Strings.T("loadout.secondary");
         var w = data.Find(draftId);

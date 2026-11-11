@@ -21,7 +21,11 @@ simulation, the data files and the wire codecs; the Godot scenes, shaders and HU
   the hotbar (`LoadoutHotbar.All`).
 - Corpses (#130): a killed player leaves a corpse holding its primary. Walking onto it and pressing E swaps the corpse's
   weapon into the primary or the secondary position.
-- Rename of a loadout is not built (no name field on the wire, see section 8).
+- Loadout autosave, rename, copy and reset (#145). Each loadout has a name (1-24 characters, trimmed, `LoadoutRules.ValidateName`,
+  default "Class 1" .. "Class 5"). The editor saves on its own after a pause: every `SaveLoadout` carries a client sequence
+  number (`seq`), and the server answers each one with a `LoadoutAck` event so the client can match answers. Copy (`CopyLoadout`)
+  and reset to the starter kit (`ResetLoadout`) are server-validated events; a copy keeps the destination's name and slot.
+  Dev mode (`--unlock-all`, #149) reports every unlock and the `dev/unlock_all` marker, and the starter kits are the showcase kits.
 
 ## 2. Weapons
 
@@ -172,7 +176,6 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 ## 8. Known gaps (collected from the closed tickets)
 
 Not built:
-- Rename of a loadout (#118, #141). It needs a name field on `Loadout` and `SaveLoadoutMsg`, which is a wire change.
 - XP gain toasts (kill, headshot, roadkill, streak kill). The server sends only `LevelUp` and the round summary; a per-kill
   XP event is needed (#143). Left open here (not trivial: a new wire event).
 - Perk icon. The HUD shows the perk as a text label (#143); there is no icon asset.
@@ -218,9 +221,11 @@ Server and persistence:
 
 ## 9. Wire protocol
 
-Protocol version: **6** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
+Protocol version: **8** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
 versions. Version 6 was bumped in #133 because the killstreak, aircraft, turret, missile, care package, corpse and MOAB
-events and world entity types are new. Before this, the last bump was 5 (camo per loadout slot).
+events and world entity types are new. Version 7 added the target dummies (#148: entity type 3 and event kind 140). Version 8
+added the loadout editor's autosave, rename, copy and reset (#145: event kinds 130-132, and `SaveLoadout` carries the name
+and the sequence number). Before 6, the last bump was 5 (camo per loadout slot).
 
 Event kinds (`EventKind`, one byte in the event message):
 
@@ -246,10 +251,13 @@ Event kinds (`EventKind`, one byte in the event message):
 | 18 | StreakUsed | | |
 | 19 | StreakEnded | | |
 | 20 | PickUpCorpse (client to server) | | |
-| 21 | Hotbar | | |
+| 21 | Hotbar | 130 | CopyLoadout (client to server, kinds 130-139) |
+| | | 131 | ResetLoadout (client to server) |
+| | | 132 | LoadoutAck (server to the editing player) |
+| | | 140 | TargetRoster (server to one player on join, kinds 140-149) |
 
 Message tags (`Wire.T*`): Hello 1, Welcome 2, Join 3, Leave 4, Event 5, Profile 6, SaveLoadout 7, SelectSlot 8, Error 9,
-SaveCamo 10, Input 11, Snapshot 20, WorldSnapshot 21.
+SaveCamo 10, Input 11, Snapshot 20, WorldSnapshot 21. SaveLoadout is slot, six item strings, name (string), seq (u32 LE).
 
 Special weapon ids (kill-feed `weapon` byte, `SpecialWeapons`): Ac130 244, Helper 245, AttackHelicopter 246, Turret 247,
 Missile 248, Moab 249, VehicleGun 250, Vehicle 252, Debug 253, Void 254, Fall 255, Drown 251. Killstreak ids (`StreakWeapons`)
@@ -261,12 +269,16 @@ aircraft 40. Players and vehicles keep their own snapshot code.
 Move buttons (`MoveButtons`, bits in the input message): Jump 1, Sprint 2, Crouch 4, Fire 8, Aim 16, Reload 32, Use 64,
 Switch 128, Headlights 256, Prone 512, Killstreak 1024.
 
+Snapshot entity types (`EntityType`, one byte in a snapshot entry): Player 0, Projectile 1, Vehicle 2, Target 3 (the target
+dummies, #148: planned on the ground, Defeat pose when down).
+
 Entity state (`EntityState`, one byte): Alive 0, Protected 1, InVehicle 2, Dead 3.
 
 Snapshot flags (`Wire.F*`): PosAbs 1, PosDelta 2, Rot 4, Status 8, Hp 16.
 
 Database migrations (`godot/ShooterServer.Persistence/migrations`, applied in order): 0001 init (players, loadouts, unlocks,
-stats, weapon_kills), 0002 roadkills, 0003 camo, 0004 loadout camo.
+stats, weapon_kills), 0002 roadkills, 0003 camo, 0004 loadout camo, 0005 loadout name (`loadouts.name`, empty for rows
+from before #145; the server gives those "Class N" on load).
 
 Data file versions: weapons 2, every other file 1.
 

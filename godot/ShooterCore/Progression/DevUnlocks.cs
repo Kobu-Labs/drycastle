@@ -45,7 +45,11 @@ public static class DevUnlocks
     public static Loadout DevKit(int slot)
     {
         if (slot is < 0 or > Loadout.MaxSlot) throw new ArgumentOutOfRangeException(nameof(slot));
-        return slot switch
+        return Kit(slot) with { Name = LoadoutRules.DefaultName(slot) };
+    }
+
+    static Loadout Kit(int slot) =>
+        slot switch
         {
             // each arm names its own slot number, so the kit always sits in the slot it is for
             // assault rifle, pistol, Fleet Foot, UAV, sentry turret, care package
@@ -59,5 +63,4 @@ public static class DevUnlocks
             // LMG with the big streaks, Hot Streak so they come sooner
             _ => new Loadout(4, "m249", "deagle", "hot_streak", "attack_helicopter", "ac130", "moab"),
         };
-    }
 }

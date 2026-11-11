@@ -97,8 +97,12 @@ public partial class NetServer
         foreach (var l in rows) if (l.Slot is >= 0 and <= Loadout.MaxSlot) slots[l.Slot] = l;
         for (var i = 0; i < slots.Length; i++)
         {
-            if (slots[i].PrimaryWeapon != "") continue;
-            slots[i] = defaults(i);
+            if (slots[i].PrimaryWeapon != "")
+            {
+                if (slots[i].Name != "") continue;
+                slots[i] = slots[i] with { Name = LoadoutRules.DefaultName(i) }; // a row from before loadout names (#145)
+            }
+            else slots[i] = defaults(i);
             if (saveDefaults) await store.Loadouts.SaveAsync(p.Id, slots[i]);
         }
         return new PlayerProfile
@@ -142,22 +146,85 @@ public partial class NetServer
     {
         switch (m)
         {
-            case SaveLoadoutMsg s: OnSaveLoadout(c, s.Loadout); break;
+            case SaveLoadoutMsg s: OnSaveLoadout(c, s); break;
             case SelectSlotMsg sl: OnSelectSlot(c, sl.Slot); break;
             case SaveCamoMsg sc: OnSaveCamo(c, sc.Slot, sc.Spec); break;
+            case EventMsg { Kind: (byte)EventKind.CopyLoadout } cp: OnCopyLoadout(c, cp.Payload); break;
+            case EventMsg { Kind: (byte)EventKind.ResetLoadout } rs: OnResetLoadout(c, rs.Payload); break;
         }
     }
 
-    void OnSaveLoadout(Client c, Loadout l)
+    /// <summary>Answers one save (ticket #145): the client matches it by seq. Failures change nothing on the server.</summary>
+    void AckSave(Client c, int slot, uint seq, string? error)
+    {
+        var ack = new LoadoutAckInfo(slot, seq, error == null, error ?? "");
+        Send(c, new EventMsg((byte)EventKind.LoadoutAck, LoadoutEvents.EncodeAck(ack)));
+    }
+
+    /// <summary>
+    /// Saves one slot from the editor (autosave sends these). The name is trimmed and checked (ValidateName), then the loadout
+    /// is checked against the data files and the player's unlocks. Ack ok on success, otherwise the reason.
+    /// </summary>
+    void OnSaveLoadout(Client c, SaveLoadoutMsg m)
     {
         var p = c.Profile!;
+        var l = m.Loadout;
+        if (LoadoutRules.ValidateSlot(l.Slot) is { } slotErr) { AckSave(c, l.Slot, m.Seq, slotErr); return; }
+        var name = LoadoutRules.ValidateName(l.Name, out var nameErr);
+        if (nameErr != null) { AckSave(c, l.Slot, m.Seq, nameErr); return; }
+        l = l with { Name = name! };
         if (LoadoutRules.ValidateLoadout(l, Weapons, p.Level, ReportedUnlocks(p), PerkLevels, Killstreaks.UnlockLevels) is { } err)
         {
-            Send(c, new ErrorMsg(err));
+            AckSave(c, l.Slot, m.Seq, err);
             return;
         }
         p.Loadouts[l.Slot] = l;
         if (p.Persist) _ = Progression!.Loadouts.SaveAsync(p.DbId, l);
+        AckSave(c, l.Slot, m.Seq, null);
+        SendProfile(c);
+    }
+
+    /// <summary>
+    /// Copies one slot's loadout and camouflage into another (ticket #145). The destination keeps its own name, and the active
+    /// slot does not change. The copied loadout is validated like a save. Invalid copies get an <see cref="ErrorMsg"/>.
+    /// </summary>
+    void OnCopyLoadout(Client c, byte[] payload)
+    {
+        var p = c.Profile!;
+        if (LoadoutEvents.DecodeCopy(payload) is not { } pair) { Send(c, new ErrorMsg("malformed copy request")); return; }
+        var (from, to) = pair;
+        if (LoadoutRules.ValidateSlot(from) is { } fromErr) { Send(c, new ErrorMsg(fromErr)); return; }
+        if (LoadoutRules.ValidateSlot(to) is { } toErr) { Send(c, new ErrorMsg(toErr)); return; }
+        if (from == to) { Send(c, new ErrorMsg("copy needs two different slots")); return; }
+        var next = LoadoutRules.CopyInto(p.Loadouts[from], p.Loadouts[to]);
+        if (LoadoutRules.ValidateLoadout(next, Weapons, p.Level, ReportedUnlocks(p), PerkLevels, Killstreaks.UnlockLevels) is { } err)
+        {
+            Send(c, new ErrorMsg(err));
+            return;
+        }
+        p.Loadouts[to] = next;
+        p.Camos[to] = p.Camos[from];
+        if (p.Persist)
+        {
+            _ = Progression!.Loadouts.SaveAsync(p.DbId, next);
+            _ = Progression.Camo.SaveAsync(p.DbId, to, p.Camos[to]);
+        }
+        SendProfile(c);
+        if (to == p.Active) BroadcastAppearance(c);
+    }
+
+    /// <summary>
+    /// Restores one slot's loadout to the starter kit and its default name (ticket #145). The slot's camouflage is kept:
+    /// the reset covers the loadout items, not the look.
+    /// </summary>
+    void OnResetLoadout(Client c, byte[] payload)
+    {
+        var p = c.Profile!;
+        if (LoadoutEvents.DecodeReset(payload) is not { } slot) { Send(c, new ErrorMsg("malformed reset request")); return; }
+        if (LoadoutRules.ValidateSlot(slot) is { } err) { Send(c, new ErrorMsg(err)); return; }
+        var next = StarterLoadout(slot); // the showcase kit in dev mode (#149)
+        p.Loadouts[slot] = next;
+        if (p.Persist) _ = Progression!.Loadouts.SaveAsync(p.DbId, next);
         SendProfile(c);
     }
 

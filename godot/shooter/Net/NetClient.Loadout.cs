@@ -29,6 +29,47 @@ public partial class NetClient
     /// <summary>weapons.json indexes of the spawn hotbar: primary, secondary, knife (keys 1-3 and the cycle).</summary>
     int[] _hotbar = Array.Empty<int>();
 
+    /// <summary>
+    /// Loadout autosave state (#145). It lives on the connection, not the screen, so a save in flight is still answered when
+    /// the player leaves the editor. The screen reads it; <see cref="PumpAutosave"/> sends it.
+    /// </summary>
+    public LoadoutAutosave Autosave { get; } = new();
+    /// <summary>Raised for every answer to a save (ok or the reason), so the editor can show a rejection.</summary>
+    public event Action<LoadoutAckInfo>? LoadoutAcked;
+
+    /// <summary>Sends every save whose debounce has run out (called each frame), and times out the ones that got no answer.</summary>
+    public void PumpAutosave()
+    {
+        var now = (long)Time.GetTicksMsec();
+        foreach (var (slot, seq, value) in Autosave.Poll(now))
+            if (!SaveLoadout(value, seq)) Autosave.Abandon(slot, now);
+    }
+
+    /// <summary>Leaving the editor: every unsent edit goes out now, so nothing waits on the debounce.</summary>
+    public void FlushAutosave()
+    {
+        Autosave.Flush((long)Time.GetTicksMsec());
+        PumpAutosave();
+    }
+
+    /// <summary>Asks the server to copy one loadout slot (and its camouflage) into another. The answer is a new profile, or a <see cref="ServerError"/>.</summary>
+    public bool CopyLoadout(int from, int to)
+    {
+        if (_peer == null || !_welcomed) return false;
+        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.CopyLoadout, LoadoutEvents.EncodeCopy(from, to))), (int)ENetPacketPeer.FlagReliable);
+        _conn.Flush();
+        return true;
+    }
+
+    /// <summary>Asks the server to restore one loadout slot to the starter kit. The answer is a new profile, or a <see cref="ServerError"/>.</summary>
+    public bool ResetLoadout(int slot)
+    {
+        if (_peer == null || !_welcomed) return false;
+        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.ResetLoadout, LoadoutEvents.EncodeReset(slot))), (int)ENetPacketPeer.FlagReliable);
+        _conn.Flush();
+        return true;
+    }
+
     /// <summary>Takes the active loadout (as the server does at the spawn): the hotbar, the perk, and the hotbar names on the HUD.</summary>
     void ApplySpawnLoadout()
     {
@@ -59,6 +100,7 @@ public partial class NetClient
     /// <summary>A profile arrived: the editor and the respawn list redraw from it.</summary>
     void OnProfileReceived(ProfileMsg p)
     {
+        foreach (var l in p.Loadouts) Autosave.Seed(l); // the editor's server copy; a draft still being saved stays on screen
         ProfileChanged?.Invoke(p);
         _hud?.SetLoadoutRows(LoadoutRows(p));
         RefreshProgress();
@@ -118,6 +160,10 @@ public partial class NetClient
                 RefreshProgress();
                 GD.Print($"client {PlayerName}: level up to {lu.Level}");
                 LevelUpReceived?.Invoke(lu);
+                break;
+            case EventKind.LoadoutAck when LoadoutEvents.DecodeAck(payload) is { } ack:
+                Autosave.Acknowledge(ack);
+                LoadoutAcked?.Invoke(ack);
                 break;
             case EventKind.StreakEarned or EventKind.StreakUsed or EventKind.StreakEnded:
                 OnStreakEvent(kind, payload);

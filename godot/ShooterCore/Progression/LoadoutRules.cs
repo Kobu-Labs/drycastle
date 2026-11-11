@@ -9,6 +9,26 @@ public static class LoadoutRules
     /// <summary>Longest item id the wire carries; anything longer cannot be a data-file id.</summary>
     public const int MaxItemIdBytes = 48;
 
+    /// <summary>Longest loadout name, in characters, after trimming (ticket #145).</summary>
+    public const int MaxNameChars = 24;
+
+    /// <summary>The default name of a slot: "Class 1" .. "Class 5".</summary>
+    public static string DefaultName(int slot) => $"Class {slot + 1}";
+
+    /// <summary>
+    /// Checks a submitted loadout name. Returns the trimmed name, or null with <paramref name="error"/> set. Profanity is not
+    /// filtered (the ticket says so); control characters and an empty name are refused.
+    /// </summary>
+    public static string? ValidateName(string? raw, out string? error)
+    {
+        error = null;
+        var name = (raw ?? "").Trim();
+        if (name.Length == 0) error = "a loadout name cannot be empty";
+        else if (name.Length > MaxNameChars) error = $"a loadout name can be at most {MaxNameChars} characters";
+        else if (name.Any(char.IsControl)) error = "a loadout name cannot contain control characters";
+        return error == null ? name : null;
+    }
+
     /// <summary>
     /// The loadout a new or guest player gets in every slot: the first unlock-0 primary and secondary weapon in data-file
     /// order, the first unlock-0 perk, and the starter killstreak (<see cref="KillstreakIds.StarterStreak"/>).
@@ -18,8 +38,15 @@ public static class LoadoutRules
         var primary = weapons.Weapons.FirstOrDefault(w => w.Slot == WeaponSlot.Primary && w.UnlockLevel == 0)?.Id ?? "";
         var secondary = weapons.Weapons.FirstOrDefault(w => w.Slot == WeaponSlot.Secondary && w.UnlockLevel == 0)?.Id ?? "";
         var perk = perks.Perks.FirstOrDefault(p => p.UnlockLevel == 0)?.Id ?? "";
-        return new Loadout(slot, primary, secondary, perk, KillstreakIds.StarterStreak, "", "");
+        return new Loadout(slot, primary, secondary, perk, KillstreakIds.StarterStreak, "", "", DefaultName(slot));
     }
+
+    /// <summary>
+    /// The loadout a copy leaves in the destination slot: the source's items (the caller copies the camouflage too), under the
+    /// destination's slot number and name. The copy is validated like any save before it is stored.
+    /// </summary>
+    public static Loadout CopyInto(Loadout source, Loadout destination) =>
+        source with { Slot = destination.Slot, Name = destination.Name };
 
     /// <summary>Null when the slot number is one of the five; otherwise the reason.</summary>
     public static string? ValidateSlot(int slot) =>
