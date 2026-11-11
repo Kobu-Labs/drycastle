@@ -170,9 +170,24 @@ on a body (the hit point), and rounds to destroy a 300 hp car (direct hit, rocke
 | AC-130 40 mm (m82) | 0.2 s | 36 | 180 | 6 m | 6 |
 | AC-130 105 mm shell (bazooka) | 1.0 s | 150 | 150 | 14 m | 2 |
 
-Gunship rockets keep the bazooka's own blast (6 m) because the rocket sim owns the explosion. The enemy markers on the overlay
-are a red diamond per visible enemy player and target dummy, the nearest to the reticle larger (`GunshipOverlay`, from the
-remote replicas). The attack missile view has no markers yet.
+Gunship rockets (#159) have their own 8 m blast: a `splash` block on the rockets entry in killstreaks.json (radius 8, full damage
+to 2 m, edge 20, no self damage). The rocket sim takes it per launch (`Rocket.Blast`, `ProjectileMath.WithBlast`), so the bazooka
+keeps weapons.json's 6 m, and the explosion's radius rides the Explosion event (protocol 12). The enemy markers are a red diamond
+per visible enemy player and target dummy, the nearest to the reticle larger. One helper draws them for both the gunship overlay
+and the attack missile's infrared view (`EnemyMarkers`, from the remote replicas), so the two cannot drift apart.
+
+Coalesced gunship FX (#159): damage is applied when a round resolves, as before, but the clients are told once per server tick
+(30 Hz), not once per round. Per tick, each gunner sends at most one shots message (up to 8 tracers; the first 8 of the tick are
+drawn), everyone gets at most one impacts message (up to 6; every kill is kept, then the biggest of the rest), and each gunner
+gets at most one blasts message (up to 8 blasts, the biggest kept) carrying its hit-marker flags (hit, headshot, kill), so the
+hit marker is one per tick and not one per round. The batch is `GunshipFxBatch` (pure, tested in `GunshipFxTests`), flushed at the
+end of the tick. At 25 rounds a second a gunner lands about one round a tick, so the coalescing does not save bytes at the normal rate. Measured
+for one gunner's full-rate 25 mm second (25 rounds, each with a tracer, an impact and a 3 m blast, 40 bytes of packet overhead
+per message): 4875 bytes a second coalesced. The old per-round events for the same second come to about 4775 bytes (Shot 31,
+ImpactFx 18 and Ac130Blast 22 bytes each, envelope included, plus the same overhead). The test asserts under the 6000 bytes a second budget. The
+saving is in bursts (a stall of input, or several gunners in a tick), where the caps bound the messages to three per gunner per
+tick. Server-side damage is not covered by a test in ShooterCore.Tests (the resolution is in Godot); it is applied when each round
+resolves, before the tick's flush.
 
 Reachability (#133, estimate): UAV and the turret are reachable in a first life at level 0-5. The 18 and 24 kill streaks
 need most of a 25-kill round in a single life; with `score_goal` 25 the MOAB is effectively a match-deciding streak.
@@ -268,8 +283,11 @@ Server and persistence:
 
 ## 9. Wire protocol
 
-Protocol version: **11** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
-versions. Version 11 (#157) cut the GunshipStatus payload to weapon and zoom (2 bytes): the turret has no ammo and no heat. Version 10 (#156) added the hello flags byte (bit 0: sandbox requested), event kinds 150 (SandboxStatus, server to the joining player), 151 (SandboxGrant: hold a streak), 152 (SandboxAction: heal, teleport, vehicle, target respawn, use the held streak), 153 (SandboxState: the [SANDBOX] name tags), 154 (SandboxHeld) and 155 (SandboxNotice). The F4 panel (sandbox_panel, rebindable) is client-side only. Version 9 (#151) retired the care package's PerkGained (kind 51) and added StreakGranted (kind 23). Version 6 was bumped in #133 because the killstreak, aircraft, turret, missile, care package, corpse and MOAB
+Protocol version: **12** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
+versions. Version 12 (#159) coalesces the gunship FX: the per-round Shot, ImpactFx and Ac130Blast of the turrets are replaced by
+GunshipShots (121), GunshipImpacts (122) and GunshipBlasts (123), one per gunner (or per tick) per server tick, and kind 120 is
+retired. The Explosion payload grew by a f32 blast radius (21 bytes), so a gunship rocket's 8 m reaches the clients. Layouts are in
+`GunshipFxCodec`. Version 11 (#157) cut the GunshipStatus payload to weapon and zoom (2 bytes): the turret has no ammo and no heat. Version 10 (#156) added the hello flags byte (bit 0: sandbox requested), event kinds 150 (SandboxStatus, server to the joining player), 151 (SandboxGrant: hold a streak), 152 (SandboxAction: heal, teleport, vehicle, target respawn, use the held streak), 153 (SandboxState: the [SANDBOX] name tags), 154 (SandboxHeld) and 155 (SandboxNotice). The F4 panel (sandbox_panel, rebindable) is client-side only. Version 9 (#151) retired the care package's PerkGained (kind 51) and added StreakGranted (kind 23). Version 6 was bumped in #133 because the killstreak, aircraft, turret, missile, care package, corpse and MOAB
 events and world entity types are new. Version 7 added the target dummies (#148: entity type 3 and event kind 140). Version 8
 added the loadout editor's autosave, rename, copy and reset (#145: event kinds 130-132, and `SaveLoadout` carries the name
 and the sequence number). Before 6, the last bump was 5 (camo per loadout slot).
@@ -286,7 +304,9 @@ Event kinds (`EventKind`, one byte in the event message):
 | 6 | Explosion | 70 | Moab |
 | 7 | Death | 90 | UavPing |
 | 8 | Debug (client to server) | 110 | HelperWarning (kinds 110-119) |
-| 9 | Ammo | 120 | Ac130Blast (kinds 120-129) |
+| 9 | Ammo | 121 | GunshipShots, per gunner per tick (kinds 120-129; 120 retired, #159) |
+| | | 122 | GunshipImpacts, per tick |
+| | | 123 | GunshipBlasts, per gunner per tick, with hit flags |
 | 10 | Launch | | |
 | 11 | VehicleExplosion | | |
 | 12 | PelletFan | | |

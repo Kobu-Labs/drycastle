@@ -22,7 +22,7 @@ public enum GunshipWeaponKind : byte
 {
     /// <summary>A hitscan round from the turret (walls, players, dummies, vehicles), with an optional blast.</summary>
     Cannon,
-    /// <summary>A rocket on the player rocket sim (its splash is the weapons.json entry's).</summary>
+    /// <summary>A rocket on the player rocket sim (its blast is the weapons.json entry's unless the weapon sets its own splash).</summary>
     Rocket,
     /// <summary>A shell: a hitscan trace to the first wall, player or vehicle, then a blast with its own <see cref="GunshipWeaponDef.Splash"/>.</summary>
     Shell,
@@ -31,7 +31,7 @@ public enum GunshipWeaponKind : byte
 /// <summary>
 /// One weapon a gunship's turret fires. There is no ammo and no heat: the streak's time limit is the only limit, and the
 /// fire interval is the pacing. <see cref="WeaponId"/> names a weapons.json entry: it gives the shot's sound and tracer (the
-/// shot index on the wire), and for a rocket the explosion numbers (the rocket sim is the player's). A cannon uses its own
+/// shot index on the wire), and for a rocket the flight and the default explosion (the rocket sim is the player's). A cannon uses its own
 /// <see cref="Damage"/>, <see cref="RangeM"/>, <see cref="SpreadDeg"/> and optional <see cref="Splash"/>.
 /// </summary>
 public sealed class GunshipWeaponDef
@@ -47,7 +47,8 @@ public sealed class GunshipWeaponDef
     public float SpreadDeg { get; init; }
     /// <summary>
     /// The blast of a round (its own tuning, not weapons.json): a shell always has one, a cannon round may have one (its hit
-    /// point takes the full damage, everything in the radius the falloff). Null for a rocket (the rocket sim's blast).
+    /// point takes the full damage, everything in the radius the falloff). A rocket may have one too: it then replaces the
+    /// weapons.json blast for that launch (the gunship's rockets 8 m; the bazooka keeps its 6 m). Null uses the weapon's own.
     /// </summary>
     public SplashDef? Splash { get; init; }
 }
@@ -178,8 +179,6 @@ public static class AircraftData
                 "shell" => GunshipWeaponKind.Shell,
                 _ => throw new DataFileException($"{F}: {where}: field \"kind\" must be cannon, rocket or shell"),
             };
-            if (kind == GunshipWeaponKind.Rocket && r.Splash != null)
-                throw new DataFileException($"{F}: {where}: a rocket's blast is weapons.json's, so it takes no \"splash\" block");
             SplashDef? splash = null;
             if (r.Splash is { } s)
             {

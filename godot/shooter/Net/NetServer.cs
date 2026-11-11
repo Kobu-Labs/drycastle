@@ -100,7 +100,7 @@ public partial class NetServer : Node
     // weapons smoke bookkeeping
     int _shotsFired, _hitsLanded, _headshots, _wallBlocked, _backstabs, _refills;
     // rockets: server-owned projectile entities, ids from 0x8000 up (player ids count up from 1)
-    sealed class Rocket { public ushort Id, Owner; public byte Weapon; public Vector3 Pos, Dir; public float Age; }
+    sealed class Rocket { public ushort Id, Owner; public byte Weapon; public Vector3 Pos, Dir; public float Age; public SplashDef? Blast; }
     readonly List<Rocket> _rockets = new();
     ushort _nextRocket = 0x8000;
     public bool BazookaSmoke;
@@ -165,6 +165,7 @@ public partial class NetServer : Node
         foreach (var c in _clients.Values.ToList()) if (c.Joined) SimulateClient(c, (float)delta);
         StepRockets((float)delta);
         StepVehicles((float)delta);
+        FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
         SendSnapshots();
         LossTickEnd(tickStartUs);
@@ -632,7 +633,8 @@ public partial class NetServer : Node
         var kill = r == DamageResult.Killed;
         var msg = new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attackerId, weaponIdx, (ushort)damage, head, backstab, kill)));
         _byId.TryGetValue(attackerId, out var attacker);
-        if (attacker != null) Send(attacker, msg);
+        if (attackerId == _gunFxOwner) _gunFx.Hit(attackerId, head, kill); // a gunner's hit marker rides the tick's gunship blasts (#159)
+        else if (attacker != null) Send(attacker, msg);
         if (_byId.TryGetValue(victim, out var v) && v != attacker) Send(v, msg);
         if (kill && victim != attackerId && attacker != null) { attacker.W.RefillReserves(); _refills++; }
         GD.Print($"server: hit #{attackerId} -> #{victim} {damage:F0}{(head ? " head" : "")}{(backstab ? " backstab" : "")}{(kill ? " KILL" : "")}");
@@ -672,11 +674,12 @@ public partial class NetServer : Node
     /// Explosion: the direct-hit victim takes the full damage (and no splash on top); everyone else alive within the splash
     /// radius takes the linear falloff damage, the owner scaled by the self multiplier. Splash ignores walls. Affected players get knockback.
     /// </summary>
-    void Explode(Rocket r, WeaponDef w, Vector3 pos, ushort? direct, ServerCar? directCar = null)
+    void Explode(Rocket r, WeaponDef weapon, Vector3 pos, ushort? direct, ServerCar? directCar = null)
     {
+        var w = ProjectileMath.WithBlast(weapon, r.Blast); // a gunship's rocket has its own blast (killstreaks.json); the bazooka keeps weapons.json's
         _explosions++;
         if (Vehicles != null) RocketVsVehicles(pos, w, r.Owner, r.Weapon, directCar);
-        BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(r.Id, r.Owner, r.Weapon, N(pos))));
+        BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(r.Id, r.Owner, r.Weapon, N(pos), w.Splash?.Radius ?? 0)));
         BroadcastImpact(N(pos), ImpactSize.Plume, body: direct != null && directCar == null, vehicle: directCar != null); // rockets throw up a plume (ticket #154)
         foreach (var t in LiveTargets())
         {

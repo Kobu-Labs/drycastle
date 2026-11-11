@@ -6,7 +6,7 @@ namespace Suchohrad.Shooter;
 /// <summary>
 /// The AC-130 on the client (killstreak "ac130"). The owner's StreakUsed starts the AC-130 view (its turret def, its weapon
 /// selector and its time left, counted from the streak's duration in killstreaks.json); StreakEnded ends it. Everyone sees
-/// the shell bursts (EventKind.Ac130Blast): the explosion look at the splash radius and the shake.
+/// the shell bursts (the gunship FX, #159): the explosion look at the splash radius and the shake.
 /// </summary>
 public partial class NetClient
 {
@@ -34,13 +34,4 @@ public partial class NetClient
     }
 
     void Ac130Ended() => _ac130Active = false;
-
-    /// <summary>A shell burst: the explosion at the splash radius, the shake, and the bazooka's blast sound until the shell has its own.</summary>
-    void OnAc130Blast(Ac130BlastInfo b)
-    {
-        var at = new Vector3(b.Position.X, b.Position.Y, b.Position.Z);
-        if (Sfx.Enabled) Sfx.Play3D(SoundRules.Event("explosion", "bazooka"), at);
-        RocketFx.Explode(World, at, b.Radius);
-        ShakeFor(at, b.Radius);
-    }
 }

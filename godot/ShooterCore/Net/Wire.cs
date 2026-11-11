@@ -61,8 +61,13 @@ public enum EventKind : byte
     ImpactFx = 61,
     /// <summary>Server to the owner only: the UAV's enemy pulse and seconds left (<see cref="UavEvents"/>), every second while up.</summary>
     UavPing = 90,
-    /// <summary>Server broadcast: an AC-130 shell burst (owner, centre, splash radius). See <see cref="Ac130Codec"/>. Kinds 120-129 belong to the AC-130 streak.</summary>
-    Ac130Blast = 120,
+    // 120 was Ac130Blast (one message per shell, protocol 11); protocol 12 coalesces the gunship FX into 121-123, so 120 is not reused.
+    /// <summary>Server broadcast: one gunner's cannon tracers this tick (<see cref="GunshipFxCodec"/>). Kinds 120-129 belong to the gunship streaks; 120 is retired.</summary>
+    GunshipShots = 121,
+    /// <summary>Server broadcast: the impacts of the gunship rounds this tick, kills always included (<see cref="GunshipFxCodec"/>).</summary>
+    GunshipImpacts = 122,
+    /// <summary>Server broadcast: one gunner's blasts this tick and its hit-marker flags (<see cref="GunshipFxCodec"/>).</summary>
+    GunshipBlasts = 123,
     /// <summary>Server to the one player a helicopter helper is about to fire on: red-dot warning (<see cref="HelperWarningCodec"/>). Kinds 110-119 belong to the helicopter helper.</summary>
     HelperWarning = 110,
     /// <summary>Client to server: copy one loadout slot (and its camouflage) into another (<see cref="LoadoutEvents"/>). Kinds 130-139 belong to the loadout editor (#145).</summary>
@@ -149,8 +154,8 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 /// </summary>
 public static class Wire
 {
-    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-155 (sandbox status, grant, action, state, held streak and notice, #156); v11: GunshipStatus is weapon and zoom only (2 bytes; ammo and heat are gone, #157).</summary>
-    public const byte ProtocolVersion = 11;
+    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-155 (sandbox status, grant, action, state, held streak and notice, #156); v11: GunshipStatus is weapon and zoom only (2 bytes; ammo and heat are gone, #157); v12: the gunship FX is coalesced per tick (event kinds 121-123 replace the per-round Shot, ImpactFx and Ac130Blast of the gunships, #159), and the Explosion carries its blast radius (a gunship rocket's is 8 m).</summary>
+    public const byte ProtocolVersion = 12;
     public const byte TickRate = 30;
     public const int ChanReliable = 0, ChanData = 1, Channels = 2;
     public const int KeyEvery = 30;

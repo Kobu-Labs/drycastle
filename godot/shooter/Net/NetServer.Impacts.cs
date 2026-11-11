@@ -34,12 +34,16 @@ public partial class NetServer
         return ImpactGroups.For(onRoad, parcel?.Kind, above);
     }
 
-    /// <summary>Sends one impact: the surface is classified here (water wins over the map groups), then the size and the point go to everyone.</summary>
-    void BroadcastImpact(NVec3 at, ImpactSize size, bool body = false, bool vehicle = false)
+    /// <summary>An impact's surface and size, classified here (water wins over the map groups). Used alone or in a tick's gunship batch.</summary>
+    ImpactInfo ImpactAt(NVec3 at, ImpactSize size, bool body = false, bool vehicle = false)
     {
         var surface = SurfaceClassifier.Classify(body, vehicle, Water.DepthAt(at) > 0, body || vehicle ? null : SurfaceGroup(at));
-        BroadcastEvent(EventKind.ImpactFx, ImpactCodec.Encode(new ImpactInfo(at, surface, size)));
+        return new ImpactInfo(at, surface, size);
     }
+
+    /// <summary>Sends one impact to everyone (rockets, the missile, the helpers and the bullets' puffs).</summary>
+    void BroadcastImpact(NVec3 at, ImpactSize size, bool body = false, bool vehicle = false) =>
+        BroadcastEvent(EventKind.ImpactFx, ImpactCodec.Encode(ImpactAt(at, size, body, vehicle)));
 
     /// <summary>A plain bullet that hit the ground or a wall (not a body, not a car): a small puff, at most one per <see cref="BulletPuffGap"/>.</summary>
     void BulletPuff(NVec3 at)

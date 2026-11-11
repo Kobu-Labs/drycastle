@@ -55,6 +55,12 @@ public static class ProjectileMath
         return MathF.Max(1f, MathF.Round(dmg));
     }
 
+    /// <summary>
+    /// The weapon as one launch explodes: the same weapon with its blast replaced by <paramref name="blast"/> (a gunship's rocket
+    /// has its own 8 m blast; the bazooka keeps weapons.json's). Null keeps the weapon's own blast.
+    /// </summary>
+    public static WeaponDef WithBlast(WeaponDef w, SplashDef? blast) => blast == null ? w : new WeaponDef { Id = w.Id, Kind = w.Kind, Damage = w.Damage, Splash = blast };
+
     /// <summary>Splash strength 0..1 (before the self multiplier), used to scale knockback.</summary>
     public static float SplashFraction(WeaponDef w, float distance) =>
         w.Splash == null || w.Damage <= 0 ? 0 : SplashDamage(w, distance, false) / w.Damage;

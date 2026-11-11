@@ -126,16 +126,6 @@ public class Ac130Tests
         Assert.Equal(0, h.Entities.Count);
     }
 
-    [Fact]
-    public void Blast_payload_round_trips()
-    {
-        var bytes = Ac130Codec.EncodeBlast(Owner, new Vector3(1.5f, 2f, -3f), 14f);
-        Assert.Equal(Ac130Codec.BlastBytes, bytes.Length);
-        var b = Ac130Codec.DecodeBlast(bytes);
-        Assert.Equal(new Ac130BlastInfo(Owner, new Vector3(1.5f, 2f, -3f), 14f), b);
-        Assert.Null(Ac130Codec.DecodeBlast(bytes.AsSpan(1)));
-    }
-
     /// <summary>The AC-130 in a service with the real table: 18 kills earn it, and the rest of the streaks log.</summary>
     sealed class Harness
     {

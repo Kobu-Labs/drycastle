@@ -34,7 +34,8 @@
     "weapons": [
       { "id": "cannon", "name": "Cannon", "kind": "cannon", "weapon_id": "m82", "damage": 25, "range_m": 400, "interval_s": 0.15, "spread_deg": 0.6,
         "splash": { "radius": 3, "full_damage_radius": 1, "edge_damage": 8, "self_damage_multiplier": 0, "knockback_speed": 4 } },
-      { "id": "rockets", "name": "Rockets", "kind": "rocket", "weapon_id": "bazooka", "damage": 0, "range_m": 600, "interval_s": 1.2, "spread_deg": 0.3 }
+      { "id": "rockets", "name": "Rockets", "kind": "rocket", "weapon_id": "bazooka", "damage": 0, "range_m": 600, "interval_s": 1.2, "spread_deg": 0.3,
+        "splash": { "radius": 8, "full_damage_radius": 2, "edge_damage": 20, "self_damage_multiplier": 0, "knockback_speed": 4.5 } }
     ]
   },
   "ac130": {

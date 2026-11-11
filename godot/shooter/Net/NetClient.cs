@@ -664,17 +664,7 @@ public partial class NetClient : Node
                 HudAmmo();
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
-                _shotLog.Add((Now, sh));
-                if (_remotes.TryGetValue(sh.Shooter, out var shooter)) shooter.FireUntil = Now + 0.45;
-                if (sh.Shooter == _myId && Weapons != null && sh.Weapon < Weapons.Weapons.Count) _spread.Shot(Weapons.Weapons[sh.Weapon], Now);
-                var melee = Weapons != null && sh.Weapon < Weapons.Weapons.Count && Weapons.Weapons[sh.Weapon].Kind == WeaponKind.Melee;
-                if (EchoOfPredicted(sh.Shooter)) break; // already played and drawn by prediction
-                var endV = new Vector3(sh.End.X, sh.End.Y, sh.End.Z);
-                SfxShot(sh, melee);
-                if (!melee) { if (sh.Shooter == _myId) _viewmodel?.Flash(0.4f); else if (_remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
-                ShotFx.Spawn(World, MuzzleOf(sh.Shooter, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV), endV, melee);
-                if (!melee) ShotHole(new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV);
-                if (!melee) BulletSurfaceHit(new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV);
+                OnShot(sh);
                 break;
             case EventKind.PelletFan when WeaponCodec.DecodePelletFan(payload) is { } pf:
                 OnPelletFan(pf);
@@ -697,7 +687,7 @@ public partial class NetClient : Node
                 _dec.Remove(ex.Id);
                 _deadRockets.Add(ex.Id);
                 if (_deadRockets.Count > 256) _deadRockets.Clear();
-                var exR = Weapons?.Weapons.ElementAtOrDefault(ex.Weapon)?.Splash?.Radius ?? 6f;
+                var exR = ex.Radius > 0 ? ex.Radius : 6f; // the blast the server used (a gunship rocket's is 8 m)
                 var exAt = new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z);
                 RocketFx.Explode(World, exAt, exR);
                 ShakeFor(exAt, exR);
@@ -711,8 +701,14 @@ public partial class NetClient : Node
             case EventKind.MissileBlast when MissileCodec.DecodeBlast(payload) is { } mb:
                 OnMissileBlast(mb);
                 break;
-            case EventKind.Ac130Blast when Ac130Codec.DecodeBlast(payload) is { } ab:
-                OnAc130Blast(ab);
+            case EventKind.GunshipShots when GunshipFxCodec.DecodeShots(payload) is { } gs:
+                OnGunshipShots(gs);
+                break;
+            case EventKind.GunshipImpacts when GunshipFxCodec.DecodeImpacts(payload) is { } gi:
+                OnGunshipImpacts(gi);
+                break;
+            case EventKind.GunshipBlasts when GunshipFxCodec.DecodeBlasts(payload) is { } gb:
+                OnGunshipBlasts(gb);
                 break;
             case EventKind.ImpactFx when ImpactCodec.Decode(payload) is { } imp:
                 OnImpactFx(imp);

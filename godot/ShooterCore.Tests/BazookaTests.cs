@@ -96,7 +96,7 @@ public class BazookaTests
     {
         var l = new LaunchMsg(0x8001, 3, 2, new Vector3(1, 2, 3), new Vector3(0, 0, -40));
         Assert.Equal(l, WeaponCodec.DecodeLaunch(WeaponCodec.Encode(l)));
-        var e = new ExplosionMsg(0x8001, 3, 2, new Vector3(4, 5, 6));
+        var e = new ExplosionMsg(0x8001, 3, 2, new Vector3(4, 5, 6), 8f);
         Assert.Equal(e, WeaponCodec.DecodeExplosion(WeaponCodec.Encode(e)));
     }
 }

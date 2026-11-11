@@ -75,34 +75,3 @@ public sealed class Ac130Streak : IKillstreak
         return true;
     }
 }
-
-/// <summary>Wire payloads of the AC-130 (EventKind 120+).</summary>
-public static class Ac130Codec
-{
-    /// <summary>EventKind.Ac130Blast: u16 owner, three f32 centre, f32 splash radius.</summary>
-    public const int BlastBytes = 2 + 12 + 4;
-
-    public static byte[] EncodeBlast(ushort owner, Vector3 at, float radius)
-    {
-        var b = new byte[BlastBytes];
-        BinaryPrimitives.WriteUInt16LittleEndian(b, owner);
-        BinaryPrimitives.WriteSingleLittleEndian(b.AsSpan(2), at.X);
-        BinaryPrimitives.WriteSingleLittleEndian(b.AsSpan(6), at.Y);
-        BinaryPrimitives.WriteSingleLittleEndian(b.AsSpan(10), at.Z);
-        BinaryPrimitives.WriteSingleLittleEndian(b.AsSpan(14), radius);
-        return b;
-    }
-
-    public static Ac130BlastInfo? DecodeBlast(ReadOnlySpan<byte> d)
-    {
-        if (d.Length != BlastBytes) return null;
-        var at = new Vector3(
-            BinaryPrimitives.ReadSingleLittleEndian(d.Slice(2)),
-            BinaryPrimitives.ReadSingleLittleEndian(d.Slice(6)),
-            BinaryPrimitives.ReadSingleLittleEndian(d.Slice(10)));
-        return new Ac130BlastInfo(BinaryPrimitives.ReadUInt16LittleEndian(d), at, BinaryPrimitives.ReadSingleLittleEndian(d.Slice(14)));
-    }
-}
-
-/// <summary>A shell's blast as the clients see it: who fired, where it burst and the splash radius.</summary>
-public readonly record struct Ac130BlastInfo(ushort Owner, Vector3 Position, float Radius);
