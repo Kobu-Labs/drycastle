@@ -218,11 +218,11 @@ public sealed class KillstreakService
         _send(use.Owner, EventKind.StreakEnded, KillstreakEvents.EncodeEnded(use.StreakId, use.EndReason ?? KillstreakEndReason.Finished));
     }
 
-    internal bool TakeControl(KillstreakUse use, ushort entityId, Action<NetInput> onInput, bool freezesBody)
+    internal bool TakeControl(KillstreakUse use, ushort entityId, Action<NetInput> onInput, bool freezesBody, bool shieldsBody)
     {
         if (!use.IsOpen) return false;
         if (_control.TryGetValue(use.Owner, out var holder) && !ReferenceEquals(holder, use)) return false;
-        use.Control = new ControlSession(use.Owner, use.StreakId, entityId, onInput, freezesBody);
+        use.Control = new ControlSession(use.Owner, use.StreakId, entityId, onInput, freezesBody, shieldsBody);
         _control[use.Owner] = use;
         return true;
     }

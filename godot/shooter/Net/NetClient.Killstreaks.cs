@@ -38,10 +38,12 @@ public partial class NetClient
             case EventKind.StreakUsed when KillstreakEvents.DecodeUsed(payload) is { } u:
                 _streaks.OnUsed(u.StreakId);
                 OnStreakUsed(u.StreakId);
+                HeliStreakUsed(u.StreakId);
                 break;
             case EventKind.StreakEnded when KillstreakEvents.DecodeEnded(payload) is { } x:
                 _streaks.OnEnded(x.StreakId);
                 OnStreakEnded(x.StreakId);
+                HeliStreakEnded(x.StreakId);
                 break;
             default:
                 return;
@@ -52,6 +54,7 @@ public partial class NetClient
     /// <summary>A kill from the match feed. The owner's own kills (not suicides) advance the counter.</summary>
     void OnStreakKill(KillMsg k)
     {
+        HeliKill(k);
         if (_streaks == null || k.Killer != _myId || k.Killer == k.Victim) return;
         _streaks.OnKill();
         RefreshStreaks();

@@ -24,6 +24,7 @@ public partial class NetServer
                 s.Id == CarePackageRules.StreakId ? CarePackageImpl() :
                 s.Id == AttackMissileStreak.StreakId ? MakeMissileStreak() :
                 s.Id == TurretStreak.StreakId ? new TurretStreak(Turret.Def, _match.Entities, new TurretWorld(this)) :
+                s.Id == AttackHelicopterStreak.StreakId ? MakeAttackHelicopter() :
                 new LoggingKillstreak(s.Id)),
             (owner, kind, payload) => { if (_byId.TryGetValue(owner, out var c)) Send(c, new EventMsg((byte)kind, payload)); },
             s => GD.Print($"server: {s}"));
