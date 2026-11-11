@@ -83,15 +83,15 @@ public partial class NetClient
         var cam = _me.Camera;
         var from = cam.GlobalPosition;
         var dir = -cam.GlobalTransform.Basis.Z;
-        var muzzle = _viewmodel?.MuzzlePosition ?? from + dir * 0.8f;
+        var muzzle = _me.ZoomFov > 0 ? from + dir * 0.6f : _viewmodel?.MuzzlePosition ?? from + dir * 0.8f; // scoped: the streak leaves the crosshair, the gun is hidden
         _viewmodel?.Flash(projectile ? 0.5f : 0.4f);
         if (projectile) return; // the rocket itself comes from the server
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * 300f);
         q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
         var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         var end = hit.Count > 0 ? hit["position"].AsVector3() : from + dir * 300f;
-        ShotFx.Spawn(World, muzzle, end, false);
-        if (hit.Count > 0) Sfx.Play3D("impact", end);
+        ShotFx.Spawn(World, muzzle, end, false, true, hit.Count > 0 ? hit["normal"].AsVector3() : null);
+        if (hit.Count > 0) { Sfx.Play3D("impact", end); if (hit["collider"].AsGodotObject() is CollisionObject3D { CollisionLayer: var l } && (l & 1) != 0) BulletHoles.Place(World, end, hit["normal"].AsVector3()); }
     }
 
     /// <summary>True when this server event is the echo of a shot already shown by prediction (consumes one prediction).</summary>
@@ -107,7 +107,7 @@ public partial class NetClient
     /// <summary>Where a shot of <paramref name="id"/> visibly leaves the weapon; <paramref name="fallback"/> (the eye) when nothing better is known.</summary>
     Vector3 MuzzleOf(ushort id, Vector3 fallback, Vector3 end)
     {
-        if (id == _myId) return _viewmodel?.MuzzlePosition ?? fallback;
+        if (id == _myId) return _me is { ZoomFov: > 0 } ? fallback + (end - fallback).Normalized() * 0.6f : _viewmodel?.MuzzlePosition ?? fallback;
         if (!_remotes.TryGetValue(id, out var r)) return fallback;
         var chest = r.Node.GlobalPosition + Vector3.Up * 1.3f;
         var dir = (end - fallback).Normalized();
@@ -143,7 +143,7 @@ public partial class NetClient
 {
     public string FxDemo = "";
     double _demoStart;
-    static readonly double[] DemoShots = { 3.1, 3.3, 3.6, 7.02, 7.06, 7.1, 7.14, 7.18, 7.22, 7.26, 7.3, 7.34 };
+    static readonly double[] DemoShots = { 3.1, 3.3, 3.6, 7.02, 7.06, 7.1, 7.14, 7.18, 7.22, 7.26, 7.3, 7.34, 12.7, 13.0, 13.4 };
     int _demoNext; bool _demoTp;
 
     // vehicle demo (<c>--fx-demo vehicle:dir</c> on a --blast-smoke server): stands 12 m in front of car 0 and hurts it through the stages and the blast, saving screenshots
@@ -225,8 +225,48 @@ public partial class NetClient
         if (t > 7) { mi.MoveX = t < 7.2 ? 1 : -1; mi.Yaw += (float)(t - 7) * 0.8f; } // strafe + turn: the flash must stay on the barrel
         if ((t is > 3 and < 3.1) || (t is > 7 and < 8)) mi.Buttons |= MoveButtons.Fire;
         if (_demoNext < DemoShots.Length && t >= DemoShots[_demoNext]) _ = DemoShot(FxDemo, DemoShots[_demoNext++]);
-        if (t > 9) GetTree().Quit();
+        // wall phase: face the nearest wall found by horizontal rays and fire an AK burst at it (bullet holes)
+        var wallSpots = new[] { new NVec3(-1f, 192f, 14.9f), new NVec3(-1f, 192f, -14.9f), new NVec3(-1f, 192f, 0f) };
+        for (var k = 0; k < wallSpots.Length && _wallYaw == null; k++)
+        {
+            if (_wallStep == 2 * k && t > 8 + 1.7 * k && _peer != null)
+            {
+                _wallStep++; GD.Print($"fx-demo: wall spot {k}");
+                Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(_myId, wallSpots[k]))), (int)ENetPacketPeer.FlagReliable);
+            }
+            else if (_wallStep == 2 * k + 1 && t > 9.2 + 1.7 * k)
+            {
+                _wallStep++; var best = 1e9f; var from = _me.Camera.GlobalPosition;
+                for (var i = 0; i < 24; i++)
+                {
+                    var yaw = i * Mathf.Tau / 24;
+                    var d = new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
+                    // a real wall: rays at three heights hit the same vertical plane
+                    var ok = true; var dd = 0f;
+                    foreach (var dy in new[] { -0.8f, 0f, 1.2f })
+                    {
+                        var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(from + Vector3.Up * dy, from + Vector3.Up * dy + d * 25f, 1));
+                        if (hit.Count == 0 || Mathf.Abs(hit["normal"].AsVector3().Y) > 0.15f) { ok = false; break; }
+                        var hd = from.DistanceTo(hit["position"].AsVector3());
+                        if (dd != 0 && Mathf.Abs(hd - dd) > 0.6f) { ok = false; break; }
+                        dd = hd;
+                    }
+                    if (ok && dd > 3f && dd < best) { best = dd; _wallYaw = yaw; }
+                }
+                GD.Print($"fx-demo: wall yaw {_wallYaw} dist {best} at {from}");
+            }
+        }
+        if (t > 8 && _wallYaw is { } wy)
+        {
+            mi.Yaw = wy; _me.Pitch = 0;
+            var o = _me.Camera.GlobalPosition; var fw = -_me.Camera.GlobalTransform.Basis.Z;
+            var ahead = World.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(o, o + fw * 40f, 1));
+            if (t < 12.5 && (ahead.Count == 0 || o.DistanceTo(ahead["position"].AsVector3()) > 3f)) mi.MoveY = 1;
+        }
+        if (_wallYaw != null && (t is > 12.5 and < 13)) mi.Buttons |= MoveButtons.Fire;
+        if (t > 15) GetTree().Quit();
     }
+    float? _wallYaw; int _wallStep;
 
     async System.Threading.Tasks.Task DemoShot(string dir, double at)
     {

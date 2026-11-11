@@ -423,7 +423,7 @@ public partial class NetClient : Node
         var slot = Ammo?.Slot ?? _wantSlot;
         var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
         _viewmodel.Show(id);
-        _viewmodel.Visible = !Dead && !_driving && _myState != EntityState.InVehicle;
+        _viewmodel.Visible = !Dead && !_driving && _myState != EntityState.InVehicle && _me is not { ZoomFov: > 0 };
     }
 
     /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
@@ -598,6 +598,7 @@ public partial class NetClient : Node
                 SfxShot(sh, melee);
                 if (!melee) { if (sh.Shooter == _myId) _viewmodel?.Flash(0.4f); else if (_remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
                 ShotFx.Spawn(World, MuzzleOf(sh.Shooter, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV), endV, melee);
+                if (!melee) BulletHoles.PlaceFromShot(World, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV);
                 break;
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
                 _launchLog.Add((Now, l));

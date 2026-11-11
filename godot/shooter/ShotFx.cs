@@ -32,7 +32,7 @@ public static class ShotFx
     }
 
     /// <summary>Shot from the muzzle <paramref name="from"/> to <paramref name="to"/>. Melee swings have no effect here.</summary>
-    public static void Spawn(Node3D world, Vector3 from, Vector3 to, bool melee, bool impact = true)
+    public static void Spawn(Node3D world, Vector3 from, Vector3 to, bool melee, bool impact = true, Vector3? normal = null)
     {
         if (!Enabled || melee || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree()) return;
         var dir = to - from;
@@ -41,7 +41,7 @@ public static class ShotFx
         Init();
         dir /= dist;
         Tracer(world, from, to, dir, dist);
-        if (impact && dist < MaxShotRange - 1f) Impact(world, to, -dir);
+        if (impact && dist < MaxShotRange - 1f) Impact(world, to, normal ?? -dir);
     }
 
     static void Tracer(Node3D world, Vector3 from, Vector3 to, Vector3 dir, float dist)
