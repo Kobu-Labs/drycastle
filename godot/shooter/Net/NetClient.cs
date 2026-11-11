@@ -577,8 +577,10 @@ public partial class NetClient : Node
             var d = p - r.LastPos; d.Y = 0;
             var sp = d.Length() / (float)(now - r.LastT);
             if (sp > 30f) sp = 0; // a teleport (respawn), not running
+            // a rider sits: the seat moving (the car driving, a flak turret turning the gunner about its ring) is not the body walking
+            if (r.State == EntityState.InVehicle) sp = 0;
             r.Speed = Mathf.Lerp(r.Speed, sp, 0.3f);
-            SfxRemoteStep(r, p, (float)(now - r.LastT));
+            if (r.State != EntityState.InVehicle) SfxRemoteStep(r, p, (float)(now - r.LastT));
         }
         r.LastPos = p; r.LastT = now;
         var weaponId = Weapons != null && r.Slot >= 1 && r.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[r.Slot - 1].Id : "";
