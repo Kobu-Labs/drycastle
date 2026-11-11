@@ -46,6 +46,10 @@ public enum EventKind : byte
     Appearance = 22,
     /// <summary>Server broadcast: a MOAB countdown armed, detonated or was cancelled (<see cref="MoabEvents"/>).</summary>
     Moab = 70,
+    /// <summary>Client to server: open a landed care package (<see cref="CarePackageCodec"/>).</summary>
+    OpenCarePackage = 50,
+    /// <summary>Server to the opener: the perk a care package gave until death (<see cref="CarePackageCodec"/>).</summary>
+    PerkGained = 51,
 }
 
 public abstract record ReliableMsg;

@@ -82,6 +82,12 @@ public sealed class KillstreakService
         }
     }
 
+    /// <summary>Sets the owner's Hot Streak reduction for this life (a care package perk gained mid-life). Thresholds apply from the next kill.</summary>
+    public void SetCostReduction(ushort owner, float costReduction)
+    {
+        if (_lives.TryGetValue(owner, out var life)) life.CostReduction = costReduction;
+    }
+
     /// <summary>The owner died: the counter, the earned and used streaks reset, and their active instances end.</summary>
     public void OnDeath(ushort owner)
     {
