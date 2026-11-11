@@ -31,7 +31,7 @@ what changed, then Play. **Maintainer, game update:** merge to `main` and wait f
 | `dev-<run>` (prerelease) | every push to `main` (`.github/workflows/release.yml`) | `suchohrad-game-windows.zip`, `suchohrad-game-linux.zip` (no map), `manifest.json` |
 | `vX.Y.Z` | pushing a tag `vX.Y.Z` (same workflow) | same, channel `stable` |
 | `map-<date>-<hash>` (prerelease) | you, `scripts/publish-map.sh` | `map.zip`, `map.json` |
-| `launcher-vX.Y.Z` | pushing a tag `launcher-v*` (`launcher.yml`) | `suchohrad-launcher-windows.zip`, `suchohrad-launcher-linux.zip` |
+| `launcher-vX.Y.Z` (prerelease, so it is never GitHub "latest") | pushing a tag `launcher-v*` (`launcher.yml`) | `suchohrad-launcher-windows.zip`, `suchohrad-launcher-linux.zip` |
 
 `manifest.json` (schema 2) lists one build per platform (`windows`, `linux`: exe and game zip) and the map release, each with sha256 and size. The launcher picks the build for its own OS. Players on **stable** get the newest non-prerelease
 (`vX.Y.Z`, fetched through the API's `releases/latest` so map and dev releases never hide it); players on **dev** get the newest of the last 100. The last 15 `dev-*` releases are kept. There is no release branch: cut a stable release by tagging a green commit.
