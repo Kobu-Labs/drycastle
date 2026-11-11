@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "hp": 500,
+  "lifetime_seconds": 90,
+  "placement_range_m": 3,
+  "placement_slope_deg": 12,
+  "placement_step_m": 1,
+  "placement_probe_m": 6,
+  "sight_range_m": 40,
+  "turn_rate_deg_per_s": 150,
+  "acquire_delay_s": 0.6,
+  "aim_tolerance_deg": 6,
+  "fire_interval_s": 0.2,
+  "damage_per_shot": 12,
+  "knife_hits_to_destroy": 3
+}

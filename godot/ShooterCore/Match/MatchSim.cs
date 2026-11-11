@@ -13,6 +13,8 @@ public static class SpecialWeapons
     public const byte Drown = 251, Vehicle = 252, Debug = 253, Void = 254, Fall = 255;
     /// <summary>The jeep's roof gun (a gunner's rounds).</summary>
     public const byte VehicleGun = 250;
+    /// <summary>A sentry turret's shots (killstreak "turret"); its kills count as the streak's, under the weapon id turret_gun.</summary>
+    public const byte Turret = 249;
 }
 
 public abstract record MatchEvent;

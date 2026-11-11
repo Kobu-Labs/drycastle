@@ -75,5 +75,6 @@ public partial class NetServer
 
     /// <summary>The stats key of a weapon byte: its weapons.json id, or a name for the special causes (vehicle, debug, void, fall).</summary>
     string WeaponKey(byte weapon) =>
-        weapon < Weapons.Weapons.Count ? Weapons.Weapons[weapon].Id : weapon == SpecialWeapons.Vehicle ? "vehicle" : "other";
+        weapon < Weapons.Weapons.Count ? Weapons.Weapons[weapon].Id : weapon == SpecialWeapons.Vehicle ? "vehicle"
+        : weapon == SpecialWeapons.Turret ? TurretStreak.WeaponId : "other";
 }

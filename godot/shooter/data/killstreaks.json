@@ -3,7 +3,7 @@
   "streaks": [
     { "id": "uav", "name": "UAV", "kills_required": 4, "unlock_level": 0, "max_active": 1, "duration_seconds": 60, "control": "none" },
     { "id": "attack_missile", "name": "Attack Missile", "kills_required": 5, "unlock_level": 4, "max_active": 1, "duration_seconds": 0, "control": "pov" },
-    { "id": "turret", "name": "Turret", "kills_required": 6, "unlock_level": 5, "max_active": 1, "duration_seconds": 0, "control": "none" },
+    { "id": "turret", "name": "Turret", "kills_required": 6, "unlock_level": 5, "max_active": 1, "duration_seconds": 15, "control": "none" },
     { "id": "care_package", "name": "Care Package", "kills_required": 6, "unlock_level": 6, "max_active": 1, "duration_seconds": 0, "control": "none" },
     { "id": "attack_helicopter", "name": "Attack Helicopter", "kills_required": 10, "unlock_level": 9, "max_active": 1, "duration_seconds": 0, "control": "pov" },
     { "id": "helicopter_helper", "name": "Helicopter Helper", "kills_required": 15, "unlock_level": 11, "max_active": 1, "duration_seconds": 0, "control": "none" },

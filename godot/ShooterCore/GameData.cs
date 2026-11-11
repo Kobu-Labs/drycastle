@@ -13,9 +13,11 @@ public class GameData
 
     /// <summary>environment.json (day/night clock). Defaults when the file is absent from the parse call.</summary>
     public EnvironmentConfig Environment { get; init; } = new();
+    /// <summary>turret.json: the sentry turret's tuning (the turret killstreak).</summary>
+    public required TurretFile Turret { get; init; }
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string environmentJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -27,6 +29,7 @@ public class GameData
             Vehicles = VehiclesFile.Validate(DataFile.Parse<VehiclesFile>(vehiclesJson, "vehicles.json")),
             Perks = perks,
             Killstreaks = killstreaks,
+            Turret = TurretFile.Parse(turretJson),
             Levels = LevelsFile.Parse(levelsJson, weapons, perks, killstreaks.UnlockLevels),
             Environment = environmentJson == "" ? new() : EnvironmentConfig.Parse(environmentJson),
         };
@@ -44,6 +47,7 @@ public class GameData
             Vehicles = VehiclesFile.Load(Path.Combine(dir, "vehicles.json")),
             Perks = perks,
             Killstreaks = killstreaks,
+            Turret = TurretFile.Load(Path.Combine(dir, "turret.json")),
             Levels = LevelsFile.Load(Path.Combine(dir, "levels.json"), weapons, perks, killstreaks.UnlockLevels),
             Environment = File.Exists(Path.Combine(dir, "environment.json")) ? EnvironmentConfig.Load(Path.Combine(dir, "environment.json")) : new(),
         };
