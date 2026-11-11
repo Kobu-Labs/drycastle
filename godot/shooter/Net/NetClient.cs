@@ -227,6 +227,7 @@ public partial class NetClient : Node
                 break;
             case ProfileMsg p:
                 Profile = p;
+                OnProfileReceived(p);
                 GD.Print($"client: profile {p.Name}, level {p.Level}, xp {p.Xp}, active slot {p.ActiveSlot}");
                 break;
             case ErrorMsg er:

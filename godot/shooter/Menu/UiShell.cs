@@ -139,9 +139,15 @@ public partial class UiShell : CanvasLayer
     void UpdateMouse()
     {
         if (DisplayServer.GetName() == "headless") return;
-        var want = GameActive && _stack.Count == 0 ? Input.MouseModeEnum.Captured : Input.MouseModeEnum.Visible;
+        var free = WantsFreeMouse?.Invoke() ?? false;
+        var want = GameActive && _stack.Count == 0 && !free ? Input.MouseModeEnum.Captured : Input.MouseModeEnum.Visible;
         if (Input.MouseMode != want) Input.MouseMode = want;
     }
+
+    /// <summary>True while the match asks for a free mouse with no screen open (the respawn screen, so its buttons can be clicked).</summary>
+    public Func<bool>? WantsFreeMouse { get; set; }
+
+    public override void _Process(double delta) => UpdateMouse();
 
     /// <summary>Called by the match owner when the match starts or ends.</summary>
     public void SetGameActive(bool on) { GameActive = on; UpdateMouse(); }

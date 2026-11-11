@@ -125,6 +125,7 @@ public partial class Hud : CanvasLayer
         BuildHints();
         BuildRespawn();
         BuildBoard();
+        BuildXpPanel();
         Relayout();
         GetViewport().SizeChanged += Relayout;
         SetHealth(100);
@@ -432,6 +433,7 @@ public partial class Hud : CanvasLayer
         v.AddChild(L(Strings.T("hud.respawn.title"), "HudHead", HorizontalAlignment.Center));
         _respawnBy = L("", "HudBig", HorizontalAlignment.Center); _respawnBy.ThemeTypeVariation = "HudDanger"; _respawnBy.ClipText = true; v.AddChild(_respawnBy);
         _respawnIn = L("", "HudDisplay", HorizontalAlignment.Center); v.AddChild(_respawnIn);
+        BuildRespawnLoadouts(v);
     }
 
     void BuildBoard()
@@ -523,6 +525,7 @@ public partial class Hud : CanvasLayer
             _ => line.IAmLeader ? Strings.F("hud.score.leading", line.MyKills) : Strings.F("hud.score.behind", line.MyKills, line.LeaderName, line.LeaderKills),
         });
         UpdateTimer();
+        RefreshXpPanel();
     }
 
     void UpdateTimer()
@@ -634,7 +637,7 @@ public partial class Hud : CanvasLayer
         var now = Now;
         AdvanceBreath((float)delta);
         if (_timeRunning) UpdateTimer();
-        if (_dead) UpdateRespawn();
+        if (_dead) { UpdateRespawn(); PollRespawnKeys(); }
         if (_protUntil > 0)
         {
             if (now >= _protUntil) SetProtection(0); else UpdateProtection();
