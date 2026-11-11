@@ -58,6 +58,14 @@ library only; it loads the flak script's mesh helpers; `python3 -I scripts/make_
 materials, no texture; `Glass` and `GlassClear` are alpha-blended. Same vehicle frame, origin on the ground at the centre. Separate nodes with their origin
 at the pivot: `wheel_fl`/`_fr`/`_rl`/`_rr` and the door leaves `door_front_1`/`_2`, `door_mid_1`/`_2` (the game does not move them yet); empties mark
 `seat_driver`, `seat_passenger_1` to `_3` (the four seats of vehicles.json), the lamps and `smoke_engine` (the engine is at the rear).
+`suchohrad-generated-models/utility_helicopter.glb` (2026-11-12) is the utility helicopter (`godot/shooter` vehicle id `utility_helicopter`): a two-blade
+transport with an open cabin (no doors: you see through it from side to side), skids, a glazed cockpit and a pintle-mounted door gun on the right.
+Original geometry written as code in `scripts/make_utility_helicopter_model.py` (standard library only; it loads the flak script's mesh helpers from the
+file beside it; `python3 -I scripts/make_utility_helicopter_model.py` rebuilds the file byte for byte), CC0, 13 flat-colour materials, no texture; `Glass`
+is alpha-blended. Same vehicle frame, with the origin on the ground under the rotor mast. Moving parts are separate nodes with their origin at the pivot:
+`rotor_main` (spin about Y), `rotor_tail` (spin about X), `gun_mount` (yaw about Y; the node is turned so its own -Z points out of the right door),
+`gun` (pitch about X, positive raises the muzzle), `barrel` (recoil along +Z) with the `muzzle` empty; empties mark `gunner_sight`, `seat_pilot`,
+`seat_gunner`, the lights (`light_head`, `light_tail`, `light_nav_l`/`_r`) and `smoke_engine`.
 
 kenney.nl answered automated requests with HTTP 403, and Quaternius distributes through itch.io or
 Patreon pages. Neither was circumvented. The same CC0 archives are published openly by their creators
