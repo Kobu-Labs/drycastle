@@ -62,6 +62,9 @@ public sealed partial class MapLoader
         ReadParcels(Path.Combine(mapDir, "parcels.json"));
         ParcelIndex = new ParcelIndex(_parcels.Values);
         ReadSpawns(Path.Combine(mapDir, "spawns.json"));
+        _lamps.Clear();
+        var lamps = Path.Combine(mapDir, "lamps.json");
+        if (File.Exists(lamps)) ReadLamps(lamps); // map 0.5.0+
         var roads = Path.Combine(mapDir, "roads.json");
         if (File.Exists(roads)) RoadsJson = File.ReadAllText(roads); // no consumer in v1
         var water = Path.Combine(mapDir, "water.json");

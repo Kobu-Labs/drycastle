@@ -72,6 +72,7 @@ def test_roads_json_spawns_json_and_manifest(ws) -> None:
         "roads": "roads.json",
         "spawns": "spawns.json",
         "water": "water.json",
+        "lamps": "lamps.json",
     }
     assert {"terrain", "roads", "fences", "trees", "spawns", "buildings", "water"} <= set(
         manifest["generated"]

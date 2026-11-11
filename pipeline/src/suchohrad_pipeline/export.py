@@ -28,11 +28,12 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # 0.3.0: manifest lists objects.json (files.objects) and one GLB per primitive (prims).
 # 0.4.0: parcels.json carries origin_epsg5514 (the local frame's origin in S-JTSK metres, so the editor can
 # write absolute coordinates) and the manifest lists edit_defaults (the rule values the editor shows as defaults).
-MAP_VERSION_BASE = "0.4.0"
+# 0.5.0: lamps.json (street lamp positions, files.lamps). Not in the chunk GLBs: the game builds poles and lights.
+MAP_VERSION_BASE = "0.5.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
-               "props.json", "spawns.json")
+               "props.json", "spawns.json", "lamps.json")
 NOT_GENERATED_NOTE = "Textures, landmarks, navmesh and water surface meshes are not generated (water.json holds the water bodies)."
 
 
@@ -204,6 +205,11 @@ def run_export(
     if scene.spawns is not None:
         _dump(out_dir / "spawns.json", scene.spawns)
         files["spawns"] = "spawns.json"
+    lamps_src = work_dir / "lamps.json"
+    if lamps_src.is_file():
+        # street lamp positions (props stage); copied verbatim, the game builds the lamps from them
+        (out_dir / "lamps.json").write_bytes(lamps_src.read_bytes())
+        files["lamps"] = "lamps.json"
 
     parcels_file = {
         "version": ARTIFACT_FORMAT_VERSION,
@@ -225,6 +231,8 @@ def run_export(
     elif water_file.exists():
         water_file.unlink()  # no terrain: a water file from an earlier run would be stale
     generated = {"buildings"}
+    if "lamps" in files:
+        generated.add("lamps")
     terrain_info = None
     if scene.terrain is not None:
         t = scene.terrain

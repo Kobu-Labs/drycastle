@@ -259,6 +259,22 @@ spawns:
   ground_per_1000m2: 2.0
   ground_kinds: [garden, field, other]
 
+# --- Street lamps (props stage, data/work/lamps.json) ----------------------------------------
+# OSM street_lamp nodes are kept where they stand. Where a road has no lamp nearby, rule lamps are
+# placed along it every spacing_m, staggered left and right, just beyond the carriageway edge.
+# Every lamp must lie in the terrain coverage, outside building footprints (grown by
+# building_clearance_m) and outside parcels of avoid_kinds (house plots and gardens). OSM lamps
+# only get the coverage and building checks, since their position is taken as given.
+lamps:
+  spacing_m: 30
+  # Gap between the carriageway edge and the lamp pole, metres.
+  road_offset_m: 1.0
+  building_clearance_m: 2
+  # A rule lamp is skipped when an OSM lamp (or another rule lamp) is closer than this.
+  min_lamp_distance_m: 10
+  rule_highways: [primary, secondary, tertiary, unclassified, residential, living_street, service]
+  avoid_kinds: [building_plot, garden]
+
 # --- Area overlays --------------------------------------------------------------------------
 # `areas.<name>.<section>` is merged over the section when the pipeline runs with that area
 # (--area / AREA=). The slice has none and keeps the settings above. The village is ~50x larger,

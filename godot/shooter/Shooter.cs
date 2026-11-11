@@ -224,7 +224,9 @@ public partial class Shooter : Node3D
         _map.Load(Path.GetFullPath(dir));
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Suchohrad.ShooterCore.Water.Empty : Suchohrad.ShooterCore.Water.Parse(_map.WaterJson);
         var s = _map.Stats;
-        GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} load={s.LoadSeconds:F2}s");
+        // Lamps are solid, so the server gets the same pole colliders as the client (map 0.5.0+; none on older maps).
+        if (_map.Lamps.Count > 0) AddChild(new StreetLamps { Bases = _map.Lamps.Select(l => l.Position).ToList() });
+        GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} load={s.LoadSeconds:F2}s");
     }
 
     Vector3 RandomSpawn() =>
