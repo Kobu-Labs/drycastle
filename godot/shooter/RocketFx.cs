@@ -25,7 +25,7 @@ public static class RocketFx
     }
 
     /// <summary>Particle material: unshaded, takes the per-particle colour (the ramp) as albedo, alpha blended.</summary>
-    static StandardMaterial3D Part(Color c, bool emissive = false)
+    internal static StandardMaterial3D Part(Color c, bool emissive = false)
     {
         var m = Unshaded(new Color(c.R, c.G, c.B, 0.99f));
         m.VertexColorUseAsAlbedo = true;
@@ -33,7 +33,7 @@ public static class RocketFx
         return m;
     }
 
-    static Gradient Ramp(params (float At, Color C)[] stops)
+    internal static Gradient Ramp(params (float At, Color C)[] stops)
     {
         var g = new Gradient();
         g.Offsets = stops.Select(s => s.At).ToArray();
@@ -41,14 +41,14 @@ public static class RocketFx
         return g;
     }
 
-    static Curve Curve2(float from, float to)
+    internal static Curve Curve2(float from, float to)
     {
         var c = new Curve();
         c.AddPoint(new Vector2(0, from)); c.AddPoint(new Vector2(1, to));
         return c;
     }
 
-    sealed class Cache
+    internal sealed class Cache
     {
         public readonly CapsuleMesh Body = new() { Radius = 0.12f, Height = 1.1f, Material = new StandardMaterial3D { AlbedoColor = new Color(0.4f, 0.45f, 0.33f), Roughness = 0.6f } };
         public readonly SphereMesh Nose = new() { Radius = 0.14f, Height = 0.28f, Material = Glow(new Color(1f, 0.35f, 0.1f)) };
@@ -71,7 +71,7 @@ public static class RocketFx
     }
 
     static Cache? _c;
-    static Cache C => _c ??= new Cache();
+    internal static Cache C => _c ??= new Cache();
 
     /// <summary>Builds the rocket node (lying along -Z) under the client's world.</summary>
     public static Node3D Make(Node3D world)
@@ -111,7 +111,7 @@ public static class RocketFx
         rocket.QueueFree();
     }
 
-    static CpuParticles3D Emitter(Node3D root, Mesh mesh, Gradient? ramp, int amount, double life, Vector3 dir, float spread, float vMin, float vMax, Vector3 gravity, float sMin, float sMax, Curve? curve = null)
+    internal static CpuParticles3D Emitter(Node3D root, Mesh mesh, Gradient? ramp, int amount, double life, Vector3 dir, float spread, float vMin, float vMax, Vector3 gravity, float sMin, float sMax, Curve? curve = null)
     {
         var p = new CpuParticles3D
         {

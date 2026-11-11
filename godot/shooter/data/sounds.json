@@ -9,6 +9,7 @@
     { "id": "launch.bazooka", "files": ["suchohrad-generated-sounds/launch_bazooka.ogg"], "bus": "SFX", "volume_db": -2, "pitch_variance": 0.03, "max_distance": 250, "priority": 3 },
     { "id": "rocket.flight", "files": ["suchohrad-generated-sounds/rocket_flight.ogg"], "bus": "SFX", "volume_db": -8, "max_distance": 60, "loop": true },
     { "id": "explosion.bazooka", "files": ["oga-combat-sound-effects-150/explosion_bazooka.ogg"], "bus": "SFX", "volume_db": 0, "pitch_variance": 0.05, "max_distance": 300, "priority": 4 },
+    { "id": "explosion.vehicle", "files": ["oga-combat-sound-effects-150/explosion_bazooka.ogg"], "bus": "SFX", "volume_db": 2, "pitch": 0.75, "pitch_variance": 0.05, "max_distance": 350, "priority": 4 },
     { "id": "dry.pistol", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.8, "pitch_variance": 0.03, "max_distance": 0 },
     { "id": "dry.ak47", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.7, "pitch_variance": 0.03, "max_distance": 0 },
     { "id": "dry.bazooka", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.55, "pitch_variance": 0.03, "max_distance": 0 },

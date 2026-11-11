@@ -15,6 +15,9 @@ public sealed record LaunchMsg(ushort Id, ushort Owner, byte Weapon, Vector3 Ori
 /// <summary>Explosion (broadcast, for effects): where, which projectile and who fired it.</summary>
 public sealed record ExplosionMsg(ushort Id, ushort Owner, byte Weapon, Vector3 Position);
 
+/// <summary>A destroyed vehicle's blast (broadcast, for effects): vehicle entity id, attacker (0 = none), centre and radius in metres.</summary>
+public sealed record VehicleExplosionMsg(ushort Id, ushort Attacker, Vector3 Position, float Radius);
+
 /// <summary>Owner-only ammo state: selected slot (1-based), seconds of reload left (0 = not reloading) and per slot magazine and reserve.</summary>
 public sealed record AmmoMsg(byte Slot, float ReloadRemaining, IReadOnlyList<(ushort Mag, ushort Reserve)> Slots)
 {
@@ -33,7 +36,7 @@ public sealed record AmmoMsg(byte Slot, float ReloadRemaining, IReadOnlyList<(us
 /// </summary>
 public static class WeaponCodec
 {
-    public const byte DebugTeleport = 2;
+    public const byte DebugTeleport = 2, DebugVehicleDamage = 3;
 
     public static byte[] Encode(ShotMsg m)
     {
@@ -87,6 +90,19 @@ public static class WeaponCodec
     public static ExplosionMsg? DecodeExplosion(byte[] d) => d.Length < 17 ? null : new ExplosionMsg(
         BinaryPrimitives.ReadUInt16LittleEndian(d), BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(2)), d[4], Get(d, 5));
 
+    public static byte[] Encode(VehicleExplosionMsg m)
+    {
+        var b = new byte[20];
+        BinaryPrimitives.WriteUInt16LittleEndian(b, m.Id);
+        BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(2), m.Attacker);
+        Put(b, 4, m.Position);
+        BinaryPrimitives.WriteSingleLittleEndian(b.AsSpan(16), m.Radius);
+        return b;
+    }
+
+    public static VehicleExplosionMsg? DecodeVehicleExplosion(byte[] d) => d.Length < 20 ? null : new VehicleExplosionMsg(
+        BinaryPrimitives.ReadUInt16LittleEndian(d), BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(2)), Get(d, 4), BinaryPrimitives.ReadSingleLittleEndian(d.AsSpan(16)));
+
     public static byte[] Encode(AmmoMsg m)
     {
         var b = new byte[6 + m.Slots.Count * 4];
@@ -124,6 +140,19 @@ public static class WeaponCodec
 
     public static (ushort Target, Vector3 Pos)? DecodeDebugTeleport(byte[] d) =>
         d.Length >= 15 && d[0] == DebugTeleport ? (BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(1)), Get(d, 3)) : null;
+
+    /// <summary>Debug command (dev servers and smokes only): hurt a vehicle by an amount, as if a weapon had.</summary>
+    public static byte[] EncodeDebugVehicleDamage(ushort vehicle, float amount)
+    {
+        var b = new byte[7];
+        b[0] = DebugVehicleDamage;
+        BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(1), vehicle);
+        BinaryPrimitives.WriteSingleLittleEndian(b.AsSpan(3), amount);
+        return b;
+    }
+
+    public static (ushort Vehicle, float Amount)? DecodeDebugVehicleDamage(byte[] d) =>
+        d.Length >= 7 && d[0] == DebugVehicleDamage ? (BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(1)), BinaryPrimitives.ReadSingleLittleEndian(d.AsSpan(3))) : null;
 
     static void Put(byte[] b, int o, Vector3 v)
     {

@@ -23,7 +23,7 @@ public partial class NetClient
     {
         try
         {
-            _wbScript ??= (BazookaBot != "" ? (WeaponsBot == "a" ? BazAlice() : BazBob()) : WeaponsBot == "a" ? AliceScript() : BobScript()).GetEnumerator();
+            _wbScript ??= (BlastBot != "" ? (WeaponsBot == "a" ? BlastAlice() : BlastBob()) : BazookaBot != "" ? (WeaponsBot == "a" ? BazAlice() : BazBob()) : WeaponsBot == "a" ? AliceScript() : BobScript()).GetEnumerator();
             if (!_done && !_wbScript.MoveNext()) _wbScript = null;
         }
         catch (WbAbort e) { WeaponsFail(e.Message); }
@@ -40,7 +40,8 @@ public partial class NetClient
         if (_done) return;
         _done = true;
         if (!ok) GD.PrintErr($"client {PlayerName}: weapons smoke failure: {why}");
-        GD.Print(ok ? $"SHOOTER_{(BazookaBot != "" ? "BAZOOKA" : "WEAPONS")}_CLIENT_OK" : $"SHOOTER_{(BazookaBot != "" ? "BAZOOKA" : "WEAPONS")}_CLIENT_FAIL");
+        var which = BlastBot != "" ? "BLAST" : BazookaBot != "" ? "BAZOOKA" : "WEAPONS";
+        GD.Print(ok ? $"SHOOTER_{which}_CLIENT_OK" : $"SHOOTER_{which}_CLIENT_FAIL");
         GetTree().Quit(ok ? 0 : 2);
     }
 

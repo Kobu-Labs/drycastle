@@ -145,8 +145,32 @@ public partial class NetClient
     static readonly double[] DemoShots = { 3.1, 3.3, 3.6, 7.02, 7.06, 7.1, 7.14, 7.18, 7.22, 7.26, 7.3, 7.34 };
     int _demoNext; bool _demoTp;
 
+    // vehicle demo (<c>--fx-demo vehicle:dir</c> on a --blast-smoke server): stands 12 m in front of car 0 and hurts it through the stages and the blast, saving screenshots
+    static readonly (double T, float Damage)[] VehicleDemoHits = { (1.5, 120), (5.0, 120), (9.0, 40), (12.0, 100) };
+    static readonly double[] VehicleDemoShots = { 4.0, 8.0, 9.5, 10.5, 12.05, 12.15, 12.3, 12.6, 13.5, 16.0 };
+    int _vdHit, _vdShot;
+
+    void FxVehicleDemoInput(ref MoveInput mi)
+    {
+        if (_me == null || _peer == null || _cars.Count == 0) return;
+        var dir = FxDemo["vehicle:".Length..];
+        if (_demoStart == 0) { _demoStart = Now; System.IO.Directory.CreateDirectory(dir); }
+        var t = Now - _demoStart;
+        var c = new NVec3(NetServer.ArenaX, 0, NetServer.ArenaZ);
+        if (!_demoTp) { _demoTp = true; Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(_myId, c + new NVec3(2, 0, -42)))), (int)ENetPacketPeer.FlagReliable); }
+        mi.Yaw = MathF.PI; _me.Pitch = -0.08f;
+        if (_vdHit < VehicleDemoHits.Length && t >= VehicleDemoHits[_vdHit].T)
+        {
+            Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugVehicleDamage(VehicleRecord.FirstId, VehicleDemoHits[_vdHit++].Damage))), (int)ENetPacketPeer.FlagReliable);
+            _conn.Flush();
+        }
+        if (_vdShot < VehicleDemoShots.Length && t >= VehicleDemoShots[_vdShot]) _ = DemoShot(dir, VehicleDemoShots[_vdShot++]);
+        if (t > 17) GetTree().Quit();
+    }
+
     void FxDemoInput(ref MoveInput mi)
     {
+        if (FxDemo.StartsWith("vehicle:")) { FxVehicleDemoInput(ref mi); return; }
         if (FxDemo == "" || _me == null) return;
         if (_demoStart == 0) { _demoStart = Now; System.IO.Directory.CreateDirectory(FxDemo); }
         var t = Now - _demoStart;

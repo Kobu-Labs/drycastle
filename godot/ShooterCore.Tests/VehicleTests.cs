@@ -190,4 +190,95 @@ public class VehicleTests
         var f = Cfg(); f.Vehicles[0].Paints.Add("X");
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(f));
     }
+
+    // ---- damage stages and the blast (ticket #103) ----
+
+    static readonly float[] Stages = { 0.66f, 0.33f, 0.12f };
+
+    [Theory]
+    [InlineData(300f, 0)]
+    [InlineData(199f, 0)]    // 66.3 percent
+    [InlineData(198f, 1)]    // exactly at the first threshold
+    [InlineData(100f, 1)]   // 33.3 percent, just above the second threshold
+    [InlineData(99f, 2)]
+    [InlineData(36f, 3)]
+    [InlineData(1f, 3)]
+    [InlineData(0f, 3)]      // out of HP: still stage 3 until the blast removes it
+    public void StageFollowsRemainingHp(float hp, int stage) => Assert.Equal(stage, VehicleDamage.Stage(hp, 300, Stages));
+
+    [Fact]
+    public void StageNeverGoesDownWhenHpOnlyDrops()
+    {
+        var last = 0;
+        for (var hp = 300f; hp >= 0; hp -= 7) { var s = VehicleDamage.Stage(hp, 300, Stages); Assert.True(s >= last); last = s; }
+        Assert.Equal(3, last);
+    }
+
+    [Fact]
+    public void BlastFallsOffLinearlyAndStopsAtTheRadius()
+    {
+        var e = new VehicleExplosionDef { Damage = 110, Splash = new SplashDef { Radius = 9, FullDamageRadius = 3, EdgeDamage = 20 } };
+        Assert.Equal(110f, VehicleDamage.BlastDamage(e, 0));
+        Assert.Equal(110f, VehicleDamage.BlastDamage(e, 3));
+        Assert.Equal(65f, VehicleDamage.BlastDamage(e, 6));
+        Assert.Equal(0f, VehicleDamage.BlastDamage(e, 9));
+        Assert.Equal(0f, VehicleDamage.BlastDamage(e, 20));
+    }
+
+    [Fact]
+    public void DistanceToBoxIsZeroInsideAndMeasuredFromTheSurface()
+    {
+        var c = new Vector3(10, 0, 10);
+        Assert.Equal(0f, VehicleDamage.DistanceToBox(c + new Vector3(0.5f, 0.8f, 1f), c, 0, 1.1f, 2.15f), 1e-4f);
+        Assert.Equal(3f, VehicleDamage.DistanceToBox(c + new Vector3(4.1f, 0.5f, 0), c, 0, 1.1f, 2.15f), 1e-3f);   // beside the car
+        Assert.Equal(2f, VehicleDamage.DistanceToBox(c + new Vector3(0, 0.5f, -4.15f), c, 0, 1.1f, 2.15f), 1e-3f); // in front (forward is -Z)
+        Assert.Equal(2f, VehicleDamage.DistanceToBox(c + new Vector3(0, 0.5f, 4.15f), c, MathF.PI, 1.1f, 2.15f), 1e-3f); // turned round: that side is its front now
+        Assert.Equal(2f, VehicleDamage.DistanceToBox(c + new Vector3(0, 3.5f, 0), c, 0, 1.1f, 2.15f), 1e-3f);     // above the roof (1.5 m)
+    }
+
+    [Fact]
+    public void ShippedFileHasDamageStagesAndHpForEveryVehicle()
+    {
+        var f = Shipped();
+        Assert.Equal(3, f.DamageStages.Count);
+        Assert.All(f.Vehicles, v => { Assert.True(v.Hp > 0); Assert.Equal(3, v.Hood.Length); });
+        Assert.True(f.Explosion.Damage > 0 && f.Explosion.Splash.Radius > 0);
+    }
+
+    [Fact]
+    public void BadStagesAreRejected()
+    {
+        var f = Cfg(); f.DamageStages = new List<float> { 0.3f, 0.6f, 0.1f };
+        Assert.Throws<DataFileException>(() => VehiclesFile.Validate(f));
+        var g = Cfg(); g.Vehicles[0].Hp = 0;
+        Assert.Throws<DataFileException>(() => VehiclesFile.Validate(g));
+    }
+
+    [Fact]
+    public void VehicleRecordCarriesStageAndDestroyedState()
+    {
+        var r = VehicleRecord.Make(0x4001, Vector3.Zero, 0, 7, 3, stage: 2);
+        Assert.Equal(2, VehicleRecord.Stage(r));
+        Assert.Equal(EntityState.InVehicle, r.State);
+        var dead = VehicleRecord.Make(0x4001, Vector3.Zero, 0, 0, 3, stage: 3, destroyed: true);
+        Assert.Equal(EntityState.Dead, dead.State);
+        Assert.Equal(3, VehicleRecord.Stage(dead));
+    }
+
+    [Fact]
+    public void VehicleExplosionMessageRoundTrips()
+    {
+        var m = new VehicleExplosionMsg(0x4002, 5, new Vector3(1.5f, 2, -3), 9);
+        Assert.Equal(m, WeaponCodec.DecodeVehicleExplosion(WeaponCodec.Encode(m)));
+        Assert.Null(WeaponCodec.DecodeVehicleExplosion(new byte[5]));
+    }
+
+    [Fact]
+    public void ExplosionKnockbackOverloadMatchesTheWeaponOne()
+    {
+        var w = new WeaponDef { Damage = 100, Splash = new SplashDef { Radius = 6, KnockbackSpeed = 4.5f } };
+        var a = ProjectileMath.Knockback(w, new Vector3(0, 0, 0), new Vector3(2, 1, 0), 0.5f);
+        var b = ProjectileMath.Knockback(4.5f, new Vector3(0, 0, 0), new Vector3(2, 1, 0), 0.5f);
+        Assert.Equal(a, b);
+    }
 }

@@ -21,6 +21,10 @@ public partial class NetClient
         public float Yaw, Kmh;
         public uint LastTick;
         public LoopVoice? Snd;
+        /// <summary>Damage stage 0..3 from the record, whether the vehicle is destroyed, and whether its blast was already drawn (event or state, whichever came first).</summary>
+        public int Stage;
+        public bool Destroyed, Exploded;
+        public VehicleFx.Damage? Smoke;
     }
 
     readonly Dictionary<ushort, CarView> _cars = new();
@@ -36,6 +40,7 @@ public partial class NetClient
         if (Vehicles == null) return; // never let a missing table abort the rest of the snapshot
         if (!_cars.TryGetValue(id, out var v)) { v = new CarView { Node = CarFx.Make(World, Vehicles!.Vehicles[Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1)], VehicleRecord.Colour(rec)), Kind = Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1), Pos = rec.Position, Yaw = rec.YawRad }; _cars[id] = v; }
         v.Driver = VehicleRecord.Driver(rec);
+        SetVehicleDamage(v, VehicleRecord.Stage(rec), rec.State == EntityState.Dead);
         if (tick > v.LastTick && v.LastTick != 0)
         {
             var d = NVec3.Distance(rec.Position, v.Pos) / ((tick - v.LastTick) / (float)Wire.TickRate);
@@ -44,6 +49,41 @@ public partial class NetClient
         v.LastTick = tick; v.Pos = rec.Position;
         v.Buf.Push(tick, rec.Position, rec.YawRad, 0);
     }
+
+    /// <summary>Applies the stage and destroyed flag of a record: smoke stage emitters; a destroyed vehicle disappears (its blast is drawn here if the event has not arrived), a returned one shows again.</summary>
+    void SetVehicleDamage(CarView v, int stage, bool destroyed)
+    {
+        v.Stage = stage;
+        if (destroyed)
+        {
+            if (!v.Destroyed) { v.Destroyed = true; if (!v.Exploded) ExplodeVehicle(v, new Vector3(v.Pos.X, v.Pos.Y + 0.8f, v.Pos.Z), Vehicles?.Explosion.Splash.Radius ?? 9f); }
+            return;
+        }
+        if (v.Destroyed) { v.Destroyed = false; v.Exploded = false; v.Node.Visible = true; }
+        if (!ShotFx.Enabled) return;
+        if (stage > 0 && v.Smoke == null && Vehicles != null) v.Smoke = VehicleFx.Damage.Make(v.Node, Vehicles.Vehicles[v.Kind]);
+        v.Smoke?.Set(stage);
+    }
+
+    /// <summary>The blast of one vehicle: effect, sound, camera shake, and the vehicle is gone (engine loop and smoke stop).</summary>
+    void ExplodeVehicle(CarView v, Vector3 at, float radius)
+    {
+        v.Exploded = true;
+        v.Snd?.Release(); v.Snd = null;
+        v.Smoke?.Stop();
+        v.Node.Visible = false;
+        VehicleFx.Explode(World, at, radius);
+        if (Sfx.Enabled) Sfx.Play3D("explosion.vehicle", at);
+        ShakeFor(at, radius);
+    }
+
+    void OnVehicleExplosion(VehicleExplosionMsg m)
+    {
+        _vehicleExplosionLog.Add((Now, m));
+        if (_cars.TryGetValue(m.Id, out var v) && !v.Exploded) ExplodeVehicle(v, new Vector3(m.Position.X, m.Position.Y, m.Position.Z), m.Radius);
+    }
+
+    readonly List<(double T, VehicleExplosionMsg M)> _vehicleExplosionLog = new();
 
     void RenderCars()
     {
@@ -56,6 +96,8 @@ public partial class NetClient
             var p = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
             v.Node.GlobalPosition = p;
             v.Node.Rotation = new Vector3(0, s.Yaw, 0);
+            if (v.Destroyed) continue;
+            v.Smoke?.Near(Sfx.ListenerDistance(p) < 90f); // far vehicles do not smoke: particle budget
             SfxCar(v, p);
             if (v.Driver == _myId && _driving && _me != null)
             {

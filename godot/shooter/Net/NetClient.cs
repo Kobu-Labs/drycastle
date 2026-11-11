@@ -41,6 +41,8 @@ public partial class NetClient : Node
     public string WeaponsBot = "";
     /// <summary>Bazooka smoke role ("a"/"b"); WeaponsBot carries the same letter so the shared bot plumbing runs.</summary>
     public string BazookaBot = "";
+    /// <summary>Vehicle blast smoke role ("a"/"b"); WeaponsBot carries the same letter.</summary>
+    public string BlastBot = "";
     /// <summary>Latest owner ammo state from the server (null before the first one).</summary>
     public AmmoMsg? Ammo { get; private set; }
     readonly List<(double T, ShotMsg M)> _shotLog = new();
@@ -184,7 +186,7 @@ public partial class NetClient : Node
                 _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY };
                 World.AddChild(_me);
                 if (!Bot && ShotFx.Enabled) { _viewmodel = new WeaponViewmodel(); _me.Camera.AddChild(_viewmodel); }
-                if (WeaponsBot != "" || CarBot != "") NetServer.AddArenaColliders(World);
+                if (WeaponsBot != "" || CarBot != "" || FxDemo.StartsWith("vehicle:")) NetServer.AddArenaColliders(World);
                 if (Bot) _me.InputOverride = new MoveInput { SpeedScale = 1 };
                 HudWelcome();
                 OnWelcomed?.Invoke();
@@ -608,6 +610,9 @@ public partial class NetClient : Node
                 var exAt = new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z);
                 RocketFx.Explode(World, exAt, exR);
                 ShakeFor(exAt, exR);
+                break;
+            case EventKind.VehicleExplosion when WeaponCodec.DecodeVehicleExplosion(payload) is { } vx:
+                OnVehicleExplosion(vx);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 _hitLog.Add((Now, h));

@@ -20,6 +20,8 @@ public enum EventKind : byte
     Ammo = 9,
     /// <summary>Server broadcast: a rocket was launched (projectile id, owner, origin, velocity).</summary>
     Launch = 10,
+    /// <summary>Server broadcast: a vehicle blew up (vehicle id, who dealt the last damage, centre, radius).</summary>
+    VehicleExplosion = 11,
 }
 
 public abstract record ReliableMsg;

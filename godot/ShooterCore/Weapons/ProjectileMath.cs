@@ -63,9 +63,10 @@ public static class ProjectileMath
     /// Knockback velocity added to a player: away from the explosion towards the player's body centre with a slight upward
     /// bias, <c>KnockbackSpeed * fraction</c> m/s. A blast right under the feet therefore lifts the player almost straight up.
     /// </summary>
-    public static Vector3 Knockback(WeaponDef w, Vector3 explosion, Vector3 bodyCenter, float fraction)
+    public static Vector3 Knockback(WeaponDef w, Vector3 explosion, Vector3 bodyCenter, float fraction) => Knockback(w.Splash?.KnockbackSpeed ?? 0, explosion, bodyCenter, fraction);
+
+    public static Vector3 Knockback(float speed, Vector3 explosion, Vector3 bodyCenter, float fraction)
     {
-        var speed = w.Splash?.KnockbackSpeed ?? 0;
         if (speed <= 0 || fraction <= 0) return Vector3.Zero;
         var d = bodyCenter - explosion;
         if (d.LengthSquared() < 1e-6f) d = Vector3.UnitY;

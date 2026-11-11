@@ -12,6 +12,42 @@ public static class RunOver
     }
 }
 
+/// <summary>Hidden vehicle HP (ticket #103): smoke stage from the remaining fraction, blast damage falloff and the box distance of a blast to a vehicle.</summary>
+public static class VehicleDamage
+{
+    /// <summary>0 = fine, 1 = light smoke, 2 = dark smoke, 3 = smoke and sparks; at 0 HP the vehicle is destroyed (not a stage).</summary>
+    public static int Stage(float hp, float maxHp, IReadOnlyList<float> fractions)
+    {
+        var f = hp / MathF.Max(1e-4f, maxHp);
+        var s = 0;
+        for (var i = 0; i < fractions.Count; i++) if (f <= fractions[i]) s = i + 1;
+        return s;
+    }
+
+    /// <summary>Blast damage at surface distance <paramref name="distance"/>: full damage inside the full-damage radius, linear to the edge damage at the radius, none beyond.</summary>
+    public static float BlastDamage(VehicleExplosionDef e, float distance)
+    {
+        var s = e.Splash;
+        if (distance >= s.Radius) return 0;
+        if (distance <= s.FullDamageRadius) return e.Damage;
+        var t = (distance - s.FullDamageRadius) / MathF.Max(1e-4f, s.Radius - s.FullDamageRadius);
+        return MathF.Max(1f, MathF.Round(e.Damage + (s.EdgeDamage - e.Damage) * t));
+    }
+
+    /// <summary>Distance from a blast centre to the surface of an upright box (the vehicle: centre on the ground, yaw as in <see cref="CarState"/>, 1.5 m tall).</summary>
+    public static float DistanceToBox(Vector3 blast, Vector3 centre, float yaw, float halfWidth, float halfLength)
+    {
+        var d = blast - centre;
+        var fwd = new Vector3(-MathF.Sin(yaw), 0, -MathF.Cos(yaw));
+        var right = new Vector3(MathF.Cos(yaw), 0, -MathF.Sin(yaw));
+        var lx = d.X * right.X + d.Z * right.Z; var lz = d.X * fwd.X + d.Z * fwd.Z;
+        var dx = MathF.Max(0, MathF.Abs(lx) - halfWidth);
+        var dz = MathF.Max(0, MathF.Abs(lz) - halfLength);
+        var dy = d.Y < 0 ? -d.Y : MathF.Max(0, d.Y - 1.5f);
+        return MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+    }
+}
+
 /// <summary>Seat state machine of one vehicle: one driver only, no passengers.</summary>
 public sealed class VehicleSeat
 {
@@ -79,9 +115,10 @@ public static class VehicleRecord
 {
     public const ushort FirstId = 0x4000;
 
-    public static EntityRecord Make(ushort id, Vector3 pos, float yaw, ushort driver, byte colourAndKind)
+    /// <summary>The Health byte of a vehicle record carries the damage stage (0..3); a destroyed vehicle is State Dead.</summary>
+    public static EntityRecord Make(ushort id, Vector3 pos, float yaw, ushort driver, byte colourAndKind, int stage = 0, bool destroyed = false)
     {
-        var r = EntityRecord.Make(id, EntityType.Vehicle, pos, yaw, 0, 0, driver != 0 ? EntityState.InVehicle : EntityState.Alive, colourAndKind);
+        var r = EntityRecord.Make(id, EntityType.Vehicle, pos, yaw, 0, stage, destroyed ? EntityState.Dead : driver != 0 ? EntityState.InVehicle : EntityState.Alive, colourAndKind);
         r.Pitch = unchecked((short)driver);
         return r;
     }
@@ -90,6 +127,7 @@ public static class VehicleRecord
     public static byte Pack(int kind, byte colour) => (byte)((kind << 4) | (colour & 0xF));
 
     public static ushort Driver(in EntityRecord r) => unchecked((ushort)r.Pitch);
+    public static int Stage(in EntityRecord r) => r.Health;
     public static byte Colour(in EntityRecord r) => (byte)(r.Weapon & 0xF);
     public static int Kind(in EntityRecord r) => r.Weapon >> 4;
 }

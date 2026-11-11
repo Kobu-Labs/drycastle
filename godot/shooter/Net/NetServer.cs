@@ -75,7 +75,9 @@ public partial class NetServer : Node
     public bool BazookaSmoke;
     /// <summary>Car smoke: flat arena, three cars at fixed spots, debug commands, judges the vehicle scenario.</summary>
     public bool CarSmoke;
-    bool ArenaMode => WeaponsSmoke || BazookaSmoke || CarSmoke;
+    /// <summary>Blast smoke (ticket #103): flat arena with three cars (two side by side, one far), judges vehicle damage, the blast and the chain reaction.</summary>
+    public bool BlastSmoke;
+    bool ArenaMode => WeaponsSmoke || BazookaSmoke || CarSmoke || BlastSmoke;
     int _rocketsFired, _explosions, _directHits, _splashHits, _selfHits, _worldExplosions, _expiredRockets, _knocked;
     public const float ArenaX = 20000f, ArenaZ = 20000f;
 
@@ -129,6 +131,10 @@ public partial class NetServer : Node
         if (BazookaSmoke)
         {
             if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishBazooka();
+        }
+        else if (BlastSmoke)
+        {
+            if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishBlast();
         }
         else if (CarSmoke)
         {
@@ -332,6 +338,12 @@ public partial class NetServer : Node
             BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(t.Id, tp.Pos, 0)));
             return;
         }
+        if (WeaponCodec.DecodeDebugVehicleDamage(payload) is { } vd)
+        {
+            var car = _cars.FirstOrDefault(x => x.Id == vd.Vehicle);
+            if (car != null) DamageVehicle(car, vd.Amount, c.Id, SpecialWeapons.Debug, 0);
+            return;
+        }
         if (MatchCodec.DecodeDebugKill(payload) is not { } target) return;
         var r = _match.ApplyDamage(target, c.Id, SpecialWeapons.Debug, 9999);
         if (r == DamageResult.Ignored && _match.IsProtected(target)) _ignoredHits++;
@@ -433,15 +445,21 @@ public partial class NetServer : Node
             .Select(o => new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Crouching, o.Body.Yaw)).ToList();
 
     /// <summary>Distance from <paramref name="from"/> along <paramref name="dir"/> to the first world collider (player bodies excluded), or infinity.</summary>
-    float WorldDistance(Vector3 from, Vector3 dir, float max)
+    float WorldDistance(Vector3 from, Vector3 dir, float max) => WorldHit(from, dir, max, out _);
+
+    /// <summary>As <see cref="WorldDistance"/>, and the vehicle if that is what the ray stopped on (destroyed vehicles have no collision, so they are shot through).</summary>
+    float WorldHit(Vector3 from, Vector3 dir, float max, out ServerCar? car)
     {
+        car = null;
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
-        q.CollisionMask = 3; // world (1) and vehicles (2): bullets and rockets stop on cars (vehicles have no health in v1)
+        q.CollisionMask = 3; // world (1) and vehicles (2): bullets and rockets stop on cars and hurt them
         var ex = new Godot.Collections.Array<Rid>();
         foreach (var o in _byId.Values) ex.Add(o.Body.GetRid());
         q.Exclude = ex;
         var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
-        return r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3());
+        if (r.Count == 0) return float.PositiveInfinity;
+        car = r["collider"].As<GodotObject>() as ServerCar;
+        return from.DistanceTo(r["position"].AsVector3());
     }
 
     const float MaxShotRange = 300f;
@@ -459,12 +477,14 @@ public partial class NetServer : Node
         {
             var d = HitMath.SpreadDirection(yaw, pitch, shot.SpreadDegrees, _rng);
             var dir = new Vector3(d.X, d.Y, d.Z);
-            var wall = WorldDistance(eye, dir, MaxShotRange);
+            var wall = WorldHit(eye, dir, MaxShotRange, out var shotCar);
             var hit = HitMath.Raycast(N(eye), d, MaxShotRange, wall, targets, c.Id);
             if (hit == null && HitMath.Raycast(N(eye), d, MaxShotRange, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
             var end = eye + dir * (hit?.Distance ?? Math.Min(wall, MaxShotRange));
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
             if (hit is { } h) Deal(c.Id, (byte)shot.WeaponIndex, h.Id, HitMath.HitscanDamage(w, h.Distance, h.Head), h.Head, false);
+            else if (shotCar != null && Vehicles != null && wall <= MaxShotRange)
+                DamageVehicle(shotCar, HitMath.HitscanDamage(w, wall, false) * Vehicles.BulletDamageMultiplier, c.Id, (byte)shot.WeaponIndex, 0);
         }
         else if (w.Kind == WeaponKind.Projectile)
         {
@@ -518,7 +538,7 @@ public partial class NetServer : Node
             var r = _rockets[k];
             var w = Weapons.Weapons[r.Weapon];
             var len = w.ProjectileSpeed * dt;
-            var wall = WorldDistance(r.Pos, r.Dir, len);
+            var wall = WorldHit(r.Pos, r.Dir, len, out var hitCar);
             var sweep = ProjectileMath.Sweep(N(r.Pos), N(r.Dir), len, wall, LiveTargets(), r.Owner);
             switch (sweep.Kind)
             {
@@ -530,7 +550,7 @@ public partial class NetServer : Node
                     _rockets.RemoveAt(k);
                     _worldExplosions++;
                     // pulled back a hair so the blast centre is in front of the surface, not inside it
-                    Explode(r, w, r.Pos + r.Dir * MathF.Max(0, sweep.Distance - 0.02f), null);
+                    Explode(r, w, r.Pos + r.Dir * MathF.Max(0, sweep.Distance - 0.02f), null, hitCar);
                     continue;
             }
             r.Pos += r.Dir * len;
@@ -543,9 +563,10 @@ public partial class NetServer : Node
     /// Explosion: the direct-hit victim takes the full damage (and no splash on top); everyone else alive within the splash
     /// radius takes the linear falloff damage, the owner scaled by the self multiplier. Splash ignores walls. Affected players get knockback.
     /// </summary>
-    void Explode(Rocket r, WeaponDef w, Vector3 pos, ushort? direct)
+    void Explode(Rocket r, WeaponDef w, Vector3 pos, ushort? direct, ServerCar? directCar = null)
     {
         _explosions++;
+        if (Vehicles != null) RocketVsVehicles(pos, w, r.Owner, r.Weapon, directCar);
         BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(r.Id, r.Owner, r.Weapon, N(pos))));
         foreach (var t in LiveTargets())
         {
@@ -573,7 +594,7 @@ public partial class NetServer : Node
             if (c.Joined)
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot));
-        foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour));
+        foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed));
         foreach (var r in _rockets)
             ents.Add(EntityRecord.Make(r.Id, EntityType.Projectile, N(r.Pos),
                 MathF.Atan2(-r.Dir.X, -r.Dir.Z), MathF.Asin(Math.Clamp(r.Dir.Y, -1f, 1f)), 0, EntityState.Alive, r.Weapon));

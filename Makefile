@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-loss-test
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test
 
 setup:
 	cd pipeline && uv sync
@@ -172,6 +172,10 @@ shooter-bazooka-smoke:
 shooter-car-smoke:
 	dotnet build godot/shooter/shooter.csproj
 	python3 godot/shooter/run_car_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
+
+shooter-blast-smoke:
+	dotnet build godot/shooter/shooter.csproj
+	python3 godot/shooter/run_blast_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
 
 shooter-bike-smoke:
 	dotnet build godot/shooter/shooter.csproj
