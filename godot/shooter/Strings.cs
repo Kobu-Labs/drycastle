@@ -32,6 +32,8 @@ public static class Strings
         ("hud.corpse.hold", "Hold {0}  take {1} as primary     Tap {0}  choose slot"), ("hud.corpse.tap", "Tap {0}  take {1}"),
         ("corpse.title", "Take {0}"), ("corpse.option", "{0}  {1}"), ("corpse.primary", "Replace primary: {0}"), ("corpse.secondary", "Replace secondary: {0}"),
         ("corpse.cancel", "{0}  Cancel"),
+        ("gunship.title", "GUNSHIP"), ("gunship.zoom", "{0}x"), ("gunship.ammo", "AMMO {0} / {1}"), ("gunship.heat", "HEAT {0}%"),
+        ("gunship.overheat", "OVERHEATED"), ("gunship.empty", "OUT OF AMMO"), ("gunship.hint", "{0}  Fire     {1}  Zoom     {2}  Next weapon"),
         ("app.title", "SUCHOHRAD"), ("app.subtitle", "Shooter"),
         ("menu.play", "Play"), ("menu.settings", "Settings"), ("menu.quit", "Quit"),
         ("menu.hint", "Up/Down or Tab to move   Enter to select   Esc to go back"),

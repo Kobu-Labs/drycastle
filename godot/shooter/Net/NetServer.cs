@@ -125,6 +125,7 @@ public partial class NetServer : Node
         _match.Entities.Despawned += w => BroadcastEvent(EventKind.WorldDespawn, WorldCodec.EncodeDespawn(w.Id, w.Reason));
         CorpseRules.Register(WorldEntityRegistry.Shared);
         _corpses = new CorpseBook(_match.Entities);
+        InitAircraft();
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");
@@ -476,6 +477,7 @@ public partial class NetServer : Node
             c.StreakHeld = streakDown;
             if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
             if (streakEdge) StreakActivate(c);
+            if (_streaks.RouteInput(c.Id, i)) continue; // the owner is at a gunship's turret: the input steers it, not the body
             if (c.Car != null)
             {
                 // driving: the car is simulated in StepVehicles from the driver's inputs; no walking or weapon timers.

@@ -122,7 +122,7 @@ public partial class NetClient
                 kmh = v.Kmh;
             }
         }
-        if (!_driving) _me?.EndChase(_carYaw);
+        if (!_driving && _gunship == null) _me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
         _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
         string? prompt = null;
         if (_driving) prompt = Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));

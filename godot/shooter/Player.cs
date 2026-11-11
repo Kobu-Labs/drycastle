@@ -122,6 +122,15 @@ public partial class Player : CharacterBody3D
         _camera.GlobalRotation = new Vector3(-0.22f, carYaw, 0);
     }
 
+    /// <summary>Turret camera (a gunship's owner): the camera sits at the turret and looks along the given world yaw and pitch. The body does not move; <see cref="EndChase"/> ends it.</summary>
+    public void Turret(Vector3 at, float yaw, float pitch)
+    {
+        _chase = true;
+        if (!_camera.IsInsideTree()) return;
+        _camera.GlobalPosition = at;
+        _camera.GlobalRotation = new Vector3(pitch, yaw, 0);
+    }
+
     /// <summary>Back to the first-person camera, looking where the car pointed.</summary>
     public void EndChase(float yaw)
     {

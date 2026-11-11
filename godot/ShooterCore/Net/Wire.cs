@@ -42,6 +42,8 @@ public enum EventKind : byte
     PickUpCorpse = 20,
     /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
     Hotbar = 21,
+    /// <summary>Server to the owner of a gunship: weapon, ammo, heat, zoom (<see cref="GunshipCodec"/>). Kinds 60-69 belong to the aircraft streaks.</summary>
+    GunshipStatus = 60,
 }
 
 public abstract record ReliableMsg;

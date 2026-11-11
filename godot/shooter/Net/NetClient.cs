@@ -96,6 +96,7 @@ public partial class NetClient : Node
     {
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
         InitCorpses();
+        InitAircraft();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
         _peer = _conn.ConnectToHost(Host, Port, Wire.Channels, 0);
@@ -170,6 +171,7 @@ public partial class NetClient : Node
         RenderRemotes();
         RenderCorpses();
         RenderCars();
+        RenderAircraft(delta);
         RenderRockets();
         RenderWater();
         UpdateViewmodel();
@@ -436,10 +438,11 @@ public partial class NetClient : Node
         FxDemoInput(ref mi);
         TickRecoil(mi);
         TickBreath(mi);
-        PredictFire(mi);
+        if (_gunship == null) PredictFire(mi); // rounds from a turret are the server's alone
+        ClampGunnerView(ref mi);
         _me.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, _me.Pitch, (byte)(Weapons != null ? _wantSlot : 0));
-        if (!_driving) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); }
+        if (!_driving && _gunship == null) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // at a turret the body stays put
         _pending.Add(new Pending { Input = ni, After = _me.State });
         if (_pending.Count > 120) _pending.RemoveAt(0);
         var recent = new NetInput[Math.Min(3, _pending.Count)];
@@ -604,7 +607,7 @@ public partial class NetClient : Node
     /// <summary>Holding zoom with a scoped weapon (sniper) narrows the camera; never while dead or with the mouse released.</summary>
     void ApplyScope()
     {
-        if (_me == null) return;
+        if (_me == null || _gunship != null) return; // at a turret the zoom is the gunship's
         var slot = Ammo?.Slot ?? _wantSlot;
         var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
         var on = zoom > 0 && !Dead && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
