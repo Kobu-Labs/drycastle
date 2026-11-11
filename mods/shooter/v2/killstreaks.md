@@ -28,7 +28,10 @@ helicopter helper
 - a helicopter starts circling around the map and sporadically, yet efficiently shoots at enemies, user does not control it
 ac-130
 - 18 kills
-- an ac-130 starts circling around the map, user controls the turret, the rockets and can fire it, POV
+- an ac-130 starts circling around the map, user controls the turret and can fire it, POV
+- unlimited ammo: the streak's time is the only limit (no ammo count, no overheating); the fire rate is the pacing
+- 25 mm (fastest), 40 mm and 105 mm (slow shell); every round has a blast, so a near miss still hurts
+- enemy players and target dummies show a red diamond on the screen while the turret is in use
 moab
 - 24 kills
 - nuclear bomb, kills everyone on map

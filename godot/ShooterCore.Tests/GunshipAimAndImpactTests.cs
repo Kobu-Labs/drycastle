@@ -71,14 +71,16 @@ public class GunshipAimAndImpactTests
     }
 
     [Theory]
-    [InlineData(GunshipWeaponKind.Cannon, 22f, ImpactSize.Puff)]
-    [InlineData(GunshipWeaponKind.Cannon, 40f, ImpactSize.Burst)]
-    [InlineData(GunshipWeaponKind.Cannon, 60f, ImpactSize.Burst)]
-    [InlineData(GunshipWeaponKind.Rocket, 0f, ImpactSize.Burst)]
-    [InlineData(GunshipWeaponKind.Shell, 150f, ImpactSize.Plume)]
-    public void Burst_size_follows_the_round(GunshipWeaponKind kind, float damage, ImpactSize expected)
+    [InlineData(GunshipWeaponKind.Cannon, 22f, 0f, ImpactSize.Puff)]
+    [InlineData(GunshipWeaponKind.Cannon, 40f, 0f, ImpactSize.Burst)]
+    [InlineData(GunshipWeaponKind.Cannon, 6f, 3f, ImpactSize.Puff)]     // 25 mm: a 3 m blast
+    [InlineData(GunshipWeaponKind.Cannon, 36f, 6f, ImpactSize.Burst)]   // 40 mm: a 6 m blast
+    [InlineData(GunshipWeaponKind.Cannon, 25f, 10f, ImpactSize.Plume)]  // a 10 m blast is a plume
+    [InlineData(GunshipWeaponKind.Rocket, 0f, 0f, ImpactSize.Burst)]
+    [InlineData(GunshipWeaponKind.Shell, 150f, 14f, ImpactSize.Plume)]
+    public void Burst_size_follows_the_round(GunshipWeaponKind kind, float damage, float radius, ImpactSize expected)
     {
-        Assert.Equal(expected, SurfaceClassifier.SizeFor(kind, damage));
+        Assert.Equal(expected, SurfaceClassifier.SizeFor(kind, damage, radius));
     }
 
     [Fact]

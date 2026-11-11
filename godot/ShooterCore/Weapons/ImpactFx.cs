@@ -52,11 +52,17 @@ public static class SurfaceClassifier
         };
     }
 
-    /// <summary>The burst size for a gunship round: a 25 mm-class round (up to 25 damage) is a puff, a 40 mm-class one a burst, shells a plume.</summary>
-    public static ImpactSize SizeFor(GunshipWeaponKind kind, float damage)
+    /// <summary>
+    /// The burst size for a gunship round, by its blast radius: a shell or a blast of 10 m or more is a plume, 4 m or more a
+    /// burst, smaller a puff. A round with no blast (<paramref name="splashRadius"/> 0) is sized by its damage.
+    /// </summary>
+    public static ImpactSize SizeFor(GunshipWeaponKind kind, float damage, float splashRadius)
     {
         if (kind == GunshipWeaponKind.Shell) return ImpactSize.Plume;
         if (kind == GunshipWeaponKind.Rocket) return ImpactSize.Burst;
+        if (splashRadius >= 10f) return ImpactSize.Plume;
+        if (splashRadius >= 4f) return ImpactSize.Burst;
+        if (splashRadius > 0f) return ImpactSize.Puff;
         return damage <= 25f ? ImpactSize.Puff : ImpactSize.Burst;
     }
 }

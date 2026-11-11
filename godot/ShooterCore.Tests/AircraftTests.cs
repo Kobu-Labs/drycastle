@@ -183,7 +183,6 @@ public class AircraftTests
         var s = g.Shots[0];
         Assert.Equal(GunshipWeaponKind.Cannon, s.Kind);
         Assert.Equal(g.Air.Position.Y - GunshipControl.TurretDropM, s.Origin.Y, 0.001f);
-        Assert.Equal(Gun.Weapons[0].Ammo - 1, g.Control.Ammo(0));
     }
 
     [Fact]
@@ -198,42 +197,35 @@ public class AircraftTests
     }
 
     [Fact]
-    public void Heat_locks_the_weapon_and_it_unlocks_at_half_after_cooling()
+    public void Unlimited_ammo_and_no_heat_lock_the_time_limit_is_the_only_limit()
     {
         var g = new Gunner();
         var cannon = Gun.Weapons[0];
         var t = 1.0;
-        // fire at the full rate until the cannon locks (heat rises faster than it cools at that rate)
-        for (var i = 0; i < 500 && !g.Control.Overheated(0); i++, t += cannon.IntervalS + 0.01)
+        var last = t;
+        // 300 inputs held on fire: far past any old ammo count or heat lock, and none of it stops the trigger
+        for (var i = 0; i < 300; i++, t += cannon.IntervalS + 0.01)
+        {
             g.Control.OnInput(Input(0, -0.5f, MoveButtons.Fire), t);
-        Assert.True(g.Control.Overheated(0));
-        var fired = g.Shots.Count;
-        g.Control.OnInput(Input(0, -0.5f, MoveButtons.Fire), t + 0.1);
-        Assert.Equal(fired, g.Shots.Count); // locked: no round
-
-        // cooling from the lock level (max) down to half takes (max / 2) / cool-rate seconds
-        var lockAt = t - (cannon.IntervalS + 0.01); // the last round locked it
-        var toHalf = cannon.HeatMax * 0.5f / cannon.HeatCoolPerS;
-        g.Control.OnInput(Input(0, -0.5f, MoveButtons.None), lockAt + toHalf - 0.2);
-        Assert.True(g.Control.Overheated(0));
-        g.Control.OnInput(Input(0, -0.5f, MoveButtons.None), lockAt + toHalf + 0.2);
-        Assert.False(g.Control.Overheated(0));
-        g.Control.OnInput(Input(0, -0.5f, MoveButtons.Fire), lockAt + toHalf + 0.3);
-        Assert.Equal(fired + 1, g.Shots.Count);
+            last = t;
+        }
+        // the rate is the interval's: rounds due from the first press to the last input (the schedule catches up when an input is late)
+        Assert.Equal((int)Math.Floor((last - 1.0) / cannon.IntervalS) + 1, g.Shots.Count);
+        Assert.True(g.Shots.Count > 300);
     }
 
     [Fact]
-    public void Ammo_runs_out_and_reports_empty()
+    public void A_short_interval_fires_every_round_due_within_one_input_up_to_the_cap()
     {
-        var g = new Gunner();
-        var cannon = Gun.Weapons[0];
-        var t = 1.0;
-        // one round every half second: the cannon cools more than it heats, so only the ammo limits the run
-        for (var i = 0; i < cannon.Ammo + 5; i++, t += 0.5)
-            g.Control.OnInput(Input(0, -0.5f, MoveButtons.Fire), t);
-        Assert.Equal(cannon.Ammo, g.Shots.Count);
-        Assert.Equal(0, g.Control.Ammo(0));
-        Assert.True((g.Status.Last().Flags & GunshipStatus.FlagEmpty) != 0);
+        // the AC-130's 25 mm: 0.04 s between rounds, so an input 0.25 s after the last one has six rounds due (1.04 .. 1.24)
+        var shots = new List<GunshipShot>();
+        var control = new GunshipControl(Shipping.Ac130!, new Aircraft(Shipping.AircraftKinds[1], 1, Vector3.Zero, 0, true, 3), shots.Add, _ => { }, new Random(1));
+        var fire25 = Input(0, -0.5f, MoveButtons.Fire) with { Slot = 1 }; // key 1: the AC-130's 25 mm
+        control.OnInput(fire25, 1.0);
+        Assert.Single(shots);
+        control.OnInput(fire25, 1.25);
+        Assert.Equal(7, shots.Count);
+        Assert.True(GunshipControl.MaxRoundsPerInput >= 6);
     }
 
     [Fact]
@@ -268,8 +260,9 @@ public class AircraftTests
     [Fact]
     public void Status_round_trips_through_the_codec()
     {
-        var s = new GunshipStatus(1, 1234, 77, 2, GunshipStatus.FlagOverheated);
+        var s = new GunshipStatus(1, 2);
         Assert.Equal(s, GunshipCodec.Decode(GunshipCodec.Encode(s)));
+        Assert.Equal(GunshipCodec.Bytes, GunshipCodec.Encode(s).Length);
         Assert.Null(GunshipCodec.Decode(new byte[3]));
     }
 

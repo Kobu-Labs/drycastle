@@ -8,13 +8,17 @@ public readonly record struct GunshipShot(int WeaponIndex, GunshipWeaponKind Kin
 
 /// <summary>
 /// The gunship's point-of-view control (a <see cref="ControlSession"/> target): the owner's view drives the turret, Aim
-/// steps the zoom, Reload steps the weapon, Fire fires it. Each weapon has its own ammo and heat. Server side; the rules are
-/// pure so they run in the tests. Aim is clamped with <see cref="GunshipAim"/>; the server then resolves each shot.
+/// steps the zoom, Reload steps the weapon, Fire fires it. There is no ammo and no heat: the fire interval paces each weapon,
+/// and the streak's time limit is the only limit. An interval shorter than the input period fires several rounds in one
+/// input (up to <see cref="MaxRoundsPerInput"/>), so the effective rate is the interval's. Server side; the rules are pure so
+/// they run in the tests. Aim is clamped with <see cref="GunshipAim"/>; the server then resolves each shot.
 /// </summary>
 public sealed class GunshipControl
 {
     /// <summary>Turret height below the airframe's position, metres: rounds leave from there.</summary>
     public const float TurretDropM = 1.5f;
+    /// <summary>The most rounds one input may fire for one weapon: a backlog (a stall of the input stream) does not turn into a flood.</summary>
+    public const int MaxRoundsPerInput = 8;
 
     readonly GunshipDef _def;
     readonly Aircraft _aircraft;
@@ -24,11 +28,7 @@ public sealed class GunshipControl
     /// <summary>Indices into <see cref="GunshipDef.Weapons"/> the owner may cycle through, in order.</summary>
     readonly int[] _weapons;
     int _slot;
-    readonly int[] _ammo;
-    readonly float[] _heat;
-    readonly bool[] _locked;
     readonly double[] _nextShot;
-    double _coolAt = double.NaN;
     bool _aimWas, _reloadWas;
     /// <summary>The hotbar key last seen (1 = the first weapon); only a change of it selects a weapon, so Reload still cycles.</summary>
     byte _key;
@@ -43,11 +43,8 @@ public sealed class GunshipControl
         _rng = rng ?? new Random();
         _weapons = (weapons ?? Enumerable.Range(0, def.Weapons.Count).ToList()).ToArray();
         if (_weapons.Length == 0) throw new ArgumentException("a gunship control needs at least one weapon", nameof(weapons));
-        var n = def.Weapons.Count;
-        _ammo = def.Weapons.Select(w => w.Ammo).ToArray();
-        _heat = new float[n];
-        _locked = new bool[n];
-        _nextShot = new double[n];
+        _nextShot = new double[def.Weapons.Count];
+        Array.Fill(_nextShot, double.NegativeInfinity); // every weapon starts idle: the first press fires at once, with no backlog
     }
 
     /// <summary>Index into <see cref="GunshipDef.ZoomLevels"/>.</summary>
@@ -63,10 +60,6 @@ public sealed class GunshipControl
     /// <summary>True once the airframe has ended (its streak is over): the control takes no more input.</summary>
     public bool Ended => _aircraft.Ended != null;
 
-    public int Ammo(int weapon) => _ammo[weapon];
-    public float HeatOf(int weapon) => _heat[weapon];
-    public bool Overheated(int weapon) => _locked[weapon];
-
     /// <summary>Where a round leaves the turret, in world space (under the airframe).</summary>
     public Vector3 Muzzle => _aircraft.Position - Vector3.UnitY * TurretDropM;
 
@@ -77,7 +70,6 @@ public sealed class GunshipControl
         var yaw = Quant.Yaw(input.Yaw);
         var pitch = Quant.Pitch(input.Pitch);
         (TurretYaw, TurretPitch) = GunshipAim.Clamp(_aircraft.YawRad, yaw, pitch, _def);
-        Cool(now);
 
         var aim = Held(input, MoveButtons.Aim);
         var reload = Held(input, MoveButtons.Reload);
@@ -94,86 +86,47 @@ public sealed class GunshipControl
             if (pick >= 0 && pick != _slot) { _slot = pick; changed = true; }
         }
 
-        if (fire) changed |= TryFire(now);
+        if (fire) FireDue(now);
         if (changed) _status(Status());
     }
 
-    /// <summary>Whether a round fires now for the current weapon: trigger held, not locked, interval passed, a round left.</summary>
-    bool TryFire(double now)
+    /// <summary>
+    /// Fires every round that is due for the current weapon: the first at once if the weapon was idle, then one per interval
+    /// that has passed since the last, at most <see cref="MaxRoundsPerInput"/>.
+    /// </summary>
+    void FireDue(double now)
     {
         var w = Weapon;
         var def = _def.Weapons[w];
-        if (_locked[w] || _ammo[w] == 0 || now < _nextShot[w]) return false;
-        _ammo[w]--;
-        _nextShot[w] = now + def.IntervalS;
-        _heat[w] = Math.Min(def.HeatMax, _heat[w] + def.HeatPerShot);
-        if (_heat[w] >= def.HeatMax) _locked[w] = true;
-        var dir = HitMath.SpreadDirection(TurretYaw, TurretPitch, def.SpreadDeg, _rng);
-        _fire(new GunshipShot(w, def.Kind, Muzzle, dir, def.Damage, def.RangeM));
-        return true;
-    }
-
-    /// <summary>Heat drains at each weapon's rate; a locked weapon unlocks at half its heat maximum.</summary>
-    void Cool(double now)
-    {
-        if (double.IsNaN(_coolAt)) { _coolAt = now; return; }
-        var dt = (float)Math.Max(0, now - _coolAt);
-        _coolAt = now;
-        if (dt <= 0) return;
-        for (var i = 0; i < _heat.Length; i++)
+        if (now - _nextShot[w] > MaxRoundsPerInput * def.IntervalS) _nextShot[w] = now; // a long stall or idle: no backlog from before
+        for (var n = 0; n < MaxRoundsPerInput && now >= _nextShot[w]; n++)
         {
-            var def = _def.Weapons[i];
-            _heat[i] = Math.Max(0, _heat[i] - def.HeatCoolPerS * dt);
-            if (_locked[i] && _heat[i] <= def.HeatMax * 0.5f) _locked[i] = false;
+            _nextShot[w] += def.IntervalS;
+            var dir = HitMath.SpreadDirection(TurretYaw, TurretPitch, def.SpreadDeg, _rng);
+            _fire(new GunshipShot(w, def.Kind, Muzzle, dir, def.Damage, def.RangeM));
         }
     }
 
-    /// <summary>The status the owner's HUD shows for the current weapon.</summary>
-    public GunshipStatus Status()
-    {
-        var def = _def.Weapons[Weapon];
-        var flags = (_locked[Weapon] ? GunshipStatus.FlagOverheated : 0) | (_ammo[Weapon] == 0 ? GunshipStatus.FlagEmpty : 0);
-        return new GunshipStatus(
-            (byte)Weapon,
-            (ushort)Math.Clamp(_ammo[Weapon], 0, ushort.MaxValue),
-            (byte)Math.Clamp((int)MathF.Round(100f * _heat[Weapon] / def.HeatMax), 0, 100),
-            (byte)Zoom,
-            (byte)flags);
-    }
+    /// <summary>The status the owner's HUD shows: the weapon in use and the zoom step.</summary>
+    public GunshipStatus Status() => new((byte)Weapon, (byte)Zoom);
 
     /// <summary>Whether a button bit is down in this input.</summary>
     static bool Held(NetInput i, MoveButtons b) => (i.Buttons & (ushort)b) != 0;
 }
 
-/// <summary>What the gunship owner's HUD shows: weapon index, ammo, heat percent, zoom step and flags.</summary>
-public readonly record struct GunshipStatus(byte Weapon, ushort Ammo, byte HeatPercent, byte Zoom, byte Flags)
-{
-    public const byte FlagOverheated = 1, FlagEmpty = 2;
+/// <summary>What the gunship owner's HUD shows: the weapon index and the zoom step.</summary>
+public readonly record struct GunshipStatus(byte Weapon, byte Zoom);
 
-    public bool Overheated => (Flags & FlagOverheated) != 0;
-    public bool Empty => (Flags & FlagEmpty) != 0;
-}
-
-/// <summary>Payload of <see cref="EventKind.GunshipStatus"/> (owner only): u8 weapon, u16 ammo, u8 heat %, u8 zoom, u8 flags.</summary>
+/// <summary>Payload of <see cref="EventKind.GunshipStatus"/> (owner only): u8 weapon, u8 zoom.</summary>
 public static class GunshipCodec
 {
-    public const int Bytes = 6;
+    public const int Bytes = 2;
 
-    public static byte[] Encode(GunshipStatus s)
-    {
-        var b = new byte[Bytes];
-        b[0] = s.Weapon;
-        b[1] = (byte)(s.Ammo & 0xFF);
-        b[2] = (byte)(s.Ammo >> 8);
-        b[3] = s.HeatPercent;
-        b[4] = s.Zoom;
-        b[5] = s.Flags;
-        return b;
-    }
+    public static byte[] Encode(GunshipStatus s) => new[] { s.Weapon, s.Zoom };
 
     public static GunshipStatus? Decode(ReadOnlySpan<byte> d)
     {
         if (d.Length != Bytes) return null;
-        return new GunshipStatus(d[0], (ushort)(d[1] | (d[2] << 8)), d[3], d[4], d[5]);
+        return new GunshipStatus(d[0], d[1]);
     }
 }

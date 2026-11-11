@@ -103,10 +103,29 @@ public partial class NetClient
             // the timed streak's clock: the helicopter's, or the AC-130's time left (whole seconds, its kills are not counted here)
             var (timer, kills) = _ac130Active ? (Strings.F("ac130.timer", (int)Math.Ceiling(Ac130SecondsLeft)), "") : HeliClock();
             _gunOverlay.SetClock(timer, kills);
+            _gunOverlay.SetMarkers(_me.Camera, EnemyMarkers());
         }
         else if (_gunship != null) EndGunship();
 
         if (_viewmodel != null) _viewmodel.Visible = _gunship == null;
+    }
+
+    /// <summary>The enemy markers' points (ticket #157): the chest of every live enemy player and target dummy. Reused each frame, no allocation.</summary>
+    readonly List<Vector3> _enemyMarkers = new();
+
+    /// <summary>
+    /// Fills <see cref="_enemyMarkers"/> from the remote replicas (players and target dummies share them): every one but the owner
+    /// and the dead (a dummy's Defeat pose, a player's body). Positions are the replicas' feet plus the chest height.
+    /// </summary>
+    List<Vector3> EnemyMarkers()
+    {
+        _enemyMarkers.Clear();
+        foreach (var (id, r) in _remotes)
+        {
+            if (id == _myId || r.State == EntityState.Dead || !GodotObject.IsInstanceValid(r.Node)) continue;
+            _enemyMarkers.Add(r.Node.GlobalPosition + Vector3.Up * 1.0f);
+        }
+        return _enemyMarkers;
     }
 
     /// <summary>Back to the body's first-person view, looking where the turret pointed.</summary>

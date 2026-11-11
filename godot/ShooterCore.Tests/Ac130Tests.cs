@@ -46,7 +46,9 @@ public class Ac130Tests
     [Fact]
     public void A_shell_without_splash_is_rejected()
     {
-        var json = ShippedJson.Replace(",\n        \"splash\": { \"radius\": 14, \"full_damage_radius\": 4, \"edge_damage\": 25, \"self_damage_multiplier\": 0.5, \"knockback_speed\": 8 }", "");
+        // the shell is the entry of kind "shell": drop its splash block (the cannons keep theirs)
+        var json = System.Text.RegularExpressions.Regex.Replace(ShippedJson, "(\"kind\": \"shell\"[^}]*?),\\s*\"splash\": \\{[^}]*\\}", "$1");
+        Assert.DoesNotContain("\"splash\": { \"radius\": 14", json);
         var e = Assert.Throws<DataFileException>(() => KillstreakFile.Parse(json));
         Assert.Contains("needs a \"splash\" block", e.Message);
     }
@@ -75,32 +77,28 @@ public class Ac130Tests
     }
 
     [Fact]
-    public void The_shell_fires_once_per_its_slow_interval_and_counts_its_six_rounds()
+    public void The_shell_fires_once_per_its_interval_with_no_ammo_limit()
     {
         var shots = new List<GunshipShot>();
         var control = new GunshipControl(Turret, new Aircraft(Shipping.AircraftKinds[1], 1, Vector3.Zero, 0, true, Owner), shots.Add, _ => { }, new Random(1));
         control.OnInput(Input(MoveButtons.Fire, slot: 3), 1.0);
-        control.OnInput(Input(MoveButtons.Fire, slot: 3), 4.0); // inside the 6 s interval
+        control.OnInput(Input(MoveButtons.Fire, slot: 3), 1.5); // inside the 1 s interval
         Assert.Single(shots);
         Assert.Equal(GunshipWeaponKind.Shell, shots[0].Kind);
-        Assert.Equal(5, control.Ammo(2));
 
-        control.OnInput(Input(MoveButtons.Fire, slot: 3), 7.1);
+        control.OnInput(Input(MoveButtons.Fire, slot: 3), 2.1);
         Assert.Equal(2, shots.Count);
-        Assert.Equal(4, control.Ammo(2));
     }
 
     [Fact]
-    public void The_cannon_has_its_own_ammo_and_heat_apart_from_the_shell()
+    public void Each_cannon_fires_at_its_own_rate_with_no_ammo_or_heat()
     {
         var shots = new List<GunshipShot>();
         var control = new GunshipControl(Turret, new Aircraft(Shipping.AircraftKinds[1], 1, Vector3.Zero, 0, true, Owner), shots.Add, _ => { }, new Random(1));
         control.OnInput(Input(MoveButtons.Fire, slot: 2), 1.0);
-        control.OnInput(Input(MoveButtons.Fire, slot: 2), 1.6);
-        Assert.True(control.HeatOf(1) > 0); // the 40 mm's heat rose
-        Assert.Equal(58, control.Ammo(1));
-        Assert.Equal(6, control.Ammo(2));
-        Assert.Equal(0, control.HeatOf(2));
+        control.OnInput(Input(MoveButtons.Fire, slot: 2), 1.61); // the 40 mm's 0.2 s: rounds due at 1.0, 1.2, 1.4 and 1.6
+        Assert.Equal(4, shots.Count);
+        Assert.All(shots, s => Assert.Equal(1, s.WeaponIndex));
     }
 
     [Fact]
