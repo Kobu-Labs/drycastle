@@ -132,7 +132,7 @@ public partial class NetServer
     void OnSaveLoadout(Client c, Loadout l)
     {
         var p = c.Profile!;
-        if (LoadoutRules.ValidateLoadout(l, Weapons, p.Level, p.Unlocks, PerkLevels, KillstreakIds.Placeholder) is { } err)
+        if (LoadoutRules.ValidateLoadout(l, Weapons, p.Level, p.Unlocks, PerkLevels, Killstreaks.UnlockLevels) is { } err)
         {
             Send(c, new ErrorMsg(err));
             return;

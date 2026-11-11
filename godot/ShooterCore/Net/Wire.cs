@@ -32,6 +32,12 @@ public enum EventKind : byte
     LevelUp = 15,
     /// <summary>Server to one player at the end of a round: XP earned in it, with the reasons (<see cref="ProgressionEvents"/>).</summary>
     XpSummary = 16,
+    /// <summary>Server to the owner: a killstreak was earned (<see cref="KillstreakEvents"/>).</summary>
+    StreakEarned = 17,
+    /// <summary>Server to the owner: a held killstreak was used (<see cref="KillstreakEvents"/>).</summary>
+    StreakUsed = 18,
+    /// <summary>Server to the owner: an active killstreak ended, with the reason (<see cref="KillstreakEvents"/>).</summary>
+    StreakEnded = 19,
 }
 
 public abstract record ReliableMsg;

@@ -11,8 +11,8 @@ public class LevelsTests
     static readonly string LevelsJson = File.ReadAllText(Path.Combine(DataDir, "levels.json"));
     static readonly GameData Shipped = GameData.Load(DataDir);
 
-    static LevelsFile Parse(string json, IReadOnlySet<string>? streaks = null) =>
-        LevelsFile.Parse(json, Shipped.Weapons, Shipped.Perks, streaks);
+    static LevelsFile Parse(string json, IReadOnlyDictionary<string, int>? streaks = null) =>
+        LevelsFile.Parse(json, Shipped.Weapons, Shipped.Perks, streaks ?? Shipped.Killstreaks.UnlockLevels);
 
     static Profile ProfileAt(int level) => new(1, "t", "", 0, level, DateTime.UtcNow, DateTime.UtcNow);
 
@@ -93,7 +93,10 @@ public class LevelsTests
         Assert.True(Shipped.Levels.IsUnlocked(ProfileAt(40), UnlockKind.Weapon, "m60"));
         Assert.False(Shipped.Levels.IsUnlocked(ProfileAt(40), UnlockKind.Weapon, "not_a_gun"));
         Assert.False(Shipped.Levels.IsUnlocked(ProfileAt(40), UnlockKind.Weapon, "knife"));
-        Assert.False(Shipped.Levels.IsUnlocked(ProfileAt(40), UnlockKind.Streak, "uav"));
+        Assert.True(Shipped.Levels.IsUnlocked(ProfileAt(40), UnlockKind.Streak, "uav")); // the starter streak, open at 0
+        Assert.False(Shipped.Levels.IsUnlocked(ProfileAt(19), UnlockKind.Streak, "moab"));
+        Assert.True(Shipped.Levels.IsUnlocked(ProfileAt(20), UnlockKind.Streak, "moab"));
+        Assert.False(Shipped.Levels.IsUnlocked(ProfileAt(40), UnlockKind.Streak, "not_a_streak"));
     }
 
     // ---- validation ----
@@ -161,9 +164,28 @@ public class LevelsTests
     public void StreakUnlocksNeedKillstreakIds()
     {
         var line = "{ \"level\": 4, \"kind\": \"streak\", \"id\": \"uav\" }";
-        Assert.Contains("unknown killstreak id", Assert.Throws<DataFileException>(() => Parse(WithUnlock(line))).Message);
-        var ok = Parse(WithUnlock(line), new HashSet<string> { "uav" });
+        // every shipped streak except uav is known; uav is not, so its line fails
+        var withoutUav = Shipped.Killstreaks.UnlockLevels.Where(kv => kv.Key != "uav").ToDictionary(kv => kv.Key, kv => kv.Value);
+        Assert.Contains("unknown killstreak id", Assert.Throws<DataFileException>(() => Parse(WithUnlock(line), withoutUav)).Message);
+        // the line must match the streak's own unlock_level (uav is 4 in this fixture's killstreak table)
+        var ok = Parse(WithUnlock(line), new Dictionary<string, int>(Shipped.Killstreaks.UnlockLevels) { ["uav"] = 4 });
         Assert.Equal(4, ok.Table.RequiredLevel(UnlockKind.Streak, "uav"));
+        Assert.Contains("make them match", Assert.Throws<DataFileException>(() => Parse(WithUnlock(line))).Message);
+    }
+
+    [Fact]
+    public void ShippedStreakUnlocksMatchKillstreaksJson()
+    {
+        foreach (var s in Shipped.Killstreaks.Streaks.Where(s => s.UnlockLevel != 0))
+            Assert.Equal(s.UnlockLevel, Shipped.Levels.Table.RequiredLevel(UnlockKind.Streak, s.Id));
+    }
+
+    [Fact]
+    public void GatedStreakMissingFromTheTableFailsAtLoad()
+    {
+        var without = LevelsJson.Replace("{ \"level\": 14, \"kind\": \"streak\", \"id\": \"ac130\" },", "");
+        Assert.NotEqual(LevelsJson, without);
+        Assert.Contains("\"ac130\" has unlock_level 14 but no entry", Assert.Throws<DataFileException>(() => Parse(without)).Message);
     }
 
     [Fact]

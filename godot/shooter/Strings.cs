@@ -76,7 +76,7 @@ public static class Strings
         ("bind.move_forward", "Move forward"), ("bind.move_back", "Move back"), ("bind.move_left", "Move left"), ("bind.move_right", "Move right"),
         ("bind.jump", "Jump"), ("bind.sprint", "Sprint"), ("bind.crouch", "Crouch"), ("bind.prone", "Prone"), ("bind.fire", "Fire"), ("bind.reload", "Reload"),
         ("bind.interact", "Interact"), ("bind.scoreboard", "Scoreboard (hold)"),
-        ("bind.slot_1", "Weapon slot 1"), ("bind.slot_2", "Weapon slot 2"), ("bind.slot_3", "Weapon slot 3"), ("bind.slot_4", "Weapon slot 4"), ("bind.slot_5", "Weapon slot 5"), ("bind.zoom", "Scope zoom"), ("bind.headlights", "Vehicle headlights"),
+        ("bind.slot_1", "Weapon slot 1"), ("bind.slot_2", "Weapon slot 2"), ("bind.slot_3", "Weapon slot 3"), ("bind.slot_4", "Weapon slot 4"), ("bind.slot_5", "Weapon slot 5"), ("bind.zoom", "Scope zoom"), ("bind.headlights", "Vehicle headlights"), ("bind.killstreak", "Use killstreak"),
         ("toast.info", "Info:"), ("toast.warn", "Notice:"), ("toast.error", "Problem:"),
     };
 

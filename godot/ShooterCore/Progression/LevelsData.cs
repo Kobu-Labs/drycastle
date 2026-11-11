@@ -44,20 +44,20 @@ public sealed class LevelsFile
     /// <summary>Required level for every selectable item; the basis of <see cref="IsUnlocked(Profile, UnlockKind, string)"/>.</summary>
     public UnlockTable Table { get; init; } = null!;
 
-    public static LevelsFile Load(string path, WeaponsFile weapons, PerksFile perks, IReadOnlySet<string>? killstreakIds = null) =>
-        Resolve(DataFile.Load<LevelsRaw>(path, SupportedVersion), weapons, perks, killstreakIds);
+    public static LevelsFile Load(string path, WeaponsFile weapons, PerksFile perks, IReadOnlyDictionary<string, int>? streakLevels = null) =>
+        Resolve(DataFile.Load<LevelsRaw>(path, SupportedVersion), weapons, perks, streakLevels);
 
-    public static LevelsFile Parse(string json, WeaponsFile weapons, PerksFile perks, IReadOnlySet<string>? killstreakIds = null) =>
-        Resolve(DataFile.Parse<LevelsRaw>(json, "levels.json", SupportedVersion), weapons, perks, killstreakIds);
+    public static LevelsFile Parse(string json, WeaponsFile weapons, PerksFile perks, IReadOnlyDictionary<string, int>? streakLevels = null) =>
+        Resolve(DataFile.Parse<LevelsRaw>(json, "levels.json", SupportedVersion), weapons, perks, streakLevels);
 
     /// <summary>Whether a profile at its current level may use the item. Unknown ids are never unlocked.</summary>
     public bool IsUnlocked(Profile profile, UnlockKind kind, string id) => Table.IsUnlocked(profile.Level, kind, id);
 
-    /// <param name="killstreakIds">Killstreak ids from killstreaks.json; none is loaded yet, so streak unlocks are rejected until the killstreak ticket passes them.</param>
-    static LevelsFile Resolve(LevelsRaw raw, WeaponsFile weapons, PerksFile perks, IReadOnlySet<string>? killstreakIds)
+    /// <param name="streakLevels">Killstreak id to its unlock level, from killstreaks.json (<see cref="KillstreakFile.UnlockLevels"/>). A streak line must name a listed id at the same level.</param>
+    static LevelsFile Resolve(LevelsRaw raw, WeaponsFile weapons, PerksFile perks, IReadOnlyDictionary<string, int>? streakLevels)
     {
         const string F = "levels.json";
-        killstreakIds ??= new HashSet<string>();
+        streakLevels ??= new Dictionary<string, int>();
         if (raw.XpToReach is not { Count: LevelCount })
             throw new DataFileException($"{F}: field \"xp_to_reach\" must list exactly {LevelCount} thresholds (levels 1-{LevelCount})");
         if (raw.XpToReach[0] != 0) throw new DataFileException($"{F}: field \"xp_to_reach\" must start at 0 (level 1)");
@@ -81,6 +81,7 @@ public sealed class LevelsFile
         var itemLevels = new Dictionary<(UnlockKind, string), int>();
         foreach (var gun in weapons.Weapons.Where(x => x.Slot != WeaponSlot.Special)) itemLevels[(UnlockKind.Weapon, gun.Id)] = gun.UnlockLevel;
         foreach (var p in perks.Perks) itemLevels[(UnlockKind.Perk, p.Id)] = p.UnlockLevel;
+        foreach (var (id, level) in streakLevels) itemLevels[(UnlockKind.Streak, id)] = level;
 
         var unlocks = new List<UnlockEntry>();
         var table = new Dictionary<(UnlockKind, string), int>();
@@ -105,7 +106,7 @@ public sealed class LevelsFile
                     _ = perks.Find(r.Id) ?? throw new DataFileException($"{F}: {where}: unknown perk id (not in perks.json)");
                     break;
                 case UnlockKind.Streak:
-                    if (!killstreakIds.Contains(r.Id)) throw new DataFileException($"{F}: {where}: unknown killstreak id (not in killstreaks.json)");
+                    if (!streakLevels.ContainsKey(r.Id)) throw new DataFileException($"{F}: {where}: unknown killstreak id (not in killstreaks.json)");
                     break;
                 case UnlockKind.LoadoutSlot:
                     if (!LoadoutSlotIds.Contains(r.Id)) throw new DataFileException($"{F}: {where}: unknown loadout slot id (expected streak_slot_2 or streak_slot_3)");
@@ -124,7 +125,7 @@ public sealed class LevelsFile
         {
             if (table.ContainsKey((kind, id))) continue;
             if (own != 0)
-                throw new DataFileException($"levels.json: {(kind == UnlockKind.Weapon ? "weapon" : "perk")} \"{id}\" has unlock_level {own} but no entry in levels.json \"unlocks\"");
+                throw new DataFileException($"levels.json: {ItemLabel(kind)} \"{id}\" has unlock_level {own} but no entry in levels.json \"unlocks\"");
             table[(kind, id)] = 0;
         }
 
@@ -141,6 +142,8 @@ public sealed class LevelsFile
             Table = new UnlockTable(table),
         };
     }
+
+    static string ItemLabel(UnlockKind kind) => kind switch { UnlockKind.Weapon => "weapon", UnlockKind.Perk => "perk", UnlockKind.Streak => "killstreak", _ => "item" };
 
     static int Award(int? value, string key) =>
         value is { } v && v >= 0 ? v : throw new DataFileException($"levels.json: awards \"{key}\" is required and must be >= 0");
