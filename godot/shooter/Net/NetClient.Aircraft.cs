@@ -22,6 +22,8 @@ public partial class NetClient
     /// <summary>The local player's gunship while it exists (null otherwise); its yaw is the rendered heading.</summary>
     AircraftView? _gunship;
     float _gunYaw;
+    /// <summary>The yaw the turret camera was set to this frame (the minimap follows it, ticket #150).</summary>
+    float _turretViewYaw;
     GunshipStatus _gunStatus;
     bool _gunDirty;
     GunshipOverlay _gunOverlay = null!;
@@ -93,6 +95,7 @@ public partial class NetClient
             if (_gunship != mine) { _gunship = mine; _gunDirty = true; }
             if (WorldEntities.Entities.TryGetValue(mineId, out var me) && me.Buf.At(rt) is { } ms) _gunYaw = ms.Yaw;
             var (yaw, pitch) = GunshipAim.Clamp(_gunYaw, _me.Yaw, _me.Pitch, gun);
+            _turretViewYaw = yaw;
             var mount = mine.Model.GlobalPosition - Vector3.Up * GunshipControl.TurretDropM;
             _me.Turret(mount, yaw, pitch);
             _me.ZoomFov = GameSettings.Current.Fov / (_gunStatus.Zoom < gun.ZoomLevels.Count ? gun.ZoomLevels[_gunStatus.Zoom] : 1f);

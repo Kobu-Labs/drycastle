@@ -15,6 +15,8 @@ public partial class NetClient
     /// <summary>True from StreakUsed(attack_missile) to its StreakEnded: the owner steers a missile.</summary>
     bool _controlling;
     Camera3D? _povCam;
+    /// <summary>The missile's heading the POV camera uses this frame (the minimap follows it, ticket #150).</summary>
+    float _missileViewYaw;
     MissilePovOverlay? _pov;
     readonly Dictionary<ushort, Rocket> _missiles = new();
     double _povSince;
@@ -100,6 +102,7 @@ public partial class NetClient
         var s = e.State;
         var p = s.Position;
         _povCam.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
+        _missileViewYaw = s.YawRad;
         _povCam.Rotation = new Vector3(s.PitchRad, s.YawRad, 0); // Godot's YXZ order: the same heading HitMath.Forward gives
         _me.Camera.Current = false;
         _povCam.Current = true;

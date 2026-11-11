@@ -6,17 +6,21 @@ using NVector2 = System.Numerics.Vector2;
 namespace Suchohrad.Shooter;
 
 /// <summary>
-/// Top-down minimap (ticket #119). The base texture is rasterised once per map from the client's own map data (parcels as
-/// land-use fills, roads.json as lines) and cached; each frame only the view transform, the player arrow and a few dots are
-/// drawn, with no per-frame allocations. The view turns with the player so their facing is up.
-/// Dots: the player arrow (fixed at the centre), vehicles (squares, <see cref="SetVehicleDots"/>) and enemy pings (circles,
-/// <see cref="SetEnemyPings"/>, the hook the UAV streak uses; pings expire on their own).
-/// Positions are ground (x, z) in metres, the same axes as the game's world (z = -north).
+/// Top-down minimap (ticket #119, quality and orientation in #150). Two layers:
+/// - Terrain and parcel fills: one mipmapped texture per map, sized from the on-screen scale (UI scale times device pixel
+///   ratio), rebuilt only when that scale changes by a lot. Sampled with linear filtering, so it is not blocky when zoomed.
+/// - Roads: anti-aliased polylines drawn each frame in screen space, culled to the view, so they stay crisp at any scale.
+/// Dots: the player arrow (fixed at the centre), vehicles (squares), enemy pings (circles, the UAV streak's layer, expiring
+/// on their own), and a north marker "N" on the rim. The view turns to the player's view direction (see
+/// <see cref="MinimapView"/>), eased along the shorter arc.
+/// Positions are ground (x, z) in metres, the same axes as the game's world (north is -z).
 /// </summary>
 public sealed partial class Minimap : Control
 {
-    /// <summary>Texels across the map's longer side (plus a margin). About 2 m per texel on the village map.</summary>
-    public const int TextureSize = 512;
+    /// <summary>Texture side limits in texels. The side follows the on-screen scale inside these bounds.</summary>
+    public const int MinTextureSide = 512, MaxTextureSide = 2048;
+    /// <summary>How fast the shown yaw eases to the view yaw, per second (about 0.15 s to settle).</summary>
+    public const float FollowRate = 14f;
     const float PadMetres = 10f;
     const float ArrowHalf = 9f;
 
@@ -24,32 +28,50 @@ public sealed partial class Minimap : Control
     public float ZoomMetres { get; set; } = 90f;
 
     ImageTexture? _base;
-    Vector2 _origin;   // ground (x, z) of texel (0, 0)
+    Suchohrad.MapLoader.MapLoader? _map;
+    int _side;               // texture side in texels (0 = not built)
+    float _sideMetres;       // the map's extent covered by the texture, metres
+    Vector2 _origin;         // ground (x, z) of texel (0, 0)
     float _metresPerTexel = 1f;
     Vector2 _player;
-    float _yaw;
+    float _yaw;              // target: the view yaw
+    float _shownYaw;         // eased towards _yaw
     bool _hasPlayer;
     readonly List<NVector2> _vehicles = new();
     readonly MinimapPings _pings = new();
+    readonly List<RoadDraw> _roads = new();
     static readonly Vector2[] Arrow = { new(0, -ArrowHalf), new(ArrowHalf * 0.8f, ArrowHalf), new(0, ArrowHalf * 0.4f), new(-ArrowHalf * 0.8f, ArrowHalf) };
+
+    /// <summary>A road drawn as geometry: ground points, its own screen scratch buffer (reused every frame), and its bounds.</summary>
+    sealed class RoadDraw
+    {
+        public Vector2[] Ground = Array.Empty<Vector2>();
+        public Vector2[] Screen = Array.Empty<Vector2>();
+        public Rect2 Bounds;
+        public float WidthM;
+        public Color Colour;
+    }
 
     public Minimap()
     {
         MouseFilter = MouseFilterEnum.Ignore;
         ClipContents = true;
+        TextureFilter = TextureFilterEnum.LinearWithMipmaps;
         CustomMinimumSize = new Vector2(224, 224);
     }
 
     /// <summary>
-    /// Builds the base texture from the map's parcels and roads. Call once per loaded map; returns false when the map has
-    /// neither (the minimap then shows the player only). Cost: one pass over the parcels' bounding boxes and the road lines.
+    /// Stores the map and prepares the roads. The terrain texture is built on the first frame, once the on-screen size is known.
+    /// Returns false when the map has no parcels or roads (the minimap then shows the player only).
     /// </summary>
     public bool Build(Suchohrad.MapLoader.MapLoader? map)
     {
         _base = null;
+        _side = 0;
+        _map = map;
+        _roads.Clear();
         if (map == null) return false;
         var roads = RoadNetwork.Parse(map.RoadsJson);
-        var roadPolylines = new List<Vector2[]>(roads.Count);
         var box = default(Rect2);
         var any = false;
         void Grow(Rect2 r) { box = any ? box.Merge(r) : r; any = true; }
@@ -58,47 +80,24 @@ public sealed partial class Minimap : Control
         {
             var g = new Vector2[r.Points.Length];
             for (var i = 0; i < g.Length; i++) g[i] = new Vector2(r.Points[i].X, -r.Points[i].Y); // local north-up to ground z
-            foreach (var q in g) Grow(new Rect2(q, Vector2.Zero));
-            roadPolylines.Add(g);
+            var bounds = new Rect2(g[0], Vector2.Zero);
+            foreach (var q in g) bounds = bounds.Expand(q);
+            Grow(bounds);
+            _roads.Add(new RoadDraw { Ground = g, Screen = new Vector2[g.Length], Bounds = bounds, WidthM = r.WidthM, Colour = RoadColour(r.Highway) });
         }
         if (!any) return false;
 
-        var side = Math.Max(box.Size.X, box.Size.Y) + 2 * PadMetres;
-        _origin = box.GetCenter() - new Vector2(side / 2, side / 2);
-        _metresPerTexel = side / TextureSize;
-        var img = Image.CreateEmpty(TextureSize, TextureSize, false, Image.Format.Rgba8);
-        img.Fill(Terrain);
-
-        foreach (var parcel in map.Parcels.Values)
-        {
-            var colour = ParcelColour(parcel.Kind);
-            var b = parcel.Bounds;
-            var u0 = Math.Clamp((int)Math.Floor((b.Position.X - _origin.X) / _metresPerTexel), 0, TextureSize - 1);
-            var u1 = Math.Clamp((int)Math.Ceiling((b.End.X - _origin.X) / _metresPerTexel), 0, TextureSize - 1);
-            var v0 = Math.Clamp((int)Math.Floor((b.Position.Y - _origin.Y) / _metresPerTexel), 0, TextureSize - 1);
-            var v1 = Math.Clamp((int)Math.Ceiling((b.End.Y - _origin.Y) / _metresPerTexel), 0, TextureSize - 1);
-            for (var v = v0; v <= v1; v++)
-                for (var u = u0; u <= u1; u++)
-                    if (parcel.Contains(TexelCentre(u, v))) img.SetPixel(u, v, colour);
-        }
-
-        for (var i = 0; i < roads.Count; i++)
-        {
-            var radius = Math.Max(1f, roads[i].WidthM / _metresPerTexel / 2f);
-            var colour = RoadColour(roads[i].Highway);
-            var pts = roadPolylines[i];
-            for (var s = 0; s + 1 < pts.Length; s++) StampSegment(img, pts[s], pts[s + 1], radius, colour);
-        }
-
-        _base = ImageTexture.CreateFromImage(img);
+        _sideMetres = Math.Max(box.Size.X, box.Size.Y) + 2 * PadMetres;
+        _origin = box.GetCenter() - new Vector2(_sideMetres / 2, _sideMetres / 2);
         return true;
     }
 
-    /// <summary>The player's ground position (x, z) and yaw, in the game's convention. Call every frame.</summary>
-    public void SetPlayer(Vector2 groundXZ, float yaw)
+    /// <summary>The player's ground position (x, z) and view yaw, in the game's convention. Call every frame.</summary>
+    public void SetPlayer(Vector2 groundXZ, float viewYaw)
     {
         _player = groundXZ;
-        _yaw = yaw;
+        _yaw = viewYaw;
+        if (!_hasPlayer) _shownYaw = viewYaw; // first frame: no sweep from zero
         _hasPlayer = true;
     }
 
@@ -122,7 +121,50 @@ public sealed partial class Minimap : Control
 
     public void ClearEnemyPings() => _pings.Clear();
 
-    public override void _Process(double delta) => QueueRedraw();
+    /// <summary>Screen pixels per metre at the minimap's current size, UI scale and device pixel ratio.</summary>
+    float DevicePxPerMetre()
+    {
+        var localPxPerMetre = Math.Min(Size.X, Size.Y) / 2f / ZoomMetres;
+        return localPxPerMetre * Math.Max(0.01f, GetGlobalTransformWithCanvas().Scale.X);
+    }
+
+    /// <summary>Rebuilds the terrain texture when the on-screen scale asks for a different resolution (rare: resize, zoom, UI scale).</summary>
+    void EnsureTexture()
+    {
+        if (_map == null || Size.X <= 0 || _sideMetres <= 0) return;
+        var wanted = MinimapView.TextureSide(_sideMetres, DevicePxPerMetre(), MinTextureSide, MaxTextureSide);
+        if (MinimapView.NeedsRebuild(_side, wanted)) Rasterise(wanted);
+    }
+
+    /// <summary>Rasterises the parcel fills into a square of <paramref name="side"/> texels, with mipmaps.</summary>
+    void Rasterise(int side)
+    {
+        _side = side;
+        _metresPerTexel = _sideMetres / side;
+        var img = Image.CreateEmpty(side, side, false, Image.Format.Rgba8);
+        img.Fill(Terrain);
+        foreach (var parcel in _map!.Parcels.Values)
+        {
+            var colour = ParcelColour(parcel.Kind);
+            var b = parcel.Bounds;
+            var u0 = Math.Clamp((int)Math.Floor((b.Position.X - _origin.X) / _metresPerTexel), 0, side - 1);
+            var u1 = Math.Clamp((int)Math.Ceiling((b.End.X - _origin.X) / _metresPerTexel), 0, side - 1);
+            var v0 = Math.Clamp((int)Math.Floor((b.Position.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
+            var v1 = Math.Clamp((int)Math.Ceiling((b.End.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
+            for (var v = v0; v <= v1; v++)
+                for (var u = u0; u <= u1; u++)
+                    if (parcel.Contains(TexelCentre(u, v))) img.SetPixel(u, v, colour);
+        }
+        img.GenerateMipmaps();
+        _base = ImageTexture.CreateFromImage(img);
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_hasPlayer) _shownYaw = MinimapView.Follow(_shownYaw, _yaw, (float)delta, FollowRate);
+        EnsureTexture();
+        QueueRedraw();
+    }
 
     public override void _Draw()
     {
@@ -134,17 +176,18 @@ public sealed partial class Minimap : Control
         var now = Time.GetTicksMsec() / 1000.0;
         if (_hasPlayer)
         {
-            var theta = MinimapMath.RotationFor(_yaw);
+            var theta = MinimapMath.RotationFor(_shownYaw);
             var pxPerMetre = MinimapMath.PxPerMetre(half, ZoomMetres);
-            if (_base is { } tex)
+            if (_base is { } tex && _side > 0)
             {
                 var k = pxPerMetre * _metresPerTexel;
                 var playerTexel = (_player - _origin) / _metresPerTexel;
-                var extent = TextureSize * k;
+                var extent = _side * k;
                 DrawSetTransform(centre, theta, Vector2.One);
                 DrawTextureRect(tex, new Rect2(-playerTexel * k, new Vector2(extent, extent)), false);
                 DrawSetTransform(Vector2.Zero);
             }
+            DrawRoads(centre, theta, pxPerMetre, half);
             var inner = half - 6f;
             for (var i = 0; i < _vehicles.Count; i++)
             {
@@ -158,11 +201,41 @@ public sealed partial class Minimap : Control
                 DrawCircle(p, 6f, ShooterTheme.Outline);
                 DrawCircle(p, 4f, ShooterTheme.Danger);
             }
+            DrawNorth(centre, theta, half);
         }
         DrawSetTransform(centre);
         DrawColoredPolygon(Arrow, ShooterTheme.Text);
         DrawSetTransform(Vector2.Zero);
         DrawRect(new Rect2(Vector2.Zero, size), ShooterTheme.Line, false, ShooterTheme.Border);
+    }
+
+    /// <summary>Anti-aliased roads in screen space. Roads outside the view are skipped; each road reuses its own buffer.</summary>
+    void DrawRoads(Vector2 centre, float theta, float pxPerMetre, float half)
+    {
+        var reach = ZoomMetres * 1.5f; // the view's corner is ZoomMetres * sqrt(2) from the player
+        var view = new Rect2(_player - new Vector2(reach, reach), new Vector2(reach * 2, reach * 2));
+        var player = new NVector2(_player.X, _player.Y);
+        for (var i = 0; i < _roads.Count; i++)
+        {
+            var road = _roads[i];
+            if (!road.Bounds.Intersects(view)) continue;
+            var ground = road.Ground;
+            for (var p = 0; p < ground.Length; p++)
+            {
+                var d = new NVector2(ground[p].X, ground[p].Y) - player;
+                var s = MinimapMath.ToScreen(d, theta, pxPerMetre);
+                road.Screen[p] = centre + new Vector2(s.X, s.Y);
+            }
+            DrawPolyline(road.Screen, road.Colour, Math.Max(1f, road.WidthM * pxPerMetre), true);
+        }
+    }
+
+    /// <summary>The "N" marker on the rim, at ground north (-z) in the rotated view.</summary>
+    void DrawNorth(Vector2 centre, float theta, float half)
+    {
+        var dir = MinimapMath.Rotate(new NVector2(0, -1), theta);
+        var at = centre + new Vector2(dir.X, dir.Y) * (half - 14f);
+        DrawString(ThemeDB.FallbackFont, at + new Vector2(-5, 6), "N", HorizontalAlignment.Left, -1, 16, ShooterTheme.Text);
     }
 
     /// <summary>Screen offset from the centre of a ground point, clamped into the square of half-size <paramref name="inner"/>.</summary>
@@ -174,27 +247,6 @@ public sealed partial class Minimap : Control
     }
 
     Vector2 TexelCentre(int u, int v) => _origin + new Vector2((u + 0.5f) * _metresPerTexel, (v + 0.5f) * _metresPerTexel);
-
-    void StampSegment(Image img, Vector2 a, Vector2 b, float radius, Color colour)
-    {
-        var ta = (a - _origin) / _metresPerTexel;
-        var tb = (b - _origin) / _metresPerTexel;
-        var steps = Math.Max(1, (int)Math.Ceiling(ta.DistanceTo(tb) * 2f));
-        var r = (int)Math.Ceiling(radius);
-        for (var s = 0; s <= steps; s++)
-        {
-            var p = ta.Lerp(tb, s / (float)steps);
-            var cx = (int)Math.Round(p.X);
-            var cy = (int)Math.Round(p.Y);
-            for (var dy = -r; dy <= r; dy++)
-                for (var dx = -r; dx <= r; dx++)
-                {
-                    if (dx * dx + dy * dy > radius * radius) continue;
-                    var x = cx + dx; var y = cy + dy;
-                    if (x >= 0 && y >= 0 && x < TextureSize && y < TextureSize) img.SetPixel(x, y, colour);
-                }
-        }
-    }
 
     static readonly Color Backdrop = new(0.05f, 0.06f, 0.08f, 0.85f);
     static readonly Color Terrain = new(0.20f, 0.23f, 0.19f);

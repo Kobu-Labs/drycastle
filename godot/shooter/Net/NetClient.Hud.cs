@@ -63,7 +63,8 @@ public partial class NetClient
         if (_me != null && _hud != null)
         {
             var g = _me.GlobalPosition;
-            _hud.Minimap.SetPlayer(new Vector2(g.X, g.Z), _me.Yaw);
+            var src = MinimapView.Select(missilePov: _povCam is { Current: true }, turret: _gunship != null, driving: _driving);
+            _hud.Minimap.SetPlayer(new Vector2(g.X, g.Z), MinimapView.YawFor(src, _me.Yaw, _carYaw, _turretViewYaw, _missileViewYaw));
             _carDots.Clear();
             foreach (var c in _cars.Values)
                 if (!c.Destroyed) _carDots.Add(new Vector2(c.Node.GlobalPosition.X, c.Node.GlobalPosition.Z));
