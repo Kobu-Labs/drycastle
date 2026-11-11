@@ -25,6 +25,8 @@ public partial class NetServer : Node
         public bool HasSeq;
         public byte Slot;
         public PlayerWeapons W = null!;
+        /// <summary>The player's perk values. Neutral until the loadout ticket sets them from the player's loadout.</summary>
+        public PerkModifiers Perks = PerkModifiers.None;
         public readonly SnapshotEncoder Enc = new();
         public Vector3 Start;
         public float MaxMoved;
@@ -281,7 +283,7 @@ public partial class NetServer : Node
         c.Id = _nextId++;
         c.Name = string.IsNullOrWhiteSpace(h.Name) ? $"player{c.Id}" : h.Name.Trim();
         // health, death and respawn belong to the match state machine, not the body
-        c.W = new PlayerWeapons(Weapons);
+        c.W = new PlayerWeapons(Weapons, c.Perks);
         c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}" };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
@@ -576,6 +578,7 @@ public partial class NetServer : Node
             var self = t.Id == r.Owner;
             var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, self);
             if (dmg <= 0) continue;
+            if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
             var res = Deal(r.Owner, r.Weapon, t.Id, dmg, false, false);
             if (res == DamageResult.Ignored) continue; // spawn protected: neither damage nor knockback
             if (isDirect) _directHits++; else if (self) _selfHits++; else _splashHits++;

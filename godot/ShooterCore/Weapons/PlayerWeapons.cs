@@ -16,15 +16,21 @@ public sealed class PlayerWeapons
     /// <summary>Timers compare with this slack so 3 ticks of 1/30 s reliably equal a 0.1 s interval.</summary>
     const double Eps = 1e-4;
 
+    /// <summary>Base time to draw a secondary (off-hand) weapon; Swift Swap shortens it. Primary switches stay instant.</summary>
+    public const double SecondarySwapSeconds = 0.35;
+
     readonly WeaponsFile _file;
+    readonly PerkModifiers _perks;
     readonly int[] _mag, _reserve;
-    double _nextFire, _reloadDone, _lastNow;
+    double _nextFire, _reloadDone, _swapReady, _lastNow;
     bool _prevFire;
     float _spreadExtra;
 
-    public PlayerWeapons(WeaponsFile file)
+    /// <param name="perks">The player's perk values (run, reload and swap speed are read here); null = no perk.</param>
+    public PlayerWeapons(WeaponsFile file, PerkModifiers? perks = null)
     {
         _file = file;
+        _perks = perks ?? PerkModifiers.None;
         _mag = new int[file.Weapons.Count];
         _reserve = new int[file.Weapons.Count];
         Reset(0);
@@ -44,9 +50,9 @@ public sealed class PlayerWeapons
     public int Reserve(int slot) => _reserve[slot - 1];
     public float ReloadRemaining(double now) => Reloading ? (float)Math.Max(0, _reloadDone - now) : 0f;
 
-    /// <summary>Speed multiplier for the weapon in <paramref name="wantedSlot"/> (0 or invalid: the current one).</summary>
+    /// <summary>Speed multiplier for the weapon in <paramref name="wantedSlot"/> (0 or invalid: the current one), times the perk's run speed.</summary>
     public float SpeedFor(int wantedSlot) =>
-        (wantedSlot >= 1 && wantedSlot <= _file.Weapons.Count ? _file.Weapons[wantedSlot - 1] : Current).MoveSpeedMultiplier;
+        (wantedSlot >= 1 && wantedSlot <= _file.Weapons.Count ? _file.Weapons[wantedSlot - 1] : Current).MoveSpeedMultiplier * _perks.RunSpeed;
 
     /// <summary>Spawn state: full magazines and reserves, starting weapon, no timers.</summary>
     public void Reset(double now)
@@ -54,7 +60,7 @@ public sealed class PlayerWeapons
         for (var i = 0; i < _mag.Length; i++) { _mag[i] = _file.Weapons[i].MagazineSize; _reserve[i] = _file.Weapons[i].ReserveAmmo; }
         Slot = Math.Max(1, _file.Weapons.FindIndex(w => w.Id == _file.StartingWeapon) + 1);
         Reloading = false; _spreadExtra = 0; _prevFire = false;
-        _nextFire = _reloadDone = now; _lastNow = now;
+        _nextFire = _reloadDone = _swapReady = now; _lastNow = now;
         Changed = true;
     }
 
@@ -82,6 +88,8 @@ public sealed class PlayerWeapons
         if (want != Slot)
         {
             Slot = want; Reloading = false; _prevFire = input.Fire; Changed = true;
+            // drawing the off-hand weapon takes time (Swift Swap shortens it); no fire until it is out
+            _swapReady = Current.Slot == WeaponSlot.Secondary ? now + SecondarySwapSeconds / _perks.WeaponSwapSpeed : now;
         }
         var w = Current;
 
@@ -93,7 +101,7 @@ public sealed class PlayerWeapons
 
         var pull = w.FullAuto ? input.Fire : input.Fire && !_prevFire;
         _prevFire = input.Fire;
-        if (!pull || Reloading || now + Eps < _nextFire) return null;
+        if (!pull || Reloading || now + Eps < _nextFire || now + Eps < _swapReady) return null;
 
         switch (w.Kind)
         {
@@ -121,7 +129,7 @@ public sealed class PlayerWeapons
 
     bool CanReload(WeaponDef w) => !Reloading && w.MagazineSize > 0 && w.ReloadTime > 0 && _mag[Slot - 1] < w.MagazineSize && _reserve[Slot - 1] > 0;
 
-    void StartReload(double now, WeaponDef w) { Reloading = true; _reloadDone = now + w.ReloadTime; Changed = true; }
+    void StartReload(double now, WeaponDef w) { Reloading = true; _reloadDone = now + w.ReloadTime / _perks.ReloadSpeed; Changed = true; }
 
     void FinishReload()
     {

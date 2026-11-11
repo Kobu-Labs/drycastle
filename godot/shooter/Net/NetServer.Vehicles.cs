@@ -217,6 +217,7 @@ public partial class NetServer
     void DamageVehicle(ServerCar car, float amount, ushort attacker, byte weapon, float delay)
     {
         if (car.Destroyed || amount <= 0 || Vehicles == null) return;
+        if (attacker != 0 && _byId.TryGetValue(attacker, out var attackerClient)) amount *= attackerClient.Perks.VehicleDamageDealt; // Tank Hunter
         if (attacker != 0) { car.LastAttacker = attacker; car.LastWeapon = weapon; }
         var before = VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages);
         car.Hp = MathF.Max(0, car.Hp - amount);
@@ -256,6 +257,7 @@ public partial class NetServer
             if (dmg <= 0) continue;
             var self = t.Id == attacker;
             if (self) dmg = MathF.Max(1f, MathF.Round(dmg * e.Splash.SelfDamageMultiplier));
+            if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
             var res = Deal(attacker, weapon, t.Id, dmg, false, false);
             if (res == DamageResult.Ignored) continue;
             _blastHits++;

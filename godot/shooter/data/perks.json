@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "perks": [
+    { "id": "fleet_foot", "name": "Fleet Foot", "unlock_level": 0, "modifiers": { "run_speed": 1.12 } },
+    { "id": "quick_hands", "name": "Quick Hands", "unlock_level": 0, "modifiers": { "reload_speed": 1.33 } },
+    { "id": "flak_jacket", "name": "Flak Jacket", "unlock_level": 3, "modifiers": { "explosive_damage_taken": 0.8 } },
+    { "id": "swift_swap", "name": "Swift Swap", "unlock_level": 5, "modifiers": { "weapon_swap_speed": 1.5 } },
+    { "id": "tank_hunter", "name": "Tank Hunter", "unlock_level": 8, "modifiers": { "vehicle_damage_dealt": 1.25 } },
+    { "id": "hot_streak", "name": "Hot Streak", "unlock_level": 12, "modifiers": { "streak_cost_reduction": 1 } },
+    { "id": "steady_lung", "name": "Steady Lung", "unlock_level": 15, "modifiers": { "hold_breath_time": 1.5 } },
+    { "id": "ghost", "name": "Ghost", "unlock_level": 20, "modifiers": { "uav_visibility": 0 } }
+  ]
+}

@@ -198,7 +198,7 @@ public partial class Shooter : Node3D
         static string Read(string f) =>
             Godot.FileAccess.Open($"res://data/{f}", Godot.FileAccess.ModeFlags.Read)?.GetAsText()
             ?? throw new DataFileException($"{f}: cannot open ({Godot.FileAccess.GetOpenError()})");
-        return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"));
+        return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"));
     }
 
     void LoadMap(Config cfg)

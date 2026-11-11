@@ -547,9 +547,12 @@ public partial class NetClient : Node
 
     int StartSlot() => Weapons == null ? 1 : Math.Max(1, Weapons.Weapons.FindIndex(w => w.Id == Weapons.StartingWeapon) + 1);
 
-    /// <summary>Movement speed multiplier of the weapon in <paramref name="slot"/> (0: none, 1.0). The server applies the same value.</summary>
+    /// <summary>Movement speed multiplier of the weapon in <paramref name="slot"/> (0: none, 1.0), times the run speed of <see cref="Perks"/>. The server applies the same value.</summary>
     float SpeedFor(byte slot) =>
-        Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].MoveSpeedMultiplier : 1f;
+        (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].MoveSpeedMultiplier : 1f) * Perks.RunSpeed;
+
+    /// <summary>This player's perk values, mirroring the server's copy for prediction. Neutral until the loadout ticket sets them.</summary>
+    public PerkModifiers Perks = PerkModifiers.None;
 
     /// <summary>Holding zoom with a scoped weapon (sniper) narrows the camera; never while dead or with the mouse released.</summary>
     void ApplyScope()
