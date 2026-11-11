@@ -19,6 +19,7 @@ public partial class NetClient
         public NVec3 Pos;
         public float Yaw, Kmh;
         public uint LastTick;
+        public LoopVoice? Snd;
     }
 
     readonly Dictionary<ushort, CarView> _cars = new();
@@ -51,6 +52,7 @@ public partial class NetClient
             var p = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
             v.Node.GlobalPosition = p;
             v.Node.Rotation = new Vector3(0, s.Yaw, 0);
+            SfxCar(v, p);
             if (v.Driver == _myId && _driving && _me != null)
             {
                 _carYaw = s.Yaw;

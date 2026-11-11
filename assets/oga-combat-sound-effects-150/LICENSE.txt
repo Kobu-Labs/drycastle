@@ -1,0 +1,57 @@
+CC0 SOUND EFFECT LICENSES
+
+All 150 included WAV files are licensed under CC0 1.0 Universal.
+https://creativecommons.org/publicdomain/zero/1.0/
+Legal terms: https://creativecommons.org/publicdomain/zero/1.0/legalcode
+Attribution is not required.
+
+SOURCE IDS
+The postfix in each filename identifies its original source. For example,
+SoundName_s01.wav uses the source credited under s01 below. Files from the same
+source share the same ID.
+
+[s01] Cosmo Myzrail Gorynych - CoMiGo's Bleeps and Bloops
+Source: https://comigo.itch.io/bleeps-n-bloops
+License: CC0 1.0 Universal
+Included sounds: 35
+
+[s02] Kenney - Impact Sounds
+Source: https://kenney.nl/assets/impact-sounds
+License: CC0 1.0 Universal
+Included sounds: 10
+
+[s03] Kenney - RPG Audio
+Source: https://kenney.nl/assets/rpg-audio
+License: CC0 1.0 Universal
+Included sounds: 5
+
+[s04] Kenney - Sci-fi Sounds
+Source: https://kenney.nl/assets/sci-fi-sounds
+License: CC0 1.0 Universal
+Included sounds: 9
+
+[s05] Kronbits - 200 Free SFX
+Source: https://kronbits.itch.io/freesfx
+License: CC0 1.0 Universal
+Included sounds: 26
+
+[s06] lentikula - Basic Spell Impacts
+Source: https://lentikula.itch.io/freecc0-basic-spell-impacts-sfx
+License: CC0 1.0 Universal
+Included sounds: 20
+
+[s07] lentikula - Druid Spell Impacts
+Source: https://lentikula.itch.io/druid-spell-impacts
+License: CC0 1.0 Universal
+Included sounds: 15
+
+[s08] lentikula - Healing Spell Impacts
+Source: https://lentikula.itch.io/healing-spell-impacts
+License: CC0 1.0 Universal
+Included sounds: 15
+
+[s09] lentikula - Sci-Fi Weapon Shots SFX
+Source: https://lentikula.itch.io/sci-fi-weapon-shots-sfx-freecc0
+License: CC0 1.0 Universal
+Included sounds: 15
+

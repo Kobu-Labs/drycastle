@@ -18,11 +18,17 @@ public static class ModelLib
         return t?.Duplicate() as Node3D;
     }
 
-    static Node3D? Load(string relPath)
+    /// <summary>Absolute path of a file in the asset library (assets/, or SUCHOHRAD_ASSETS).</summary>
+    public static string AssetPath(string relPath)
     {
         var env = OS.GetEnvironment("SUCHOHRAD_ASSETS");
         var dir = string.IsNullOrEmpty(env) ? ProjectSettings.GlobalizePath("res://") + "../../assets" : env;
-        var path = Path.GetFullPath(Path.Combine(dir, relPath));
+        return Path.GetFullPath(Path.Combine(dir, relPath));
+    }
+
+    static Node3D? Load(string relPath)
+    {
+        var path = AssetPath(relPath);
         if (!File.Exists(path)) { GD.PrintErr($"model not found: {path}; using a primitive"); return null; }
         var doc = new GltfDocument();
         var state = new GltfState();

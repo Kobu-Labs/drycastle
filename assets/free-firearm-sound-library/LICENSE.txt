@@ -1,0 +1,5 @@
+The Free Firearm Sound Library, recorded by Ben Jaszczak, Brian Nelson, Kevin Heras and Matthew Nanney (submitted by bart)
+https://opengameart.org/content/the-free-firearm-sound-library
+Licence shown on the page: CC0 1.0 (http://creativecommons.org/publicdomain/zero/1.0/). The 7z archive ships no licence file.
+Downloaded 2026-11-11 without a login. The files here are single shots cut from the long takes (1911 A_42P, Walther PPQ X_39P, AK-47 C_31P),
+trimmed, faded, peak-normalised and converted to mono OGG.

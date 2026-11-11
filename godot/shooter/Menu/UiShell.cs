@@ -51,13 +51,30 @@ public partial class UiShell : CanvasLayer
         Relayout();
         GetViewport().SizeChanged += Relayout;
         GameSettings.Changed += Relayout;
-        TreeExiting += () => { GameSettings.Changed -= Relayout; if (Instance == this) Instance = null; };
+        GetTree().NodeAdded += WireSounds;
+        TreeExiting += () => { GameSettings.Changed -= Relayout; GetTree().NodeAdded -= WireSounds; if (Instance == this) Instance = null; };
     }
 
     public override void _Notification(int what)
     {
         if (what == NotificationWMCloseRequest) GameSettings.SaveWindowSize();
     }
+
+    /// <summary>UI sounds for every menu control as it is added: hover (mouse, or keyboard focus move), press (accept for primary buttons, click otherwise). Back and error come from Pop and Toast.</summary>
+    void WireSounds(Node n)
+    {
+        if (n is BaseButton b && IsAncestorOf(b))
+        {
+            b.MouseEntered += () => { if (!b.Disabled) Sfx.Ui("ui.hover"); };
+            b.FocusEntered += () => { if (!b.Disabled && KeyNavigated()) Sfx.Ui("ui.hover"); };
+            b.Pressed += () => Sfx.Ui(b.ThemeTypeVariation == "MenuPrimary" ? "ui.accept" : "ui.click");
+        }
+        else if (n is Slider sl && IsAncestorOf(sl)) sl.MouseEntered += () => Sfx.Ui("ui.hover");
+    }
+
+    static bool KeyNavigated() =>
+        Input.IsActionJustPressed("ui_up") || Input.IsActionJustPressed("ui_down") || Input.IsActionJustPressed("ui_left") || Input.IsActionJustPressed("ui_right")
+        || Input.IsActionJustPressed("ui_focus_next") || Input.IsActionJustPressed("ui_focus_prev");
 
     void Relayout()
     {
@@ -82,6 +99,7 @@ public partial class UiShell : CanvasLayer
     public void Pop()
     {
         if (_stack.Count == 0) return;
+        Sfx.Ui("ui.back");
         var s = _stack[^1];
         _stack.RemoveAt(_stack.Count - 1);
         s.QueueFree();
@@ -156,6 +174,7 @@ public partial class UiShell : CanvasLayer
         var prefix = Strings.T(kind switch { ToastKind.Warn => "toast.warn", ToastKind.Error => "toast.error", _ => "toast.info" });
         _toast.ThemeTypeVariation = kind switch { ToastKind.Warn => "MenuToastWarn", ToastKind.Error => "MenuToastError", _ => "MenuToast" };
         _toastText.Text = $"{prefix}  {text}";
+        if (kind == ToastKind.Error) Sfx.Ui("ui.error");
         _toast.Visible = true;
         _toast.Modulate = Colors.White;
         PlaceToast();

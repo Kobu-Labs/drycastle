@@ -13,7 +13,7 @@ namespace Suchohrad.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed; public EntityState State; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
+    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -43,7 +43,7 @@ public partial class NetClient : Node
     readonly List<(double T, HitMsg M)> _hitLog = new();
     readonly List<(double T, LaunchMsg M)> _launchLog = new();
     readonly List<(double T, ExplosionMsg M)> _explosionLog = new();
-    sealed class Rocket { public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; }
+    sealed class Rocket { public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; }
     readonly Dictionary<ushort, Rocket> _rockets = new();
     readonly HashSet<ushort> _deadRockets = new();
     readonly List<(double T, AmmoMsg M)> _ammoLog = new();
@@ -95,6 +95,7 @@ public partial class NetClient : Node
     public void Teardown()
     {
         _done = true;
+        SfxTeardown();
         if (_peer != null) { _peer.PeerDisconnect(); _conn.Flush(); _peer = null; }
         foreach (var r in _remotes.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         _remotes.Clear();
@@ -199,6 +200,7 @@ public partial class NetClient : Node
         switch (kind)
         {
             case EventKind.MatchState:
+                SfxPhase(Match.Phase);
                 if (Match.Restarts != _hudRestarts) { _hudRestarts = Match.Restarts; _hud?.ClearKills(); }
                 _hud?.SetMatch(Match.Phase, Match.TimeRemaining(Now), Match.Rows, Match.Winners, Match.NameOf);
                 GD.Print($"client {PlayerName}: {Match.ScoreboardText(Now)}"); break;
@@ -221,6 +223,7 @@ public partial class NetClient : Node
             case EventKind.Death:
                 var d = Match.LastDeath.Values.Last();
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
+                SfxDeath(d);
                 if (d.Victim == _myId) { Dead = true; _deaths++; _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay); _hud?.SetProtection(0); }
                 break;
         }
@@ -234,7 +237,7 @@ public partial class NetClient : Node
         if (_me == null || !_dec.Apply(d, out var h)) return;
         if (_lastTick != 0 && h.Tick < _lastTick) return;
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
-        foreach (var id in _dec.RemoveStale(h.Tick, 90)) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) cg.Node.QueueFree(); }
+        foreach (var id in _dec.RemoveStale(h.Tick, 90)) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); } }
         foreach (var (id, rec) in _dec.States)
         {
             if (id == _myId) { OnSelf(rec, h.Ack); continue; }
@@ -265,6 +268,7 @@ public partial class NetClient : Node
             if (r.Node == null) continue;
             var p = r.Pos + r.Dir * (r.Speed * (float)Math.Min(0.1, Now - r.At));
             r.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
+            SfxRocket(r, r.Node.GlobalPosition);
             if (Mathf.Abs(r.Dir.Y) < 0.99f) r.Node.LookAt(r.Node.GlobalPosition + new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z));
         }
     }
@@ -361,9 +365,10 @@ public partial class NetClient : Node
         }
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
         if (!Bot) ReadSlotKeys();
+        SfxDry(mi);
         _me.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, _me.Pitch, (byte)(Weapons != null ? _wantSlot : 0));
-        if (!_driving) _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt);
+        if (!_driving) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); }
         _pending.Add(new Pending { Input = ni, After = _me.State });
         if (_pending.Count > 120) _pending.RemoveAt(0);
         var recent = new NetInput[Math.Min(3, _pending.Count)];
@@ -409,6 +414,7 @@ public partial class NetClient : Node
             var sp = d.Length() / (float)(now - r.LastT);
             if (sp > 30f) sp = 0; // a teleport (respawn), not running
             r.Speed = Mathf.Lerp(r.Speed, sp, 0.3f);
+            SfxRemoteStep(r, p, (float)(now - r.LastT));
         }
         r.LastPos = p; r.LastT = now;
         var weaponId = Weapons != null && r.Slot >= 1 && r.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[r.Slot - 1].Id : "";
@@ -545,6 +551,7 @@ public partial class NetClient : Node
         {
             case EventKind.Ammo when WeaponCodec.DecodeAmmo(payload) is { } a:
                 Ammo = a; _ammoAt = Now; _ammoLog.Add((Now, a));
+                SfxAmmo(a);
                 HudAmmo();
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
@@ -552,15 +559,18 @@ public partial class NetClient : Node
                 if (_remotes.TryGetValue(sh.Shooter, out var shooter)) shooter.FireUntil = Now + 0.45;
                 if (sh.Shooter == _myId && Weapons != null && sh.Weapon < Weapons.Weapons.Count) _spread.Shot(Weapons.Weapons[sh.Weapon], Now);
                 var melee = Weapons != null && sh.Weapon < Weapons.Weapons.Count && Weapons.Weapons[sh.Weapon].Kind == WeaponKind.Melee;
+                SfxShot(sh, melee);
                 ShotFx.Spawn(World, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), new Vector3(sh.End.X, sh.End.Y, sh.End.Z), melee);
                 break;
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
                 _launchLog.Add((Now, l));
                 if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
+                SfxLaunch(l);
                 break;
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
                 _explosionLog.Add((Now, ex));
-                if (_rockets.Remove(ex.Id, out var rk)) { if (GodotObject.IsInstanceValid(rk.Node)) rk.Node.QueueFree(); }
+                if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); if (GodotObject.IsInstanceValid(rk.Node)) rk.Node.QueueFree(); }
+                SfxExplosion(ex);
                 _dec.Remove(ex.Id);
                 _deadRockets.Add(ex.Id);
                 if (_deadRockets.Count > 256) _deadRockets.Clear();
@@ -568,6 +578,7 @@ public partial class NetClient : Node
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 _hitLog.Add((Now, h));
+                SfxHit(h);
                 HudHit(h);
                 GD.Print($"client {PlayerName}: hit #{h.Attacker} -> #{h.Victim} {h.Damage}{(h.Headshot ? " head" : "")}{(h.Backstab ? " backstab" : "")}{(h.Kill ? " kill" : "")}");
                 break;

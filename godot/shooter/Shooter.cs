@@ -46,6 +46,18 @@ public partial class Shooter : Node3D
         if (cfg.Str("model-shots") != "") { _ = ModelShots.Run(this, cfg.Str("model-shots")); return; }
         if (cfg.Str("hud-shots") != "") { _ = HudShots.Run(this, cfg.Str("hud-shots")); return; }
         if (cfg.Str("menu-shots") != "") { _ = MenuShots.Run(this, cfg.Str("menu-shots")); return; }
+        if (role == "client")
+        {
+            try { GD.Print($"sounds: {Sfx.Init(this).SoundCount} events, table and files ok"); }
+            catch (Exception e)
+            {
+                GD.PrintErr($"startup failed: {e.Message}");
+                GetTree().Quit(2);
+                _smoke = false;
+                _frames = int.MinValue;
+                return;
+            }
+        }
         if (role == "client" && !_smoke && !_smokeMove && !cfg.Flag("offline") && !cfg.Flag("headless-bot") && DisplayServer.GetName() != "headless")
         {
             GameSettings.RestoreWindowSize();
@@ -101,8 +113,11 @@ public partial class Shooter : Node3D
         _ = BeginGame(host, int.TryParse(p, out var port) ? port : ConnectForm.DefaultPort, cfg.Str("name", "player"));
     }
 
-    void ShowMain() =>
+    void ShowMain()
+    {
+        Sfx.MenuMusic(true);
         _shell.Reset(new MainMenu(() => _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n))), () => _shell.Push(new SettingsScreen(false))));
+    }
 
     async Task Step(LoadingScreen ld, string key, float f)
     {
@@ -153,6 +168,7 @@ public partial class Shooter : Node3D
             return;
         }
         ld.Set("loading.ready", 1f);
+        Sfx.MenuMusic(false);
         _shell.SetGameActive(true);
         _shell.Reset();
         GD.Print("SHOOTER_GAME_STARTED");
