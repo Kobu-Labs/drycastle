@@ -13,6 +13,7 @@ public sealed class InMemoryProgressionStore : IProgressionStore
     readonly Dictionary<long, int> _activeSlot = new();
     readonly Dictionary<long, HashSet<Unlock>> _unlocks = new();
     readonly Dictionary<long, StatsRow> _stats = new();
+    readonly Dictionary<long, CamoSpec> _camo = new();
     readonly LevelCurve _curve;
     long _nextId = 1;
 
@@ -25,12 +26,14 @@ public sealed class InMemoryProgressionStore : IProgressionStore
         Loadouts = new LoadoutRepo(this);
         Unlocks = new UnlockRepo(this);
         Stats = new StatsRepo(this);
+        Camo = new CamoRepo(this);
     }
 
     public IProfileRepository Profiles { get; }
     public ILoadoutRepository Loadouts { get; }
     public IUnlockRepository Unlocks { get; }
     public IStatsRepository Stats { get; }
+    public ICamoRepository Camo { get; }
 
     public void Dispose() { }
 
@@ -83,6 +86,21 @@ public sealed class InMemoryProgressionStore : IProgressionStore
             var next = f(p);
             s._byId[id] = next;
             s._byToken[next.Token] = next;
+        }
+    }
+
+    sealed class CamoRepo(InMemoryProgressionStore s) : ICamoRepository
+    {
+        public Task<CamoSpec?> GetAsync(long playerId)
+        {
+            lock (s._gate) return Task.FromResult<CamoSpec?>(s._camo.TryGetValue(playerId, out var c) ? c : null);
+        }
+
+        public Task SaveAsync(long playerId, CamoSpec spec)
+        {
+            lock (s._gate)
+                if (s._byId.ContainsKey(playerId)) s._camo[playerId] = spec;
+            return Task.CompletedTask;
         }
     }
 
