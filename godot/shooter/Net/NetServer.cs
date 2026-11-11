@@ -678,7 +678,7 @@ public partial class NetServer : Node
         if (_streaks.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
-        if (r == DamageResult.Damaged) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
+        if (r == DamageResult.Damaged && Scores(attackerId)) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
         _hitsLanded++;
         LossHit(attackerId, victim, r == DamageResult.Killed);
         if (head) _headshots++;

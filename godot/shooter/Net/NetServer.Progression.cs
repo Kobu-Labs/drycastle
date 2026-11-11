@@ -41,7 +41,7 @@ public partial class NetServer
     {
         StreakRoundReset();
         _shells.Clear();
-        AwardXp(_xp.OnMatchEnd(_match.Winners, _match.Ranking().Select(p => p.Id).ToList()));
+        AwardXp(_xp.OnMatchEnd(_match.Winners, _match.Ranking().Where(p => !p.Sandbox).Select(p => p.Id).ToList()));
         foreach (var c in _clients.Values.Where(c => c.Joined))
         {
             var p = c.Profile!;

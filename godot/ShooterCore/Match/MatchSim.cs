@@ -238,7 +238,7 @@ public sealed class MatchSim
     {
         var top = Ranking().Where(p => !p.Sandbox).ToList(); // sandbox players never win (#156)
         var winners = new List<ushort>();
-        if (top.Count > 0)
+        if (top.Count > 0 && top[0].Kills > 0) // nobody wins a round without a kill
             winners = top.Where(p => p.Kills == top[0].Kills && p.Deaths == top[0].Deaths).Select(p => p.Id).ToList();
         Winners = winners;
         Phase = MatchPhase.Ending;

@@ -132,6 +132,16 @@ public class MatchTests
     }
 
     [Fact]
+    public void NobodyWinsATimeLimitRoundWithoutAKill()
+    {
+        var r = new Rig();
+        r.M.AddPlayer(1, "a"); r.M.AddPlayer(2, "b"); r.Pass();
+        r.Advance(600);
+        Assert.Equal(MatchPhase.Ending, r.M.Phase);
+        Assert.Empty(r.M.Winners);
+    }
+
+    [Fact]
     public void JoinInProgressSpawnsWithZeroScoreAndLeaveRemoves()
     {
         var r = new Rig();
