@@ -83,9 +83,7 @@ public partial class NetServer
     {
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
         q.CollisionMask = 1;
-        var ex = new Godot.Collections.Array<Rid>();
-        foreach (var o in _byId.Values) ex.Add(o.Body.GetRid());
-        q.Exclude = ex;
+        q.Exclude = PlayerRids();
         var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         return r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3());
     }

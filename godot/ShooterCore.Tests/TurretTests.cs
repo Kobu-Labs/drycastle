@@ -213,6 +213,42 @@ public class TurretTests
     }
 
     [Fact]
+    public void ACloserEnemyIsPickedOnlyAtTheNextRepick()
+    {
+        var far = new TurretCandidate(5, new Vector3(0, 1, -8));
+        var near = new TurretCandidate(6, new Vector3(0, 1, -4));
+        var world = new FlatWorld { Foes = new[] { far } };
+        var t = ArmedAt(world);
+        t.Tick(0.05f);
+        Assert.Equal((ushort)5, t.Target);
+
+        world.Foes = new[] { far, near };
+        t.Tick(0.05f);
+        t.Tick(0.05f);
+        Assert.Equal((ushort)5, t.Target); // the held target is still valid: no re-pick yet
+
+        var ticks = 0;
+        while (t.Target != 6 && ticks < 20) { t.Tick(0.05f); ticks++; }
+        Assert.Equal((ushort)6, t.Target);
+        Assert.InRange(ticks, 1, 8); // about 5 Hz: switches within one repick interval (0.2 s = 4 ticks, plus slack)
+    }
+
+    [Fact]
+    public void ALostTargetIsReplacedAtOnce()
+    {
+        var far = new TurretCandidate(5, new Vector3(0, 1, -8));
+        var near = new TurretCandidate(6, new Vector3(0, 1, -4));
+        var world = new FlatWorld { Foes = new[] { far, near } };
+        var t = ArmedAt(world);
+        t.Tick(0.05f);
+        Assert.Equal((ushort)6, t.Target);
+
+        world.Foes = new[] { far }; // the nearer enemy leaves the list between picks
+        t.Tick(0.05f);
+        Assert.Equal((ushort)5, t.Target);
+    }
+
+    [Fact]
     public void ArmedTurretDoesNotFireAtNothing()
     {
         var world = new FlatWorld();

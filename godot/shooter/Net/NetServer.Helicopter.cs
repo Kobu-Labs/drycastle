@@ -57,12 +57,7 @@ public partial class NetServer
         return SpawnAircraft("helicopter", at, phase, _helperRng.Next(2) == 0, 0);
     }
 
-    NVec3? HelicopterPosition(ushort entityId)
-    {
-        foreach (var e in _match.Entities.Snapshot())
-            if (e.Id == entityId) return e.State.Position;
-        return null;
-    }
+    NVec3? HelicopterPosition(ushort entityId) => _match.Entities.StateOf(entityId)?.Position;
 
     /// <summary>Every live player except the owner, aimed at chest height, with the stance that sets their exposure.</summary>
     IReadOnlyList<HelperCandidate> HelperEnemies(ushort owner) =>

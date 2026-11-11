@@ -42,9 +42,7 @@ public partial class NetServer
         var to = from + dir * maxDistance;
         var q = PhysicsRayQueryParameters3D.Create(new Vector3(from.X, from.Y, from.Z), new Vector3(to.X, to.Y, to.Z));
         q.CollisionMask = CollisionLayers.Bullets; // as for bullets
-        var ex = new Godot.Collections.Array<Rid>();
-        foreach (var o in _byId.Values) ex.Add(o.Body.GetRid());
-        q.Exclude = ex;
+        q.Exclude = PlayerRids();
         var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         if (r.Count == 0) return null;
         return new GroundHit(N(r["position"].AsVector3()), N(r["normal"].AsVector3()));

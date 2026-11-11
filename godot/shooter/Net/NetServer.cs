@@ -95,6 +95,8 @@ public partial class NetServer : Node
     readonly Dictionary<string, float> _movedByName = new();
     readonly List<NetInput> _scratch = new();
     readonly Dictionary<ushort, Client> _byId = new();
+    Godot.Collections.Array<Rid> _playerRids = new();
+    bool _playerRidsDirty = true;
     MatchSim _match = null!;
     // match smoke bookkeeping
     int _kills, _roundsEnded, _restarts, _ignoredHits, _earlyProtectionEnds;
@@ -367,6 +369,7 @@ public partial class NetServer : Node
         c.Joined = true;
         foreach (var car in _cars) car.AddCollisionExceptionWith(c.Body);
         _byId[c.Id] = c;
+        _playerRidsDirty = true;
         SendProfile(c);
         SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick,
@@ -393,6 +396,7 @@ public partial class NetServer : Node
         if (c.Car != null) { c.Car.Seat.Exit(c.Id); c.Car = null; }
         c.Body.QueueFree();
         _byId.Remove(c.Id);
+        _playerRidsDirty = true;
         foreach (var o in _clients.Values.Where(o => o.Joined)) Send(o, new LeaveMsg(c.Id));
         _match.RemovePlayer(c.Id);
         GD.Print($"server: {c.Name} #{c.Id} left");
@@ -409,8 +413,10 @@ public partial class NetServer : Node
     /// <summary>Broadcast an event envelope to every joined client (shot, hit, kill, ... from later issues).</summary>
     public void BroadcastEvent(EventKind kind, byte[] payload)
     {
-        var m = new EventMsg((byte)kind, payload);
-        foreach (var c in _clients.Values.Where(c => c.Joined)) Send(c, m);
+        ReliableMsg m = new EventMsg((byte)kind, payload);
+        var bytes = Wire.Encode(m); // encoded once: every recipient gets the same bytes (Tx copies them into the packet)
+        foreach (var c in _clients.Values)
+            if (c.Joined) Tx(c.Peer, Wire.ChanReliable, bytes, (int)ENetPacketPeer.FlagReliable);
     }
 
     void OnDebug(Client c, byte[] payload)
@@ -558,9 +564,26 @@ public partial class NetServer : Node
 
     static NVec3 N(Vector3 v) => new(v.X, v.Y, v.Z);
 
-    List<HitTarget> LiveTargets() =>
-        _byId.Values.Where(o => _match.Get(o.Id)?.Life == PlayerLife.Alive)
-            .Select(o => new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw)).Concat(TargetHitTargets()).ToList();
+    List<HitTarget> LiveTargets()
+    {
+        // A fresh list each call on purpose: callers nest (an explosion can detonate a car, which explodes again) and each
+        // holds its list while it iterates, so one shared buffer would be cleared under them.
+        var list = new List<HitTarget>(_byId.Count);
+        foreach (var o in _byId.Values)
+            if (_match.Get(o.Id)?.Life == PlayerLife.Alive) list.Add(new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw));
+        list.AddRange(TargetHitTargets());
+        return list;
+    }
+
+    /// <summary>The player bodies' RIDs for ray exclusion, rebuilt only after a join or a drop (T2-02) instead of per ray.</summary>
+    Godot.Collections.Array<Rid> PlayerRids()
+    {
+        if (!_playerRidsDirty) return _playerRids;
+        _playerRids = new Godot.Collections.Array<Rid>();
+        foreach (var o in _byId.Values) _playerRids.Add(o.Body.GetRid());
+        _playerRidsDirty = false;
+        return _playerRids;
+    }
 
     /// <summary>Distance from <paramref name="from"/> along <paramref name="dir"/> to the first world collider (player bodies excluded), or infinity.</summary>
     float WorldDistance(Vector3 from, Vector3 dir, float max) => WorldHit(from, dir, max, out _);
@@ -571,9 +594,7 @@ public partial class NetServer : Node
         car = null;
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
         q.CollisionMask = CollisionLayers.Bullets; // world (1), vehicles (2) and shot-only cover (tree crowns): bullets and rockets stop on them
-        var ex = new Godot.Collections.Array<Rid>();
-        foreach (var o in _byId.Values) ex.Add(o.Body.GetRid());
-        q.Exclude = ex;
+        q.Exclude = PlayerRids();
         var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         if (r.Count == 0) return float.PositiveInfinity;
         car = r["collider"].As<GodotObject>() as ServerCar;

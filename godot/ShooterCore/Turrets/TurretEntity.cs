@@ -56,8 +56,11 @@ public sealed class TurretEntity : IWorldEntity
     readonly TurretDef _def;
     readonly ITurretWorld _world;
 
+    /// <summary>How often the turret re-picks its target across all candidates (about 5 Hz). Between picks only the held target is checked.</summary>
+    const float RepickIntervalS = 0.2f;
+
     ushort? _target;
-    float _acquire, _cooldown, _flash, _age;
+    float _acquire, _cooldown, _flash, _age, _repick;
 
     public TurretEntity(TurretDef def, ushort owner, ITurretWorld world)
     {
@@ -119,18 +122,28 @@ public sealed class TurretEntity : IWorldEntity
         if (_age >= _def.LifetimeSeconds) { Ended = WorldDespawnReason.Expired; return; }
         _cooldown -= dt;
         _flash -= dt;
+        _repick -= dt;
 
         var muzzle = Position + Vector3.UnitY * TurretRules.MuzzleHeightM;
         var enemies = _world.Enemies(Owner);
-        var pick = TurretMath.PickTarget(muzzle, enemies, _def.SightRangeM, Clear);
-        if (pick != _target)
+        // The held target is checked every tick (one sight ray); the sight ray for every candidate runs only at RepickIntervalS,
+        // or at once when the held target is lost. A re-pick that lands on the same target keeps the acquire delay running.
+        var held = _target is { } heldId ? Find(enemies, heldId) : null;
+        if (held is { } h && !InSight(muzzle, h.Aim)) held = null;
+        if (_repick <= 0 || (_target != null && held == null))
         {
-            _target = pick;
-            _acquire = pick != null ? _def.AcquireDelayS : 0f;
+            _repick = RepickIntervalS;
+            var pick = TurretMath.PickTarget(muzzle, enemies, _def.SightRangeM, Clear);
+            if (pick != _target)
+            {
+                _target = pick;
+                _acquire = pick != null ? _def.AcquireDelayS : 0f;
+            }
+            held = pick is { } p ? Find(enemies, p) : null;
         }
-        if (_target is not { } id) return;
+        if (_target is not { } id || held is not { } target) return;
 
-        var aim = enemies.First(c => c.Id == id).Aim;
+        var aim = target.Aim;
         var want = TurretMath.YawTo(Position, aim);
         Yaw = TurretMath.StepAngle(Yaw, want, Rad(_def.TurnRateDegPerS) * dt);
         if (_acquire > 0) { _acquire -= dt; return; }
@@ -150,6 +163,14 @@ public sealed class TurretEntity : IWorldEntity
         var hpByte = _def.Hp > 0 ? Hp / _def.Hp * 255f : 0f;
         return WorldState.Make(Position, Yaw, 0, Owner, state, hpByte);
     }
+
+    static TurretCandidate? Find(IReadOnlyList<TurretCandidate> enemies, ushort id)
+    {
+        foreach (var c in enemies) if (c.Id == id) return c;
+        return null;
+    }
+
+    bool InSight(Vector3 muzzle, Vector3 aim) => Vector3.Distance(muzzle, aim) <= _def.SightRangeM && Clear(muzzle, aim);
 
     /// <summary>True when no world surface lies between the two points (a small margin keeps the end point itself clear).</summary>
     bool Clear(Vector3 from, Vector3 to)

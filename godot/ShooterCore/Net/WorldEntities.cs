@@ -146,6 +146,9 @@ public sealed class WorldEntityManager
         foreach (var id in _live.Keys.ToList()) Despawn(id, WorldDespawnReason.Removed);
     }
 
+    /// <summary>The current state of one live entity, or null when it is gone. Looks up one id without building the whole snapshot.</summary>
+    public WorldState? StateOf(ushort id) => _live.TryGetValue(id, out var e) ? e.Serialize() : null;
+
     /// <summary>The live entities with their current state, for snapshots and join catch-up. Order is not significant.</summary>
     public List<WorldEntry> Snapshot()
     {

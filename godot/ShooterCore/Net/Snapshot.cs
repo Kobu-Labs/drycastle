@@ -10,18 +10,24 @@ public sealed class SnapshotEncoder
 
     sealed class Base { public EntityRecord Rec; public long LastFull; }
     readonly Dictionary<ushort, Base> _last = new();
+    // scratch reused every tick (T2-03): the packet is copied out in Finish, so the buffer and sets can be shared between calls
+    readonly byte[] _buf = new byte[1400];
+    readonly HashSet<ushort> _present = new();
+    readonly List<ushort> _gone = new();
 
     public long FullEntries, DeltaEntries;
 
     /// <summary>Encode the entities visible to this client into one or more packets (split at 40 entities).</summary>
     public List<byte[]> Encode(uint tick, ushort ack, IReadOnlyList<EntityRecord> entities)
     {
-        var present = new HashSet<ushort>();
-        foreach (var e in entities) present.Add(e.Id);
-        foreach (var id in _last.Keys.Where(k => !present.Contains(k)).ToList()) _last.Remove(id);
+        _present.Clear();
+        foreach (var e in entities) _present.Add(e.Id);
+        _gone.Clear();
+        foreach (var k in _last.Keys) if (!_present.Contains(k)) _gone.Add(k);
+        foreach (var id in _gone) _last.Remove(id);
 
         var packets = new List<byte[]>();
-        var buf = new byte[1400];
+        var buf = _buf;
         var o = HeaderBytes; var count = 0;
         foreach (var q in entities)
         {
