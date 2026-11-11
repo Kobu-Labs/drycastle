@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="../MapLoader/MapLoader.csproj" />
     <ProjectReference Include="../ShooterCore/ShooterCore.csproj" />
+    <ProjectReference Include="../ShooterServer.Persistence/ShooterServer.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

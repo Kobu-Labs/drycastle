@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../ShooterCore/ShooterCore.csproj" />
+    <ProjectReference Include="../ShooterServer.Persistence/ShooterServer.Persistence.csproj" />
     <!-- the real data files are tested in place -->
     <Content Include="../shooter/data/*.json" Link="data/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
