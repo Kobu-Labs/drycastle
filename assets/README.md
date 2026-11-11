@@ -25,7 +25,7 @@ the full packs are not.
 | `kenney-city-kit-suburban` (2.0) | Kenney, https://kenney.nl/assets/city-kit-suburban | fences, driveways, paths, planter, 2 trees | OpenGameArt mirror |
 | `quaternius-stylized-nature-megakit` (Standard, free) | Quaternius, https://quaternius.com/packs/stylizednaturemegakit.html | 2 bushes, 4 flowers, grass, fern, plants, clover | OpenGameArt mirror |
 | `kaykit-character-animations` (1.2) | Kay Lousberg, https://opengameart.org/content/kaykit-character-animations | 1 animated character GLB (Prototype Pete: head and torso, 6 bones, 30 clips incl. Idle, Walk, Run, Shooting, Defeat) | OpenGameArt (publisher's own listing) |
-| `quaternius-ultimate-gun-pack` (July 2019) | Quaternius, https://opengameart.org/content/low-poly-guns-pack | pistol, assault rifle, bayonet, converted OBJ to GLB | OpenGameArt |
+| `quaternius-ultimate-gun-pack` (July 2019) | Quaternius, https://opengameart.org/content/low-poly-guns-pack | pistol, assault rifle, bayonet, sniper rifle (a later separate download of the same author, already GLB), converted OBJ to GLB | OpenGameArt |
 
 **Unverified, user-provided (2026-11-11):** `zsky-vehicles/` holds two vehicle models by Zsky supplied by the project owner as local files:
 `motorbike.glb` ("Military Motorbike", 5 colour materials Green/Black/Silver/Yellow/Red_Motor) and `bicycle.glb` ("Bike", 4: Silver/Black/Green/Yellow_Bike).

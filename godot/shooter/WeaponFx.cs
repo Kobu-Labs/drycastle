@@ -14,7 +14,7 @@ public static class WeaponFx
     {
         ["pistol"] = ("quaternius-ultimate-gun-pack/pistol-1.glb", 0.26f),
         ["ak47"] = ("quaternius-ultimate-gun-pack/assault-rifle-1.glb", 0.8f),
-        ["sniper"] = ("quaternius-ultimate-gun-pack/assault-rifle-1.glb", 1.15f),
+        ["sniper"] = ("quaternius-ultimate-gun-pack/sniper-rifle.glb", 1.15f),
         ["knife"] = ("quaternius-ultimate-gun-pack/bayonet.glb", 0.32f),
     };
 

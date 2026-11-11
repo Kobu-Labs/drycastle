@@ -958,6 +958,25 @@
       "pack": "quaternius-ultimate-gun-pack"
     },
     {
+      "id": "pack:quaternius-ultimate-gun-pack/sniper-rifle",
+      "category": "other",
+      "name": "Sniper rifle 1",
+      "file": "quaternius-ultimate-gun-pack/sniper-rifle.glb",
+      "size_m": [
+        7.3,
+        1.5,
+        0.5
+      ],
+      "tags": [
+        "shooter",
+        "weapon",
+        "flat-colour"
+      ],
+      "licence": "CC0",
+      "source": "https://opengameart.org/content/low-poly-guns-pack",
+      "pack": "quaternius-ultimate-gun-pack"
+    },
+    {
       "id": "pack:quaternius-ultimate-gun-pack/bayonet",
       "category": "other",
       "name": "Bayonet (knife stand-in)",
