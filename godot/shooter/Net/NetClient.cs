@@ -47,7 +47,7 @@ public partial class NetClient : Node
     readonly List<(double T, HitMsg M)> _hitLog = new();
     readonly List<(double T, LaunchMsg M)> _launchLog = new();
     readonly List<(double T, ExplosionMsg M)> _explosionLog = new();
-    sealed class Rocket { public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; }
+    sealed class Rocket { public double Born; public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; }
     readonly Dictionary<ushort, Rocket> _rockets = new();
     readonly HashSet<ushort> _deadRockets = new();
     readonly List<(double T, AmmoMsg M)> _ammoLog = new();
@@ -140,6 +140,7 @@ public partial class NetClient : Node
         RenderCars();
         RenderRockets();
         UpdateViewmodel();
+        UpdateShake();
         UpdateHud();
     }
 
@@ -269,7 +270,7 @@ public partial class NetClient : Node
         if (_deadRockets.Contains(id)) return;
         var dir = HitMath.Forward(rec.YawRad, rec.PitchRad);
         var speed = Weapons != null && rec.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[rec.Weapon].ProjectileSpeed : 40f;
-        if (!_rockets.TryGetValue(id, out var r)) { r = new Rocket { Node = RocketFx.Make(World) }; _rockets[id] = r; }
+        if (!_rockets.TryGetValue(id, out var r)) { r = new Rocket { Node = RocketFx.Make(World), Born = Now }; _rockets[id] = r; }
         r.Pos = rec.Position; r.Dir = dir; r.At = Now; r.Speed = speed;
     }
 
@@ -279,7 +280,11 @@ public partial class NetClient : Node
         {
             if (r.Node == null) continue;
             var p = r.Pos + r.Dir * (r.Speed * (float)Math.Min(0.1, Now - r.At));
-            r.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
+            // visual only: the server rocket starts at the eye; draw it leaving the muzzle (0.8 m ahead, right and down) and blend onto the true path
+            var k = Mathf.Max(0f, 1f - (float)(Now - r.Born) / 0.35f);
+            var d = new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z);
+            var side = d.Cross(Vector3.Up).Normalized();
+            r.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z) + (d * 0.8f + side * 0.25f + Vector3.Down * 0.2f) * k;
             SfxRocket(r, r.Node.GlobalPosition);
             if (Mathf.Abs(r.Dir.Y) < 0.99f) r.Node.LookAt(r.Node.GlobalPosition + new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z));
         }
@@ -380,7 +385,8 @@ public partial class NetClient : Node
         }
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
         if (!Bot) ReadSlotKeys();
-        SfxDry(mi);
+        FxDemoInput(ref mi);
+        PredictFire(mi);
         _me.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, _me.Pitch, (byte)(Weapons != null ? _wantSlot : 0));
         if (!_driving) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); }
@@ -566,6 +572,7 @@ public partial class NetClient : Node
         {
             case EventKind.Ammo when WeaponCodec.DecodeAmmo(payload) is { } a:
                 Ammo = a; _ammoAt = Now; _ammoLog.Add((Now, a));
+                PredictOnAmmo(a);
                 SfxAmmo(a);
                 HudAmmo();
                 break;
@@ -574,22 +581,33 @@ public partial class NetClient : Node
                 if (_remotes.TryGetValue(sh.Shooter, out var shooter)) shooter.FireUntil = Now + 0.45;
                 if (sh.Shooter == _myId && Weapons != null && sh.Weapon < Weapons.Weapons.Count) _spread.Shot(Weapons.Weapons[sh.Weapon], Now);
                 var melee = Weapons != null && sh.Weapon < Weapons.Weapons.Count && Weapons.Weapons[sh.Weapon].Kind == WeaponKind.Melee;
+                if (EchoOfPredicted(sh.Shooter)) break; // already played and drawn by prediction
+                var endV = new Vector3(sh.End.X, sh.End.Y, sh.End.Z);
                 SfxShot(sh, melee);
-                ShotFx.Spawn(World, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), new Vector3(sh.End.X, sh.End.Y, sh.End.Z), melee);
+                ShotFx.Spawn(World, MuzzleOf(sh.Shooter, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV), endV, melee);
                 break;
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
                 _launchLog.Add((Now, l));
                 if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
-                SfxLaunch(l);
+                if (_rockets.ContainsKey(l.Id) == false && !_deadRockets.Contains(l.Id) && ShotFx.Enabled && Weapons != null)
+                {
+                    // show the rocket at once from the launch event; snapshots take over
+                    var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);
+                    _rockets[l.Id] = new Rocket { Node = RocketFx.Make(World), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length() };
+                }
+                if (!EchoOfPredicted(l.Owner)) SfxLaunch(l);
                 break;
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
                 _explosionLog.Add((Now, ex));
-                if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); if (GodotObject.IsInstanceValid(rk.Node)) rk.Node.QueueFree(); }
+                if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(World, rk.Node); }
                 SfxExplosion(ex);
                 _dec.Remove(ex.Id);
                 _deadRockets.Add(ex.Id);
                 if (_deadRockets.Count > 256) _deadRockets.Clear();
-                RocketFx.Explode(World, new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z), Weapons?.Weapons.ElementAtOrDefault(ex.Weapon)?.Splash?.Radius ?? 6f);
+                var exR = Weapons?.Weapons.ElementAtOrDefault(ex.Weapon)?.Splash?.Radius ?? 6f;
+                var exAt = new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z);
+                RocketFx.Explode(World, exAt, exR);
+                ShakeFor(exAt, exR);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 _hitLog.Add((Now, h));

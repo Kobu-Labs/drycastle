@@ -34,6 +34,9 @@ public static class WeaponFx
         }
         else if (weaponId == "bazooka") BuildTube(root);
         else return null;
+        // muzzle marker: the barrel tip (0.7 of the length in front of the grip; the tube ends at -0.81)
+        var z = weaponId == "bazooka" ? -0.82f : Models.TryGetValue(weaponId, out var mm) ? -mm.Length * 0.7f : -0.3f;
+        root.AddChild(new Node3D { Name = "Muzzle", Position = new Vector3(0, 0.02f, z) });
         return root;
     }
 

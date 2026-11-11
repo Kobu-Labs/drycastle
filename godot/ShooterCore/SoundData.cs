@@ -24,6 +24,7 @@ public class SoundsFile : IVersioned
             if (s.Files.Count == 0) throw new DataFileException($"sounds.json: {s.Id} has no files");
             if (!ValidBuses.Contains(s.Bus)) throw new DataFileException($"sounds.json: {s.Id} has unknown bus {s.Bus} (SFX, UI or Music)");
             if (s.MaxDistance < 0) throw new DataFileException($"sounds.json: {s.Id} max_distance is negative");
+            if (s.MinGap < 0) throw new DataFileException($"sounds.json: {s.Id} min_gap is negative");
             if (s.Pitch <= 0) throw new DataFileException($"sounds.json: {s.Id} pitch must be positive");
             if (s.PitchVariance < 0 || s.PitchVariance >= 1) throw new DataFileException($"sounds.json: {s.Id} pitch_variance must be in [0, 1)");
         }
@@ -50,6 +51,10 @@ public class SoundDef
     /// <summary>Audible range in metres when played in 3D; 0 means the sound is never positional.</summary>
     public float MaxDistance { get; set; }
     public bool Loop { get; set; }
+    /// <summary>Voice priority when the pool is full: a new sound steals the lowest-priority (then oldest) voice, and is dropped when every playing voice outranks it.</summary>
+    public int Priority { get; set; }
+    /// <summary>Minimum seconds between two plays of this event (0 = none); rapid repeats inside the gap are dropped so e.g. impacts do not starve weapon sounds.</summary>
+    public float MinGap { get; set; }
 
     public bool Positional => MaxDistance > 0;
 }
@@ -90,6 +95,18 @@ public static class SoundRules
 
     /// <summary>Engine loop pitch from road speed in km/h: idle at standstill, rising linearly to the top pitch at <see cref="EngineTopKmh"/>.</summary>
     public static float EnginePitch(float kmh) => EngineIdlePitch + (EngineTopPitch - EngineIdlePitch) * Math.Clamp(Math.Abs(kmh) / EngineTopKmh, 0f, 1f);
+
+    /// <summary>Index of the voice to (re)use: a free one, else the lowest priority then oldest; -1 when every playing voice outranks <paramref name="priority"/>.</summary>
+    public static int PickVoice(int count, Func<int, bool> playing, Func<int, int> priorityOf, Func<int, ulong> startedOf, int priority)
+    {
+        var best = -1;
+        for (var i = 0; i < count; i++)
+        {
+            if (!playing(i)) return i;
+            if (best < 0 || priorityOf(i) < priorityOf(best) || (priorityOf(i) == priorityOf(best) && startedOf(i) < startedOf(best))) best = i;
+        }
+        return best >= 0 && priorityOf(best) > priority ? -1 : best;
+    }
 
     /// <summary>The event id for a per-weapon sound, e.g. <c>Event("shot", "ak47")</c> is <c>shot.ak47</c>.</summary>
     public static string Event(string kind, string weaponId) => kind + "." + weaponId;

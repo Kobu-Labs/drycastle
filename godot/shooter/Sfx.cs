@@ -41,7 +41,7 @@ public sealed class LoopVoice
 /// </summary>
 public partial class Sfx : Node
 {
-    const int Pool2D = 8, Pool3D = 24, PoolUi = 4, PoolLoop = 10;
+    const int Pool2D = 32, Pool3D = 64, PoolUi = 4, PoolLoop = 10;
 
     public static Sfx? Instance { get; private set; }
     public static bool Enabled => ShotFx.Enabled;
@@ -56,6 +56,8 @@ public partial class Sfx : Node
     readonly bool[] _loopTaken = new bool[PoolLoop];
     ulong[] _s2 = Array.Empty<ulong>(), _s3 = Array.Empty<ulong>(), _sUi = Array.Empty<ulong>();
     ulong _i2, _i3, _iUi;
+    readonly Dictionary<string, double> _lastPlay = new();
+    int[] _pr2 = Array.Empty<int>(), _pr3 = Array.Empty<int>();
     ulong _uiFrame; int _uiFrameSlot = -1;
     AudioStreamPlayer? _music;
     Tween? _musicFade;
@@ -100,7 +102,7 @@ public partial class Sfx : Node
         _rng.Randomize();
         if (!Enabled) return;
         _p2 = MakePool(Pool2D, "SFX"); _pUi = MakePool(PoolUi, "UI");
-        _s2 = new ulong[_p2.Length]; _sUi = new ulong[_pUi.Length];
+        _s2 = new ulong[_p2.Length]; _pr2 = new int[_p2.Length]; _pr3 = new int[Pool3D]; _sUi = new ulong[_pUi.Length];
         _p3 = new AudioStreamPlayer3D[Pool3D]; _s3 = new ulong[Pool3D];
         for (var i = 0; i < Pool3D; i++) { _p3[i] = Make3D(); AddChild(_p3[i]); }
         _pLoop = new AudioStreamPlayer3D[PoolLoop];
@@ -150,6 +152,16 @@ public partial class Sfx : Node
         return best;
     }
 
+    /// <summary>True (and records the play) unless the event played less than its min_gap ago.</summary>
+    bool GapOk(SoundDef d)
+    {
+        if (d.MinGap <= 0) return true;
+        var now = Time.GetTicksMsec() / 1000.0;
+        if (_lastPlay.TryGetValue(d.Id, out var t) && now - t < d.MinGap) return false;
+        _lastPlay[d.Id] = now;
+        return true;
+    }
+
     // ---- playback ----
 
     /// <summary>Non-positional (own weapon, hit marker, stingers).</summary>
@@ -164,8 +176,10 @@ public partial class Sfx : Node
 
     void Do2D(string id, float dbOffset)
     {
-        if (!Enabled || _p2.Length == 0 || Def(id) is not { } d || Pick(d) is not { } st) return;
-        var i = Oldest(_s2, _p2);
+        if (!Enabled || _p2.Length == 0 || Def(id) is not { } d || !GapOk(d)) return;
+        var i = SoundRules.PickVoice(_p2.Length, k => _p2[k].Playing, k => _pr2[k], k => _s2[k], d.Priority);
+        if (i < 0 || Pick(d) is not { } st) return;
+        _pr2[i] = d.Priority;
         var p = _p2[i];
         p.Stream = st; p.Bus = d.Bus; p.VolumeDb = d.VolumeDb + dbOffset;
         p.PitchScale = SoundRules.PitchFor(d, _rng.Randf());
@@ -179,8 +193,10 @@ public partial class Sfx : Node
         if (!d.Positional) { Do2D(id, dbOffset); return; }
         var cam = GetViewport().GetCamera3D();
         if (cam != null && !SoundRules.Audible(d, cam.GlobalPosition.DistanceTo(at))) return;
-        if (Pick(d) is not { } st) return;
-        var i = Oldest(_s3, k => _p3[k].Playing, _p3.Length);
+        if (!GapOk(d)) return;
+        var i = SoundRules.PickVoice(_p3.Length, k => _p3[k].Playing, k => _pr3[k], k => _s3[k], d.Priority);
+        if (i < 0 || Pick(d) is not { } st) return;
+        _pr3[i] = d.Priority;
         var p = _p3[i];
         p.Stream = st; p.Bus = d.Bus; p.VolumeDb = d.VolumeDb + dbOffset;
         p.PitchScale = SoundRules.PitchFor(d, _rng.Randf());

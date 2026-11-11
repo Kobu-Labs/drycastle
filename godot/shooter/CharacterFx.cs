@@ -69,6 +69,9 @@ public sealed partial class CharacterView : Node3D
         _anim.Play(anim, 0.12);
     }
 
+    /// <summary>Barrel tip of the held weapon in world space, or null when nothing is held.</summary>
+    public Vector3? MuzzlePosition => _held != null && GodotObject.IsInstanceValid(_held) && _held.IsInsideTree() ? _held.GetNodeOrNull<Node3D>("Muzzle")?.GlobalPosition : null;
+
     void SetWeapon(string id)
     {
         if (id == _heldId || _hand == null) return;

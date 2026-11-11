@@ -27,5 +27,8 @@ public sealed partial class WeaponViewmodel : Node3D
 
     public Node3D? Current => _models.GetValueOrDefault(_current);
 
+    /// <summary>World position of the held weapon's barrel tip, or null when nothing is shown.</summary>
+    public Vector3? MuzzlePosition => Current is { Visible: true } n && n.GetNodeOrNull<Node3D>("Muzzle") is { } m ? m.GlobalPosition : null;
+
     public override void _Ready() { Position = new Vector3(0.24f, -0.22f, -0.5f); }
 }

@@ -33,6 +33,7 @@ public partial class NetClient
 
     void OnVehicleState(ushort id, EntityRecord rec, uint tick)
     {
+        if (Vehicles == null) return; // never let a missing table abort the rest of the snapshot
         if (!_cars.TryGetValue(id, out var v)) { v = new CarView { Node = CarFx.Make(World, Vehicles!.Vehicles[Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1)], VehicleRecord.Colour(rec)), Kind = Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1), Pos = rec.Position, Yaw = rec.YawRad }; _cars[id] = v; }
         v.Driver = VehicleRecord.Driver(rec);
         if (tick > v.LastTick && v.LastTick != 0)

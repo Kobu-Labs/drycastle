@@ -97,4 +97,18 @@ public class SoundTests
         Assert.True(SoundRules.EnginePitch(50) > SoundRules.EnginePitch(20));
         Assert.Equal(SoundRules.EnginePitch(30), SoundRules.EnginePitch(-30)); // reversing
     }
+
+    [Fact]
+    public void PickVoice_prefers_free_then_lowest_priority_then_oldest()
+    {
+        var playing = new[] { true, true, true };
+        var pr = new[] { 3, -1, -1 };
+        var started = new ulong[] { 1, 5, 2 };
+        Assert.Equal(2, SoundRules.PickVoice(3, i => playing[i], i => pr[i], i => started[i], 0));
+        playing[1] = false;
+        Assert.Equal(1, SoundRules.PickVoice(3, i => playing[i], i => pr[i], i => started[i], 0));
+        playing[1] = true; pr = new[] { 3, 3, 3 };
+        Assert.Equal(-1, SoundRules.PickVoice(3, i => playing[i], i => pr[i], i => started[i], -1)); // low priority is dropped
+        Assert.Equal(0, SoundRules.PickVoice(3, i => playing[i], i => pr[i], i => started[i], 3));
+    }
 }

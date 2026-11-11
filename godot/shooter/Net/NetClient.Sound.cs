@@ -68,19 +68,8 @@ public partial class NetClient
         if (_sfxSlot != 0 && a.Slot != _sfxSlot) Sfx.Play2D("switch");
         _sfxSlot = a.Slot;
         var reloading = a.ReloadRemaining > 0;
-        if (reloading && !_sfxReloading) Sfx.Play2D(SoundRules.Event("reload", WeaponId(a.Slot - 1)));
+        if (reloading && !_sfxReloading && Now > _pReloadUntil) Sfx.Play2D(SoundRules.Event("reload", WeaponId(a.Slot - 1)));
         _sfxReloading = reloading;
-    }
-
-    /// <summary>Click when the trigger is held on an empty magazine (at most every 0.45 s).</summary>
-    void SfxDry(MoveInput mi)
-    {
-        if (!Sfx.Enabled || !mi.Has(MoveButtons.Fire) || Dead || _driving) return;
-        if (CurrentWeapon is { Kind: not WeaponKind.Melee } w && Ammo is { } a && a.ReloadRemaining <= 0 && a.Slots[a.Slot - 1].Mag == 0 && Now - _sfxDryAt > 0.45)
-        {
-            _sfxDryAt = Now;
-            Sfx.Play2D(SoundRules.Event("dry", w.Id));
-        }
     }
 
     void SfxPhase(MatchPhase p)

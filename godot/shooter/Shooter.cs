@@ -146,7 +146,7 @@ public partial class Shooter : Node3D
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
-                World = this, Host = host, Port = port, PlayerName = name, KillY = killY, Weapons = _data.Weapons, Sim = NetSim.Parse(_cfg.Str("net-sim")),
+                World = this, Host = host, Port = port, PlayerName = name, KillY = killY, Weapons = _data.Weapons, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(null),
             };
             client.OnFailed = (why, joined) =>
@@ -294,7 +294,7 @@ public partial class Shooter : Node3D
             BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6,
             Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"),
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
-            MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), BazookaBot = cfg.Str("bazooka-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, Vehicles = _data.Vehicles,
+            FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), BazookaBot = cfg.Str("bazooka-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, Vehicles = _data.Vehicles,
         });
     }
 
