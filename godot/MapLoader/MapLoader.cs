@@ -69,6 +69,8 @@ public sealed partial class MapLoader
         if (File.Exists(roads)) RoadsJson = File.ReadAllText(roads); // no consumer in v1
         var water = Path.Combine(mapDir, "water.json");
         WaterJson = File.Exists(water) ? File.ReadAllText(water) : "";
+        var trees = Path.Combine(mapDir, "trees.json");
+        TreesJson = File.Exists(trees) ? File.ReadAllText(trees) : ""; // map 0.6.0+
 
         foreach (var c in manifest.RootElement.GetProperty("chunks").EnumerateArray())
         {
@@ -77,6 +79,7 @@ public sealed partial class MapLoader
             var iy = c.GetProperty("index")[1].GetInt32();
             LoadChunk(file, new Vector2I(ix, iy));
         }
+        BuildTreeColliders(); // after the chunks, so each tree's bodies go under its chunk
         if (manifest.RootElement.TryGetProperty("files", out var files)
             && files.TryGetProperty("objects", out var objFile) && objFile.GetString() is { } of)
             LoadObjects(Path.Combine(mapDir, of));

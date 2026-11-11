@@ -6,6 +6,7 @@ glTF (x, y, z) = local (east, up, -north). parcels.json keeps local metres (x ea
 
 import hashlib
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -29,9 +30,11 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # 0.4.0: parcels.json carries origin_epsg5514 (the local frame's origin in S-JTSK metres, so the editor can
 # write absolute coordinates) and the manifest lists edit_defaults (the rule values the editor shows as defaults).
 # 0.5.0: lamps.json (street lamp positions, files.lamps). Not in the chunk GLBs: the game builds poles and lights.
-MAP_VERSION_BASE = "0.5.0"
+# 0.6.0: trees.json (files.trees): tree records and model numbers, for the trunk and crown collision solids.
+MAP_VERSION_BASE = "0.6.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
+TREES_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
                "props.json", "spawns.json", "lamps.json")
 NOT_GENERATED_NOTE = "Textures, landmarks, navmesh and water surface meshes are not generated (water.json holds the water bodies)."
@@ -205,6 +208,29 @@ def run_export(
     if scene.spawns is not None:
         _dump(out_dir / "spawns.json", scene.spawns)
         files["spawns"] = "spawns.json"
+    if scene.trees is not None:
+        # tree collision solids (trunk and crown), built by the game from these records and the model numbers
+        tree_cfg = load_section("props", rules_path, area)["trees"]
+        chunk_m = float(parcels_doc["chunk_size_m"])
+        _dump(out_dir / "trees.json", {
+            "format_version": TREES_FORMAT_VERSION,
+            "axes": "map metres: x east, y north, z up (ground height at the trunk foot)",
+            "chunk_size_m": chunk_m,
+            "model": {
+                "trunk_width_m": float(tree_cfg["trunk_width_m"]),
+                "trunk_height_m": float(tree_cfg["trunk_height_m"]),
+                "canopy_m": float(tree_cfg["canopy_m"]),
+            },
+            "trees": [
+                {
+                    "x": t["x"], "y": t["y"], "z": round(t["z"], 3), "scale": t["scale"], "rot": t["rot"],
+                    "shape": t["shape"],
+                    "chunk": [int(math.floor(t["x"] / chunk_m)), int(math.floor(t["y"] / chunk_m))],
+                }
+                for t in scene.trees
+            ],
+        })
+        files["trees"] = "trees.json"
     lamps_src = work_dir / "lamps.json"
     if lamps_src.is_file():
         # street lamp positions (props stage); copied verbatim, the game builds the lamps from them

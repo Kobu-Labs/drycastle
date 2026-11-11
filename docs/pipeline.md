@@ -132,7 +132,8 @@ accepted in v1, and a higher road class sits a hair above a lower one.
 and of gardens near buildings (seeded per parcel, a gate gap on road frontage, no fence through
 buildings or the carriageway), OSM trees and seeded rule-based trees in gardens, plots and forests
 (blocky box canopy, or stacked pyramids in forests). Fences also get a simple closed-box
-collision node; trees have no collision in v1.
+collision node. Trees are not in the chunk collision: `trees.json` (map 0.6.0, `files.trees`) lists every tree (position,
+ground height, scale, rotation, broadleaf or conifer, chunk) and the game builds the solids from it (see below).
 
 **Hand edits** (`pipeline/config/edits.json`, read by the props stage; `--edits PATH` overrides the
 file): per-parcel fence mode (`auto`, `none`, `custom` with a type, height, colour and gaps),
@@ -160,6 +161,15 @@ deterministic (no random numbers). Raw data fetched before street lamps were que
 lamp nodes: run `make fetch --force` once, then `make normalise` and `make props`. The export copies
 `lamps.json` to `out/map/` (map version 0.5.0, `files.lamps`); lamps are not in the chunk GLBs. The game
 builds the pole, the head and the light from primitives, so the viewer ignores them.
+
+**Tree collision (`trees.json`).** Each tree is two or three solids, built in the game from the rule model numbers
+(`model`: trunk width and height, canopy edge) and the tree's scale and rotation, with the same arithmetic as the drawn tree
+(`propmeshes.tree_mesh`): the trunk box (solid, starts 0.2 m below the ground) and the crown (two stacked boxes for a broadleaf,
+two stacked pyramids for a conifer). Trunks are on the world layer, so players and cars stop at them. Crowns are shot-only
+(layer 4): bullets, pellets, rockets, turret sight and the client's decals and tracers stop on them, while players and cars drive
+through. The geometry is `ShooterCore/Colliders/PropColliders.cs`; the loader (`MapLoader.Trees.cs`) makes one static body per
+chunk and role, not one per tree. The surface of a hit (wood or foliage) comes from the tree lookup
+(`TreeColliders.GroupAt`). Trees that the viewer edits are not in the game's collision until the map is re-exported.
 
 ## Regions
 

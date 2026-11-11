@@ -192,6 +192,12 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 - Day/night (#135): one server clock, `environment.json` (start time 08:00, day length 24 minutes by default). The sun,
   moon, sky shader and ambient light follow it. Street lamps (#136) light up at night from `lamps.json`.
 - Sentry turret, attack missile, MOAB, care packages and aircraft are world entities (section 9).
+- Trees and props (#158): trunks are solid, crowns and bushes are shot-only cover (`CollisionLayers`: bullets, pellets, rockets,
+  turret sight and the client's decals stop on a crown; players and cars drive through). Tree solids come from `trees.json`
+  (map 0.6.0). Placed objects (`objects.json`) get one box each by category: flowers none, bushes shot-only, trees a trunk and a
+  crown, everything else (cars, walls, slabs, pots, the radio tower) solid. Hits on trees are classed wood (trunk) or foliage
+  (crown). Still open: fences without collision in the village profile take no shots either (a pipeline choice), a parcel
+  replaced at runtime keeps its trees' solids, and an edited tree is not in the game until the map is re-exported.
 
 ## 8. Known gaps (collected from the closed tickets)
 

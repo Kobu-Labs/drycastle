@@ -176,6 +176,7 @@ public sealed partial class MapLoader
         }
         var node = new Node3D { Name = $"object_{SafeName(o.Id)}" };
         node.AddChild(CreateObjectModel(o.Asset, o.Colour, out _));
+        AddObjectColliders(node, o.Asset);
         container.AddChild(node);
         var y = o.Z ?? TerrainOrMean(o.X, -o.Y);
         node.Position = new Vector3(o.X, y, -o.Y);

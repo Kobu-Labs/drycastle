@@ -26,7 +26,7 @@ public partial class NetClient
         foreach (var dir in HitMath.PelletDirections(aim, w.PelletSpread, w.Pellets, pf.Seed))
         {
             var ray = G(dir);
-            var q = PhysicsRayQueryParameters3D.Create(from, from + ray * range, 1);
+            var q = PhysicsRayQueryParameters3D.Create(from, from + ray * range, CollisionLayers.WorldShots);
             var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
             var worldDist = hit.Count == 0 ? float.MaxValue : from.DistanceTo(hit["position"].AsVector3());
             if (VehicleAlong(from, ray, MathF.Min(range, worldDist), out var car, out var vh))

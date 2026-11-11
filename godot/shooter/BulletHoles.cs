@@ -123,13 +123,13 @@ public partial class BulletHoles : Node3D
         return new Transform3D(basis.Scaled(new Vector3(s, 1, s)), at + normal * 0.02f);
     }
 
-    /// <summary>Raycasts the world (mask 1) from <paramref name="from"/> past <paramref name="end"/>; a hit within 0.15 m of <paramref name="end"/> is a world hit and gets a hole.</summary>
+    /// <summary>Raycasts the world and shot-only cover (mask WorldShots) from <paramref name="from"/> past <paramref name="end"/>; a hit within 0.15 m of <paramref name="end"/> is a world hit and gets a hole.</summary>
     public static void PlaceFromShot(Node3D world, Vector3 from, Vector3 end)
     {
         if (!ShotFx.Enabled || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree()) return;
         var dir = end - from;
         if (dir.LengthSquared() < 0.01f) return;
-        var q = PhysicsRayQueryParameters3D.Create(from, end + dir.Normalized() * 0.1f, 1);
+        var q = PhysicsRayQueryParameters3D.Create(from, end + dir.Normalized() * 0.1f, Suchohrad.ShooterCore.CollisionLayers.WorldShots);
         var hit = world.GetWorld3D().DirectSpaceState.IntersectRay(q);
         if (hit.Count == 0) return;
         var p = hit["position"].AsVector3();

@@ -29,7 +29,7 @@ public partial class NetServer
         // The first surface from above: the ground, or a roof where the ray meets one first. Steep faces are rejected.
         float? GroundY(float x, float z)
         {
-            var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(new Vector3(x, top, z), new Vector3(x, bottom, z)));
+            var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(new Vector3(x, top, z), new Vector3(x, bottom, z), CollisionLayers.World));
             if (hit.Count == 0) return null;
             var normal = (Vector3)hit["normal"];
             return normal.Y >= 0.7f ? ((Vector3)hit["position"]).Y : null;

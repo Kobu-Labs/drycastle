@@ -207,7 +207,7 @@ public partial class NetServer : Node
         var before = Spawns.Count;
         Spawns.RemoveAll(sp =>
         {
-            var q = PhysicsRayQueryParameters3D.Create(new Vector3(sp.X, sp.Y + 2f, sp.Z), new Vector3(sp.X, sp.Y - 5f, sp.Z));
+            var q = PhysicsRayQueryParameters3D.Create(new Vector3(sp.X, sp.Y + 2f, sp.Z), new Vector3(sp.X, sp.Y - 5f, sp.Z), CollisionLayers.World);
             return space.IntersectRay(q).Count == 0;
         });
         GD.Print($"server: {Spawns.Count}/{before} spawn candidates have ground");
@@ -553,7 +553,7 @@ public partial class NetServer : Node
     {
         car = null;
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
-        q.CollisionMask = 3; // world (1) and vehicles (2): bullets and rockets stop on cars and hurt them
+        q.CollisionMask = CollisionLayers.Bullets; // world (1), vehicles (2) and shot-only cover (tree crowns): bullets and rockets stop on them
         var ex = new Godot.Collections.Array<Rid>();
         foreach (var o in _byId.Values) ex.Add(o.Body.GetRid());
         q.Exclude = ex;

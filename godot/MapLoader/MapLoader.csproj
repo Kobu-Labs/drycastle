@@ -7,4 +7,9 @@
     <RootNamespace>Suchohrad.MapLoader</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Pure collision geometry (trees, placed objects), shared with the server and the tests. -->
+    <ProjectReference Include="../ShooterCore/ShooterCore.csproj" />
+  </ItemGroup>
+
 </Project>

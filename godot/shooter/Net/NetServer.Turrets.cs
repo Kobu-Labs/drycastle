@@ -41,7 +41,7 @@ public partial class NetServer
     {
         var to = from + dir * maxDistance;
         var q = PhysicsRayQueryParameters3D.Create(new Vector3(from.X, from.Y, from.Z), new Vector3(to.X, to.Y, to.Z));
-        q.CollisionMask = 3; // world and vehicles, as for bullets
+        q.CollisionMask = CollisionLayers.Bullets; // as for bullets
         var ex = new Godot.Collections.Array<Rid>();
         foreach (var o in _byId.Values) ex.Add(o.Body.GetRid());
         q.Exclude = ex;

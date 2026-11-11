@@ -141,7 +141,7 @@ public partial class NetClient
         }
         var end = hit.Count > 0 ? hit["position"].AsVector3() : from + dir * 300f;
         ShotFx.Spawn(World, muzzle, end, false, true, hit.Count > 0 ? hit["normal"].AsVector3() : null);
-        if (hit.Count > 0) { Sfx.Play3D("impact", end); if (hit["collider"].AsGodotObject() is CollisionObject3D { CollisionLayer: var l } && (l & 1) != 0) BulletHoles.Place(World, end, hit["normal"].AsVector3()); }
+        if (hit.Count > 0) { Sfx.Play3D("impact", end); if (hit["collider"].AsGodotObject() is CollisionObject3D { CollisionLayer: var l } && (l & CollisionLayers.WorldShots) != 0) BulletHoles.Place(World, end, hit["normal"].AsVector3()); }
     }
 
     /// <summary>True when this server event is the echo of a shot already shown by prediction (consumes one prediction).</summary>

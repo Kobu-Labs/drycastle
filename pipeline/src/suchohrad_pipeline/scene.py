@@ -64,6 +64,7 @@ class MapScene:
     parcel_props: dict[Chunk, list[tuple[str, Mesh, Mesh]]] = field(default_factory=dict)
     graph: dict | None = None
     props: dict | None = None
+    trees: list[dict] | None = None  # tree records as exported (z with the exaggeration), for trees.json
     spawns: dict | None = None
     warnings: list[str] = field(default_factory=list)  # stale or unusable edits entries
 
@@ -168,6 +169,7 @@ def build_scene(
         pcfg = load_section("props", rules_path, area)
         fences = [{**s, "za": s["za"] * k, "zb": s["zb"] * k} for s in scene.props["fences"]]
         trees = [{**tr, "z": tr["z"] * k} for tr in scene.props["trees"]]
+        scene.trees = trees
         chunk_of_parcel = {p["id"]: tuple(p["chunk"]) for p in parcels_doc["parcels"]}
 
         def owned(it: dict) -> bool:  # OSM trees have no parcel (null or absent): chunk level

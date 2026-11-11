@@ -104,6 +104,10 @@ _Avoid_: spread (alone), buckshot
 A loadout's suit look and face paint (`camo.json`): a base colour, a pattern and ghillie tufts. Chosen in the customiser and stored per loadout slot.
 _Avoid_: skin, outfit, cosmetic
 
+**Shot-only cover**:
+Collision that stops bullets, pellets, rockets and sight lines but not players or cars: tree crowns and bushes. Tree trunks and placed solids are solid for everyone.
+_Avoid_: hitbox (for a prop), foliage collision
+
 **Concealment**:
 The factor (stance, stillness, movement) by which camouflage reduces how far away a player can be spotted. Only the number exists; it is not yet applied in the server tick.
 _Avoid_: stealth, invisibility

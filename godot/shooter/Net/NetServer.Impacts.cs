@@ -28,6 +28,7 @@ public partial class NetServer
     {
         var onRoad = Roads.Contains(at.X, -at.Z); // ground z is -north, map y is north
         if (Map == null) return ImpactGroups.For(onRoad, null, 0f);
+        if (!onRoad && TreeColliders.GroupAt(Map.Trees, Map.TreeModel, new NVec3(at.X, -at.Z, at.Y)) is { } tree) return tree; // trunk: wood, crown: foliage
         var parcel = Map.ParcelIndex?.At(at.X, at.Z);
         var above = at.Y - Map.GroundHeightOrMean(at.X, at.Z);
         return ImpactGroups.For(onRoad, parcel?.Kind, above);
