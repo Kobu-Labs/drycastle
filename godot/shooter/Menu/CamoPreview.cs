@@ -54,6 +54,9 @@ public sealed class CamoPreview
 
     public void SetProne(bool prone) => _view?.SetStance(prone ? Stance.Prone : Stance.Stand);
 
+    /// <summary>Holds a weapon (its id from weapons.json) in the figure's hands; "" holds nothing (the loadout editor, ticket #147).</summary>
+    public void ShowWeapon(string weaponId) => _view?.Apply(0, false, false, weaponId);
+
     /// <summary>Turns the figure by <paramref name="degrees"/> about the vertical axis.</summary>
     public void Turn(float degrees)
     {

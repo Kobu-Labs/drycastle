@@ -135,6 +135,8 @@ public static class ShooterTheme
         t.SetConstant("separation", "HBoxContainer", Space);
         t.SetConstant("h_separation", "Button", Space);
         t.SetConstant("h_separation", "CheckBox", Space);
+        t.SetConstant("h_separation", "GridContainer", Space + Space / 2);
+        t.SetConstant("v_separation", "GridContainer", Space + Space / 2);
         VariationButton(t, "MenuPrimary", Box(Active, pad, Accent), Box(Hover, pad, Accent, BorderStrong), Box(Raised, pad, Accent, BorderStrong));
         VariationButton(t, "MenuDanger", Box(Raised, pad, Danger), Box(Hover, pad, Danger), Box(Active, pad, Danger, BorderStrong));
         VariationButton(t, "MenuTab", Box(Surface, pad, Line), Box(Hover, pad, Accent), Box(Active, pad, Accent, BorderStrong));
