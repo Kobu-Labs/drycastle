@@ -61,7 +61,7 @@ public static class CarFx
     }
 
     static MeshInstance3D Box(VehicleDef def, Color tint) =>
-        new() { Mesh = new BoxMesh { Size = new Vector3(def.HalfWidth * 2, 1.2f, def.HalfLength * 2) }, Position = new Vector3(0, 0.75f, 0), MaterialOverride = new StandardMaterial3D { AlbedoColor = tint } };
+        new() { Mesh = new BoxMesh { Size = new Vector3(def.HalfWidth * 2, ServerCar.BoxHeight, def.HalfLength * 2) }, Position = new Vector3(0, ServerCar.BoxHeight / 2, 0), MaterialOverride = new StandardMaterial3D { AlbedoColor = tint } };
 
     /// <summary>Colour variant of a bike: the model's paint material takes the albedo of the variant's own material (Green_Motor to Red_Motor and so on).</summary>
     static void PaintVariant(Node n, VehicleDef def, byte colour)

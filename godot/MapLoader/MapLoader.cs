@@ -73,7 +73,64 @@ public sealed partial class MapLoader
         if (manifest.RootElement.TryGetProperty("files", out var files)
             && files.TryGetProperty("objects", out var objFile) && objFile.GetString() is { } of)
             LoadObjects(Path.Combine(mapDir, of));
+        if (BuildBoundary) BuildTerrainBoundary();
         Stats.LoadSeconds = (Time.GetTicksMsec() - t0) / 1000.0;
+    }
+
+    /// <summary>Invisible walls along the rim of the terrain (on by default). The exported terrain is a bounded, ragged patch while spawns, parcels and roads reach past it, so without a rim players walk off the edge and fall into the void.</summary>
+    public bool BuildBoundary { get; set; } = true;
+    /// <summary>Number of rim wall boxes built (0 without terrain).</summary>
+    public int BoundaryWalls { get; private set; }
+    const float RimCell = 1f, RimHeight = 24f;
+
+    void BuildTerrainBoundary()
+    {
+        if (_terrain.Count == 0) return;
+        var box = _terrain[0].box;
+        foreach (var t in _terrain) box = box.Merge(t.box);
+        int x0 = (int)Mathf.Floor(box.Position.X / RimCell) - 1, x1 = (int)Mathf.Ceil(box.End.X / RimCell) + 1;
+        int z0 = (int)Mathf.Floor(box.Position.Z / RimCell) - 1, z1 = (int)Mathf.Ceil(box.End.Z / RimCell) + 1;
+        int w = x1 - x0 + 1, h = z1 - z0 + 1;
+        var ground = new float[w * h];
+        for (var i = 0; i < w; i++)
+            for (var j = 0; j < h; j++)
+                ground[i * h + j] = GroundHeight((x0 + i + 0.5f) * RimCell, (z0 + j + 0.5f) * RimCell);
+        bool Covered(int i, int j) => i >= 0 && j >= 0 && i < w && j < h && !float.IsNaN(ground[i * h + j]);
+
+        var body = new StaticBody3D { Name = "TerrainRim" };
+        var n = 0;
+        // an empty cell touching a covered one becomes a wall cell; runs of them along an axis merge into one box
+        var wall = new bool[w * h];
+        var wallY = new float[w * h];
+        for (var i = 0; i < w; i++)
+            for (var j = 0; j < h; j++)
+            {
+                if (Covered(i, j)) continue;
+                var gy = float.NaN;
+                for (var di = -1; di <= 1 && float.IsNaN(gy); di++)
+                    for (var dj = -1; dj <= 1; dj++)
+                        if ((di != 0 || dj != 0) && Covered(i + di, j + dj)) { gy = ground[(i + di) * h + j + dj]; break; }
+                if (float.IsNaN(gy)) continue;
+                wall[i * h + j] = true; wallY[i * h + j] = gy;
+            }
+        for (var j = 0; j < h; j++)
+            for (var i = 0; i < w; i++)
+            {
+                if (!wall[i * h + j]) continue;
+                var e = i;
+                while (e + 1 < w && wall[(e + 1) * h + j]) e++;
+                var yMin = float.MaxValue;
+                for (var k = i; k <= e; k++) { yMin = Mathf.Min(yMin, wallY[k * h + j]); wall[k * h + j] = false; }
+                var len = (e - i + 1) * RimCell;
+                body.AddChild(new CollisionShape3D
+                {
+                    Shape = new BoxShape3D { Size = new Vector3(len, RimHeight + 20f, RimCell) },
+                    Position = new Vector3((x0 + i) * RimCell + len / 2, yMin - 20f + (RimHeight + 20f) / 2, (z0 + j + 0.5f) * RimCell),
+                });
+                n++;
+            }
+        Root.AddChild(body);
+        BoundaryWalls = n;
     }
 
     void ReadParcels(string path)

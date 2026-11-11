@@ -15,6 +15,7 @@ public partial class NetServer
     public string SmokeKind = "car";
     readonly List<ServerCar> _cars = new();
     const float EnterRange = 3f, RunOverCooldown = 0.8f;
+    int _destroyedReturns, _vehicleHits, _vehicleBlasts, _blastHits, _chainHits;
     int _carEnters, _carExits, _runOvers, _runOverKills, _carReturns, _carResets;
     bool _carWasAway;
 
@@ -22,15 +23,15 @@ public partial class NetServer
     void SpawnCars()
     {
         var space = World.GetWorld3D().DirectSpaceState;
-        float? Ground(NVec3 p)
-        {
-            var q = PhysicsRayQueryParameters3D.Create(new Vector3(p.X, p.Y + 2f, p.Z), new Vector3(p.X, p.Y - 5f, p.Z));
-            q.CollisionMask = 1;
-            var r = space.IntersectRay(q);
-            return r.Count == 0 ? null : r["position"].AsVector3().Y;
-        }
         var spots = new List<(NVec3 Pos, float Yaw, int Kind)>();
-        if (CarSmoke)
+        if (BlastSmoke)
+        {
+            var kind = Vehicles!.Vehicles.FindIndex(v => v.Id == SmokeKind);
+            var c = new NVec3(ArenaX, 0, ArenaZ);
+            // car 0 is shot to pieces, car 1 stands 6 m beside it (chain damage, survives), car 2 is far away (rocket target, never in a blast)
+            foreach (var o in new[] { new NVec3(0, 0, -30), new NVec3(6, 0, -30), new NVec3(0, 0, -70) }) spots.Add((c + o, 0, kind));
+        }
+        else if (CarSmoke)
         {
             var kind = Vehicles!.Vehicles.FindIndex(v => v.Id == SmokeKind);
             if (kind < 0) throw new InvalidOperationException($"unknown --car-kind {SmokeKind}");
@@ -49,8 +50,11 @@ public partial class NetServer
                 {
                     var p = pool[pi];
                     if (spots.Any(s => NVec3.Distance(s.Pos, p) < 12f)) continue;
-                    if (Ground(p) is not { } gy) continue; // no ground under the candidate: skip
-                    spots.Add((new NVec3(p.X, gy, p.Z), (float)(_rng.NextDouble() * Math.PI * 2), kind));
+                    var yaw = (float)(_rng.NextDouble() * Math.PI * 2);
+                    var def0 = Vehicles.Vehicles[kind];
+                    // the real ground under the whole footprint; no ground or a cliff under it: skip the candidate
+                    if (ServerCar.RestHeight(space, new Vector3(p.X, p.Y, p.Z), yaw, def0.HalfWidth, def0.HalfLength, p.Y) is not { } gy) continue;
+                    spots.Add((new NVec3(p.X, gy, p.Z), yaw, kind));
                     got++;
                 }
             }
@@ -65,7 +69,7 @@ public partial class NetServer
             var car = new ServerCar
             {
                 Name = $"{def.Id}{_cars.Count}", Id = (ushort)(VehicleRecord.FirstId + _cars.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, colour),
-                HalfWidth = def.HalfWidth, HalfLength = def.HalfLength, OriginPos = new Vector3(pos.X, pos.Y + 0.05f, pos.Z), OriginYaw = yaw,
+                HalfWidth = def.HalfWidth, HalfLength = def.HalfLength, OriginPos = new Vector3(pos.X, pos.Y + 0.02f, pos.Z), OriginYaw = yaw,
             };
             World.AddChild(car);
             foreach (var cl in _clients.Values.Where(x => x.Joined)) car.AddCollisionExceptionWith(cl.Body);
@@ -87,7 +91,7 @@ public partial class NetServer
         var p = c.Body.GlobalPosition;
         foreach (var car in _cars)
         {
-            if (car.Seat.Occupied || Mathf.Abs(car.GlobalPosition.Y - p.Y) > 2.5f) continue;
+            if (car.Destroyed || car.Seat.Occupied || Mathf.Abs(car.GlobalPosition.Y - p.Y) > 2.5f) continue;
             var d = new Vector2(car.GlobalPosition.X - p.X, car.GlobalPosition.Z - p.Z).Length();
             if (d <= bd) { best = car; bd = d; }
         }
@@ -139,11 +143,19 @@ public partial class NetServer
         foreach (var car in _cars)
         {
             var def = car.Def;
+            if (car.Destroyed)
+            {
+                if (_elapsed >= car.ReturnAt) { car.Reset(); _destroyedReturns++; if (BlastSmoke && _destroyedReturns >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5; GD.Print($"server: {def.Id} {car.Id} returned after its destruction"); }
+                continue;
+            }
             Client? driver = car.Seat.Occupied && _byId.TryGetValue(car.Seat.Driver, out var d) ? d : null;
             if (car.Seat.Occupied && driver == null) car.Seat.Clear();
             if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt);
             else car.Step(def, 0, 0, false, dt);
-            if (car.GlobalPosition.Y < KillY) { if (driver != null) EjectDriver(driver, false); car.Reset(); }
+            if (car.GlobalPosition.Y < KillY) { if (driver != null) EjectDriver(driver, false); car.Reset(false); }
+            if (driver != null && car.LastImpact > Vehicles.CrashMinSpeedLoss)
+                DamageVehicle(car, (car.LastImpact - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, 0, SpecialWeapons.Vehicle, 0);
+            if (car.DetonateAt >= 0 && _elapsed >= car.DetonateAt) { Detonate(car); continue; }
             if (driver != null)
             {
                 driver.Body.Teleport(car.GlobalPosition);
@@ -152,11 +164,95 @@ public partial class NetServer
             }
             else if (car.Abandon.Update(false, car.AtOrigin, dt, Vehicles.AbandonReturnTime))
             {
-                car.Reset(); _carReturns++;
+                car.Reset(false); _carReturns++;
                 GD.Print($"server: {car.Def.Id} {car.Id} abandoned, returned to its origin");
             }
             else if (!car.AtOrigin && car.GlobalPosition.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
             if (driver != null && car.GlobalPosition.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
+        }
+    }
+
+    /// <summary>
+    /// Hurts a vehicle (bullet, rocket, blast or wall impact). At 0 HP it is scheduled to blow up <paramref name="delay"/> seconds from now
+    /// (0 = in this tick's vehicle step). <paramref name="attacker"/> 0 means nobody: the blast is then credited to nobody (or the driver's own crash).
+    /// </summary>
+    void DamageVehicle(ServerCar car, float amount, ushort attacker, byte weapon, float delay)
+    {
+        if (car.Destroyed || amount <= 0 || Vehicles == null) return;
+        if (attacker != 0) { car.LastAttacker = attacker; car.LastWeapon = weapon; }
+        var before = VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages);
+        car.Hp = MathF.Max(0, car.Hp - amount);
+        _vehicleHits++;
+        var stage = VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages);
+        if (stage != before) GD.Print($"server: {car.Def.Id} {car.Id} damage stage {before} -> {stage} (hp {car.Hp:F0}/{car.Def.Hp:F0})");
+        if (car.Hp <= 0 && car.DetonateAt < 0) car.DetonateAt = _elapsed + delay;
+    }
+
+    /// <summary>
+    /// The vehicle blows up: broadcast the event, kill the driver, splash everyone alive and every other vehicle in range (those that run out of HP
+    /// go off after the chain delay), then the vehicle is gone until it returns. The last attacker gets the credit.
+    /// </summary>
+    void Detonate(ServerCar car)
+    {
+        var e = Vehicles!.Explosion;
+        var at = car.GlobalPosition + Vector3.Up * 0.8f;
+        var driver = car.Seat.Occupied && _byId.TryGetValue(car.Seat.Driver, out var d) ? d : null;
+        var attacker = car.LastAttacker != 0 ? car.LastAttacker : driver?.Id ?? (ushort)0;
+        var weapon = car.LastWeapon != 0 ? car.LastWeapon : SpecialWeapons.Vehicle;
+        car.Destroy();
+        car.ReturnAt = _elapsed + Vehicles.DestroyedReturnTime;
+        _vehicleBlasts++;
+        BroadcastEvent(EventKind.VehicleExplosion, WeaponCodec.Encode(new VehicleExplosionMsg(car.Id, attacker, N(at), e.Splash.Radius)));
+        GD.Print($"server: {car.Def.Id} {car.Id} exploded at ({at.X:F1},{at.Y:F1},{at.Z:F1}), credited to #{attacker}");
+
+        if (driver != null)
+        {
+            Deal(attacker, weapon, driver.Id, e.DriverDamage, false, false);
+            if (driver.Car == car) EjectDriver(driver, true); // survived (spawn protection): thrown out, the seat is gone
+        }
+        foreach (var t in LiveTargets())
+        {
+            if (driver != null && t.Id == driver.Id) continue;
+            var dist = ProjectileMath.DistanceToCapsule(N(at), t.Feet, HitMath.Height(t.Crouching), MoveConsts.CapsuleRadius);
+            var dmg = VehicleDamage.BlastDamage(e, dist);
+            if (dmg <= 0) continue;
+            var self = t.Id == attacker;
+            if (self) dmg = MathF.Max(1f, MathF.Round(dmg * e.Splash.SelfDamageMultiplier));
+            var res = Deal(attacker, weapon, t.Id, dmg, false, false);
+            if (res == DamageResult.Ignored) continue;
+            _blastHits++;
+            if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v))
+            {
+                var centre = t.Feet + new NVec3(0, HitMath.Height(t.Crouching) / 2, 0);
+                var k = ProjectileMath.Knockback(e.Splash.KnockbackSpeed, N(at), centre, dmg / e.Damage);
+                if (k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
+            }
+        }
+        foreach (var other in _cars)
+        {
+            if (other == car || other.Destroyed) continue;
+            var dist = VehicleDamage.DistanceToBox(N(at), N(other.GlobalPosition), other.State.Yaw, other.HalfWidth, other.HalfLength);
+            var dmg = VehicleDamage.BlastDamage(e, dist) * e.VehicleDamageMultiplier;
+            if (dmg <= 0) continue;
+            _chainHits++;
+            DamageVehicle(other, dmg, attacker, weapon, e.ChainDelay);
+        }
+    }
+
+    /// <summary>Vehicle damage of a weapon (rocket direct hit or splash) by the vehicles.json multiplier.</summary>
+    void RocketVsVehicles(Vector3 pos, WeaponDef w, ushort owner, byte weapon, ServerCar? direct)
+    {
+        foreach (var car in _cars)
+        {
+            if (car.Destroyed) continue;
+            float dmg;
+            if (car == direct) dmg = w.Damage;
+            else
+            {
+                var dist = VehicleDamage.DistanceToBox(N(pos), N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength);
+                dmg = ProjectileMath.SplashDamage(w, dist, false);
+            }
+            DamageVehicle(car, dmg * Vehicles!.RocketDamageMultiplier, owner, weapon, 0);
         }
     }
 
@@ -181,6 +277,15 @@ public partial class NetServer
             if (r == DamageResult.Killed) _runOverKills++;
             GD.Print($"server: {car.Def.Id} {car.Id} ran over #{t.Id} at {car.State.Speed:F1} m/s for {dmg:F0}");
         }
+    }
+
+    void FinishBlast()
+    {
+        var ok = _vehicleHits >= 20 && _vehicleBlasts >= 2 && _blastHits >= 2 && _chainHits >= 1 && _destroyedReturns >= 2 && _cars.Count == 3;
+        GD.Print($"server: blast smoke vehicleHits={_vehicleHits} blasts={_vehicleBlasts} blastHits(players)={_blastHits} chainHits={_chainHits} returns={_destroyedReturns} kills={_kills}");
+        GD.Print(ok ? "SHOOTER_BLAST_SERVER_OK" : "SHOOTER_BLAST_SERVER_FAIL");
+        GetTree().Quit(ok ? 0 : 2);
+        SetPhysicsProcess(false);
     }
 
     void FinishCar()
