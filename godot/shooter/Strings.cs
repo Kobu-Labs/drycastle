@@ -18,6 +18,7 @@ public static class Strings
         ("hud.protection", "Spawn protection {0}"),
         ("hud.streak.title", "KILLSTREAK"), ("hud.streak.none", "Empty slot"), ("hud.streak.need", "{0} more kills"), ("hud.streak.ready", "READY  press {0}"),
         ("hud.streak.ready.dead", "READY"), ("hud.streak.active", "ACTIVE"), ("hud.streak.spent", "USED"),
+        ("hud.uav.title", "UAV"), ("hud.uav.time", "{0}:{1:00} LEFT"),
         ("hud.respawn.title", "You were eliminated"), ("hud.respawn.by", "by {0}"), ("hud.respawn.self", "by accident"),
         ("hud.respawn.in", "Respawning in {0}"),
         ("hud.hint.captured", "{0}  Scoreboard     {1}-{2}  Weapons     Esc  Pause"),

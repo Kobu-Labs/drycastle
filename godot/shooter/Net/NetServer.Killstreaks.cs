@@ -16,7 +16,9 @@ public partial class NetServer
     KillstreakService _streaks = null!;
 
     /// <summary>Builds the service once the table and the match are set. Streaks without a ticket yet keep their logging stub.</summary>
-    void BuildStreaks() =>
+    void BuildStreaks()
+    {
+        _uav = BuildUav();
         _streaks = new KillstreakService(
             Killstreaks,
             Killstreaks.Streaks.Select(s =>
@@ -24,9 +26,11 @@ public partial class NetServer
                 s.Id == CarePackageRules.StreakId ? CarePackageImpl() :
                 s.Id == AttackMissileStreak.StreakId ? MakeMissileStreak() :
                 s.Id == TurretStreak.StreakId ? new TurretStreak(Turret.Def, _match.Entities, new TurretWorld(this)) :
+                s.Id == UavStreak.StreakId ? _uav :
                 new LoggingKillstreak(s.Id)),
             (owner, kind, payload) => { if (_byId.TryGetValue(owner, out var c)) Send(c, new EventMsg((byte)kind, payload)); },
             s => GD.Print($"server: {s}"));
+    }
 
     /// <summary>A life starts at spawn (join and every spawn, like the perk): the loadout's streaks and the perk's cost reduction.</summary>
     void StreakArm(Client c, Loadout l) => _streaks.Arm(c.Id, new[] { l.Streak1, l.Streak2, l.Streak3 }, c.Perks.StreakCostReduction);
@@ -50,7 +54,7 @@ public partial class NetServer
 
     void StreakRoundReset() => _streaks.Reset();
 
-    void StreakTick() => _streaks.Tick(_elapsed);
+    void StreakTick() { _streaks.Tick(_elapsed); _uav.Tick(_elapsed); }
 
     void StreakLeave(ushort id) => _streaks.Forget(id);
 }
