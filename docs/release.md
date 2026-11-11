@@ -39,11 +39,11 @@ The server address is not baked into the client: players type it on the connect 
 The server runs in Docker next to a PostgreSQL container (`deploy/`). Progression lives in Postgres (volume `pgdata`); the game port is
 UDP 27015; Postgres is reachable only from the server container.
 
-One-time on the VPS: install Docker with the compose plugin (`curl -fsSL https://get.docker.com | sh`) and `rsync`; open **UDP 27015**
-in the host and provider firewalls (and SSH). Nothing else is exposed.
+One-time on the VPS: install Docker with the compose plugin and `rsync` (Debian 13: `apt-get install docker.io docker-compose rsync`); open **UDP 27015**
+in the host and provider firewalls (and SSH). Nothing else is exposed (Postgres is not published).
 
 1. `make shooter-export` (bundles the server binary, `assets/` and the village `map/`).
-2. `deploy/deploy.sh user@host` copies the export and `deploy/` to `/opt/suchohrad` on the VPS (its `rsync --delete` only touches
+2. `SSH_OPTS="-i ~/.ssh/suchohrad-vps -o IdentitiesOnly=yes" deploy/deploy.sh user@host` (SSH_OPTS only if you use a dedicated key) copies the export and `deploy/` to `/opt/suchohrad` on the VPS (its `rsync --delete` only touches
    that export copy), creates `deploy/.env` with a random database password on the first run, and runs `docker compose up -d --build`.
 3. Check: `ssh user@host 'cd /opt/suchohrad/deploy && docker compose logs server'` should show
    `server: progression db postgres shooter@db:5432/shooter` and the map line.
@@ -56,6 +56,13 @@ The database URL comes from `SUCHOHRAD_DB`, so the password is never on a comman
 - **Restore:** `docker compose exec -T db psql -U shooter shooter < shooter-DATE.sql` into an empty database.
 - The wire protocol version must match between server and client. A new protocol means a new client zip and a redeploy together.
 - **Without Docker/Postgres:** the server also accepts `--db ./shooter.db` (SQLite) as before.
+
+### Current production server
+
+netcup VPS 500 G12.5 (Vienna, Debian 13, 2 vCores, 4 GB), `root@159.195.244.164`, key `~/.ssh/suchohrad-vps`, stack in `/opt/suchohrad/deploy`.
+Players connect to `159.195.244.164`, port 27015. Check it from anywhere with the headless bot:
+`godot --headless --path godot/shooter -- --connect 159.195.244.164 --name probe --map out/village/map --headless-bot --bot-seconds 8`
+(it ends with `SHOOTER_NET_CLIENT_FAIL` when alone on the server; "welcome" and "snapshots N" in its output are the success signs).
 
 ## Updating
 
