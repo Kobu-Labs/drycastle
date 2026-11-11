@@ -342,3 +342,54 @@ public class VehicleTests
         Assert.Equal(a, b);
     }
 }
+
+/// <summary>The swept car footprint: players and dummies are hit along the whole path of the tick, not only where the car ends.</summary>
+public class CarFootprintTests
+{
+    // yaw 0: the car faces -Z; half width 1.1, half length 2.15 (a car).
+    static bool Hit(Vector3 from, Vector3 to, Vector3 body) => CarFootprint.Hits(from, to, 0f, 1.1f, 2.15f, body, 0.4f);
+
+    [Fact]
+    public void BodyInFrontOfTheCarIsHit()
+    {
+        Assert.True(Hit(Vector3.Zero, Vector3.Zero, new Vector3(0, 0, -2.4f)));
+        Assert.False(Hit(Vector3.Zero, Vector3.Zero, new Vector3(0, 0, -2.8f)));
+    }
+
+    [Fact]
+    public void FastCarCannotStepOverABodyBetweenTicks()
+    {
+        // 30 m/s at 30 Hz: 1 m a tick is fine, but a 12 m jump (a hard frame) leaves the body behind the end position.
+        var body = new Vector3(0, 0, -6);
+        Assert.False(CarFootprint.Overlaps(new Vector3(0, 0, -12), 0f, 1.1f, 2.15f, body, 0.4f));
+        Assert.True(Hit(Vector3.Zero, new Vector3(0, 0, -12), body));
+    }
+
+    [Fact]
+    public void BodyBesideTheCarIsMissed()
+    {
+        Assert.False(Hit(Vector3.Zero, new Vector3(0, 0, -12), new Vector3(2.0f, 0, -6)));
+        Assert.True(Hit(Vector3.Zero, new Vector3(0, 0, -12), new Vector3(1.3f, 0, -6)));
+    }
+
+    [Fact]
+    public void CornersAreRoundedByTheBodyRadius()
+    {
+        // diagonal from the corner (1.1, -2.15): 0.35 each way is 0.49 m away: out of a 0.4 m radius
+        Assert.False(Hit(Vector3.Zero, Vector3.Zero, new Vector3(1.45f, 0, -2.5f)));
+        Assert.True(Hit(Vector3.Zero, Vector3.Zero, new Vector3(1.3f, 0, -2.3f)));
+    }
+
+    [Fact]
+    public void BodiesFarAboveOrBelowAreMissed()
+    {
+        Assert.False(Hit(Vector3.Zero, Vector3.Zero, new Vector3(0, 3, -1)));
+        Assert.False(Hit(Vector3.Zero, Vector3.Zero, new Vector3(0, -1, -1)));
+    }
+
+    [Fact]
+    public void ATeleportIsNotASweep()
+    {
+        Assert.False(Hit(new Vector3(0, 0, 100), Vector3.Zero, new Vector3(0, 0, 50)));
+    }
+}

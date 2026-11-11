@@ -13,6 +13,41 @@ public static class RunOver
     }
 }
 
+/// <summary>
+/// Where a vehicle hits a body: the car's oriented footprint against the body's circle, swept along the path the car drove this tick so
+/// a fast or small vehicle cannot step over a body between two ticks. Players and target dummies share it.
+/// </summary>
+public static class CarFootprint
+{
+    /// <summary>The path is sampled at most this far apart (metres); a body circle is wider than this, so no gap is left.</summary>
+    public const float StepMetres = 0.5f;
+    /// <summary>A longer jump than this in one tick is a teleport (reset, respawn), not driving: only the end point counts.</summary>
+    public const float MaxSweepMetres = 20f;
+
+    /// <summary>The car at <paramref name="p"/> with <paramref name="yaw"/> touches a body standing at <paramref name="body"/> (feet) with <paramref name="radius"/>: the footprint's nearest point within the radius, the feet between 0.6 m below and 2 m above the car's origin.</summary>
+    public static bool Overlaps(Vector3 p, float yaw, float halfWidth, float halfLength, Vector3 body, float radius)
+    {
+        var d = body - p;
+        if (d.Y < -0.6f || d.Y > 2f) return false;
+        var lx = d.X * MathF.Cos(yaw) - d.Z * MathF.Sin(yaw);
+        var lz = -d.X * MathF.Sin(yaw) - d.Z * MathF.Cos(yaw);
+        var dx = MathF.Max(MathF.Abs(lx) - halfWidth, 0);
+        var dz = MathF.Max(MathF.Abs(lz) - halfLength, 0);
+        return dx * dx + dz * dz <= radius * radius;
+    }
+
+    /// <summary>The same test along the path from <paramref name="from"/> to <paramref name="to"/> (the car's origin at the start and end of the tick; the end yaw is used all along).</summary>
+    public static bool Hits(Vector3 from, Vector3 to, float yaw, float halfWidth, float halfLength, Vector3 body, float radius)
+    {
+        var travel = Vector3.Distance(from, to);
+        if (travel > MaxSweepMetres) return Overlaps(to, yaw, halfWidth, halfLength, body, radius);
+        var steps = Math.Max(1, (int)MathF.Ceiling(travel / StepMetres));
+        for (var i = 0; i <= steps; i++)
+            if (Overlaps(Vector3.Lerp(from, to, (float)i / steps), yaw, halfWidth, halfLength, body, radius)) return true;
+        return false;
+    }
+}
+
 /// <summary>Hidden vehicle HP (ticket #103): smoke stage from the remaining fraction, blast damage falloff and the box distance of a blast to a vehicle.</summary>
 public static class VehicleDamage
 {

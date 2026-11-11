@@ -82,15 +82,10 @@ public partial class NetServer
     /// <summary>Roadkill: a car drives over dummies like players (the same footprint test, the same damage).</summary>
     void RunOverTargets(ServerCar car, Client driver, float dmg)
     {
-        var fwd = car.Forward;
-        var right = new Vector3(Mathf.Cos(car.State.Yaw), 0, -Mathf.Sin(car.State.Yaw));
         foreach (var t in _match.Targets.All)
         {
             if (!t.Alive) continue;
-            var d = new Vector3(t.Spot.Feet.X, t.Spot.Feet.Y, t.Spot.Feet.Z) - car.GlobalPosition;
-            if (d.Y < -0.6f || d.Y > 2f) continue;
-            var lx = d.Dot(right); var lz = d.Dot(fwd);
-            if (Mathf.Abs(lx) > car.HalfWidth + MoveConsts.CapsuleRadius || Mathf.Abs(lz) > car.HalfLength + MoveConsts.CapsuleRadius) continue;
+            if (!CarHits(car, new Vector3(t.Spot.Feet.X, t.Spot.Feet.Y, t.Spot.Feet.Z))) continue;
             if (car.HitCooldown.TryGetValue(t.Id, out var until) && _elapsed < until) continue;
             car.HitCooldown[t.Id] = _elapsed + RunOverCooldown;
             Deal(driver.Id, SpecialWeapons.Vehicle, t.Id, dmg, false, false, KillCause.Roadkill);
