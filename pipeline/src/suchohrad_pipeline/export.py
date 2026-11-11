@@ -114,7 +114,8 @@ def _sha256(path: Path) -> str:
 
 
 def _dump(path: Path, doc: dict) -> None:
-    path.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    # compact: the map loader parses these at every start, and indentation was most of trees.json (1.8 MB)
+    path.write_text(json.dumps(doc, separators=(",", ":"), sort_keys=True) + "\n")
 
 
 def _edit_defaults(rules_path: Path, area: str) -> dict:
