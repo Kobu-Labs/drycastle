@@ -140,6 +140,12 @@ public sealed class WorldEntityManager
         }
     }
 
+    /// <summary>Despawns every live entity of one type owned by <paramref name="owner"/> (a turret when its owner dies or leaves).</summary>
+    public void DespawnOwned(ushort owner, byte type, WorldDespawnReason reason)
+    {
+        foreach (var (id, e) in _live.Where(kv => kv.Value.Owner == owner && kv.Value.TypeId == type).ToList()) Despawn(id, reason);
+    }
+
     /// <summary>Despawns everything (round end). Each despawn raises <see cref="Despawned"/> with <see cref="WorldDespawnReason.Removed"/>.</summary>
     public void Clear()
     {

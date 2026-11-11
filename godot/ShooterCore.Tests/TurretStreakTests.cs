@@ -141,7 +141,7 @@ public class TurretStreakTests
     }
 
     [Fact]
-    public void ThePlacedTurretOutlivesItsOwnersDeath()
+    public void TheStreakServiceLeavesAPlacedTurretToTheServerWhenItsOwnerDies()
     {
         var rig = new Rig(new TurretTests.FlatWorld());
         rig.EarnTurret();
@@ -163,5 +163,21 @@ public class TurretStreakTests
         Assert.False(rig.Service.Activate(Owner, 0, Vector3.Zero));
         Assert.Equal(0, rig.Entities.Count);
         Assert.Equal(new[] { TurretStreak.StreakId }, rig.Service.Held(Owner)); // refused: the streak stays held
+    }
+
+    [Fact]
+    public void DespawnOwnedRemovesOnlyTheOwnersTurrets()
+    {
+        var rig = new Rig(new TurretTests.FlatWorld());
+        rig.EarnTurret();
+        rig.Service.Activate(Owner, 0, Vector3.Zero);
+        rig.Service.RouteInput(Owner, Press(MoveButtons.None, pitch: -0.5f));
+        rig.Service.RouteInput(Owner, Press(MoveButtons.Fire, pitch: -0.5f));
+        Assert.True(Armed(rig.Entities));
+
+        rig.Entities.DespawnOwned(Owner + 1, TurretRules.TypeId, WorldDespawnReason.Removed);
+        Assert.Equal(1, rig.Entities.Count);
+        rig.Entities.DespawnOwned(Owner, TurretRules.TypeId, WorldDespawnReason.Removed);
+        Assert.Equal(0, rig.Entities.Count);
     }
 }

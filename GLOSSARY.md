@@ -141,7 +141,7 @@ A flying entity that circles the map at a set altitude and radius: the attack he
 _Avoid_: plane (for helicopters), drone
 
 **Sentry turret**:
-The killstreak that places a 500 hp gun on the ground for 15 seconds. It turns to targets within its sight range and shoots them.
+The killstreak that places a 500 hp gun on the ground for 15 seconds. It turns to targets within its sight range and shoots them. It is removed when its owner dies or leaves the match, so it never fires or credits kills for an absent owner.
 _Avoid_: turret (alone, ambiguous with the vehicle gun), gun emplacement
 
 **UAV**:
