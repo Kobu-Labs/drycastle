@@ -2,7 +2,7 @@
   "version": 1,
   "_note": "Event id to sound. files are relative to assets/ (variants are picked at random, never the same twice in a row); bus is SFX, UI or Music; volume_db and pitch are the base; pitch_variance is the +/- fraction applied per play; max_distance is the audible range in metres for 3D playback (0 = always non-positional); loop makes the stream loop. Own sounds are played non-positional by the game whatever max_distance says. Ranges follow the sound plan (#78).",
   "sounds": [
-    { "id": "shot.pistol", "files": ["free-firearm-sound-library/pistol_1911.ogg", "free-firearm-sound-library/pistol_ppq.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 120, "priority": 3 },
+    { "id": "shot.pistol", "files": ["free-firearm-sound-library/pistol_1911.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 120, "priority": 3 },
     { "id": "shot.ak47", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 200, "priority": 3 },
     { "id": "shot.sniper", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": 1, "pitch": 0.7, "pitch_variance": 0.04, "max_distance": 400, "priority": 3 },
     { "id": "shot.knife", "files": ["oga-combat-sound-effects-150/knife_swing_1.ogg", "oga-combat-sound-effects-150/knife_swing_2.ogg"], "bus": "SFX", "volume_db": -4, "pitch_variance": 0.08, "max_distance": 15 },
