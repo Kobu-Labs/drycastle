@@ -14,6 +14,9 @@
    ]
   },
   "G-0002": {
+   "fence": {
+    "mode": "custom"
+   },
    "parcels": [
     "P-0505",
     "P-0506"
@@ -33,12 +36,18 @@
    ]
   },
   "G-0004": {
+   "fence": {
+    "mode": "custom"
+   },
    "parcels": [
     "P-0187",
     "P-1164"
    ]
   },
   "G-0005": {
+   "fence": {
+    "mode": "custom"
+   },
    "parcels": [
     "P-0423",
     "P-0428",
@@ -46,13 +55,1952 @@
    ]
   },
   "G-0006": {
+   "fence": {
+    "mode": "custom"
+   },
    "parcels": [
     "P-0438",
     "P-0440"
    ]
+  },
+  "G-0007": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0223",
+    "P-0224",
+    "P-0531"
+   ]
+  },
+  "G-0010": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0007",
+    "P-0015",
+    "P-0016"
+   ]
+  },
+  "G-0012": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0022",
+    "P-0023",
+    "P-0024",
+    "P-0025"
+   ]
+  },
+  "G-0013": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0030",
+    "P-0031",
+    "P-0032"
+   ]
+  },
+  "G-0016": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0049",
+    "P-0050"
+   ]
+  },
+  "G-0017": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0051",
+    "P-0052"
+   ]
+  },
+  "G-0018": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0053",
+    "P-0057"
+   ]
+  },
+  "G-0021": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0068",
+    "P-0069"
+   ]
+  },
+  "G-0022": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0070",
+    "P-0071"
+   ]
+  },
+  "G-0024": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0084",
+    "P-0092"
+   ]
+  },
+  "G-0025": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0085",
+    "P-0177",
+    "P-0178"
+   ]
+  },
+  "G-0026": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0088",
+    "P-0089",
+    "P-0846",
+    "P-0848",
+    "P-0850",
+    "P-0853",
+    "P-0864",
+    "P-0867"
+   ]
+  },
+  "G-0027": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0090",
+    "P-0095"
+   ]
+  },
+  "G-0028": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0101",
+    "P-0102"
+   ]
+  },
+  "G-0029": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0109",
+    "P-0110"
+   ]
+  },
+  "G-0031": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0123",
+    "P-0130",
+    "P-0133"
+   ]
+  },
+  "G-0035": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0138",
+    "P-0139"
+   ]
+  },
+  "G-0036": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0144",
+    "P-1053"
+   ]
+  },
+  "G-0040": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0158",
+    "P-0160"
+   ]
+  },
+  "G-0041": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0161",
+    "P-0162"
+   ]
+  },
+  "G-0045": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0174",
+    "P-1089",
+    "P-1090"
+   ]
+  },
+  "G-0047": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0183",
+    "P-0185"
+   ]
+  },
+  "G-0048": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0188",
+    "P-0189"
+   ]
+  },
+  "G-0049": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0190",
+    "P-0191",
+    "P-0192"
+   ]
+  },
+  "G-0050": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0193",
+    "P-0195"
+   ]
+  },
+  "G-0051": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0196",
+    "P-0197"
+   ]
+  },
+  "G-0052": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0204",
+    "P-0211",
+    "P-0212",
+    "P-0214",
+    "P-0215"
+   ]
+  },
+  "G-0053": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0207",
+    "P-0208",
+    "P-0213"
+   ]
+  },
+  "G-0054": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0219",
+    "P-0220"
+   ]
+  },
+  "G-0055": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0225",
+    "P-0227"
+   ]
+  },
+  "G-0056": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0231",
+    "P-0232"
+   ]
+  },
+  "G-0057": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0234",
+    "P-0236"
+   ]
+  },
+  "G-0058": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0245",
+    "P-0247",
+    "P-0248"
+   ]
+  },
+  "G-0059": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0250",
+    "P-0252",
+    "P-0253"
+   ]
+  },
+  "G-0060": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0251",
+    "P-0254"
+   ]
+  },
+  "G-0061": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0258",
+    "P-0259"
+   ]
+  },
+  "G-0062": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0264",
+    "P-0265"
+   ]
+  },
+  "G-0063": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0267",
+    "P-0268"
+   ]
+  },
+  "G-0064": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0272",
+    "P-0273",
+    "P-0274"
+   ]
+  },
+  "G-0065": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0283",
+    "P-0284"
+   ]
+  },
+  "G-0066": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0286",
+    "P-0287"
+   ]
+  },
+  "G-0067": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0313",
+    "P-0314"
+   ]
+  },
+  "G-0068": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0315",
+    "P-0316"
+   ]
+  },
+  "G-0069": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0327",
+    "P-0329",
+    "P-0333",
+    "P-0335"
+   ]
+  },
+  "G-0070": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0332",
+    "P-0334"
+   ]
+  },
+  "G-0071": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0340",
+    "P-0341",
+    "P-0360"
+   ]
+  },
+  "G-0072": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0345",
+    "P-0356"
+   ]
+  },
+  "G-0073": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0362",
+    "P-0363"
+   ]
+  },
+  "G-0074": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0364",
+    "P-0365"
+   ]
+  },
+  "G-0075": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0399",
+    "P-0400"
+   ]
+  },
+  "G-0076": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0401",
+    "P-0404"
+   ]
+  },
+  "G-0077": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0402",
+    "P-0403"
+   ]
+  },
+  "G-0078": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0406",
+    "P-0407"
+   ]
+  },
+  "G-0079": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0409",
+    "P-0411"
+   ]
+  },
+  "G-0080": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0413",
+    "P-0414"
+   ]
+  },
+  "G-0081": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0430",
+    "P-0431"
+   ]
+  },
+  "G-0082": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0445",
+    "P-0446",
+    "P-0447"
+   ]
+  },
+  "G-0083": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0449",
+    "P-0455",
+    "P-0456",
+    "P-0460",
+    "P-0461"
+   ]
+  },
+  "G-0084": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0451",
+    "P-0452"
+   ]
+  },
+  "G-0085": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0463",
+    "P-0468"
+   ]
+  },
+  "G-0086": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0469",
+    "P-0470"
+   ]
+  },
+  "G-0087": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0485",
+    "P-0489",
+    "P-0490"
+   ]
+  },
+  "G-0088": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0487",
+    "P-0488"
+   ]
+  },
+  "G-0089": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0491",
+    "P-0492",
+    "P-0493"
+   ]
+  },
+  "G-0090": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0494",
+    "P-0496"
+   ]
+  },
+  "G-0091": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0521",
+    "P-0552",
+    "P-0553"
+   ]
+  },
+  "G-0092": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0522",
+    "P-0526"
+   ]
+  },
+  "G-0093": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0538",
+    "P-0539"
+   ]
+  },
+  "G-0094": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0540",
+    "P-0541"
+   ]
+  },
+  "G-0095": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0546",
+    "P-0555",
+    "P-0556",
+    "P-0558"
+   ]
+  },
+  "G-0096": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0547",
+    "P-0548"
+   ]
+  },
+  "G-0097": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0560",
+    "P-0561",
+    "P-0562"
+   ]
+  },
+  "G-0098": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0563",
+    "P-0566"
+   ]
+  },
+  "G-0099": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0568",
+    "P-0569"
+   ]
+  },
+  "G-0100": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0570",
+    "P-0572"
+   ]
+  },
+  "G-0101": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0579",
+    "P-0580",
+    "P-0583"
+   ]
+  },
+  "G-0102": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0581",
+    "P-0585"
+   ]
+  },
+  "G-0103": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0582",
+    "P-0584"
+   ]
+  },
+  "G-0104": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0586",
+    "P-0587"
+   ]
+  },
+  "G-0105": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0589",
+    "P-0590"
+   ]
+  },
+  "G-0106": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0591",
+    "P-0592",
+    "P-0594",
+    "P-0595"
+   ]
+  },
+  "G-0107": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0596",
+    "P-0597"
+   ]
+  },
+  "G-0108": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0599",
+    "P-0600"
+   ]
+  },
+  "G-0109": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0601",
+    "P-0602"
+   ]
+  },
+  "G-0110": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0607",
+    "P-0608"
+   ]
+  },
+  "G-0111": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0610",
+    "P-0611"
+   ]
+  },
+  "G-0112": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0614",
+    "P-0615"
+   ]
+  },
+  "G-0113": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0617",
+    "P-0618",
+    "P-0854"
+   ]
+  },
+  "G-0114": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0631",
+    "P-0632"
+   ]
+  },
+  "G-0115": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0633",
+    "P-0883"
+   ]
+  },
+  "G-0116": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0636",
+    "P-0637"
+   ]
+  },
+  "G-0117": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0640",
+    "P-0641"
+   ]
+  },
+  "G-0118": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0644",
+    "P-0645"
+   ]
+  },
+  "G-0119": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0647",
+    "P-0649"
+   ]
+  },
+  "G-0120": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0651",
+    "P-0652"
+   ]
+  },
+  "G-0121": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0658",
+    "P-0659"
+   ]
+  },
+  "G-0122": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0660",
+    "P-0662"
+   ]
+  },
+  "G-0123": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0661",
+    "P-0663"
+   ]
+  },
+  "G-0124": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0665",
+    "P-0666",
+    "P-0667"
+   ]
+  },
+  "G-0126": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0670",
+    "P-0671"
+   ]
+  },
+  "G-0127": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0672",
+    "P-0675"
+   ]
+  },
+  "G-0128": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0677",
+    "P-0681"
+   ]
+  },
+  "G-0129": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0683",
+    "P-0685"
+   ]
+  },
+  "G-0130": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0691",
+    "P-0693"
+   ]
+  },
+  "G-0131": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0694",
+    "P-0696",
+    "P-0750"
+   ]
+  },
+  "G-0132": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0702",
+    "P-0703"
+   ]
+  },
+  "G-0133": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0704",
+    "P-0705"
+   ]
+  },
+  "G-0134": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0709",
+    "P-0710"
+   ]
+  },
+  "G-0135": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0713",
+    "P-0714",
+    "P-0718"
+   ]
+  },
+  "G-0136": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0722",
+    "P-0725"
+   ]
+  },
+  "G-0137": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0729",
+    "P-0730"
+   ]
+  },
+  "G-0138": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0732",
+    "P-0739"
+   ]
+  },
+  "G-0139": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0733",
+    "P-0734"
+   ]
+  },
+  "G-0140": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0741",
+    "P-0744"
+   ]
+  },
+  "G-0141": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0745",
+    "P-0746",
+    "P-0749"
+   ]
+  },
+  "G-0142": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0757",
+    "P-0758",
+    "P-0759"
+   ]
+  },
+  "G-0143": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0765",
+    "P-0766"
+   ]
+  },
+  "G-0144": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0768",
+    "P-0769"
+   ]
+  },
+  "G-0145": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0771",
+    "P-0772"
+   ]
+  },
+  "G-0146": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0773",
+    "P-0774",
+    "P-0775"
+   ]
+  },
+  "G-0147": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0778",
+    "P-0779"
+   ]
+  },
+  "G-0148": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0780",
+    "P-0781"
+   ]
+  },
+  "G-0149": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0786",
+    "P-0787"
+   ]
+  },
+  "G-0150": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0789",
+    "P-0790",
+    "P-0791"
+   ]
+  },
+  "G-0151": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0796",
+    "P-0798"
+   ]
+  },
+  "G-0152": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0800",
+    "P-0802"
+   ]
+  },
+  "G-0153": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0833",
+    "P-0834"
+   ]
+  },
+  "G-0156": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0858",
+    "P-0859"
+   ]
+  },
+  "G-0157": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0882",
+    "P-0884",
+    "P-0885"
+   ]
+  },
+  "G-0158": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0896",
+    "P-0897",
+    "P-0898",
+    "P-0899"
+   ]
+  },
+  "G-0159": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0904",
+    "P-0905"
+   ]
+  },
+  "G-0160": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0910",
+    "P-0911",
+    "P-0912",
+    "P-0913"
+   ]
+  },
+  "G-0161": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0934",
+    "P-0935"
+   ]
+  },
+  "G-0162": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0939",
+    "P-0945"
+   ]
+  },
+  "G-0163": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0943",
+    "P-0944"
+   ]
+  },
+  "G-0164": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0949",
+    "P-0950"
+   ]
+  },
+  "G-0165": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0951",
+    "P-0952"
+   ]
+  },
+  "G-0166": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0953",
+    "P-0955",
+    "P-0956",
+    "P-0958"
+   ]
+  },
+  "G-0167": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0960",
+    "P-0963",
+    "P-0964"
+   ]
+  },
+  "G-0168": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0962",
+    "P-0965",
+    "P-0966"
+   ]
+  },
+  "G-0169": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0976",
+    "P-0990",
+    "P-0991"
+   ]
+  },
+  "G-0170": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0978",
+    "P-0980",
+    "P-0981"
+   ]
+  },
+  "G-0172": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0982",
+    "P-0984",
+    "P-0996"
+   ]
+  },
+  "G-0173": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0985",
+    "P-0995"
+   ]
+  },
+  "G-0174": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0989",
+    "P-0998"
+   ]
+  },
+  "G-0175": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1003",
+    "P-1012"
+   ]
+  },
+  "G-0176": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1007",
+    "P-1008"
+   ]
+  },
+  "G-0177": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1010",
+    "P-1015"
+   ]
+  },
+  "G-0178": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1028",
+    "P-1030"
+   ]
+  },
+  "G-0180": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1042",
+    "P-1051"
+   ]
+  },
+  "G-0181": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1044",
+    "P-1046"
+   ]
+  },
+  "G-0182": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1045",
+    "P-1049"
+   ]
+  },
+  "G-0183": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1061",
+    "P-1087"
+   ]
+  },
+  "G-0184": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1067",
+    "P-1068",
+    "P-1072"
+   ]
+  },
+  "G-0185": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1078",
+    "P-1079",
+    "P-1080",
+    "P-1081"
+   ]
+  },
+  "G-0186": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1094",
+    "P-1109"
+   ]
+  },
+  "G-0187": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1097",
+    "P-1099"
+   ]
+  },
+  "G-0188": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1098",
+    "P-1106"
+   ]
+  },
+  "G-0189": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1101",
+    "P-1102",
+    "P-1105"
+   ]
+  },
+  "G-0190": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1114",
+    "P-1116"
+   ]
+  },
+  "G-0191": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1115",
+    "P-1118"
+   ]
+  },
+  "G-0192": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1120",
+    "P-1121"
+   ]
+  },
+  "G-0193": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1123",
+    "P-1125"
+   ]
+  },
+  "G-0194": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1126",
+    "P-1127"
+   ]
+  },
+  "G-0195": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1128",
+    "P-1130"
+   ]
+  },
+  "G-0196": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1129",
+    "P-1131"
+   ]
+  },
+  "G-0197": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1132",
+    "P-1133"
+   ]
+  },
+  "G-0198": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1136",
+    "P-1137"
+   ]
+  },
+  "G-0199": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1139",
+    "P-1142",
+    "P-1143"
+   ]
+  },
+  "G-0201": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1159",
+    "P-1160"
+   ]
+  },
+  "G-0202": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0148",
+    "P-0149",
+    "P-0151",
+    "P-0152"
+   ]
+  },
+  "G-0203": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0153",
+    "P-0154",
+    "P-0155",
+    "P-0156",
+    "P-0159"
+   ]
+  },
+  "G-0204": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0163",
+    "P-0164",
+    "P-0165",
+    "P-0166"
+   ]
+  },
+  "G-0205": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0167",
+    "P-0168",
+    "P-0169"
+   ]
+  },
+  "G-0206": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0170",
+    "P-0171",
+    "P-0172",
+    "P-0173"
+   ]
+  },
+  "G-0207": {
+   "parcels": [
+    "P-1064",
+    "P-1065"
+   ]
+  },
+  "G-0208": {
+   "parcels": [
+    "P-1073",
+    "P-1074"
+   ]
+  },
+  "G-0209": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-1148",
+    "P-1149",
+    "P-1152",
+    "P-1153"
+   ]
+  },
+  "G-0210": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0002",
+    "P-0003",
+    "P-0004"
+   ]
+  },
+  "G-0211": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0005",
+    "P-0006",
+    "P-0017"
+   ]
+  },
+  "G-0212": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0013",
+    "P-0014",
+    "P-0018"
+   ]
+  },
+  "G-0213": {
+   "parcels": [
+    "P-0099",
+    "P-0100"
+   ]
+  },
+  "G-0214": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0034",
+    "P-0036",
+    "P-0037",
+    "P-0039",
+    "P-0040",
+    "P-0042"
+   ]
+  },
+  "G-0215": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0038",
+    "P-0041",
+    "P-0043",
+    "P-0044",
+    "P-0045",
+    "P-0046",
+    "P-0047",
+    "P-0048"
+   ]
+  },
+  "G-0216": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0054",
+    "P-0055",
+    "P-0056",
+    "P-0058",
+    "P-0059",
+    "P-0060",
+    "P-0061",
+    "P-0062",
+    "P-0063",
+    "P-0065",
+    "P-0066",
+    "P-0067"
+   ]
+  },
+  "G-0217": {
+   "parcels": [
+    "P-0072",
+    "P-0075"
+   ]
+  },
+  "G-0218": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0077",
+    "P-0078",
+    "P-0079",
+    "P-0832",
+    "P-0836",
+    "P-0837"
+   ]
+  },
+  "G-0219": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0113",
+    "P-0114",
+    "P-0115",
+    "P-0117",
+    "P-0119",
+    "P-0120",
+    "P-0121",
+    "P-0122"
+   ]
+  },
+  "G-0220": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0129",
+    "P-0131",
+    "P-0132",
+    "P-0136",
+    "P-0137"
+   ]
+  },
+  "G-0221": {
+   "parcels": [
+    "P-0087",
+    "P-0094"
+   ]
+  },
+  "G-0222": {
+   "parcels": [
+    "P-0134",
+    "P-0140",
+    "P-0141",
+    "P-1034",
+    "P-1038"
+   ]
+  },
+  "G-0223": {
+   "parcels": [
+    "P-0124",
+    "P-0127",
+    "P-0142"
+   ]
+  },
+  "G-0224": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0125",
+    "P-0126",
+    "P-0128"
+   ]
+  },
+  "G-0225": {
+   "parcels": [
+    "P-0083",
+    "P-0093",
+    "P-0176"
+   ]
+  },
+  "G-0226": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0179",
+    "P-0180",
+    "P-1092"
+   ]
+  },
+  "G-0227": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0856",
+    "P-0866",
+    "P-1093"
+   ]
+  },
+  "G-0228": {
+   "parcels": [
+    "P-0020",
+    "P-0679",
+    "P-0680"
+   ]
+  },
+  "G-0229": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0669",
+    "P-0673",
+    "P-0676"
+   ]
+  },
+  "G-0230": {
+   "parcels": [
+    "P-0143",
+    "P-1043"
+   ]
+  },
+  "G-0231": {
+   "parcels": [
+    "P-0116",
+    "P-1035",
+    "P-1037"
+   ]
+  },
+  "G-0232": {
+   "parcels": [
+    "P-0721",
+    "P-0726"
+   ]
+  },
+  "G-0233": {
+   "parcels": [
+    "P-0720",
+    "P-0724"
+   ]
+  },
+  "G-0234": {
+   "fence": {
+    "mode": "custom"
+   },
+   "parcels": [
+    "P-0979",
+    "P-0987",
+    "P-0988"
+   ]
   }
  },
  "parcels": {
+  "P-0002": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0010": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0018": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0020": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0021": {
+   "fence": {
+    "mode": "none"
+   }
+  },
   "P-0026": {
    "objects": [
     {
@@ -346,10 +2294,103 @@
     "type": "wire"
    }
   },
+  "P-0033": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0038": {
+   "fence": {
+    "mode": "none"
+   }
+  },
   "P-0040": {
+   "fence": {
+    "mode": "none"
+   },
    "trees": {
     "count": 8,
     "seed_offset": 4
+   }
+  },
+  "P-0041": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0042": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0045": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0046": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0047": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0054": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0056": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0060": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0061": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0062": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0063": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0064": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0067": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0072": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0073": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0075": {
+   "fence": {
+    "mode": "none"
    }
   },
   "P-0076": {
@@ -357,12 +2398,75 @@
     "count": 5000
    }
   },
+  "P-0077": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0081": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0083": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0086": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0087": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0091": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0093": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0094": {
+   "fence": {
+    "mode": "none"
+   }
+  },
   "P-0096": {
    "trees": {
     "count": 2000
    }
   },
+  "P-0098": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0099": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0100": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0103": {
+   "fence": {
+    "mode": "none"
+   }
+  },
   "P-0105": {
+   "fence": {
+    "mode": "none"
+   },
    "objects": [
     {
      "asset": "pack:quaternius-stylized-nature-megakit/Plant_1_Big",
@@ -374,6 +2478,101 @@
      "rotation_deg": 0.0
     }
    ]
+  },
+  "P-0106": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0107": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0108": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0112": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0114": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0115": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0116": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0118": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0119": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0121": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0125": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0127": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0129": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0132": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0136": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0140": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0141": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0142": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0145": {
+   "fence": {
+    "mode": "none"
+   }
   },
   "P-0146": {
    "objects": [
@@ -433,7 +2632,375 @@
     }
    ]
   },
+  "P-0150": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0157": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0159": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0165": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0166": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0169": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0170": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0176": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0179": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0184": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0186": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0194": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0198": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0199": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0200": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0201": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0202": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0203": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0205": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0206": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0209": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0210": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0216": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0221": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0222": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0226": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0228": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0229": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0230": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0235": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0237": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0244": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0246": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0249": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0255": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0257": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0266": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0271": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0275": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0276": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0277": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0282": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0288": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0289": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0290": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0292": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0295": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0296": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0297": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0301": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0302": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0303": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0304": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0305": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0306": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0307": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0308": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0309": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0310": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0311": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0319": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0320": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0322": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0323": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0328": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0331": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0336": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0337": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0338": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0342": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0343": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0344": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0346": {
+   "fence": {
+    "mode": "none"
+   }
+  },
   "P-0347": {
+   "fence": {
+    "mode": "none"
+   },
    "objects": [
     {
      "asset": "pack:quaternius-stylized-nature-megakit/Bush_Common_Flowers",
@@ -590,9 +3157,84 @@
     "density_per_1000m2": 28.0
    }
   },
+  "P-0348": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0349": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0351": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0352": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0353": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0354": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0355": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0358": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0361": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0370": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0372": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0373": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0374": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0375": {
+   "fence": {
+    "mode": "none"
+   }
+  },
   "P-0376": {
    "trees": {
     "count": 2000
+   }
+  },
+  "P-0377": {
+   "fence": {
+    "mode": "none"
    }
   },
   "P-0378": {
@@ -600,7 +3242,25 @@
     "count": 2000
    }
   },
+  "P-0379": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0381": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0382": {
+   "fence": {
+    "mode": "none"
+   }
+  },
   "P-0383": {
+   "fence": {
+    "mode": "none"
+   },
    "objects": [
     {
      "asset": "prim:wall",
@@ -616,11 +3276,269 @@
     "count": 8
    }
   },
+  "P-0384": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0385": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0386": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0387": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0388": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0389": {
+   "fence": {
+    "mode": "none"
+   }
+  },
   "P-0390": {
    "fence": {
-    "colour": "#0a49dd",
-    "mode": "custom",
-    "type": "wire"
+    "mode": "none"
+   }
+  },
+  "P-0391": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0392": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0393": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0394": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0395": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0396": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0397": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0398": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0405": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0408": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0410": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0412": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0415": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0420": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0426": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0427": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0429": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0432": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0433": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0434": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0435": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0437": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0439": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0441": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0448": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0453": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0454": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0457": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0458": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0459": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0462": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0464": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0471": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0472": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0477": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0478": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0479": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0480": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0484": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0486": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0495": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0497": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0498": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0499": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0507": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0508": {
+   "fence": {
+    "mode": "none"
    }
   },
   "P-0509": {
@@ -629,6 +3547,9 @@
    }
   },
   "P-0510": {
+   "fence": {
+    "mode": "none"
+   },
    "objects": [
     {
      "asset": "prim:radio_tower",
@@ -641,7 +3562,650 @@
     }
    ]
   },
+  "P-0517": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0520": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0528": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0529": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0530": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0532": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0533": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0544": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0545": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0549": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0550": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0551": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0554": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0557": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0559": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0565": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0571": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0573": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0574": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0588": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0593": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0598": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0603": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0604": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0605": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0606": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0609": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0612": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0613": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0616": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0620": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0622": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0624": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0625": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0626": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0627": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0629": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0630": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0634": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0635": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0638": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0639": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0642": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0646": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0650": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0653": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0654": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0655": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0656": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0657": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0664": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0673": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0674": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0678": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0679": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0680": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0682": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0684": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0686": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0688": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0692": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0695": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0697": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0698": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0699": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0701": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0707": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0708": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0711": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0715": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0716": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0717": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0719": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0720": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0721": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0724": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0726": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0727": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0728": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0731": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0735": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0736": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0737": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0738": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0740": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0742": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0748": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0751": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0752": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0753": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0760": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0761": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0762": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0763": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0764": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0767": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0776": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0777": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0782": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0783": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0784": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0785": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0788": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0792": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0793": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0794": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0795": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0797": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0799": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0801": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0804": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0806": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0807": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0808": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0809": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0810": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0811": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0812": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0813": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0814": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0816": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0817": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0818": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0819": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0820": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0823": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0824": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0825": {
+   "fence": {
+    "mode": "none"
+   }
+  },
   "P-0829": {
+   "fence": {
+    "mode": "none"
+   },
    "objects": [
     {
      "asset": "prim:bunker",
@@ -657,6 +4221,131 @@
   "P-0831": {
    "trees": {
     "count": 2000
+   }
+  },
+  "P-0832": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0838": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0839": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0840": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0841": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0842": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0843": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0844": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0849": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0851": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0852": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0857": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0862": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0863": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0865": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0869": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0870": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0871": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0876": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0879": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0880": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0881": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0886": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0887": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0888": {
+   "fence": {
+    "mode": "none"
    }
   },
   "P-0891": {
@@ -726,6 +4415,171 @@
     }
    ]
   },
+  "P-0900": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0906": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0907": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0909": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0914": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0915": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0916": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0918": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0919": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0921": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0924": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0925": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0926": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0927": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0928": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0929": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0930": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0932": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0933": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0936": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0937": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0938": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0940": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0942": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0946": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0947": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0948": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0954": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0957": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0959": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0961": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0967": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0968": {
+   "fence": {
+    "mode": "none"
+   }
+  },
   "P-0969": {
    "objects": [
     {
@@ -747,6 +4601,236 @@
      "rotation_deg": 0.0
     }
    ]
+  },
+  "P-0970": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0971": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0972": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0973": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0975": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0977": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0983": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0986": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0988": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0992": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0993": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0994": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0997": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-0999": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1000": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1001": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1002": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1004": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1005": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1006": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1011": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1013": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1014": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1029": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1032": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1033": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1035": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1036": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1037": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1039": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1040": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1043": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1047": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1050": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1052": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1054": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1055": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1059": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1062": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1063": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1065": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1066": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1069": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1070": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1071": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1074": {
+   "fence": {
+    "mode": "none"
+   }
   },
   "P-1082": {
    "fence": {
@@ -856,6 +4940,206 @@
    ],
    "trees": {
     "count": 0
+   }
+  },
+  "P-1083": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1084": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1085": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1086": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1088": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1091": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1093": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1095": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1096": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1100": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1103": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1104": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1107": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1108": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1110": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1111": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1112": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1113": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1117": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1119": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1122": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1124": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1134": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1135": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1138": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1140": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1141": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1144": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1145": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1146": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1147": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1150": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1151": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1153": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1155": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1156": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1157": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1158": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1161": {
+   "fence": {
+    "mode": "none"
+   }
+  },
+  "P-1162": {
+   "fence": {
+    "mode": "none"
    }
   }
  },
