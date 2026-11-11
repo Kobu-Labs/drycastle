@@ -82,6 +82,7 @@ public sealed partial class MapLoader
         TreesJson = File.Exists(trees) ? File.ReadAllText(trees) : ""; // map 0.6.0+
         yield return 0.03f;
 
+        var tPhase = Time.GetTicksMsec();
         var chunks = manifest.RootElement.GetProperty("chunks");
         var total = Math.Max(1, chunks.GetArrayLength());
         var done = 0;
@@ -93,14 +94,18 @@ public sealed partial class MapLoader
             LoadChunk(file, new Vector2I(ix, iy));
             yield return 0.03f + 0.82f * ++done / total;
         }
-        BuildTreeColliders(); // after the chunks, so each tree's bodies go under its chunk
-        yield return 0.90f;
+        var tChunks = Time.GetTicksMsec();
+        // after the chunks, so each tree's bodies go under its chunk
+        foreach (var f in BuildTreeColliderSteps()) yield return 0.85f + 0.07f * f;
+        var tTrees = Time.GetTicksMsec();
         if (manifest.RootElement.TryGetProperty("files", out var files)
             && files.TryGetProperty("objects", out var objFile) && objFile.GetString() is { } of)
-            LoadObjects(Path.Combine(mapDir, of));
+            foreach (var f in LoadObjectSteps(Path.Combine(mapDir, of))) yield return 0.92f + 0.05f * f;
+        var tObjects = Time.GetTicksMsec();
         yield return 0.97f;
         if (BuildBoundary) BuildTerrainBoundary();
         Stats.LoadSeconds = (Time.GetTicksMsec() - t0) / 1000.0;
+        GD.Print($"map load phases: chunks {(tChunks - tPhase) / 1000.0:F1}s, trees {(tTrees - tChunks) / 1000.0:F1}s, objects {(tObjects - tTrees) / 1000.0:F1}s, boundary {(Time.GetTicksMsec() - tObjects) / 1000.0:F1}s");
         yield return 1f;
     }
 

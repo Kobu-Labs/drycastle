@@ -179,6 +179,12 @@ public partial class LoadingScreen : MenuScreen
         return v;
     }
 
+    /// <summary>A frame this slow means a loading step blocked the main thread (the spinner stops): the log names the stage so it can be split up.</summary>
+    public override void _Process(double delta)
+    {
+        if (delta > 0.25 && _stage != null) GD.Print($"loading hitch: {delta:F2}s frame during \"{_stage.Text}\"");
+    }
+
     protected override Control? FirstFocusTarget() => null;
     /// <summary>Loading cannot be cancelled while a step blocks the main thread, so Esc is deliberately inert here.</summary>
     public override void Back() { }

@@ -134,16 +134,21 @@ public sealed partial class MapLoader
         return list;
     }
 
-    void LoadObjects(string path)
+    void LoadObjects(string path) { foreach (var _ in LoadObjectSteps(path)) { } }
+
+    /// <summary>Places the baked objects, yielding the fraction done after each one (each may load a model file).</summary>
+    IEnumerable<float> LoadObjectSteps(string path)
     {
         List<PlacedObject> list;
         using (var doc = JsonDocument.Parse(File.ReadAllText(path)))
             list = ParseObjects(doc.RootElement.GetProperty("objects"));
+        var n = 0;
         foreach (var o in list)
         {
             if (!_bakedObjects.TryGetValue(o.Group, out var l)) _bakedObjects[o.Group] = l = new();
             l.Add(o);
             AddObject(o);
+            yield return (float)++n / list.Count;
         }
     }
 

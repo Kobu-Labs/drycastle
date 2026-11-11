@@ -26,25 +26,40 @@ public sealed partial class MapLoader
     static GVector3 ToGodot(float x, float y, float z) => new(x, z, -y);
 
     /// <summary>Builds the trunk and crown bodies of every tree, per chunk (or on the root for a tree outside any loaded chunk).</summary>
-    void BuildTreeColliders()
+    void BuildTreeColliders() { foreach (var _ in BuildTreeColliderSteps()) { } }
+
+    /// <summary>Tree colliders in batches (thousands of shapes): yields the fraction done after each batch so a loading screen can redraw.</summary>
+    IEnumerable<float> BuildTreeColliderSteps()
     {
+        const int Batch = 300;
         _trees.Clear();
         _trees.AddRange(TreeColliders.Parse(TreesJson, out var model));
         TreeModel = model;
         var bodies = new Dictionary<(int, int, PartRole), StaticBody3D>();
+        var n = 0;
         foreach (var t in _trees)
+        {
+            if (n++ % Batch == Batch - 1) yield return 0.5f * n / _trees.Count;
             foreach (var part in TreeColliders.Parts(t, model))
             {
                 var key = (t.ChunkX, t.ChunkY, part.Role);
                 if (!bodies.TryGetValue(key, out var body))
                 {
                     body = NewSolidBody(part.Role == PartRole.Trunk ? "TreeTrunks" : "TreeCrowns", part.Layer, part.Group);
-                    var parent = _chunkRoots.TryGetValue($"chunk_{t.ChunkX}_{t.ChunkY}", out var cr) ? cr : Root;
-                    parent.AddChild(body);
                     bodies[key] = body;
                 }
                 body.AddChild(SolidShape(part));
             }
+        }
+        // Bodies are filled while detached and attached once each: adding a shape to a body that is already in the tree
+        // makes the physics server update it per shape (about 16 s for the village's 12,000 trees).
+        var attached = 0;
+        foreach (var ((cx, cy, _), body) in bodies)
+        {
+            var parent = _chunkRoots.TryGetValue($"chunk_{cx}_{cy}", out var cr) ? cr : Root;
+            parent.AddChild(body);
+            yield return 0.5f + 0.5f * ++attached / bodies.Count;
+        }
     }
 
     /// <summary>The collision of the placed objects of one asset, as children of the object's node (scaled with it).</summary>
