@@ -72,7 +72,7 @@ public partial class NetClient
         if (w.Kind == WeaponKind.Hitscan && _me != null)
         {
             // same offset step as the server's shot; the viewmodel kicks by the same (ADS / crouch scaled) climb
-            var mult = RecoilState.Multiplier(w.Recoil, mi.Has(MoveButtons.Aim), _me.State.Crouching);
+            var mult = RecoilState.Multiplier(w.Recoil, mi.Has(MoveButtons.Aim), _me.State.Stance);
             _recoil.Shot(w.Recoil, mult);
             _viewmodel?.Kick(w.Recoil.VerticalPerShot * mult);
         }

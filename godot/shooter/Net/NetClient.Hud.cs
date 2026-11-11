@@ -15,7 +15,7 @@ public partial class NetClient
     void HudWelcome()
     {
         if (!ShotFx.Enabled || _hud != null) return; // headless runs have no HUD
-        _hud = new Hud { MyId = _myId, Scoped = () => _me is { ZoomFov: > 0 }, Aim = () => _viewmodel?.AimAmount ?? 0f, Spread = () => CurrentWeapon is { } w ? _spread.Degrees(w, Now) : 0f };
+        _hud = new Hud { MyId = _myId, Scoped = () => _me is { ZoomFov: > 0 }, Aim = () => _viewmodel?.AimAmount ?? 0f, Spread = () => CurrentWeapon is { } w ? HitMath.StanceSpread(_spread.Degrees(w, Now), w, _me?.State.Stance ?? Stance.Stand) : 0f, StanceOf = () => _me?.State.Stance ?? Stance.Stand };
         AddChild(_hud);
         if (Weapons != null) _hud.SetWeapons(Weapons.Weapons.Select(w => WeaponName(w.Id)).ToList());
     }

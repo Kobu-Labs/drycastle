@@ -11,6 +11,7 @@ public static class Strings
     static readonly (string Key, string Text)[] Table =
     {
         ("hud.health", "HEALTH"), ("hud.low", "LOW"),
+        ("hud.stance.stand", "Standing"), ("hud.stance.crouch", "Crouched"), ("hud.stance.prone", "Prone"),
         ("hud.reloading", "RELOADING"), ("hud.ammo.reserve", "/ {0}"), ("hud.ammo.none", "-"),
         ("hud.timer.waiting", "--:--"), ("hud.phase.waiting", "Waiting for players"), ("hud.phase.ending", "Round over"),
         ("hud.score.leading", "You lead: {0}"), ("hud.score.behind", "You {0}   Leader {1}: {2}"),
@@ -72,7 +73,7 @@ public static class Strings
         ("controls.swapped", "{0} was used by {1}. They swapped: {1} is now {2}."),
         ("bind.mouse", "Mouse {0}"),
         ("bind.move_forward", "Move forward"), ("bind.move_back", "Move back"), ("bind.move_left", "Move left"), ("bind.move_right", "Move right"),
-        ("bind.jump", "Jump"), ("bind.sprint", "Sprint"), ("bind.crouch", "Crouch"), ("bind.fire", "Fire"), ("bind.reload", "Reload"),
+        ("bind.jump", "Jump"), ("bind.sprint", "Sprint"), ("bind.crouch", "Crouch"), ("bind.prone", "Prone"),("bind.fire", "Fire"), ("bind.reload", "Reload"),
         ("bind.interact", "Interact"), ("bind.scoreboard", "Scoreboard (hold)"),
         ("bind.slot_1", "Weapon slot 1"), ("bind.slot_2", "Weapon slot 2"), ("bind.slot_3", "Weapon slot 3"), ("bind.slot_4", "Weapon slot 4"), ("bind.slot_5", "Weapon slot 5"), ("bind.zoom", "Scope zoom"),
         ("toast.info", "Info:"), ("toast.warn", "Notice:"), ("toast.error", "Problem:"),

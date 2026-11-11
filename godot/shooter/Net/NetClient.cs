@@ -13,7 +13,7 @@ namespace Suchohrad.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
+    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Stance Stance; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -292,7 +292,7 @@ public partial class NetClient : Node
             if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
             if (rec.Type != EntityType.Player) continue;
             if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id); _remotes[id] = r; }
-            r.State = rec.State; r.Slot = rec.Weapon;
+            r.State = rec.State; r.Stance = rec.Stance; r.Slot = rec.Weapon;
             r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
         }
@@ -446,6 +446,7 @@ public partial class NetClient : Node
                 r.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 r.Node.Rotation = new Vector3(0, s.Yaw, 0);
                 r.Node.Visible = r.State != EntityState.InVehicle;
+                r.View?.SetStance(r.Stance);
                 AnimateRemote(r, s.Pos);
             }
     }

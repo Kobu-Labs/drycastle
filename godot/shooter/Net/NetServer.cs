@@ -468,7 +468,7 @@ public partial class NetServer : Node
 
     List<HitTarget> LiveTargets() =>
         _byId.Values.Where(o => _match.Get(o.Id)?.Life == PlayerLife.Alive)
-            .Select(o => new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Crouching, o.Body.Yaw)).ToList();
+            .Select(o => new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw)).ToList();
 
     /// <summary>Distance from <paramref name="from"/> along <paramref name="dir"/> to the first world collider (player bodies excluded), or infinity.</summary>
     float WorldDistance(Vector3 from, Vector3 dir, float max) => WorldHit(from, dir, max, out _);
@@ -495,15 +495,15 @@ public partial class NetServer : Node
     {
         var w = shot.Weapon;
         var feet = c.Body.GlobalPosition;
-        var eye = feet + Vector3.Up * MovementStep.EyeHeight(c.Body.State.Crouching);
+        var eye = feet + Vector3.Up * MovementStep.EyeHeight(c.Body.State.Stance);
         var yaw = Quant.Yaw(i.Yaw); var pitch = Quant.Pitch(i.Pitch);
         var targets = LiveTargets();
         _shotsFired++;
         if (w.Kind == WeaponKind.Hitscan && w.Pellets > 1) FirePellets(c, eye, yaw, pitch, w, (byte)shot.WeaponIndex);
         else if (w.Kind == WeaponKind.Hitscan)
         {
-            var kick = c.Recoil.Shot(w.Recoil, RecoilState.Multiplier(w.Recoil, (i.Buttons & (ushort)MoveButtons.Aim) != 0, c.Body.State.Crouching));
-            var d = HitMath.SpreadDirection(yaw + kick.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad), shot.SpreadDegrees, _rng);
+            var kick = c.Recoil.Shot(w.Recoil, RecoilState.Multiplier(w.Recoil, (i.Buttons & (ushort)MoveButtons.Aim) != 0, c.Body.State.Stance));
+            var d = HitMath.SpreadDirection(yaw + kick.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad), HitMath.StanceSpread(shot.SpreadDegrees, w, c.Body.State.Stance), _rng);
             var dir = new Vector3(d.X, d.Y, d.Z);
             var range = w.Range > 0 ? w.Range : MaxShotRange;
             var wall = WorldHit(eye, dir, range, out var shotCar);
@@ -600,7 +600,7 @@ public partial class NetServer : Node
         foreach (var t in LiveTargets())
         {
             var isDirect = direct == t.Id;
-            var dist = ProjectileMath.DistanceToCapsule(N(pos), t.Feet, HitMath.Height(t.Crouching), MoveConsts.CapsuleRadius);
+            var dist = ProjectileMath.DistanceToCapsule(N(pos), t.Feet, HitMath.Height(t.Stance), MoveConsts.CapsuleRadius);
             var self = t.Id == r.Owner;
             var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, self);
             if (dmg <= 0) continue;
@@ -610,7 +610,7 @@ public partial class NetServer : Node
             if (isDirect) _directHits++; else if (self) _selfHits++; else _splashHits++;
             if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v))
             {
-                var center = t.Feet + new NVec3(0, HitMath.Height(t.Crouching) / 2, 0);
+                var center = t.Feet + new NVec3(0, HitMath.Height(t.Stance) / 2, 0);
                 var k = ProjectileMath.Knockback(w, N(pos), center, isDirect ? 1f : ProjectileMath.SplashFraction(w, dist));
                 if (k != NVec3.Zero) { v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z)); _knocked++; }
             }
@@ -623,7 +623,7 @@ public partial class NetServer : Node
         foreach (var c in _clients.Values)
             if (c.Joined)
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
-                    c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot));
+                    c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot, c.Body.State.Stance));
         foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed));
         foreach (var r in _rockets)
             ents.Add(EntityRecord.Make(r.Id, EntityType.Projectile, N(r.Pos),

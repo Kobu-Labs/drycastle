@@ -54,7 +54,7 @@ public sealed class SnapshotEncoder
                     else { flags |= Wire.FPosAbs; WritePosAbs(buf, ref o, q); }
                 }
                 if (q.Yaw != r.Yaw || q.Pitch != r.Pitch) { flags |= Wire.FRot; WriteRot(buf, ref o, q); }
-                if (q.Health != r.Health || q.State != r.State || q.Weapon != r.Weapon) { flags |= Wire.FStatus; WriteStatus(buf, ref o, q); }
+                if (q.Health != r.Health || q.State != r.State || q.Stance != r.Stance || q.Weapon != r.Weapon) { flags |= Wire.FStatus; WriteStatus(buf, ref o, q); }
                 if (flags == 0) { o = o0; continue; }
                 b.Rec = q;
                 DeltaEntries++;
@@ -80,7 +80,7 @@ public sealed class SnapshotEncoder
     static void W32(byte[] b, ref int o, int v) { BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(o), v); o += 4; }
     static void WritePosAbs(byte[] b, ref int o, in EntityRecord q) { W32(b, ref o, q.X); W32(b, ref o, q.Y); W32(b, ref o, q.Z); }
     static void WriteRot(byte[] b, ref int o, in EntityRecord q) { W16(b, ref o, (short)q.Yaw); W16(b, ref o, q.Pitch); }
-    static void WriteStatus(byte[] b, ref int o, in EntityRecord q) { b[o++] = q.Health; b[o++] = (byte)q.State; b[o++] = q.Weapon; }
+    static void WriteStatus(byte[] b, ref int o, in EntityRecord q) { b[o++] = q.Health; b[o++] = (byte)((byte)q.State | ((byte)q.Stance << 4)); b[o++] = q.Weapon; }
 }
 
 public readonly record struct SnapshotHeader(uint Tick, ushort Ack);
@@ -142,7 +142,7 @@ public sealed class SnapshotDecoder
             if ((flags & Wire.FStatus) != 0)
             {
                 if (o + 3 > d.Length) return false;
-                r.Health = d[o]; r.State = (EntityState)d[o + 1]; r.Weapon = d[o + 2];
+                r.Health = d[o]; r.State = (EntityState)(d[o + 1] & 0x0F); r.Stance = (Stance)(d[o + 1] >> 4); r.Weapon = d[o + 2];
                 o += 3;
             }
             staged.Add((r, known, (byte)flags));

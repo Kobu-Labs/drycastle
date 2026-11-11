@@ -141,6 +141,7 @@ public class WeaponsFile
             SpreadPerShot = Pick(r.SpreadPerShot, c.SpreadPerShot, 0),
             SpreadMax = Pick(r.SpreadMax, c.SpreadMax, 0),
             SpreadRecovery = Pick(r.SpreadRecovery, c.SpreadRecovery, 0),
+            ProneSpreadMultiplier = Pick(r.ProneSpreadMultiplier, c.ProneSpreadMultiplier, 1),
             Recoil = MergeRecoil(r.Recoil, c.Recoil),
             Range = r.Range ?? 0,
             // scope_fov is the v2 name; zoom_fov (v1) is still read so existing files keep working.
@@ -168,6 +169,7 @@ public class WeaponsFile
         MaxClimb = Pick(own?.MaxClimb, category?.MaxClimb, 0),
         AdsMultiplier = Pick(own?.AdsMultiplier, category?.AdsMultiplier, 1),
         CrouchMultiplier = Pick(own?.CrouchMultiplier, category?.CrouchMultiplier, 1),
+        ProneMultiplier = Pick(own?.ProneMultiplier, category?.ProneMultiplier, 1),
         Pattern = own?.Pattern ?? category?.Pattern ?? new(),
     };
 
@@ -180,6 +182,7 @@ public class WeaponsFile
         NonNegative(t.SpreadPerShot, where, "spread_per_shot");
         NonNegative(t.SpreadMax, where, "spread_max");
         NonNegative(t.SpreadRecovery, where, "spread_recovery");
+        NonNegative(t.ProneSpreadMultiplier, where, "prone_spread_multiplier");
         if (t.Recoil is not { } rc) return;
         NonNegative(rc.VerticalPerShot, where, "recoil.vertical_per_shot");
         NonNegative(rc.HorizontalSway, where, "recoil.horizontal_sway");
@@ -187,6 +190,7 @@ public class WeaponsFile
         NonNegative(rc.MaxClimb, where, "recoil.max_climb");
         NonNegative(rc.AdsMultiplier, where, "recoil.ads_multiplier");
         NonNegative(rc.CrouchMultiplier, where, "recoil.crouch_multiplier");
+        NonNegative(rc.ProneMultiplier, where, "recoil.prone_multiplier");
         if (rc.Pattern?.Any(v => !float.IsFinite(v)) == true) throw Invalid(where, "recoil.pattern", "must contain only finite numbers");
     }
 
@@ -245,6 +249,7 @@ public class WeaponsFile
         public float? SpreadPerShot { get; set; }
         public float? SpreadMax { get; set; }
         public float? SpreadRecovery { get; set; }
+        public float? ProneSpreadMultiplier { get; set; }
         public RecoilRaw? Recoil { get; set; }
     }
 
@@ -294,6 +299,7 @@ public class WeaponsFile
         public float? MaxClimb { get; set; }
         public float? AdsMultiplier { get; set; }
         public float? CrouchMultiplier { get; set; }
+        public float? ProneMultiplier { get; set; }
         public List<float>? Pattern { get; set; }
     }
 }
@@ -334,6 +340,8 @@ public class WeaponDef
     public float SpreadPerShot { get; set; }
     public float SpreadMax { get; set; }
     public float SpreadRecovery { get; set; }
+    /// <summary>Spread multiplier while prone (1 = none; below 1 steadies the aim, snipers lowest).</summary>
+    public float ProneSpreadMultiplier { get; set; } = 1;
 
     /// <summary>Data-only recoil model (v2). Zero for weapons that do not set it; the runtime that applies it comes with the category work.</summary>
     public RecoilDef Recoil { get; set; } = new();
@@ -386,6 +394,8 @@ public class RecoilDef
     public float AdsMultiplier { get; set; } = 1;
     /// <summary>Kick multiplier while crouching.</summary>
     public float CrouchMultiplier { get; set; } = 1;
+    /// <summary>Kick multiplier while prone (lying steadies the weapon; snipers lower).</summary>
+    public float ProneMultiplier { get; set; } = 1;
 }
 
 public class SplashDef

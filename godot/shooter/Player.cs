@@ -52,7 +52,7 @@ public partial class Player : CharacterBody3D
         if (!AutoSim) SetPhysicsProcess(false);
         FloorSnapLength = 0.3f;
         FloorMaxAngle = Mathf.DegToRad(50);
-        SetCrouchShape(false);
+        SetStanceShape(Stance.Stand);
         if (CaptureMouse && !_headless && SelfManageMouse) Input.MouseMode = Input.MouseModeEnum.Captured;
         ApplyFov();
         GameSettings.Changed += ApplyFov;
@@ -114,7 +114,7 @@ public partial class Player : CharacterBody3D
         _chase = false;
         _yaw = yaw; _pitch = 0;
         _camera.Rotation = new Vector3(0, _yaw, 0);
-        SetCrouchShape(_state.Crouching);
+        SetStanceShape(_state.Stance);
     }
 
     public void Respawn()
@@ -150,7 +150,7 @@ public partial class Player : CharacterBody3D
         _state = s;
         GlobalPosition = ToG(s.Position);
         Velocity = ToG(s.Velocity);
-        SetCrouchShape(s.Crouching);
+        SetStanceShape(s.Stance);
     }
 
     MoveInput ReadInput()
@@ -160,6 +160,7 @@ public partial class Player : CharacterBody3D
         if (Input.IsActionPressed("jump")) b |= MoveButtons.Jump;
         if (Input.IsActionPressed("sprint")) b |= MoveButtons.Sprint;
         if (Input.IsActionPressed("crouch")) b |= MoveButtons.Crouch;
+        if (Input.IsActionPressed("prone")) b |= MoveButtons.Prone;
         if (Input.IsActionPressed("fire")) b |= MoveButtons.Fire;
         if (Input.IsActionPressed("zoom")) b |= MoveButtons.Aim;
         if (Input.IsActionPressed("reload")) b |= MoveButtons.Reload;
@@ -186,9 +187,10 @@ public partial class Player : CharacterBody3D
     /// <summary>One movement tick: the shared step, the physics move and (when authoritative) fall damage and respawn.</summary>
     public void Simulate(in MoveInput input, float dt)
     {
-        _state.HeadBlocked = _state.Crouching && HeadBlockedCheck();
+        _state.HeadBlocked = _state.Stance != Stance.Stand && HeadBlockedCheck(_state.Stance);
+        _state.FloorTooSteep = IsOnFloor() && GetFloorNormal().Y < Mathf.Cos(Mathf.DegToRad(MoveConsts.ProneMaxSlopeDegrees));
         MovementStep.Step(ref _state, input, dt);
-        SetCrouchShape(_state.Crouching);
+        SetStanceShape(_state.Stance);
 
         Velocity = ToG(_state.Velocity);
         MoveAndSlide();
@@ -201,19 +203,19 @@ public partial class Player : CharacterBody3D
         if (Authoritative && (Health <= 0 || GlobalPosition.Y < KillY)) Respawn();
     }
 
-    bool HeadBlockedCheck()
+    bool HeadBlockedCheck(Stance current)
     {
-        // would the standing capsule collide if we stood up?
-        var up = MoveConsts.CapsuleHeight - MoveConsts.CrouchHeight;
+        // would the capsule one stance up collide? (the body rises by the height difference)
+        var up = MovementStep.CapsuleHeight((Stance)((int)current - 1)) - MovementStep.CapsuleHeight(current);
         return TestMove(GlobalTransform, Vector3.Up * (up + 0.02f));
     }
 
-    void SetCrouchShape(bool crouching)
+    void SetStanceShape(Stance stance)
     {
-        var h = MovementStep.CapsuleHeight(crouching);
+        var h = MovementStep.CapsuleHeight(stance);
         _capsule.Height = h;
         _shape.Position = new Vector3(0, h / 2, 0);
-        _camera.Position = new Vector3(0, MovementStep.EyeHeight(crouching), 0);
+        _camera.Position = new Vector3(0, MovementStep.EyeHeight(stance), 0);
     }
 
     static NVec3 ToN(Vector3 v) => new(v.X, v.Y, v.Z);

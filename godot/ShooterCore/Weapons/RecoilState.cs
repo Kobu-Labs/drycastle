@@ -69,9 +69,14 @@ public sealed class RecoilState
         return fired;
     }
 
-    /// <summary>Recoil multiplier for the shooter's stance: ADS and crouch each scale the kick by their data value (1 = no change).</summary>
-    public static float Multiplier(RecoilDef recoil, bool aiming, bool crouching) =>
-        (aiming ? recoil.AdsMultiplier : 1f) * (crouching ? recoil.CrouchMultiplier : 1f);
+    /// <summary>Recoil multiplier for the shooter's stance: ADS scales the kick, crouch and prone each by their data value (1 = no change).</summary>
+    public static float Multiplier(RecoilDef recoil, bool aiming, Stance stance) =>
+        (aiming ? recoil.AdsMultiplier : 1f) * stance switch
+        {
+            Stance.Crouch => recoil.CrouchMultiplier,
+            Stance.Prone => recoil.ProneMultiplier,
+            _ => 1f,
+        };
 
     /// <summary>The final aim pitch (mouse plus offset) limited to the look range.</summary>
     public static float ClampPitch(float rad) => Math.Clamp(rad, -MaxPitchRad, MaxPitchRad);

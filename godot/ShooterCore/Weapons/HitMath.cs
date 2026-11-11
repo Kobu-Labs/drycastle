@@ -2,8 +2,8 @@ using System.Numerics;
 
 namespace Suchohrad.ShooterCore;
 
-/// <summary>A player as a hit target: feet position, crouch state and the yaw they face.</summary>
-public readonly record struct HitTarget(ushort Id, Vector3 Feet, bool Crouching, float Yaw);
+/// <summary>A player as a hit target: feet position, stance (sets the capsule height) and the yaw they face.</summary>
+public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw);
 
 public readonly record struct RayHit(ushort Id, float Distance, bool Head);
 public readonly record struct MeleeHit(ushort Id, bool Backstab, float Distance);
@@ -18,10 +18,13 @@ public static class HitMath
     public const float MeleeHalfAngleDegrees = 60f;
     public const float MeleeVerticalReach = 1.6f;
 
-    public static float Height(bool crouching) => MovementStep.CapsuleHeight(crouching);
+    public static float Height(Stance stance) => MovementStep.CapsuleHeight(stance);
+
+    /// <summary>Spread in degrees for a stance: prone scales it by the weapon's prone spread multiplier, other stances leave it alone.</summary>
+    public static float StanceSpread(float degrees, WeaponDef w, Stance stance) => stance == Stance.Prone ? degrees * w.ProneSpreadMultiplier : degrees;
 
     /// <summary>Head hit sphere centre: the top of the body capsule minus the head radius.</summary>
-    public static Vector3 HeadCenter(in HitTarget t) => t.Feet + new Vector3(0, Height(t.Crouching) - HeadRadius, 0);
+    public static Vector3 HeadCenter(in HitTarget t) => t.Feet + new Vector3(0, Height(t.Stance) - HeadRadius, 0);
 
     /// <summary>Unit view direction for Godot yaw (0 faces -Z, positive turns left) and pitch (positive looks up).</summary>
     public static Vector3 Forward(float yaw, float pitch)
@@ -129,7 +132,7 @@ public static class HitMath
         foreach (var t in targets)
         {
             if (t.Id == shooter) continue;
-            if (RayCapsule(origin, dir, t.Feet, Height(t.Crouching), MoveConsts.CapsuleRadius) is not { } d || d > limit) continue;
+            if (RayCapsule(origin, dir, t.Feet, Height(t.Stance), MoveConsts.CapsuleRadius) is not { } d || d > limit) continue;
             if (best is { } b && b.Distance <= d) continue;
             var head = RaySphere(origin, dir, HeadCenter(t), HeadRadius) is not null;
             best = new RayHit(t.Id, d, head);

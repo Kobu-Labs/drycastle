@@ -2,14 +2,14 @@
   "version": 2,
   "starting_weapon": "pistol",
   "category_defaults": {
-    "pistol": { "move_speed_multiplier": 1.0, "spread_base": 0.4, "spread_per_shot": 0.3, "spread_max": 4, "spread_recovery": 0.4 },
-    "machine_gun": { "move_speed_multiplier": 0.7, "ads_move_speed_multiplier": 0.55, "spread_base": 1.4, "spread_per_shot": 0.12, "spread_max": 4.5, "spread_recovery": 0.5, "recoil": { "vertical_per_shot": 0.5, "horizontal_sway": 0.3, "recovery_rate": 4, "max_climb": 15 } },
-    "assault_rifle": { "move_speed_multiplier": 0.95, "spread_base": 1.0, "spread_per_shot": 0.25, "spread_max": 4, "spread_recovery": 0.6, "recoil": { "vertical_per_shot": 0.6, "horizontal_sway": 0.25, "recovery_rate": 6, "max_climb": 10 } },
-    "smg": { "move_speed_multiplier": 1.05, "ads_move_speed_multiplier": 1.0, "spread_base": 0.8, "spread_per_shot": 0.45, "spread_max": 5, "spread_recovery": 0.4,
-      "recoil": { "vertical_per_shot": 0.5, "horizontal_sway": 0.4, "recovery_rate": 3.5, "max_climb": 6 } },
-    "shotgun": { "move_speed_multiplier": 0.95, "ads_move_speed_multiplier": 0.9,
-      "recoil": { "vertical_per_shot": 3, "horizontal_sway": 1, "recovery_rate": 6, "max_climb": 12 } },
-    "sniper": { "move_speed_multiplier": 0.8, "spread_base": 0.02, "spread_per_shot": 0, "spread_max": 0.02, "spread_recovery": 0.5 }
+    "pistol": { "move_speed_multiplier": 1.0, "spread_base": 0.4, "spread_per_shot": 0.3, "spread_max": 4, "spread_recovery": 0.4, "prone_spread_multiplier": 0.7 },
+    "machine_gun": { "move_speed_multiplier": 0.7, "ads_move_speed_multiplier": 0.55, "spread_base": 1.4, "spread_per_shot": 0.12, "spread_max": 4.5, "spread_recovery": 0.5, "prone_spread_multiplier": 0.7, "recoil": { "vertical_per_shot": 0.5, "horizontal_sway": 0.3, "recovery_rate": 4, "max_climb": 15, "prone_multiplier": 0.6 } },
+    "assault_rifle": { "move_speed_multiplier": 0.95, "spread_base": 1.0, "spread_per_shot": 0.25, "spread_max": 4, "spread_recovery": 0.6, "prone_spread_multiplier": 0.7, "recoil": { "vertical_per_shot": 0.6, "horizontal_sway": 0.25, "recovery_rate": 6, "max_climb": 10, "prone_multiplier": 0.6 } },
+    "smg": { "move_speed_multiplier": 1.05, "ads_move_speed_multiplier": 1.0, "spread_base": 0.8, "spread_per_shot": 0.45, "spread_max": 5, "spread_recovery": 0.4, "prone_spread_multiplier": 0.7,
+      "recoil": { "vertical_per_shot": 0.5, "horizontal_sway": 0.4, "recovery_rate": 3.5, "max_climb": 6, "prone_multiplier": 0.7 } },
+    "shotgun": { "move_speed_multiplier": 0.95, "ads_move_speed_multiplier": 0.9, "prone_spread_multiplier": 0.7,
+      "recoil": { "vertical_per_shot": 3, "horizontal_sway": 1, "recovery_rate": 6, "max_climb": 12, "prone_multiplier": 0.7 } },
+    "sniper": { "move_speed_multiplier": 0.8, "spread_base": 0.02, "spread_per_shot": 0, "spread_max": 0.02, "spread_recovery": 0.5, "prone_spread_multiplier": 0.4 }
   },
   "weapons": [
     {

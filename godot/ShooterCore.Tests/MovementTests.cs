@@ -42,9 +42,9 @@ public class MovementTests
     {
         var s = Run(new MoveInput { MoveY = 1, Buttons = MoveButtons.Crouch });
         Assert.Equal(2.5f, HSpeed(s), 2);
-        Assert.True(s.Crouching);
-        Assert.Equal(1.2f, MovementStep.CapsuleHeight(true));
-        Assert.Equal(1.8f, MovementStep.CapsuleHeight(false));
+        Assert.Equal(Stance.Crouch, s.Stance);
+        Assert.Equal(1.2f, MovementStep.CapsuleHeight(Stance.Crouch));
+        Assert.Equal(1.8f, MovementStep.CapsuleHeight(Stance.Stand));
     }
 
     [Fact]
@@ -143,12 +143,13 @@ public class MovementTests
     [Fact]
     public void CannotStandWhenHeadBlocked()
     {
-        var s = Run(new MoveInput { Buttons = MoveButtons.Crouch }, 3);
+        var s = Run(new MoveInput { Buttons = MoveButtons.Crouch }, 10);
+        Assert.Equal(Stance.Crouch, s.Stance);
         s.HeadBlocked = true;
-        Tick(ref s, default);
-        Assert.True(s.Crouching);
+        for (var k = 0; k < 30; k++) Tick(ref s, default); // a second: well past the stand-up time, still blocked
+        Assert.Equal(Stance.Crouch, s.Stance);
         s.HeadBlocked = false;
-        Tick(ref s, default);
-        Assert.False(s.Crouching);
+        for (var k = 0; k < 15; k++) Tick(ref s, default); // the 0.35 s stand-up completes
+        Assert.Equal(Stance.Stand, s.Stance);
     }
 }

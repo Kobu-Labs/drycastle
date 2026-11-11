@@ -55,6 +55,14 @@ public static class HudLogic
     /// <summary>Whole seconds shown for a countdown (ceil); used to update a label only when the number changes.</summary>
     public static int CeilSeconds(double seconds) => (int)Math.Ceiling(Math.Max(0, seconds));
 
+    /// <summary>Translation key of the stance badge text (the icon shows the same stance by silhouette, so it is not colour-only).</summary>
+    public static string StanceKey(Stance stance) => stance switch
+    {
+        Stance.Crouch => "hud.stance.crouch",
+        Stance.Prone => "hud.stance.prone",
+        _ => "hud.stance.stand",
+    };
+
     /// <summary>
     /// Crosshair arm offset from the screen centre in pixels for a spread half-angle (degrees), vertical fov (degrees)
     /// and viewport height in pixels: the on-screen radius of the cone, never below <paramref name="minGap"/>.

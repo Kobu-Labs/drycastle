@@ -27,7 +27,12 @@ public partial class Hud : CanvasLayer
     public Func<bool>? Scoped { get; set; }
     /// <summary>Iron-sight aim amount 0..1; the crosshair fades out as it rises (the weapon's own sight takes over).</summary>
     public Func<float>? Aim { get; set; }
+    /// <summary>The local player's stance for the stance badge (read each frame; the badge only redraws on change).</summary>
+    public Func<Stance>? StanceOf { get; set; }
     float _crossAlpha = 1;
+    Label? _stanceText;
+    StanceIcon? _stanceIcon;
+    Stance? _stanceShown;
     Control _scope = null!;
 
     Control _root = null!;
@@ -100,6 +105,7 @@ public partial class Hud : CanvasLayer
         _root.AddChild(_scope);
         BuildCrosshair();
         BuildHealth();
+        BuildStance();
         BuildAmmo();
         BuildHotbar();
         BuildTop();
@@ -203,6 +209,30 @@ public partial class Hud : CanvasLayer
             pivot.AddChild(back); pivot.AddChild(tri);
             _root.AddChild(pivot); _ind[i] = pivot;
         }
+    }
+
+    /// <summary>Stance badge above the health panel: a silhouette icon and its word, so the state never rests on colour.</summary>
+    void BuildStance()
+    {
+        var p = Place(P("HudPanel"), 0, 1, ShooterTheme.Margin, -ShooterTheme.Margin - 120, 200, 40);
+        _root.AddChild(p);
+        var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        row.AddThemeConstantOverride("separation", ShooterTheme.Space);
+        p.AddChild(row);
+        _stanceIcon = new StanceIcon { CustomMinimumSize = new Vector2(48, 32), MouseFilter = Control.MouseFilterEnum.Ignore };
+        _stanceText = L("", "HudSmall");
+        row.AddChild(_stanceIcon); row.AddChild(_stanceText);
+    }
+
+    void UpdateStance()
+    {
+        if (StanceOf == null || _stanceIcon == null || _stanceText == null) return;
+        var st = StanceOf();
+        if (st == _stanceShown) return;
+        _stanceShown = st;
+        _stanceIcon.Stance = st;
+        _stanceIcon.QueueRedraw();
+        Set(_stanceText, Strings.T(HudLogic.StanceKey(st)));
     }
 
     void BuildHealth()
@@ -562,6 +592,7 @@ public partial class Hud : CanvasLayer
         for (var i = 0; i < Indicators; i++) UpdateIndicator(i, now);
         UpdateFeed(now);
         UpdateCrosshair();
+        UpdateStance();
         RefreshHint();
         var want = ForceScoreboard ?? (Input.IsActionPressed("scoreboard") || _phase == MatchPhase.Ending);
         if (want != _boardShown || (want && _boardDirty)) UpdateBoard(want);
@@ -694,6 +725,33 @@ public partial class Hud : CanvasLayer
 }
 
 /// <summary>Small shield icon for spawn protection, drawn once (the HUD's one icon set so far).</summary>
+/// <summary>Stance silhouette: standing (tall), crouched (lower) and prone (flat), drawn in the HUD text colour.</summary>
+public partial class StanceIcon : Control
+{
+    public Stance Stance { get; set; }
+
+    public override void _Draw()
+    {
+        var w = Size.X; var h = Size.Y;
+        var head = h * 0.14f;
+        switch (Stance)
+        {
+            case Stance.Prone:
+                DrawCircle(new Vector2(w * 0.86f, h * 0.55f), head, ShooterTheme.Text);
+                DrawRect(new Rect2(w * 0.08f, h * 0.66f, w * 0.80f, h * 0.20f), ShooterTheme.Text);
+                break;
+            case Stance.Crouch:
+                DrawCircle(new Vector2(w * 0.5f, h * 0.30f), head, ShooterTheme.Text);
+                DrawRect(new Rect2(w * 0.34f, h * 0.46f, w * 0.32f, h * 0.54f), ShooterTheme.Text);
+                break;
+            default:
+                DrawCircle(new Vector2(w * 0.5f, h * 0.14f), head, ShooterTheme.Text);
+                DrawRect(new Rect2(w * 0.36f, h * 0.30f, w * 0.28f, h * 0.70f), ShooterTheme.Text);
+                break;
+        }
+    }
+}
+
 public partial class ShieldIcon : Control
 {
     public override void _Draw()

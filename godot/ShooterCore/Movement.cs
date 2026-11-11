@@ -22,7 +22,23 @@ public static class MoveConsts
     public const float CrouchHeight = 1.2f;
     public const float EyeHeight = 1.65f;
     public const float CrouchEyeHeight = 1.05f;
+    /// <summary>Prone capsule: the minimum height for its radius (2 x 0.35 m); the head zone sits low at 0.5 m.</summary>
+    public const float ProneHeight = 0.7f;
+    public const float ProneEyeHeight = 0.5f;
+    /// <summary>Crawl speed while prone (m/s); no sprint.</summary>
+    public const float CrawlSpeed = 1.2f;
+    /// <summary>Steeper ground than this (degrees) forces a prone player to stand (auto stand).</summary>
+    public const float ProneMaxSlopeDegrees = 20f;
+    /// <summary>Stance step durations in seconds. The body changes stance when a step ends; standing up waits for headroom.</summary>
+    public const float StandToCrouchTime = 0.2f;
+    public const float CrouchToStandTime = 0.35f;
+    public const float CrouchToProneTime = 0.45f;
+    /// <summary>Getting up from prone is deliberately slow.</summary>
+    public const float ProneToCrouchTime = 0.9f;
 }
+
+/// <summary>Body stance. Steps are one level at a time: Stand to Crouch to Prone, and back.</summary>
+public enum Stance : byte { Stand = 0, Crouch = 1, Prone = 2 }
 
 [Flags]
 public enum MoveButtons
@@ -39,6 +55,8 @@ public enum MoveButtons
     Use = 64,
     /// <summary>Switch to the next weapon (hotbar slot changes also travel as the selected slot).</summary>
     Switch = 128,
+    /// <summary>Prone key: a press (rising edge) toggles the prone latch.</summary>
+    Prone = 256,
 }
 
 /// <summary>One tick of player input: movement axes (x = strafe right, y = forward, each -1..1), look yaw in radians, buttons.</summary>
@@ -61,12 +79,28 @@ public struct MoveState
     public Vector3 Position;
     public Vector3 Velocity;
     public bool OnFloor;
-    public bool Crouching;
-    /// <summary>Set by the caller each tick: something is over the head, so a crouching player cannot stand.</summary>
+    /// <summary>The stance the body has now; sets the capsule and eye height. Changes when a transition step ends.</summary>
+    public Stance Stance;
+    /// <summary>The stance the body is stepping toward; equal to <see cref="Stance"/> when settled.</summary>
+    public Stance StepTo;
+    /// <summary>Seconds left in the current stance step.</summary>
+    public float StanceTimer;
+    /// <summary>Prone is latched on (toggled by presses of the Prone key).</summary>
+    public bool ProneLatched;
+    /// <summary>The Prone key was down last tick (edge detection).</summary>
+    public bool ProneKeyDown;
+    /// <summary>Set by the caller each tick: no prone here (in a vehicle, or in water). Clears the latch.</summary>
+    public bool ProneBlocked;
+    /// <summary>Set by the caller each tick: the ground is too steep to lie on. Clears the latch (auto stand).</summary>
+    public bool FloorTooSteep;
+    /// <summary>Set by the caller each tick: something is over the head for the stance one level up, so a crouched or prone player cannot stand up past it.</summary>
     public bool HeadBlocked;
     /// <summary>Highest feet height of the current airborne period.</summary>
     public float FallPeakY;
     public bool WasSprinting;
+
+    /// <summary>True while a stance step is under way (no sprint or jump, speed of the slower stance).</summary>
+    public readonly bool Transitioning => Stance != StepTo;
 }
 
 /// <summary>
@@ -77,12 +111,62 @@ public struct MoveState
 /// </summary>
 public static class MovementStep
 {
-    public static float CapsuleHeight(bool crouching) => crouching ? MoveConsts.CrouchHeight : MoveConsts.CapsuleHeight;
-    public static float EyeHeight(bool crouching) => crouching ? MoveConsts.CrouchEyeHeight : MoveConsts.EyeHeight;
+    public static float CapsuleHeight(Stance stance) => stance switch
+    {
+        Stance.Crouch => MoveConsts.CrouchHeight,
+        Stance.Prone => MoveConsts.ProneHeight,
+        _ => MoveConsts.CapsuleHeight,
+    };
 
-    /// <summary>Sprint is forward only, not while crouching, firing or aiming.</summary>
-    public static bool CanSprint(in MoveInput i, bool crouching) =>
-        i.Has(MoveButtons.Sprint) && !crouching && i.MoveY > 0.1f && !i.Has(MoveButtons.Fire) && !i.Has(MoveButtons.Aim);
+    public static float EyeHeight(Stance stance) => stance switch
+    {
+        Stance.Crouch => MoveConsts.CrouchEyeHeight,
+        Stance.Prone => MoveConsts.ProneEyeHeight,
+        _ => MoveConsts.EyeHeight,
+    };
+
+    /// <summary>Sprint is forward only: standing, not mid-transition, not firing or aiming.</summary>
+    public static bool CanSprint(in MoveInput i, Stance stance, bool transitioning) =>
+        i.Has(MoveButtons.Sprint) && stance == Stance.Stand && !transitioning && i.MoveY > 0.1f && !i.Has(MoveButtons.Fire) && !i.Has(MoveButtons.Aim);
+
+    /// <summary>Seconds for one stance step (one level up or down).</summary>
+    public static float TransitionTime(Stance from, Stance to) => from switch
+    {
+        Stance.Stand => MoveConsts.StandToCrouchTime,
+        Stance.Crouch => to == Stance.Prone ? MoveConsts.CrouchToProneTime : MoveConsts.CrouchToStandTime,
+        _ => MoveConsts.ProneToCrouchTime,
+    };
+
+    /// <summary>Walking speed of a settled stance; mid-transition the slower of the two stances applies.</summary>
+    static float StanceSpeed(in MoveState s)
+    {
+        var a = SpeedOf(s.Stance);
+        return s.Transitioning ? MathF.Min(a, SpeedOf(s.StepTo)) : a;
+    }
+
+    static float SpeedOf(Stance stance) => stance switch
+    {
+        Stance.Crouch => MoveConsts.CrouchSpeed,
+        Stance.Prone => MoveConsts.CrawlSpeed,
+        _ => MoveConsts.WalkSpeed,
+    };
+
+    /// <summary>
+    /// Move the stance toward the goal one step at a time. The goal is prone if latched, else crouch while Crouch is held,
+    /// else stand. Standing up past a level needs headroom: the step waits at zero until the caller clears HeadBlocked.
+    /// </summary>
+    static void UpdateStance(ref MoveState s, in MoveInput i, float dt)
+    {
+        var goal = s.ProneLatched ? Stance.Prone : i.Has(MoveButtons.Crouch) ? Stance.Crouch : Stance.Stand;
+        if (goal == s.Stance) { s.StepTo = s.Stance; s.StanceTimer = 0; return; }
+
+        var next = (Stance)((int)s.Stance + (goal > s.Stance ? 1 : -1));
+        if (s.StepTo != next) { s.StepTo = next; s.StanceTimer = TransitionTime(s.Stance, next); }
+        if (s.StanceTimer > 0) s.StanceTimer -= dt;
+        if (s.StanceTimer > 0) return;
+        if (next > s.Stance || !s.HeadBlocked) s.Stance = next;
+        if (s.Stance == next) s.StepTo = next;
+    }
 
     /// <summary>Damage for a fall of <paramref name="drop"/> metres: none below 4 m, linear to death at 14 m.</summary>
     public static float FallDamage(float drop)
@@ -95,11 +179,16 @@ public static class MovementStep
     /// <summary>Update crouch and velocity from the input; the caller then moves the body by <c>s.Velocity</c>.</summary>
     public static void Step(ref MoveState s, in MoveInput i, float dt)
     {
-        s.Crouching = i.Has(MoveButtons.Crouch) || (s.Crouching && s.HeadBlocked);
+        // Prone key: a press toggles the latch. Vehicles, water and steep ground take it away.
+        var proneKey = i.Has(MoveButtons.Prone);
+        if (proneKey && !s.ProneKeyDown) s.ProneLatched = !s.ProneLatched;
+        s.ProneKeyDown = proneKey;
+        if (s.ProneBlocked || s.FloorTooSteep) s.ProneLatched = false;
+        UpdateStance(ref s, i, dt);
 
-        var sprint = CanSprint(i, s.Crouching);
+        var sprint = CanSprint(i, s.Stance, s.Transitioning);
         s.WasSprinting = sprint;
-        var speed = s.Crouching ? MoveConsts.CrouchSpeed : sprint ? MoveConsts.SprintSpeed : MoveConsts.WalkSpeed;
+        var speed = sprint ? MoveConsts.SprintSpeed : StanceSpeed(s);
         speed *= i.SpeedScale > 0f ? i.SpeedScale : 1f;
 
         var (sin, cos) = MathF.SinCos(i.Yaw);
@@ -119,7 +208,7 @@ public static class MovementStep
         if (s.OnFloor)
         {
             vy = 0;
-            if (i.Has(MoveButtons.Jump) && !s.Crouching) { vy = MoveConsts.JumpSpeed; s.OnFloor = false; }
+            if (i.Has(MoveButtons.Jump) && s.Stance == Stance.Stand && !s.Transitioning) { vy = MoveConsts.JumpSpeed; s.OnFloor = false; }
         }
         if (!s.OnFloor) vy -= MoveConsts.Gravity * dt;
 

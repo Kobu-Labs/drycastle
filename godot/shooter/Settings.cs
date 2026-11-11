@@ -167,7 +167,7 @@ public static class InputBindings
     {
         ("move_forward", Binding.Key((int)Key.W)), ("move_back", Binding.Key((int)Key.S)),
         ("move_left", Binding.Key((int)Key.A)), ("move_right", Binding.Key((int)Key.D)),
-        ("jump", Binding.Key((int)Key.Space)), ("sprint", Binding.Key((int)Key.Shift)), ("crouch", Binding.Key((int)Key.Ctrl)),
+        ("jump", Binding.Key((int)Key.Space)), ("sprint", Binding.Key((int)Key.Shift)), ("crouch", Binding.Key((int)Key.Ctrl)), ("prone", Binding.Key((int)Key.Z)),
         ("fire", Binding.MouseButton((int)MouseButton.Left)),
         ("reload", Binding.Key((int)Key.R)), ("interact", Binding.Key((int)Key.E)), ("scoreboard", Binding.Key((int)Key.Tab)),
         ("slot_1", Binding.Key((int)Key.Key1)), ("slot_2", Binding.Key((int)Key.Key2)), ("slot_3", Binding.Key((int)Key.Key3)), ("slot_4", Binding.Key((int)Key.Key4)), ("slot_5", Binding.Key((int)Key.Key5)),

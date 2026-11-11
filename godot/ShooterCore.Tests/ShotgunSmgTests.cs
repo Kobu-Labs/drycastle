@@ -10,7 +10,7 @@ public class ShotgunSmgTests
     static readonly WeaponsFile Shipped = WeaponsFile.Load(Path.Combine(AppContext.BaseDirectory, "../../../../shooter/data/weapons.json"));
     static WeaponDef Def(string id) => Shipped.Find(id)!;
 
-    static HitTarget T(ushort id, float x, float y, float z) => new(id, new Vector3(x, y, z), false, 0);
+    static HitTarget T(ushort id, float x, float y, float z) => new(id, new Vector3(x, y, z), Stance.Stand, 0);
 
     // ---- pellet directions ---------------------------------------------------------------------------------------
 
