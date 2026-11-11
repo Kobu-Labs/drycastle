@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -140,6 +140,11 @@ netspike-quick:
 # Shooter v1 (godot/shooter + godot/ShooterCore). MAP=/path/to/out/map or SUCHOHRAD_MAP.
 # shooter-server runs headless; add SMOKE=1 to boot, load and exit cleanly.
 SHOOTER_MAP = $(if $(MAP),--map $(abspath $(MAP)),)
+
+# Loadout and HUD icons (#146): weapon renders need a display (DISPLAY); the rest is ImageMagick + Pillow.
+shooter-icons:
+	godot --path godot/shooter --script res://tools/render_icons.gd
+	python3 godot/shooter/tools/make_icons.py
 
 shooter-server:
 	dotnet build godot/shooter/shooter.csproj

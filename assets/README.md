@@ -112,6 +112,23 @@ The brief is flat-colour low-poly. `make assets-check` loads every asset headles
 Kenney City Kit (Suburban) models are authored at a small scale (a tree is 0.77 m tall, a fence
 section 0.5 m wide); the editor needs to scale them. Sizes in the manifest are the raw imported sizes.
 
+## Shooter UI icons (#146)
+
+Loadout and HUD icons live in `godot/shooter/ui/icons/` (not in this library, not placeable). `IconRegistry`
+(`godot/ShooterCore/Icons`) maps each weapon, category, perk and killstreak id to its file; a missing id gets
+`placeholder.png`. Regenerate with `make shooter-icons`. The weapon renders need a rendering device (a display, `DISPLAY` set); the
+other icons only need ImageMagick and Pillow.
+
+- `weapons/<id>.png` (512x256): side-on renders of the held models in the Quaternius gun pack (CC0), by
+  `godot/shooter/tools/render_icons.gd`.
+- `categories/<category>.png` (128x128): white silhouettes cut from one weapon render per category, by
+  `godot/shooter/tools/make_icons.py`. Derived from the same CC0 pack.
+- `perks/`, `streaks/`, `placeholder.png` (128x128): flat white glyphs drawn as SVG (sources in `ui/icons/src/`) by
+  `godot/shooter/tools/make_icons.py`. Original work of this repository; no third-party pack was downloaded.
+
+Icons are white on transparent so the theme can tint them. The licence record is the top-level `ui_icons` entry in
+`manifest.json`.
+
 ## Adding assets
 
 1. Check the licence is CC0 (or compatible) and permits redistribution. Do not commit paid or unclear-licence files.

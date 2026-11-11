@@ -1942,5 +1942,31 @@
       "provided": "2026-11-11",
       "used_for": "godot/shooter vehicles (data/vehicles.json)"
     }
-  ]
+  ],
+  "ui_icons": {
+    "folder": "godot/shooter/ui/icons",
+    "note": "Loadout and HUD icons (#146). Not pipeline assets: no id, not placeable, not in the editor. Licences below cover every committed file.",
+    "groups": [
+      {
+        "files": "weapons/<id>.png (24, 512x256)",
+        "what": "side-on renders of the held models of the Quaternius Ultimate Gun Pack (the same files WeaponFx.cs loads), rendered by godot/shooter/tools/render_icons.gd",
+        "licence": "CC0 1.0 (derived renders of the pack above)",
+        "source": "https://opengameart.org/content/low-poly-guns-pack"
+      },
+      {
+        "files": "categories/<category>.png (6, 128x128)",
+        "what": "white silhouettes of one representative weapon per category, cut from weapons/ by godot/shooter/tools/make_icons.py",
+        "licence": "CC0 1.0 (derived renders of the pack above)",
+        "source": "https://opengameart.org/content/low-poly-guns-pack"
+      },
+      {
+        "files": "perks/<id>.png (8, 128x128), streaks/<id>.png (8, 128x128), placeholder.png",
+        "what": "flat white glyphs authored as SVG in godot/shooter/ui/icons/src/ by godot/shooter/tools/make_icons.py; no third-party art, no downloaded icon pack",
+        "licence": "same as the repository (original work)",
+        "source": "authored in this repository (#146)"
+      }
+    ],
+    "generated": "2026-11-11",
+    "why_not_a_pack": "No CC0 icon pack was fetched: the perk and killstreak glyphs are simple enough to draw directly, which keeps one style and avoids an untrusted archive. The issue allowed this fallback."
+  }
 }
