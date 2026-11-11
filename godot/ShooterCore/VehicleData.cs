@@ -61,6 +61,10 @@ public class VehiclesFile : IVersioned
                 if (!v.Seats.Any(x => x.Role == "gunner")) throw new DataFileException($"vehicles.json: {v.Id}: a gun needs a gunner seat");
             }
             if (v.RunOverMass is { } rm && rm <= 0) throw new DataFileException($"vehicles.json: {v.Id}: run_over_mass must be positive");
+            if (!VehicleMedium.All.Contains(v.Medium)) throw new DataFileException($"vehicles.json: {v.Id}: medium {v.Medium} is not land, amphibious or boat");
+            if (v.Medium != VehicleMedium.Land && (v.WaterTopSpeed <= 0 || v.WaterAcceleration <= 0 || v.LandDecel <= 0 || v.PlaningSpeed < 0))
+                throw new DataFileException($"vehicles.json: {v.Id}: water_top_speed, water_acceleration and land_decel must be positive, planing_speed not negative");
+            if (v.Medium == VehicleMedium.Boat && v.Gun != null) throw new DataFileException($"vehicles.json: {v.Id}: a boat carries no gun");
         }
         if (f.DamageStages.Count != 3 || f.DamageStages.Any(x => x <= 0 || x >= 1) || f.DamageStages[0] <= f.DamageStages[1] || f.DamageStages[1] <= f.DamageStages[2])
             throw new DataFileException("vehicles.json: damage_stages are three descending fractions between 0 and 1");
@@ -71,6 +75,13 @@ public class VehiclesFile : IVersioned
 
     /// <summary>Run-over damage multiplier of a type: its run_over_mass over the reference mass, or 1 when it has none (the v1 numbers).</summary>
     public float RunOverScale(VehicleDef v) => v.RunOverMass is { } m ? m / RunOverReferenceMass : 1f;
+}
+
+/// <summary>vehicles.json "medium" values (see <see cref="VehicleDef.Medium"/>).</summary>
+public static class VehicleMedium
+{
+    public const string Land = "land", Amphibious = "amphibious", Boat = "boat";
+    public static readonly string[] All = { Land, Amphibious, Boat };
 }
 
 /// <summary>One seat of a vehicle (vehicles.json "seats"). Seat 0 is always the driver. Offset is in the vehicle's frame, metres: x right, y up, z back (forward is -Z), origin on the ground at the car's centre.</summary>
@@ -174,6 +185,25 @@ public class VehicleDef
     public VehicleGunDef? Gun { get; set; }
     /// <summary>Mass (kg) for run-over damage. Unset: the v1 run-over numbers (see <see cref="VehiclesFile.RunOverScale"/>).</summary>
     public float? RunOverMass { get; set; }
+    /// <summary>
+    /// Where the type travels (<see cref="VehicleMedium"/>): "land" (default), "amphibious" (drives on land, floats on water at
+    /// <see cref="WaterTopSpeed"/>) or "boat" (water only: on land it coasts to a stop at <see cref="LandDecel"/>).
+    /// </summary>
+    public string Medium { get; set; } = VehicleMedium.Land;
+    /// <summary>Amphibious only: top speed afloat, m/s.</summary>
+    public float WaterTopSpeed { get; set; } = 7;
+    /// <summary>Amphibious only: forward acceleration afloat, m/s².</summary>
+    public float WaterAcceleration { get; set; } = 1.5f;
+    /// <summary>Boat only: below this speed (m/s) the hull is still pushing water aside and the boat accelerates at half rate; above it it planes. 0: no planing.</summary>
+    public float PlaningSpeed { get; set; }
+    /// <summary>Boat only: deceleration on land, m/s², while it coasts to a stop (it has no drive there).</summary>
+    public float LandDecel { get; set; } = 5;
+    /// <summary>Whether a driver running someone over hurts them. Land types, and an amphibious only on land; a boat never runs anyone over.</summary>
+    public bool RunOver { get; set; } = true;
+    /// <summary>Whether a wall impact hurts the vehicle. False for a boat: running aground is not damage.</summary>
+    public bool CrashDamage { get; set; } = true;
+    /// <summary>True for a type that can float (amphibious or boat): its origin rides the water surface when it is over a water body.</summary>
+    public bool CanFloat => Medium != VehicleMedium.Land;
     /// <summary>A single fixed body colour [r, g, b] (sRGB) for a type with one look (olive drab). Replaces the colour variants: such a type has one variant.</summary>
     public float[]? Tint { get; set; }
     /// <summary>Model file relative to assets/ (empty: the code-built car with the Kenney sedan). Scale, yaw and offset fit the raw node to the game (forward -Z, origin at the ground centre).</summary>

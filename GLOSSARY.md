@@ -75,3 +75,11 @@ _Avoid_: supply drop, crate
 **Weapon category**:
 A class of primary weapon (machine guns, assault rifles, shotguns, SMGs, sniper rifles) that shares a base recoil pattern; individual weapons may override it. Pistols form the secondary category.
 _Avoid_: weapon type, class
+
+**Boat**:
+A water-only vehicle: it floats on a water body, has no drive on land (it coasts to a stop), and never runs anyone over.
+_Avoid_: ship, watercraft
+
+**Amphibious transport**:
+A four-seat vehicle that drives on land like the war jeep (and runs people over there) and floats at reduced speed on water.
+_Avoid_: APC, amphib

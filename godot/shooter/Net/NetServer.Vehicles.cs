@@ -79,14 +79,39 @@ public partial class NetServer
                 }
                 return false;
             }
+            // water craft: a boat floats on a water body, 4 m to 15 m off its shore (WaterSpawns); with too little such water it takes the largest body
+            bool PlaceWater(int kind, IEnumerable<WaterSpawns.Spot> cands)
+            {
+                foreach (var c in cands)
+                {
+                    var p = new NVec3(c.X, c.SurfaceY, c.Z);
+                    if (spots.Any(s => NVec3.Distance(s.Pos, p) < 12f)) continue;
+                    spots.Add((p, (float)(_rng.NextDouble() * Math.PI * 2), kind));
+                    return true;
+                }
+                return false;
+            }
+            var boatShore = WaterSpawns.ShoreCandidates(Water).OrderBy(_ => _rng.Next()).ToList();
+            var boatInterior = WaterSpawns.FallbackCandidates(Water);
             for (var i = 0; i < kinds.Count; i++)
             {
+                var kind = kinds[i];
+                var def = Vehicles.Vehicles[kind];
+                if (def.Medium == VehicleMedium.Boat)
+                {
+                    if (PlaceWater(kind, boatShore)) continue;
+                    if (PlaceWater(kind, boatInterior)) { GD.Print($"server: too little shore water for {def.Id}: placed on the largest water body"); continue; }
+                    GD.PrintErr($"server: no water for {def.Id} (no water.json, or no body at least {WaterSpawns.MinDepth} m deep)");
+                    continue;
+                }
                 var anchor = anchors.Count > 0 ? anchors[i % anchors.Count] : Spawns[0];
                 var near = Spawns.Where(s => Dist2D(s, anchor) <= 40f).OrderBy(Rank).ThenBy(_ => _rng.Next()).ToList();
-                var ok = Place(kinds[i], near)
-                    || Place(kinds[i], Spawns.Where(s => Dist2D(s, anchor) <= 90f).OrderBy(s => Dist2D(s, anchor)))
-                    || Place(kinds[i], Spawns.OrderBy(Rank).ThenBy(_ => _rng.Next()));
-                if (!ok) GD.PrintErr($"server: no spot for {Vehicles.Vehicles[kinds[i]].Id}");
+                // amphibious: a shore candidate near its cluster first, so it can drive straight into the water
+                var ok = (def.Medium == VehicleMedium.Amphibious && Place(kind, Spawns.Where(s => Dist2D(s, anchor) <= 90f && Water.ShoreDistance(s.X, s.Z) <= 40f).OrderBy(Rank).ThenBy(_ => _rng.Next())))
+                    || Place(kind, near)
+                    || Place(kind, Spawns.Where(s => Dist2D(s, anchor) <= 90f).OrderBy(s => Dist2D(s, anchor)))
+                    || Place(kind, Spawns.OrderBy(Rank).ThenBy(_ => _rng.Next()));
+                if (!ok) GD.PrintErr($"server: no spot for {def.Id}");
             }
             // players must not respawn inside a vehicle: drop the spawn candidates next to one (keep a healthy pool)
             var free = Spawns.Where(s => spots.All(v => NVec3.Distance(v.Pos, s) > 4f)).ToList();
@@ -244,10 +269,10 @@ public partial class NetServer
             // seats of players who have gone (disconnect, death) are freed; the driver is seat 0 and only the driver steers
             for (var s = 0; s < car.Seat.Count; s++) if (car.Seat.Occupant(s) != 0 && OccupantAt(car, s) == null) car.Seat.Clear(s);
             var driver = OccupantAt(car, 0);
-            if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt);
-            else car.Step(def, 0, 0, false, dt);
+            if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt, Water);
+            else car.Step(def, 0, 0, false, dt, Water);
             if (car.GlobalPosition.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); continue; }
-            if (driver != null && car.LastImpact > Vehicles.CrashMinSpeedLoss)
+            if (driver != null && car.Def.CrashDamage && car.LastImpact > Vehicles.CrashMinSpeedLoss)
                 DamageVehicle(car, (car.LastImpact - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, 0, SpecialWeapons.Vehicle, 0);
             if (car.DetonateAt >= 0 && _elapsed >= car.DetonateAt) { Detonate(car); continue; }
             var occupied = car.Seat.Occupied;
@@ -257,7 +282,7 @@ public partial class NetServer
                 o.Body.Teleport(at);
                 _match.SetPosition(o.Id, N(at));
             }
-            if (driver != null) RunOverCheck(car, driver);
+            if (driver != null && car.Def.RunOver && !car.Afloat) RunOverCheck(car, driver); // road kill: on land only
             if (!occupied && car.Abandon.Update(false, car.AtOrigin, dt, Vehicles.AbandonReturnTime))
             {
                 car.Reset(false); _carReturns++;

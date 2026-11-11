@@ -51,6 +51,13 @@ public static class CarFx
             else root.AddChild(Box(def, new Color(0.6f, 0.6f, 0.6f)));
             return root;
         }
+        if (def.Medium == VehicleMedium.Boat)
+        {
+            // no model file for a boat: a primitive hull and cabin (no licence involved)
+            var hull = def.Tint is { } ht ? new Color(ht[0], ht[1], ht[2]) : new Color(0.32f, 0.36f, 0.28f);
+            root.AddChild(Hull(def, hull));
+            return root;
+        }
         if (def.Tint is { } tint0)
         {
             // no model for this type: primitive meshes (a body and four wheels), in its one fixed colour
@@ -87,6 +94,15 @@ public static class CarFx
                 RotationDegrees = new Vector3(0, 0, 90),
                 MaterialOverride = wheel,
             });
+        return n;
+    }
+
+    /// <summary>A boat with no model file: a hull box at the waterline and a cabin box on it.</summary>
+    static Node3D Hull(VehicleDef def, Color tint)
+    {
+        var n = new Node3D();
+        n.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(def.HalfWidth * 2, 0.8f, def.HalfLength * 2) }, Position = new Vector3(0, 0.2f, 0), MaterialOverride = new StandardMaterial3D { AlbedoColor = tint } });
+        n.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(def.HalfWidth * 1.3f, 0.7f, def.HalfLength * 0.8f) }, Position = new Vector3(0, 1.1f, def.HalfLength * 0.2f), MaterialOverride = new StandardMaterial3D { AlbedoColor = tint.Darkened(0.25f) } });
         return n;
     }
 

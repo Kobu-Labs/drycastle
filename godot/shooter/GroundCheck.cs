@@ -189,7 +189,7 @@ public partial class GroundCheck : Node3D
         }
         if (_cars.Count > 0 && !_walkReady)
         {
-            foreach (var (c, _) in _cars) c.Step(c.Def, 0, 0, false, 1f / 30);
+            foreach (var (c, _) in _cars) c.Step(c.Def, 0, 0, false, 1f / 30, Suchohrad.ShooterCore.Water.Empty);
             if (_frame - _carStart == 150) { ReportCars(); if (!_noWalk) SetupWalk(); else Finish(); }
             return;
         }

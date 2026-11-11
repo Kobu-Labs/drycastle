@@ -4,7 +4,7 @@ using Suchohrad.ShooterCore;
 namespace Suchohrad.Shooter;
 
 /// <summary>
-/// Server-side vehicle (car, motorcycle or bicycle, the def sets the footprint): a kinematic CharacterBody3D driven by <see cref="CarModel"/> (arcade planar model: speed along the facing, yaw rate
+/// Server-side vehicle (any type in vehicles.json: the def sets the footprint and medium; water craft float, see <see cref="Afloat"/>): a kinematic CharacterBody3D driven by <see cref="CarModel"/> (arcade planar model: speed along the facing, yaw rate
 /// from steering) with the physics move providing wall collision, slopes and gravity. Chosen over VehicleBody3D (Jolt) because
 /// it is deterministic, cannot flip or jitter, and needs no per-wheel tuning. Layer 2: players and bullets (mask 1) pass through it;
 /// run-over is an overlap test in the server. Mask 1 = world only (players are excluded per body with collision exceptions).
@@ -78,6 +78,17 @@ public partial class ServerCar : CharacterBody3D
         Reset();
     }
 
+    /// <summary>Raises the origin onto the ground under it when that is above it (a bank rising out of the water).</summary>
+    void LiftToGround()
+    {
+        var q = PhysicsRayQueryParameters3D.Create(new Vector3(GlobalPosition.X, GlobalPosition.Y + 3f, GlobalPosition.Z), new Vector3(GlobalPosition.X, GlobalPosition.Y - 8f, GlobalPosition.Z));
+        q.CollisionMask = 1;
+        var r = GetWorld3D().DirectSpaceState.IntersectRay(q);
+        if (r.Count == 0) return;
+        var g = r["position"].AsVector3().Y + 0.02f;
+        if (g > GlobalPosition.Y) GlobalPosition = new Vector3(GlobalPosition.X, g, GlobalPosition.Z);
+    }
+
     public Vector3 Forward => new(-Mathf.Sin(State.Yaw), 0, -Mathf.Cos(State.Yaw));
     public bool AtOrigin => GlobalPosition.DistanceTo(OriginPos) < 0.5f;
 
@@ -107,13 +118,28 @@ public partial class ServerCar : CharacterBody3D
         Lights = false;
     }
 
-    public void Step(VehicleDef def, float throttle, float steer, bool handbrake, float dt)
+    /// <summary>Over a water body (amphibious or boat): the origin rides its surface and gravity does not apply.</summary>
+    public bool Afloat;
+
+    public void Step(VehicleDef def, float throttle, float steer, bool handbrake, float dt, Water water)
     {
-        CarModel.Step(ref State, def, throttle, steer, handbrake, dt);
+        var body = def.CanFloat ? water.BodyAt(GlobalPosition.X, GlobalPosition.Z) : null;
+        var wasAfloat = Afloat;
+        Afloat = body != null;
+        CarModel.Step(ref State, def, throttle, steer, handbrake, dt, Afloat);
         var fwd = Forward;
-        var vy = IsOnFloor() ? -1f : Velocity.Y - 20f * dt;
         Rotation = new Vector3(0, State.Yaw, 0);
-        Velocity = fwd * State.Speed + new Vector3(0, vy, 0);
+        if (Afloat)
+        {
+            GlobalPosition = new Vector3(GlobalPosition.X, body!.SurfaceY, GlobalPosition.Z);
+            Velocity = fwd * State.Speed;
+        }
+        else
+        {
+            var vy = IsOnFloor() ? -1f : Velocity.Y - 20f * dt;
+            if (wasAfloat) LiftToGround(); // climbing out of the water onto a bank higher than the surface
+            Velocity = fwd * State.Speed + new Vector3(0, vy, 0);
+        }
         MoveAndSlide();
         // a wall or a slope takes speed away: feed the real speed back
         var real = new Vector3(Velocity.X, 0, Velocity.Z).Dot(fwd);
