@@ -11,7 +11,7 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class GunshipOverlay : CanvasLayer
 {
-    const string ShaderPath = "res://shaders/gunship_thermal.gdshader";
+    public const string ShaderPath = "res://shaders/gunship_thermal.gdshader";
 
     readonly ColorRect _thermal = new() { MouseFilter = Control.MouseFilterEnum.Ignore };
     ShaderMaterial _grade = null!;

@@ -13,6 +13,9 @@ public class AttackMissileTests
 
     const ushort Owner = 7, Enemy = 8;
 
+    /// <summary>The fixture missile's own shallow limit (not the shipped one): the flying-fixture tests fly this dive.</summary>
+    const float FixtureShallowRad = -10f * MathF.PI / 180f;
+
     /// <summary>A world with no walls and no players unless the test says so; records every detonation.</summary>
     sealed class FakeWorld : IMissileWorld
     {
@@ -24,10 +27,16 @@ public class AttackMissileTests
         public float OwnerFacing;
         public List<MissileImpact> Blasts = new();
 
+        /// <summary>Flat ground at this height (NaN for none); a ray going down meets it.</summary>
+        public float GroundY = float.NaN;
+
         public float WorldDistance(Vector3 from, Vector3 dir, float len, out object? hitCar)
         {
-            hitCar = Wall <= len ? WallCar : null;
-            return Wall;
+            var ground = float.PositiveInfinity;
+            if (!float.IsNaN(GroundY) && dir.Y < 0) ground = (from.Y - GroundY) / -dir.Y;
+            var d = MathF.Min(Wall, ground);
+            hitCar = d <= len && Wall <= ground ? WallCar : null;
+            return d <= len ? d : float.PositiveInfinity; // the contract: infinity when nothing is within len
         }
         public IEnumerable<HitTarget> Targets() => Players;
         public float OwnerYaw(ushort owner) => OwnerFacing;
@@ -49,10 +58,12 @@ public class AttackMissileTests
         var t = new MissileTuning
         {
             SpeedMps = 45, TurnRateRad = turnDeg * MathF.PI / 180f, LifeSeconds = life, SpawnHeight = 150, SpawnPitchRad = -1.2f,
+            ShallowPitchRad = FixtureShallowRad, SteepPitchRad = -80f * MathF.PI / 180f,
             Damage = 100, EdgeDamage = 30, FullDamageRadius = 3, SplashRadius = 12, SelfDamageMultiplier = 0.5f, KnockbackSpeed = 6,
         };
         var w = new FakeWorld(NewManager());
-        return (new AttackMissileEntity(Owner, t, w, Vector3.Zero, 0f, 0f), w);
+        // starts on the shallowest dive: the missile never flies level, so the tests fly the dive
+        return (new AttackMissileEntity(Owner, t, w, Vector3.Zero, 0f, FixtureShallowRad), w);
     }
 
     // ---- killstreaks.json: the missile block ------------------------------------------------------------------------
@@ -61,9 +72,13 @@ public class AttackMissileTests
     public void ShippedMissileTuningIsLoadedAndSplashIsBiggerThanTheBazookas()
     {
         var t = Tuning;
-        Assert.Equal(45f, t.SpeedMps);
+        Assert.Equal(64f, t.SpeedMps);
         Assert.Equal(60f * MathF.PI / 180f, t.TurnRateRad, 1e-4f);
-        Assert.Equal(20f, t.LifeSeconds);
+        Assert.Equal(60f, t.LifeSeconds); // a safety cap only
+        Assert.Equal(450f, t.SpawnHeight);
+        Assert.Equal(-45f * MathF.PI / 180f, t.SpawnPitchRad, 1e-4f);
+        Assert.Equal(-32f * MathF.PI / 180f, t.ShallowPitchRad, 1e-4f);
+        Assert.Equal(-80f * MathF.PI / 180f, t.SteepPitchRad, 1e-4f);
         Assert.Equal(12f, t.SplashRadius);
         Assert.True(t.SplashRadius > Shipped.Weapons.Find("bazooka")!.Splash!.Radius);
         Assert.Null(Shipping.Find("uav")!.Missile);
@@ -81,20 +96,24 @@ public class AttackMissileTests
     public void AMissileBlockOnAnotherStreakIsRefused()
     {
         var json = "{\"version\":1,\"streaks\":[{\"id\":\"uav\",\"name\":\"UAV\",\"kills_required\":4,\"unlock_level\":0,\"duration_seconds\":60,\"control\":\"none\","
-            + "\"missile\":{\"speed_mps\":45,\"turn_rate_deg\":60,\"life_seconds\":20,\"spawn_height\":150,\"spawn_pitch_deg\":-70,\"damage\":1,\"edge_damage\":1,\"full_damage_radius\":1,\"splash_radius\":2,\"self_damage_multiplier\":1,\"knockback_speed\":1}}]}";
+            + "\"missile\":{\"speed_mps\":45,\"turn_rate_deg\":60,\"life_seconds\":20,\"spawn_height\":150,\"spawn_pitch_deg\":-45,\"pitch_min_deg\":-10,\"pitch_max_deg\":-80,\"damage\":1,\"edge_damage\":1,\"full_damage_radius\":1,\"splash_radius\":2,\"self_damage_multiplier\":1,\"knockback_speed\":1}}]}";
         var e = Assert.Throws<DataFileException>(() => KillstreakFile.Parse(json));
         Assert.Contains("only for the attack missile", e.Message);
     }
 
     [Theory]
     [InlineData("\"full_damage_radius\":12,\"splash_radius\":12", "must be less than")]
-    [InlineData("\"spawn_pitch_deg\":-95", "between -89 and -1")]
+    [InlineData("\"spawn_pitch_deg\":-95", "\"missile.spawn_pitch_deg\" is required and must be between -89 and -1")]
+    [InlineData("\"pitch_max_deg\":-95", "\"missile.pitch_max_deg\" is required and must be between -89 and -1")]
+    [InlineData("\"pitch_min_deg\":-85", "\"missile.pitch_max_deg\" (the steepest) must be below")]
+    [InlineData("\"spawn_pitch_deg\":-5", "must lie between")]
     [InlineData("\"speed_mps\":0", "must be more than 0")]
     public void BadMissileTuningNamesTheField(string overrideFields, string expected)
     {
         var fields = new Dictionary<string, string>
         {
-            ["speed_mps"] = "45", ["turn_rate_deg"] = "60", ["life_seconds"] = "20", ["spawn_height"] = "150", ["spawn_pitch_deg"] = "-70",
+            ["speed_mps"] = "64", ["turn_rate_deg"] = "60", ["life_seconds"] = "60", ["spawn_height"] = "450", ["spawn_pitch_deg"] = "-45",
+            ["pitch_min_deg"] = "-10", ["pitch_max_deg"] = "-80",
             ["damage"] = "100", ["edge_damage"] = "30", ["full_damage_radius"] = "3", ["splash_radius"] = "12", ["self_damage_multiplier"] = "0.5", ["knockback_speed"] = "6",
         };
         foreach (var kv in overrideFields.Split(','))
@@ -177,23 +196,103 @@ public class AttackMissileTests
     }
 
     [Fact]
-    public void PitchIsClampedShortOfStraightUp()
+    public void PitchNeverGoesLevelOrUp()
     {
         var (m, _) = Flying();
-        m.Aim(0, MathF.PI / 2);
+        m.Aim(0, 0.5f); // aiming up
         for (var i = 0; i < 60; i++) m.Tick(0.1f);
-        Assert.True(m.Pitch < MathF.PI / 2 - 0.01f);
-        Assert.True(m.Pitch > 1.5f);
+        Assert.Equal(FixtureShallowRad, m.Pitch, 1e-4f); // the shallowest dive, not level
+        Assert.True(m.Pitch < 0);
     }
 
     [Fact]
-    public void ItFliesStraightAtConstantSpeedWhenNotSteered()
+    public void PitchNeverGoesStraightDown()
+    {
+        var (m, _) = Flying();
+        m.Aim(0, -MathF.PI / 2); // straight down
+        for (var i = 0; i < 60; i++) m.Tick(0.1f);
+        Assert.Equal(Tuning.SteepPitchRad, m.Pitch, 1e-4f); // the steepest limit, short of vertical
+        Assert.True(m.Pitch > -MathF.PI / 2 + 0.1f);
+    }
+
+    [Fact]
+    public void PitchMovesAtTheTurnRateWithinTheClamp()
+    {
+        var (m, _) = Flying(turnDeg: 60); // starts on the shallowest dive, -10 deg
+        m.Aim(0, -MathF.PI / 4);
+        m.Tick(0.1f);
+        Assert.Equal(FixtureShallowRad - 6f * MathF.PI / 180f, m.Pitch, 1e-3f);
+    }
+
+    [Fact]
+    public void ASpawnPitchOutsideTheClampIsPulledInside()
+    {
+        var w = new FakeWorld(NewManager());
+        var m = new AttackMissileEntity(Owner, Tuning, w, Vector3.Zero, 0f, 0f); // level, which is not allowed
+        Assert.Equal(Tuning.ShallowPitchRad, m.Pitch, 1e-4f);
+    }
+
+    /// <summary>Flies a missile over flat ground from the shipped spawn height, holding one pitch; returns the time to impact.</summary>
+    static float TimeToGround(float pitchRad)
+    {
+        var w = new FakeWorld(NewManager()) { GroundY = 0f };
+        var m = new AttackMissileEntity(Owner, Tuning, w, new Vector3(0, Tuning.SpawnHeight, 0), 0f, pitchRad);
+        m.Id = 1;
+        m.Aim(0, pitchRad);
+        const float dt = 0.01f;
+        var t = 0f;
+        while (m.Ended == null && t < 120f) { m.Tick(dt); t += dt; }
+        Assert.Equal(WorldDespawnReason.Destroyed, m.Ended);
+        Assert.Single(w.Blasts); // it hit the ground, it did not time out
+        return t;
+    }
+
+    [Fact]
+    public void TheShallowestDiveIsTheLongestFlightAndTheSteepestTheShortest()
+    {
+        var shallow = TimeToGround(Tuning.ShallowPitchRad);
+        var steep = TimeToGround(Tuning.SteepPitchRad);
+        Assert.True(shallow > steep * 1.5f, $"shallow {shallow} s vs steep {steep} s"); // 13.3 s vs 7.1 s at -32 and -80
+    }
+
+    [Fact]
+    public void TheImpactTimeStaysInsideTheDiveBounds()
+    {
+        // height / (speed x sin of the pitch): the flight time at each limit, flat ground, no steering
+        var expectShallow = Tuning.SpawnHeight / (Tuning.SpeedMps * MathF.Sin(-Tuning.ShallowPitchRad));
+        var expectSteep = Tuning.SpawnHeight / (Tuning.SpeedMps * MathF.Sin(-Tuning.SteepPitchRad));
+        Assert.InRange(TimeToGround(Tuning.ShallowPitchRad), expectShallow * 0.99f, expectShallow * 1.01f);
+        Assert.InRange(TimeToGround(Tuning.SteepPitchRad), expectSteep * 0.99f, expectSteep * 1.01f);
+        Assert.InRange(TimeToGround(Tuning.SpawnPitchRad), 9f, 11f); // the launch dive at -45 deg is about 9.9 s
+        Assert.True(expectSteep > 0 && expectShallow < Tuning.LifeSeconds, "the safety cap never cuts a flight short");
+    }
+
+    [Fact]
+    public void SteeringNeverLengthensTheFlightPastTheShallowestDive()
+    {
+        // whatever the owner aims at, the missile is never level: the ground comes within the shallow bound
+        var bound = Tuning.SpawnHeight / (Tuning.SpeedMps * MathF.Sin(-Tuning.ShallowPitchRad)) * 1.01f;
+        var w = new FakeWorld(NewManager()) { GroundY = 0f };
+        var m = new AttackMissileEntity(Owner, Tuning, w, new Vector3(0, Tuning.SpawnHeight, 0), 0f, Tuning.SpawnPitchRad);
+        m.Id = 1;
+        m.Aim(MathF.PI, 0); // try to level out
+        var t = 0f;
+        while (m.Ended == null && t < 120f) { m.Tick(0.01f); t += 0.01f; }
+        Assert.Equal(WorldDespawnReason.Destroyed, m.Ended);
+        Assert.True(t <= bound, $"{t} s, bound {bound} s");
+    }
+
+    [Fact]
+    public void ItFliesAlongItsDiveAtConstantSpeedWhenNotSteered()
     {
         var (m, _) = Flying();
         m.Tick(1f);
-        // yaw 0, pitch 0 faces -Z
-        Assert.Equal(-45f, m.Position.Z, 1e-3f);
-        Assert.Equal(0f, m.Position.X, 1e-4f);
+        // yaw 0 faces -Z; the pitch is the shallow dive, so 45 m along it
+        var dir = HitMath.Forward(0, FixtureShallowRad);
+        Assert.Equal(45f * dir.X, m.Position.X, 1e-3f);
+        Assert.Equal(45f * dir.Y, m.Position.Y, 1e-3f);
+        Assert.Equal(45f * dir.Z, m.Position.Z, 1e-3f);
+        Assert.True(m.Position.Y < 0);
         Assert.Null(m.Ended);
     }
 
@@ -210,7 +309,7 @@ public class AttackMissileTests
         Assert.Equal(Owner, b.Owner);
         Assert.Null(b.Victim);
         Assert.Null(b.Car);
-        Assert.Equal(-(3f - 0.02f), b.Position.Z, 1e-3f); // the rocket's pull-back
+        Assert.Equal(3f - 0.02f, b.Position.Length(), 1e-3f); // the rocket's pull-back, along the dive
     }
 
     [Fact]
@@ -228,12 +327,13 @@ public class AttackMissileTests
     public void ItDetonatesOnAPlayerAndNamesThemAsTheVictim()
     {
         var (m, w) = Flying();
-        w.Players.Add(new HitTarget(5, new Vector3(0, 0, -10), Stance.Stand, 0));
+        var ahead = HitMath.Forward(0, FixtureShallowRad) * 10f; // 10 m along the dive
+        w.Players.Add(new HitTarget(5, ahead, Stance.Stand, 0));
         m.Tick(0.5f); // 22.5 m: the player is 10 m away
         Assert.Equal(WorldDespawnReason.Destroyed, m.Ended);
         var b = Assert.Single(w.Blasts);
         Assert.Equal((ushort)5, b.Victim);
-        Assert.InRange(-b.Position.Z, 9f, 10f); // at the player's body, a little short of its centre
+        Assert.InRange(b.Position.Length(), 9f, 10f); // at the player's body, a little short of its centre
     }
 
     [Fact]

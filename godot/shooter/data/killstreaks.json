@@ -6,7 +6,8 @@
     {
       "id": "attack_missile", "name": "Attack Missile", "kills_required": 5, "unlock_level": 4, "max_active": 1, "duration_seconds": 0, "control": "pov",
       "missile": {
-        "speed_mps": 45, "turn_rate_deg": 60, "life_seconds": 20, "spawn_height": 150, "spawn_pitch_deg": -70,
+        "speed_mps": 64, "turn_rate_deg": 60, "life_seconds": 60, "spawn_height": 450, "spawn_pitch_deg": -45,
+        "pitch_min_deg": -32, "pitch_max_deg": -80,
         "damage": 100, "edge_damage": 30, "full_damage_radius": 3, "splash_radius": 12, "self_damage_multiplier": 0.5, "knockback_speed": 6
       }
     },

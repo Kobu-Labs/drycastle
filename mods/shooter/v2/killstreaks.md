@@ -8,7 +8,7 @@ uav
 - shows enemies on minimap for 1min
 attack missle
 - 5 kills
-- a POV missle is spawned and the user controls it, but only direction
+- a POV missle is spawned high above the user (450 m) and the user controls it, but only direction; it can only dive (between -32 and -80 degrees, never level or straight down), so it hits the ground after about 7 to 13 seconds
 turret
 - placeable turret that auto aims at enemies
 - can be destroyed by 3 meele attacks, or 5 person worth of damage
