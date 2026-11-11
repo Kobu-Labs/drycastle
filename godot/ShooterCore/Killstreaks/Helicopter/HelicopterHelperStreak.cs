@@ -81,6 +81,7 @@ public sealed class HelicopterHelperStreak : IKillstreak
         }
         var run = new Run { Owner = use.Owner, Entity = entity, Gunner = new HelicopterGunner(_tuning, _roll) };
         _runs.Add(run);
+        use.BindEntity(entity); // shot down: the use ends with its helicopter
         use.OnEnded(_ =>
         {
             _runs.Remove(run);

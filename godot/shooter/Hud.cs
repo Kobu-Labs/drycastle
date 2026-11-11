@@ -661,6 +661,13 @@ public partial class Hud : CanvasLayer
         if (kmh != null) Set(_speed, Strings.F("hud.vehicle.speed", (int)Math.Round(kmh.Value)));
     }
 
+    /// <summary>The vehicle readout as text (the flak gunner's ammo or a reload word) in the place of the speed; null hides it. A change of text only.</summary>
+    public void SetVehicleReadout(string? text)
+    {
+        _speed.Visible = text != null;
+        if (text != null) Set(_speed, text);
+    }
+
     // ---- per frame (cheap, change-gated) ----
 
     /// <summary>Screenshot mode freezes the clock so transient elements (hit marker, indicators, feed, countdowns) stay as set.</summary>
@@ -738,7 +745,7 @@ public partial class Hud : CanvasLayer
 
     string WeaponName(byte id)
     {
-        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Drown => Strings.T("weapon.drown"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), SpecialWeapons.VehicleGun => Strings.T("weapon.vehicle_gun"), SpecialWeapons.Moab => Strings.T("weapon.moab"), SpecialWeapons.Missile => Strings.T("weapon.attack_missile"), SpecialWeapons.Turret => Strings.T("weapon.turret"), SpecialWeapons.AttackHelicopter => Strings.T("heli.weapon"), SpecialWeapons.Ac130 => Strings.T("ac130.kill"), SpecialWeapons.Helper => Strings.T("helper.weapon"), _ => KillWeaponName?.Invoke(id) ?? Strings.T("weapon.unknown") };
+        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Drown => Strings.T("weapon.drown"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), SpecialWeapons.VehicleGun => Strings.T("weapon.vehicle_gun"), SpecialWeapons.Flak => Strings.T("weapon.flak"), SpecialWeapons.Moab => Strings.T("weapon.moab"), SpecialWeapons.Missile => Strings.T("weapon.attack_missile"), SpecialWeapons.Turret => Strings.T("weapon.turret"), SpecialWeapons.AttackHelicopter => Strings.T("heli.weapon"), SpecialWeapons.Ac130 => Strings.T("ac130.kill"), SpecialWeapons.Helper => Strings.T("helper.weapon"), _ => KillWeaponName?.Invoke(id) ?? Strings.T("weapon.unknown") };
     }
 
     /// <summary>Black outside a centred circle with a thin cross, drawn over the zoomed view.</summary>

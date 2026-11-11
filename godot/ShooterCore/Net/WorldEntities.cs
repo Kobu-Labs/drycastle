@@ -152,6 +152,14 @@ public sealed class WorldEntityManager
         foreach (var id in _live.Keys.ToList()) Despawn(id, WorldDespawnReason.Removed);
     }
 
+    /// <summary>The live entities of one type (their ids and the entities themselves), for server rules that look for them (the flak fuse looks for aircraft). A copy: safe to despawn while iterating.</summary>
+    public List<(ushort Id, IWorldEntity Entity)> OfType(byte type)
+    {
+        var list = new List<(ushort, IWorldEntity)>();
+        foreach (var (id, e) in _live) if (e.TypeId == type) list.Add((id, e));
+        return list;
+    }
+
     /// <summary>The current state of one live entity, or null when it is gone. Looks up one id without building the whole snapshot.</summary>
     public WorldState? StateOf(ushort id) => _live.TryGetValue(id, out var e) ? e.Serialize() : null;
 

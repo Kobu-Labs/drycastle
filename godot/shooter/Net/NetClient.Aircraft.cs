@@ -44,6 +44,7 @@ public partial class NetClient
     {
         WorldEntities.Spawned += OnAircraftSpawned;
         WorldEntities.Despawned += OnAircraftDespawned;
+        WorldEntities.DespawnedFor += OnAircraftDespawnedFor;
         EventReceived += OnAircraftEvent;
         _gunOverlay = new GunshipOverlay();
         AddChild(_gunOverlay);
@@ -72,6 +73,19 @@ public partial class NetClient
         if (_gunship == v) EndGunship();
         v.Model.QueueFree();
     }
+
+    /// <summary>A shot-down aircraft blows up where it flew (an expired or removed one just leaves); runs before <see cref="OnAircraftDespawned"/> frees the model.</summary>
+    void OnAircraftDespawnedFor(ushort id, WorldDespawnReason reason)
+    {
+        if (reason != WorldDespawnReason.Destroyed || !_aircraft.TryGetValue(id, out var v)) return;
+        var at = v.Model.GlobalPosition;
+        RocketFx.Explode(Owned, at, AircraftCrashRadius);
+        if (Sfx.Enabled) Sfx.Play3D("explosion.vehicle", at);
+        ShakeFor(at, AircraftCrashRadius);
+    }
+
+    /// <summary>The size of the blast of a shot-down aircraft (the vehicle blast is 9 m).</summary>
+    const float AircraftCrashRadius = 12f;
 
     void OnAircraftEvent(EventKind kind, byte[] payload)
     {

@@ -115,6 +115,7 @@ public partial class NetClient : Node
         InitMissile();
         InitTurrets();
         InitAircraft();
+        InitFlak();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
         _peer = _conn.ConnectToHost(Host, Port, Wire.Channels, 0);
@@ -353,6 +354,7 @@ public partial class NetClient : Node
             if (id == _myId) { OnSelf(rec, h.Ack); continue; }
             if (rec.Type == EntityType.Projectile) { OnRocketState(id, rec); continue; }
             if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
+            if (rec.Type == EntityType.Turret) { OnTurretState(rec, h.Tick); continue; }
             if (rec.Type is not (EntityType.Player or EntityType.Target)) continue;
             if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); _remotes[id] = r; }
             r.State = rec.State; r.Stance = rec.Stance; r.Slot = rec.Weapon;

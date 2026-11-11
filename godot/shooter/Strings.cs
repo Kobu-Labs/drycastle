@@ -23,7 +23,7 @@ public static class Strings
         ("hud.respawn.in", "Respawning in {0}"),
         ("hud.hint.captured", "{0}  Scoreboard     {1}-{2}  Weapons     Esc  Pause"),
         ("hud.hint.released", "Mouse released. Close the menu to resume"),
-        ("hud.vehicle.speed", "{0} km/h"), ("hud.vehicle.enter", "{0}  Enter car"), ("hud.vehicle.exit", "{0}  Exit car     Space  Handbrake"),
+        ("hud.vehicle.speed", "{0} km/h"), ("hud.flak.ammo", "FLAK  {0} / {1}"), ("hud.flak.reload", "FLAK  RELOADING"), ("weapon.flak", "Flak"), ("hud.vehicle.enter", "{0}  Enter car"), ("hud.vehicle.exit", "{0}  Exit car     Space  Handbrake"),
         ("score.title", "Scoreboard"), ("score.ending", "Round over: {0} wins"), ("score.ending.tie", "Round over: {0} win"),
         ("score.col.player", "Player"), ("score.col.kills", "K"), ("score.col.deaths", "D"), ("score.col.ping", "Ping"),
         ("score.you", "{0} (you)"), ("score.hint.hold", "Hold Tab to show this"), ("score.hint.next", "A new round starts soon"),

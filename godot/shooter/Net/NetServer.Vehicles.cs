@@ -171,7 +171,7 @@ public partial class NetServer
         var seat = best.Seat.NearestFreeSeat(best.Def, N(best.GlobalPosition), best.State.Yaw, N(p), EnterRange + 1.5f);
         var wasEmpty = !best.Seat.Occupied;
         if (seat < 0 || !best.Seat.TryEnter(c.Id, seat)) return false;
-        c.Car = best; c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.Body.InVehicle = true;
+        c.Car = best; c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.Body.InVehicle = true; c.FlakSent = null;
         if (wasEmpty) best.Lights = Headlights.OnEnterAt(Clock.HourAt(_elapsed)); // night: on as the first rider gets in
         c.Body.Teleport(SeatPos(best, seat));
         _carEnters++;
@@ -199,10 +199,12 @@ public partial class NetServer
         GD.Print($"server: {c.Name} left {car.Def.Id} {car.Id} (seat {seat})");
     }
 
-    /// <summary>World position of a seat of the car (its offset in the car's frame).</summary>
+    /// <summary>World position of a seat of the car (its offset in the car's frame). A flak truck's gunner sits on the turret, so the seat turns with it.</summary>
     static Vector3 SeatPos(ServerCar car, int seat)
     {
-        var p = VehicleSeat.SeatPosition(N(car.GlobalPosition), car.State.Yaw, car.Def.Seats[seat].Offset);
+        var offset = car.Def.Seats[seat].Offset;
+        if (car.Def.Flak is { } flak && car.Def.Seats[seat].Role == "gunner") offset = FlakRules.TurretSeatOffset(flak, offset, car.TurretLocalYaw);
+        var p = VehicleSeat.SeatPosition(N(car.GlobalPosition), car.State.Yaw, offset);
         return new Vector3(p.X, p.Y, p.Z);
     }
 
@@ -218,6 +220,7 @@ public partial class NetServer
     /// <summary>A gunner's inputs: reload when asked, then one round when the trigger is held and the gun is ready.</summary>
     void GunnerInput(Client c, NetInput i)
     {
+        if (c.Car!.Def.Flak is { } flak) { FlakGunnerInput(c, c.Car, flak, i); return; }
         var gun = c.Car!.Gun!;
         if ((i.Buttons & (ushort)MoveButtons.Reload) != 0) gun.TryReload(_elapsed);
         if (gun.TryFire(_elapsed, (i.Buttons & (ushort)MoveButtons.Fire) != 0)) FireGun(c, c.Car, i, gun.Def);

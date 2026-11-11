@@ -11,7 +11,7 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public sealed partial class SandboxScreen : MenuScreen
 {
-    static readonly string[] Vehicles = { "car", "jeep", "quad", "boat", "amphibious" };
+    static readonly string[] Vehicles = { "car", "jeep", "quad", "boat", "amphibious", "flak" };
 
     readonly NetClient _client;
     readonly Func<GameData> _data;
@@ -60,7 +60,7 @@ public sealed partial class SandboxScreen : MenuScreen
         {
             var index = data.Vehicles.Vehicles.FindIndex(v => v.Id == id);
             if (index < 0) continue; // a vehicle missing from vehicles.json is left out, not an error
-            vehicles.AddChild(Ui.Btn(Strings.T("sandbox.vehicle." + id), () => _client.SendSandboxAction(SandboxAction.SpawnVehicle, (byte)index), null, 150));
+            vehicles.AddChild(Ui.Btn(Strings.T("sandbox.vehicle." + id), () => _client.SendSandboxAction(SandboxAction.SpawnVehicle, (byte)index), null, 140));
         }
         _body.AddChild(vehicles);
 

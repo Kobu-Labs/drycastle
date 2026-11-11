@@ -14,6 +14,9 @@ public partial class NetClient
     sealed class CarView
     {
         public Node3D Node = null!;
+        public ushort Id;
+        /// <summary>A flak truck's moving nodes (null for every other type, or a model without them).</summary>
+        public FlakNodes? Flak;
         public readonly Interpolator Buf = new();
         public ushort Driver;
         public int Kind;
@@ -42,7 +45,12 @@ public partial class NetClient
     void OnVehicleState(ushort id, EntityRecord rec, uint tick)
     {
         if (Vehicles == null) return; // never let a missing table abort the rest of the snapshot
-        if (!_cars.TryGetValue(id, out var v)) { v = new CarView { Node = CarFx.Make(Owned, Vehicles!.Vehicles[Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1)], VehicleRecord.Colour(rec)), Kind = Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1), Pos = rec.Position, Yaw = rec.YawRad }; _cars[id] = v; }
+        if (!_cars.TryGetValue(id, out var v))
+        {
+            v = new CarView { Id = id, Node = CarFx.Make(Owned, Vehicles!.Vehicles[Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1)], VehicleRecord.Colour(rec)), Kind = Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1), Pos = rec.Position, Yaw = rec.YawRad };
+            if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flak != null) v.Flak = FlakNodes.Find(v.Node);
+            _cars[id] = v;
+        }
         v.Lamps ??= ShotFx.Enabled ? CarLights.Attach(v.Node, Vehicles!.Vehicles[v.Kind]) : null;
         v.Driver = VehicleRecord.Driver(rec);
         v.Lights = VehicleRecord.Lights(rec);
@@ -125,6 +133,8 @@ public partial class NetClient
         float? kmh = null;
         // real spot lights go to the nearest lit vehicles only (CarLights.MaxBeams); the others show their cones and lenses
         var beams = PickBeams();
+        var flakGunner = false;
+        var dt = (float)GetProcessDeltaTime();
         foreach (var v in _cars.Values)
         {
             v.Lamps?.Set(v.Lights && !v.Destroyed, v.Braking, beams.Contains(v));
@@ -133,6 +143,7 @@ public partial class NetClient
             v.Node.GlobalPosition = p;
             v.Node.Rotation = new Vector3(0, s.Yaw, 0);
             if (v.Destroyed) continue;
+            if (v.Flak != null && RenderFlak(v, s, rt, dt)) flakGunner = true;
             v.Smoke?.Near(Sfx.ListenerDistance(p) < 90f); // far vehicles do not smoke: particle budget
             SfxCar(v, p);
             if (v.Driver == _myId && _driving && _me != null)
@@ -144,8 +155,10 @@ public partial class NetClient
             }
         }
         if (!_driving) HideSelfInCar();
+        if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; _me?.EndChase(_me.Yaw); } // the flak gunner's camera ends where the look pointed
         if (!_driving && _gunship == null) _me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
-        _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
+        if (flakGunner) _hud?.SetVehicleReadout(FlakReadout());
+        else _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
         string? prompt = null;
         if (_driving) prompt = Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) != null) prompt = Strings.F("hud.vehicle.enter", InputBindings.Name("interact"));

@@ -61,6 +61,23 @@ public class VehiclesFile : IVersioned
                     throw new DataFileException($"vehicles.json: {v.Id}: gun damage, fire_interval, range and magazine must be positive, reserve and reload_time not negative");
                 if (!v.Seats.Any(x => x.Role == "gunner")) throw new DataFileException($"vehicles.json: {v.Id}: a gun needs a gunner seat");
             }
+            if (v.Flak is { } fk)
+            {
+                if (v.Gun != null) throw new DataFileException($"vehicles.json: {v.Id}: a vehicle has a gun or a flak turret, not both");
+                if (!v.Seats.Any(x => x.Role == "gunner")) throw new DataFileException($"vehicles.json: {v.Id}: a flak turret needs a gunner seat");
+                if (v.Medium != VehicleMedium.Land) throw new DataFileException($"vehicles.json: {v.Id}: a flak turret is for a land vehicle");
+                if (string.IsNullOrEmpty(fk.WeaponId) || fk.Pivot.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: flak needs weapon_id and pivot [x, y, z]");
+                if (fk.FireInterval <= 0 || fk.ShellSpeed <= 0 || fk.MaxRange <= 0 || fk.MuzzleLength <= 0 || fk.BarrelSpacing < 0 || fk.SpreadDegrees < 0
+                    || fk.ProximityRadius <= 0 || fk.BurstRadius <= 0 || fk.Damage <= 0 || fk.EdgeDamage < 0 || fk.GroundDamage <= 0 || fk.Magazine < 1 || fk.Reserve < 0 || fk.ReloadTime < 0
+                    || fk.TracerLength <= 0 || fk.PuffRadius <= 0)
+                    throw new DataFileException($"vehicles.json: {v.Id}: flak numbers must be positive (spread, edge damage, reserve, reload_time and barrel_spacing not negative)");
+                if (fk.BurstFullRadius < 0 || fk.BurstFullRadius >= fk.BurstRadius) throw new DataFileException($"vehicles.json: {v.Id}: flak burst_full_radius must be 0 or more and less than burst_radius");
+                if (fk.ProximityRadius > fk.BurstRadius) throw new DataFileException($"vehicles.json: {v.Id}: flak proximity_radius must not exceed burst_radius");
+                if (fk.GroundSplash.Radius <= 0 || fk.GroundSplash.FullDamageRadius < 0 || fk.GroundSplash.FullDamageRadius >= fk.GroundSplash.Radius)
+                    throw new DataFileException($"vehicles.json: {v.Id}: flak ground_splash needs radius > full_damage_radius >= 0");
+                if (fk.MinElevationDeg < -10 || fk.MaxElevationDeg > 89 || fk.MinElevationDeg >= fk.MaxElevationDeg)
+                    throw new DataFileException($"vehicles.json: {v.Id}: flak elevation is min_elevation_deg (at least -10) below max_elevation_deg (at most 89)");
+            }
             if (v.Height <= 0 || v.HalfWidth <= 0 || v.HalfLength <= 0) throw new DataFileException($"vehicles.json: {v.Id}: height, half_width and half_length must be positive");
             if (v.RunOverMass is { } rm && rm <= 0) throw new DataFileException($"vehicles.json: {v.Id}: run_over_mass must be positive");
             if (!VehicleMedium.All.Contains(v.Medium)) throw new DataFileException($"vehicles.json: {v.Id}: medium {v.Medium} is not land, amphibious or boat");
@@ -107,6 +124,51 @@ public class VehicleGunDef
     /// <summary>Rounds carried outside the magazine; a reload moves them in.</summary>
     public int Reserve { get; set; } = 240;
     public float ReloadTime { get; set; } = 2.5f;
+}
+
+/// <summary>
+/// An anti-aircraft turret on a vehicle (vehicles.json "flak"), worked from the gunner seat: the gunner's view is the turret's aim, and each
+/// round is a fast airburst shell (<see cref="FlakRules"/>). Magazine, reserve and reload work as a <see cref="VehicleGun"/>'s (<see cref="AsGun"/>).
+/// </summary>
+public class VehicleFlakDef
+{
+    /// <summary>The weapons.json weapon whose shot sound and tracer index the flak's rounds use.</summary>
+    public string WeaponId { get; set; } = "m249";
+    /// <summary>The gun cradle's pivot in the vehicle's frame, [x, y, z] (x right, y up, z back); the barrels swing about it.</summary>
+    public float[] Pivot { get; set; } = { 0, 2.55f, 1.75f };
+    /// <summary>Metres from the pivot along the barrels to the muzzle tips.</summary>
+    public float MuzzleLength { get; set; } = 3.65f;
+    /// <summary>Each of the two barrels sits this far to the side of the pivot; the rounds leave them in turn.</summary>
+    public float BarrelSpacing { get; set; } = 0.27f;
+    /// <summary>Seconds between rounds while the trigger is held.</summary>
+    public float FireInterval { get; set; } = 0.25f;
+    /// <summary>Shell speed, m/s (a straight line: no drop).</summary>
+    public float ShellSpeed { get; set; } = 700;
+    /// <summary>The shell bursts on its own this far out if it met nothing.</summary>
+    public float MaxRange { get; set; } = 2500;
+    public float SpreadDegrees { get; set; } = 0.25f;
+    /// <summary>The fuse: the shell bursts at its closest approach once it passes within this many metres of an aircraft.</summary>
+    public float ProximityRadius { get; set; } = 12;
+    /// <summary>An airburst's reach: an aircraft inside it takes <see cref="Damage"/> out to <see cref="BurstFullRadius"/>, falling to <see cref="EdgeDamage"/> here.</summary>
+    public float BurstRadius { get; set; } = 15;
+    public float BurstFullRadius { get; set; } = 4;
+    public float Damage { get; set; } = 150;
+    public float EdgeDamage { get; set; } = 40;
+    /// <summary>A shell that hits the ground, a body or a vehicle: the direct damage and the small blast (weak on purpose, the flak is for aircraft).</summary>
+    public float GroundDamage { get; set; } = 30;
+    public SplashDef GroundSplash { get; set; } = new() { Radius = 4, FullDamageRadius = 1.5f, EdgeDamage = 10, SelfDamageMultiplier = 0.5f, KnockbackSpeed = 3 };
+    public int Magazine { get; set; } = 40;
+    public int Reserve { get; set; } = 400;
+    public float ReloadTime { get; set; } = 4;
+    /// <summary>Lowest and highest barrel elevation, degrees. The minimum keeps the barrels clear of the cab.</summary>
+    public float MinElevationDeg { get; set; } = 5;
+    public float MaxElevationDeg { get; set; } = 85;
+    /// <summary>Visual only: the tracer's length, and the radius of the puff an airburst shows (the damage reach is <see cref="BurstRadius"/>).</summary>
+    public float TracerLength { get; set; } = 14;
+    public float PuffRadius { get; set; } = 6;
+
+    /// <summary>The magazine, reserve and reload as a vehicle gun's, so the same <see cref="VehicleGun"/> keeps the count.</summary>
+    public VehicleGunDef AsGun() => new() { Damage = GroundDamage, FireInterval = FireInterval, Range = MaxRange, SpreadDegrees = SpreadDegrees, Magazine = Magazine, Reserve = Reserve, ReloadTime = ReloadTime };
 }
 
 /// <summary>
@@ -196,6 +258,8 @@ public class VehicleDef
     public List<VehicleSeatDef> Seats { get; set; } = new() { new VehicleSeatDef { Role = "driver" } };
     /// <summary>The gun a gunner seat fires. Null: no gun.</summary>
     public VehicleGunDef? Gun { get; set; }
+    /// <summary>An anti-aircraft turret worked from the gunner seat (the flak truck). Null: none. Excludes <see cref="Gun"/>.</summary>
+    public VehicleFlakDef? Flak { get; set; }
     /// <summary>Mass (kg) for run-over damage. Unset: the v1 run-over numbers (see <see cref="VehiclesFile.RunOverScale"/>).</summary>
     public float? RunOverMass { get; set; }
     /// <summary>

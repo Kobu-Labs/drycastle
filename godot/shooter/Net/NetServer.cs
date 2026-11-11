@@ -48,6 +48,8 @@ public partial class NetServer : Node
         public ServerCar? Car;
         /// <summary>Seat of <see cref="Car"/> this player sits in (0 = driver).</summary>
         public int CarSeat;
+        /// <summary>The flak status last sent to this client as the gunner (magazine, reserve, reloading), so only a change is sent; null until the first.</summary>
+        public (int Mag, int Reserve, bool Reloading)? FlakSent;
         public bool UseHeld, LightsHeld, Handbrake, StreakHeld;
         public float Throttle, Steer;
         public PlayerProfile? Profile;
@@ -153,6 +155,7 @@ public partial class NetServer : Node
         BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
         WarmSurfaceIndexes(); // roads.json and the tree grid, so no impact pays for them on a tick (T3-003, T3-004)
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
+        if (Weapons != null) foreach (var v in Vehicles.Vehicles) if (v.Flak is { } fk) FlakWeapon(fk); // a flak naming an unknown weapon fails here, not on the first shot
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");
     }
@@ -190,6 +193,7 @@ public partial class NetServer : Node
         StepCorpses((float)delta);
         StepVehicles((float)delta);
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
+        DetonateFlak();    // flak shells that have arrived burst now
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
         if (catchUp && LossTest == 0) _skippedSnapshots++; // the next regular tick sends the current state
@@ -802,6 +806,7 @@ public partial class NetServer : Node
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot, c.Body.State.Stance));
         foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed, car.Lights));
+        foreach (var car in _cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model
         ents.AddRange(TargetRecords()); // target dummies (#148)
         foreach (var r in _rockets)
             ents.Add(EntityRecord.Make(r.Id, EntityType.Projectile, N(r.Pos),

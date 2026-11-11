@@ -25,6 +25,8 @@ public static class SpecialWeapons
     public const byte Ac130 = 244;
     /// <summary>The helicopter helper's rounds (killstreak "helicopter_helper"); its kills count as the streak's, under the weapon id helicopter_gun.</summary>
     public const byte Helper = 245;
+    /// <summary>The flak truck's shells (a gunner's rounds): its kills are ordinary kills, not the streak's, like the jeep's roof gun.</summary>
+    public const byte Flak = 243;
 }
 
 public abstract record MatchEvent;

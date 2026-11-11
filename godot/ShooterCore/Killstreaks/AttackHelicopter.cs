@@ -8,9 +8,9 @@ namespace Suchohrad.ShooterCore;
 /// </summary>
 /// <remarks>
 /// Decisions (documented in the ticket): the owner's body stands still and takes no damage while they hold the gun (it
-/// is a sitting target otherwise, and the helicopter cannot be shot down in v2); the rockets are not part of this streak;
+/// is a sitting target otherwise; the helicopter itself can be shot down by a flak truck, ADR 0005, which ends the streak and gives the body back); the rockets are not part of this streak;
 /// the circle is centred on the map's centre and the helicopter starts on the owner's bearing from it; the streak ends
-/// at its duration (the gunner is returned to the body) or when the owner dies or leaves.
+/// at its duration (the gunner is returned to the body), when the helicopter is shot down, or when the owner dies or leaves.
 /// </remarks>
 public static class AttackHelicopterStreak
 {

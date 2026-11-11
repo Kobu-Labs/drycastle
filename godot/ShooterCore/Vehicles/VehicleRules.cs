@@ -193,6 +193,9 @@ public sealed class VehicleGun
 
     public bool Reloading => _reloadDone >= 0;
 
+    /// <summary>Seconds of reload left at <paramref name="now"/> (0 when not reloading).</summary>
+    public float ReloadRemaining(double now) => _reloadDone >= 0 ? (float)Math.Max(0, _reloadDone - now) : 0f;
+
     /// <summary>Starts a reload: not when full, empty of reserve or already reloading.</summary>
     public bool TryReload(double now)
     {

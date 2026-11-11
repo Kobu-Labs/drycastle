@@ -141,8 +141,16 @@ A value from the day clock that drives street lamp light, headlight and window g
 _Avoid_: darkness, night mode
 
 **Aircraft**:
-A flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper and the AC-130 gunship. It is replicated as one world entity type, and its guns are controlled by the owner.
+A flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper and the AC-130 gunship. It is replicated as one world entity type, and its guns are controlled by the owner. It has hit points (600 for the helicopter, 1500 for the gunship) and can be shot down by flak: its streak then ends and the owner is released from the gun.
 _Avoid_: plane (for helicopters), drone
+
+**Flak truck**:
+A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun.
+_Avoid_: AA gun, anti-air vehicle, SPAAG
+
+**Airburst**:
+A flak shell's end by an aircraft: the shell flies straight at 700 m/s, and once it passes within 12 m of an aircraft it bursts at the closest approach. An aircraft within 15 m of the burst takes 150 damage out to 4 m, falling to 40 at the edge. The gunner has to lead the aircraft, which flies a known circle. A shell that meets no aircraft ends on the ground with a small blast (4 m, weak), or runs out of range.
+_Avoid_: proximity fuse (the fuse is how it works, the burst is the thing), flak burst
 
 **Sentry turret**:
 The killstreak that places a 500 hp gun on the ground for 15 seconds. It turns to targets within its sight range and shoots them. It is removed when its owner dies or leaves the match, so it never fires or credits kills for an absent owner.

@@ -47,6 +47,9 @@ public partial class ServerCar : CharacterBody3D
     public VehicleSeat Seat { get; private set; } = null!;
     /// <summary>The gunner seat's gun, with its own magazine and reserve; refilled by a full <see cref="Reset"/>. Null when the type has none.</summary>
     public VehicleGun? Gun { get; private set; }
+    /// <summary>A flak truck's turret: its yaw against the chassis (it turns with the vehicle when nobody aims it), the barrels' elevation, and which barrel fires next. See <see cref="FlakRules"/>.</summary>
+    public float TurretLocalYaw, GunPitch;
+    public int FlakBarrel;
     /// <summary>Headlights on (replicated as one bit, <see cref="VehicleRecord.Make"/>): set when a driver gets in at night, toggled by the H key, off when empty.</summary>
     public bool Lights;
     public readonly AbandonTimer Abandon = new();
@@ -106,7 +109,9 @@ public partial class ServerCar : CharacterBody3D
         {
             Hp = Def.Hp; LastAttacker = 0; LastWeapon = 0; DetonateAt = -1;
             Destroyed = false; CollisionLayer = 2;
-            Gun = Def.Gun is { } g ? new VehicleGun(g) : null;
+            Gun = Def.Gun is { } g ? new VehicleGun(g) : Def.Flak is { } fk ? new VehicleGun(fk.AsGun()) : null;
+            TurretLocalYaw = 0; FlakBarrel = 0;
+            GunPitch = Def.Flak is { } f0 ? FlakRules.ClampPitch(f0, 0) : 0;
         }
         GlobalPosition = OriginPos;
         State = new CarState { Yaw = OriginYaw, Speed = 0 };
