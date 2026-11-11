@@ -31,6 +31,6 @@ void fragment() {
 	}
 	float lum = clamp(dot(src, vec3(0.299, 0.587, 0.114)) * gain * exposure, 0.0, 1.0);
 	vec3 graded = mix(heat(lum), vec3(lum), mono);
-	graded *= 1.0 - scanline * (0.5 + 0.5 * sin(SCREEN_UV.y * 1400.0));
+	graded *= 1.0 - scanline * (0.5 + 0.5 * sin(FRAGCOORD.y * 1.3));
 	COLOR = vec4(mix(src, graded, amount), 1.0);
 }
