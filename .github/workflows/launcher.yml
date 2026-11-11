@@ -1,0 +1,32 @@
+# Builds the launcher the players install once. Push a tag `launcher-vX.Y.Z` (or run manually); the launcher updates the game, not itself.
+name: launcher
+on:
+  push:
+    tags: ['launcher-v*']
+  workflow_dispatch:
+permissions: { contents: write }
+env:
+  GODOT_VERSION: 4.7.2
+  GH_TOKEN: ${{ github.token }}
+jobs:
+  launcher:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 8.0.x }
+      - run: dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj --filter "FullyQualifiedName~Launcher"
+      - name: Install Godot ${{ env.GODOT_VERSION }} mono and export templates
+        run: |
+          base=https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable
+          curl -fsSL -o godot.zip $base/Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip
+          curl -fsSL -o templates.tpz $base/Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz
+          unzip -q godot.zip -d "$RUNNER_TEMP/godot"
+          sudo ln -sf "$(ls -d $RUNNER_TEMP/godot/*/ | head -1)Godot_v${GODOT_VERSION}-stable_mono_linux.x86_64" /usr/local/bin/godot
+          tpl=$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono
+          mkdir -p "$tpl" && unzip -q templates.tpz -d "$RUNNER_TEMP/tpl" && cp -r "$RUNNER_TEMP/tpl/templates/." "$tpl/"
+      - run: make launcher-export
+      - name: Publish
+        run: |
+          tag="${GITHUB_REF_NAME}"; [[ "$GITHUB_REF" == refs/tags/launcher-v* ]] || tag="launcher-manual-${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" --target "$GITHUB_SHA" --title "Launcher $tag" --notes "Install once; it keeps the game updated. Windows may show SmartScreen: More info, Run anyway. Linux: unzip, chmod +x, run." out/launcher/suchohrad-launcher-windows.zip out/launcher/suchohrad-launcher-linux.zip

@@ -64,6 +64,7 @@ dotnet build godot/viewer/viewer.csproj
 - Pipeline stages, config, areas, registry: [docs/pipeline.md](docs/pipeline.md)
 - Viewer, editor mode, hot reload, MCP: [docs/viewer-and-editor.md](docs/viewer-and-editor.md), [docs/mcp.md](docs/mcp.md)
 - Netcode spike (headless 64-client test; `make netspike`): [docs/spikes/netcode-spike.md](docs/spikes/netcode-spike.md)
+- Launcher, CI releases, how players get and update the game: [docs/launcher.md](docs/launcher.md)
 - UI standard: [docs/standards/ui-ux.md](docs/standards/ui-ux.md)
 
 ## Data attribution

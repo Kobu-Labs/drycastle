@@ -1,5 +1,7 @@
 # Releasing the shooter
 
+Players normally get builds through the launcher and CI releases: see `docs/launcher.md`. This page is the manual path (and the server deploy).
+
 How to ship a build to players and run a public server. Details of the server flags are in `docs/shooter-server.md`.
 Status: `make shooter-package` builds the Windows zip (79 MB) and the Linux server starts from the export layout. A run of the Windows client itself is still untested (see "Still unverified").
 
@@ -75,4 +77,4 @@ Players connect to `159.195.244.164`, port 27015. Check it from anywhere with th
 - The Windows client has not been run from an unzipped folder (assets and map found next to the exe).
 - The exported Linux server prints `ERROR: Pages in use exist at exit in PagedAllocator` and dumps core when it ends via
   `--quit-after`; the match itself ran fine. Check whether it also happens on a normal stop (SIGTERM) before relying on it.
-- No CI builds release artifacts yet.
+- CI now builds release artifacts and a launcher updates players: see `docs/launcher.md` (not yet run against real GitHub).
