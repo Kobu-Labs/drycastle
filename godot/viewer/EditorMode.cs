@@ -143,6 +143,7 @@ public partial class EditorMode : Node
             CancelDrag();
             CancelRegionGesture();
             DisarmPlacement(false);
+            if (GateArmed) CancelGate();
             HoverId = null;
             _hoverLabel.Visible = false;
         }
@@ -198,8 +199,8 @@ public partial class EditorMode : Node
     // ---- picking ----
 
     /// <summary>
-    /// Ground point under a ray: physics ray against the map colliders (terrain first of all), else a
-    /// horizontal plane at the mean terrain height.
+    /// Ground point under a ray: the first crossing of the terrain height (ray march, buildings and props are
+    /// ignored), else a horizontal plane at the mean terrain height.
     /// </summary>
     public bool RayToGround(Vector3 origin, Vector3 dir, out Vector3 point)
     {
@@ -217,11 +218,28 @@ public partial class EditorMode : Node
 
     bool CastGroundRay(Vector3 origin, Vector3 dir, out Vector3 point)
     {
-        var q = PhysicsRayQueryParameters3D.Create(origin, origin + dir * 3000f);
-        q.CollideWithBodies = true;
-        q.Exclude = new Godot.Collections.Array<Rid> { Player.GetRid() };
-        var hit = GetViewport().World3D.DirectSpaceState.IntersectRay(q);
-        if (hit.Count > 0) { point = hit["position"].AsVector3(); return true; }
+        // march the ray against the terrain height (roofs, eaves, fence tops and props must not count as ground)
+        var prevT = 0f;
+        var h0 = Map.GroundHeight(origin.X, origin.Z);
+        var above = float.IsNaN(h0) || origin.Y > h0;
+        for (var t = 1f; t <= 3000f; t += Mathf.Max(1f, t * 0.01f))
+        {
+            var p = origin + dir * t;
+            var h = Map.GroundHeight(p.X, p.Z);
+            if (float.IsNaN(h)) { above = true; prevT = t; continue; }
+            if (p.Y > h) { above = true; prevT = t; continue; }
+            if (!above) { prevT = t; continue; } // started below the terrain: wait until the ray comes out of it
+            var lo = prevT; var hi = t; // above at lo, below at hi
+            for (var i = 0; i < 12; i++)
+            {
+                var mid = (lo + hi) / 2;
+                var m = origin + dir * mid;
+                var mh = Map.GroundHeight(m.X, m.Z);
+                if (!float.IsNaN(mh) && m.Y <= mh) hi = mid; else lo = mid;
+            }
+            point = origin + dir * hi;
+            return true;
+        }
         var plane = Map.MeanTerrainHeight;
         if (dir.Y < -1e-4f)
         {

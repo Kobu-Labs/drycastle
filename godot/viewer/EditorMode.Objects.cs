@@ -211,8 +211,7 @@ public partial class EditorMode
         foreach (var (id, node) in Map.ObjectNodes)
         {
             if (!GodotObject.IsInstanceValid(node) || !node.IsInsideTree()) continue;
-            if (node.GlobalPosition.DistanceSquaredTo(origin) > 600f * 600f) continue;
-            if (LocalAabb(node) is not { } box) continue;
+                        if (LocalAabb(node) is not { } box) continue;
             var t = node.GlobalTransform;
             var inv = t.AffineInverse();
             if (RayBox(box.Grow(PickMargin), inv * origin, inv.Basis * dir) is not { } hit) continue;
@@ -376,6 +375,7 @@ public partial class EditorMode
             double x = gx + _grab.dx, y = gy + _grab.dy;
             if (!free) { x = Snap(x, MoveSnap); y = Snap(y, MoveSnap); }
             _dragNow = (Math.Round(x, 3), Math.Round(y, 3), _dragStart.rot);
+            TintDrag(ParcelAtAbs(_dragNow.x, _dragNow.y) != null);
         }
         else
         {
@@ -385,6 +385,26 @@ public partial class EditorMode
         }
         if (_dragNow != _dragStart) _dragMoved = true;
         PreviewObject(_dragId, _dragNow.x, _dragNow.y, _dragNow.rot);
+    }
+
+    Dictionary<MeshInstance3D, Material?>? _dragTint;
+
+    /// <summary>Red while the dragged object is over no parcel (release would refuse), like the placement ghost; the object's own materials come back when valid.</summary>
+    void TintDrag(bool valid)
+    {
+        if (_dragId == null || !Map.ObjectNodes.TryGetValue(_dragId, out var node) || !GodotObject.IsInstanceValid(node)) return;
+        if (valid) { RestoreDragTint(); return; }
+        if (_dragTint != null) return;
+        _dragTint = new();
+        foreach (var mi in Meshes(node)) { _dragTint[mi] = mi.MaterialOverride; mi.MaterialOverride = _ghostBad; }
+        Say("no parcel here: releasing will not move the object", true);
+    }
+
+    void RestoreDragTint()
+    {
+        if (_dragTint == null) return;
+        foreach (var (mi, mat) in _dragTint) if (GodotObject.IsInstanceValid(mi)) mi.MaterialOverride = mat;
+        _dragTint = null;
     }
 
     void PreviewObject(string id, double x, double y, double rot)
@@ -400,6 +420,7 @@ public partial class EditorMode
     {
         if (_drag == DragKind.None || _dragId == null) return false;
         var kind = _drag; var id = _dragId; var now = _dragNow; var start = _dragStart; var moved = _dragMoved;
+        RestoreDragTint();
         _drag = DragKind.None; _dragId = null;
         if (!moved) return false;
         var ok = kind == DragKind.Move ? MoveObject(id, now.x, now.y) : SetObjectRotation(now.rot, id);
@@ -410,6 +431,7 @@ public partial class EditorMode
     public void CancelDrag()
     {
         if (_drag == DragKind.None || _dragId == null) return;
+        RestoreDragTint();
         PreviewObject(_dragId, _dragStart.x, _dragStart.y, _dragStart.rot);
         _drag = DragKind.None; _dragId = null;
     }
