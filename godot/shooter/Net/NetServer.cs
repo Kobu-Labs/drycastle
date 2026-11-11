@@ -18,6 +18,8 @@ public partial class NetServer : Node
         public string Name = "";
         public bool Joined;
         public Player Body = null!;
+        /// <summary>Recoil of this player's trigger hand; the server fires hitscan shots with its offset.</summary>
+        public RecoilState Recoil = new(0);
         public readonly Queue<NetInput> Inputs = new();
         public ushort Ack;
         public bool HasAck;
@@ -284,6 +286,7 @@ public partial class NetServer : Node
         c.Name = string.IsNullOrWhiteSpace(h.Name) ? $"player{c.Id}" : h.Name.Trim();
         // health, death and respawn belong to the match state machine, not the body
         c.W = new PlayerWeapons(Weapons, c.Perks);
+        c.Recoil = new RecoilState(c.Id);
         c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}" };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
@@ -371,6 +374,7 @@ public partial class NetServer : Node
                     sc.Body.Health = MoveConsts.MaxHealth;
                     sc.Inputs.Clear(); sc.Start = sc.Body.GlobalPosition; sc.MaxMoved = 0;
                     sc.W.Reset(_elapsed);
+                    sc.Recoil.Reset();
                     SendAmmo(sc);
                 }
                 BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(s.Id, s.Position, s.ProtectionSeconds)));
@@ -420,6 +424,7 @@ public partial class NetServer : Node
             c.Body.Yaw = Quant.Yaw(i.Yaw);
             c.Body.Pitch = Quant.Pitch(i.Pitch);
             c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
+            c.Recoil.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Fire) != 0, c.W.Current.Recoil);
             var wi = new WeaponInput((i.Buttons & (ushort)MoveButtons.Fire) != 0, (i.Buttons & (ushort)MoveButtons.Reload) != 0, i.Slot, (i.Buttons & (ushort)MoveButtons.Switch) != 0);
             if (c.W.Update(_elapsed, wi) is { } shot) FireWeapon(c, i, shot);
             if (c.W.Changed) SendAmmo(c);
@@ -477,7 +482,8 @@ public partial class NetServer : Node
         _shotsFired++;
         if (w.Kind == WeaponKind.Hitscan)
         {
-            var d = HitMath.SpreadDirection(yaw, pitch, shot.SpreadDegrees, _rng);
+            var kick = c.Recoil.Shot(w.Recoil, RecoilState.Multiplier(w.Recoil, (i.Buttons & (ushort)MoveButtons.Aim) != 0, c.Body.State.Crouching));
+            var d = HitMath.SpreadDirection(yaw + kick.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad), shot.SpreadDegrees, _rng);
             var dir = new Vector3(d.X, d.Y, d.Z);
             var range = w.Range > 0 ? w.Range : MaxShotRange;
             var wall = WorldHit(eye, dir, range, out var shotCar);

@@ -230,7 +230,7 @@ public partial class NetClient : Node
                     _wantSlot = StartSlot();
                     Dead = false; _gotSelf = false; _pending.Clear(); // the next snapshot carries the spawn position
                     _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
-                    _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset();
+                    _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId);
                 }
                 break;
             case EventKind.Death:
@@ -388,6 +388,7 @@ public partial class NetClient : Node
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
         if (!Bot) { ReadSlotKeys(); ApplyScope(); }
         FxDemoInput(ref mi);
+        TickRecoil(mi);
         PredictFire(mi);
         _me.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, _me.Pitch, (byte)(Weapons != null ? _wantSlot : 0));

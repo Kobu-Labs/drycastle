@@ -39,6 +39,8 @@ public partial class Player : CharacterBody3D
     public bool Authoritative { get; set; } = true;
     public float Yaw { get => _yaw; set => _yaw = value; }
     public float Pitch { get => _pitch; set => _pitch = value; }
+    /// <summary>Recoil offset shown on top of the mouse aim (radians: x pitch, y yaw). Never sent: the server applies the same offset to shots.</summary>
+    public Vector2 AimKick { get; set; }
 
     public override void _Ready()
     {
@@ -68,6 +70,7 @@ public partial class Player : CharacterBody3D
     public override void _Process(double delta)
     {
         if (!_camera.IsInsideTree()) return;
+        if (!_chase) _camera.Rotation = new Vector3(RecoilState.ClampPitch(_pitch + AimKick.X), _yaw + AimKick.Y, 0);
         var target = ZoomFov > 0 ? ZoomFov : GameSettings.Current.Fov;
         if (Mathf.IsEqualApprox(_fovNow, target)) return;
         _fovNow = Mathf.Lerp(_fovNow, target, 1f - Mathf.Exp(-18f * (float)delta));
@@ -158,6 +161,7 @@ public partial class Player : CharacterBody3D
         if (Input.IsActionPressed("sprint")) b |= MoveButtons.Sprint;
         if (Input.IsActionPressed("crouch")) b |= MoveButtons.Crouch;
         if (Input.IsActionPressed("fire")) b |= MoveButtons.Fire;
+        if (Input.IsActionPressed("zoom")) b |= MoveButtons.Aim;
         if (Input.IsActionPressed("reload")) b |= MoveButtons.Reload;
         if (Input.IsActionPressed("interact")) b |= MoveButtons.Use;
         var captured = Input.MouseMode == Input.MouseModeEnum.Captured;

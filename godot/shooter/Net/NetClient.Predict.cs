@@ -17,6 +17,7 @@ public partial class NetClient
     double _pNextFire, _pReloadUntil, _pDryAt;
     int _pMag = -1, _pMagAfter, _pSlot;
     double _shakeAmp, _shakeUntil;
+    RecoilState _recoil = new(0);
 
     bool PredictionOn => !Bot && ShotFx.Enabled && Weapons != null;
 
@@ -28,6 +29,14 @@ public partial class NetClient
         while (_predShots.Count > 0 && Now - _predShots.Peek() > 0.6) _predShots.Dequeue();
         var inFlight = _predShots.Count(t => Now - t < 0.25); // shots sent but not yet counted by this message
         _pMag = Math.Max(0, a.Slots[a.Slot - 1].Mag - inFlight);
+    }
+
+    /// <summary>Recovers the recoil offset for this tick and shows it on the camera (the server fires with the same offset).</summary>
+    void TickRecoil(MoveInput mi)
+    {
+        if (_me == null || CurrentWeapon is not { } w) return;
+        _recoil.Tick(Now, mi.Has(MoveButtons.Fire), w.Recoil);
+        _me.AimKick = new Vector2(_recoil.PitchRad, _recoil.YawRad);
     }
 
     /// <summary>Predicts this tick's trigger pull / reload key; plays sounds and own-shot effects at once.</summary>
@@ -58,6 +67,13 @@ public partial class NetClient
         _pNextFire = now + w.FireInterval;
         if (ranged) _pMag--;
         _predShots.Enqueue(now);
+        if (w.Kind == WeaponKind.Hitscan && _me != null)
+        {
+            // same offset step as the server's shot; the viewmodel kicks by the same (ADS / crouch scaled) climb
+            var mult = RecoilState.Multiplier(w.Recoil, mi.Has(MoveButtons.Aim), _me.State.Crouching);
+            _recoil.Shot(w.Recoil, mult);
+            _viewmodel?.Kick(w.Recoil.VerticalPerShot * mult);
+        }
         if (FxDemo != "") GD.Print($"fx-demo: predicted {w.Id} shot, mag {_pMag}");
         OwnShotFx(w);
     }
