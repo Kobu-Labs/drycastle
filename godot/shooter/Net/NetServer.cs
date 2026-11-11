@@ -38,7 +38,10 @@ public partial class NetServer : Node
         public PerkModifiers Perks = PerkModifiers.None;
         /// <summary>XP granted to this player since the round began (the end-of-round summary).</summary>
         public readonly List<XpGrant> RoundXp = new();
-        public readonly SnapshotEncoder Enc = new();
+        /// <summary>Entity snapshots for this client, against the states the server kept (set in Join).</summary>
+        public SnapshotEncoder Enc = null!;
+        /// <summary>The newest snapshot tick this client has committed (from its inputs), the baseline for its deltas; NoTick until then.</summary>
+        public uint SnapAck = Wire.NoTick;
         public readonly WorldSnapshotEncoder WEnc = new();
         public Vector3 Start;
         public float MaxMoved;
@@ -95,6 +98,8 @@ public partial class NetServer : Node
     readonly Dictionary<string, float> _movedByName = new();
     readonly List<NetInput> _scratch = new();
     readonly Dictionary<ushort, Client> _byId = new();
+    /// <summary>The entity states of the recent ticks, shared by every client's encoder (the baselines of their deltas).</summary>
+    readonly SnapshotHistory _sentStates = new();
     Godot.Collections.Array<Rid> _playerRids = new();
     bool _playerRidsDirty = true;
     MatchSim _match = null!;
@@ -331,7 +336,8 @@ public partial class NetServer : Node
         else if (c.Joined && d[0] == Wire.TInput)
         {
             _scratch.Clear();
-            if (!Wire.TryDecodeInputs(d, _scratch)) return;
+            if (!Wire.TryDecodeInputs(d, _scratch, out var snapTick)) return;
+            if (snapTick != Wire.NoTick && (c.SnapAck == Wire.NoTick || snapTick > c.SnapAck)) c.SnapAck = snapTick; // an older input's ack arriving late changes nothing
             foreach (var i in _scratch)
             {
                 // redundant copies of already-seen inputs are skipped
@@ -371,6 +377,7 @@ public partial class NetServer : Node
         foreach (var car in _cars) car.AddCollisionExceptionWith(c.Body);
         _byId[c.Id] = c;
         _playerRidsDirty = true;
+        c.Enc = new SnapshotEncoder(_sentStates);
         SendProfile(c);
         SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick,
@@ -753,7 +760,7 @@ public partial class NetServer : Node
         foreach (var c in _clients.Values)
         {
             if (!c.Joined) continue;
-            foreach (var pkt in c.Enc.Encode(_tick, c.Ack, ents)) Tx(c.Peer, Wire.ChanData, pkt, 0);
+            foreach (var pkt in c.Enc.Encode(_tick, c.Ack, c.SnapAck, ents)) Tx(c.Peer, Wire.ChanData, pkt, 0);
         }
         var world = _match.Entities.Snapshot();
         foreach (var c in _clients.Values)

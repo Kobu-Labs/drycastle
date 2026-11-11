@@ -77,7 +77,7 @@ public class VehicleTests
         var r = VehicleRecord.Make(0x4001, new Vector3(1, 2, 3), 1f, 1234, 5);
         Assert.Equal(EntityState.InVehicle, r.State);
         var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
-        foreach (var p in enc.Encode(1, 0, new[] { r })) Assert.True(dec.Apply(p, out _));
+        foreach (var p in enc.Encode(1, 0, Wire.NoTick, new[] { r })) Assert.True(dec.Apply(p, out _));
         var got = dec.States[0x4001];
         Assert.Equal(EntityType.Vehicle, got.Type);
         Assert.Equal((ushort)1234, VehicleRecord.Driver(got));
@@ -231,7 +231,7 @@ public class VehicleTests
         Assert.Equal(2, VehicleRecord.Kind(r));
         Assert.Equal((byte)2, VehicleRecord.Colour(r));
         var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
-        foreach (var p in enc.Encode(1, 0, new[] { r })) Assert.True(dec.Apply(p, out _));
+        foreach (var p in enc.Encode(1, 0, Wire.NoTick, new[] { r })) Assert.True(dec.Apply(p, out _));
         Assert.Equal(2, VehicleRecord.Kind(dec.States[0x4010]));
         Assert.Equal((ushort)7, VehicleRecord.Driver(dec.States[0x4010]));
     }

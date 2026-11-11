@@ -141,22 +141,28 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 ///   SaveCamo(10): u8 slot, then the fixed-size CamoSpec encoding (<see cref="CamoSpec"/>)
 ///   Profile(6) also ends with: u8 camoCount, camoCount * CamoSpec (one per slot, #141)
 ///   Strings are u8 length + utf8 (clamped to 255 bytes). Hello also carries u8 tokenLen, token after the name.
-/// ch1 client to server, Input(11): u8 count (1..3, newest last), count inputs of 12 bytes:
+/// ch1 client to server, Input(11): u8 count (1..3, newest last), u32 snapTick (the newest snapshot tick the client has
+///   committed, or NoTick; the server's baseline for the next deltas), then count inputs of 12 bytes:
 ///   u16 seq, i8 mx, i8 my, u16 yaw, i16 pitch, u16 buttons, u8 slot, u8 flags (bit 0: aim)
 ///   when bit 0 is set, 12 more bytes follow the input: i32 aimX, i32 aimY, i32 aimZ (Quant.Pos units, #161)
-/// ch1 server to client, Snapshot(20): u32 tick, u16 ackSeq, u8 count, then count entities:
-///   u16 id, u8 type, u8 flags, then per flag
+/// ch1 server to client, Snapshot(20): u32 tick, u16 ackSeq, u32 baseTick (NoTick: the packet is part of a full set),
+///   u8 index, u8 total, u8 count, then count records, see <see cref="SnapshotEncoder"/>. Every packet of a tick has the same
+///   baseline; the client commits a tick when all of its packets have arrived.
+///   Record: u16 id, u8 type, u8 flags, then per flag
 ///     PosAbs(1):   i32 x, i32 y, i32 z   (1/128 m)
-///     PosDelta(2): i16 dx, dy, dz        (vs the last state sent to this client)
+///     PosDelta(2): i16 dx, dy, dz        (vs the baseline tick's state)
 ///     Rot(4):      u16 yaw, i16 pitch
 ///     Status(8):   u8 health, u8 state, u8 weapon
-///   Unchanged entities are omitted; a keyframe (all of the above, absolute) is sent for new entities and every 30 ticks.
+///     Remove(128): no fields; the entity left since the baseline
+///   Unchanged entities are omitted; a keyframe (all of the above, absolute) is sent for entities new to the baseline.
 /// ch1 server to client, WorldSnapshot(21): world entities (turrets, missiles, ...), see <see cref="WorldReplica"/> and <see cref="WorldCodec"/>.
 /// </summary>
 public static class Wire
 {
-    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-155 (sandbox status, grant, action, state, held streak and notice, #156); v11: GunshipStatus is weapon and zoom only (2 bytes; ammo and heat are gone, #157); v12: the gunship FX is coalesced per tick (event kinds 121-123 replace the per-round Shot, ImpactFx and Ac130Blast of the gunships, #159), and the Explosion carries its blast radius (a gunship rocket's is 8 m); v13: GunshipShots carries each tracer's speed and length (#160); v14: the camo spec grows from 30 to 33 bytes (codec 2: body, skin tone, headgear); v15: an input carries the gunner's aim, a ground point (flags byte, 12 more bytes when set), so the rounds land on the reticle (#161); v16: a gunship rocket flies at its own speed (killstreaks.json projectile_speed_mps) and lives out its range, so clients animate it at its Launch velocity's speed, not the bazooka's 40 m/s.</summary>
-    public const byte ProtocolVersion = 16;
+    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-155 (sandbox status, grant, action, state, held streak and notice, #156); v11: GunshipStatus is weapon and zoom only (2 bytes; ammo and heat are gone, #157); v12: the gunship FX is coalesced per tick (event kinds 121-123 replace the per-round Shot, ImpactFx and Ac130Blast of the gunships, #159), and the Explosion carries its blast radius (a gunship rocket's is 8 m); v13: GunshipShots carries each tracer's speed and length (#160); v14: the camo spec grows from 30 to 33 bytes (codec 2: body, skin tone, headgear); v15: an input carries the gunner's aim, a ground point (flags byte, 12 more bytes when set), so the rounds land on the reticle (#161); v16: a gunship rocket flies at its own speed (killstreaks.json projectile_speed_mps) and lives out its range, so clients animate it at its Launch velocity's speed, not the bazooka's 40 m/s; v17: entity snapshots are deltas against the client's acknowledged tick (the inputs carry the snapshot tick, the snapshot carries its baseline and set position, removals are records), so a lost packet no longer leaves an entity wrong until a keyframe.</summary>
+    public const byte ProtocolVersion = 17;
+    /// <summary>"No tick": the snapshot tick of an input before the first commit, and the baseline of a full set.</summary>
+    public const uint NoTick = uint.MaxValue;
     public const byte TickRate = 30;
     public const int ChanReliable = 0, ChanData = 1, Channels = 2;
     public const int KeyEvery = 30;
@@ -172,6 +178,8 @@ public static class Wire
     public const byte THello = 1, TWelcome = 2, TJoin = 3, TLeave = 4, TEvent = 5, TProfile = 6, TSaveLoadout = 7, TSelectSlot = 8, TError = 9, TSaveCamo = 10;
     public const byte TInput = 11, TSnapshot = 20, TWorldSnapshot = 21;
     public const byte FPosAbs = 1, FPosDelta = 2, FRot = 4, FStatus = 8, FHp = 16;
+    /// <summary>Entity snapshot record flag: the entity is gone since the baseline (no fields follow).</summary>
+    public const byte FRemove = 128;
     /// <summary>Flags that make a snapshot record a keyframe (world entities; players and vehicles use the same three).</summary>
     public const byte FKey = FPosAbs | FRot | FStatus;
 
@@ -355,14 +363,15 @@ public static class Wire
     }
 
     /// <summary>Encode the newest inputs (up to 3, oldest first) as one packet. An input with an aim adds <see cref="AimBytes"/>.</summary>
-    public static byte[] EncodeInputs(ReadOnlySpan<NetInput> inputs)
+    public static byte[] EncodeInputs(ReadOnlySpan<NetInput> inputs, uint snapTick = NoTick)
     {
         var n = Math.Min(inputs.Length, MaxInputsPerPacket);
-        var size = 2;
+        var size = InputHeaderBytes;
         for (var i = 0; i < n; i++) size += InputSize(inputs[inputs.Length - n + i]);
         var b = new byte[size];
         b[0] = TInput; b[1] = (byte)n;
-        var at = 2;
+        BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(2), snapTick);
+        var at = InputHeaderBytes;
         for (var i = 0; i < n; i++)
         {
             var x = inputs[inputs.Length - n + i];
@@ -388,13 +397,21 @@ public static class Wire
 
     static int InputSize(in NetInput x) => InputBytes + (x.HasAim ? AimBytes : 0);
 
-    /// <summary>Decodes a packet of inputs (the newest up to 3 in order). False when the packet is malformed or truncated.</summary>
-    public static bool TryDecodeInputs(ReadOnlySpan<byte> d, List<NetInput> into)
+    /// <summary>type, count, snapshot tick u32.</summary>
+    public const int InputHeaderBytes = 6;
+
+    /// <summary>
+    /// Decodes a packet of inputs (the newest up to 3 in order) and the snapshot tick it acknowledges. False when the packet
+    /// is malformed or truncated.
+    /// </summary>
+    public static bool TryDecodeInputs(ReadOnlySpan<byte> d, List<NetInput> into, out uint snapTick)
     {
-        if (d.Length < 2 || d[0] != TInput) return false;
+        snapTick = NoTick;
+        if (d.Length < InputHeaderBytes || d[0] != TInput) return false;
         int n = d[1];
         if (n < 1 || n > MaxInputsPerPacket) return false;
-        var at = 2;
+        snapTick = BinaryPrimitives.ReadUInt32LittleEndian(d[2..]);
+        var at = InputHeaderBytes;
         for (var i = 0; i < n; i++)
         {
             if (d.Length < at + InputBytes) return false;

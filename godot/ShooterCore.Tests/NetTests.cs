@@ -42,7 +42,7 @@ public class NetTests
             src.Add(NetInput.From((ushort)(65534 + i), new MoveInput { MoveX = -1, MoveY = 0.5f, Yaw = -1.2f, Buttons = MoveButtons.Jump | MoveButtons.Use }, 0.4f, 3));
         var pkt = Wire.EncodeInputs(src.ToArray());
         var got = new List<NetInput>();
-        Assert.True(Wire.TryDecodeInputs(pkt, got));
+        Assert.True(Wire.TryDecodeInputs(pkt, got, out _));
         Assert.Equal(3, got.Count);
         Assert.Equal(src[2].Seq, got[0].Seq);
         Assert.Equal(src[4].Seq, got[2].Seq);
@@ -52,7 +52,17 @@ public class NetTests
         Assert.True(m.Has(MoveButtons.Use));
         Assert.Equal(3, got[2].Slot);
         Assert.Equal(0.4f, Quant.Pitch(got[2].Pitch), 3);
-        Assert.False(Wire.TryDecodeInputs(pkt.AsSpan(0, 5), got));
+        Assert.False(Wire.TryDecodeInputs(pkt.AsSpan(0, 5), got, out _));
+    }
+
+    [Fact]
+    public void InputsCarryTheSnapshotTickTheyAcknowledge()
+    {
+        var pkt = Wire.EncodeInputs(new[] { NetInput.From(7, new MoveInput { SpeedScale = 1 }, 0f, 0) }, 4321u);
+        Assert.True(Wire.TryDecodeInputs(pkt, new List<NetInput>(), out var snap));
+        Assert.Equal(4321u, snap);
+        Assert.True(Wire.TryDecodeInputs(Wire.EncodeInputs(new[] { NetInput.From(8, new MoveInput(), 0f, 0) }), new List<NetInput>(), out var none));
+        Assert.Equal(Wire.NoTick, none);
     }
 
     [Fact]
@@ -77,7 +87,9 @@ public class NetTests
     static SnapshotHeader Decode(SnapshotDecoder d, IEnumerable<byte[]> pkts)
     {
         SnapshotHeader h = default;
-        foreach (var p in pkts) Assert.True(d.Apply(p, out h));
+        var committed = false;
+        foreach (var p in pkts) committed |= d.Apply(p, out h);
+        Assert.True(committed, "the tick did not complete");
         return h;
     }
 
@@ -85,58 +97,124 @@ public class NetTests
     public void SnapshotKeyframeThenDeltasReproduceState()
     {
         var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
-        var h = Decode(dec, enc.Encode(100, 42, new[] { Ent(1, 10.5f, 3, -200.25f, 1f), Ent(2, 0, 0, 0, 0, 80, EntityType.Projectile) }));
+        var h = Decode(dec, enc.Encode(100, 42, Wire.NoTick, new[] { Ent(1, 10.5f, 3, -200.25f, 1f), Ent(2, 0, 0, 0, 0, 80, EntityType.Projectile) }));
         Assert.Equal(new SnapshotHeader(100, 42), h);
         Assert.Equal(2, dec.States.Count);
         Assert.Equal(EntityType.Projectile, dec.States[2].Type);
         Assert.Equal(-200.25f, dec.States[1].Position.Z);
 
         var cur = new[] { Ent(1, 10.9f, 3, -200f, 1.5f, 90), Ent(2, 0, 0, 0, 0, 80, EntityType.Projectile) };
-        var pkts = enc.Encode(101, 43, cur);
-        Assert.Equal(1, enc.DeltaEntries); // entity 2 unchanged: omitted
+        var pkts = enc.Encode(101, 43, 100, cur); // against the tick the client acknowledged
+        Assert.Equal(1, enc.DeltaEntries); // entity 2 unchanged since the baseline: omitted
         Decode(dec, pkts);
         Assert.Equal(cur[0], dec.States[1]);
         Assert.Equal(cur[1], dec.States[2]);
+        Assert.Equal(101u, dec.AckTick);
     }
 
     [Fact]
     public void UnchangedSnapshotIsHeaderOnlyAndLargeJumpUsesAbsolute()
     {
         var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
-        Decode(dec, enc.Encode(1, 0, new[] { Ent(1, 0) }));
-        var same = enc.Encode(2, 5, new[] { Ent(1, 0) });
-        Assert.Equal(8, Assert.Single(same).Length);
+        Decode(dec, enc.Encode(1, 0, Wire.NoTick, new[] { Ent(1, 0) }));
+        var same = enc.Encode(2, 5, 1, new[] { Ent(1, 0) });
+        Assert.Equal(SnapshotEncoder.HeaderBytes, Assert.Single(same).Length);
+        Decode(dec, same);
         var far = new[] { Ent(1, 1500, 80, -900) };
-        Decode(dec, enc.Encode(3, 6, far));
+        Decode(dec, enc.Encode(3, 6, 2, far));
         Assert.Equal(far[0], dec.States[1]);
     }
 
     [Fact]
-    public void KeyframeAtLeastEveryThirtyTicks()
+    public void KeyframeOnlyForEntitiesNewToTheBaseline()
     {
-        long maxGap = 0;
-        // per entity: count keyframes over 300 ticks of a single moving entity
-        var e2 = new SnapshotEncoder();
-        long last = 0; var full = 0L;
-        for (uint tick = 1; tick <= 300; tick++)
+        var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
+        Decode(dec, enc.Encode(1, 0, Wire.NoTick, new[] { Ent(5, 0) }));
+        var full = enc.FullEntries;
+        for (uint tick = 2; tick <= 300; tick++)
         {
-            var f0 = e2.FullEntries;
-            e2.Encode(tick, 0, new[] { Ent(5, tick * 0.01f) });
-            if (e2.FullEntries > f0) { if (full > 0) maxGap = Math.Max(maxGap, tick - last); last = tick; full++; }
+            var moved = Ent(5, tick * 0.01f);
+            Decode(dec, enc.Encode(tick, 0, tick - 1, new[] { moved }));
+            Assert.Equal(moved, dec.States[5]);
         }
-        Assert.True(full >= 10);
-        Assert.Equal(30, maxGap);
+        Assert.Equal(full, enc.FullEntries); // no periodic keyframes: the baseline repairs everything
     }
 
     [Fact]
-    public void LostDeltaIsRepairedByNextKeyframe()
+    public void LostPacketIsRepairedByTheNextTickAgainstTheSameBaseline()
     {
         var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
-        Decode(dec, enc.Encode(1, 0, new[] { Ent(1, 0) }));
-        enc.Encode(2, 0, new[] { Ent(1, 1) }); // lost
+        Decode(dec, enc.Encode(1, 0, Wire.NoTick, new[] { Ent(1, 0) }));
+        enc.Encode(2, 0, 1, new[] { Ent(1, 1) }); // lost: the client never commits tick 2
+        Assert.Equal(1u, dec.AckTick);
         var final = Ent(1, 2);
-        for (uint t = 3; t <= 40; t++) { var p = enc.Encode(t, 0, new[] { Ent(1, 2) }); if (t > 3) Decode(dec, p); }
+        Decode(dec, enc.Encode(3, 0, 1, new[] { final })); // still relative to tick 1, which the client has
         Assert.Equal(final, dec.States[1]);
+    }
+
+    [Fact]
+    public void ATickIsCommittedOnlyWhenAllItsPacketsArrive()
+    {
+        var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
+        var ents = Enumerable.Range(1, 60).Select(i => Ent((ushort)i, i, 1, 2)).ToArray();
+        var pkts = enc.Encode(5, 0, Wire.NoTick, ents);
+        Assert.Equal(2, pkts.Count);
+        Assert.False(dec.Apply(pkts[1], out _)); // the second packet alone completes nothing
+        Assert.False(dec.HasState);
+        Assert.True(dec.Apply(pkts[0], out _));
+        Assert.Equal(60, dec.States.Count);
+    }
+
+    [Fact]
+    public void BaselineTheClientNoLongerKeepsIsNotDecodable()
+    {
+        var enc = new SnapshotEncoder(); var first = new SnapshotDecoder();
+        Decode(first, enc.Encode(1, 0, Wire.NoTick, new[] { Ent(1, 0) }));
+        var delta = enc.Encode(2, 0, 1, new[] { Ent(1, 3) });
+        var fresh = new SnapshotDecoder(); // knows no tick 1
+        Assert.False(fresh.Apply(Assert.Single(delta), out _));
+        Assert.False(fresh.HasState);
+    }
+
+    [Fact]
+    public void AnAckOlderThanTheHistoryGetsAFullSet()
+    {
+        var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
+        Decode(dec, enc.Encode(1, 0, Wire.NoTick, new[] { Ent(1, 0), Ent(2, 0) }));
+        var late = enc.Encode(1 + (uint)SnapshotHistory.Depth + 5, 0, 1, new[] { Ent(1, 4) }); // tick 1 has aged out
+        Assert.True(dec.Apply(Assert.Single(late), out _)); // a full set: the client replaces its state
+        Assert.Single(dec.States);
+        Assert.Equal(new[] { (ushort)2 }, dec.Removed.ToArray());
+    }
+
+    [Fact]
+    public void UnderPacketLossEveryCommittedTickMatchesTheServer()
+    {
+        // 30% of the packets are dropped; the client acknowledges what it committed one tick ago. Whatever it commits must be
+        // exactly the server's state for that tick, and the stream keeps committing (the next tick repairs a lost one).
+        var rng = new Random(7);
+        var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
+        var ack = Wire.NoTick;
+        var committed = 0;
+        for (uint tick = 1; tick <= 600; tick++)
+        {
+            var now = new List<EntityRecord>();
+            for (ushort id = 1; id <= 40; id++)
+            {
+                if (id == 7 && tick is >= 100 and <= 130) continue; // leaves, then comes back
+                var moving = (tick + id) % 3 != 0;
+                now.Add(Ent(id, id + (moving ? tick * 0.05f : 0), 0, 0, 0.1f * (tick % 7), 100 - tick / 50));
+            }
+            var got = false;
+            foreach (var p in enc.Encode(tick, 0, ack, now))
+                if (rng.NextDouble() >= 0.3 && dec.Apply(p, out _)) got = true;
+            if (!got) continue;
+            committed++;
+            Assert.Equal(now.Count, dec.States.Count);
+            foreach (var r in now) Assert.Equal(r, dec.States[r.Id]);
+            ack = dec.AckTick;
+        }
+        Assert.True(committed > 400, $"only {committed} of 600 ticks committed");
     }
 
     [Fact]
@@ -144,7 +222,7 @@ public class NetTests
     {
         var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
         var ents = Enumerable.Range(1, 100).Select(i => Ent((ushort)i, i, 1, 2)).ToArray();
-        var pkts = enc.Encode(5, 9, ents);
+        var pkts = enc.Encode(5, 9, Wire.NoTick, ents);
         Assert.Equal(3, pkts.Count);
         Assert.All(pkts, p => Assert.True(p.Length < 1400));
         Decode(dec, pkts);
@@ -152,21 +230,24 @@ public class NetTests
     }
 
     [Fact]
-    public void RemovedEntityGetsKeyframeWhenItReturns()
+    public void AnEntityThatLeftIsRemovedAgainstTheBaseline()
     {
         var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
-        Decode(dec, enc.Encode(1, 0, new[] { Ent(1, 0), Ent(2, 0) }));
-        enc.Encode(2, 0, new[] { Ent(1, 0) });
+        Decode(dec, enc.Encode(1, 0, Wire.NoTick, new[] { Ent(1, 0), Ent(2, 0) }));
+        Decode(dec, enc.Encode(2, 0, 1, new[] { Ent(1, 0) }));
+        Assert.Equal(new[] { (ushort)2 }, dec.Removed.ToArray());
+        Assert.False(dec.States.ContainsKey(2));
+        // it comes back later: a fresh decoder resolves it from the keyframe alone
         var dec2 = new SnapshotDecoder();
-        Decode(dec2, enc.Encode(3, 0, new[] { Ent(1, 0), Ent(2, 7) }));
-        Assert.Equal(7f, dec2.States[2].Position.X); // fresh decoder resolves it from the keyframe alone
+        Decode(dec2, enc.Encode(3, 0, Wire.NoTick, new[] { Ent(1, 0), Ent(2, 7) }));
+        Assert.Equal(7f, dec2.States[2].Position.X);
     }
 
     [Fact]
     public void TruncatedSnapshotIsRejectedAndChangesNothing()
     {
         var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
-        var p = Assert.Single(enc.Encode(1, 0, new[] { Ent(1, 3) }));
+        var p = Assert.Single(enc.Encode(1, 0, Wire.NoTick, new[] { Ent(1, 3) }));
         Assert.False(dec.Apply(p.AsSpan(0, p.Length - 2), out _));
         Assert.Empty(dec.States);
     }
@@ -201,9 +282,9 @@ public class NetTests
     public void DecoderDropsEntitiesThatStopArriving()
     {
         var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
-        Decode(dec, enc.Encode(1, 0, new[] { Ent(1, 0), Ent(2, 0) }));
-        Decode(dec, enc.Encode(100, 0, new[] { Ent(1, 0) }));
-        Assert.Equal(new ushort[] { 2 }, dec.RemoveStale(100, 90).ToArray());
+        Decode(dec, enc.Encode(1, 0, Wire.NoTick, new[] { Ent(1, 0), Ent(2, 0) }));
+        Decode(dec, enc.Encode(100, 0, 1, new[] { Ent(1, 0) }));
+        Assert.Equal(new ushort[] { 2 }, dec.Removed.ToArray());
         Assert.Single(dec.States);
     }
 }

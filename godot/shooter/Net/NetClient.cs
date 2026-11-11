@@ -249,7 +249,7 @@ public partial class NetClient : Node
                 break;
             case JoinMsg j: _names[j.PlayerId] = j.Name; GD.Print($"client: {j.Name} #{j.PlayerId} joined"); break;
             case LeaveMsg l:
-                _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Remove(l.PlayerId);
+                _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
                 if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
                 break;
             case EventMsg e:
@@ -315,7 +315,7 @@ public partial class NetClient : Node
         LossOnSnapshot(h);
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         DayNightCycle.Current?.SetServerTick(h.Tick);
-        foreach (var id in _dec.RemoveStale(h.Tick, 90)) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); } }
+        foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); } }
         foreach (var (id, rec) in _dec.States)
         {
             if (id == _myId) { OnSelf(rec, h.Ack); continue; }
@@ -469,7 +469,7 @@ public partial class NetClient : Node
         if (_pending.Count > 120) _pending.RemoveAt(0);
         var recent = new NetInput[Math.Min(3, _pending.Count)];
         for (var i = 0; i < recent.Length; i++) recent[i] = _pending[_pending.Count - recent.Length + i].Input;
-        Tx(_peer, Wire.ChanData, Wire.EncodeInputs(recent), 0);
+        Tx(_peer, Wire.ChanData, Wire.EncodeInputs(recent, _dec.AckTick), 0); // the inputs name the snapshot tick they follow (the server's delta baseline)
         _conn.Flush();
         var p = _me.State.Position;
         _meMin = NVec3.Min(_meMin, p); _meMax = NVec3.Max(_meMax, p);
@@ -731,7 +731,7 @@ public partial class NetClient : Node
                 _explosionLog.Add((Now, ex));
                 if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(World, rk.Node); }
                 SfxExplosion(ex);
-                _dec.Remove(ex.Id);
+                _dec.Forget(ex.Id);
                 _deadRockets.Add(ex.Id);
                 if (_deadRockets.Count > 256) _deadRockets.Clear();
                 var exR = ex.Radius > 0 ? ex.Radius : 6f; // the blast the server used (a gunship rocket's is 8 m)
