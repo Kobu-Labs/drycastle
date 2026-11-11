@@ -132,7 +132,7 @@ public partial class NetServer
         var targets = LiveTargets();
         var route = GunshipRouting.Route(def, shot.Origin, shot.Direction, wall, targets, owner, GunshipVehicles(), Vehicles?.BulletDamageMultiplier ?? 0f);
         var end = shot.Origin + shot.Direction * route.Distance;
-        _gunFx.Tracer(owner, new GunshipTracer((byte)weapon, shot.Origin, end));
+        _gunFx.Tracer(owner, new GunshipTracer((byte)weapon, shot.Origin, end, def.TracerSpeedMps ?? 0f, def.TracerLengthM ?? 0f));
 
         // the damage, now; the owner's hit markers are collected for the tick (see Deal)
         var kill = false;

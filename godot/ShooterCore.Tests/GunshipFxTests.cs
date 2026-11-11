@@ -20,7 +20,7 @@ public class GunshipFxTests
     /// <summary>The budget for one gunner's full-rate AC-130 burst, bytes per second, all its messages and packet overhead included.</summary>
     const int ByteBudgetPerSecond = 6000;
 
-    static GunshipTracer Tracer(byte weapon, float x) => new(weapon, new Vector3(x, 30, 0), new Vector3(x + 1, 0, 0));
+    static GunshipTracer Tracer(byte weapon, float x) => new(weapon, new Vector3(x, 30, 0), new Vector3(x + 1, 0, 0), 1500f, 14f);
 
     static GunshipImpactFx Impact(ImpactSize size, bool kill, float x = 0) => new(new ImpactInfo(new Vector3(x, 0, 0), SurfaceKind.Ground, size), kill);
 
@@ -211,7 +211,7 @@ public class GunshipFxTests
             {
                 rounds++;
                 var end = s.Origin + s.Direction * 200f;
-                batch.Tracer(Owner, new GunshipTracer((byte)s.WeaponIndex, s.Origin, end));
+                batch.Tracer(Owner, new GunshipTracer((byte)s.WeaponIndex, s.Origin, end, 1500f, 14f));
                 batch.Impact(new GunshipImpactFx(new ImpactInfo(end, SurfaceKind.Ground, ImpactSize.Puff), false));
                 batch.Blast(Owner, new GunshipBlast(end, 3f));
             }

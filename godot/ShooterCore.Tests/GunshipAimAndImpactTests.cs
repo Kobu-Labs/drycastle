@@ -22,22 +22,13 @@ public class GunshipAimAndImpactTests
     [Fact]
     public void Turret_reaches_the_orbit_centre_from_the_airframe_heading()
     {
-        // the airframe flies tangent to its circle, so the centre is 90 degrees off its nose: the old 75 degree swing could not reach it
+        // the airframe flies tangent to its circle, so the centre is 90 degrees off its nose; the aim is world space, so it is reached
         var a = Orbit(0);
         var toCentre = new Vector3(Centre.X - a.Position.X, 0, Centre.Z - a.Position.Z);
         var yaw = YawToward(toCentre);
-        var (clampedYaw, _) = GunshipAim.Clamp(a.YawRad, yaw, -0.4f, Gun);
-        Assert.InRange(MathF.Abs(GunshipAim.Wrap(clampedYaw - yaw)), 0, 0.001f);
-    }
-
-    [Fact]
-    public void Turret_still_cannot_look_straight_back()
-    {
-        var a = Orbit(0);
-        var (clampedYaw, _) = GunshipAim.Clamp(a.YawRad, a.YawRad + MathF.PI, -0.4f, Gun);
-        var limit = Gun.YawLimitDeg * MathF.PI / 180f;
-        Assert.InRange(MathF.Abs(GunshipAim.Wrap(clampedYaw - a.YawRad)), 0, limit + 0.001f);
-        Assert.True(limit < MathF.PI, "the rear cone stays blocked");
+        var control = new GunshipControl(Gun, a, _ => { }, _ => { }, new Random(1));
+        control.OnInput(new NetInput { Yaw = Quant.Yaw(yaw), Pitch = Quant.Pitch(-0.4f) }, 1.0);
+        Assert.InRange(MathF.Abs(GunshipAim.Wrap(control.TurretYaw - yaw)), 0, 0.001f);
     }
 
     [Fact]

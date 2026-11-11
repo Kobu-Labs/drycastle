@@ -170,6 +170,23 @@ on a body (the hit point), and rounds to destroy a 300 hp car (direct hit, rocke
 | AC-130 40 mm (m82) | 0.2 s | 80 | 400 | 6 m | 3 |
 | AC-130 105 mm shell (bazooka) | 1.0 s | 150 | 150 | 14 m | 2 |
 
+Turret aim is world space and ground-stabilised (#160). The aim is a world point: the look (the mouse's world yaw and pitch) meets
+the ground plane at the orbit centre's height (`GunshipAim.AimPoint`; a plane, not a physics raycast, so the client and the server
+compute the same point), or lies the longest weapon range out when it meets no ground that near. The turret's view is the direction
+from the muzzle to that point (`GunshipAim.View`), so the orbit never moves the reticle. Only the pitch is limited (`pitch_min_deg`,
+`pitch_max_deg`); the airframe-relative yaw limit is gone (it pinned the view as the airframe turned, which was the bug). The mouse
+move is applied to the view on screen, zoom-scaled (`GunshipAim.Turn`: x4 is a quarter of the speed), and re-anchors the point; a
+still mouse keeps it. The owner's input carries the look, and the server anchors it at its own muzzle when the look changes, so the
+shot goes through the reticle's point (a latency-sized difference from the client's anchor, about 0.5 degrees at 1 km). The camera's
+yaw is unwrapped (`GunshipAim.Unwrap`) so it is continuous through +-pi and every heading; `GunshipGroundAimTests` sweeps the heading
+through 720 degrees and the aim through +-pi.
+
+Tracers (#160): a cannon round's and a shell's tracer speed and length come from killstreaks.json (`tracer_speed_mps`, `tracer_length_m`;
+cannon 1500 m/s and 14 m, the 105 mm shell 1200 m/s, so it reaches 800 m in about 0.66 s). They ride the GunshipShots message and
+`ShotFx.Spawn` takes them as optional parameters (the generic 250 m/s stays for every other weapon). Rockets have no tracer data.
+The damage is still the server's and instant; the 105 mm burst is at the server's resolution, not at the shell's arrival (a known
+gap: the blast can show about 0.66 s before the shell visually arrives).
+
 Gunship rockets (#159) have their own 8 m blast: a `splash` block on the rockets entry in killstreaks.json (radius 8, full damage
 to 2 m, edge 20, no self damage). The rocket sim takes it per launch (`Rocket.Blast`, `ProjectileMath.WithBlast`), so the bazooka
 keeps weapons.json's 6 m, and the explosion's radius rides the Explosion event (protocol 12). The enemy markers are a red diamond
@@ -283,8 +300,9 @@ Server and persistence:
 
 ## 9. Wire protocol
 
-Protocol version: **12** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
-versions. Version 12 (#159) coalesces the gunship FX: the per-round Shot, ImpactFx and Ac130Blast of the turrets are replaced by
+Protocol version: **13** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
+versions. Version 13 (#160) adds each tracer's speed (u16 m/s) and length (u16 cm) to GunshipShots (tracer 29 bytes, was 25).
+Version 12 (#159) coalesces the gunship FX: the per-round Shot, ImpactFx and Ac130Blast of the turrets are replaced by
 GunshipShots (121), GunshipImpacts (122) and GunshipBlasts (123), one per gunner (or per tick) per server tick, and kind 120 is
 retired. The Explosion payload grew by a f32 blast radius (21 bytes), so a gunship rocket's 8 m reaches the clients. Layouts are in
 `GunshipFxCodec`. Version 11 (#157) cut the GunshipStatus payload to weapon and zoom (2 bytes): the turret has no ammo and no heat. Version 10 (#156) added the hello flags byte (bit 0: sandbox requested), event kinds 150 (SandboxStatus, server to the joining player), 151 (SandboxGrant: hold a streak), 152 (SandboxAction: heal, teleport, vehicle, target respawn, use the held streak), 153 (SandboxState: the [SANDBOX] name tags), 154 (SandboxHeld) and 155 (SandboxNotice). The F4 panel (sandbox_panel, rebindable) is client-side only. Version 9 (#151) retired the care package's PerkGained (kind 51) and added StreakGranted (kind 23). Version 6 was bumped in #133 because the killstreak, aircraft, turret, missile, care package, corpse and MOAB

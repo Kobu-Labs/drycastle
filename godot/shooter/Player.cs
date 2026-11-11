@@ -93,7 +93,13 @@ public partial class Player : CharacterBody3D
     }
 
     /// <summary>Mouse look scale: tan(fov/2) ratio while the camera is zoomed so the crosshair sweeps the same screen distance.</summary>
-    float LookScale() => Mathf.Tan(Mathf.DegToRad(_camera.Fov) / 2) / Mathf.Tan(Mathf.DegToRad(GameSettings.Current.Fov) / 2);
+    float LookScale() => TurretLook ? 1f : Mathf.Tan(Mathf.DegToRad(_camera.Fov) / 2) / Mathf.Tan(Mathf.DegToRad(GameSettings.Current.Fov) / 2);
+
+    /// <summary>
+    /// The turret's look (a gunship's owner, #160): the mouse delta is passed unscaled, and the turret divides it by its zoom, so a
+    /// x4 zoom turns exactly a quarter as fast (the FOV ratio is only close to that).
+    /// </summary>
+    public bool TurretLook { get; set; }
 
     public void Teleport(Vector3 feet)
     {

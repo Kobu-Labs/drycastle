@@ -11,7 +11,7 @@ public readonly record struct GunshipShot(int WeaponIndex, GunshipWeaponKind Kin
 /// steps the zoom, Reload steps the weapon, Fire fires it. There is no ammo and no heat: the fire interval paces each weapon,
 /// and the streak's time limit is the only limit. An interval shorter than the input period fires several rounds in one
 /// input (up to <see cref="MaxRoundsPerInput"/>), so the effective rate is the interval's. Server side; the rules are pure so
-/// they run in the tests. Aim is clamped with <see cref="GunshipAim"/>; the server then resolves each shot.
+/// they run in the tests. The aim is a ground-stabilised world point (<see cref="GunshipAim"/>, #160); the server fires along the view from the muzzle to it.
 /// </summary>
 public sealed class GunshipControl
 {
@@ -41,6 +41,7 @@ public sealed class GunshipControl
         _fire = fire;
         _status = status;
         _rng = rng ?? new Random();
+        _maxDistance = GunshipAim.MaxDistance(def);
         _weapons = (weapons ?? Enumerable.Range(0, def.Weapons.Count).ToList()).ToArray();
         if (_weapons.Length == 0) throw new ArgumentException("a gunship control needs at least one weapon", nameof(weapons));
         _nextShot = new double[def.Weapons.Count];
@@ -51,9 +52,15 @@ public sealed class GunshipControl
     public int Zoom { get; private set; }
     /// <summary>Index into <see cref="GunshipDef.Weapons"/> of the weapon in use.</summary>
     public int Weapon => _weapons[_slot];
-    /// <summary>The turret's aim after clamping, world yaw and pitch in radians.</summary>
+    /// <summary>The turret's view, world yaw and pitch in radians: the direction from the muzzle to <see cref="AimPoint"/>.</summary>
     public float TurretYaw { get; private set; }
     public float TurretPitch { get; private set; }
+    /// <summary>The world point the turret is on (ground-stabilised, #160). It moves only when the owner's look moves.</summary>
+    public Vector3 AimPoint { get; private set; }
+    bool _haveLook;
+    ushort _lookYaw;
+    short _lookPitch;
+    readonly float _maxDistance;
     public float Magnification => _def.ZoomLevels[Zoom];
     public GunshipDef Def => _def;
     public Aircraft Aircraft => _aircraft;
@@ -67,9 +74,17 @@ public sealed class GunshipControl
     public void OnInput(NetInput input, double now)
     {
         if (Ended) return;
-        var yaw = Quant.Yaw(input.Yaw);
-        var pitch = Quant.Pitch(input.Pitch);
-        (TurretYaw, TurretPitch) = GunshipAim.Clamp(_aircraft.YawRad, yaw, pitch, _def);
+        // the look moves the aim point only when it changes (the mouse moved): the point is then anchored to the ground from
+        // where the turret is now, and it stays put while the owner's mouse is still, however the airframe turns (#160)
+        if (!_haveLook || input.Yaw != _lookYaw || input.Pitch != _lookPitch)
+        {
+            _haveLook = true;
+            _lookYaw = input.Yaw;
+            _lookPitch = input.Pitch;
+            var pitch = GunshipAim.ClampPitch(Quant.Pitch(input.Pitch), _def);
+            AimPoint = GunshipAim.AimPoint(Muzzle, Quant.Yaw(input.Yaw), pitch, _aircraft.GroundY, _maxDistance);
+        }
+        (TurretYaw, TurretPitch) = GunshipAim.View(Muzzle, AimPoint, _def);
 
         var aim = Held(input, MoveButtons.Aim);
         var reload = Held(input, MoveButtons.Reload);

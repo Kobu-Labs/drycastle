@@ -126,34 +126,7 @@ public class AircraftTests
         Assert.False(reg.Find(Aircraft.WireType)!.HasHp);
     }
 
-    [Fact]
-    public void Aim_clamp_limits_yaw_to_the_swing_and_pitch_to_its_range()
-    {
-        var limit = Gun.YawLimitDeg * MathF.PI / 180f;
-        var (y, p) = GunshipAim.Clamp(0f, 3.1f, 0.5f, Gun);
-        Assert.Equal(limit, y, 0.001f);
-        Assert.Equal(Gun.PitchMaxDeg * MathF.PI / 180f, p, 0.001f);
-
-        var (y2, p2) = GunshipAim.Clamp(0f, -3.1f, -3f, Gun);
-        Assert.Equal(-limit, y2, 0.001f);
-        Assert.Equal(Gun.PitchMinDeg * MathF.PI / 180f, p2, 0.001f);
-    }
-
-    [Fact]
-    public void Aim_clamp_is_relative_to_the_airframe_heading_across_the_wrap()
-    {
-        // airframe heading just under pi, view just over -pi: a small turn, inside the swing
-        var (y, _) = GunshipAim.Clamp(3.0f, -3.0f, -0.3f, Gun);
-        Assert.Equal(3.0f + 0.283f, y, 0.01f);
-    }
-
-    [Fact]
-    public void Aim_inside_the_limits_is_unchanged()
-    {
-        var (y, p) = GunshipAim.Clamp(1f, 1.2f, -0.4f, Gun);
-        Assert.Equal(1.2f, y, 0.001f);
-        Assert.Equal(-0.4f, p, 0.001f);
-    }
+    // The turret aim is ground-stabilised and world-space now (#160): its limits and continuity are in GunshipGroundAimTests.
 
     static NetInput Input(float yaw, float pitch, MoveButtons buttons) => new()
     {

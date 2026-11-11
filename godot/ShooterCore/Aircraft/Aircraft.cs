@@ -74,6 +74,8 @@ public sealed class Aircraft : IWorldEntity
     public WorldDespawnReason? Ended { get; private set; }
     public AircraftKindDef Def => _def;
     public int Kind => _kind;
+    /// <summary>Height of the ground under the circle centre (the plane the gunship's aim points are on, #160).</summary>
+    public float GroundY => _centre.Y;
     /// <summary>Seconds flown since spawn.</summary>
     public float Age => _age;
 

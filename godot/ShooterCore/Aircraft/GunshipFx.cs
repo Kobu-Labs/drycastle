@@ -19,8 +19,11 @@ public static class GunshipFxLimits
     public const int MaxBlastsPerTick = 8;
 }
 
-/// <summary>One cannon round's tracer: the weapons.json index of the round (its sound and tracer), where it left and where it stopped.</summary>
-public readonly record struct GunshipTracer(byte Weapon, Vector3 Origin, Vector3 End);
+/// <summary>
+/// One round's tracer: the weapons.json index of the round (its sound), where it left, where it stopped, and how it looks in flight
+/// (the gunship weapon's <c>tracer_speed_mps</c> and <c>tracer_length_m</c>, #160). Visual only; the damage is the server's.
+/// </summary>
+public readonly record struct GunshipTracer(byte Weapon, Vector3 Origin, Vector3 End, float SpeedMps, float LengthM);
 
 /// <summary>A blast of a gunship round: its centre and the splash radius it used.</summary>
 public readonly record struct GunshipBlast(Vector3 At, float Radius);
@@ -42,14 +45,14 @@ public sealed record GunshipBlastsMsg(ushort Owner, GunshipHitFlags Hits, IReadO
 /// The wire payloads of the coalesced gunship FX (kinds 121-123, little-endian). Per server tick, each gunner sends at most one
 /// shots message and one blasts message, and everyone gets at most one impacts message:
 /// <list type="bullet">
-/// <item><b>GunshipShots (121)</b>: u16 owner, u8 count (at most <see cref="GunshipFxLimits.MaxTracersPerTick"/>), then count × (u8 weapon, three f32 origin, three f32 end).</item>
+/// <item><b>GunshipShots (121)</b>: u16 owner, u8 count (at most <see cref="GunshipFxLimits.MaxTracersPerTick"/>), then count × (u8 weapon, three f32 origin, three f32 end, u16 speed in m/s, u16 length in cm).</item>
 /// <item><b>GunshipImpacts (122)</b>: u8 count, then count × (three f32 point, u8 surface, u8 size with bit 7 set for a kill).</item>
 /// <item><b>GunshipBlasts (123)</b>: u16 owner, u8 hit flags (<see cref="GunshipHitFlags"/>), u8 count (at most <see cref="GunshipFxLimits.MaxBlastsPerTick"/>), then count × (three f32 centre, f32 radius).</item>
 /// </list>
 /// </summary>
 public static class GunshipFxCodec
 {
-    public const int TracerBytes = 1 + 24, ImpactBytes = 14, BlastBytes = 16;
+    public const int TracerBytes = 1 + 24 + 4, ImpactBytes = 14, BlastBytes = 16;
     const byte KillBit = 0x80;
 
     public static byte[] EncodeShots(GunshipShotsMsg m)
@@ -64,6 +67,8 @@ public static class GunshipFxCodec
             b[at] = t.Weapon;
             PutVec(b, at + 1, t.Origin);
             PutVec(b, at + 13, t.End);
+            BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(at + 25), (ushort)Math.Clamp(MathF.Round(t.SpeedMps), 0, ushort.MaxValue));
+            BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(at + 27), (ushort)Math.Clamp(MathF.Round(t.LengthM * 100f), 0, ushort.MaxValue));
             at += TracerBytes;
         }
         return b;
@@ -78,7 +83,9 @@ public static class GunshipFxCodec
         var at = 3;
         for (var i = 0; i < count; i++)
         {
-            list.Add(new GunshipTracer(d[at], GetVec(d, at + 1), GetVec(d, at + 13)));
+            var speed = BinaryPrimitives.ReadUInt16LittleEndian(d[(at + 25)..]);
+            var length = BinaryPrimitives.ReadUInt16LittleEndian(d[(at + 27)..]);
+            list.Add(new GunshipTracer(d[at], GetVec(d, at + 1), GetVec(d, at + 13), speed, length / 100f));
             at += TracerBytes;
         }
         return new GunshipShotsMsg(BinaryPrimitives.ReadUInt16LittleEndian(d), list);

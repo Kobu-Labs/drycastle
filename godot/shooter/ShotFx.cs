@@ -32,7 +32,8 @@ public static class ShotFx
     }
 
     /// <summary>Shot from the muzzle <paramref name="from"/> to <paramref name="to"/>. Melee swings have no effect here.</summary>
-    public static void Spawn(Node3D world, Vector3 from, Vector3 to, bool melee, bool impact = true, Vector3? normal = null)
+    /// <paramref name="speed"/> and <paramref name="length"/> set the tracer's flight (m/s) and streak (m) for a weapon that has its own (the gunship, #160); null keeps the generic ones.
+    public static void Spawn(Node3D world, Vector3 from, Vector3 to, bool melee, bool impact = true, Vector3? normal = null, float? speed = null, float? length = null)
     {
         if (!Enabled || melee || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree()) return;
         var dir = to - from;
@@ -40,13 +41,13 @@ public static class ShotFx
         if (dist < 0.05f) return;
         Init();
         dir /= dist;
-        Tracer(world, from, to, dir, dist);
+        Tracer(world, from, to, dir, dist, speed ?? TracerSpeed, length ?? TracerLength);
         if (impact && dist < MaxShotRange - 1f) Impact(world, to, normal ?? -dir);
     }
 
-    static void Tracer(Node3D world, Vector3 from, Vector3 to, Vector3 dir, float dist)
+    static void Tracer(Node3D world, Vector3 from, Vector3 to, Vector3 dir, float dist, float speed, float length)
     {
-        var len = Mathf.Min(TracerLength, dist);
+        var len = Mathf.Min(length, dist);
         var pivot = new Node3D();
         pivot.AddChild(new MeshInstance3D { Mesh = _tracerMesh, Scale = new Vector3(1, 1, len), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
         world.AddChild(pivot);
@@ -56,7 +57,7 @@ public static class ShotFx
         var end = to - dir * (len * 0.5f);
         pivot.LookAtFromPosition(start, start + dir, up);
         var tw = pivot.CreateTween();
-        tw.TweenProperty(pivot, "position", end, Mathf.Max(0.03f, (dist - len) / TracerSpeed));
+        tw.TweenProperty(pivot, "position", end, Mathf.Max(0.03f, (dist - len) / speed));
         tw.TweenCallback(Callable.From(pivot.QueueFree));
     }
 

@@ -51,13 +51,17 @@ public sealed class GunshipWeaponDef
     /// weapons.json blast for that launch (the gunship's rockets 8 m; the bazooka keeps its 6 m). Null uses the weapon's own.
     /// </summary>
     public SplashDef? Splash { get; init; }
+    /// <summary>
+    /// Visual only (#160): the tracer's speed and length. Cannon rounds and shells need them; a rocket has none (it flies in the
+    /// rocket sim, with its own look). The damage is the server's, at the hit, whatever these are.
+    /// </summary>
+    public float? TracerSpeedMps { get; init; }
+    public float? TracerLengthM { get; init; }
 }
 
 /// <summary>The gunship turret: aim limits relative to the airframe, zoom levels, and its weapons (killstreaks.json "gunship").</summary>
 public sealed class GunshipDef
 {
-    /// <summary>Half-angle the turret can swing either side of the airframe's heading, degrees.</summary>
-    public float YawLimitDeg { get; init; }
     /// <summary>Lowest and highest pitch, degrees (negative looks down).</summary>
     public float PitchMinDeg { get; init; }
     public float PitchMaxDeg { get; init; }
@@ -86,7 +90,6 @@ public static class AircraftData
 
     internal sealed class GunshipRaw
     {
-        public float? YawLimitDeg { get; set; }
         public float? PitchMinDeg { get; set; }
         public float? PitchMaxDeg { get; set; }
         public List<float>? ZoomLevels { get; set; }
@@ -104,6 +107,8 @@ public static class AircraftData
         public float? IntervalS { get; set; }
         public float? SpreadDeg { get; set; }
         public SplashRaw? Splash { get; set; }
+        public float? TracerSpeedMps { get; set; }
+        public float? TracerLengthM { get; set; }
     }
 
     internal sealed class SplashRaw
@@ -203,12 +208,13 @@ public static class AircraftData
                 IntervalS = Need(r.IntervalS, where, "interval_s", 0.01f),
                 SpreadDeg = Need(r.SpreadDeg, where, "spread_deg", 0),
                 Splash = splash,
+                TracerSpeedMps = kind == GunshipWeaponKind.Rocket ? r.TracerSpeedMps : Need(r.TracerSpeedMps, where, "tracer_speed_mps", 50),
+                TracerLengthM = kind == GunshipWeaponKind.Rocket ? r.TracerLengthM : Need(r.TracerLengthM, where, "tracer_length_m", 0.5f),
             });
         }
         if (weapons.Count == 0) throw new DataFileException($"{F}: {section}: at least one weapon is required");
         return new GunshipDef
         {
-            YawLimitDeg = Need(gunship.YawLimitDeg, section, "yaw_limit_deg", 0),
             PitchMinDeg = pitchMin, PitchMaxDeg = pitchMax,
             ZoomLevels = zoom, Weapons = weapons,
         };

@@ -16,13 +16,23 @@ public partial class NetClient
     {
         public AircraftModel Model = null!;
         public RotorSound? Sound;
+        /// <summary>Height above the ground under the circle centre (the aim's ground plane is the model's Y minus this).</summary>
+        public float AltitudeM;
     }
 
     readonly Dictionary<ushort, AircraftView> _aircraft = new();
-    /// <summary>The local player's gunship while it exists (null otherwise); its yaw is the rendered heading.</summary>
+    /// <summary>The local player's gunship while it exists (null otherwise).</summary>
     AircraftView? _gunship;
-    float _gunYaw;
-    /// <summary>The yaw the turret camera was set to this frame (the minimap follows it, ticket #150).</summary>
+    /// <summary>
+    /// The turret's look, world yaw and pitch (#160): the mouse moves it, zoom-scaled. It is what the owner sends as the aim, so it
+    /// changes only when the mouse does; the view is the direction from the turret to <see cref="_aimPoint"/>, not this.
+    /// </summary>
+    float _lookYaw, _lookPitch;
+    /// <summary>The raw look (the player's mouse yaw and pitch) last seen, so this frame's mouse move is the difference from it.</summary>
+    float _rawYaw, _rawPitch;
+    /// <summary>The ground point the turret is on: fixed while the mouse is still, re-anchored when it moves.</summary>
+    System.Numerics.Vector3 _aimPoint;
+    /// <summary>The yaw the turret camera was set to this frame, unwrapped so it never jumps at +-pi (the minimap follows it, ticket #150).</summary>
     float _turretViewYaw;
     GunshipStatus _gunStatus;
     bool _gunDirty;
@@ -47,7 +57,7 @@ public partial class NetClient
         var kindId = kinds != null && index < kinds.Count ? kinds[index].Id : "helicopter";
         var model = AircraftModel.Build(kindId);
         World.AddChild(model);
-        var view = new AircraftView { Model = model };
+        var view = new AircraftView { Model = model, AltitudeM = kinds != null && index < kinds.Count ? kinds[index].AltitudeM : 0f };
         if (ShotFx.Enabled)
         {
             view.Sound = new RotorSound { Level = kindId == "gunship" ? 0.7f : 0.5f, BladeHz = kindId == "gunship" ? 24f : 36f };
@@ -92,12 +102,23 @@ public partial class NetClient
 
         if (mineId != 0 && _aircraft.TryGetValue(mineId, out var mine) && !Dead && _me != null && GunDef() is { } gun)
         {
-            if (_gunship != mine) { _gunship = mine; _gunDirty = true; }
-            if (WorldEntities.Entities.TryGetValue(mineId, out var me) && me.Buf.At(rt) is { } ms) _gunYaw = ms.Yaw;
-            var (yaw, pitch) = GunshipAim.Clamp(_gunYaw, _me.Yaw, _me.Pitch, gun);
-            _turretViewYaw = yaw;
             var mount = mine.Model.GlobalPosition - Vector3.Up * GunshipControl.TurretDropM;
-            _me.Turret(mount, yaw, pitch);
+            var groundY = mine.Model.GlobalPosition.Y - mine.AltitudeM;
+            var maxD = GunshipAim.MaxDistance(gun);
+            var starting = _gunship != mine;
+            if (starting)
+            {
+                // the turret takes the look the player had, anchored to the ground point it is on (ground-stabilised, #160)
+                _gunship = mine; _gunDirty = true;
+                _lookYaw = _me.Yaw; _lookPitch = GunshipAim.ClampPitch(_me.Pitch, gun);
+                _rawYaw = _me.Yaw; _rawPitch = _me.Pitch;
+                _aimPoint = GunshipAim.AimPoint(ToNum(mount), _lookYaw, _lookPitch, groundY, maxD);
+                _me.TurretLook = true;
+            }
+            GunAimStep(mount, groundY, maxD, gun);
+            var (yaw, pitch) = GunshipAim.View(ToNum(mount), _aimPoint, gun);
+            _turretViewYaw = starting ? yaw : GunshipAim.Unwrap(_turretViewYaw, yaw);
+            _me.Turret(mount, _turretViewYaw, pitch);
             _me.ZoomFov = GameSettings.Current.Fov / (_gunStatus.Zoom < gun.ZoomLevels.Count ? gun.ZoomLevels[_gunStatus.Zoom] : 1f);
             if (_gunDirty) { _gunOverlay.Present(_gunStatus, gun, HeliCycleWeapons && !_ac130Active, _ac130Active); _gunDirty = false; }
             // the timed streak's clock: the helicopter's, or the AC-130's time left (whole seconds, its kills are not counted here)
@@ -134,26 +155,38 @@ public partial class NetClient
         _gunship = null;
         _gunDirty = false;
         _gunOverlay.Dismiss();
-        _me?.EndChase(_me.Yaw);
+        if (_me != null) { _me.TurretLook = false; _me.EndChase(_turretViewYaw); } // back to the body, looking where the turret looked
+    }
+
+    static System.Numerics.Vector3 ToNum(Vector3 v) => new(v.X, v.Y, v.Z);
+
+    /// <summary>The magnification of the turret's zoom step now (1 when out of range).</summary>
+    float MagnificationOf(GunshipDef gun) => _gunStatus.Zoom < gun.ZoomLevels.Count ? gun.ZoomLevels[_gunStatus.Zoom] : 1f;
+
+    /// <summary>
+    /// Moves the turret's look by this frame's mouse move (the raw look's change since last frame), scaled down by the zoom, and
+    /// re-anchors the aim point to the ground there. The move is applied to the view as it is on screen (the aim point seen from
+    /// the turret now), so the reticle moves from where it is. With no mouse move the aim point stays where it is (#160).
+    /// </summary>
+    void GunAimStep(Vector3 mount, float groundY, float maxDistance, GunshipDef gun)
+    {
+        var dYaw = GunshipAim.Wrap(_me!.Yaw - _rawYaw);
+        var dPitch = _me.Pitch - _rawPitch;
+        _rawYaw = _me.Yaw; _rawPitch = _me.Pitch;
+        if (dYaw == 0 && dPitch == 0) return;
+        var (viewYaw, viewPitch) = GunshipAim.View(ToNum(mount), _aimPoint, gun);
+        (_lookYaw, _lookPitch) = GunshipAim.Turn(viewYaw, viewPitch, dYaw, dPitch, MagnificationOf(gun), gun);
+        _aimPoint = GunshipAim.AimPoint(ToNum(mount), _lookYaw, _lookPitch, groundY, maxDistance);
     }
 
     /// <summary>
-    /// The look in world space at the turret (the mouse's, never clamped). It is kept apart from the clamped look that is sent
-    /// and drawn, so a view pinned at the limit does not ratchet with the orbit (ticket #154).
+    /// At the turret the input carries the turret's look (the aim the server anchors to the ground), not the raw mouse look, which
+    /// stays the player's own. Returns the pitch to send. Called on the input tick.
     /// </summary>
-    float _gunAimYaw;
-
-    /// <summary>
-    /// At the turret the look is clamped to the turret's limits before it is sent, so the view the player sees is the one the
-    /// server will apply. Called on the input tick, before the yaw is stored. The world-space look is kept in
-    /// <see cref="_gunAimYaw"/>; the caller stores it, not the clamped value, as the player's yaw.
-    /// </summary>
-    void ClampGunnerView(ref MoveInput mi)
+    float GunnerLook(ref MoveInput mi)
     {
-        if (_gunship == null || _me == null || GunDef() is not { } gun) return;
-        _gunAimYaw = mi.Yaw;
-        var (yaw, pitch) = GunshipAim.Clamp(_gunYaw, _gunAimYaw, _me.Pitch, gun);
-        mi.Yaw = yaw;
-        _me.Pitch = pitch;
+        if (_gunship == null || _me == null) return _me?.Pitch ?? 0f;
+        mi.Yaw = _lookYaw;
+        return _lookPitch;
     }
 }
