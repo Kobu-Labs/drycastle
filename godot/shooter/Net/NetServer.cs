@@ -166,6 +166,7 @@ public partial class NetServer : Node
         foreach (var c in _clients.Values.ToList()) if (c.Joined) SimulateClient(c, (float)delta);
         StepRockets((float)delta);
         StepVehicles((float)delta);
+        DetonateShells();  // shells whose tracer has arrived burst now (#162)
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
         SendSnapshots();

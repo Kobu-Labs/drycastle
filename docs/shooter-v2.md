@@ -196,10 +196,14 @@ cannon 1500 m/s and 14 m; the 105 mm shell is 1500 m/s too, so a shell reaches 8
 They ride the GunshipShots message and `ShotFx.Spawn` takes them as optional parameters (the generic 250 m/s stays for every other
 weapon). Rockets have no tracer data. A gunship's impact is its own message (GunshipImpacts), so its tracer does not also draw the
 generic spark (`ShotFx`'s 300 m cut-off would skip it for a long round). A sky shot's tracer is drawn only to
-`GunshipFxLimits.MaxSkyTracerM` (1500 m); the round still flies its full range. The damage is still the server's and instant; the
-105 mm burst is at the server's resolution, not at the shell's arrival (a known gap: with the shell at 1500 m/s the blast can show up
-to about 0.5 s before the shell visually arrives at 800 m, and about 2 s at 3000 m; a fix needs the flight time on the wire, or
-the shell as a rocket-sim projectile, which changes its damage routing).
+`GunshipFxLimits.MaxSkyTracerM` (1500 m); the round still flies its full range. The cannon rounds' damage is still
+instant (their 3000 m flight is at most 2 s, but a delay would make the 0.3 s hits at 450 m feel laggy). The 105 mm shell is the
+exception (#162): it bursts when its tracer arrives. The detonation is at fire time plus distance over `tracer_speed_mps`
+(`ShellFlight.Plan`, read from the same weapon def as the visual, so they agree), within one tick; the server queues it in a
+`TimedQueue<PendingShell>` and `DetonateShells` runs once a tick, before the coalesced FX are sent, so the blast, the impact and the
+hit markers come at arrival. The point and the route are fixed at the fire (a shell does not home on a moving target). A shell still in
+the air is lost on a round start or end (`_shells.Clear()`); its owner leaving does not stop it. A shell whose flight is one tick or less
+is resolved at once.
 
 Gunship rockets (#159) have their own 8 m blast: a `splash` block on the rockets entry in killstreaks.json (radius 8, full damage
 to 2 m, edge 20, no self damage). The rocket sim takes it per launch (`Rocket.Blast`, `ProjectileMath.WithBlast`), so the bazooka
