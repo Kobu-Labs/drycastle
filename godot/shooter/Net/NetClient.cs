@@ -98,6 +98,7 @@ public partial class NetClient : Node
         InitCorpses();
         InitCarePackages();
         InitMissile();
+        InitTurrets();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
         _peer = _conn.ConnectToHost(Host, Port, Wire.Channels, 0);
@@ -172,6 +173,7 @@ public partial class NetClient : Node
         RenderRemotes();
         RenderCorpses();
         RenderCarePackages();
+        RenderTurrets();
         RenderCars();
         RenderRockets();
         RenderMissiles();

@@ -226,7 +226,7 @@ public partial class Shooter : Node3D
         static string Read(string f) =>
             Godot.FileAccess.Open($"res://data/{f}", Godot.FileAccess.ModeFlags.Read)?.GetAsText()
             ?? throw new DataFileException($"{f}: cannot open ({Godot.FileAccess.GetOpenError()})");
-        return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("environment.json"), Read("camo.json"));
+        return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"));
     }
 
     void LoadMap(Config cfg)
@@ -257,7 +257,7 @@ public partial class Shooter : Node3D
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var server = new NetServer
         {
-            World = this, KillY = killY, Water = _water, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, CamoData = _data.Camo,
+            World = this, KillY = killY, Water = _water, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, CamoData = _data.Camo, Turret = _data.Turret,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             MatchConfig = ApplyOverrides(_data.Match, cfg.Str("match-set")),
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")),

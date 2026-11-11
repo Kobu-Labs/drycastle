@@ -127,7 +127,7 @@ public partial class NetClient
         string? prompt = null;
         if (_driving) prompt = Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) != null) prompt = Strings.F("hud.vehicle.enter", InputBindings.Name("interact"));
-        _hud?.SetPrompt(prompt ?? CratePrompt() ?? CorpsePrompt());
+        _hud?.SetPrompt(TurretPrompt() ?? prompt ?? CratePrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
     }
 
     CarView? NearestFreeCar(Vector3 p)

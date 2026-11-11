@@ -17,6 +17,8 @@ public static class SpecialWeapons
     public const byte Moab = 249;
     /// <summary>The attack missile's blast (killstreak "attack_missile"): the kill feed and the stats name it.</summary>
     public const byte Missile = 248;
+    /// <summary>A sentry turret's shots (killstreak "turret"); its kills count as the streak's, under the weapon id turret_gun.</summary>
+    public const byte Turret = 247;
 }
 
 public abstract record MatchEvent;

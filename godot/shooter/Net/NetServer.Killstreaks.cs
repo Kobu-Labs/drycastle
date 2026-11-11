@@ -15,7 +15,7 @@ public partial class NetServer
 
     KillstreakService _streaks = null!;
 
-    /// <summary>Builds the service once the table is set. Each streak runs its logging stub until its own ticket replaces it.</summary>
+    /// <summary>Builds the service once the table and the match are set. Streaks without a ticket yet keep their logging stub.</summary>
     void BuildStreaks() =>
         _streaks = new KillstreakService(
             Killstreaks,
@@ -23,6 +23,7 @@ public partial class NetServer
                 s.Id == MoabStreak.StreakId ? (IKillstreak)new MoabStreak(OnMoabPhase) :
                 s.Id == CarePackageRules.StreakId ? CarePackageImpl() :
                 s.Id == AttackMissileStreak.StreakId ? MakeMissileStreak() :
+                s.Id == TurretStreak.StreakId ? new TurretStreak(Turret.Def, _match.Entities, new TurretWorld(this)) :
                 new LoggingKillstreak(s.Id)),
             (owner, kind, payload) => { if (_byId.TryGetValue(owner, out var c)) Send(c, new EventMsg((byte)kind, payload)); },
             s => GD.Print($"server: {s}"));

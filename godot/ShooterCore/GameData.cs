@@ -13,6 +13,8 @@ public class GameData
 
     /// <summary>environment.json (day/night clock). Defaults when the file is absent from the parse call.</summary>
     public EnvironmentConfig Environment { get; init; } = new();
+    /// <summary>turret.json: the sentry turret's tuning (the turret killstreak).</summary>
+    public required TurretFile Turret { get; init; }
 
     /// <summary>camo.json (camouflage presets, tuft and concealment rules). A built-in minimal file when absent.</summary>
     public CamoFile Camo { get; init; } = CamoFile.Parse(MinimalCamoJson);
@@ -27,7 +29,7 @@ public class GameData
         """;
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string environmentJson = "", string camoJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -39,6 +41,7 @@ public class GameData
             Vehicles = VehiclesFile.Validate(DataFile.Parse<VehiclesFile>(vehiclesJson, "vehicles.json")),
             Perks = perks,
             Killstreaks = killstreaks,
+            Turret = TurretFile.Parse(turretJson),
             Levels = LevelsFile.Parse(levelsJson, weapons, perks, killstreaks.UnlockLevels),
             Environment = environmentJson == "" ? new() : EnvironmentConfig.Parse(environmentJson),
             Camo = camoJson == "" ? CamoFile.Parse(MinimalCamoJson) : CamoFile.Parse(camoJson),
@@ -57,6 +60,7 @@ public class GameData
             Vehicles = VehiclesFile.Load(Path.Combine(dir, "vehicles.json")),
             Perks = perks,
             Killstreaks = killstreaks,
+            Turret = TurretFile.Load(Path.Combine(dir, "turret.json")),
             Levels = LevelsFile.Load(Path.Combine(dir, "levels.json"), weapons, perks, killstreaks.UnlockLevels),
             Environment = File.Exists(Path.Combine(dir, "environment.json")) ? EnvironmentConfig.Load(Path.Combine(dir, "environment.json")) : new(),
             Camo = File.Exists(Path.Combine(dir, "camo.json")) ? CamoFile.Load(Path.Combine(dir, "camo.json")) : CamoFile.Parse(MinimalCamoJson),

@@ -275,7 +275,7 @@ public sealed class AttackMissileStreak : IKillstreak
             return false;
         }
         missile.Id = id;
-        if (!use.TakeControl(id, input => missile.Aim(Quant.Yaw(input.Yaw), Quant.Pitch(input.Pitch))))
+        if (!use.TakeControl(id, input => missile.Aim(Quant.Yaw(input.Yaw), Quant.Pitch(input.Pitch)), freezesBody: true))
         {
             entities.Despawn(id, WorldDespawnReason.Removed);
             return false;

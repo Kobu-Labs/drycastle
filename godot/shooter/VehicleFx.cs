@@ -42,9 +42,13 @@ public static partial class VehicleFx
         int _stage;
         bool _near = true;
 
-        public static Damage Make(Node3D car, VehicleDef def)
+        public static Damage Make(Node3D car, VehicleDef def) => MakeAt(car, new Vector3(def.Hood[0], def.Hood[1], def.Hood[2]));
+
+        /// <summary>The same emitters at any point of a parent (the sentry turret's top, for one).</summary>
+        public static Damage MakeAt(Node3D parent, Vector3 at)
         {
-            var d = new Damage { Name = "Damage", Position = new Vector3(def.Hood[0], def.Hood[1], def.Hood[2]) };
+            var d = new Damage { Name = "Damage", Position = at };
+            var car = parent;
             car.AddChild(d);
             var rc = RocketFx.C;
             d._smoke = Stream(d, rc.Smoke, C.Light, C.Grow);

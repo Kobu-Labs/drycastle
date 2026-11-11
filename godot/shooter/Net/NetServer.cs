@@ -123,9 +123,10 @@ public partial class NetServer : Node
         _match.Entities.Spawned += w => BroadcastEvent(EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State));
         _match.Entities.Despawned += w => BroadcastEvent(EventKind.WorldDespawn, WorldCodec.EncodeDespawn(w.Id, w.Reason));
         CorpseRules.Register(WorldEntityRegistry.Shared);
+        TurretRules.Register(WorldEntityRegistry.Shared);
         _corpses = new CorpseBook(_match.Entities);
         BuildCarePackages();
-        BuildStreaks(); // after the match and the crate book: the care package streak needs both
+        BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");
@@ -470,6 +471,10 @@ public partial class NetServer : Node
         {
             var i = c.Inputs.Dequeue();
             c.Ack = i.Seq; c.HasAck = true;
+            // a killstreak's control session (a turret being placed) takes the owner's input first; while it holds it,
+            // Fire and Use belong to the session, not to the weapon or the vehicles
+            var controlled = _streaks.RouteInput(c.Id, i);
+            if (controlled) i.Buttons &= (ushort)(ushort.MaxValue ^ (ushort)(MoveButtons.Fire | MoveButtons.Use));
             var useDown = (i.Buttons & (ushort)MoveButtons.Use) != 0;
             var useEdge = useDown && !c.UseHeld;
             c.UseHeld = useDown;
@@ -478,8 +483,8 @@ public partial class NetServer : Node
             var streakEdge = streakDown && !c.StreakHeld;
             c.StreakHeld = streakDown;
             if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
-            if (streakEdge) StreakActivate(c);
-            if (c.Car == null && _streaks.RouteInput(c.Id, i)) continue; // controlling a streak entity (the missile): the body stands still
+            if (streakEdge && !controlled) StreakActivate(c);
+            if (c.Car == null && _streaks.ControlOf(c.Id) is { FreezesBody: true }) continue; // controlling a streak entity that holds the body (the missile): the body stands still
             if (c.Car != null)
             {
                 // driving: the car is simulated in StepVehicles from the driver's inputs; no walking or weapon timers.
@@ -594,6 +599,7 @@ public partial class NetServer : Node
             }
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(eye) + fwd * w.Reach)));
             if (hit is { } m) Deal(c.Id, (byte)shot.WeaponIndex, m.Id, HitMath.MeleeDamage(w, m.Backstab), false, m.Backstab);
+            else if (TurretMelee(N(feet), yaw, w.Reach) is { } turret) _match.Entities.Damage(turret, Turret.KnifeDamage * c.Perks.VehicleDamageDealt, c.Id);
         }
     }
 

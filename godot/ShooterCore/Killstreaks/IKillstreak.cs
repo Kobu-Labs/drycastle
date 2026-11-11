@@ -50,10 +50,12 @@ public sealed class ControlSession
     /// <summary>The world entity (<see cref="WorldEntityManager"/> id) the owner controls.</summary>
     public ushort EntityId { get; }
     public Action<NetInput> OnInput { get; }
+    /// <summary>True when the owner's body stands still while the session holds control (the missile); false when the owner keeps moving (a placing turret).</summary>
+    public bool FreezesBody { get; }
 
-    internal ControlSession(ushort owner, string streakId, ushort entityId, Action<NetInput> onInput)
+    internal ControlSession(ushort owner, string streakId, ushort entityId, Action<NetInput> onInput, bool freezesBody)
     {
-        Owner = owner; StreakId = streakId; EntityId = entityId; OnInput = onInput;
+        Owner = owner; StreakId = streakId; EntityId = entityId; OnInput = onInput; FreezesBody = freezesBody;
     }
 }
 
@@ -92,7 +94,7 @@ public sealed class KillstreakUse
     public void OnEnded(Action<KillstreakEndReason> callback) => _onEnded.Add(callback);
 
     /// <summary>Gives the owner control of an entity. False when the owner already controls another streak or this one has ended.</summary>
-    public bool TakeControl(ushort entityId, Action<NetInput> onInput) => _service.TakeControl(this, entityId, onInput);
+    public bool TakeControl(ushort entityId, Action<NetInput> onInput, bool freezesBody = false) => _service.TakeControl(this, entityId, onInput, freezesBody);
 
     /// <summary>Writes a line to the server log, tagged with the streak and owner.</summary>
     public void Log(string message) => _service.Log($"killstreak {StreakId} (player {Owner}): {message}");
