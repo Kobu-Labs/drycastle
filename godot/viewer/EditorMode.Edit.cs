@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Godot;
 using Suchohrad.MapLoader;
@@ -448,6 +449,22 @@ public partial class EditorMode
         return r;
     }
 
+    /// <summary>The count/density line under the trees note, for a mode and its value (a density, or a tree count in count mode).</summary>
+    void ShowTreeStats(bool has, string kind, double value)
+    {
+        var area = Math.Max(1.0, FirstArea);
+        var density = kind == TreesDraft.Count ? value * 1000.0 / area : value;
+        var count = kind == TreesDraft.Count ? value : density * area / 1000.0;
+        _statsLabel.Text = !has ? "" : $"{(kind == TreesDraft.Count ? count.ToString("0") : "about " + count.ToString("0.#"))} trees, {density:0.##} per 1000 m2 ({area:0} m2)";
+    }
+
+    /// <summary>Live preview while a value is typed, before Enter or focus loss commits it.</summary>
+    void PreviewTreeText(string kind, string text)
+    {
+        if (_target == null || !double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) || v < 0) return;
+        ShowTreeStats(true, kind, kind == TreesDraft.Count ? Math.Round(v) : v);
+    }
+
     static SpinBox Spin(double min, double max, double step, string suffix = "")
     {
         var s = new SpinBox { MinValue = min, MaxValue = max, Step = step, Suffix = suffix, AllowGreater = false, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
@@ -561,9 +578,11 @@ public partial class EditorMode
         _radioRules = Radio("rules (default)", TreesDraft.Rules);
         _radioDensity = Radio("density", TreesDraft.Density);
         _densitySpin = Spin(0, 500, 0.1, " / 1000 m2");
+        _densitySpin.GetLineEdit().TextChanged += t => { if (!_syncing) PreviewTreeText(TreesDraft.Density, t); };
         _densitySpin.ValueChanged += v => { if (_syncing) return; if (CurrentTrees.Kind != TreesDraft.Density) SetTreesKind(TreesDraft.Density); SetTreesValue(v); };
         _radioCount = Radio("count", TreesDraft.Count);
         _countSpin = Spin(0, 5000, 1, " trees");
+        _countSpin.GetLineEdit().TextChanged += t => { if (!_syncing) PreviewTreeText(TreesDraft.Count, t); };
         _countSpin.ValueChanged += v => { if (_syncing) return; if (CurrentTrees.Kind != TreesDraft.Count) SetTreesKind(TreesDraft.Count); SetTreesValue(v); };
         body.AddChild(_radioRules);
         var d = new HBoxContainer(); d.AddChild(_radioDensity); d.AddChild(_densitySpin); body.AddChild(d);
@@ -646,10 +665,8 @@ public partial class EditorMode
         // ---- trees ----
         var tr = CurrentTrees;
         _treesNote.Text = !has ? "" : t!.IsGroup ? $"applies to {t.Parcels.Count} parcels (per parcel, the whole group)" : t.Parcels.Count > 1 ? $"applies to {t.Parcels.Count} parcels" : "";
-        var area = Math.Max(1.0, FirstArea);
-        var effDensity = tr.Kind == TreesDraft.Count ? tr.CountValue * 1000.0 / area : tr.Kind == TreesDraft.Density ? tr.DensityValue : RulesDensity;
-        var effCount = tr.Kind == TreesDraft.Count ? tr.CountValue : effDensity * area / 1000.0;
-        _statsLabel.Text = !has ? "" : $"{(tr.Kind == TreesDraft.Count ? effCount.ToString("0") : "about " + effCount.ToString("0.#"))} trees, {effDensity:0.##} per 1000 m2 ({area:0} m2)";
+        var shown = tr.Kind == TreesDraft.Count ? tr.CountValue : tr.Kind == TreesDraft.Density ? tr.DensityValue : RulesDensity;
+        ShowTreeStats(has, tr.Kind, shown);
         _radioRules.SetPressedNoSignal(tr.Kind == TreesDraft.Rules);
         _radioDensity.SetPressedNoSignal(tr.Kind == TreesDraft.Density);
         _radioCount.SetPressedNoSignal(tr.Kind == TreesDraft.Count);
