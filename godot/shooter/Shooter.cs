@@ -267,9 +267,11 @@ public partial class Shooter : Node3D
     {
         // Opened here so a bad path or failed migration stops the server at start, like a bad --match-set.
         // Write failures are logged by the store, never thrown into the match. Disposed in _ExitTree (flushes queued writes).
-        var dbPath = cfg.Str("db", "./shooter.db");
-        _progression = Suchohrad.ShooterServer.Persistence.Sqlite.SqliteProgressionStore.Open(dbPath, s => GD.PrintErr(s), _data.Levels.Curve);
-        GD.Print($"server: progression db {Path.GetFullPath(dbPath)}");
+        // --db is a SQLite file path or a PostgreSQL URL/connection string; SUCHOHRAD_DB (else ./shooter.db) when absent, so a password stays out of the command line.
+        var envDb = OS.GetEnvironment("SUCHOHRAD_DB");
+        var dbPath = cfg.Str("db", string.IsNullOrEmpty(envDb) ? "./shooter.db" : envDb);
+        _progression = Suchohrad.ShooterServer.Persistence.ProgressionStores.Open(dbPath, s => GD.PrintErr(s), _data.Levels.Curve);
+        GD.Print($"server: progression db {Suchohrad.ShooterServer.Persistence.ProgressionStores.Describe(dbPath)}");
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var server = new NetServer
         {

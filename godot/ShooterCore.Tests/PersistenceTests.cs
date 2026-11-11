@@ -9,7 +9,7 @@ namespace Suchohrad.ShooterCore.Tests;
 /// <summary>Shooter v2 persistence (ADR 0003). The same contract runs against the SQLite and in-memory stores.</summary>
 public class PersistenceTests
 {
-    public static IEnumerable<object[]> Backends => new[] { new object[] { "memory" }, new object[] { "sqlite" } };
+    public static IEnumerable<object[]> Backends => TestPostgres.Backends();
 
     static readonly List<string> Logged = new();
 
@@ -18,7 +18,12 @@ public class PersistenceTests
     static string TempDb() => Path.Combine(Path.GetTempPath(), $"shooter-test-{Guid.NewGuid():N}", "shooter.db");
 
     static IProgressionStore Create(string backend, string? path = null) =>
-        backend == "memory" ? new InMemoryProgressionStore(Curve) : SqliteProgressionStore.Open(path ?? TempDb(), Logged.Add, Curve);
+        backend switch
+        {
+            "memory" => new InMemoryProgressionStore(Curve),
+            "postgres" => TestPostgres.Open(Curve, Logged.Add),
+            _ => SqliteProgressionStore.Open(path ?? TempDb(), Logged.Add, Curve),
+        };
 
     [Theory]
     [MemberData(nameof(Backends))]
@@ -146,6 +151,17 @@ public class PersistenceTests
     }
 
     [Fact]
+    public void PostgresUrlsAndConnectionStringsAreRecognisedAndPasswordsNeverDescribed()
+    {
+        Assert.True(ProgressionStores.IsPostgres("postgres://u:p@db:5432/shooter"));
+        Assert.True(ProgressionStores.IsPostgres("Host=db;Username=u"));
+        Assert.False(ProgressionStores.IsPostgres("./shooter.db"));
+        var cs = new Npgsql.NpgsqlConnectionStringBuilder(ProgressionStores.ToConnectionString("postgres://shooter:p%40ss@db:5433/game"));
+        Assert.Equal(("db", 5433, "shooter", "p@ss", "game"), (cs.Host, cs.Port, cs.Username, cs.Password, cs.Database));
+        Assert.DoesNotContain("p@ss", ProgressionStores.Describe("postgres://shooter:p%40ss@db:5433/game"));
+    }
+
+    [Fact]
     public async Task SqliteFailedWriteIsLoggedAndDoesNotThrow()
     {
         using var store = SqliteProgressionStore.Open(TempDb(), Logged.Add, Curve);
@@ -167,4 +183,16 @@ public class PersistenceTests
     [InlineData(999_999, 40)]
     public void LevelCurveFromLevelsJsonStartsAtOneAndCapsAtForty(int xp, int level) =>
         Assert.Equal(level, Curve.LevelForXp(xp));
+
+    [Fact]
+    public async Task PostgresDataSurvivesReopenAndAFailedWriteIsLogged()
+    {
+        if (TestPostgres.Target == null) return; // needs SHOOTER_TEST_PG (see TestPostgres)
+        using var store = TestPostgres.Open(Curve, Logged.Add);
+        Logged.Clear();
+        await store.Stats.RecordKillAsync(424242, "ak47"); // no such player: the foreign key rejects it, the write logs
+        var p = await store.Profiles.GetOrCreateAsync("still-works");
+        Assert.True(p.Id > 0);
+        Assert.Contains(Logged, m => m.Contains("record kill"));
+    }
 }

@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Server-only persistence (ADR 0003). No Godot reference. Repository interfaces + SQLite and in-memory stores. -->
+  <!-- Server-only persistence (ADR 0003). No Godot reference. Repository interfaces + SQLite, PostgreSQL and in-memory stores. -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -11,9 +11,12 @@
   <ItemGroup>
     <Using Include="Suchohrad.ShooterCore" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
+    <PackageReference Include="Npgsql" Version="8.0.6" />
     <ProjectReference Include="../ShooterCore/ShooterCore.csproj" />
     <!-- numbered migrations, applied in order at server start -->
     <EmbeddedResource Include="migrations/*.sql" LogicalName="migrations/%(Filename)%(Extension)" />
+    <!-- the PostgreSQL schema (one baseline) -->
+    <EmbeddedResource Include="migrations-pg/*.sql" LogicalName="migrations-pg/%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

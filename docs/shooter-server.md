@@ -56,7 +56,7 @@ Flags (after `--`):
 | `--role server` | run as the dedicated server (default role is client) |
 | `--port N` | UDP listen port, default 27015 |
 | `--map DIR` | map folder (else `SUCHOHRAD_MAP`) |
-| `--db PATH` | progression database file, default `./shooter.db` (relative to the working directory); created and migrated at start, the server refuses to start if it cannot be opened |
+| `--db TARGET` | progression database: a SQLite file path (default `./shooter.db`, relative to the working directory), or a PostgreSQL URL `postgres://user:pass@host:5432/db` or Npgsql connection string. Env `SUCHOHRAD_DB` is used when the flag is absent (keeps the password off the command line). Created and migrated at start (Postgres: retries for about a minute while the database comes up); the server refuses to start if it cannot be opened |
 | `--time HH:MM` | start time of day for the day/night clock; overrides `start_time` in `environment.json` (default `08:00`) |
 | `--day-length MIN` | real minutes for one 24-hour day; overrides `day_length_minutes` in `environment.json` (default `24`) |
 | `--freeze-time` | hold the clock at its start time (or at `--time`), so the sky does not move |
@@ -111,7 +111,7 @@ A bad key or value makes the server refuse to start with an error naming the ent
 
 ### Progression database (`--db`)
 
-The dedicated server keeps profiles, loadouts, unlocks and stats in one SQLite file (ADR 0003). Schema changes are numbered
+The dedicated server keeps profiles, loadouts, unlocks and stats in one SQLite file or one PostgreSQL database (ADR 0003; the Docker deployment in `docs/release.md` uses Postgres, with its schema in `migrations-pg/`). Schema changes are numbered
 `.sql` migrations in `godot/ShooterServer.Persistence/migrations/`, applied once each in order at start. Back the file up
 like any other data; deleting it wipes every player's progression. Writes run on a background thread and a failed write
 is logged to the server output, never thrown into the match. The netcode reads a profile at join (3 s timeout, then a guest profile), applies the active loadout at each spawn (perk, hotbar), writes XP and kill stats, and sends `LevelUp` and round XP summary events. Guests earn XP in memory only.

@@ -182,7 +182,7 @@ public class CamoTests
     {
         var curve = Data.Levels.Curve;
         var path = Path.Combine(Path.GetTempPath(), $"shooter-camo-{Guid.NewGuid():N}", "shooter.db");
-        using IProgressionStore store = backend == "memory" ? new InMemoryProgressionStore(curve) : SqliteProgressionStore.Open(path, _ => { }, curve);
+        using IProgressionStore store = backend == "memory" ? new InMemoryProgressionStore(curve) : backend == "postgres" ? TestPostgres.Open(curve, _ => { }) : SqliteProgressionStore.Open(path, _ => { }, curve);
         var player = await store.Profiles.GetOrCreateAsync("camo-token");
         Assert.Empty(await store.Camo.GetAllAsync(player.Id));
 
@@ -218,5 +218,5 @@ public class CamoTests
         Assert.Equal(2L, (long)q.ExecuteScalar()!);
     }
 
-    public static IEnumerable<object[]> Backends => new[] { new object[] { "memory" }, new object[] { "sqlite" } };
+    public static IEnumerable<object[]> Backends => TestPostgres.Backends();
 }

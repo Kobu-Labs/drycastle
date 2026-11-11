@@ -34,23 +34,33 @@ The server address is not baked into the client: players type it on the connect 
 5. Publish the zip (GitHub Release on Kobu-Labs/drycastle, tagged `vX.Y.Z`, is the default) and send the link.
    Tell players about the SmartScreen prompt: "More info", then "Run anyway" (the exe is unsigned).
 
-## Deploying the server
+## Deploying the server (Docker, with PostgreSQL)
 
-1. Copy `out/shooter/linux-server/` to the host (binary, `.pck`, .NET data, `assets/`, `map/`). Nothing else is needed.
-2. Start it (public flags only; leave off `--unlock-all`, `--allow-sandbox`, `--debug-cmds`):
-   ```
-   ./suchohrad-server.x86_64 --headless -- --role server --port 27015 --db /srv/suchohrad/data/shooter.db
-   ```
-3. Open UDP 27015 in the host firewall and the provider's firewall.
-4. Run it under a supervisor (systemd or a container with a restart policy). Mount `shooter.db` on persistent storage and
-   back it up: deleting it wipes all player progression.
-5. The wire protocol version must match between server and client. A new protocol means shipping a new client zip
-   and redeploying the server together.
+The server runs in Docker next to a PostgreSQL container (`deploy/`). Progression lives in Postgres (volume `pgdata`); the game port is
+UDP 27015; Postgres is reachable only from the server container.
+
+One-time on the VPS: install Docker with the compose plugin (`curl -fsSL https://get.docker.com | sh`) and `rsync`; open **UDP 27015**
+in the host and provider firewalls (and SSH). Nothing else is exposed.
+
+1. `make shooter-export` (bundles the server binary, `assets/` and the village `map/`).
+2. `deploy/deploy.sh user@host` copies the export and `deploy/` to `/opt/suchohrad` on the VPS (its `rsync --delete` only touches
+   that export copy), creates `deploy/.env` with a random database password on the first run, and runs `docker compose up -d --build`.
+3. Check: `ssh user@host 'cd /opt/suchohrad/deploy && docker compose logs server'` should show
+   `server: progression db postgres shooter@db:5432/shooter` and the map line.
+
+The server flags are the compose `command:` (see `docs/shooter-server.md`); keep `--unlock-all`, `--allow-sandbox` and `--debug-cmds` off.
+The database URL comes from `SUCHOHRAD_DB`, so the password is never on a command line. `GAME_PORT` in `.env` changes the host port.
+
+- **Backups:** `docker compose exec -T db pg_dump -U shooter shooter > shooter-$(date +%F).sql` (cron it). Deleting the `pgdata` volume
+  (`docker compose down -v`) wipes all progression.
+- **Restore:** `docker compose exec -T db psql -U shooter shooter < shooter-DATE.sql` into an empty database.
+- The wire protocol version must match between server and client. A new protocol means a new client zip and a redeploy together.
+- **Without Docker/Postgres:** the server also accepts `--db ./shooter.db` (SQLite) as before.
 
 ## Updating
 
 - Server-only change (balance in `data/*.json` is in the `.pck`, so it is a client change too): rebuild, redeploy, restart.
-  Back up `shooter.db` first; migrations apply at start.
+  Back up the database first (see above); migrations apply at start.
 - Any client-visible change, new map build, or protocol bump: repeat "Cutting a release" and redeploy the server.
 
 ## Still unverified
