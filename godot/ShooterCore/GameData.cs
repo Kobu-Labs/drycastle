@@ -10,7 +10,7 @@ public class GameData
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
     public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson) => new()
     {
-        Weapons = WeaponsFile.Validate(DataFile.Parse<WeaponsFile>(weaponsJson, "weapons.json")),
+        Weapons = WeaponsFile.Parse(weaponsJson),
         Match = DataFile.Parse<MatchConfig>(matchJson, "match.json"),
         Vehicles = VehiclesFile.Validate(DataFile.Parse<VehiclesFile>(vehiclesJson, "vehicles.json")),
     };
