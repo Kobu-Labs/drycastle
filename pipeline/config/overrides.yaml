@@ -98,3 +98,15 @@ buildings:
     roof: hipped
     height_m: 4.8
     roof_height_m: 1.8
+
+  # P-0028 (G-0001): old village house, street gable to the road, grey-white weathered render, orange-red
+  # clay tile, steep (about 47 degrees) roof. Eave about 3.0 m, ridge about 6.6 m, scaled from one Street
+  # View frame. The attic has two small windows in the gable, so it is one storey plus attic. Openings
+  # are in config/buildings/.
+  w378920508:
+    wall_colour: "#d9d7d0"
+    roof_colour: "#b8532f"
+    levels: 1
+    roof: gabled
+    height_m: 6.6
+    roof_height_m: 3.6
