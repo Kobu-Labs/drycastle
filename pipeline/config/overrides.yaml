@@ -110,3 +110,16 @@ buildings:
     roof: gabled
     height_m: 6.6
     roof_height_m: 3.6
+
+  # P-0561 (Suchohrad 295): two-storey house of four flats, pale cream render, one gabled roof with a
+  # deep front overhang, loggias with balconies and a staircase block over the open entrance. Modelled by
+  # hand from four Street View frames (pipeline/src/suchohrad_pipeline/flats.py); the generated default
+  # (four storeys, flat roof, 11.5 m) was wrong. The roof and height here only describe the model.
+  w378900224:
+    model: flats
+    wall_colour: "#ece6cc"
+    roof_colour: "#5f5650"
+    levels: 2
+    roof: gabled
+    height_m: 7.15
+    roof_height_m: 1.7
