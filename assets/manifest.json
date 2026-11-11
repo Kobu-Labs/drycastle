@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "note": "size_m is [x, y, z] in glTF axes (y up), metres, as imported in Godot. file is relative to the assets/ directory. sounds lists the audio files used by godot/shooter (data/sounds.json maps events to them); they are not placeable objects and are not loaded by assets-check. unverified_models lists user-provided files whose source page and licence are NOT confirmed: they are not placeable assets, are not in packs/assets (which are CC0 only, checked by the pipeline tests), and must not ship until the licence and attribution are confirmed.",
+  "note": "size_m is [x, y, z] in glTF axes (y up), metres, as imported in Godot. file is relative to the assets/ directory. sounds lists the audio files used by godot/shooter (data/sounds.json maps events to them); they are not placeable objects and are not loaded by assets-check. unverified_models lists user-provided files whose source page and licence are NOT confirmed: they are not placeable assets, are not in packs/assets (which are CC0 only, checked by the pipeline tests), and must not ship until the licence and attribution are confirmed. textures lists the texture library: tileable images any map mesh can use by id (a node named <node>_tex_<id> is drawn with texture <id>); tile_m is the size of one repeat in metres ([w, h], h = 0: stretched once over the surface height), tintable ones are near-white and take the mesh's vertex colour as paint.",
   "packs": [
     {
       "name": "kenney-car-kit",
@@ -105,6 +105,14 @@
       "download_url": null,
       "licence": "CC0",
       "downloaded": "2026-11-11"
+    },
+    {
+      "name": "suchohrad-generated-textures",
+      "title": "Generated tileable textures (the project's own script, no third-party material)",
+      "url": "https://github.com/Kobu-Labs/drycastle",
+      "download_url": null,
+      "licence": "CC0",
+      "downloaded": "2026-11-12"
     }
   ],
   "assets": [
@@ -1423,6 +1431,122 @@
       "source": "scripts/make_flak_model.py (original geometry written as code; python3 -I scripts/make_flak_model.py rebuilds the file)",
       "pack": "suchohrad-generated-models",
       "used_for": "godot/shooter vehicle id flak (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground, metres), separate nodes for turret, gun_cradle, barrels, wheels, outriggers"
+    }
+  ],
+  "textures": [
+    {
+      "id": "brick_red",
+      "name": "Brick red",
+      "file": "suchohrad-generated-textures/brick_red.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.0,
+        0.6
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#a15b47",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "brick_white",
+      "name": "Brick white",
+      "file": "suchohrad-generated-textures/brick_white.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.0,
+        0.6
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#dfdbd0",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "stone",
+      "name": "Stone",
+      "file": "suchohrad-generated-textures/stone.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.2,
+        1.2
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#8b857a",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "concrete",
+      "name": "Concrete",
+      "file": "suchohrad-generated-textures/concrete.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        2.0,
+        2.0
+      ],
+      "alpha": false,
+      "tintable": true,
+      "mean_colour": "#ebebeb",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "picket",
+      "name": "Picket",
+      "file": "suchohrad-generated-textures/picket.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        0.5,
+        0.0
+      ],
+      "alpha": true,
+      "tintable": true,
+      "mean_colour": "#eeeeee",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "wire",
+      "name": "Wire",
+      "file": "suchohrad-generated-textures/wire.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        0.5,
+        0.5
+      ],
+      "alpha": true,
+      "tintable": true,
+      "mean_colour": "#d6d6d6",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
     }
   ],
   "sounds": [

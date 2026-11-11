@@ -113,6 +113,20 @@ events (`godot/shooter/data/sounds.json`). All CC0 (OpenGameArt pages above, che
   Reload and dry-fire events still use the generated placeholders and the Kenney click, as before.
 - **Not sourced**: no reload or machine-gun sound exists in the CC0 libraries used so far; they are placeholders (see above).
 
+## Texture library (generated, 2026-11-12)
+
+`suchohrad-generated-textures/` holds the tileable textures that map meshes can use by id: `brick_red`, `brick_white`,
+`stone`, `concrete`, `picket`, `wire` (256 x 256 RGBA PNG each). They are original pixels computed by
+`scripts/make_textures.py` (standard library only; `python3 -I scripts/make_textures.py` rebuilds them byte for byte,
+`--meta` prints the manifest entries, `--sheet FILE` writes a contact sheet), CC0, in a flat style: a few tones, hard
+edges, little noise. The manifest's top-level `textures` array lists them: `id` (lower case, digits and underscores:
+it becomes part of a node name), `file`, `size_px`, `tile_m` (one repeat in metres, `[w, h]`; `h` = 0 means the image
+is stretched once over the surface height), `alpha` (has cut-outs), `tintable` (near-white: the mesh's vertex colour is
+the paint) and `mean_colour` (previews). A map node named `<node>_tex_<id>` is drawn with texture `<id>`
+(`godot/MapLoader/MapLoader.Textures.cs`); the first user is typed fences (`docs/pipeline.md`). To add a texture: draw it
+in the script (or drop in a CC0 PNG with power-of-two sides), add its entry to `textures`, and use it from a mesh builder
+through `suchohrad_pipeline.textures`.
+
 ## Style: flat colour, and what the packs really contain
 
 The brief is flat-colour low-poly. `make assets-check` loads every asset headless in Godot (all 40 pass; the Kenney Car Kit GLBs load fine despite a forum report of failures elsewhere, Godot ignores their harmless `KHR_texture_transform`). Findings:

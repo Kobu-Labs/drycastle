@@ -8,7 +8,8 @@ namespace Suchohrad.MapLoader;
 /// parcels.json, spawns.json, roads.json, chunks/*.glb) with Godot's runtime glTF importer,
 /// turns collision meshes into static trimesh colliders and supports parcel replacement.
 /// Node names in a chunk: parcel_&lt;ID&gt;_visual / _collision (buildings), parcel_&lt;ID&gt;_props /
-/// _props_collision (fences and trees of that parcel), terrain, terrain_collision, roads, and
+/// _props_collision (fences and trees of that parcel), parcel_&lt;ID&gt;_props_tex_&lt;texture&gt; (its textured
+/// fence parts, see MapLoader.Textures.cs), terrain, terrain_collision, roads, and
 /// props / props_collision (items without a parcel, e.g. OSM trees).
 /// Independent of any mod. Axes: map x east, y north; Godot x east, y up, z = -north.
 /// </summary>
@@ -280,11 +281,17 @@ public sealed partial class MapLoader
                 if (GodotObject.IsInstanceValid(mi) && !HasCollisionDescendant(mi)) mi.Free();
                 continue;
             }
-            FixMaterials(mi);
+            ApplyMaterial(mi, name);
             Stats.Triangles += TriangleCount(mi.Mesh);
-            if (name.StartsWith("parcel_") && name.EndsWith("_props"))
+            var (baseName, texture) = SplitTexNode(name);
+            if (PropsParcelId(baseName) is { } propsId)
             {
-                _propsVisuals[name["parcel_".Length..^"_props".Length]] = mi;
+                if (texture == null) _propsVisuals[propsId] = mi;
+                else
+                {
+                    if (!_propsTexVisuals.TryGetValue(propsId, out var tex)) _propsTexVisuals[propsId] = tex = new();
+                    tex.Add(mi);
+                }
             }
             else if (RegionId(name) is { } regionId)
             {

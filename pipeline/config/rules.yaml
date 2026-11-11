@@ -215,6 +215,11 @@ props:
     # A fence is built from boxes of at most this length.
     section_m: 3
     colour: "#8a6a47"
+    # Optional `type` (picket, wire, brick_red, brick_white, stone_wall, concrete; see edits.py
+    # FENCE_TYPES) draws the rule fences in that textured style instead of the plain box, and an
+    # optional `column` swaps its posts (edits.py COLUMN_TYPES). `colour` is then the tint. Each
+    # fenced parcel gets one more node per texture, so mind the draw calls in the village.
+    # type: picket
     # Boundary stretches within this distance of a building are not fenced.
     building_clearance_m: 0.8
     # Boundary stretches within this distance of a road centreline are not fenced.

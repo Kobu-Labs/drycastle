@@ -112,7 +112,7 @@ def make_fences(
     parcel without a spec gets the rules' ``auto`` fence. ``groups`` maps a group ID to its member
     parcel IDs: the members' outer edge is fenced as one property, each piece with its owner's
     settings and the seeded roll keyed by the group ID. Custom sections carry their own
-    ``height_m``, ``thickness_m`` and ``colour``.
+    ``type``, ``height_m``, ``thickness_m`` and ``colour`` (and ``column`` when the edit names one).
 
     ``road_polys`` replaces the road parcels taken from ``parcels`` for the gate-gap logic (the
     per-parcel run passes only the road parcels near its targets).
@@ -182,7 +182,13 @@ def make_fences(
             boundary = boundary.difference(done)
         pieces = [ln for ln in merged_lines(boundary) if ln.length >= _MIN_PIECE_M]
         style = (
-            {"height_m": spec.height_m, "thickness_m": spec.thickness_m, "colour": spec.colour}
+            {
+                "type": spec.type,
+                "height_m": spec.height_m,
+                "thickness_m": spec.thickness_m,
+                "colour": spec.colour,
+                **({"column": spec.column} if spec.column is not None else {}),
+            }
             if custom and spec is not None
             else {}
         )

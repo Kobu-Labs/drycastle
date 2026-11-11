@@ -378,7 +378,7 @@ public sealed partial class MapLoader
                 var name = mi.Name.ToString();
                 if (mi.Mesh == null || !name.StartsWith("parcel_")) continue;
                 string? id = name.EndsWith("_props_collision") ? name["parcel_".Length..^"_props_collision".Length]
-                    : name.EndsWith("_props") ? name["parcel_".Length..^"_props".Length] : null;
+                    : PropsParcelId(SplitTexNode(name).Base);  // the flat props node or a textured sibling
                 if (id == null) continue;
                 if (!set.Contains(id)) { Warn($"fragment GLB has props for {id}, which is not in 'replaces'; ignored"); continue; }
                 if (!byParcel.TryGetValue(id, out var l)) byParcel[id] = l = new();
@@ -396,7 +396,7 @@ public sealed partial class MapLoader
                     container.AddChild(mi);
                     mi.Transform = Transform3D.Identity;
                     if (name.EndsWith("_collision")) BuildCollider(mi, name, dynamic: true);
-                    else FixMaterials(mi);
+                    else ApplyMaterial(mi, name);
                     propsNodes++;
                 }
             }
@@ -418,6 +418,7 @@ public sealed partial class MapLoader
     {
         GeometryChanged();
         if (_propsVisuals.TryGetValue(id, out var v)) v.Visible = false;
+        if (_propsTexVisuals.TryGetValue(id, out var tex)) foreach (var t in tex) t.Visible = false;
         if (_propsShapes.TryGetValue(id, out var shapes))
             foreach (var s in shapes) s.SetDeferred(CollisionShape3D.PropertyName.Disabled, true);
     }
@@ -429,6 +430,7 @@ public sealed partial class MapLoader
         RemoveDynamic(id);
         _swapped.Remove(id);
         if (_propsVisuals.TryGetValue(id, out var v)) v.Visible = true;
+        if (_propsTexVisuals.TryGetValue(id, out var tex)) foreach (var t in tex) t.Visible = true;
         if (_propsShapes.TryGetValue(id, out var shapes))
             foreach (var s in shapes) s.SetDeferred(CollisionShape3D.PropertyName.Disabled, false);
         RemoveGroupObjects(id);

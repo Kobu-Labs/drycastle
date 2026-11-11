@@ -21,6 +21,7 @@ from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.primitives import PRIMITIVES, build_primitive
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 from suchohrad_pipeline.scene import build_scene
+from suchohrad_pipeline.textures import TexturedMesh, tex_node_name
 from suchohrad_pipeline.water import build_water
 
 DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
@@ -31,13 +32,15 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # write absolute coordinates) and the manifest lists edit_defaults (the rule values the editor shows as defaults).
 # 0.5.0: lamps.json (street lamp positions, files.lamps). Not in the chunk GLBs: the game builds poles and lights.
 # 0.6.0: trees.json (files.trees): tree records and model numbers, for the trunk and crown collision solids.
-MAP_VERSION_BASE = "0.6.0"
+# 0.7.0: textured nodes "<node>_tex_<texture id>" (UVs and a tint; drawn with that texture of the library in
+# assets/manifest.json), first used for typed fences: "parcel_<ID>_props_tex_<id>". The manifest lists the ids used.
+MAP_VERSION_BASE = "0.7.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 TREES_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
                "props.json", "spawns.json", "lamps.json")
-NOT_GENERATED_NOTE = "Textures, landmarks, navmesh and water surface meshes are not generated (water.json holds the water bodies)."
+NOT_GENERATED_NOTE = "Landmarks, navmesh and water surface meshes are not generated (water.json holds the water bodies). Textures are not in the map: textured nodes name a texture of the asset library."
 
 
 def to_gltf_axes(tris: np.ndarray) -> np.ndarray:
@@ -62,13 +65,44 @@ def to_trimesh(mesh: Mesh) -> trimesh.Trimesh:
     )
 
 
-def parcel_props_nodes(items: list[tuple[str, Mesh, Mesh]]) -> dict[str, Mesh]:
-    """``parcel_<ID>_props`` (visual) and ``parcel_<ID>_props_collision`` nodes; empty ones omitted."""
-    out: dict[str, Mesh] = {}
-    for pid, visual, collision in sorted(items, key=lambda t: t[0]):
+def to_trimesh_textured(mesh: TexturedMesh, tid: str) -> trimesh.Trimesh:
+    """Flat-shaded trimesh with UVs (TEXCOORD_0) and the tint as vertex colour (COLOR_0).
+
+    The material only carries the name ``tex:<id>``; no image is embedded (see ``textures.py``).
+    """
+    verts = to_gltf_axes(mesh.tris).reshape(-1, 3)
+    rgba = np.concatenate([mesh.colours, np.full((len(mesh.colours), 1), 255, np.uint8)], axis=1)
+    visual = trimesh.visual.TextureVisuals(
+        uv=mesh.uvs.reshape(-1, 2),
+        material=trimesh.visual.material.PBRMaterial(
+            name=f"tex:{tid}", roughnessFactor=1.0, metallicFactor=0.0
+        ),
+    )
+    visual.vertex_attributes["color"] = np.repeat(rgba, 3, axis=0)
+    return trimesh.Trimesh(
+        vertices=verts, faces=np.arange(len(verts)).reshape(-1, 3), visual=visual, process=False
+    )
+
+
+def node_trimesh(name: str, mesh: Mesh | TexturedMesh) -> trimesh.Trimesh:
+    if isinstance(mesh, TexturedMesh):
+        return to_trimesh_textured(mesh, name.partition("_tex_")[2])
+    return to_trimesh(mesh)
+
+
+def parcel_props_nodes(
+    items: list[tuple[str, Mesh, Mesh, dict[str, TexturedMesh]]],
+) -> dict[str, Mesh | TexturedMesh]:
+    """``parcel_<ID>_props`` (visual), ``parcel_<ID>_props_collision`` and one
+    ``parcel_<ID>_props_tex_<texture id>`` per texture used; empty ones omitted."""
+    out: dict[str, Mesh | TexturedMesh] = {}
+    for pid, visual, collision, textured in sorted(items, key=lambda t: t[0]):
         for suffix, mesh in (("props", visual), ("props_collision", collision)):
             if mesh.face_count:
                 out[f"parcel_{pid}_{suffix}"] = mesh
+        for tid, mesh in sorted(textured.items()):
+            if mesh.face_count:
+                out[tex_node_name(f"parcel_{pid}_props", tid)] = mesh
     return out
 
 
@@ -77,7 +111,8 @@ def chunk_name(ix: int, iy: int) -> str:
 
 
 def build_chunk_scene(
-    parcel_meshes: list[tuple[str, Mesh, Mesh]], extra: dict[str, Mesh] | None = None
+    parcel_meshes: list[tuple[str, Mesh, Mesh]],
+    extra: dict[str, Mesh | TexturedMesh] | None = None,
 ) -> trimesh.Scene:
     """Nodes of one chunk: parcel nodes plus terrain, terrain_collision, roads, props, ..."""
     scene = trimesh.Scene()
@@ -86,7 +121,7 @@ def build_chunk_scene(
             name = f"parcel_{pid}_{suffix}"
             scene.add_geometry(to_trimesh(mesh), node_name=name, geom_name=name)
     for name, mesh in sorted((extra or {}).items()):
-        scene.add_geometry(to_trimesh(mesh), node_name=name, geom_name=name)
+        scene.add_geometry(node_trimesh(name, mesh), node_name=name, geom_name=name)
     return scene
 
 
@@ -309,6 +344,9 @@ def run_export(
         "generated": sorted(generated),
         "files": files,
         "edit_defaults": _edit_defaults(rules_path, area),
+        "textures": sorted(
+            {name.partition("_tex_")[2] for c in chunk_entries for name in c["triangles"] if "_tex_" in name}
+        ),
         "prims": prims,
         "terrain": terrain_info,
         "not_generated": NOT_GENERATED_NOTE,

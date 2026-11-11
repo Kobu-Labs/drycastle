@@ -678,3 +678,20 @@ def test_region_overlap_winner_is_numeric(env):
     edits.regions["R-9999"] = {"colour": "#111111", "polygon": SQUARE}
     edits.regions["R-10000"] = {"colour": "#222222", "polygon": SQUARE}
     assert "R-10000 wins" in type(tools)._overlap_warnings(edits, "R-9999")[0]
+
+
+def test_set_fence_takes_the_textured_types_and_a_column(tools) -> None:
+    out = tools.set_fence("P-0001", type="picket", column="brick_red", colour="#f2efe6")
+    assert out["fence"] == {"colour": "#f2efe6", "column": "brick_red", "type": "picket"}
+    eff = tools.get_parcel("P-0001")["effective_fence"]
+    assert (eff["type"], eff["column"]) == ("picket", "brick_red")
+    tools.set_fence("P-0001", type="stone_wall")
+    tools.reset_fence("P-0001")
+    tools.set_fence("P-0001", type="concrete")
+    eff = tools.get_parcel("P-0001")
+    assert eff["effective_fence"]["column"] == "concrete"  # the type's own
+    assert "stone" in eff["rule_defaults"]["fence"]["column_types"]
+    with pytest.raises(ToolError, match="column must be one of"):
+        tools.set_fence("P-0001", column="marble")
+    with pytest.raises(ToolError, match="cannot be combined"):
+        tools.set_fence("P-0001", mode="none", column="stone")

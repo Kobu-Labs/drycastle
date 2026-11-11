@@ -15,10 +15,17 @@ formatting is fixed, so git diffs stay small. Version 1::
                       auto = the rules in rules.yaml (props.fences); none = no fence;
                       custom = always fenced on the boundary, no seeded probability, no kind
                       filter (building and road clearances still apply).
-    type              picket | wire | brick_wall (custom only). Each maps to the defaults in
-                      FENCE_TYPES below.
+    type              picket | wire | brick_red | brick_white | stone_wall | concrete (custom
+                      only; brick_wall is the old name of brick_red). Each maps to the defaults in
+                      FENCE_TYPES below and to a style in fencestyles.py (panel texture, column,
+                      cap).
+    column            one of COLUMN_TYPES below (custom only): the posts or piers at the section
+                      joints and run ends, replacing the type's own (e.g. picket between brick_red
+                      piers); "none" leaves them out.
     height_m, thickness_m  numbers > 0 (custom only), overriding the type.
-    colour            "#rrggbb" (custom only), overriding the type.
+    colour            "#rrggbb" (custom only), overriding the type. It is a tint: picket, wire and
+                      concrete are near-white textures, so the colour is their paint; brick and
+                      stone carry their own colours (white = as drawn).
     gaps              list of {"at": [x, y], "width_m": n} (custom only). A gap is cut out of
                       the boundary, centred on the nearest boundary point to ``at``. ``at`` is
                       absolute EPSG:5514 (S-JTSK) metres, the same frame as objects.
@@ -80,17 +87,24 @@ DEFAULT_EDITS = PIPELINE_DIR / "config" / "edits.json"
 
 FENCE_MODES = ("auto", "none", "custom")
 DEFAULT_FENCE_TYPE = "picket"
-# Each type is a height, thickness and colour; explicit fence keys override them.
+# Each type is a height, thickness and colour (a tint, see the module docstring); explicit fence
+# keys override them. How a type is drawn (texture, column, cap) is in fencestyles.FENCE_STYLES.
 FENCE_TYPES: dict[str, dict[str, float | str]] = {
     "picket": {"height_m": 1.0, "thickness_m": 0.06, "colour": "#9a8064"},
     "wire": {"height_m": 1.1, "thickness_m": 0.03, "colour": "#5c5f66"},
-    "brick_wall": {"height_m": 1.8, "thickness_m": 0.3, "colour": "#b5523a"},
+    "brick_red": {"height_m": 1.8, "thickness_m": 0.3, "colour": "#ffffff"},
+    "brick_white": {"height_m": 1.8, "thickness_m": 0.3, "colour": "#ffffff"},
+    "stone_wall": {"height_m": 1.4, "thickness_m": 0.45, "colour": "#ffffff"},
+    "concrete": {"height_m": 1.8, "thickness_m": 0.15, "colour": "#cfcac0"},
+    "brick_wall": {"height_m": 1.8, "thickness_m": 0.3, "colour": "#ffffff"},  # old name of brick_red
 }
+# Columns a fence can be given instead of its type's own (fencestyles.COLUMN_STYLES).
+COLUMN_TYPES = ("none", "wood_post", "metal_post", "brick_red", "brick_white", "stone", "concrete")
 
 TOP_KEYS = ("version", "parcels", "groups", "regions")
 PARCEL_KEYS = ("fence", "trees", "objects")
-FENCE_KEYS = ("mode", "type", "height_m", "thickness_m", "colour", "gaps")
-CUSTOM_FENCE_KEYS = ("type", "height_m", "thickness_m", "colour", "gaps")
+FENCE_KEYS = ("mode", "type", "column", "height_m", "thickness_m", "colour", "gaps")
+CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "gaps")
 GAP_KEYS = ("at", "width_m")
 TREE_KEYS = ("density_per_1000m2", "count", "seed_offset")
 OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour")
@@ -131,6 +145,7 @@ class FenceSpec:
     thickness_m: float
     colour: str
     gaps: tuple[tuple[float, float, float], ...] = ()
+    column: str | None = None  # None = the type's own column
 
 
 # --- validation -----------------------------------------------------------------------------
@@ -185,6 +200,8 @@ def _check_fence(v: object, path: str, errors: list[str]) -> None:
                 errors.append(f"{path}.{key}: not used with mode {mode!r}")
     if "type" in v and not (isinstance(v["type"], str) and v["type"] in FENCE_TYPES):
         errors.append(f"{path}.type: must be one of {', '.join(FENCE_TYPES)}")
+    if "column" in v and not (isinstance(v["column"], str) and v["column"] in COLUMN_TYPES):
+        errors.append(f"{path}.column: must be one of {', '.join(COLUMN_TYPES)}")
     for key in ("height_m", "thickness_m"):
         if key in v:
             _check_positive(v[key], f"{path}.{key}", errors)
@@ -452,4 +469,5 @@ def resolve_fence(parcel_fence: dict | None, group_fence: dict | None = None) ->
             (float(g["at"][0]), float(g["at"][1]), float(g["width_m"]))
             for g in merged.get("gaps", [])
         ),
+        column=merged.get("column"),
     )

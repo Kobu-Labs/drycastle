@@ -637,11 +637,14 @@ def test_custom_sections_carry_their_own_fence_style(ws) -> None:
 
     cfg = {**FENCE, "probability": 0.0}
     got = fences(ws, {"P-0001": resolve_fence({"type": "brick_wall"})}, cfg=cfg)
-    assert got and all(s["height_m"] == 1.8 for s in got)
+    assert got and all(s["height_m"] == 1.8 and s["type"] == "brick_wall" for s in got)
+    assert all("column" not in s for s in got)  # only written when the edit names a column
     mesh = fence_mesh(got, load("props")["fences"])
     assert mesh.face_count == 10 * len(got)
-    # the brick wall colour (not the rules colour) is on every triangle of its sections
-    assert (mesh.colours == [0xB5, 0x52, 0x3A]).all()
+    # the type's tint (not the rules colour) is on every triangle of its sections
+    assert (mesh.colours == [0xFF, 0xFF, 0xFF]).all()
+    got = fences(ws, {"P-0001": resolve_fence({"type": "picket", "column": "brick_red"})}, cfg=cfg)
+    assert got and all(s["column"] == "brick_red" and s["colour"] == "#9a8064" for s in got)
 
 
 def test_roundtrip_fixture_is_canonical():

@@ -26,6 +26,7 @@ from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.rules import DEFAULT_RULES
 from suchohrad_pipeline.scene import MapScene, build_scene
+from suchohrad_pipeline.textures import flat_mesh, split_tex_node
 
 DEFAULT_PREVIEW_DIR = REPO_ROOT / "out" / "preview"
 KIND_COLOURS = {
@@ -174,8 +175,12 @@ def _layers(scene: MapScene) -> list[Mesh]:
         return Mesh.concat([n[name] for n in scene.nodes.values() if name in n])
 
     objects = [v for chunk in scene.parcels.values() for _, v, _ in chunk]
-    objects += [v for chunk in scene.parcel_props.values() for _, v, _ in chunk]
+    for chunk in scene.parcel_props.values():
+        for _, visual, _, textured in chunk:
+            objects += [visual, flat_mesh(textured)]
     objects.append(node("props"))
+    for nodes in scene.nodes.values():  # textured chunk-level nodes, in their mean colour
+        objects += [flat_mesh({split_tex_node(n)[1]: m}) for n, m in nodes.items() if "_tex_" in n]
     return [node("terrain"), node("roads"), Mesh.concat(objects)]
 
 

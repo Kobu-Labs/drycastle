@@ -48,6 +48,7 @@ from suchohrad_pipeline.assets import DEFAULT_MANIFEST, load_manifest, validate_
 from suchohrad_pipeline.buildings import footprint_polygon
 from suchohrad_pipeline.config import DEFAULT_AREA, REPO_ROOT, area_paths
 from suchohrad_pipeline.edits import (
+    COLUMN_TYPES,
     CUSTOM_FENCE_KEYS,
     DEFAULT_EDITS,
     FENCE_TYPES,
@@ -59,6 +60,7 @@ from suchohrad_pipeline.edits import (
     resolve_fence,
     validate,
 )
+from suchohrad_pipeline.fencestyles import FENCE_STYLES
 from suchohrad_pipeline.regions import region_rank
 from suchohrad_pipeline.roads import edge_lines
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
@@ -702,6 +704,7 @@ class ParcelEditTools:
             "effective_fence": {
                 "mode": effective.mode,
                 "type": effective.type,
+                "column": effective.column or FENCE_STYLES[effective.type].column,
                 "height_m": effective.height_m,
                 "thickness_m": effective.thickness_m,
                 "colour": effective.colour,
@@ -714,6 +717,7 @@ class ParcelEditTools:
                     "auto_height_m": fcfg["height_m"],
                     "gate_gap_m": fcfg["gate_gap_m"],
                     "custom_types": FENCE_TYPES,
+                    "column_types": list(COLUMN_TYPES),
                 },
                 "trees": {
                     "density_per_1000m2": tcfg["density_per_1000m2"].get(p["kind"], 0.0),
@@ -763,17 +767,18 @@ class ParcelEditTools:
         thickness_m: float | None = None,
         colour: str | None = None,
         gaps: list[dict] | None = None,
+        column: str | None = None,
     ) -> dict:
         """Set the fence of a parcel or property group (see the registered tool description)."""
         kind, tid = self._fence_target(target)
         custom = {
-            "type": type, "height_m": height_m, "thickness_m": thickness_m,
+            "type": type, "column": column, "height_m": height_m, "thickness_m": thickness_m,
             "colour": colour, "gaps": gaps,
         }
         custom = {k: v for k, v in custom.items() if v is not None}
         if mode is None and not custom:
             raise ToolError(
-                "nothing to set: give mode (auto|none|custom) and/or type, height_m, "
+                "nothing to set: give mode (auto|none|custom) and/or type, column, height_m, "
                 "thickness_m, colour, gaps"
             )
         if mode is not None and mode not in ("auto", "none", "custom"):
@@ -785,6 +790,8 @@ class ParcelEditTools:
             )
         if "type" in custom and custom["type"] not in FENCE_TYPES:
             raise ToolError(f"type must be one of {', '.join(FENCE_TYPES)} (got {type!r})")
+        if "column" in custom and custom["column"] not in COLUMN_TYPES:
+            raise ToolError(f"column must be one of {', '.join(COLUMN_TYPES)} (got {column!r})")
         for key in ("height_m", "thickness_m"):
             if key in custom:
                 _check_num(key, custom[key], positive=True)
@@ -1600,8 +1607,12 @@ def build_server(settings: Settings) -> Any:
     @server.tool(description=(
         "Set the fence of a parcel (P-0412) or of a property group (G-0001: one fence around the "
         "group's outer edge). `mode`: auto (the generator's rules), none (no fence) or custom "
-        "(always fenced). `type` (picket | wire | brick_wall), `height_m`, `thickness_m`, `colour` "
-        "(\"#rrggbb\") and `gaps` (gates: list of {\"at\": [x, y] or \"front\", \"width_m\": n}) are "
+        "(always fenced). `type` (picket | wire | brick_red | brick_white | stone_wall | concrete; "
+        "textured, each with its own posts or piers), `column` (none | wood_post | metal_post | "
+        "brick_red | brick_white | stone | concrete: other columns than the type's own, e.g. picket "
+        "between brick_red piers), `height_m`, `thickness_m`, `colour` (\"#rrggbb\": a tint; it is the "
+        "paint of picket, wire and concrete, while brick and stone have their own colours and default "
+        "to white) and `gaps` (gates: list of {\"at\": [x, y] or \"front\", \"width_m\": n}) are "
         "custom-only: giving any of them without a mode means custom; combining them with mode "
         "auto/none is an error. Given keys are merged into the existing fence entry. A parcel that "
         "is in a group gets an override on top of the group's fence (a warning says so)."))
@@ -1613,8 +1624,9 @@ def build_server(settings: Settings) -> Any:
         thickness_m: float | None = None,
         colour: str | None = None,
         gaps: list[dict] | None = None,
+        column: str | None = None,
     ) -> dict:
-        return tools.set_fence(target, mode, type, height_m, thickness_m, colour, gaps)
+        return tools.set_fence(target, mode, type, height_m, thickness_m, colour, gaps, column)
 
     @server.tool(description="Remove the fence edit of a parcel or group so the rules (or the group's fence) apply again.")
     def reset_fence(target: str) -> dict:

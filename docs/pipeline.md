@@ -135,8 +135,26 @@ buildings or the carriageway), OSM trees and seeded rule-based trees in gardens,
 collision node. Trees are not in the chunk collision: `trees.json` (map 0.6.0, `files.trees`) lists every tree (position,
 ground height, scale, rotation, broadleaf or conifer, chunk) and the game builds the solids from it (see below).
 
+**Fence types and the texture library.** A fence section with a `type` is drawn in that type's style
+(`fencestyles.py`) instead of the plain box: `picket` and `wire` are one thin two-sided quad with a
+cut-out texture that follows the ground, with wood or metal posts; `brick_red`, `brick_white`,
+`stone_wall` and `concrete` are level-topped walls (they step on a slope) with a repeating texture, a
+flat coping and matching piers. Columns stand at every section joint and run end; `column` swaps them
+(`none`, `wood_post`, `metal_post`, `brick_red`, `brick_white`, `stone`, `concrete`), e.g. picket
+between brick piers. The colour is a tint: picket, wire and concrete are near-white textures, so the
+colour is their paint; brick and stone carry their own colours and default to white. Custom (hand-edited)
+fences always have a type (default `picket`); rule fences stay plain boxes unless `props.fences.type` is
+set in `rules.yaml`. The collision box of a section is unchanged.
+
+The textures are a library, not part of the fences: `assets/manifest.json` `textures` lists each one (id,
+PNG under `assets/`, `tile_m` = the size of one repeat in metres, `alpha`, `tintable`, mean colour), and
+`textures.py` gives any mesh builder `texture(id).uv(...)` and a `TexturedBuilder`. The PNGs are built by
+`python3 -I scripts/make_textures.py` (standard library only, deterministic; `--sheet FILE` writes a contact
+sheet). `uv run python -m suchohrad_pipeline.fence_preview` (in `pipeline/`) draws every fence type from its
+real meshes, UVs and textures into `out/textures/fences.png`, so the look can be checked without the game.
+
 **Hand edits** (`pipeline/config/edits.json`, read by the props stage; `--edits PATH` overrides the
-file): per-parcel fence mode (`auto`, `none`, `custom` with a type, height, colour and gaps),
+file): per-parcel fence mode (`auto`, `none`, `custom` with a type, column, height, colour and gaps),
 property groups (`G-NNNN`: one fence around the members' combined outer edge), tree density or
 count with a seed offset, and placed objects (`pack:` or `prim:` assets, absolute S-JTSK metres).
 Objects go to `work/objects.json`. `regions` (`R-NNNN`: `colour` `#rrggbb`, `polygon` one ring of at
@@ -202,7 +220,10 @@ and `parcel_<ID>_collision` (extruded footprint, no roof detail) for each parcel
 `terrain` and `terrain_collision` (flat colours by parcel kind; collision is every second grid
 vertex); `roads`; `parcel_<ID>_props` (that parcel's fences and trees, visual) and
 `parcel_<ID>_props_collision` (its fences, only when the `fences.collision` rule is on), placed in
-the parcel's own chunk file so one parcel's props can be swapped at runtime; `region_<ID>` (see Regions); `props` and
+the parcel's own chunk file so one parcel's props can be swapped at runtime; `parcel_<ID>_props_tex_<texture id>`
+(map 0.7.0: the textured parts of that parcel's typed fences, one node per texture; it carries UVs and a tint as
+vertex colour, and no image: the loader draws a node named `<node>_tex_<id>` with texture `<id>` of the asset
+library, and the manifest's `textures` lists the ids the map uses); `region_<ID>` (see Regions); `props` and
 `props_collision` remain only for items without a parcel (OSM trees). The manifest says
 `"props_layout": "per_parcel"`; `map_version` went from `0.1.0` to `0.2.0` for this node-layout
 change (pre-1.0, a node-layout change bumps the minor part). Also

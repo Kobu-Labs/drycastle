@@ -8,7 +8,8 @@ using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 /// <summary>
 /// The schema constants of edits.json that the editor needs, kept in this one place. They mirror
 /// pipeline/src/suchohrad_pipeline/edits.py (FENCE_MODES, FENCE_TYPES, DEFAULT_FENCE_TYPE); the panel smoke
-/// compares them with what Python prints, so a drift fails `make viewer-panel-smoke`.
+/// compares them with what Python prints, so a drift fails `make viewer-panel-smoke`. The colour of a type is a
+/// tint over its texture (picket, wire and concrete are near-white, so the colour is their paint).
 /// </summary>
 public static class EditSchema
 {
@@ -21,8 +22,15 @@ public static class EditSchema
     {
         new("picket", 1.0, 0.06, "#9a8064"),
         new("wire", 1.1, 0.03, "#5c5f66"),
-        new("brick_wall", 1.8, 0.3, "#b5523a"),
+        new("brick_red", 1.8, 0.3, "#ffffff"),
+        new("brick_white", 1.8, 0.3, "#ffffff"),
+        new("stone_wall", 1.4, 0.45, "#ffffff"),
+        new("concrete", 1.8, 0.15, "#cfcac0"),
+        new("brick_wall", 1.8, 0.3, "#ffffff"),  // the old name of brick_red
     };
+
+    /// <summary>Values of the fence `column` key (edits.py COLUMN_TYPES): the posts or piers, instead of the type's own.</summary>
+    public static readonly string[] ColumnTypes = { "none", "wood_post", "metal_post", "brick_red", "brick_white", "stone", "concrete" };
 
     public static IEnumerable<string> FenceTypeNames => FenceTypes.Select(t => t.Name);
 
@@ -46,22 +54,24 @@ public sealed class FenceDraft
 {
     public string? Mode;
     public string? Type;
+    /// <summary>The `column` key. The panel has no control for it yet; it is kept as read so an Apply does not drop it.</summary>
+    public string? Column;
     public double? Height, Thickness;
     public string? Colour;
     public List<Gap> Gaps = new();
     /// <summary>Remove the fence entry altogether (inherit the group's / use the rules), whatever the mode shows.</summary>
     public bool Remove;
 
-    public bool HasCustomKeys => Type != null || Height != null || Thickness != null || Colour != null || Gaps.Count > 0;
+    public bool HasCustomKeys => Type != null || Column != null || Height != null || Thickness != null || Colour != null || Gaps.Count > 0;
     /// <summary>The mode the pipeline would use: the explicit one, else custom when custom keys are present, else auto.</summary>
     public string EffectiveMode => Mode ?? (HasCustomKeys ? "custom" : "auto");
 
     public FenceDraft Clone() => new()
     {
-        Mode = Mode, Type = Type, Height = Height, Thickness = Thickness, Colour = Colour, Gaps = new List<Gap>(Gaps), Remove = Remove,
+        Mode = Mode, Type = Type, Column = Column, Height = Height, Thickness = Thickness, Colour = Colour, Gaps = new List<Gap>(Gaps), Remove = Remove,
     };
 
-    public void ClearCustom() { Type = null; Height = null; Thickness = null; Colour = null; Gaps.Clear(); }
+    public void ClearCustom() { Type = null; Column = null; Height = null; Thickness = null; Colour = null; Gaps.Clear(); }
 
     /// <summary>Choose the mode; leaving custom drops the custom-only keys.</summary>
     public void SetMode(string mode)
@@ -80,6 +90,7 @@ public sealed class FenceDraft
         if (entry is not Obj o) return d;
         d.Mode = o.GetValueOrDefault("mode") as string;
         d.Type = o.GetValueOrDefault("type") as string;
+        d.Column = o.GetValueOrDefault("column") as string;
         d.Height = Number(o.GetValueOrDefault("height_m"));
         d.Thickness = Number(o.GetValueOrDefault("thickness_m"));
         d.Colour = o.GetValueOrDefault("colour") as string;
@@ -114,6 +125,7 @@ public sealed class FenceDraft
         o["mode"] = mode;
         if (mode == "none") return o;
         if (Type != null) o["type"] = Type;
+        if (Column != null) o["column"] = Column;
         if (Height != null) o["height_m"] = Num(Height.Value);
         if (Thickness != null) o["thickness_m"] = Num(Thickness.Value);
         if (Colour != null) o["colour"] = Colour.ToLowerInvariant();

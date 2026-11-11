@@ -137,8 +137,11 @@ property group's members targets the group: Fence goes to the group entry, Trees
 grouped parcel selected, `Edit: whole group | this parcel` chooses (default group); "this parcel" writes the
 parcel's own fence override, which wins field by field over the group's.
 
-* **Fence**: `mode` auto | none | custom; `type` picket | wire | brick_wall (the table lives in `EditSchema`,
-  `EditModel.cs`, and `make viewer-panel-smoke` compares it with `edits.py`); `height`, `thickness` and `colour`
+* **Fence**: `mode` auto | none | custom; `type` picket | wire | brick_red | brick_white | stone_wall | concrete
+  (textured styles, see `docs/pipeline.md`; brick_wall is the old name of brick_red; the table lives in `EditSchema`,
+  `EditModel.cs`, and `make viewer-panel-smoke` compares it with `edits.py`); the `column` key (other posts or
+  piers than the type's own) has no control in the panel yet: set it through MCP or by hand, the panel keeps it
+  when it writes; `height`, `thickness` and `colour` (a tint: the paint of picket, wire and concrete)
   each have a `set` box: unset means the type's default, which is shown greyed. These fields and the gate list are
   custom-only and disabled otherwise; switching to auto or none clears them, so the panel never writes a file the
   Python validator rejects (it also checks what it writes before saving). `Reset` removes the fence entry (rules
