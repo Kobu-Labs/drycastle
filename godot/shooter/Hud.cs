@@ -39,7 +39,7 @@ public partial class Hud : CanvasLayer
     ProgressBar _hpBar = null!;
     int _hp = -1;
     // ammo
-    Label _wName = null!, _mag = null!, _reserve = null!, _reloadText = null!, _speed = null!;
+    Label _wName = null!, _mag = null!, _reserve = null!, _reloadText = null!, _speed = null!, _prompt = null!;
     ProgressBar _reloadBar = null!;
     double _reloadUntil, _reloadLen;
     // hotbar
@@ -219,6 +219,9 @@ public partial class Hud : CanvasLayer
         _speed = Place(L("", "HudBig", HorizontalAlignment.Right), 1, 1, -ShooterTheme.Margin, -ShooterTheme.Margin - 136, 320, 40);
         _speed.Visible = false; // vehicle speed readout hook: SetVehicleSpeed
         _root.AddChild(_speed);
+        _prompt = Place(L("", "HudHead", HorizontalAlignment.Center), 0.5f, 0.7f, -200, 0, 400, 32); // context prompt (enter / exit a vehicle)
+        _prompt.Visible = false;
+        _root.AddChild(_prompt);
         var p = Place(P("HudPanel"), 1, 1, -ShooterTheme.Margin, -ShooterTheme.Margin, 320, 112);
         _root.AddChild(p);
         var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -509,6 +512,13 @@ public partial class Hud : CanvasLayer
         Fade(_protChip, 1); Fade(_protOutline, 1);
     }
 
+    /// <summary>Context prompt under the crosshair, e.g. "E  Enter car"; null hides it.</summary>
+    public void SetPrompt(string? text)
+    {
+        _prompt.Visible = text != null;
+        if (text != null) Set(_prompt, text);
+    }
+
     /// <summary>Vehicle speed readout (km/h); null hides it. Hook for the vehicles issue, unused by the match HUD today.</summary>
     public void SetVehicleSpeed(float? kmh)
     {
@@ -585,7 +595,7 @@ public partial class Hud : CanvasLayer
     string WeaponName(byte id)
     {
         if (id < _weapons.Count) return _weapons.Names[id];
-        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), _ => Strings.T("weapon.unknown") };
+        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), _ => Strings.T("weapon.unknown") };
     }
 
     void UpdateCrosshair()

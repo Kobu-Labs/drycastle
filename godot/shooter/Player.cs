@@ -73,6 +73,28 @@ public partial class Player : CharacterBody3D
         _state.FallPeakY = Mathf.Max(_state.FallPeakY, GlobalPosition.Y);
     }
 
+    bool _chase;
+
+    /// <summary>Third-person chase camera behind a car (driving): the body sits in the car, the camera follows its yaw.</summary>
+    public void Chase(Vector3 carPos, float carYaw)
+    {
+        _chase = true;
+        GlobalPosition = carPos;
+        if (!_camera.IsInsideTree()) return; // headless bots have no camera
+        _camera.GlobalPosition = carPos + Vector3.Up * 2.8f + new Vector3(Mathf.Sin(carYaw), 0, Mathf.Cos(carYaw)) * 6.5f;
+        _camera.GlobalRotation = new Vector3(-0.22f, carYaw, 0);
+    }
+
+    /// <summary>Back to the first-person camera, looking where the car pointed.</summary>
+    public void EndChase(float yaw)
+    {
+        if (!_chase) return;
+        _chase = false;
+        _yaw = yaw; _pitch = 0;
+        _camera.Rotation = new Vector3(0, _yaw, 0);
+        SetCrouchShape(_state.Crouching);
+    }
+
     public void Respawn()
     {
         Health = MoveConsts.MaxHealth;
@@ -118,6 +140,7 @@ public partial class Player : CharacterBody3D
         if (Input.IsActionPressed("crouch")) b |= MoveButtons.Crouch;
         if (Input.IsActionPressed("fire")) b |= MoveButtons.Fire;
         if (Input.IsActionPressed("reload")) b |= MoveButtons.Reload;
+        if (Input.IsActionPressed("interact")) b |= MoveButtons.Use;
         var captured = Input.MouseMode == Input.MouseModeEnum.Captured;
         return new MoveInput
         {

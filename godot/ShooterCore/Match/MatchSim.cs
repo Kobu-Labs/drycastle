@@ -9,7 +9,7 @@ public enum DamageResult { Ignored, Damaged, Killed }
 /// <summary>Weapon ids for deaths that no weapon from weapons.json caused.</summary>
 public static class SpecialWeapons
 {
-    public const byte Debug = 253, Void = 254, Fall = 255;
+    public const byte Vehicle = 252, Debug = 253, Void = 254, Fall = 255;
 }
 
 public abstract record MatchEvent;

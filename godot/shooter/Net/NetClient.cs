@@ -13,7 +13,7 @@ namespace Suchohrad.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
+    sealed class Remote { public EntityState State; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -99,6 +99,8 @@ public partial class NetClient : Node
         _remotes.Clear();
         foreach (var r in _rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         _rockets.Clear();
+        foreach (var v in _cars.Values) if (GodotObject.IsInstanceValid(v.Node)) v.Node.QueueFree();
+        _cars.Clear();
         if (_me != null && GodotObject.IsInstanceValid(_me)) _me.QueueFree();
         _me = null;
     }
@@ -123,6 +125,7 @@ public partial class NetClient : Node
             return;
         }
         RenderRemotes();
+        RenderCars();
         RenderRockets();
         UpdateHud();
     }
@@ -166,7 +169,7 @@ public partial class NetClient : Node
                 _myId = w.PlayerId; _welcomed = true;
                 _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY };
                 World.AddChild(_me);
-                if (WeaponsBot != "") NetServer.AddArenaColliders(World);
+                if (WeaponsBot != "" || CarBot != "") NetServer.AddArenaColliders(World);
                 if (Bot) _me.InputOverride = new MoveInput { SpeedScale = 1 };
                 HudWelcome();
                 OnWelcomed?.Invoke();
@@ -228,13 +231,15 @@ public partial class NetClient : Node
         if (_me == null || !_dec.Apply(d, out var h)) return;
         if (_lastTick != 0 && h.Tick < _lastTick) return;
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
-        foreach (var id in _dec.RemoveStale(h.Tick, 90)) if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree();
+        foreach (var id in _dec.RemoveStale(h.Tick, 90)) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) cg.Node.QueueFree(); }
         foreach (var (id, rec) in _dec.States)
         {
             if (id == _myId) { OnSelf(rec, h.Ack); continue; }
             if (rec.Type == EntityType.Projectile) { OnRocketState(id, rec); continue; }
-            if (rec.Type != EntityType.Player) continue; // vehicles are rendered by a later issue
+            if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
+            if (rec.Type != EntityType.Player) continue;
             if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id); _remotes[id] = r; }
+            r.State = rec.State;
             r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
         }
@@ -291,6 +296,15 @@ public partial class NetClient : Node
         }
         _me!.Health = rec.Health;
         _myState = rec.State;
+        var inCar = rec.State == EntityState.InVehicle;
+        if (inCar != _driving)
+        {
+            // entering or leaving a car: no prediction while driving; on exit take the server's position (the free side) as is
+            _driving = inCar; _pending.Clear();
+            if (!inCar) { _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); _me.EndChase(_carYaw); }
+            return;
+        }
+        if (_driving) { _pending.Clear(); return; }
         if (rec.State == EntityState.Protected) _sawProtected = true;
         if (rec.State == EntityState.Alive && _fireStart > 0 && !_earlyCounted && Now - _fireStart < 0.6 && _fireStart - _spawnAt < _spawnProtection - 1.0) { _earlyEnds++; _earlyCounted = true; }
         var idx = _pending.FindIndex(p => p.Input.Seq == ack);
@@ -317,7 +331,7 @@ public partial class NetClient : Node
     {
         if (_done || !_welcomed || _me == null || _peer == null) return;
         _elapsed += delta;
-        if (Bot && _elapsed >= BotSeconds) { if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
+        if (Bot && _elapsed >= BotSeconds) { if (CarBot != "") CarResult(false, "timeout"); else if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
         if (!_gotSelf) return; // wait for our spawn position
         var dt = (float)delta;
         MoveInput mi;
@@ -334,6 +348,7 @@ public partial class NetClient : Node
             if (MatchBot == "alice") MatchAliceStep();
             else MatchBobCheck();
         }
+        else if (Bot && CarBot != "") mi = CarBotStep();
         else if (Bot && WeaponsBot != "") mi = WeaponsBotStep();
         else if (Bot)
         {
@@ -348,7 +363,7 @@ public partial class NetClient : Node
         if (!Bot) ReadSlotKeys();
         _me.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, _me.Pitch, (byte)(Weapons != null ? _wantSlot : 0));
-        _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt);
+        if (!_driving) _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt);
         _pending.Add(new Pending { Input = ni, After = _me.State });
         if (_pending.Count > 120) _pending.RemoveAt(0);
         var recent = new NetInput[Math.Min(3, _pending.Count)];
@@ -368,6 +383,7 @@ public partial class NetClient : Node
             {
                 r.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 r.Node.Rotation = new Vector3(0, s.Yaw, 0);
+                r.Node.Visible = r.State != EntityState.InVehicle;
             }
     }
 

@@ -28,6 +28,9 @@ public partial class NetServer : Node
         public readonly SnapshotEncoder Enc = new();
         public Vector3 Start;
         public float MaxMoved;
+        public ServerCar? Car;
+        public bool UseHeld, Handbrake;
+        public float Throttle, Steer;
     }
 
     public Node3D World = null!;
@@ -68,6 +71,9 @@ public partial class NetServer : Node
     readonly List<Rocket> _rockets = new();
     ushort _nextRocket = 0x8000;
     public bool BazookaSmoke;
+    /// <summary>Car smoke: flat arena, three cars at fixed spots, debug commands, judges the vehicle scenario.</summary>
+    public bool CarSmoke;
+    bool ArenaMode => WeaponsSmoke || BazookaSmoke || CarSmoke;
     int _rocketsFired, _explosions, _directHits, _splashHits, _selfHits, _worldExplosions, _expiredRockets, _knocked;
     public const float ArenaX = 20000f, ArenaZ = 20000f;
 
@@ -80,9 +86,10 @@ public partial class NetServer : Node
             GetTree().Quit(2);
             return;
         }
-        if (WeaponsSmoke || BazookaSmoke) BuildArena();
+        if (ArenaMode) BuildArena();
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
+        if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 28, Acceleration = 9, Steering = 1.7f, Mass = 1200 } } };
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");
     }
@@ -94,7 +101,7 @@ public partial class NetServer : Node
         _tick++;
         if (!_spawnsChecked)
         {
-            if (_tick >= 3) CheckSpawnGround();
+            if (_tick >= 3) { CheckSpawnGround(); SpawnCars(); }
             return; // not accepting connections until the spawn list is validated
         }
         _elapsed += delta;
@@ -102,6 +109,8 @@ public partial class NetServer : Node
         _match.Update();
         foreach (var c in _clients.Values.ToList()) if (c.Joined) SimulateClient(c, (float)delta);
         StepRockets((float)delta);
+        StepVehicles((float)delta);
+        if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
         SendSnapshots();
         if (_clients.Count > _peakPlayers) _peakPlayers = _clients.Count;
         foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved;
@@ -110,6 +119,10 @@ public partial class NetServer : Node
         if (BazookaSmoke)
         {
             if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishBazooka();
+        }
+        else if (CarSmoke)
+        {
+            if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishCar();
         }
         else if (WeaponsSmoke)
         {
@@ -227,7 +240,7 @@ public partial class NetServer : Node
         {
             var m = Wire.DecodeReliable(d);
             if (m is HelloMsg h && !c.Joined) OnHello(c, h);
-            else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || WeaponsSmoke || BazookaSmoke)) OnDebug(c, e.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || ArenaMode)) OnDebug(c, e.Payload);
         }
         else if (c.Joined && d[0] == Wire.TInput)
         {
@@ -255,6 +268,7 @@ public partial class NetServer : Node
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
         c.Joined = true;
+        foreach (var car in _cars) car.AddCollisionExceptionWith(c.Body);
         _byId[c.Id] = c;
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick));
         foreach (var o in _clients.Values.Where(o => o.Joined))
@@ -271,6 +285,7 @@ public partial class NetServer : Node
     {
         if (!_clients.Remove(peer, out var c)) return;
         if (!c.Joined) return;
+        if (c.Car != null) { c.Car.Seat.Clear(); c.Car = null; }
         c.Body.QueueFree();
         _byId.Remove(c.Id);
         foreach (var o in _clients.Values.Where(o => o.Joined)) Send(o, new LeaveMsg(c.Id));
@@ -313,6 +328,7 @@ public partial class NetServer : Node
             case ScoreboardChanged: BroadcastEvent(EventKind.MatchState, MatchCodec.Encode(BuildMatchState())); break;
             case PhaseChanged { Phase: MatchPhase.Ending }: _roundsEnded++; GD.Print($"server: round over, winners {string.Join(",", _match.Winners)}"); break;
             case PhaseChanged { Phase: MatchPhase.Running }:
+                ResetCars();
                 if (_roundsEnded > 0) { _restarts++; _finishAt = _elapsed + 1.5; }
                 GD.Print("server: round started");
                 break;
@@ -328,6 +344,7 @@ public partial class NetServer : Node
                 BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(s.Id, s.Position, s.ProtectionSeconds)));
                 break;
             case PlayerKilled k:
+                if (_byId.TryGetValue(k.Victim, out var kv) && kv.Car != null) EjectDriver(kv, false);
                 _kills += k.Killer != k.Victim ? 1 : 0;
                 if (WeaponsSmoke && _kills >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5;
                 if (BazookaSmoke && _kills >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.5;
@@ -354,7 +371,18 @@ public partial class NetServer : Node
         {
             var i = c.Inputs.Dequeue();
             c.Ack = i.Seq; c.HasAck = true;
+            var useDown = (i.Buttons & (ushort)MoveButtons.Use) != 0;
+            var useEdge = useDown && !c.UseHeld;
+            c.UseHeld = useDown;
             if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
+            if (c.Car != null)
+            {
+                // driving: the car is simulated in StepVehicles from these inputs; no walking, shooting or weapon timers
+                c.Throttle = Quant.Axis(i.MoveY); c.Steer = Quant.Axis(i.MoveX); c.Handbrake = (i.Buttons & (ushort)MoveButtons.Jump) != 0;
+                if (useEdge) ExitCar(c);
+                continue;
+            }
+            if (useEdge && TryEnterCar(c)) continue;
             if ((i.Buttons & (ushort)MoveButtons.Fire) != 0 && _match.NotifyFired(c.Id)) _earlyProtectionEnds++;
             c.Body.Yaw = Quant.Yaw(i.Yaw);
             c.Body.Pitch = Quant.Pitch(i.Pitch);
@@ -389,6 +417,7 @@ public partial class NetServer : Node
     float WorldDistance(Vector3 from, Vector3 dir, float max)
     {
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
+        q.CollisionMask = 1; // world and players only: cars (layer 2) are shot through
         var ex = new Godot.Collections.Array<Rid>();
         foreach (var o in _byId.Values) ex.Add(o.Body.GetRid());
         q.Exclude = ex;
@@ -523,7 +552,8 @@ public partial class NetServer : Node
         foreach (var c in _clients.Values)
             if (c.Joined)
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
-                    c.Body.Yaw, c.Body.Pitch, c.Body.Health, _match.StateOf(c.Id), c.Slot));
+                    c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot));
+        foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour));
         foreach (var r in _rockets)
             ents.Add(EntityRecord.Make(r.Id, EntityType.Projectile, N(r.Pos),
                 MathF.Atan2(-r.Dir.X, -r.Dir.Z), MathF.Asin(Math.Clamp(r.Dir.Y, -1f, 1f)), 0, EntityState.Alive, r.Weapon));
