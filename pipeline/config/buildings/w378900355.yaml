@@ -1,0 +1,20 @@
+# P-0288 (Obecny urad Suchohrad), long middle bar. Front wall = edge 5 (14.6 m), facing the road/forecourt.
+# Measured from Street View section frames (Fable annotation + line-fit rectification, camera height 2.5 m,
+# right corner checked against the footprint edge length: 14.59 m of 14.6 m).
+# Not modelled: the recessed main entrance with the metal gate at the south-west end of this wall (it was
+# cut off in every frame and the fit was unreliable), and the other walls.
+id: w378900355
+source: "Street View 2022-09 section frames, Fable annotation + metric line fit"
+overhang_m: 0.4
+frame_colour: '#f2f0ea'
+openings:
+- {id: n_w1, kind: window, edge: 5, at_m: 4.05, width_m: 1.51, height_m: 1.63, sill_m: 0.99,
+  recess_m: 0.12, confidence: medium}
+- {id: n_w2, kind: window, edge: 5, at_m: 6.06, width_m: 1.22, height_m: 1.46, sill_m: 0.98,
+  recess_m: 0.12, confidence: high}
+- {id: n_d2, kind: door, edge: 5, at_m: 9.16, width_m: 0.94, height_m: 2.18, sill_m: 0.05,
+  recess_m: 0.12, colour: '#f2f2f2', confidence: high}
+- {id: n_w3, kind: window, edge: 5, at_m: 10.9, width_m: 1.32, height_m: 1.46, sill_m: 1.09,
+  recess_m: 0.12, confidence: high}
+- {id: n_w4, kind: window, edge: 5, at_m: 12.93, width_m: 1.46, height_m: 1.46, sill_m: 1.06,
+  recess_m: 0.12, confidence: high}

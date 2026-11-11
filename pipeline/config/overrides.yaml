@@ -67,3 +67,34 @@ buildings:
   w378900330:
     wall_colour: "#d9d4c6"
     roof_colour: "#b4502f"
+
+  # P-0288 (Obecny urad Suchohrad): long single-storey office of three bars, white render, hipped
+  # terracotta roofs, eave about 3.0 m (measured from Street View section frames). The generated defaults
+  # (two storeys, gabled, brown/grey roofs) were wrong. Roof rise 1.8 m is a visual estimate.
+  # Openings of the road-facing walls are in config/buildings/. The south-west bar (w378900312) measured
+  # 3.5 m to the eave from poor frames, but the eave line continues unbroken into the middle bar in the
+  # photos, so it uses 3.0 m too.
+  w378900312:
+    model: office
+    wall_colour: "#f0ece2"
+    roof_colour: "#c86040"
+    levels: 1
+    roof: hipped
+    height_m: 4.8
+    roof_height_m: 1.8
+  w378900355:
+    model: office
+    wall_colour: "#f0ece2"
+    roof_colour: "#c86040"
+    levels: 1
+    roof: hipped
+    height_m: 4.8
+    roof_height_m: 1.8
+  w378900320:
+    model: office
+    wall_colour: "#f0ece2"
+    roof_colour: "#c86040"
+    levels: 1
+    roof: hipped
+    height_m: 4.8
+    roof_height_m: 1.8

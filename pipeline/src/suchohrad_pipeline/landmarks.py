@@ -287,8 +287,15 @@ def _bunker(b: dict, detail: bool) -> Mesh:
     return bunker_mesh(b["footprint"]["exterior"], (math.cos(a), math.sin(a)), detail)
 
 
+def _office(b: dict, detail: bool) -> Mesh:
+    """Municipal office of P-0288: one hipped roof over three footprints (see ``office.py``)."""
+    from suchohrad_pipeline.office import office_mesh
+
+    return office_mesh(b, detail)
+
+
 # Models built straight on the footprint (map metres) instead of in a local frame.
-FOOTPRINT_MODELS: dict[str, Callable[[dict, bool], Mesh]] = {"bunker": _bunker}
+FOOTPRINT_MODELS: dict[str, Callable[[dict, bool], Mesh]] = {"bunker": _bunker, "office": _office}
 
 
 def build_landmark(b: dict, detail: bool = True) -> Mesh:
