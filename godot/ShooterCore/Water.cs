@@ -36,6 +36,37 @@ public sealed class WaterBody
 
     public float Depth => Math.Max(0f, SurfaceY - BedY);
 
+    /// <summary>Area of the outer ring, m² (the shoelace formula; holes are not taken off).</summary>
+    public float Area
+    {
+        get
+        {
+            var r = Rings[0];
+            double a = 0;
+            for (int i = 0, j = r.Length - 1; i < r.Length; j = i++) a += (double)r[j].X * r[i].Y - (double)r[i].X * r[j].Y;
+            return (float)Math.Abs(a / 2);
+        }
+    }
+
+    /// <summary>Distance (m) from (x, z) to the nearest outline of this body (outer ring or a hole). Sign-free: inside or outside.</summary>
+    public float ShoreDistance(float x, float z)
+    {
+        var best = float.MaxValue;
+        var p = new Vector2(x, z);
+        foreach (var ring in Rings)
+            for (int i = 0, j = ring.Length - 1; i < ring.Length; j = i++)
+                best = MathF.Min(best, SegmentDistance(p, ring[j], ring[i]));
+        return best;
+    }
+
+    internal static float SegmentDistance(Vector2 p, Vector2 a, Vector2 b)
+    {
+        var d = b - a;
+        var len2 = d.LengthSquared();
+        var t = len2 <= 0 ? 0f : Math.Clamp(Vector2.Dot(p - a, d) / len2, 0f, 1f);
+        return Vector2.Distance(p, a + d * t);
+    }
+
     /// <summary>Even-odd point in polygon over all rings, for a ground point (x, z).</summary>
     public bool Contains(float x, float z)
     {
@@ -70,6 +101,14 @@ public sealed class Water
         WaterBody? best = null;
         foreach (var b in Bodies)
             if ((best is null || b.SurfaceY > best.SurfaceY) && b.Contains(x, z)) best = b;
+        return best;
+    }
+
+    /// <summary>Distance (m) from (x, z) to the nearest shoreline of any body; float.MaxValue with no water.</summary>
+    public float ShoreDistance(float x, float z)
+    {
+        var best = float.MaxValue;
+        foreach (var b in Bodies) best = MathF.Min(best, b.ShoreDistance(x, z));
         return best;
     }
 
@@ -177,5 +216,64 @@ public static class Breath
         var hadAir = s.AirSpent < Capacity;
         s.AirSpent = Math.Min(Capacity, s.AirSpent + dt);
         return hadAir ? 0f : DrowningDamagePerSecond * dt;
+    }
+}
+
+/// <summary>
+/// Where boats (and the amphibious transport on the water) are placed at match start. Pure: candidates are grid points inside
+/// water bodies, in a band of shoreline distances so the hull is clear of the bank and close enough to walk to.
+/// Too little water (no candidate in the band) falls back to the interior of the largest body, so a boat still spawns.
+/// </summary>
+public static class WaterSpawns
+{
+    /// <summary>Boat candidates lie this far (m) from the shoreline or more, so a boat's box (about 2.6 m half length) stays off the bank.</summary>
+    public const float ShoreMinDistance = 4f;
+    /// <summary>...and no further than this from it.</summary>
+    public const float ShoreMaxDistance = 15f;
+    /// <summary>Grid spacing of the candidate sampling, m.</summary>
+    public const float Grid = 3f;
+    /// <summary>A body shallower than this (m) gives no shore candidates: a boat would touch the bed.</summary>
+    public const float MinDepth = 1.5f;
+
+    /// <summary>A placement point: ground x and z (Godot axes) and the water surface height the origin rides.</summary>
+    public readonly record struct Spot(float X, float Z, float SurfaceY);
+
+    /// <summary>Shore-band candidates over every body at least <see cref="MinDepth"/> deep.</summary>
+    public static List<Spot> ShoreCandidates(Water water)
+    {
+        var list = new List<Spot>();
+        foreach (var b in water.Bodies)
+        {
+            if (b.Depth < MinDepth) continue;
+            foreach (var p in Grid2D(b))
+            {
+                var d = b.ShoreDistance(p.X, p.Y);
+                if (d >= ShoreMinDistance && d <= ShoreMaxDistance) list.Add(new Spot(p.X, p.Y, b.SurfaceY));
+            }
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// The fallback when there are too few shore candidates: the largest body (by area) that is at least <see cref="MinDepth"/> deep,
+    /// all its grid points, furthest from the shore first (the band does not apply: a small pond still gets its middle). Empty with no water at all.
+    /// </summary>
+    public static List<Spot> FallbackCandidates(Water water)
+    {
+        var body = water.Bodies.Where(b => b.Depth >= MinDepth).OrderByDescending(b => b.Area).FirstOrDefault()
+                   ?? water.Bodies.OrderByDescending(b => b.Area).FirstOrDefault();
+        if (body == null) return new List<Spot>();
+        return Grid2D(body)
+            .Select(p => (P: p, D: body.ShoreDistance(p.X, p.Y)))
+            .OrderByDescending(x => x.D)
+            .Select(x => new Spot(x.P.X, x.P.Y, body.SurfaceY))
+            .ToList();
+    }
+
+    static IEnumerable<Vector2> Grid2D(WaterBody b)
+    {
+        for (var x = b.MinX + Grid / 2; x < b.MaxX; x += Grid)
+            for (var z = b.MinZ + Grid / 2; z < b.MaxZ; z += Grid)
+                if (b.Contains(x, z)) yield return new Vector2(x, z);
     }
 }

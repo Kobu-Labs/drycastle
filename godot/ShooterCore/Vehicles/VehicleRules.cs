@@ -273,17 +273,35 @@ public static class CarModel
     /// Longitudinal: linear acceleration to top speed (reverse capped by the handling), brake against travel, coast when idle.
     /// Lateral: yaw rate is speed / <see cref="TurnRadiusAt"/>, so it is zero when standing still, tight at walking pace and
     /// capped at high speed; the actual yaw rate chases that target at a limited slew rate.
+    /// <paramref name="onWater"/> is set while the vehicle floats: an amphibious then drives at its water speed, and a boat has its drive
+    /// (with planing); a boat not on water has none and coasts to a stop at its land deceleration.
     /// </summary>
-    public static void Step(ref CarState s, VehicleDef def, float throttle, float steer, bool handbrake, float dt)
+    public static void Step(ref CarState s, VehicleDef def, float throttle, float steer, bool handbrake, float dt, bool onWater = false)
     {
         var h = def.Handling;
         var v = s.Speed;
+        var top = def.TopSpeed;
+        var accel = def.Acceleration;
+        var coast = h.CoastDecel;
+        if (def.Medium == VehicleMedium.Boat && !onWater)
+        {
+            // a boat has no drive on land: it coasts to a stop at its land deceleration
+            throttle = 0; handbrake = false; coast = def.LandDecel;
+        }
+        else if (onWater && def.Medium == VehicleMedium.Amphibious)
+        {
+            top = def.WaterTopSpeed; accel = def.WaterAcceleration;
+        }
+        else if (onWater && def.Medium == VehicleMedium.Boat && def.PlaningSpeed > 0 && MathF.Abs(v) < def.PlaningSpeed)
+        {
+            accel *= 0.5f; // below the planing speed the hull pushes water aside: half the thrust until it lifts onto the plane
+        }
         if (handbrake) v = Approach(v, 0, h.HandbrakeDecel * dt);
         else if (throttle > 0.05f)
-            v = v < 0 ? Approach(v, 0, def.Brake * dt) : MathF.Min(def.TopSpeed, v + def.Acceleration * throttle * dt);
+            v = v < 0 ? Approach(v, 0, def.Brake * dt) : MathF.Min(top, v + accel * throttle * dt);
         else if (throttle < -0.05f)
-            v = v > 0 ? Approach(v, 0, def.Brake * dt) : MathF.Max(-def.TopSpeed * h.ReverseTopFraction, v + def.Acceleration * throttle * dt);
-        else v = Approach(v, 0, h.CoastDecel * dt);
+            v = v > 0 ? Approach(v, 0, def.Brake * dt) : MathF.Max(-top * h.ReverseTopFraction, v + accel * throttle * dt);
+        else v = Approach(v, 0, coast * dt);
         s.Speed = v;
 
         // steering: the wheel input sets the curvature; the handbrake sharpens it for a slide
