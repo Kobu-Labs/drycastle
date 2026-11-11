@@ -31,6 +31,8 @@ public sealed partial class MapLoader
     public Node3D Root { get; } = new() { Name = "Map" };
     public string MapVersion { get; private set; } = "";
     public string RoadsJson { get; private set; } = "";
+    /// <summary>Contents of water.json (empty when the map has no water file); parsed by the shooter (ShooterCore.Water).</summary>
+    public string WaterJson { get; private set; } = "";
     /// <summary>Origin of the local frame in S-JTSK (EPSG:5514) metres (east, north), from parcels.json (map 0.4.0+); null for older maps.</summary>
     public (double X, double Y)? OriginEpsg5514 { get; private set; }
     /// <summary>Rule values (fence and tree defaults) from the manifest (map 0.4.0+); null for older maps.</summary>
@@ -62,6 +64,8 @@ public sealed partial class MapLoader
         ReadSpawns(Path.Combine(mapDir, "spawns.json"));
         var roads = Path.Combine(mapDir, "roads.json");
         if (File.Exists(roads)) RoadsJson = File.ReadAllText(roads); // no consumer in v1
+        var water = Path.Combine(mapDir, "water.json");
+        WaterJson = File.Exists(water) ? File.ReadAllText(water) : "";
 
         foreach (var c in manifest.RootElement.GetProperty("chunks").EnumerateArray())
         {

@@ -49,5 +49,9 @@ public partial class NetClient
         }
     }
 
-    void UpdateHud() => _hud?.SetHealth(Mathf.CeilToInt(_me?.Health ?? 100));
+    void UpdateHud()
+    {
+        _hud?.SetHealth(Mathf.CeilToInt(_me?.Health ?? 100));
+        if (_me != null) _hud?.SetBreath(Breath.AirLeft(_me.State), _me.HeadUnder);
+    }
 }

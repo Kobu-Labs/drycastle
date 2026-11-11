@@ -22,6 +22,12 @@ public partial class Player : CharacterBody3D
 
     public float Health { get; set; } = MoveConsts.MaxHealth;
     public float LastFallDamage { get; private set; }
+    /// <summary>Drowning damage of the last tick (air used up with the head under); applied when authoritative.</summary>
+    public float LastDrowningDamage { get; private set; }
+    /// <summary>The map's water (set by the owner before the first tick); <see cref="Water.Empty"/> on a dry map.</summary>
+    public Water Water { get; set; } = Water.Empty;
+    /// <summary>True while the eyes are under the water surface (no firing, breath is running).</summary>
+    public bool HeadUnder => _state.HeadUnder;
     public MoveState State => _state;
     public float KillY { get; set; } = float.NegativeInfinity;
     /// <summary>Picks the respawn position (a random spawn point).</summary>
@@ -164,6 +170,7 @@ public partial class Player : CharacterBody3D
         if (Input.IsActionPressed("zoom")) b |= MoveButtons.Aim;
         if (Input.IsActionPressed("reload")) b |= MoveButtons.Reload;
         if (Input.IsActionPressed("interact")) b |= MoveButtons.Use;
+        if (_state.HeadUnder) b &= ~MoveButtons.Fire; // no firing with the head under water
         var captured = Input.MouseMode == Input.MouseModeEnum.Captured;
         return new MoveInput
         {
@@ -187,17 +194,20 @@ public partial class Player : CharacterBody3D
     public void Simulate(in MoveInput input, float dt)
     {
         _state.HeadBlocked = _state.Crouching && HeadBlockedCheck();
+        Water.Sample(ref _state);
+        LastDrowningDamage = Breath.Tick(ref _state, dt);
         MovementStep.Step(ref _state, input, dt);
         SetCrouchShape(_state.Crouching);
 
         Velocity = ToG(_state.Velocity);
         MoveAndSlide();
-        LastFallDamage = MovementStep.PostMove(ref _state, ToN(GlobalPosition), ToN(Velocity), IsOnFloor());
+        LastFallDamage = MovementStep.PostMove(ref _state, ToN(GlobalPosition), ToN(Velocity), IsOnFloor(), Water.DepthAt(ToN(GlobalPosition)));
         if (Authoritative && LastFallDamage > 0)
         {
             Health -= LastFallDamage;
             GD.Print($"player: fall damage {LastFallDamage:F1}, health {Health:F1}");
         }
+        if (Authoritative && LastDrowningDamage > 0) Health -= LastDrowningDamage;
         if (Authoritative && (Health <= 0 || GlobalPosition.Y < KillY)) Respawn();
     }
 

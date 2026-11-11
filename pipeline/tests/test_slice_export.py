@@ -71,8 +71,9 @@ def test_roads_json_spawns_json_and_manifest(ws) -> None:
         "objects": "objects.json",
         "roads": "roads.json",
         "spawns": "spawns.json",
+        "water": "water.json",
     }
-    assert {"terrain", "roads", "fences", "trees", "spawns", "buildings"} <= set(
+    assert {"terrain", "roads", "fences", "trees", "spawns", "buildings", "water"} <= set(
         manifest["generated"]
     )
     assert manifest["terrain"]["cells_per_chunk"] % 2 == 0

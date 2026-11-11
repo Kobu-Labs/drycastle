@@ -84,6 +84,12 @@ public static class HudLogic
 
     /// <summary>Health bar turns to the low state at or under this many health points.</summary>
     public const int LowHealth = 25;
+
+    /// <summary>Breath meter turns to LOW at or under this many seconds of air.</summary>
+    public const float BreathLowSeconds = 5f;
+    public static bool BreathLow(float airLeft) => airLeft <= BreathLowSeconds;
+    /// <summary>Breath text, one decimal in seconds (invariant culture, so the decimal point never changes).</summary>
+    public static string BreathText(float airLeft) => string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:0.0} s", Math.Max(0f, airLeft));
 }
 
 /// <summary>

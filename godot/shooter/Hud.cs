@@ -44,6 +44,11 @@ public partial class Hud : CanvasLayer
     Label _hpNum = null!, _hpLow = null!;
     ProgressBar _hpBar = null!;
     int _hp = -1;
+    // breath: shown only while the head is under water (fades in and out)
+    Control _breath = null!;
+    Label _airNum = null!, _airLow = null!;
+    ProgressBar _airBar = null!;
+    float _airShown = -1, _breathTarget;
     // ammo
     Label _wName = null!, _mag = null!, _reserve = null!, _reloadText = null!, _speed = null!, _prompt = null!;
     ProgressBar _reloadBar = null!;
@@ -100,6 +105,7 @@ public partial class Hud : CanvasLayer
         _root.AddChild(_scope);
         BuildCrosshair();
         BuildHealth();
+        BuildBreath();
         BuildAmmo();
         BuildHotbar();
         BuildTop();
@@ -221,6 +227,49 @@ public partial class Hud : CanvasLayer
         v.AddChild(_hpNum);
         _hpBar = new ProgressBar { MaxValue = 100, Value = 100, ShowPercentage = false, CustomMinimumSize = new Vector2(0, 16), ThemeTypeVariation = "HealthBar", MouseFilter = Control.MouseFilterEnum.Ignore };
         v.AddChild(_hpBar);
+    }
+
+    /// <summary>Breath meter above the health panel: "AIR" and seconds left, a bar, and "LOW" in the last seconds. Fixed size; invisible when dry.</summary>
+    void BuildBreath()
+    {
+        _breath = Place(P("HudPanel"), 0, 1, ShooterTheme.Margin, -ShooterTheme.Margin - 112 - ShooterTheme.Space, 320, 64);
+        _root.AddChild(_breath);
+        _breath.Modulate = new Color(1, 1, 1, 0);
+        var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        v.AddThemeConstantOverride("separation", 0);
+        _breath.AddChild(v);
+        var top = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        v.AddChild(top);
+        top.AddChild(L(Strings.T("hud.air"), "HudSmall", minW: 96));
+        _airLow = L(Strings.T("hud.low"), "HudDanger"); _airLow.Modulate = new Color(1, 1, 1, 0);
+        top.AddChild(_airLow);
+        _airNum = L("", "HudDisplay", HorizontalAlignment.Left, 120);
+        v.AddChild(_airNum);
+        _airBar = new ProgressBar { MaxValue = 100, Value = 100, ShowPercentage = false, CustomMinimumSize = new Vector2(0, 12), MouseFilter = Control.MouseFilterEnum.Ignore, Modulate = ShooterTheme.Accent };
+        v.AddChild(_airBar);
+    }
+
+    /// <summary>Breath meter state: seconds of air left and whether the head is under water. Text and bar change only on a new value.</summary>
+    public void SetBreath(float airLeft, bool underwater)
+    {
+        _breathTarget = underwater ? 1f : 0f;
+        var secs = MathF.Round(Math.Clamp(airLeft, 0f, Breath.Capacity), 1);
+        if (secs == _airShown) return;
+        _airShown = secs;
+        var low = HudLogic.BreathLow(secs);
+        Set(_airNum, HudLogic.BreathText(secs));
+        _airBar.Value = secs / Breath.Capacity * 100;
+        _airBar.Modulate = low ? ShooterTheme.Danger : ShooterTheme.Accent; // "LOW" text carries it too, not colour alone
+        Fade(_airLow, low ? 1 : 0);
+    }
+
+    /// <summary>Breath meter fade, 150 ms (instant with reduce motion).</summary>
+    void AdvanceBreath(float delta)
+    {
+        var a = _breath.Modulate.A;
+        if (Mathf.IsEqualApprox(a, _breathTarget)) return;
+        var step = Settings.ReduceMotion ? 1f : delta / 0.15f;
+        _breath.Modulate = new Color(1, 1, 1, Mathf.MoveToward(a, _breathTarget, step));
     }
 
     void BuildAmmo()
@@ -547,6 +596,7 @@ public partial class Hud : CanvasLayer
     public override void _Process(double delta)
     {
         var now = Now;
+        AdvanceBreath((float)delta);
         if (_timeRunning) UpdateTimer();
         if (_dead) UpdateRespawn();
         if (_protUntil > 0)
@@ -604,7 +654,7 @@ public partial class Hud : CanvasLayer
     string WeaponName(byte id)
     {
         if (id < _weapons.Count) return _weapons.Names[id];
-        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), _ => Strings.T("weapon.unknown") };
+        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Drown => Strings.T("weapon.drown"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), _ => Strings.T("weapon.unknown") };
     }
 
     /// <summary>Black outside a centred circle with a thin cross, drawn over the zoomed view.</summary>

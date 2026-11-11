@@ -20,6 +20,7 @@ from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.primitives import PRIMITIVES, build_primitive
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 from suchohrad_pipeline.scene import build_scene
+from suchohrad_pipeline.water import build_water
 
 DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # 0.2.0: fences and trees of a parcel moved from the chunk-level props / props_collision nodes into
@@ -32,7 +33,7 @@ PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
                "props.json", "spawns.json")
-NOT_GENERATED_NOTE = "Textures, landmarks, navmesh and water surfaces are not generated."
+NOT_GENERATED_NOTE = "Textures, landmarks, navmesh and water surface meshes are not generated (water.json holds the water bodies)."
 
 
 def to_gltf_axes(tris: np.ndarray) -> np.ndarray:
@@ -214,11 +215,20 @@ def run_export(
     if "origin_epsg5514" in parcels_doc:  # always there from the parcels stage on
         parcels_file["origin_epsg5514"] = parcels_doc["origin_epsg5514"]
     _dump(out_dir / "parcels.json", parcels_file)
+    water_file = out_dir / "water.json"
+    if scene.terrain is not None:
+        water_doc, water_skipped = build_water(parcels_out, scene.terrain)
+        for pid in water_skipped:
+            print(f"export: warning: water parcel {pid} has no terrain under it; no water body", file=sys.stderr)
+        _dump(water_file, water_doc)
+        files["water"] = "water.json"
+    elif water_file.exists():
+        water_file.unlink()  # no terrain: a water file from an earlier run would be stale
     generated = {"buildings"}
     terrain_info = None
     if scene.terrain is not None:
         t = scene.terrain
-        generated |= {"terrain"}
+        generated |= {"terrain", "water"}
         terrain_info = {
             "grid_step_m": round(t.step, 4),
             "cells_per_chunk": t.n,
