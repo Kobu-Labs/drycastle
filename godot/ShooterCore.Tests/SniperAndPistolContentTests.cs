@@ -76,7 +76,7 @@ public class SniperAndPistolContentTests
     [InlineData("m82", 1, 1)]
     [InlineData("awm", 1, 1)]
     [InlineData("svd", 2, 2)]
-    [InlineData("deagle", 2, 2)]
+    [InlineData("deagle", 3, 3)]  // 45 dmg (was 60, a 2-shot kill at every range, which made it the best pistol everywhere)
     [InlineData("glock17", 6, 8)]
     [InlineData("pistol", 5, 6)]
     public void ShotsToKillTableMatchesTheData(string id, int shotsAt10, int shotsAt60)

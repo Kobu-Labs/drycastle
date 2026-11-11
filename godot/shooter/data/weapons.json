@@ -125,7 +125,7 @@
     {
       "id": "benelli_m4", "category": "shotgun", "slot": "primary", "unlock_level": 10, "kind": "hitscan", "full_auto": false,
       "shell_reload": true,
-      "damage": 13, "headshot_multiplier": 1.5, "fire_interval": 0.3,
+      "damage": 13, "headshot_multiplier": 1.5, "fire_interval": 0.4,
       "pellets": 8, "pellet_spread": 3.0, "range": 60,
       "magazine_size": 7, "reserve_ammo": 35, "reload_time": 0.5,
       "falloff_start": 8, "falloff_end": 30, "falloff_multiplier": 0.4
@@ -147,7 +147,7 @@
     },
     {
       "id": "deagle", "category": "pistol", "slot": "secondary", "unlock_level": 5, "kind": "hitscan", "full_auto": false,
-      "damage": 60, "headshot_multiplier": 2, "fire_interval": 0.35,
+      "damage": 45, "headshot_multiplier": 2, "fire_interval": 0.35,
       "magazine_size": 7, "reserve_ammo": 35, "reload_time": 2.2,
       "falloff_start": 30, "falloff_end": 70, "falloff_multiplier": 0.8,
       "spread_base": 0.5, "spread_per_shot": 0.5, "spread_max": 5, "spread_recovery": 0.4,
