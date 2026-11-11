@@ -35,7 +35,9 @@ public sealed partial class WeaponViewmodel : Node3D
 
     static readonly Vector3 HipPosition = new(0.24f, -0.22f, -0.5f);
     const float AdsDepth = -0.42f, AdsRate = 14f;
-    float _aim;
+    /// <summary>Kick per degree of climb, recovery per second, and the largest tilt in radians.</summary>
+    const float KickPerDegree = 0.04f, KickRecover = 9f, KickTilt = 0.12f;
+    float _aim, _kick;
 
     /// <summary>Holding aim-down-sights: the gun eases to the screen centre so its iron sight sits on the crosshair point.</summary>
     public bool Aiming { get; set; }
@@ -44,12 +46,16 @@ public sealed partial class WeaponViewmodel : Node3D
 
     public override void _Ready() { Position = HipPosition; }
 
+    /// <summary>Visual kick for one shot: <paramref name="degrees"/> of climb (already scaled by ADS and crouch) pushes the gun up and back, then it settles.</summary>
+    public void Kick(float degrees) => _kick = Mathf.Min(_kick + degrees * KickPerDegree, 1f);
+
     public override void _Process(double delta)
     {
         var target = Aiming ? 1f : 0f;
-        if (Mathf.IsEqualApprox(_aim, target) && _aim == target) return;
-        _aim = Mathf.MoveToward(Mathf.Lerp(_aim, target, 1f - Mathf.Exp(-AdsRate * (float)delta)), target, 0.002f);
+        if (_aim != target) _aim = Mathf.MoveToward(Mathf.Lerp(_aim, target, 1f - Mathf.Exp(-AdsRate * (float)delta)), target, 0.002f);
+        _kick = Mathf.MoveToward(_kick, 0, KickRecover * (float)delta);
         var sight = Current is { } n && n.HasMeta(WeaponFx.SightHeightMeta) ? (float)n.GetMeta(WeaponFx.SightHeightMeta) : 0.1f;
-        Position = HipPosition.Lerp(new Vector3(0, -sight, AdsDepth), _aim);
+        Position = HipPosition.Lerp(new Vector3(0, -sight, AdsDepth), _aim) + new Vector3(0, 0.01f, 0.04f) * _kick;
+        Rotation = new Vector3(KickTilt * _kick, 0, 0);
     }
 }

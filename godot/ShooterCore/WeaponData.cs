@@ -161,6 +161,8 @@ public class WeaponsFile
         HorizontalSway = Pick(own?.HorizontalSway, category?.HorizontalSway, 0),
         RecoveryRate = Pick(own?.RecoveryRate, category?.RecoveryRate, 0),
         MaxClimb = Pick(own?.MaxClimb, category?.MaxClimb, 0),
+        AdsMultiplier = Pick(own?.AdsMultiplier, category?.AdsMultiplier, 1),
+        CrouchMultiplier = Pick(own?.CrouchMultiplier, category?.CrouchMultiplier, 1),
         Pattern = own?.Pattern ?? category?.Pattern ?? new(),
     };
 
@@ -178,6 +180,8 @@ public class WeaponsFile
         NonNegative(rc.HorizontalSway, where, "recoil.horizontal_sway");
         NonNegative(rc.RecoveryRate, where, "recoil.recovery_rate");
         NonNegative(rc.MaxClimb, where, "recoil.max_climb");
+        NonNegative(rc.AdsMultiplier, where, "recoil.ads_multiplier");
+        NonNegative(rc.CrouchMultiplier, where, "recoil.crouch_multiplier");
         if (rc.Pattern?.Any(v => !float.IsFinite(v)) == true) throw Invalid(where, "recoil.pattern", "must contain only finite numbers");
     }
 
@@ -281,6 +285,8 @@ public class WeaponsFile
         public float? HorizontalSway { get; set; }
         public float? RecoveryRate { get; set; }
         public float? MaxClimb { get; set; }
+        public float? AdsMultiplier { get; set; }
+        public float? CrouchMultiplier { get; set; }
         public List<float>? Pattern { get; set; }
     }
 }
@@ -350,16 +356,25 @@ public class WeaponDef
     public SplashDef? Splash { get; set; }
 }
 
-/// <summary>Recoil model: vertical climb per shot, horizontal sway, optional per-shot horizontal pattern (degrees, cycled by shot index; replaces the sway when set), recovery and a climb cap.</summary>
+/// <summary>
+/// Recoil model (runtime in <see cref="RecoilState"/>): vertical climb per shot, horizontal sway, optional per-shot horizontal
+/// pattern (degrees, cycled by shot index; replaces the sway when set), recovery and a climb cap. Multipliers scale the kick
+/// while aiming down sights or crouching (1 = no change). All values are degrees; 0 means "none" for the climb cap
+/// (<see cref="MaxClimb"/>) and for recovery (<see cref="RecoveryRate"/>), so a recovery of 0 keeps the offset until the next burst.
+/// </summary>
 public class RecoilDef
 {
     public float VerticalPerShot { get; set; }
     public float HorizontalSway { get; set; }
     public List<float> Pattern { get; set; } = new();
-    /// <summary>Degrees per second the aim settles back down when not firing.</summary>
+    /// <summary>Degrees per second the aim settles back down when the trigger is released.</summary>
     public float RecoveryRate { get; set; }
-    /// <summary>Total climb (degrees) before sustained fire stops adding more.</summary>
+    /// <summary>Total climb (degrees) before sustained fire stops adding more. 0 = no cap.</summary>
     public float MaxClimb { get; set; }
+    /// <summary>Kick multiplier while aiming down sights (zoom held).</summary>
+    public float AdsMultiplier { get; set; } = 1;
+    /// <summary>Kick multiplier while crouching.</summary>
+    public float CrouchMultiplier { get; set; } = 1;
 }
 
 public class SplashDef
