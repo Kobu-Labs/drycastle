@@ -97,6 +97,14 @@
       "download_url": null,
       "licence": "CC0",
       "downloaded": "2026-11-11"
+    },
+    {
+      "name": "suchohrad-generated-models",
+      "title": "Generated models (the project's own scripts, no third-party material)",
+      "url": "https://github.com/Kobu-Labs/drycastle",
+      "download_url": null,
+      "licence": "CC0",
+      "downloaded": "2026-11-11"
     }
   ],
   "assets": [
@@ -1394,6 +1402,27 @@
       "source": "https://opengameart.org/content/low-poly-guns-pack",
       "pack": "quaternius-ultimate-gun-pack",
       "used_for": "held model of weapon id svd (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:suchohrad-generated-models/flak",
+      "category": "other",
+      "name": "Flak (6x6 truck with a twin 35 mm anti-aircraft turret)",
+      "file": "suchohrad-generated-models/flak.glb",
+      "size_m": [
+        2.92,
+        3.17,
+        7.2
+      ],
+      "tags": [
+        "shooter",
+        "vehicle",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_flak_model.py (original geometry written as code; python3 -I scripts/make_flak_model.py rebuilds the file)",
+      "pack": "suchohrad-generated-models",
+      "used_for": "godot/shooter vehicle id flak (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground, metres), separate nodes for turret, gun_cradle, barrels, wheels, outriggers"
     }
   ],
   "sounds": [
