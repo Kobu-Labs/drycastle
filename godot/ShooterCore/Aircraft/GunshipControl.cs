@@ -21,6 +21,9 @@ public sealed class GunshipControl
     readonly Action<GunshipShot> _fire;
     readonly Action<GunshipStatus> _status;
     readonly Random _rng;
+    /// <summary>Indices into <see cref="GunshipDef.Weapons"/> the owner may cycle through, in order.</summary>
+    readonly int[] _weapons;
+    int _slot;
     readonly int[] _ammo;
     readonly float[] _heat;
     readonly bool[] _locked;
@@ -28,13 +31,16 @@ public sealed class GunshipControl
     double _coolAt = double.NaN;
     bool _aimWas, _reloadWas;
 
-    public GunshipControl(GunshipDef def, Aircraft aircraft, Action<GunshipShot> fire, Action<GunshipStatus> status, Random? rng = null)
+    /// <param name="weapons">Weapon indices the owner may use, in cycle order; null means all of the turret's weapons.</param>
+    public GunshipControl(GunshipDef def, Aircraft aircraft, Action<GunshipShot> fire, Action<GunshipStatus> status, Random? rng = null, IReadOnlyList<int>? weapons = null)
     {
         _def = def;
         _aircraft = aircraft;
         _fire = fire;
         _status = status;
         _rng = rng ?? new Random();
+        _weapons = (weapons ?? Enumerable.Range(0, def.Weapons.Count).ToList()).ToArray();
+        if (_weapons.Length == 0) throw new ArgumentException("a gunship control needs at least one weapon", nameof(weapons));
         var n = def.Weapons.Count;
         _ammo = def.Weapons.Select(w => w.Ammo).ToArray();
         _heat = new float[n];
@@ -44,8 +50,8 @@ public sealed class GunshipControl
 
     /// <summary>Index into <see cref="GunshipDef.ZoomLevels"/>.</summary>
     public int Zoom { get; private set; }
-    /// <summary>Index into <see cref="GunshipDef.Weapons"/>.</summary>
-    public int Weapon { get; private set; }
+    /// <summary>Index into <see cref="GunshipDef.Weapons"/> of the weapon in use.</summary>
+    public int Weapon => _weapons[_slot];
     /// <summary>The turret's aim after clamping, world yaw and pitch in radians.</summary>
     public float TurretYaw { get; private set; }
     public float TurretPitch { get; private set; }
@@ -76,7 +82,7 @@ public sealed class GunshipControl
         var fire = Held(input, MoveButtons.Fire);
         var changed = false;
         if (aim && !_aimWas) { Zoom = (Zoom + 1) % _def.ZoomLevels.Count; changed = true; }
-        if (reload && !_reloadWas) { Weapon = (Weapon + 1) % _def.Weapons.Count; changed = true; }
+        if (reload && !_reloadWas) { _slot = (_slot + 1) % _weapons.Length; changed = true; }
         _aimWas = aim; _reloadWas = reload;
 
         if (fire) changed |= TryFire(now);

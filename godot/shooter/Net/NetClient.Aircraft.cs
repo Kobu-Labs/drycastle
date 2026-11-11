@@ -96,7 +96,9 @@ public partial class NetClient
             var mount = mine.Model.GlobalPosition - Vector3.Up * GunshipControl.TurretDropM;
             _me.Turret(mount, yaw, pitch);
             _me.ZoomFov = GameSettings.Current.Fov / (_gunStatus.Zoom < gun.ZoomLevels.Count ? gun.ZoomLevels[_gunStatus.Zoom] : 1f);
-            if (_gunDirty) { _gunOverlay.Present(_gunStatus, gun); _gunDirty = false; }
+            if (_gunDirty) { _gunOverlay.Present(_gunStatus, gun, HeliCycleWeapons); _gunDirty = false; }
+            var (timer, kills) = HeliClock();
+            _gunOverlay.SetClock(timer, kills);
         }
         else if (_gunship != null) EndGunship();
 

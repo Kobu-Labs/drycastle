@@ -12,7 +12,7 @@
     { "id": "turret", "name": "Turret", "kills_required": 6, "unlock_level": 5, "max_active": 1, "duration_seconds": 15, "control": "none" },
     { "id": "care_package", "name": "Care Package", "kills_required": 6, "unlock_level": 6, "max_active": 1, "duration_seconds": 0, "control": "none",
       "perk_weights": { "fleet_foot": 22, "quick_hands": 22, "swift_swap": 16, "flak_jacket": 14, "steady_lung": 10, "tank_hunter": 8, "ghost": 5, "hot_streak": 3 } },
-    { "id": "attack_helicopter", "name": "Attack Helicopter", "kills_required": 10, "unlock_level": 9, "max_active": 1, "duration_seconds": 0, "control": "pov" },
+    { "id": "attack_helicopter", "name": "Attack Helicopter", "kills_required": 10, "unlock_level": 9, "max_active": 1, "duration_seconds": 45, "control": "pov" },
     { "id": "helicopter_helper", "name": "Helicopter Helper", "kills_required": 15, "unlock_level": 11, "max_active": 1, "duration_seconds": 0, "control": "none" },
     { "id": "ac130", "name": "AC-130", "kills_required": 18, "unlock_level": 14, "max_active": 1, "duration_seconds": 0, "control": "pov" },
     { "id": "moab", "name": "MOAB", "kills_required": 24, "unlock_level": 20, "max_active": 1, "duration_seconds": 5, "control": "none" }
