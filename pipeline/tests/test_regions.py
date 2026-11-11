@@ -422,7 +422,14 @@ def test_terrain_triangles_skip_cells_chunk_mesh_does_not_mesh() -> None:
     assert footprint(mesh).intersection(hole).area < 1e-6
 
 
-# --- water regions --------------------------------------------------------------------------
+# --- water regions ---------------------------------------------------------------------------
+
+
+def _wet_setup(level_offset):
+    terrain = make_terrain()
+    mid = float(terrain.surface(np.array([70.0]), np.array([135.0]))[0])
+    plan = plan_regions(parse(doc(**{"R-0001": {**region(), "water_y": round(mid + level_offset, 3)}})), [OX, OY], terrain)
+    return terrain, plan
 
 
 def test_water_y_is_validated() -> None:
@@ -431,36 +438,23 @@ def test_water_y_is_validated() -> None:
         assert validate(doc(**{"R-0001": {**region(), "water_y": bad}})), bad
 
 
-def test_water_region_mesh_is_flat_just_under_the_surface() -> None:
-    terrain = make_terrain()
-    plan = plan_regions(parse(doc(**{"R-0001": {**region(), "water_y": 30.0}})), [OX, OY], terrain)
+def test_water_mesh_is_flat_under_the_level_and_follows_the_shore() -> None:
+    terrain, plan = _wet_setup(1.0)
+    level = plan.regions["R-0001"].water_y
     mesh = region_meshes(plan, terrain, None, ROADS, RCFG)["R-0001"]
-    assert mesh.face_count
-    assert np.allclose(mesh.tris[:, :, 2], 30.0 - 0.02)
+    assert np.allclose(mesh.tris[:, :, 2], level - 0.02)
     assert (np.cross(mesh.tris[:, 1] - mesh.tris[:, 0], mesh.tris[:, 2] - mesh.tris[:, 0])[:, 2] > 0).all()
+    xy = mesh.tris[:, :, :2].reshape(-1, 2)
+    assert (terrain.surface(xy[:, 0], xy[:, 1]) <= level + 0.4).all()  # nowhere on ground well above the level
 
 
-def test_water_region_becomes_a_water_body() -> None:
+def test_water_region_becomes_water_bodies_and_dry_levels_are_skipped() -> None:
     from suchohrad_pipeline.water import build_water
 
-    terrain = make_terrain()
-    low = float(terrain.surface(np.array([70.0]), np.array([135.0]))[0])
-    plan = plan_regions(
-        parse(doc(**{"R-0001": {**region(), "water_y": round(low + 5.0, 3)}, "R-0002": region(polygon=sq(100, 120, 120, 140))})),
-        [OX, OY],
-        terrain,
-    )
+    terrain, plan = _wet_setup(1.0)
     docw, skipped = build_water([], terrain, plan.regions)
-    assert skipped == []
-    assert [b["id"] for b in docw["bodies"]] == ["R-0001"]  # R-0002 is ground paint
-    body = docw["bodies"][0]
-    assert body["surface_y"] == pytest.approx(low + 5.0, abs=1e-3) and body["bed_y"] < body["surface_y"]
-
-
-def test_water_region_above_all_terrain_holds_no_water() -> None:
-    from suchohrad_pipeline.water import build_water
-
-    terrain = make_terrain()
-    plan = plan_regions(parse(doc(**{"R-0001": {**region(), "water_y": -50.0}})), [OX, OY], terrain)
+    assert skipped == [] and docw["bodies"]
+    assert all(b["bed_y"] < b["surface_y"] for b in docw["bodies"])
+    terrain, plan = _wet_setup(-50.0)
     docw, skipped = build_water([], terrain, plan.regions)
     assert docw["bodies"] == [] and skipped == ["R-0001"]

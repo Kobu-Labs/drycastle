@@ -243,6 +243,14 @@ props:
     parcel_edge_clearance_m: 1.0
     # Rule-based trees keep this far from placed objects (objects.json, see config/edits.json).
     object_clearance_m: 1.0
+    # Rows of trees along the edge of water regions (edits.json regions with water_y): offset from the
+    # shoreline and the share of positions kept per row (thinner outwards), positions this far apart.
+    shore:
+      spacing_m: 4.0
+      rows:
+        - {offset_m: 2.0, keep: 1.0}
+        - {offset_m: 5.5, keep: 0.7}
+        - {offset_m: 9.0, keep: 0.4}
     # Tree size: trunk height and canopy edge in metres, scaled by a seeded factor in [0.8, 1.25].
     trunk_height_m: 1.8
     trunk_width_m: 0.35

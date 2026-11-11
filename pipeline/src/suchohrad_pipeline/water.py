@@ -6,6 +6,7 @@ parcel outline), the bed is the lowest terrain height inside. A parcel with no t
 """
 
 import numpy as np
+import shapely
 from shapely import contains_xy
 from shapely.geometry import mapping, shape
 
@@ -54,6 +55,39 @@ def region_bed(geom, terrain, step: float = SAMPLE_STEP_M) -> float | None:
     return round(float(np.min(terrain.surface(gx, gy))), 3)
 
 
+WET_STEP_M = 1.0
+WET_REACH_M = 8.0  # how far past the drawn outline the water may run to find its shoreline
+
+
+def wet_area(outline, terrain, water_y: float, step: float = WET_STEP_M):
+    """Where a flat water surface at ``water_y`` really lies: the terrain below it, reached from ``outline``.
+
+    The drawn outline of a water region is only a hint (traced on the coarse terrain grid); the shore is where the
+    ground rises above the level. This samples the terrain on a ``step`` grid within ``WET_REACH_M`` of the outline,
+    keeps the cells below ``water_y`` and returns the pieces that touch the outline (a pit that is not connected to it
+    stays dry), smoothed a little so the shore is not a staircase. Empty when nothing there is below the level.
+    """
+    from shapely.geometry import box as _box
+    from shapely.ops import unary_union
+
+    reach = outline.buffer(WET_REACH_M)
+    minx, miny, maxx, maxy = reach.bounds
+    gx, gy = np.meshgrid(np.arange(minx + step / 2, maxx, step), np.arange(miny + step / 2, maxy, step))
+    gx, gy = gx.ravel(), gy.ravel()
+    keep = contains_xy(reach, gx, gy) & contains_xy(terrain.coverage, gx, gy)
+    gx, gy = gx[keep], gy[keep]
+    if gx.size == 0:
+        return outline.__class__()
+    wet = terrain.surface(gx, gy) < water_y + 0.15  # a hair over, so the water tucks under the bank
+    gx, gy = gx[wet], gy[wet]
+    if gx.size == 0:
+        return outline.__class__()
+    cells = shapely.box(gx - step / 2, gy - step / 2, gx + step / 2, gy + step / 2)
+    shore = unary_union(cells).buffer(0.35).simplify(0.25)
+    parts = [g for g in getattr(shore, "geoms", [shore]) if g.intersects(outline)]
+    return unary_union(parts) if parts else outline.__class__()
+
+
 def build_water(parcels: list[dict], terrain, regions: dict | None = None) -> tuple[dict, list[str]]:
     """The ``water.json`` document for the parcels of kind ``water``, and the ids skipped for lack of terrain.
 
@@ -74,11 +108,21 @@ def build_water(parcels: list[dict], terrain, regions: dict | None = None) -> tu
     for rid, region in sorted((regions or {}).items()):
         if region.water_y is None:
             continue
-        bed = region_bed(region.polygon, terrain)
-        if bed is None or bed >= region.water_y:
+        wet = wet_area(region.polygon, terrain, region.water_y)
+        pieces = [g for g in getattr(wet, "geoms", [wet]) if not g.is_empty and g.area > 1.0]
+        beds = [region_bed(g, terrain) for g in pieces]
+        if not pieces or any(b is None for b in beds):
             skipped.append(rid)
             continue
-        bodies.append({"id": rid, "polygon": mapping(region.polygon), "surface_y": round(region.water_y, 3), "bed_y": bed})
+        for k, (g, bed) in enumerate(zip(pieces, beds, strict=True), 1):
+            bodies.append(
+                {
+                    "id": rid if len(pieces) == 1 else f"{rid}.{k}",
+                    "polygon": mapping(g),
+                    "surface_y": round(region.water_y, 3),
+                    "bed_y": min(bed, round(region.water_y - 0.05, 3)),
+                }
+            )
     doc = {
         "version": WATER_FORMAT_VERSION,
         "axes": "polygon: local metres, x east, y north (as parcels.json); heights: metres, as terrain.json",

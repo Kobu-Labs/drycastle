@@ -17,7 +17,9 @@ export and by ``region-run``, with the same code, so a hot-reloaded region equal
   of all regions with a higher ID, cut in 2D before draping. There is never more than one region
   on a point, so nothing z-fights and the order needs no per-ID lift.
 * **Water.** A region with ``water_y`` is a body of water: its mesh is flat at that height instead
-  of draped (the ground simply hides the parts of it that lie under the terrain), and the export
+  of draped, and covers the terrain below that level reached from the drawn outline (:func:`water.wet_area`:
+  the outline is only a hint, the shore is where the ground rises above the level; overlaps with other
+  regions are not resolved for water), and the export
   also writes it to ``water.json`` (see :func:`water.build_water`). The flat mesh sits
   ``WATER_VISUAL_DROP_M`` under the surface, so the shooter's own water surface, drawn at
   ``water_y``, always wins and nothing z-fights.
@@ -38,6 +40,7 @@ from suchohrad_pipeline.edits import Edits, region_ring
 from suchohrad_pipeline.meshes import Mesh, triangulate
 from suchohrad_pipeline.roads import road_mesh
 from suchohrad_pipeline.terrain import Terrain
+from suchohrad_pipeline.water import wet_area
 
 _MIN_AREA_M2 = 1e-6
 _RANK_STEP_M = 0.003  # roads.py lifts each higher road class by this much
@@ -276,7 +279,9 @@ def region_meshes(
             continue
         water_y = plan.regions[rid].water_y
         if water_y is not None:
-            mesh = flat_mesh(geom, plan.regions[rid].colour, water_y - WATER_VISUAL_DROP_M)
+            # the drawn outline is only a hint: the water lies wherever the terrain is below its level
+            wet = wet_area(plan.regions[rid].polygon, terrain, water_y)
+            mesh = flat_mesh(wet, plan.regions[rid].colour, water_y - WATER_VISUAL_DROP_M)
             if mesh.face_count:
                 out[rid] = mesh
             continue
