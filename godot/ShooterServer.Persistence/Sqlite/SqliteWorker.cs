@@ -13,6 +13,7 @@ internal sealed class SqliteWorker : IDisposable
     readonly SqliteConnection _conn;
     readonly Action<string> _log;
     readonly BlockingCollection<Action<SqliteConnection>> _queue = new();
+    public int QueueDepth => _queue.Count;
     readonly Thread _thread;
 
     SqliteWorker(SqliteConnection conn, Action<string> log)

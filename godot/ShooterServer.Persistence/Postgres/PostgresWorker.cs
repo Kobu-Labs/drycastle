@@ -12,6 +12,7 @@ internal sealed class PostgresWorker : IDisposable
     readonly NpgsqlConnection _conn;
     readonly Action<string> _log;
     readonly BlockingCollection<Action<NpgsqlConnection>> _queue = new();
+    public int QueueDepth => _queue.Count;
     readonly Thread _thread;
 
     PostgresWorker(NpgsqlConnection conn, Action<string> log)

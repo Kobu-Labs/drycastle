@@ -49,6 +49,7 @@ public partial class StreetLamps : Node3D
         BuildPool();
         Array.Fill(_slots, -1);
         Array.Fill(_shown, -2);
+        if (DisplayServer.GetName() == "headless") SetProcess(false); // the light pool is visual only; the headless server keeps the collision
     }
 
     public override void _Process(double delta)

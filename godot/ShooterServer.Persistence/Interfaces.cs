@@ -54,4 +54,6 @@ public interface IProgressionStore : IDisposable
     IUnlockRepository Unlocks { get; }
     IStatsRepository Stats { get; }
     ICamoRepository Camo { get; }
+    /// <summary>Writes and reads queued behind the database thread (0 for a store with no queue). Logged by the server telemetry line.</summary>
+    int QueueDepth => 0;
 }

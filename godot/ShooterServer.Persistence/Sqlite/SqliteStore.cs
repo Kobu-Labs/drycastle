@@ -30,6 +30,7 @@ public sealed class SqliteProgressionStore : IProgressionStore
     /// </summary>
     public static SqliteProgressionStore Open(string path, Action<string> log, LevelCurve curve) => new(SqliteWorker.Open(path, log), curve);
 
+    public int QueueDepth => _db.QueueDepth;
     public void Dispose() => _db.Dispose();
 
     static string Stamp(DateTime utc) => utc.ToString("O", CultureInfo.InvariantCulture);

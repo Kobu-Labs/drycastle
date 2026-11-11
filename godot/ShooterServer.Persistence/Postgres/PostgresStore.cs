@@ -29,6 +29,7 @@ public sealed class PostgresProgressionStore : IProgressionStore
     /// </summary>
     public static PostgresProgressionStore Open(string connectionString, Action<string> log, LevelCurve curve) => new(PostgresWorker.Open(connectionString, log), curve);
 
+    public int QueueDepth => _db.QueueDepth;
     public void Dispose() => _db.Dispose();
 
     static void Exec(NpgsqlConnection c, string sql, params (string Name, object? Value)[] args)

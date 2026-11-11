@@ -49,6 +49,9 @@ public partial class NetServer : Node
         public float Throttle, Steer;
         public PlayerProfile? Profile;
         public ProfileLoad? Loading;
+        public int PacketsThisTick;
+        public double SaveTokens = 10;
+        public long BytesOut;
     }
 
     public Node3D World = null!;
@@ -149,6 +152,7 @@ public partial class NetServer : Node
     public override void _PhysicsProcess(double delta)
     {
         var tickStartUs = Time.GetTicksUsec();
+        var catchUp = CatchUpTick(tickStartUs);
         if (Sim != null && Sim.Pump()) _host.Flush();
         _tick++;
         if (!_spawnsChecked)
@@ -157,6 +161,7 @@ public partial class NetServer : Node
             return; // not accepting connections until the spawn list is validated
         }
         _elapsed += delta;
+        foreach (var cl in _clients.Values) cl.PacketsThisTick = 0;
         Poll();
         CompleteProfileLoads();
         _match.Update();
@@ -167,7 +172,9 @@ public partial class NetServer : Node
         StepVehicles((float)delta);
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
-        SendSnapshots();
+        if (catchUp && LossTest == 0) _skippedSnapshots++; // the next regular tick sends the current state
+        else SendSnapshots();
+        TickTelemetry(tickStartUs, delta);
         LossTickEnd(tickStartUs);
         if (_clients.Count > _peakPlayers) _peakPlayers = _clients.Count;
         foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved;
@@ -290,7 +297,12 @@ public partial class NetServer : Node
                 case ENetConnection.EventType.Connect: _clients[peer] = new Client { Peer = peer }; break;
                 case ENetConnection.EventType.Disconnect: Drop(peer); break;
                 case ENetConnection.EventType.Receive:
-                    while (peer.GetAvailablePacketCount() > 0) OnPacket(peer, peer.GetPacket());
+                    while (peer.GetAvailablePacketCount() > 0)
+                    {
+                        var pkt = peer.GetPacket();
+                        if (_clients.TryGetValue(peer, out var rc) && ++rc.PacketsThisTick > PacketsPerTick) { _droppedPackets++; continue; }
+                        OnPacket(peer, pkt);
+                    }
                     break;
             }
         }
@@ -385,6 +397,7 @@ public partial class NetServer : Node
 
     void Tx(ENetPacketPeer peer, int chan, byte[] data, int flags)
     {
+        if (_clients.TryGetValue(peer, out var c)) c.BytesOut += data.Length;
         if (Sim != null) Sim.Send(peer, chan, data, flags); else peer.Send(chan, data, flags);
     }
 
@@ -637,7 +650,6 @@ public partial class NetServer : Node
         else if (attacker != null) Send(attacker, msg);
         if (_byId.TryGetValue(victim, out var v) && v != attacker) Send(v, msg);
         if (kill && victim != attackerId && attacker != null) { attacker.W.RefillReserves(); _refills++; }
-        GD.Print($"server: hit #{attackerId} -> #{victim} {damage:F0}{(head ? " head" : "")}{(backstab ? " backstab" : "")}{(kill ? " KILL" : "")}");
         return r;
     }
 

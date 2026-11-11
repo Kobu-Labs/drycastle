@@ -277,7 +277,7 @@ public partial class NetClient : Node
                 SfxPhase(Match.Phase);
                 if (Match.Restarts != _hudRestarts) { _hudRestarts = Match.Restarts; _hud?.ClearKills(); }
                 _hud?.SetMatch(Match.Phase, Match.TimeRemaining(Now), Match.Rows, Match.Winners, Match.NameOf);
-                GD.Print($"client {PlayerName}: {Match.ScoreboardText(Now)}"); break;
+                break;
             case EventKind.Kill:
                 var k = Match.KillFeed[^1];
                 _hud?.AddKill(k, Match.NameOf(k.Killer), Match.NameOf(k.Victim));
@@ -721,7 +721,6 @@ public partial class NetClient : Node
                 _hitLog.Add((Now, h));
                 SfxHit(h);
                 HudHit(h);
-                GD.Print($"client {PlayerName}: hit #{h.Attacker} -> #{h.Victim} {h.Damage}{(h.Headshot ? " head" : "")}{(h.Backstab ? " backstab" : "")}{(h.Kill ? " kill" : "")}");
                 break;
         }
     }

@@ -297,7 +297,9 @@ public partial class Shooter : Node3D
         if (server.AllowSandbox) GD.Print("server: sandbox mode allowed (--allow-sandbox, #156)");
         if (server.UnlockAll) GD.Print("server: dev mode, every unlock on (not saved to the database)");
         if (server.Sim != null) GD.Print($"server: net-sim {server.Sim}");
-        if (server.LossTest > 0 || server.Sim != null) Engine.MaxFps = 200; // delayed packets are released at frame rate
+        // The dedicated server idles at the tick rate instead of spinning a core; the test modes release delayed packets at frame rate.
+        Engine.MaxFps = server.LossTest > 0 || server.Sim != null ? 200 : 60;
+        Engine.MaxPhysicsStepsPerFrame = 2; // a slow tick drops simulation time instead of spiralling
         AddChild(server);
     }
 

@@ -144,6 +144,11 @@ public partial class NetServer
 
     void OnProfileMessage(Client c, ReliableMsg? m)
     {
+        if (m is SaveLoadoutMsg or SaveCamoMsg or EventMsg { Kind: (byte)EventKind.CopyLoadout or (byte)EventKind.ResetLoadout } && !AllowSave(c))
+        {
+            if (m is SaveLoadoutMsg sl0) AckSave(c, sl0.Loadout.Slot, sl0.Seq, "Saving too fast, try again in a moment.");
+            return;
+        }
         switch (m)
         {
             case SaveLoadoutMsg s: OnSaveLoadout(c, s); break;
