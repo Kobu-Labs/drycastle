@@ -8,12 +8,12 @@ namespace Suchohrad.ShooterCore;
 /// </summary>
 public static class StreakWeapons
 {
-    /// <summary>AC-130 gunship weapon (reserved; the aircraft streak uses it).</summary>
-    public const byte Ac130 = 244;
+    /// <summary>AC-130 gunship weapon (the AC-130 streak's kills).</summary>
+    public const byte Ac130 = SpecialWeapons.Ac130;
     /// <summary>Helper drone weapon (reserved).</summary>
     public const byte Helper = 245;
-    /// <summary>Attack helicopter weapon (reserved).</summary>
-    public const byte Heli = 246;
+    /// <summary>Attack helicopter weapon (the attack helicopter streak's kills).</summary>
+    public const byte Heli = SpecialWeapons.AttackHelicopter;
 
     /// <summary>Whether a kill-feed weapon id is a killstreak's own weapon.</summary>
     public static bool Is(byte weapon) =>

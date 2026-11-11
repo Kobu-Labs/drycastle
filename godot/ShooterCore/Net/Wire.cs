@@ -56,6 +56,8 @@ public enum EventKind : byte
     GunshipStatus = 60,
     /// <summary>Server to the owner only: the UAV's enemy pulse and seconds left (<see cref="UavEvents"/>), every second while up.</summary>
     UavPing = 90,
+    /// <summary>Server broadcast: an AC-130 shell burst (owner, centre, splash radius). See <see cref="Ac130Codec"/>. Kinds 120-129 belong to the AC-130 streak.</summary>
+    Ac130Blast = 120,
 }
 
 public abstract record ReliableMsg;

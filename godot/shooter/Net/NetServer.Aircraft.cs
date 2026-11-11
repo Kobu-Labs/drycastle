@@ -47,14 +47,16 @@ public partial class NetServer
     /// Feed the owner's inputs to it with <c>KillstreakUse.TakeControl(entityId, i => control.OnInput(i, _elapsed), freezesBody: true)</c>:
     /// the gunship's owner stands still while steering it.
     /// <paramref name="credit"/> is the weapon byte the owner's kills are credited under (null: the turret weapon's own);
-    /// <paramref name="weapons"/> limits the turret to these indices of killstreaks.json's gunship weapons (null: all).
+    /// <paramref name="weapons"/> limits the turret to these indices of killstreaks.json's gunship weapons (null: all);
+    /// <paramref name="ac130"/> picks the AC-130's section (its own weapons and shells) instead of the gunship's.
     /// Rockets are not credited under <paramref name="credit"/>: a rocket is the rocket sim's, so use a cannon-only control for a streak.
     /// </summary>
-    public GunshipControl GunshipFor(ushort owner, Aircraft aircraft, byte? credit = null, IReadOnlyList<int>? weapons = null)
+    public GunshipControl GunshipFor(ushort owner, Aircraft aircraft, byte? credit = null, IReadOnlyList<int>? weapons = null, bool ac130 = false)
     {
-        var def = Killstreaks?.Gunship ?? throw new InvalidOperationException("killstreaks.json has no gunship");
+        var def = (ac130 ? Killstreaks?.Ac130 : Killstreaks?.Gunship) ?? throw new InvalidOperationException($"killstreaks.json has no {(ac130 ? "ac130" : "gunship")}");
+        var index = ac130 ? _ac130WeaponIndex : _gunshipWeaponIndex;
         return new GunshipControl(def, aircraft,
-            shot => ResolveGunshipShot(owner, shot, credit),
+            shot => ResolveGunshipShot(owner, shot, def, index, credit),
             status => SendGunshipStatus(owner, status),
             weapons: weapons);
     }
@@ -67,13 +69,17 @@ public partial class NetServer
         if (_byId.TryGetValue(owner, out var c)) Send(c, new EventMsg((byte)EventKind.GunshipStatus, GunshipCodec.Encode(s)));
     }
 
-    /// <summary>One round from a gunship turret: a cannon round is a hitscan from the turret; a rocket joins the rocket sim.</summary>
-    void ResolveGunshipShot(ushort owner, GunshipShot shot, byte? credit)
+    /// <summary>
+    /// One round from a turret: a cannon round is a hitscan from the turret; a rocket joins the rocket sim; a shell is a trace
+    /// that bursts at its first hit (<see cref="Ac130Detonate"/>). <paramref name="credit"/> is the kill-feed weapon when the
+    /// turret credits its kills to a special weapon (the helicopter, the AC-130); null credits the weapons.json weapon of the round.
+    /// </summary>
+    void ResolveGunshipShot(ushort owner, GunshipShot shot, GunshipDef gun, int[] weaponIndex, byte? credit)
     {
-        var gun = Killstreaks.Gunship!;
         var def = gun.Weapons[shot.WeaponIndex];
-        var weapon = _gunshipWeaponIndex[shot.WeaponIndex];
+        var weapon = weaponIndex[shot.WeaponIndex];
         var w = Weapons.Weapons[weapon];
+        var by = credit ?? (byte)weapon;
         if (def.Kind == GunshipWeaponKind.Rocket)
         {
             var rocket = new Rocket
@@ -95,10 +101,14 @@ public partial class NetServer
         var wall = WorldHit(from, dir, range, out var shotCar);
         var hit = HitMath.Raycast(shot.Origin, shot.Direction, range, wall, LiveTargets(), owner);
         var end = shot.Origin + shot.Direction * (hit?.Distance ?? Math.Min(wall, range));
-        var killedWith = credit ?? (byte)weapon; // a streak credits its kills under its own weapon id
         BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(owner, (byte)weapon, shot.Origin, end)));
-        if (hit is { } h) Deal(owner, killedWith, h.Id, def.Damage, false, false);
+        if (def.Kind == GunshipWeaponKind.Shell)
+        {
+            Ac130Detonate(owner, end, def, hit is { } sh ? sh.Id : null, shotCar as ServerCar);
+            return;
+        }
+        if (hit is { } h) Deal(owner, by, h.Id, def.Damage, false, false);
         else if (shotCar != null && Vehicles != null && wall <= range)
-            DamageVehicle(shotCar, def.Damage * Vehicles.BulletDamageMultiplier, owner, killedWith, 0);
+            DamageVehicle(shotCar, def.Damage * Vehicles.BulletDamageMultiplier, owner, by, 0);
     }
 }

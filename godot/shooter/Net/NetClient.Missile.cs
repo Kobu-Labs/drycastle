@@ -45,6 +45,7 @@ public partial class NetClient
     /// <summary>Owner-only: the streak was used. The attack missile hands the owner its point of view.</summary>
     void OnStreakUsed(string streakId)
     {
+        if (streakId == Ac130Streak.StreakId) Ac130Used();
         if (streakId != AttackMissileStreak.StreakId) return;
         _controlling = true;
         _povSince = Now;
@@ -53,6 +54,7 @@ public partial class NetClient
     /// <summary>Owner-only: the streak ended (impact, timeout, or death). The point of view goes back to the body.</summary>
     void OnStreakEnded(string streakId)
     {
+        if (streakId == Ac130Streak.StreakId) Ac130Ended();
         if (streakId == AttackMissileStreak.StreakId) _controlling = false;
     }
 

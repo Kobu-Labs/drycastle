@@ -14,7 +14,7 @@
       "perk_weights": { "fleet_foot": 22, "quick_hands": 22, "swift_swap": 16, "flak_jacket": 14, "steady_lung": 10, "tank_hunter": 8, "ghost": 5, "hot_streak": 3 } },
     { "id": "attack_helicopter", "name": "Attack Helicopter", "kills_required": 10, "unlock_level": 9, "max_active": 1, "duration_seconds": 45, "control": "pov" },
     { "id": "helicopter_helper", "name": "Helicopter Helper", "kills_required": 15, "unlock_level": 11, "max_active": 1, "duration_seconds": 0, "control": "none" },
-    { "id": "ac130", "name": "AC-130", "kills_required": 18, "unlock_level": 14, "max_active": 1, "duration_seconds": 0, "control": "pov" },
+    { "id": "ac130", "name": "AC-130", "kills_required": 18, "unlock_level": 14, "max_active": 1, "duration_seconds": 40, "control": "pov" },
     { "id": "moab", "name": "MOAB", "kills_required": 24, "unlock_level": 20, "max_active": 1, "duration_seconds": 5, "control": "none" }
   ],
   "aircraft": [
@@ -26,6 +26,15 @@
     "weapons": [
       { "id": "cannon", "name": "Cannon", "kind": "cannon", "weapon_id": "m82", "damage": 40, "range_m": 400, "interval_s": 0.15, "spread_deg": 0.6, "ammo": 60, "heat_per_shot": 4, "heat_max": 100, "heat_cool_per_s": 10 },
       { "id": "rockets", "name": "Rockets", "kind": "rocket", "weapon_id": "bazooka", "damage": 0, "range_m": 600, "interval_s": 1.2, "spread_deg": 0.3, "ammo": 12, "heat_per_shot": 0, "heat_max": 100, "heat_cool_per_s": 0 }
+    ]
+  },
+  "ac130": {
+    "yaw_limit_deg": 80, "pitch_min_deg": -75, "pitch_max_deg": -5, "zoom_levels": [1, 2.5, 4],
+    "weapons": [
+      { "id": "gun25", "name": "25 mm", "kind": "cannon", "weapon_id": "m249", "damage": 22, "range_m": 500, "interval_s": 0.1, "spread_deg": 1.2, "ammo": 200, "heat_per_shot": 3, "heat_max": 100, "heat_cool_per_s": 12 },
+      { "id": "gun40", "name": "40 mm", "kind": "cannon", "weapon_id": "m82", "damage": 60, "range_m": 600, "interval_s": 0.5, "spread_deg": 0.8, "ammo": 60, "heat_per_shot": 12, "heat_max": 100, "heat_cool_per_s": 15 },
+      { "id": "howitzer", "name": "105 mm", "kind": "shell", "weapon_id": "bazooka", "damage": 150, "range_m": 800, "interval_s": 6, "spread_deg": 0.3, "ammo": 6, "heat_per_shot": 0, "heat_max": 100, "heat_cool_per_s": 0,
+        "splash": { "radius": 14, "full_damage_radius": 4, "edge_damage": 25, "self_damage_multiplier": 0.5, "knockback_speed": 8 } }
     ]
   }
 }

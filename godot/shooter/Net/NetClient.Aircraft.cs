@@ -88,7 +88,7 @@ public partial class NetClient
             if (_myId != 0 && e.State.Owner == _myId) mineId = id;
         }
 
-        if (mineId != 0 && _aircraft.TryGetValue(mineId, out var mine) && !Dead && _me != null && Killstreaks?.Gunship is { } gun)
+        if (mineId != 0 && _aircraft.TryGetValue(mineId, out var mine) && !Dead && _me != null && GunDef() is { } gun)
         {
             if (_gunship != mine) { _gunship = mine; _gunDirty = true; }
             if (WorldEntities.Entities.TryGetValue(mineId, out var me) && me.Buf.At(rt) is { } ms) _gunYaw = ms.Yaw;
@@ -96,8 +96,9 @@ public partial class NetClient
             var mount = mine.Model.GlobalPosition - Vector3.Up * GunshipControl.TurretDropM;
             _me.Turret(mount, yaw, pitch);
             _me.ZoomFov = GameSettings.Current.Fov / (_gunStatus.Zoom < gun.ZoomLevels.Count ? gun.ZoomLevels[_gunStatus.Zoom] : 1f);
-            if (_gunDirty) { _gunOverlay.Present(_gunStatus, gun, HeliCycleWeapons); _gunDirty = false; }
-            var (timer, kills) = HeliClock();
+            if (_gunDirty) { _gunOverlay.Present(_gunStatus, gun, HeliCycleWeapons && !_ac130Active, _ac130Active); _gunDirty = false; }
+            // the timed streak's clock: the helicopter's, or the AC-130's time left (whole seconds, its kills are not counted here)
+            var (timer, kills) = _ac130Active ? (Strings.F("ac130.timer", (int)Math.Ceiling(Ac130SecondsLeft)), "") : HeliClock();
             _gunOverlay.SetClock(timer, kills);
         }
         else if (_gunship != null) EndGunship();
@@ -120,7 +121,7 @@ public partial class NetClient
     /// </summary>
     void ClampGunnerView(ref MoveInput mi)
     {
-        if (_gunship == null || _me == null || Killstreaks?.Gunship is not { } gun) return;
+        if (_gunship == null || _me == null || GunDef() is not { } gun) return;
         var (yaw, pitch) = GunshipAim.Clamp(_gunYaw, mi.Yaw, _me.Pitch, gun);
         mi.Yaw = yaw;
         _me.Pitch = pitch;

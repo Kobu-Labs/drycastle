@@ -30,6 +30,8 @@ public sealed class GunshipControl
     readonly double[] _nextShot;
     double _coolAt = double.NaN;
     bool _aimWas, _reloadWas;
+    /// <summary>The hotbar key last seen (1 = the first weapon); only a change of it selects a weapon, so Reload still cycles.</summary>
+    byte _key;
 
     /// <param name="weapons">Weapon indices the owner may use, in cycle order; null means all of the turret's weapons.</param>
     public GunshipControl(GunshipDef def, Aircraft aircraft, Action<GunshipShot> fire, Action<GunshipStatus> status, Random? rng = null, IReadOnlyList<int>? weapons = null)
@@ -84,6 +86,13 @@ public sealed class GunshipControl
         if (aim && !_aimWas) { Zoom = (Zoom + 1) % _def.ZoomLevels.Count; changed = true; }
         if (reload && !_reloadWas) { _slot = (_slot + 1) % _weapons.Length; changed = true; }
         _aimWas = aim; _reloadWas = reload;
+        // the hotbar key picks the weapon (key 1 is the turret's first weapon, the AC-130's 1-3); a key outside the subset is ignored
+        if (input.Slot != _key)
+        {
+            _key = input.Slot;
+            var pick = input.Slot >= 1 ? Array.IndexOf(_weapons, input.Slot - 1) : -1;
+            if (pick >= 0 && pick != _slot) { _slot = pick; changed = true; }
+        }
 
         if (fire) changed |= TryFire(now);
         if (changed) _status(Status());

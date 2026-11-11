@@ -6,6 +6,7 @@ uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform float amount = 1.0;
 uniform float gain = 1.15;     // brightness before the palette lookup
 uniform float scanline = 0.035; // depth of the scanline, 0 for none
+uniform float mono = 0.0;       // 1 for the AC-130's black-and-white view: white hot, no palette
 
 vec3 heat(float t) {
 	vec3 cold = vec3(0.02, 0.00, 0.08);
@@ -22,7 +23,7 @@ vec3 heat(float t) {
 void fragment() {
 	vec3 src = textureLod(screen_tex, SCREEN_UV, 0.0).rgb;
 	float lum = clamp(dot(src, vec3(0.299, 0.587, 0.114)) * gain, 0.0, 1.0);
-	vec3 graded = heat(lum);
+	vec3 graded = mix(heat(lum), vec3(lum), mono);
 	graded *= 1.0 - scanline * (0.5 + 0.5 * sin(SCREEN_UV.y * 1400.0));
 	COLOR = vec4(mix(src, graded, amount), 1.0);
 }
