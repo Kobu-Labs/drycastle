@@ -169,6 +169,7 @@ public partial class NetClient : Node
         RenderRemotes();
         RenderCars();
         RenderRockets();
+        RenderWater();
         UpdateViewmodel();
         UpdateShake();
         UpdateHud();
@@ -650,6 +651,7 @@ public partial class NetClient : Node
                 if (!melee) { if (sh.Shooter == _myId) _viewmodel?.Flash(0.4f); else if (_remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
                 ShotFx.Spawn(World, MuzzleOf(sh.Shooter, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV), endV, melee);
                 if (!melee) BulletHoles.PlaceFromShot(World, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV);
+                if (!melee) BulletSurfaceHit(new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV);
                 break;
             case EventKind.PelletFan when WeaponCodec.DecodePelletFan(payload) is { } pf:
                 OnPelletFan(pf);
