@@ -89,6 +89,10 @@ public partial class NetServer
     void HelperRound(ushort owner, ushort target, NVec3 from, NVec3 end, bool hit, float damage)
     {
         BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(0, (byte)_helperWeaponIndex, from, end)));
-        if (hit) Deal(owner, SpecialWeapons.Helper, target, damage, false, false);
+        if (hit)
+        {
+            BroadcastImpact(end, ImpactSize.Puff, body: true); // a round that lands: a small burst at the body (ticket #154)
+            Deal(owner, SpecialWeapons.Helper, target, damage, false, false);
+        }
     }
 }

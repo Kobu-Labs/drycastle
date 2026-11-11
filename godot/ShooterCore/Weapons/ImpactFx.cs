@@ -4,10 +4,32 @@ using System.Numerics;
 namespace Suchohrad.ShooterCore;
 
 /// <summary>What a shot or shell hit, for the impact particles. Chosen on the server so every client draws the same thing.</summary>
-public enum SurfaceKind : byte { Ground = 0, Road = 1, Building = 2, Water = 3, Metal = 4, Flesh = 5 }
+public enum SurfaceKind : byte { Ground = 0, Road = 1, Building = 2, Water = 3, Metal = 4, Flesh = 5, Wood = 6, Foliage = 7 }
 
 /// <summary>How big an impact burst is: a small puff, a burst, or a plume with a shockwave ring.</summary>
 public enum ImpactSize : byte { Puff = 0, Burst = 1, Plume = 2 }
+
+/// <summary>
+/// The collider group of a hit that is not a body or a vehicle, from what the server knows about the point: whether it is on a
+/// road, the kind of the parcel it is in, and how far above the ground it is. Ground-level hits are the terrain (no group).
+/// </summary>
+public static class ImpactGroups
+{
+    /// <summary>Height above the ground from which a hit is a structure or a prop, not the terrain (metres).</summary>
+    public const float StructureHeightM = 0.5f;
+
+    public static string? For(bool onRoad, string? parcelKind, float aboveGroundM)
+    {
+        if (onRoad) return "road";
+        if (parcelKind == null || aboveGroundM < StructureHeightM) return null;
+        return parcelKind switch
+        {
+            "building_plot" => "building",
+            "forest" => "foliage",
+            _ => "wood", // fences and the like in gardens, fields and other parcels
+        };
+    }
+}
 
 public static class SurfaceClassifier
 {
@@ -24,6 +46,8 @@ public static class SurfaceClassifier
         {
             "road" => SurfaceKind.Road,
             "building" or "wall" => SurfaceKind.Building,
+            "wood" => SurfaceKind.Wood,
+            "foliage" => SurfaceKind.Foliage,
             _ => SurfaceKind.Ground,
         };
     }
@@ -60,7 +84,7 @@ public static class ImpactCodec
     {
         if (d.Length != Bytes) return null;
         var at = new Vector3(BinaryPrimitives.ReadSingleLittleEndian(d), BinaryPrimitives.ReadSingleLittleEndian(d.Slice(4)), BinaryPrimitives.ReadSingleLittleEndian(d.Slice(8)));
-        if (d[12] > (byte)SurfaceKind.Flesh || d[13] > (byte)ImpactSize.Plume) return null;
+        if (d[12] > (byte)SurfaceKind.Foliage || d[13] > (byte)ImpactSize.Plume) return null;
         return new ImpactInfo(at, (SurfaceKind)d[12], (ImpactSize)d[13]);
     }
 }

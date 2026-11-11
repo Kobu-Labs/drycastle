@@ -74,6 +74,7 @@ public partial class Hud : CanvasLayer
     float _timeLeft; double _timeAt; bool _timeRunning; int _timeShown = -1;
     MatchPhase _phase = MatchPhase.Waiting;
     // kill feed
+    Control _feedRoot = null!, _feedBox = null!;
     readonly PanelContainer[] _feed = new PanelContainer[FeedRows];
     readonly Label[] _feedKiller = new Label[FeedRows], _feedWeapon = new Label[FeedRows], _feedVictim = new Label[FeedRows];
     readonly List<(KillMsg Msg, string Killer, string Victim)> _kills = new();
@@ -404,9 +405,15 @@ public partial class Hud : CanvasLayer
 
     void BuildFeed()
     {
+        // the feed sits beside the panels root, not under it, so a control session can hide the panels and keep the feed (ticket #154)
+        _feedRoot = new Control { Theme = _root.Theme, MouseFilter = Control.MouseFilterEnum.Ignore };
+        _feedRoot.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        AddChild(_feedRoot);
         var v = Place(new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore }, 1, 0, -ShooterTheme.Margin, ShooterTheme.Margin, 480, FeedRows * 40 + (FeedRows - 1) * 4);
+        v.PivotOffset = new Vector2(480, 0); // the compact feed shrinks towards the top right corner
         v.AddThemeConstantOverride("separation", 4);
-        _root.AddChild(v);
+        _feedRoot.AddChild(v);
+        _feedBox = v;
         for (var i = 0; i < FeedRows; i++)
         {
             var row = P("HudRow"); row.CustomMinimumSize = new Vector2(0, 40); row.Visible = false;
@@ -557,10 +564,11 @@ public partial class Hud : CanvasLayer
     {
         _kills.Add((k, killer, victim)); _killTimes.Add(Now);
         if (_kills.Count > 64) { _kills.RemoveRange(0, 32); _killTimes.RemoveRange(0, 32); }
+        AddOwnKill(k, killer, victim);
         _feedShown = (-1, -1);
     }
 
-    public void ClearKills() { _kills.Clear(); _killTimes.Clear(); _feedShown = (-1, -1); }
+    public void ClearKills() { _kills.Clear(); _killTimes.Clear(); _mineKills.Clear(); _mineTimes.Clear(); _feedShown = (-1, -1); }
 
     /// <summary>Direction of a damage source relative to the view (radians, 0 = ahead, clockwise).</summary>
     public void Damage(float angle)
@@ -698,13 +706,16 @@ public partial class Hud : CanvasLayer
 
     void UpdateFeed(double now)
     {
-        var w = HudLogic.FeedWindow(_killTimes, now);
+        // a control session shows only the owner's kills, compactly (ticket #154); the rows and their text are the same
+        var compact = ControlMode;
+        var w = compact ? HudLogic.FeedWindow(_mineTimes, now, ShooterTheme.FeedCompactRows) : HudLogic.FeedWindow(_killTimes, now);
         if (w == _feedShown) return;
         _feedShown = w;
+        var list = compact ? _mineKills : _kills;
         for (var i = 0; i < FeedRows; i++)
         {
             if (i >= w.Count) { _feed[i].Visible = false; continue; }
-            var (k, killer, victim) = _kills[w.Start + i];
+            var (k, killer, victim) = list[w.Start + i];
             var mine = k.Killer == MyId || k.Victim == MyId;
             var suicide = k.Killer == k.Victim;
             _feed[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";

@@ -579,6 +579,7 @@ public partial class NetServer : Node
             if (hit is { } h) Deal(c.Id, (byte)shot.WeaponIndex, h.Id, HitMath.HitscanDamage(w, h.Distance, h.Head), h.Head, false);
             else if (shotCar != null && Vehicles != null && wall <= range)
                 DamageVehicle(shotCar, HitMath.HitscanDamage(w, wall, false) * Vehicles.BulletDamageMultiplier, c.Id, (byte)shot.WeaponIndex, 0);
+            else if (shotCar == null && wall <= range) BulletPuff(N(eye + dir * wall)); // dust where a bullet meets the ground or a wall (ticket #154)
         }
         else if (w.Kind == WeaponKind.Projectile)
         {
@@ -665,6 +666,7 @@ public partial class NetServer : Node
         _explosions++;
         if (Vehicles != null) RocketVsVehicles(pos, w, r.Owner, r.Weapon, directCar);
         BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(r.Id, r.Owner, r.Weapon, N(pos))));
+        BroadcastImpact(N(pos), ImpactSize.Plume, body: direct != null && directCar == null, vehicle: directCar != null); // rockets throw up a plume (ticket #154)
         foreach (var t in LiveTargets())
         {
             var isDirect = direct == t.Id;

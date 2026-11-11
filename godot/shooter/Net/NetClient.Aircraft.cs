@@ -119,13 +119,21 @@ public partial class NetClient
     }
 
     /// <summary>
+    /// The look in world space at the turret (the mouse's, never clamped). It is kept apart from the clamped look that is sent
+    /// and drawn, so a view pinned at the limit does not ratchet with the orbit (ticket #154).
+    /// </summary>
+    float _gunAimYaw;
+
+    /// <summary>
     /// At the turret the look is clamped to the turret's limits before it is sent, so the view the player sees is the one the
-    /// server will apply. Called on the input tick, before the yaw is stored.
+    /// server will apply. Called on the input tick, before the yaw is stored. The world-space look is kept in
+    /// <see cref="_gunAimYaw"/>; the caller stores it, not the clamped value, as the player's yaw.
     /// </summary>
     void ClampGunnerView(ref MoveInput mi)
     {
         if (_gunship == null || _me == null || GunDef() is not { } gun) return;
-        var (yaw, pitch) = GunshipAim.Clamp(_gunYaw, mi.Yaw, _me.Pitch, gun);
+        _gunAimYaw = mi.Yaw;
+        var (yaw, pitch) = GunshipAim.Clamp(_gunYaw, _gunAimYaw, _me.Pitch, gun);
         mi.Yaw = yaw;
         _me.Pitch = pitch;
     }

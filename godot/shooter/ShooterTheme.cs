@@ -14,6 +14,9 @@ public static class ShooterTheme
     public const int Space = 8;
     public const int Margin = 4 * Space;   // screen edge safe margin
     public const int Radius = 4;
+    /// <summary>The compact kill feed of a control session (ticket #154): scale of the feed and its row count.</summary>
+    public const float FeedCompactScale = 0.75f;
+    public const int FeedCompactRows = 3;
     public const int Border = 1, BorderStrong = 3;
 
     // text sizes (five); body text is 20 and nothing is under 16 at 1080p
