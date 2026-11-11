@@ -12,13 +12,39 @@ namespace Suchohrad.Shooter;
 public partial class NetServer
 {
     CorpseBook _corpses = null!;
+    /// <summary>The throw a killing blow gave its victim (a blast's knockback, a car's run-over), set before the damage and used by <see cref="SpawnCorpse"/>. The corpse flies off with it.</summary>
+    readonly Dictionary<ushort, NVec3> _deathPush = new();
+
+    /// <summary>Records the throw for a victim about to take damage; <see cref="ClearPush"/> drops it when the hit did not kill.</summary>
+    void PushOnDeath(ushort victim, NVec3 velocity) => _deathPush[victim] = velocity;
+
+    void ClearPush(ushort victim, DamageResult result) { if (result != DamageResult.Killed) _deathPush.Remove(victim); }
 
     /// <summary>Called at a player's death, before the respawn: the corpse keeps the weapon the player had in the primary position.</summary>
     void SpawnCorpse(ushort victim)
     {
         if (!_byId.TryGetValue(victim, out var c) || c.W == null) return;
         var weapon = c.W.HotbarWeapon(CorpseRules.PrimaryPos);
-        _corpses.Add(new Corpse(victim, N(c.Body.GlobalPosition), c.Body.Yaw, weapon, c.W.RoundsOf(weapon)));
+        var corpse = new Corpse(victim, N(c.Body.GlobalPosition), c.Body.Yaw, weapon, c.W.RoundsOf(weapon));
+        if (_deathPush.Remove(victim, out var push)) corpse.Launch(push);
+        _corpses.Add(corpse);
+    }
+
+    /// <summary>Flies the thrown corpses one tick; they stop against the world (not the cars: a run-over body starts inside one).</summary>
+    void StepCorpses(float dt)
+    {
+        foreach (var body in _corpses.Bodies)
+        {
+            if (!body.Airborne) continue;
+            body.Fly(dt, (from, dir, len) =>
+            {
+                var a = new Vector3(from.X, from.Y, from.Z);
+                var q = PhysicsRayQueryParameters3D.Create(a, a + new Vector3(dir.X, dir.Y, dir.Z) * len);
+                q.CollisionMask = CollisionLayers.World;
+                var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+                return r.Count == 0 ? null : a.DistanceTo(r["position"].AsVector3());
+            });
+        }
     }
 
     void OnPickUpCorpse(Client c, byte[] payload)

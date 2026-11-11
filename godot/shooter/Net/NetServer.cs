@@ -165,6 +165,7 @@ public partial class NetServer : Node
         StreakTick((float)delta);
         foreach (var c in _clients.Values.ToList()) if (c.Joined) SimulateClient(c, (float)delta);
         StepRockets((float)delta);
+        StepCorpses((float)delta);
         StepVehicles((float)delta);
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
@@ -693,15 +694,13 @@ public partial class NetServer : Node
             var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, self);
             if (dmg <= 0) continue;
             if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
+            var k = ProjectileMath.Knockback(w, N(pos), HitMath.Centre(t), isDirect ? 1f : ProjectileMath.SplashFraction(w, dist));
+            PushOnDeath(t.Id, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
             var res = Deal(r.Owner, r.Weapon, t.Id, dmg, false, false);
+            ClearPush(t.Id, res);
             if (res == DamageResult.Ignored) continue; // spawn protected: neither damage nor knockback
             if (isDirect) _directHits++; else if (self) _selfHits++; else _splashHits++;
-            if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v))
-            {
-                var center = HitMath.Centre(t);
-                var k = ProjectileMath.Knockback(w, N(pos), center, isDirect ? 1f : ProjectileMath.SplashFraction(w, dist));
-                if (k != NVec3.Zero) { v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z)); _knocked++; }
-            }
+            if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) { v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z)); _knocked++; }
         }
     }
 

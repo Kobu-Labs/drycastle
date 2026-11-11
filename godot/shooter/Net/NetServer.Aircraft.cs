@@ -214,12 +214,14 @@ public partial class NetServer
                 if (h.Direct && car.Destroyed) kill = true;
                 continue;
             }
+            var t = targets.FirstOrDefault(x => x.Id == h.TargetId);
+            var k = ProjectileMath.Knockback(splash.KnockbackSpeed, at, HitMath.Centre(t), h.Fraction);
+            PushOnDeath(h.TargetId, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
             var res = Deal(owner, credit, h.TargetId, h.Damage, false, false);
+            ClearPush(h.TargetId, res);
             if (res == DamageResult.Ignored) continue; // spawn protected or a pilot at the gun: neither damage nor knockback
             if (h.Direct && res == DamageResult.Killed) kill = true;
             if (res == DamageResult.Killed || !_byId.TryGetValue(h.TargetId, out var v)) continue;
-            var t = targets.FirstOrDefault(x => x.Id == h.TargetId);
-            var k = ProjectileMath.Knockback(splash.KnockbackSpeed, at, HitMath.Centre(t), h.Fraction);
             if (k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
         }
         return kill;

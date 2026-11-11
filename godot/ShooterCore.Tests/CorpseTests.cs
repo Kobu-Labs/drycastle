@@ -225,3 +225,69 @@ public class CorpseTests
         Assert.False(CorpseCodec.TryDecodeHotbar(new byte[] { 3, 1 }, out _));
     }
 }
+
+/// <summary>The ragdoll: a body killed by a blast or a car is thrown, flies under gravity and lands.</summary>
+public class CorpseThrowTests
+{
+    static float? Floor(Vector3 from, Vector3 dir, float len)
+    {
+        if (dir.Y >= -0.5f) return null;                // only the ground, at y = 0
+        var d = from.Y / -dir.Y;
+        return d >= 0 && d <= len ? d : null;
+    }
+
+    [Fact]
+    public void ThrownBodyFliesAwayAndLands()
+    {
+        var c = new Corpse(1, Vector3.Zero, 0, 0, 0);
+        c.Launch(CorpseRules.ThrowFromBlast(new Vector3(4.5f, 0, 0)));
+        Assert.True(c.Airborne);
+        for (var i = 0; i < 600 && c.Airborne; i++) c.Fly(1f / 30, Floor);
+        Assert.False(c.Airborne);
+        Assert.True(c.Position.X > 5f, $"thrown {c.Position.X:F1} m");
+        Assert.InRange(c.Position.Y, -0.01f, 0.01f);
+        Assert.Equal(Vector3.Zero, c.Velocity);
+    }
+
+    [Fact]
+    public void NoPushLeavesTheBodyWhereItFell()
+    {
+        var c = new Corpse(1, new Vector3(3, 0, 3), 0, 0, 0);
+        c.Launch(Vector3.Zero);
+        Assert.False(c.Airborne);
+        Assert.Equal(0f, c.Serialize().PitchRad);
+    }
+
+    [Fact]
+    public void ABodyInFlightIsFlaggedInItsState()
+    {
+        var c = new Corpse(1, Vector3.Zero, 0, 0, 0);
+        c.Launch(new Vector3(5, 0, 0));
+        Assert.True(c.Serialize().PitchRad > CorpseRules.FlightPitch * 0.5f);
+    }
+
+    [Fact]
+    public void AWallStopsTheBodyAndItDropsStraightDown()
+    {
+        float? Wall(Vector3 from, Vector3 dir, float len) => dir.X > 0.5f && 4f - from.X is var d && d >= 0 && d <= len ? d : Floor(from, dir, len);
+        var c = new Corpse(1, Vector3.Zero, 0, 0, 0);
+        c.Launch(new Vector3(20, 3, 0));
+        for (var i = 0; i < 600 && c.Airborne; i++) c.Fly(1f / 30, Wall);
+        Assert.InRange(c.Position.X, 3f, 4f);
+    }
+
+    [Fact]
+    public void RoadkillIsThrownAheadOfTheCar()
+    {
+        var v = CorpseRules.ThrowFromCar(new Vector3(0, 0, -1), 15f);
+        Assert.True(v.Z < -10f && v.Y > 0);
+    }
+
+    [Fact]
+    public void ThrowSpeedIsCapped()
+    {
+        var c = new Corpse(1, Vector3.Zero, 0, 0, 0);
+        c.Launch(new Vector3(500, 0, 0));
+        Assert.True(c.Velocity.Length() <= CorpseRules.MaxThrowSpeed + 0.01f);
+    }
+}

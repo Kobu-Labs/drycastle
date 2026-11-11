@@ -342,15 +342,13 @@ public partial class NetServer
             var self = t.Id == attacker;
             if (self) dmg = MathF.Max(1f, MathF.Round(dmg * e.Splash.SelfDamageMultiplier));
             if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
+            var k = ProjectileMath.Knockback(e.Splash.KnockbackSpeed, N(at), HitMath.Centre(t), dmg / e.Damage);
+            PushOnDeath(t.Id, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
             var res = Deal(attacker, weapon, t.Id, dmg, false, false);
+            ClearPush(t.Id, res);
             if (res == DamageResult.Ignored) continue;
             _blastHits++;
-            if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v))
-            {
-                var centre = HitMath.Centre(t);
-                var k = ProjectileMath.Knockback(e.Splash.KnockbackSpeed, N(at), centre, dmg / e.Damage);
-                if (k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
-            }
+            if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
         }
         foreach (var other in _cars)
         {
@@ -396,7 +394,10 @@ public partial class NetServer
             if (Mathf.Abs(lx) > car.HalfWidth + MoveConsts.CapsuleRadius || Mathf.Abs(lz) > car.HalfLength + MoveConsts.CapsuleRadius) continue;
             if (car.HitCooldown.TryGetValue(t.Id, out var until) && _elapsed < until) continue;
             car.HitCooldown[t.Id] = _elapsed + RunOverCooldown;
+            var fwdN = N(fwd);
+            PushOnDeath(t.Id, CorpseRules.ThrowFromCar(fwdN, car.State.Speed)); // a roadkill is thrown ahead of the car (the ragdoll)
             var r = Deal(driver.Id, SpecialWeapons.Vehicle, t.Id, dmg, false, false, KillCause.Roadkill);
+            ClearPush(t.Id, r);
             if (r == DamageResult.Ignored) continue;
             _runOvers++;
             if (r == DamageResult.Killed) _runOverKills++;
