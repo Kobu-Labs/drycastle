@@ -92,7 +92,7 @@ public partial class NetServer
     PlayerProfile GuestProfile()
     {
         var slots = Enumerable.Range(0, Loadout.SlotCount).Select(i => LoadoutRules.DefaultLoadout(i, Weapons)).ToArray();
-        return new PlayerProfile { Persist = false, Level = LevelCurve.LevelForXp(0), Loadouts = slots };
+        return new PlayerProfile { Persist = false, Level = 1, Loadouts = slots };
     }
 
     /// <summary>Makes <paramref name="p"/> the client's profile and stores a changed display name (the name the player typed).</summary>
