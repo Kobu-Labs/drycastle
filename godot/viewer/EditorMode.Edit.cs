@@ -217,7 +217,7 @@ public partial class EditorMode
         var ok = Mutate(root =>
         {
             var errors = EditModel.Apply(root, items);
-            return errors.Count > 0 ? (false, "not saved: " + errors[0]) : (true, items.Count == 1 ? items[0].Target.Header : $"{items.Count} targets");
+            return errors.Count > 0 ? (false, "not saved: " + ObjectEdits.Summarise(errors)) : (true, items.Count == 1 ? items[0].Target.Header : $"{items.Count} targets");
         }, "apply " + (items.Count == 1 ? items[0].Target.Header : $"{items.Count} targets"));
         if (!ok) return false;
         _pending.Clear();

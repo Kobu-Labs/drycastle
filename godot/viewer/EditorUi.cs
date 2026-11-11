@@ -240,7 +240,12 @@ public partial class EditorMode
         _statusLabel = new Label { MouseFilter = Control.MouseFilterEnum.Ignore, CustomMinimumSize = new Vector2(0, 24) };
         _hintLabel = new Label { ThemeTypeVariation = "Dim", MouseFilter = Control.MouseFilterEnum.Ignore, ClipText = true };
         _hintLabel.Text = DefaultHint;
-        sbox.AddChild(_statusLabel);
+        var srow = new HBoxContainer();
+        _statusLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        _unsavedLabel = new Label { ThemeTypeVariation = "Warn", MouseFilter = Control.MouseFilterEnum.Ignore };
+        srow.AddChild(_statusLabel);
+        srow.AddChild(_unsavedLabel);
+        sbox.AddChild(srow);
         sbox.AddChild(_hintLabel);
     }
 

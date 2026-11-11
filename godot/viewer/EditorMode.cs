@@ -71,7 +71,7 @@ public partial class EditorMode : Node
     CanvasLayer _ui = null!;
     PanelContainer _panel = null!, _statusBar = null!;
     HSlider _speedSlider = null!;
-    Label _hudLabel = null!, _hoverLabel = null!, _statusLabel = null!, _hintLabel = null!;
+    Label _unsavedLabel = null!, _hudLabel = null!, _hoverLabel = null!, _statusLabel = null!, _hintLabel = null!;
     Label _selLabel = null!, _groupLabel = null!;
     Button _btnGroup = null!, _btnAdd = null!, _btnRemove = null!, _btnDissolve = null!;
     double _statusUntil;
@@ -86,6 +86,7 @@ public partial class EditorMode : Node
         AddChild(OutlineRoot);
         BuildUi();
         BuildRegionWorld();
+        GetTree().AutoAcceptQuit = false; // window close asks first when fence or tree edits are unapplied (_Notification)
         if (Watcher != null)
         {
             Watcher.Launched += ids => Say("regenerating " + string.Join(", ", ids.Take(3)) + "...");
@@ -143,6 +144,7 @@ public partial class EditorMode : Node
             CancelDrag();
             CancelRegionGesture();
             DisarmPlacement(false);
+            if (GateArmed) CancelGate();
             HoverId = null;
             _hoverLabel.Visible = false;
         }
@@ -198,8 +200,8 @@ public partial class EditorMode : Node
     // ---- picking ----
 
     /// <summary>
-    /// Ground point under a ray: physics ray against the map colliders (terrain first of all), else a
-    /// horizontal plane at the mean terrain height.
+    /// Ground point under a ray: the first crossing of the terrain height (ray march, buildings and props are
+    /// ignored), else a horizontal plane at the mean terrain height.
     /// </summary>
     public bool RayToGround(Vector3 origin, Vector3 dir, out Vector3 point)
     {
@@ -217,11 +219,28 @@ public partial class EditorMode : Node
 
     bool CastGroundRay(Vector3 origin, Vector3 dir, out Vector3 point)
     {
-        var q = PhysicsRayQueryParameters3D.Create(origin, origin + dir * 3000f);
-        q.CollideWithBodies = true;
-        q.Exclude = new Godot.Collections.Array<Rid> { Player.GetRid() };
-        var hit = GetViewport().World3D.DirectSpaceState.IntersectRay(q);
-        if (hit.Count > 0) { point = hit["position"].AsVector3(); return true; }
+        // march the ray against the terrain height (roofs, eaves, fence tops and props must not count as ground)
+        var prevT = 0f;
+        var h0 = Map.GroundHeight(origin.X, origin.Z);
+        var above = float.IsNaN(h0) || origin.Y > h0;
+        for (var t = 1f; t <= 3000f; t += Mathf.Max(1f, t * 0.01f))
+        {
+            var p = origin + dir * t;
+            var h = Map.GroundHeight(p.X, p.Z);
+            if (float.IsNaN(h)) { above = true; prevT = t; continue; }
+            if (p.Y > h) { above = true; prevT = t; continue; }
+            if (!above) { prevT = t; continue; } // started below the terrain: wait until the ray comes out of it
+            var lo = prevT; var hi = t; // above at lo, below at hi
+            for (var i = 0; i < 12; i++)
+            {
+                var mid = (lo + hi) / 2;
+                var m = origin + dir * mid;
+                var mh = Map.GroundHeight(m.X, m.Z);
+                if (!float.IsNaN(mh) && m.Y <= mh) hi = mid; else lo = mid;
+            }
+            point = origin + dir * hi;
+            return true;
+        }
         var plane = Map.MeanTerrainHeight;
         if (dir.Y < -1e-4f)
         {
@@ -361,7 +380,8 @@ public partial class EditorMode : Node
             var (ok, msg) = op(root);
             if (!ok) { Say(msg, true); ReloadGroups(); return false; }
             var errors = ObjectEdits.ValidateDocument(root);
-            if (errors.Count > 0) { Say("not saved: " + errors[0], true); ReloadGroups(); return false; }
+            if (errors.Count > 0) { Say("not saved: " + ObjectEdits.Summarise(errors), true); ReloadGroups(); return false; }
+            if (EditsFile.Dump(before) == EditsFile.Dump(root)) { Say("no changes to save"); return true; } // the file already says this
             var changes = DiffEntries(before, root);
             EditsFile.Save(EditsPath, root);
             SaveCount++;
@@ -423,6 +443,27 @@ public partial class EditorMode : Node
         _panelDirty = true;
     }
 
+    /// <summary>
+    /// Run <paramref name="proceed"/> now, or after a confirm when fence or tree edits are unapplied (they are
+    /// kept in memory only). Accepting discards them; Cancel stays here so Apply (Enter) can save them first.
+    /// </summary>
+    void GuardUnsaved(Action proceed, string okText = "Discard")
+    {
+        if (_pending.Count == 0) { proceed(); return; }
+        var n = _pending.Count;
+        ShowConfirm($"Discard {n} unsaved edit{(n == 1 ? "" : "s")}?",
+            $"Fence and tree edits for {string.Join(", ", _pending.Keys.Take(4))}{(n > 4 ? ", ..." : "")} are not applied yet and exist only in memory. Cancel, then press Enter to apply them.",
+            okText, () => { _pending.Clear(); AfterEdit(); proceed(); });
+    }
+
+    public override void _Notification(int what)
+    {
+        if (what != NotificationWMCloseRequest) return;
+        if (_pending.Count == 0) { GetTree().Quit(); return; }
+        if (!Active) SetActive(true); // the confirm needs the editor UI
+        GuardUnsaved(() => GetTree().Quit(), "Quit");
+    }
+
     // ---- messages ----
 
     public void Say(string message, bool error = false)
@@ -440,7 +481,7 @@ public partial class EditorMode : Node
     {
         if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F2 })
         {
-            SetActive(!Active);
+            if (Active) GuardUnsaved(() => SetActive(false)); else SetActive(true);
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -490,7 +531,7 @@ public partial class EditorMode : Node
                 switch (k.Keycode)
                 {
                     case Key.F1: ToggleCheatSheet(); break;
-                    case Key.F3: WalkFromHere(); break;
+                    case Key.F3: GuardUnsaved(WalkFromHere); break;
                     case Key.G: GroupSelected(); break;
                     case Key.T: ToggleTopDown(); break;
                     case Key.Enter or Key.KpEnter:
@@ -503,7 +544,7 @@ public partial class EditorMode : Node
                         else if (PlacementAsset != null) DisarmPlacement();
                         else if (GateArmed) CancelGate();
                         else if (SelectedObjectId != null) SelectObject(null);
-                        else if (Selection.Count > 0) Click(null, false);
+                        else if (Selection.Count > 0) GuardUnsaved(() => Click(null, false));
                         else if (Tool != EditorTool.None) SelectTool(EditorTool.None);
                         break;
                 }
@@ -547,8 +588,9 @@ public partial class EditorMode : Node
         }
         if (_outlinesDirty) RebuildOutlines();
         if (_panelDirty) RefreshPanel();
+        _unsavedLabel.Text = PendingCount == 0 ? "" : $"* {PendingCount} unsaved (Enter applies)";
         var c = FlyCam.GlobalPosition;
-        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedRegionId != null && Tool == EditorTool.Region ? $"  |  region {SelectedRegionId}" : "") + (_dirtyLabel.Visible || RegionDraftPending ? "  |  * UNSAVED" : "");
+        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedRegionId != null && Tool == EditorTool.Region ? $"  |  region {SelectedRegionId}" : "") + (PendingCount > 0 || RegionDraftPending ? $"  |  * {(PendingCount > 0 ? $"{PendingCount} UNSAVED" : "UNSAVED")}" : "");
         if (Time.GetTicksMsec() / 1000.0 > _statusUntil && _statusLabel.Text != "")
             _statusLabel.Text = "";
     }
