@@ -48,6 +48,8 @@ public sealed class MatchPlayer
     public ushort Id;
     public string Name = "";
     public int Kills, Deaths;
+    /// <summary>Sandbox mode (#156): godmode, and no kills, score or round end. Ranked after everyone else.</summary>
+    public bool Sandbox;
     public PlayerLife Life;
     public float Health;
     public Vector3 Position;
@@ -107,13 +109,13 @@ public sealed class MatchSim
 
     /// <summary>Scoreboard order: kills descending, then deaths ascending, then id.</summary>
     public List<MatchPlayer> Ranking() =>
-        _players.Values.OrderByDescending(p => p.Kills).ThenBy(p => p.Deaths).ThenBy(p => p.Id).ToList();
+        _players.Values.OrderBy(p => p.Sandbox).ThenByDescending(p => p.Kills).ThenBy(p => p.Deaths).ThenBy(p => p.Id).ToList();
 
     public void SetPosition(ushort id, Vector3 pos) { if (_players.TryGetValue(id, out var p)) p.Position = pos; }
 
-    public void AddPlayer(ushort id, string name)
+    public void AddPlayer(ushort id, string name, bool sandbox = false)
     {
-        _players[id] = new MatchPlayer { Id = id, Name = name };
+        _players[id] = new MatchPlayer { Id = id, Name = name, Sandbox = sandbox };
         if (Phase == MatchPhase.Waiting) { StartIfReady(); }
         else if (Phase == MatchPhase.Running) Spawn(_players[id]);
         // while ending the newcomer waits for the restart
@@ -145,6 +147,7 @@ public sealed class MatchSim
         if (TargetDummies.IsDummyId(victim)) return ApplyTargetDamage(victim, attacker, weapon, amount, cause);
         if (Phase != MatchPhase.Running || amount <= 0) return DamageResult.Ignored;
         if (!_players.TryGetValue(victim, out var v) || v.Life != PlayerLife.Alive) return DamageResult.Ignored;
+        if (v.Sandbox) return DamageResult.Ignored; // godmode (#156): nothing hurts a sandbox player
         if (!ignoreProtection && IsProtected(victim)) return DamageResult.Ignored;
         v.Health -= amount;
         if (v.Health > 0) return DamageResult.Damaged;
@@ -152,11 +155,12 @@ public sealed class MatchSim
         v.Health = 0; v.Life = PlayerLife.Dead; v.Deaths++;
         v.RespawnAt = _now() + _cfg.RespawnDelay;
         var credited = attacker != victim && _players.TryGetValue(attacker, out var a) ? a : null;
-        if (credited != null) credited.Kills++;
+        // a sandbox shooter's kill is shown but counts for nothing: no score, no score goal (#156)
+        if (credited is { Sandbox: false }) credited.Kills++;
         var killer = credited?.Id ?? victim;
         Emit(new PlayerKilled(killer, victim, weapon, cause));
         Emit(new PlayerDied(victim, killer, _cfg.RespawnDelay));
-        if (credited != null && credited.Kills >= _cfg.ScoreGoal) End();
+        if (credited is { Sandbox: false } && credited.Kills >= _cfg.ScoreGoal) End();
         Emit(new ScoreboardChanged());
         return DamageResult.Killed;
     }
@@ -169,7 +173,7 @@ public sealed class MatchSim
     public void CreditTargetKill(ushort killer, TargetDummies.Dummy target, byte weapon, KillCause cause = KillCause.Standard)
     {
         if (Phase != MatchPhase.Running || !_players.TryGetValue(killer, out var a)) return;
-        a.Kills++;
+        if (!a.Sandbox) a.Kills++; // sandbox kills are shown, not scored (#156)
         Emit(new TargetKilled(killer, target, weapon, cause));
         Emit(new ScoreboardChanged());
     }
@@ -224,7 +228,7 @@ public sealed class MatchSim
 
     void End()
     {
-        var top = Ranking();
+        var top = Ranking().Where(p => !p.Sandbox).ToList(); // sandbox players never win (#156)
         var winners = new List<ushort>();
         if (top.Count > 0)
             winners = top.Where(p => p.Kills == top[0].Kills && p.Deaths == top[0].Deaths).Select(p => p.Id).ToList();

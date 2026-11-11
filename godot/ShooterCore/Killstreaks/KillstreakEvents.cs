@@ -60,7 +60,7 @@ public static class KillstreakEvents
 
     public static StreakEndedInfo? DecodeEnded(ReadOnlySpan<byte> d)
     {
-        if (!ReadId(d, out var id, out var rest) || rest.Length < 1 || rest[0] > (byte)KillstreakEndReason.RoundReset) return null;
+        if (!ReadId(d, out var id, out var rest) || rest.Length < 1 || rest[0] > (byte)KillstreakEndReason.Replaced) return null;
         return new StreakEndedInfo(id, (KillstreakEndReason)rest[0]);
     }
 

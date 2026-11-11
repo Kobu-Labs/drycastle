@@ -15,6 +15,8 @@ public enum KillstreakEndReason : byte
     OwnerLeft = 3,
     /// <summary>The round ended.</summary>
     RoundReset = 4,
+    /// <summary>A sandbox owner asked for the same streak again, which replaces the running one (#156).</summary>
+    Replaced = 5,
 }
 
 /// <summary>

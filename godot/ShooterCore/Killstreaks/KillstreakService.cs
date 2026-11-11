@@ -169,6 +169,19 @@ public sealed class KillstreakService
         return false;
     }
 
+    /// <summary>
+    /// Sandbox use (#156): the owner gets <paramref name="streakId"/> at once. No kill requirement, no held slot, no use cap,
+    /// no cooldown, and it can be used again straight away. A running instance of the same streak is ended first (reason
+    /// <see cref="KillstreakEndReason.Replaced"/>). The caller checks that the owner is a sandbox player and alive.
+    /// </summary>
+    public bool SandboxActivate(ushort owner, string streakId, double now, Vector3 position)
+    {
+        if (_data.Find(streakId) is not { } def) return false;
+        foreach (var use in _active.Where(u => u.Owner == owner && u.StreakId == streakId && u.IsOpen).ToList())
+            Finish(use, KillstreakEndReason.Replaced);
+        return Start(def, owner, now, position, () => { });
+    }
+
     /// <summary>Ends the instances whose duration has run out.</summary>
     public void Tick(double now)
     {

@@ -71,11 +71,23 @@ public enum EventKind : byte
     ResetLoadout = 131,
     /// <summary>Server to the editing player: the answer to a SaveLoadout, ok or the reason (<see cref="LoadoutEvents"/>).</summary>
     LoadoutAck = 132,
+    /// <summary>Server to the joining player: whether sandbox mode was granted, and the reason (<see cref="SandboxEvents"/>). Kinds 150-159 belong to sandbox mode (#156).</summary>
+    SandboxStatus = 150,
+    /// <summary>Client to server: use one killstreak now, sandbox owners only (<see cref="SandboxEvents"/>).</summary>
+    SandboxGrant = 151,
 }
 
 public abstract record ReliableMsg;
 /// <summary>Client to server, first message after connecting. Token is the client-generated player token (ADR 0003); empty = guest.</summary>
-public sealed record HelloMsg(byte Version, string Name, string Token = "") : ReliableMsg;
+/// <summary>Flags are <see cref="HelloFlags"/> bits (v10). A v9 hello has none and decodes as 0.</summary>
+public sealed record HelloMsg(byte Version, string Name, string Token = "", byte Flags = 0) : ReliableMsg;
+
+/// <summary>Bits of <see cref="HelloMsg.Flags"/>.</summary>
+public static class HelloFlags
+{
+    /// <summary>The client asks for sandbox mode (#156). The server grants it only with --allow-sandbox.</summary>
+    public const byte Sandbox = 1;
+}
 /// <summary>Server to client, tells the client which entity id it is and the tick rate.</summary>
 /// <summary>Server to the joining client. The last three fields are the server's day/night clock (<see cref="DayClock"/>): start minute, day length in ms, frozen.</summary>
 public sealed record WelcomeMsg(byte Version, ushort PlayerId, byte TickRate, uint ServerTick, ushort StartMinute = 0, uint DayLengthMs = 0, bool Frozen = false) : ReliableMsg;
@@ -103,7 +115,7 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 /// Wire format (little-endian). Channel 0 is reliable (control + events), channel 1 is unreliable-sequenced (input, snapshots).
 ///
 /// ch0 messages: u8 type, then
-///   Hello(1):   u8 version, u8 nameLen, name utf8, u8 tokenLen, token utf8
+///   Hello(1):   u8 version, u8 nameLen, name utf8, u8 tokenLen, token utf8, u8 flags (v10, see HelloFlags)
 ///   Welcome(2): u8 version, u16 playerId, u8 tickRate, u32 serverTick, u16 startMinute, u32 dayLengthMs, u8 frozen
 ///   Join(3):    u16 playerId, u8 nameLen, name utf8
 ///   Leave(4):   u16 playerId
@@ -129,8 +141,8 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 /// </summary>
 public static class Wire
 {
-    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51).</summary>
-    public const byte ProtocolVersion = 9;
+    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-151 (sandbox status and grant, #156).</summary>
+    public const byte ProtocolVersion = 10;
     public const byte TickRate = 30;
     public const int ChanReliable = 0, ChanData = 1, Channels = 2;
     public const int KeyEvery = 30;
@@ -210,7 +222,7 @@ public static class Wire
         Span<byte> t = stackalloc byte[4];
         switch (m)
         {
-            case HelloMsg h: o.Add(THello); o.Add(h.Version); WriteName(o, h.Name); WriteStr(o, Fit(h.Token, MaxTokenBytes)); break;
+            case HelloMsg h: o.Add(THello); o.Add(h.Version); WriteName(o, h.Name); WriteStr(o, Fit(h.Token, MaxTokenBytes)); o.Add(h.Flags); break;
             case WelcomeMsg w:
                 o.Add(TWelcome); o.Add(w.Version);
                 BinaryPrimitives.WriteUInt16LittleEndian(t, w.PlayerId); o.AddRange(t[..2].ToArray());
@@ -274,9 +286,11 @@ public static class Wire
                     int n = d[2];
                     var name = Encoding.UTF8.GetString(d.Slice(3, n));
                     // a v1 hello has no token; the server rejects it on the version before it looks at the token
-                    var rest = d[(3 + n)..];
-                    var token = rest.Length > 0 ? Encoding.UTF8.GetString(rest.Slice(1, rest[0])) : "";
-                    return new HelloMsg(d[1], name, token);
+                    int p = 3 + n;
+                    var token = "";
+                    if (p < d.Length) { int tl = d[p]; token = Encoding.UTF8.GetString(d.Slice(p + 1, tl)); p += 1 + tl; }
+                    var flags = p < d.Length ? d[p] : (byte)0;
+                    return new HelloMsg(d[1], name, token, flags);
                 }
                 case TWelcome:
                     return new WelcomeMsg(d[1], BinaryPrimitives.ReadUInt16LittleEndian(d[2..]), d[4], BinaryPrimitives.ReadUInt32LittleEndian(d[5..]),

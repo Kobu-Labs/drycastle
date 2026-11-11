@@ -83,6 +83,8 @@ public sealed class PlayerWeapons
     public int Slot { get; private set; }
     public WeaponDef Current => _file.Weapons[Slot - 1];
     public bool Reloading { get; private set; }
+    /// <summary>Sandbox mode (#156): shots do not use up the magazine and a reload is never needed.</summary>
+    public bool Unlimited { get; set; }
     /// <summary>Set whenever ammo, slot or reload state changed; the host clears it after sending the ammo state.</summary>
     public bool Changed { get; set; }
     /// <summary>Current spread half-angle in degrees (what the next shot would use).</summary>
@@ -153,16 +155,16 @@ public sealed class PlayerWeapons
                 _nextFire = now + w.FireInterval;
                 return new FireOutcome(w, Slot - 1, 0);
             case WeaponKind.Hitscan:
-                if (_mag[Slot - 1] <= 0) { if (CanReload(w)) StartReload(now, w); return null; }
+                if (_mag[Slot - 1] <= 0 && !Unlimited) { if (CanReload(w)) StartReload(now, w); return null; }
                 var spread = SpreadOf(w);
-                _mag[Slot - 1]--;
+                if (!Unlimited) _mag[Slot - 1]--;
                 _nextFire = now + w.FireInterval;
                 _spreadExtra = Math.Min(_spreadExtra + w.SpreadPerShot, Math.Max(0, w.SpreadMax - w.SpreadBase));
                 Changed = true;
                 return new FireOutcome(w, Slot - 1, spread);
             default: // projectile: one rocket per magazine, the reload is started by the next pull or the reload key
-                if (_mag[Slot - 1] <= 0) { if (CanReload(w)) StartReload(now, w); return null; }
-                _mag[Slot - 1]--;
+                if (_mag[Slot - 1] <= 0 && !Unlimited) { if (CanReload(w)) StartReload(now, w); return null; }
+                if (!Unlimited) _mag[Slot - 1]--;
                 _nextFire = now + w.FireInterval;
                 Changed = true;
                 return new FireOutcome(w, Slot - 1, 0);
@@ -178,7 +180,7 @@ public sealed class PlayerWeapons
         return _hotbar[(i + 1) % _hotbar.Length] + 1;
     }
 
-    bool CanReload(WeaponDef w) => !Reloading && w.MagazineSize > 0 && w.ReloadTime > 0 && _mag[Slot - 1] < w.MagazineSize && _reserve[Slot - 1] > 0;
+    bool CanReload(WeaponDef w) => !Unlimited && !Reloading && w.MagazineSize > 0 && w.ReloadTime > 0 && _mag[Slot - 1] < w.MagazineSize && _reserve[Slot - 1] > 0;
 
     void StartReload(double now, WeaponDef w) { Reloading = true; _reloadDone = now + w.ReloadTime / _perks.ReloadSpeed; Changed = true; }
 
