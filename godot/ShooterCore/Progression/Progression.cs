@@ -28,10 +28,31 @@ public sealed record PlayerStats(long Kills, long Deaths, long Matches, IReadOnl
 }
 
 /// <summary>
-/// XP to level mapping. Placeholder curve until the levels data file lands (ADR 0003, Data files):
-/// level = 1 + floor(sqrt(xp / 100)), so 100 XP is level 2 and 400 XP is level 3.
+/// XP to level mapping from levels.json (<see cref="LevelsFile"/>). Level 1 starts at 0 XP; level N+1 needs
+/// <c>XpToReach[N]</c> XP in total. XP past the last threshold stays at <see cref="MaxLevel"/>.
 /// </summary>
-public static class LevelCurve
+public sealed class LevelCurve
 {
-    public static int LevelForXp(int xp) => xp <= 0 ? 1 : 1 + (int)Math.Floor(Math.Sqrt(xp / 100.0));
+    readonly int[] _xpToReach;
+
+    public LevelCurve(IReadOnlyList<int> xpToReach)
+    {
+        if (xpToReach.Count == 0 || xpToReach[0] != 0) throw new ArgumentException("the first level starts at 0 XP", nameof(xpToReach));
+        for (var i = 1; i < xpToReach.Count; i++)
+            if (xpToReach[i] <= xpToReach[i - 1]) throw new ArgumentException("XP thresholds must strictly increase", nameof(xpToReach));
+        _xpToReach = xpToReach.ToArray();
+    }
+
+    /// <summary>The highest level (the number of entries in levels.json xp_to_reach).</summary>
+    public int MaxLevel => _xpToReach.Length;
+
+    public int LevelForXp(int xp)
+    {
+        var level = 1;
+        while (level < MaxLevel && xp >= _xpToReach[level]) level++;
+        return level;
+    }
+
+    /// <summary>Total XP needed to reach <paramref name="level"/> (clamped to 1..MaxLevel).</summary>
+    public int XpForLevel(int level) => _xpToReach[Math.Clamp(level, 1, MaxLevel) - 1];
 }

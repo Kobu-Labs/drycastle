@@ -521,9 +521,9 @@ public partial class NetServer : Node
     }
 
     /// <summary>Applies damage through the match and sends the hit event; returns the result (Ignored when absorbed).</summary>
-    DamageResult Deal(ushort attackerId, byte weaponIdx, ushort victim, float damage, bool head, bool backstab)
+    DamageResult Deal(ushort attackerId, byte weaponIdx, ushort victim, float damage, bool head, bool backstab, KillCause cause = KillCause.Standard)
     {
-        var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage);
+        var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
         _hitsLanded++;
         LossHit(attackerId, victim, r == DamageResult.Killed);

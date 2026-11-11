@@ -17,8 +17,11 @@ public sealed record PhaseChanged(MatchPhase Phase) : MatchEvent;
 /// <summary>Roster or scores changed: broadcast a fresh scoreboard.</summary>
 public sealed record ScoreboardChanged : MatchEvent;
 public sealed record PlayerSpawned(ushort Id, Vector3 Position, float ProtectionSeconds) : MatchEvent;
+/// <summary>How a kill happened beyond the weapon. Headshot is set by the caller's hit; Roadkill by a vehicle run-over.</summary>
+public enum KillCause : byte { Standard = 0, Headshot = 1, Roadkill = 2 }
+
 /// <summary>Killer == Victim for suicides.</summary>
-public sealed record PlayerKilled(ushort Killer, ushort Victim, byte Weapon) : MatchEvent;
+public sealed record PlayerKilled(ushort Killer, ushort Victim, byte Weapon, KillCause Cause = KillCause.Standard) : MatchEvent;
 public sealed record PlayerDied(ushort Victim, ushort Killer, float RespawnDelay) : MatchEvent;
 
 public enum PlayerLife : byte { Unspawned, Alive, Dead }
@@ -112,7 +115,7 @@ public sealed class MatchSim
     /// Ignored outside a running round, on dead players and during spawn protection (unless
     /// <paramref name="ignoreProtection"/>, used for falling out of the world). Death scores the attacker +1 unless it is a suicide.
     /// </summary>
-    public DamageResult ApplyDamage(ushort victim, ushort attacker, byte weapon, float amount, bool ignoreProtection = false)
+    public DamageResult ApplyDamage(ushort victim, ushort attacker, byte weapon, float amount, bool ignoreProtection = false, KillCause cause = KillCause.Standard)
     {
         if (Phase != MatchPhase.Running || amount <= 0) return DamageResult.Ignored;
         if (!_players.TryGetValue(victim, out var v) || v.Life != PlayerLife.Alive) return DamageResult.Ignored;
@@ -125,7 +128,7 @@ public sealed class MatchSim
         var credited = attacker != victim && _players.TryGetValue(attacker, out var a) ? a : null;
         if (credited != null) credited.Kills++;
         var killer = credited?.Id ?? victim;
-        Emit(new PlayerKilled(killer, victim, weapon));
+        Emit(new PlayerKilled(killer, victim, weapon, cause));
         Emit(new PlayerDied(victim, killer, _cfg.RespawnDelay));
         if (credited != null && credited.Kills >= _cfg.ScoreGoal) End();
         Emit(new ScoreboardChanged());

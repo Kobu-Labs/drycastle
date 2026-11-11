@@ -13,12 +13,14 @@ public sealed class InMemoryProgressionStore : IProgressionStore
     readonly Dictionary<long, int> _activeSlot = new();
     readonly Dictionary<long, HashSet<Unlock>> _unlocks = new();
     readonly Dictionary<long, StatsRow> _stats = new();
+    readonly LevelCurve _curve;
     long _nextId = 1;
 
     sealed record StatsRow(long Kills, long Deaths, long Matches, Dictionary<string, long> Weapons);
 
-    public InMemoryProgressionStore()
+    public InMemoryProgressionStore(LevelCurve curve)
     {
+        _curve = curve;
         Profiles = new ProfileRepo(this);
         Loadouts = new LoadoutRepo(this);
         Unlocks = new UnlockRepo(this);
@@ -71,7 +73,7 @@ public sealed class InMemoryProgressionStore : IProgressionStore
         public Task AddXpAsync(long playerId, int amount)
         {
             if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount), amount, "XP cannot go down");
-            lock (s._gate) Update(playerId, p => p with { Xp = p.Xp + amount, Level = LevelCurve.LevelForXp(p.Xp + amount) });
+            lock (s._gate) Update(playerId, p => p with { Xp = p.Xp + amount, Level = s._curve.LevelForXp(p.Xp + amount) });
             return Task.CompletedTask;
         }
 
