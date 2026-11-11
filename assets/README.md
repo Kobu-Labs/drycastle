@@ -25,7 +25,7 @@ the full packs are not.
 | `kenney-city-kit-suburban` (2.0) | Kenney, https://kenney.nl/assets/city-kit-suburban | fences, driveways, paths, planter, 2 trees | OpenGameArt mirror |
 | `quaternius-stylized-nature-megakit` (Standard, free) | Quaternius, https://quaternius.com/packs/stylizednaturemegakit.html | 2 bushes, 4 flowers, grass, fern, plants, clover | OpenGameArt mirror |
 | `kaykit-character-animations` (1.2) | Kay Lousberg, https://opengameart.org/content/kaykit-character-animations | 1 animated character GLB (Prototype Pete: head and torso, 6 bones, 30 clips incl. Idle, Walk, Run, Shooting, Defeat) | OpenGameArt (publisher's own listing) |
-| `quaternius-ultimate-gun-pack` (July 2019) | Quaternius, https://opengameart.org/content/low-poly-guns-pack | pistol, assault rifle, bayonet, sniper rifle (a later separate download of the same author, already GLB), converted OBJ to GLB | OpenGameArt |
+| `quaternius-ultimate-gun-pack` (July 2019) | Quaternius, https://opengameart.org/content/low-poly-guns-pack | pistols, assault rifles, bullpups, SMGs, shotguns, snipers, bayonet (OBJ converted to GLB); sniper-rifle.glb is from a later separate download of the same author | OpenGameArt |
 
 **Unverified, user-provided (2026-11-11):** `zsky-vehicles/` holds two vehicle models by Zsky supplied by the project owner as local files:
 `motorbike.glb` ("Military Motorbike", 5 colour materials Green/Black/Silver/Yellow/Red_Motor) and `bicycle.glb` ("Bike", 4: Silver/Black/Green/Yellow_Bike).
@@ -61,7 +61,7 @@ the manifest's top-level `sounds` array (id `sfx:<pack>/<file>`, pack, source, l
 |---|---|---|
 | `kenney-interface-sounds` | opengameart.org/content/interface-sounds (Kenney) | UI sounds, hit tick, kill confirm, dry-fire click |
 | `kenney-music-jingles` | opengameart.org/node/22000 (Kenney) | round start and end stingers |
-| `free-firearm-sound-library` | opengameart.org/content/the-free-firearm-sound-library | pistol and AK shots (single shots cut from long takes) |
+| `free-firearm-sound-library` | opengameart.org/content/the-free-firearm-sound-library | pistol and AK shots (single shots cut from long takes); shooter v2 shots: ar15, ppsh, model12, nova, mossberg, walther_ppq, tikka, savage10, sks (see "Shooter v2 weapons") |
 | `oga-combat-sound-effects-150` | opengameart.org/node/195932 (compilation, per-file sources in its `LICENSE.txt`) | knife, impacts, death, weapon switch, bazooka explosion (layered) |
 | `fantozzi-footsteps` | opengameart.org/content/fantozzis-footsteps-grasssand-stone | footsteps (one surface) |
 | `oga-chiptune-adventures` | opengameart.org/node/74001 (Juhani Junkala) | menu music loop |
@@ -70,6 +70,33 @@ the manifest's top-level `sounds` array (id `sfx:<pack>/<file>`, pack, source, l
 Not downloaded: kenney.nl itself answers automated requests with 403 (the OpenGameArt copies above were used); the muted.io Performance Cars
 pack (planned for engines) is behind a Ko-fi page that serves a Cloudflare JavaScript challenge, so the engine is a placeholder.
 Sonniss is excluded (redistribution clause).
+
+## Shooter v2 weapons (#114)
+
+Every weapon id in `godot/shooter/data/weapons.json` has a held model (`WeaponFx.cs`, `Models`) and shot, reload and dry-fire
+events (`godot/shooter/data/sounds.json`). All CC0 (OpenGameArt pages above, checked 2026-11-11).
+
+- **Models**: the full Quaternius Ultimate Gun Pack zip (OBJ+MTL, flat colour, no textures) was downloaded and the needed OBJs converted
+  one-to-one to GLB (geometry, normals, diffuse colour). The pack has **no machine guns**, so `rpk`, `pkm`, `m249` and `m60` reuse assault
+  rifle models. Also shared: `aug` and `p90` are the two bullpups. The models were picked by their pack names and sizes and were not
+  looked at (no screenshots); the viewmodel fit is the `Length` value in `WeaponFx.cs`.
+  | Weapon id | Model file | Notes |
+  |---|---|---|
+  | `m4a1` | assault-rifle-2.glb | own model |
+  | `rpk`, `pkm`, `m249`, `m60` | assault-rifle-3, -4, -5, assault-rifle2-3 .glb | machine guns: no model in the pack, rifle models stand in |
+  | `g36` | assault-rifle2-1.glb | own model |
+  | `aug`, `p90` | bullpup-1.glb, bullpup-2.glb | bullpups |
+  | `mp5`, `ump45` | submachine-gun-1.glb, submachine-gun-2.glb | SMGs |
+  | `remington870`, `spas12`, `benelli_m4`, `aa12` | shotgun-1 .. shotgun-4 .glb | own models |
+  | `glock17`, `deagle` | pistol-2.glb, pistol-3.glb | own models (were `pistol-1.glb` placeholders) |
+  | `m82`, `awm`, `svd` | sniper-rifle-2, -3, -4 .glb | own models (were `sniper-rifle.glb` placeholders) |
+- **Sounds**: the existing `free-firearm-sound-library` takes are used where they fit. New single shots (trimmed and normalised the same way,
+  from the same CC0 library, `LICENSE.txt` there) are `ar15.ogg` (AR-15), `ppsh.ogg` (PPSh SMG), `model12.ogg`, `nova.ogg`, `mossberg.ogg`
+  (shotguns), `walther_ppq.ogg` (Glock 17), `tikka.ogg`, `savage10.ogg`, `sks.ogg` (snipers). Sharing: `ar15.ogg` for m4a1, aug, g36;
+  `ak47.ogg` for rpk, m249, m60, pkm (pitched down); `ppsh.ogg` for the three SMGs; `model12` for remington870; `nova` for spas12 and aa12;
+  `mossberg` for benelli_m4; `pistol_1911.ogg` for deagle (pitched); `tikka` for m82, `savage10` for awm, `sks` for svd (pitched).
+  Reload and dry-fire events still use the generated placeholders and the Kenney click, as before.
+- **Not sourced**: no reload or machine-gun sound exists in the CC0 libraries used so far; they are placeholders (see above).
 
 ## Style: flat colour, and what the packs really contain
 

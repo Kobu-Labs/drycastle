@@ -75,7 +75,7 @@ public sealed partial class CharacterView : Node3D
     {
         SetWeapon(dead ? "" : weaponId);
         if (!HasModel) return;
-        var twoHanded = weaponId is "ak47" or "bazooka" or "sniper" or "m82" or "awm" or "svd";
+        var twoHanded = weaponId is not ("pistol" or "glock17" or "deagle" or "knife"); // pistols are one-handed, every long gun is two-handed
         Play(dead ? "Defeat"
             : firing ? (weaponId == "knife" ? "Attack(1h)" : twoHanded ? "Shooting(2h)" : "Shooting(1h)")
             : speed > 6.2f ? "Run" : speed > 0.6f ? "Walk" : "Idle");
