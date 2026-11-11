@@ -180,7 +180,7 @@ still mouse keeps it. The camera's yaw is unwrapped (`GunshipAim.Unwrap`) so it 
 `GunshipGroundAimTests` sweeps the heading through 720 degrees and the aim through +-pi.
 
 The aim is sent, not re-derived (#161). The client computes the point from its own muzzle (its interpolated, lagging aircraft) and
-sends it with every input while a turret is steered (`NetInput.HasAim`, the wire's flags byte; protocol 14). The server does not
+sends it with every input while a turret is steered (`NetInput.HasAim`, the wire's flags byte; protocol 15). The server does not
 rebuild the point from the look angles: doing that from its own, later muzzle intersected the same ray from a point the platform
 had travelled on, so every round landed the platform's travel over the lag to one side of the reticle (about 10 m at 70 m/s and
 150 ms, which the old scheme shows in `GunshipAimLagTests`). `GunshipControl.OnInput` takes the point, bounds it (`GunshipAim.ClampAim`:
