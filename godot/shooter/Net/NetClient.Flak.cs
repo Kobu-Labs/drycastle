@@ -58,6 +58,20 @@ public partial class NetClient
         public ushort Gunner;
     }
 
+    /// <summary>
+    /// The gunner's eye in the gun cradle's space (metres, forward is -Z): on the axis between the two barrels (they are 0.27 m either side), 1.55 m
+    /// ahead of the trunnion, so in front of the shield (at 0.8 m) and the recoil sleeves (to 1.22 m), and 0.22 m above the barrel axis (the barrels
+    /// are 0.09 m thick). The barrels run past both sides of the view and meet the crosshair's line at the muzzles. It is not where the gunner sits:
+    /// the model's own <c>sight</c> node is inside the sight box and the shield, which filled the screen with olive.
+    /// </summary>
+    static readonly Vector3 GunnerEye = new(0f, 0.22f, -1.55f);
+
+    /// <summary>The width of a flak tracer as a multiple of the generic one (3 cm): about 30 cm, a fat streak you can follow.</summary>
+    const float FlakTracerWidth = 10f;
+
+    /// <summary>The visual size of an airburst (vehicles.json flak puff_radius): a blast of exactly this radius is a flak burst, drawn as black smoke.</summary>
+    float FlakPuffRadius => Vehicles?.Vehicles.Select(v => v.Flak?.PuffRadius ?? 0f).FirstOrDefault(r => r > 0f) ?? 0f;
+
     readonly Dictionary<ushort, TurretAim> _turretAims = new();
     FlakStatus? _flakStatus;
     bool _flakCamera;
@@ -110,7 +124,8 @@ public partial class NetClient
         if (!mine) return false;
         var body = v.Node.GlobalPosition;
         _me!.GlobalPosition = body;
-        _me.Turret(f.Sight?.GlobalPosition ?? body + Vector3.Up * 2.8f, yaw, pitch);
+        // over the guns: fixed to the cradle behind the breeches and above the barrels, so the barrels run parallel to the view and the crosshair sits just above them
+        _me.Turret(f.Cradle.ToGlobal(GunnerEye), yaw, pitch);
         _flakCamera = true;
         return true;
     }

@@ -64,7 +64,7 @@
         "proximity_radius": 12, "burst_radius": 15, "burst_full_radius": 4, "damage": 150, "edge_damage": 40,
         "ground_damage": 30, "ground_splash": { "radius": 4, "full_damage_radius": 1.5, "edge_damage": 10, "self_damage_multiplier": 0.5, "knockback_speed": 3 },
         "magazine": 40, "reserve": 400, "reload_time": 4, "min_elevation_deg": 5, "max_elevation_deg": 85,
-        "tracer_length": 14, "puff_radius": 4
+        "tracer_length": 30, "puff_radius": 10
       },
       "lights": { "head": [[-0.98, 1.47, -3.13], [0.98, 1.47, -3.13]], "tail": [[-1.06, 0.97, 3.5], [1.06, 0.97, 3.5]], "beam_range": 45, "beam_angle": 26 }
     }
