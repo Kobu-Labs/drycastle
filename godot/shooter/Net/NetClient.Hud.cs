@@ -46,6 +46,8 @@ public partial class NetClient
 
     void HudHit(HitMsg h)
     {
+        // a gunner's hit marker is the turret overlay's while the HUD is hidden (ticket #152); the hit event reaches it either way
+        if (h.Attacker == _myId && h.Victim != _myId && _gunship != null) _gunOverlay.Hit(h.Headshot, h.Kill);
         if (_hud == null) return;
         if (h.Attacker == _myId && h.Victim != _myId) _hud.Hit(h.Headshot, h.Kill);
         if (h.Victim == _myId && h.Attacker != _myId && _me != null && _remotes.TryGetValue(h.Attacker, out var r))
@@ -57,6 +59,7 @@ public partial class NetClient
 
     void UpdateHud()
     {
+        _hud?.SetControlMode(_gunship != null || _controlling); // one mode switch: a turret or the missile owns the screen (ticket #152)
         _hud?.SetHealth(Mathf.CeilToInt(_me?.Health ?? 100));
         UavTick();
         if (_me != null) _hud?.SetBreath(Breath.AirLeft(_me.State), _me.HeadUnder);

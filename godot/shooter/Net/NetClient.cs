@@ -712,6 +712,9 @@ public partial class NetClient : Node
             case EventKind.Ac130Blast when Ac130Codec.DecodeBlast(payload) is { } ab:
                 OnAc130Blast(ab);
                 break;
+            case EventKind.ImpactFx when ImpactCodec.Decode(payload) is { } imp:
+                OnImpactFx(imp);
+                break;
             case EventKind.HelperWarning when HelperWarningCodec.Decode(payload) is { } hw:
                 OnHelperWarning(hw);
                 break;
