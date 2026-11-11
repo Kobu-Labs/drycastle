@@ -20,22 +20,23 @@ public static class DataFile
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) },
     };
 
-    public static T Parse<T>(string json, string what) where T : IVersioned
+    /// <summary>"supported" is the newest version this file's schema understands; files that bump independently pass their own.</summary>
+    public static T Parse<T>(string json, string what, int supported = SupportedVersion) where T : IVersioned
     {
         T? v;
         try { v = JsonSerializer.Deserialize<T>(json, Options); }
         catch (JsonException e) { throw new DataFileException($"{what}: invalid JSON: {e.Message}", e); }
         if (v is null) throw new DataFileException($"{what}: empty file");
         if (v.Version < 1) throw new DataFileException($"{what}: missing or invalid \"version\"");
-        if (v.Version > SupportedVersion)
-            throw new DataFileException($"{what}: version {v.Version} is newer than supported version {SupportedVersion}");
+        if (v.Version > supported)
+            throw new DataFileException($"{what}: version {v.Version} is newer than supported version {supported}");
         return v;
     }
 
-    public static T Load<T>(string path) where T : IVersioned
+    public static T Load<T>(string path, int supported = SupportedVersion) where T : IVersioned
     {
         if (!File.Exists(path)) throw new DataFileException($"{path}: file not found");
-        return Parse<T>(File.ReadAllText(path), Path.GetFileName(path));
+        return Parse<T>(File.ReadAllText(path), Path.GetFileName(path), supported);
     }
 }
 
