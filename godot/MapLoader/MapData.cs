@@ -128,7 +128,6 @@ public sealed class EditDefaults
     public IReadOnlyList<string> FenceKinds { get; init; } = Array.Empty<string>();
     /// <summary>Trees per 1000 m2 by parcel kind (kinds not listed get none).</summary>
     public IReadOnlyDictionary<string, double> TreeDensity { get; init; } = new Dictionary<string, double>();
-    public int MaxTreesPerParcel { get; init; }
 
     internal static EditDefaults Read(System.Text.Json.JsonElement e)
     {
@@ -142,7 +141,6 @@ public sealed class EditDefaults
             FenceProbability = f.GetProperty("probability").GetDouble(),
             FenceKinds = f.GetProperty("kinds").EnumerateArray().Select(k => k.GetString()!).ToList(),
             TreeDensity = t.GetProperty("density_per_1000m2").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetDouble()),
-            MaxTreesPerParcel = t.GetProperty("max_per_parcel").GetInt32(),
         };
     }
 }

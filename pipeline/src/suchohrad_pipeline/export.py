@@ -126,7 +126,6 @@ def _edit_defaults(rules_path: Path, area: str) -> dict:
         },
         "trees": {
             "density_per_1000m2": dict(trees["density_per_1000m2"]),
-            "max_per_parcel": trees["max_per_parcel"],
         },
     }
 

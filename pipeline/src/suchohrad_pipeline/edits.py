@@ -26,7 +26,7 @@ formatting is fixed, so git diffs stay small. Version 1::
 ``trees`` (both keys are optional, but exactly one of density or count must be given)
     density_per_1000m2  number >= 0: trees per 1000 m2 of the parcel (replaces the rules'
                         density for this parcel).
-    count               int >= 0: exact number of trees (not capped by max_per_parcel).
+    count               int >= 0: exact number of trees.
     seed_offset         int, default 0: mixed into the seed so that the layout rerolls. 0 keeps
                         the default layout.
 

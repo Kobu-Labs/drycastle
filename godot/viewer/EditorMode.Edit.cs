@@ -419,7 +419,7 @@ public partial class EditorMode
     // ---- UI ----
 
     OptionButton _modeOpt = null!, _typeOpt = null!, _scopeOpt = null!;
-    Label _hdrLabel = null!, _dirtyLabel = null!, _footLabel = null!, _fenceInfo = null!, _gateHint = null!, _treesNote = null!, _rulesLabel = null!, _mixedLabel = null!;
+    Label _hdrLabel = null!, _dirtyLabel = null!, _footLabel = null!, _fenceInfo = null!, _gateHint = null!, _treesNote = null!, _statsLabel = null!, _mixedLabel = null!;
     Button _heightReset = null!, _thickReset = null!, _colourReset = null!;
     SpinBox _heightSpin = null!, _thickSpin = null!, _densitySpin = null!, _countSpin = null!, _seedSpin = null!;
     ColorPickerButton _colourBtn = null!;
@@ -549,8 +549,8 @@ public partial class EditorMode
     {
         _treesNote = Note();
         body.AddChild(_treesNote);
-        _rulesLabel = Note();
-        body.AddChild(_rulesLabel);
+        _statsLabel = Note();
+        body.AddChild(_statsLabel);
         var group = new ButtonGroup();
         CheckBox Radio(string text, string kind)
         {
@@ -646,7 +646,10 @@ public partial class EditorMode
         // ---- trees ----
         var tr = CurrentTrees;
         _treesNote.Text = !has ? "" : t!.IsGroup ? $"applies to {t.Parcels.Count} parcels (per parcel, the whole group)" : t.Parcels.Count > 1 ? $"applies to {t.Parcels.Count} parcels" : "";
-        _rulesLabel.Text = !has ? "" : $"rules: {FirstKind} {RulesDensity:0.##} per 1000 m2 (about {RulesDensity * FirstArea / 1000.0:0.#} trees, max {defs?.MaxTreesPerParcel})";
+        var area = Math.Max(1.0, FirstArea);
+        var effDensity = tr.Kind == TreesDraft.Count ? tr.CountValue * 1000.0 / area : tr.Kind == TreesDraft.Density ? tr.DensityValue : RulesDensity;
+        var effCount = tr.Kind == TreesDraft.Count ? tr.CountValue : effDensity * area / 1000.0;
+        _statsLabel.Text = !has ? "" : $"{(tr.Kind == TreesDraft.Count ? effCount.ToString("0") : "about " + effCount.ToString("0.#"))} trees, {effDensity:0.##} per 1000 m2 ({area:0} m2)";
         _radioRules.SetPressedNoSignal(tr.Kind == TreesDraft.Rules);
         _radioDensity.SetPressedNoSignal(tr.Kind == TreesDraft.Density);
         _radioCount.SetPressedNoSignal(tr.Kind == TreesDraft.Count);

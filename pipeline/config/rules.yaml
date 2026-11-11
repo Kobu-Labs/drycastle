@@ -229,7 +229,6 @@ props:
   trees:
     # Trees per 1000 m2 of parcel area, by kind (random placement, min spacing, seeded).
     density_per_1000m2: {garden: 1.5, building_plot: 0.8, forest: 8.0, field: 0.0, other: 0.3}
-    max_per_parcel: 120
     # Cap on rule-based trees per chunk (0 = no cap); OSM trees always stay. Surplus trees are
     # dropped by a position hash, so the result is stable and spread over the chunk.
     max_per_chunk: 0

@@ -717,7 +717,6 @@ class ParcelEditTools:
                 },
                 "trees": {
                     "density_per_1000m2": tcfg["density_per_1000m2"].get(p["kind"], 0.0),
-                    "max_per_parcel": tcfg["max_per_parcel"],
                 },
             },
             **({"warnings": warnings} if warnings else {}),

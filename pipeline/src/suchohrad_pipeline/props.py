@@ -295,7 +295,7 @@ def make_trees(
             count = int(fixed)
         else:
             expected = rate * poly.area / 1000.0
-            count = min(int(cfg["max_per_parcel"]), int(expected) + (rng.random() < expected % 1))
+            count = int(expected) + (rng.random() < expected % 1)
         minx, miny, maxx, maxy = inner.bounds
         placed: list[tuple[float, float]] = []
         for _ in range(count * 40):
