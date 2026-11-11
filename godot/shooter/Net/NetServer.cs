@@ -155,7 +155,7 @@ public partial class NetServer : Node
         CompleteProfileLoads();
         _match.Update();
         _match.Entities.Tick((float)delta);
-        StreakTick();
+        StreakTick((float)delta);
         foreach (var c in _clients.Values.ToList()) if (c.Joined) SimulateClient(c, (float)delta);
         StepRockets((float)delta);
         StepVehicles((float)delta);

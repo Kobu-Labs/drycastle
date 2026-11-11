@@ -54,6 +54,8 @@ public enum EventKind : byte
     MissileBlast = 30,
     /// <summary>Server to the owner of a gunship: weapon, ammo, heat, zoom (<see cref="GunshipCodec"/>). Kinds 60-69 belong to the aircraft streaks.</summary>
     GunshipStatus = 60,
+    /// <summary>Server to the one player a helicopter helper is about to fire on: red-dot warning (<see cref="HelperWarningCodec"/>). Kinds 110-119 belong to the helicopter helper.</summary>
+    HelperWarning = 110,
 }
 
 public abstract record ReliableMsg;

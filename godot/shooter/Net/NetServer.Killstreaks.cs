@@ -24,6 +24,7 @@ public partial class NetServer
                 s.Id == CarePackageRules.StreakId ? CarePackageImpl() :
                 s.Id == AttackMissileStreak.StreakId ? MakeMissileStreak() :
                 s.Id == TurretStreak.StreakId ? new TurretStreak(Turret.Def, _match.Entities, new TurretWorld(this)) :
+                s.Id == HelicopterHelperStreak.StreakId ? MakeHelicopterHelper() :
                 new LoggingKillstreak(s.Id)),
             (owner, kind, payload) => { if (_byId.TryGetValue(owner, out var c)) Send(c, new EventMsg((byte)kind, payload)); },
             s => GD.Print($"server: {s}"));
@@ -50,7 +51,11 @@ public partial class NetServer
 
     void StreakRoundReset() => _streaks.Reset();
 
-    void StreakTick() => _streaks.Tick(_elapsed);
+    void StreakTick(float dt)
+    {
+        _streaks.Tick(_elapsed);
+        _helper?.Tick(dt);
+    }
 
     void StreakLeave(ushort id) => _streaks.Forget(id);
 }

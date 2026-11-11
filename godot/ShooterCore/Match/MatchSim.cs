@@ -19,6 +19,8 @@ public static class SpecialWeapons
     public const byte Missile = 248;
     /// <summary>A sentry turret's shots (killstreak "turret"); its kills count as the streak's, under the weapon id turret_gun.</summary>
     public const byte Turret = 247;
+    /// <summary>The helicopter helper's rounds (killstreak "helicopter_helper"); its kills count as the streak's, under the weapon id helicopter_gun.</summary>
+    public const byte Helper = 245;
 }
 
 public abstract record MatchEvent;
