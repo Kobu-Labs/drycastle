@@ -159,6 +159,33 @@ public partial class Shooter : Node3D
         for (var i = 0; i < 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
     }
 
+    /// <summary>
+    /// Parses the held-weapon, character and vehicle models and loads the shaders a match would otherwise load on first use
+    /// (T2-18). One step each, so the loading screen keeps drawing between them.
+    /// </summary>
+    async Task WarmAssets(LoadingScreen ld)
+    {
+        var steps = new List<Action>();
+        foreach (var f in WeaponFx.ModelFiles) { var file = f; steps.Add(() => ModelLib.Warm(file)); }
+        steps.Add(() => ModelLib.Warm(CharacterView.DefaultModel));
+        foreach (var v in _data!.Vehicles.Vehicles)
+        {
+            if (v.Model == "") continue;
+            var model = v.Model;
+            steps.Add(() => CarFx.Warm(model));
+        }
+        foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, UnderwaterView.ShaderPath, DayNightCycle.SkyShaderPath })
+        {
+            var path = sh;
+            steps.Add(() => GD.Load<Shader>(path));
+        }
+        foreach (var warm in steps)
+        {
+            warm();
+            await Step(ld, "loading.world", 0.75f);
+        }
+    }
+
     async Task BeginGame(string host, int port, string name)
     {
         var ld = new LoadingScreen($"{host}:{port}");
@@ -176,6 +203,7 @@ public partial class Shooter : Node3D
                 foreach (var f in LoadMapSteps(_cfg)) await Step(ld, "loading.map", 0.15f + 0.60f * f);
                 _mapLoaded = true;
             }
+            await WarmAssets(ld);
             await Step(ld, "loading.world", 0.75f);
             if (!_worldLit) { AddLightAndSky(); _worldLit = true; }
             await Step(ld, "loading.connect", 0.85f);

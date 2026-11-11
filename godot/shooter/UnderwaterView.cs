@@ -11,7 +11,7 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class UnderwaterView : CanvasLayer
 {
-    const string ShaderPath = "res://shaders/underwater.gdshader";
+    public const string ShaderPath = "res://shaders/underwater.gdshader";
 
     /// <summary>The map's water (set before the node enters the tree); Water.Empty on a dry map does nothing.</summary>
     public Water Water { get; set; } = Water.Empty;

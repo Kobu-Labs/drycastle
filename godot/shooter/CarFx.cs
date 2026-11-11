@@ -12,6 +12,12 @@ public static class CarFx
 
     static readonly Dictionary<string, Node3D?> Templates = new();
 
+    /// <summary>Parses a vehicle model into the template cache ahead of its first use (#170, T2-18).</summary>
+    public static void Warm(string model)
+    {
+        if (ShotFx.Enabled) Load(model);
+    }
+
     static Node3D? Load(string model)
     {
         if (Templates.TryGetValue(model, out var t)) return t;

@@ -11,6 +11,9 @@ namespace Suchohrad.Shooter;
 public static class WeaponFx
 {
     /// <summary>File, longest edge in metres and the model-space offset of the grip, per weapon id.</summary>
+    /// <summary>The model file of every held weapon, for warming them on the loading screen (#170, T2-18).</summary>
+    public static IEnumerable<string> ModelFiles => Models.Values.Select(m => m.File);
+
     static readonly Dictionary<string, (string File, float Length)> Models = new()
     {
         ["pistol"] = ("quaternius-ultimate-gun-pack/pistol-1.glb", 0.26f),

@@ -14,8 +14,8 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public sealed partial class CharacterView
 {
-    const string SuitShaderPath = "res://shaders/camo_suit.gdshader";
-    const string TuftShaderPath = "res://shaders/camo_tuft.gdshader";
+    public const string SuitShaderPath = "res://shaders/camo_suit.gdshader";
+    public const string TuftShaderPath = "res://shaders/camo_tuft.gdshader";
 
     /// <summary>Beyond this distance (m) the tufts are not drawn: the cheap LOD for distant players.</summary>
     const float TuftHideDistance = 45f;
