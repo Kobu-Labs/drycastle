@@ -52,6 +52,15 @@ public sealed partial class MapLoader
     /// <summary>Load a map folder. The path is an OS path, not res://. Throws on failure.</summary>
     public void Load(string mapDir)
     {
+        foreach (var _ in LoadSteps(mapDir)) { }
+    }
+
+    /// <summary>
+    /// Load a map folder in steps: yields the fraction done (0..1) after each chunk and each later phase, so a caller can draw a frame
+    /// between steps. Each step still blocks, but the longest is one chunk. Throws on failure, from the enumeration.
+    /// </summary>
+    public IEnumerable<float> LoadSteps(string mapDir)
+    {
         var t0 = Time.GetTicksMsec();
         _mapDir = mapDir;
         if (!Directory.Exists(mapDir)) throw new DirectoryNotFoundException(mapDir);
@@ -71,20 +80,28 @@ public sealed partial class MapLoader
         WaterJson = File.Exists(water) ? File.ReadAllText(water) : "";
         var trees = Path.Combine(mapDir, "trees.json");
         TreesJson = File.Exists(trees) ? File.ReadAllText(trees) : ""; // map 0.6.0+
+        yield return 0.03f;
 
-        foreach (var c in manifest.RootElement.GetProperty("chunks").EnumerateArray())
+        var chunks = manifest.RootElement.GetProperty("chunks");
+        var total = Math.Max(1, chunks.GetArrayLength());
+        var done = 0;
+        foreach (var c in chunks.EnumerateArray())
         {
             var file = Path.Combine(mapDir, c.GetProperty("file").GetString()!);
             var ix = c.GetProperty("index")[0].GetInt32();
             var iy = c.GetProperty("index")[1].GetInt32();
             LoadChunk(file, new Vector2I(ix, iy));
+            yield return 0.03f + 0.82f * ++done / total;
         }
         BuildTreeColliders(); // after the chunks, so each tree's bodies go under its chunk
+        yield return 0.90f;
         if (manifest.RootElement.TryGetProperty("files", out var files)
             && files.TryGetProperty("objects", out var objFile) && objFile.GetString() is { } of)
             LoadObjects(Path.Combine(mapDir, of));
+        yield return 0.97f;
         if (BuildBoundary) BuildTerrainBoundary();
         Stats.LoadSeconds = (Time.GetTicksMsec() - t0) / 1000.0;
+        yield return 1f;
     }
 
     /// <summary>Invisible walls along the rim of the terrain (on by default). The exported terrain is a bounded, ragged patch while spawns, parcels and roads reach past it, so without a rim players walk off the edge and fall into the void.</summary>

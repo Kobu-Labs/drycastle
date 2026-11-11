@@ -1,5 +1,7 @@
 # Shooter: export and dedicated server guide
 
+Releasing to players (client zip, server deploy): see `docs/release.md`.
+
 Status: the export presets and Makefile targets are written but the actual export has NOT been verified
 (no Godot export templates were installed when this was written). Treat the first `make shooter-export` as the test.
 
@@ -11,9 +13,8 @@ The shooter loads a map folder produced by the pipeline (default `out/map`):
 make map AREA=<area>        # see docs/pipeline.md; produces out/map
 ```
 
-The map is NOT bundled into any export. Server and clients each pick the folder at start with
-`--map DIR` or the `SUCHOHRAD_MAP` environment variable (default `../../out/map` relative to the project, which does
-not exist next to an exported binary). Server and clients must use the same map build.
+Exports bundle the full village map (`out/village/map`, see `docs/release.md`) as `map/` next to the binary. Server and clients pick the folder with
+`--map DIR`, else `SUCHOHRAD_MAP`, else `map/` next to an exported binary (`../../out/map` when run from source). Server and clients must use the same map build.
 
 ## 2. Export
 
@@ -35,9 +36,8 @@ Presets live in `godot/shooter/export_presets.cfg`. What is packaged where:
 
 - `data/*.json` (match, weapons, vehicles, sounds) is included in the `.pck` and read via `res://data/`.
 - Sounds and models are NOT in the pck: the game reads them from the asset library on disk. `make shooter-export`
-  copies `assets/` to an `assets/` folder next to each binary. Point the game at it:
-  `SUCHOHRAD_ASSETS=/path/to/assets` (otherwise it looks for `../../assets` relative to the binary, which is wrong
-  for an export). The server needs it too: it validates that every sound file in `sounds.json` exists.
+  copies `assets/` to an `assets/` folder next to each binary. The game looks for it next to the
+  binary in an export (`SUCHOHRAD_ASSETS=/path/to/assets` overrides; from source it uses the repo's `assets/`). The server needs it too: it validates that every sound file in `sounds.json` exists.
 - The map folder is external (see above).
 
 ## 3. Start the headless server

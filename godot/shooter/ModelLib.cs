@@ -21,9 +21,7 @@ public static class ModelLib
     /// <summary>Absolute path of a file in the asset library (assets/, or SUCHOHRAD_ASSETS).</summary>
     public static string AssetPath(string relPath)
     {
-        var env = OS.GetEnvironment("SUCHOHRAD_ASSETS");
-        var dir = string.IsNullOrEmpty(env) ? ProjectSettings.GlobalizePath("res://") + "../../assets" : env;
-        return Path.GetFullPath(Path.Combine(dir, relPath));
+        return Path.GetFullPath(Path.Combine(GamePaths.Assets(), relPath));
     }
 
     static Node3D? Load(string relPath)

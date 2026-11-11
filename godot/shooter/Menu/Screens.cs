@@ -160,7 +160,11 @@ public partial class LoadingScreen : MenuScreen
     {
         var v = Ui.VBox();
         v.CustomMinimumSize = new Vector2(640, 0);
-        v.AddChild(Ui.Lbl(Strings.T("loading.title"), "HudDisplay"));
+        var head = Ui.HBox();
+        head.AddThemeConstantOverride("separation", ShooterTheme.Space * 2);
+        head.AddChild(new Spinner(ShooterTheme.Space * 6));
+        head.AddChild(Ui.Lbl(Strings.T("loading.title"), "HudDisplay"));
+        v.AddChild(head);
         v.AddChild(Ui.Lbl(Strings.F("loading.target", _target), "HudDim"));
         v.AddChild(Ui.Gap(ShooterTheme.Space * 3));
         _bar = new ProgressBar { MinValue = 0, MaxValue = 1, Step = 0.001, ShowPercentage = false, CustomMinimumSize = new Vector2(0, 24), MouseFilter = MouseFilterEnum.Ignore };

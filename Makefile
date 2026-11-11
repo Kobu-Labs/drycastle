@@ -227,23 +227,37 @@ shooter-menu-shots:
 	godot --path godot/shooter -- --menu-shots $(abspath $(or $(DIR),out/menu))
 
 # Export presets (godot/shooter/export_presets.cfg) into out/shooter/. Needs the Godot 4.7.2 mono export templates
-# (Editor > Manage Export Templates); not downloaded here. The map folder is NOT bundled; assets/ is copied as a sidecar.
-.PHONY: shooter-export shooter-export-check
+# (Editor > Manage Export Templates); not downloaded here. assets/ and map/ (SHOOTER_PKG_MAP) are copied next to each binary.
+.PHONY: shooter-export shooter-export-check shooter-package
 SHOOTER_TEMPLATES = $(HOME)/.local/share/godot/export_templates/4.7.2.stable.mono
+# The map bundled into every export (as map/ next to the binary): the full village build. Clients and the server must run
+# the same map build, so exports always carry it; override with SHOOTER_PKG_MAP=<map dir>.
+SHOOTER_PKG_MAP ?= out/village/map
 
 shooter-export-check:
 	@test -f godot/shooter/export_presets.cfg || { echo "missing godot/shooter/export_presets.cfg"; exit 1; }
 	@grep -q 'include_filter="data/\*.json"' godot/shooter/export_presets.cfg || { echo "export_presets.cfg does not pack data/*.json (#133)"; exit 1; }
 	@for f in weapons match vehicles sounds perks levels killstreaks turret environment camo; do test -f godot/shooter/data/$$f.json || { echo "missing godot/shooter/data/$$f.json"; exit 1; }; done
-	@echo "$$(grep -c '^name=' godot/shooter/export_presets.cfg) export presets found"
+	@test -f $(SHOOTER_PKG_MAP)/manifest.json || { echo "map not built: $(SHOOTER_PKG_MAP)/manifest.json missing. Exports bundle the full village map: run 'make map AREA=village' (or set SHOOTER_PKG_MAP=<map dir>)"; exit 1; }
+	@echo "$$(grep -c '^name=' godot/shooter/export_presets.cfg) export presets found; bundling map $(SHOOTER_PKG_MAP)"
 	@if [ -d "$(SHOOTER_TEMPLATES)" ] && [ -n "$$(ls -A $(SHOOTER_TEMPLATES) 2>/dev/null)" ]; then echo "export templates: OK ($(SHOOTER_TEMPLATES))"; \
 	else echo "export templates: MISSING at $(SHOOTER_TEMPLATES) (install the 4.7.2 mono templates: Editor > Manage Export Templates)"; exit 1; fi
 
 shooter-export: shooter-export-check
 	dotnet build godot/shooter/shooter.csproj
-	mkdir -p out/shooter/windows/assets out/shooter/linux-client/assets out/shooter/linux-server/assets
+	mkdir -p out/shooter/windows/assets out/shooter/linux-client/assets out/shooter/linux-server/assets out/shooter/windows/map out/shooter/linux-client/map out/shooter/linux-server/map
 	godot --headless --path godot/shooter --export-release "Windows Client"
 	godot --headless --path godot/shooter --export-release "Linux Client"
 	godot --headless --path godot/shooter --export-release "Linux Server"
-	for d in windows linux-client linux-server; do cp -r assets/. out/shooter/$$d/assets/; done
-	@echo "exported to out/shooter/. Run with SUCHOHRAD_ASSETS=<dir>/assets and the map via --map or SUCHOHRAD_MAP (see docs/shooter-server.md)"
+	for d in windows linux-client linux-server; do cp -r assets/. out/shooter/$$d/assets/; cp -r $(SHOOTER_PKG_MAP)/. out/shooter/$$d/map/; done
+	@echo "exported to out/shooter/ (assets/ and map/ next to each binary; see docs/shooter-server.md)"
+
+# Double-click Windows package: out/shooter/suchohrad-windows.zip (exe + assets/ + map/ + README.txt).
+# Staged as symlinks and zipped (zip follows them), so nothing is copied or deleted. Map: the bundled map folder
+# (default out/village/map, set above) is already inside each export; it must be the build the server runs.
+shooter-package: shooter-export
+	mkdir -p out/shooter/package/Suchohrad
+	for f in out/shooter/windows/*; do ln -sfn "$$PWD/$$f" out/shooter/package/Suchohrad/; done
+	ln -sfn "$$PWD/docs/player-readme.txt" out/shooter/package/Suchohrad/README.txt
+	cd out/shooter/package && zip -qrFS ../suchohrad-windows.zip Suchohrad
+	@echo "package: out/shooter/suchohrad-windows.zip ($$(du -h out/shooter/suchohrad-windows.zip | cut -f1))"

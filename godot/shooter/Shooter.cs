@@ -169,8 +169,13 @@ public partial class Shooter : Node3D
         {
             await Step(ld, "loading.data", 0.05f);
             _data ??= LoadData();
-            await Step(ld, "loading.map", 0.15f); // one blocking step: MapLoader.Load has no incremental API
-            if (!_mapLoaded) { LoadMap(_cfg); _mapLoaded = true; }
+            await Step(ld, "loading.map", 0.15f);
+            if (!_mapLoaded)
+            {
+                // One step per chunk, a frame drawn between steps: the spinner and the bar keep moving through the load.
+                foreach (var f in LoadMapSteps(_cfg)) await Step(ld, "loading.map", 0.15f + 0.60f * f);
+                _mapLoaded = true;
+            }
             await Step(ld, "loading.world", 0.75f);
             if (!_worldLit) { AddLightAndSky(); _worldLit = true; }
             await Step(ld, "loading.connect", 0.85f);
@@ -178,7 +183,7 @@ public partial class Shooter : Node3D
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
-                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
+                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(null),
             };
             client.OnFailed = (why, joined) =>
@@ -238,13 +243,15 @@ public partial class Shooter : Node3D
         return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"));
     }
 
-    void LoadMap(Config cfg)
+    void LoadMap(Config cfg) { foreach (var _ in LoadMapSteps(cfg)) { } }
+
+    /// <summary>Loads the map, yielding the fraction done after each chunk so the loading screen can draw a frame between steps.</summary>
+    IEnumerable<float> LoadMapSteps(Config cfg)
     {
-        var dir = cfg.Str("map", OS.GetEnvironment("SUCHOHRAD_MAP"));
-        if (string.IsNullOrEmpty(dir)) dir = ProjectSettings.GlobalizePath("res://") + "../../out/map";
+        var dir = GamePaths.Map(cfg.Str("map", ""));
         if (!Directory.Exists(dir)) throw new InvalidOperationException($"map folder not found: {dir} (pass --map DIR or set SUCHOHRAD_MAP)");
         AddChild(_map.Root);
-        _map.Load(Path.GetFullPath(dir));
+        foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Suchohrad.ShooterCore.Water.Empty : Suchohrad.ShooterCore.Water.Parse(_map.WaterJson);
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
         var s = _map.Stats;

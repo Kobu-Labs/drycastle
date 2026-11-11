@@ -16,9 +16,7 @@ public static class CarFx
     {
         if (Templates.TryGetValue(model, out var t)) return t;
         Templates[model] = null;
-        var env = OS.GetEnvironment("SUCHOHRAD_ASSETS");
-        var dir = string.IsNullOrEmpty(env) ? ProjectSettings.GlobalizePath("res://") + "../../assets" : env;
-        var path = Path.GetFullPath(Path.Combine(dir, model));
+        var path = Path.GetFullPath(Path.Combine(GamePaths.Assets(), model));
         if (!File.Exists(path)) { GD.PrintErr($"vehicle model not found: {path}; using a box"); return null; }
         var doc = new GltfDocument();
         var state = new GltfState();
