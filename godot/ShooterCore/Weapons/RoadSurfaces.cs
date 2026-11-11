@@ -13,8 +13,26 @@ public sealed class RoadSurfaces
     readonly record struct Seg(float Ax, float Ay, float Bx, float By, float HalfWidth, float MinX, float MinY, float MaxX, float MaxY);
 
     readonly Seg[] _segs;
+    // uniform grid over the segments' boxes (built at load): Contains reads only the segments registered in the point's cell
+    const float CellM = 32f;
+    readonly Dictionary<(int, int), List<int>> _cells = new();
 
-    RoadSurfaces(Seg[] segs) => _segs = segs;
+    RoadSurfaces(Seg[] segs)
+    {
+        _segs = segs;
+        for (var i = 0; i < segs.Length; i++)
+        {
+            var s = segs[i];
+            for (var cx = Cell(s.MinX); cx <= Cell(s.MaxX); cx++)
+                for (var cy = Cell(s.MinY); cy <= Cell(s.MaxY); cy++)
+                {
+                    if (!_cells.TryGetValue((cx, cy), out var list)) _cells[(cx, cy)] = list = new List<int>();
+                    list.Add(i);
+                }
+        }
+    }
+
+    static int Cell(float v) => (int)MathF.Floor(v / CellM);
 
     public int Count => _segs.Length;
 
@@ -50,8 +68,10 @@ public sealed class RoadSurfaces
     /// <summary>True when the map-metre point (x east, y north) is on a road.</summary>
     public bool Contains(float x, float y)
     {
-        foreach (var s in _segs)
+        if (!_cells.TryGetValue((Cell(x), Cell(y)), out var near)) return false;
+        foreach (var i in near)
         {
+            var s = _segs[i];
             if (x < s.MinX || x > s.MaxX || y < s.MinY || y > s.MaxY) continue;
             var dx = s.Bx - s.Ax; var dy = s.By - s.Ay;
             var len2 = dx * dx + dy * dy;

@@ -140,6 +140,7 @@ public partial class NetServer : Node
         InitAircraft();
         BuildCarePackages();
         BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
+        WarmSurfaceIndexes(); // roads.json and the tree grid, so no impact pays for them on a tick (T3-003, T3-004)
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");

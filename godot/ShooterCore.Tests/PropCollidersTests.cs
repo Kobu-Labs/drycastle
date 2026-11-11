@@ -174,4 +174,26 @@ public class PropCollidersTests
         Assert.Equal(CollisionLayers.World, wall[0].Layer);
         Assert.Equal(2.5f, wall[0].Z1);
     }
+
+    [Fact]
+    public void TreeGridGivesTheSameSurfaceAsTheLinearScan()
+    {
+        // deterministic scatter of trees over 400 m, with a few sizes; the grid must answer every probe as the scan does
+        var seed = 12345u;
+        float Next(float max) { seed = seed * 1664525u + 1013904223u; return (seed >> 8) / (float)(1 << 24) * max; }
+        var trees = new List<TreeInstance>();
+        for (var i = 0; i < 600; i++)
+            trees.Add(new TreeInstance(Next(400f), Next(400f), 0f, 0.6f + Next(1.2f), Next(6.28f), false, 0, 0));
+        var grid = new TreeColliders.Index(trees, Model);
+        var hits = 0;
+        for (var i = 0; i < 4000; i++)
+        {
+            var near = trees[i % trees.Count]; // probes around trees, so most of them land on a trunk or a crown
+            var p = new Vector3(near.X + Next(3f) - 1.5f, near.Y + Next(3f) - 1.5f, 0.9f);
+            var linear = TreeColliders.GroupAt(trees, Model, p);
+            Assert.Equal(linear, grid.GroupAt(p));
+            if (linear != null) hits++;
+        }
+        Assert.True(hits > 100, $"the probes should land on trees often enough to mean something (got {hits})");
+    }
 }

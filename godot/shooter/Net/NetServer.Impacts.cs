@@ -19,16 +19,31 @@ public partial class NetServer
     const double BulletPuffGap = 0.2;
 
     RoadSurfaces? _roads;
+    TreeColliders.Index? _mapTrees;
     double _nextBulletPuff;
 
     RoadSurfaces Roads => _roads ??= Map != null && Map.RoadsJson.Length > 0 ? RoadSurfaces.Parse(Map.RoadsJson) : RoadSurfaces.Empty;
+
+    /// <summary>The map's trees in a grid (T3-003); built with <see cref="WarmSurfaceIndexes"/>, or on the first lookup.</summary>
+    TreeColliders.Index MapTrees => _mapTrees ??= new TreeColliders.Index(Map!.Trees, Map.TreeModel);
+
+    /// <summary>
+    /// Builds the road polygons and the tree grid at load (T3-003, T3-004), so the first impact of a match does not parse
+    /// roads.json or index the trees on a tick.
+    /// </summary>
+    void WarmSurfaceIndexes()
+    {
+        if (Map == null) return;
+        _ = Roads;
+        _ = MapTrees;
+    }
 
     /// <summary>The collider group of a point that is not a body or a vehicle (see <see cref="ImpactGroups"/>); null for the terrain.</summary>
     string? SurfaceGroup(NVec3 at)
     {
         var onRoad = Roads.Contains(at.X, -at.Z); // ground z is -north, map y is north
         if (Map == null) return ImpactGroups.For(onRoad, null, 0f);
-        if (!onRoad && TreeColliders.GroupAt(Map.Trees, Map.TreeModel, new NVec3(at.X, -at.Z, at.Y)) is { } tree) return tree; // trunk: wood, crown: foliage
+        if (!onRoad && MapTrees.GroupAt(new NVec3(at.X, -at.Z, at.Y)) is { } tree) return tree; // trunk: wood, crown: foliage
         var parcel = Map.ParcelIndex?.At(at.X, at.Z);
         var above = at.Y - Map.GroundHeightOrMean(at.X, at.Z);
         return ImpactGroups.For(onRoad, parcel?.Kind, above);
