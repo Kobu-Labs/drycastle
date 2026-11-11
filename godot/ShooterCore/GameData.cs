@@ -23,7 +23,7 @@ public class GameData
             Match = DataFile.Parse<MatchConfig>(matchJson, "match.json"),
             Vehicles = VehiclesFile.Validate(DataFile.Parse<VehiclesFile>(vehiclesJson, "vehicles.json")),
             Perks = perks,
-            Levels = LevelsFile.Parse(levelsJson, weapons, perks),
+            Levels = LevelsFile.Parse(levelsJson, weapons, perks, KillstreakIds.Placeholder.Keys.ToHashSet()),
             Environment = environmentJson == "" ? new() : EnvironmentConfig.Parse(environmentJson),
         };
     }
@@ -38,7 +38,7 @@ public class GameData
             Match = MatchConfig.Load(Path.Combine(dir, "match.json")),
             Vehicles = VehiclesFile.Load(Path.Combine(dir, "vehicles.json")),
             Perks = perks,
-            Levels = LevelsFile.Load(Path.Combine(dir, "levels.json"), weapons, perks),
+            Levels = LevelsFile.Load(Path.Combine(dir, "levels.json"), weapons, perks, KillstreakIds.Placeholder.Keys.ToHashSet()),
             Environment = File.Exists(Path.Combine(dir, "environment.json")) ? EnvironmentConfig.Load(Path.Combine(dir, "environment.json")) : new(),
         };
     }

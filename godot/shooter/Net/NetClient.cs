@@ -239,6 +239,7 @@ public partial class NetClient : Node
             case EventMsg e:
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
+                OnProgressionEvent((EventKind)e.Kind, e.Payload);
                 WorldEntities.OnEvent((EventKind)e.Kind, e.Payload);
                 EventReceived?.Invoke((EventKind)e.Kind, e.Payload);
                 break;
@@ -267,6 +268,7 @@ public partial class NetClient : Node
                 GD.Print($"client {PlayerName}: spawn #{sp.Id} protected {sp.Protection:F1}s");
                 if (sp.Id == _myId && _me != null)
                 {
+                    ApplySpawnLoadout(); // the hotbar and perk the server applied at this spawn
                     _wantSlot = StartSlot();
                     Dead = false; _gotSelf = false; _pending.Clear(); // the next snapshot carries the spawn position
                     _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
@@ -589,8 +591,6 @@ public partial class NetClient : Node
 
     // ---- weapons: input, events, placeholder effects (the HUD lives in NetClient.Hud.cs) ----
 
-    int StartSlot() => Weapons == null ? 1 : Math.Max(1, Weapons.Weapons.FindIndex(w => w.Id == Weapons.StartingWeapon) + 1);
-
     /// <summary>Movement speed multiplier of the weapon in <paramref name="slot"/> (0: none, 1.0), times the run speed of <see cref="Perks"/>. The server applies the same value.</summary>
     float SpeedFor(byte slot) =>
         (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].MoveSpeedMultiplier : 1f) * Perks.RunSpeed;
@@ -616,8 +616,8 @@ public partial class NetClient : Node
     void ReadSlotKeys()
     {
         if (Dead || Input.MouseMode != Input.MouseModeEnum.Captured) return;
-        for (var k = 0; k < 5; k++)
-            if (Input.IsActionPressed($"slot_{k + 1}")) _wantSlot = k + 1;
+        for (var k = 0; k < Math.Min(5, _hotbar.Length); k++)
+            if (Input.IsActionPressed($"slot_{k + 1}")) _wantSlot = _hotbar[k] + 1;
     }
 
     public override void _UnhandledInput(InputEvent e)
@@ -625,8 +625,7 @@ public partial class NetClient : Node
         if (Bot || Weapons == null || Dead || Input.MouseMode != Input.MouseModeEnum.Captured) return;
         if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {
-            var n = Weapons.Weapons.Count;
-            _wantSlot = (_wantSlot - 1 + (b.ButtonIndex == MouseButton.WheelDown ? 1 : n - 1)) % n + 1;
+            _wantSlot = CycleSlot(_wantSlot, b.ButtonIndex == MouseButton.WheelDown ? 1 : -1);
         }
     }
 

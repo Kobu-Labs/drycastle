@@ -16,8 +16,7 @@ public partial class NetClient
     {
         if (!ShotFx.Enabled || _hud != null) return; // headless runs have no HUD
         _hud = new Hud { MyId = _myId, Scoped = () => _me is { ZoomFov: > 0 }, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Spread = () => CurrentWeapon is { } w ? HitMath.StanceSpread(_spread.Degrees(w, Now), w, _me?.State.Stance ?? Stance.Stand) : 0f, StanceOf = () => _me?.State.Stance ?? Stance.Stand };
-        AddChild(_hud);
-        if (Weapons != null) _hud.SetWeapons(Weapons.Weapons.Select(w => WeaponName(w.Id)).ToList());
+        AddChild(_hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
     }
 
     static string WeaponName(string id)
@@ -27,15 +26,16 @@ public partial class NetClient
         return t == k ? id : t;
     }
 
+    /// <summary>Ammo of the hotbar: the selected hotbar cell, and every hotbar weapon's magazine in hotbar order.</summary>
     void HudAmmo()
     {
         if (_hud == null || Ammo is not { } a || Weapons == null || a.Slot < 1 || a.Slot > Weapons.Weapons.Count) return;
         var w = Weapons.Weapons[a.Slot - 1];
         var all = new List<(int, int, bool)>();
-        for (var i = 0; i < Weapons.Weapons.Count && i < a.Slots.Count; i++)
-            all.Add((a.Slots[i].Mag, a.Slots[i].Reserve, Weapons.Weapons[i].MagazineSize == 0));
+        foreach (var gi in _hotbar)
+            if (gi < a.Slots.Count) all.Add((a.Slots[gi].Mag, a.Slots[gi].Reserve, Weapons.Weapons[gi].MagazineSize == 0));
         var (mag, reserve) = a.Slots[a.Slot - 1];
-        _hud.SetAmmo(a.Slot, w.MagazineSize == 0 ? -1 : mag, reserve, all, a.ReloadRemaining, w.ReloadTime);
+        _hud.SetAmmo(Math.Max(1, HotbarPos(a.Slot) + 1), w.MagazineSize == 0 ? -1 : mag, reserve, all, a.ReloadRemaining, w.ReloadTime);
     }
 
     void HudHit(HitMsg h)

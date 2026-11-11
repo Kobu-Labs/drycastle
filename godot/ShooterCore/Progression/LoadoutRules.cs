@@ -10,14 +10,15 @@ public static class LoadoutRules
     public const int MaxItemIdBytes = 48;
 
     /// <summary>
-    /// The loadout a guest (no persistence) gets in every slot: the first primary and the first secondary weapon in
-    /// data-file order that need no unlock. Perk and killstreaks stay empty.
+    /// The loadout a new or guest player gets in every slot: the first unlock-0 primary and secondary weapon in data-file
+    /// order, the first unlock-0 perk, and the starter killstreak (<see cref="KillstreakIds.StarterStreak"/>).
     /// </summary>
-    public static Loadout DefaultLoadout(int slot, WeaponsFile weapons)
+    public static Loadout DefaultLoadout(int slot, WeaponsFile weapons, PerksFile perks)
     {
         var primary = weapons.Weapons.FirstOrDefault(w => w.Slot == WeaponSlot.Primary && w.UnlockLevel == 0)?.Id ?? "";
         var secondary = weapons.Weapons.FirstOrDefault(w => w.Slot == WeaponSlot.Secondary && w.UnlockLevel == 0)?.Id ?? "";
-        return new Loadout(slot, primary, secondary, "", "", "", "");
+        var perk = perks.Perks.FirstOrDefault(p => p.UnlockLevel == 0)?.Id ?? "";
+        return new Loadout(slot, primary, secondary, perk, KillstreakIds.StarterStreak, "", "");
     }
 
     /// <summary>Null when the slot number is one of the five; otherwise the reason.</summary>
@@ -25,25 +26,46 @@ public static class LoadoutRules
         slot is >= 0 and <= Loadout.MaxSlot ? null : $"loadout slot must be 0 to {Loadout.MaxSlot}, got {slot}";
 
     /// <summary>
-    /// Checks one loadout for saving. Primary and secondary are required, perk and streaks may be empty. A weapon is
-    /// usable when the player's level reaches its unlock level or the player owns it as an unlock. Perk and streak ids
-    /// must be in the given sets (the perk and killstreak data files; empty until those tickets land, so only empty
-    /// perk and streak slots pass). Returns null when valid, otherwise a reason the client can show.
+    /// Checks one loadout for saving (ADR 0003: every item must be in the data files and unlocked for the player).
+    /// <list type="bullet">
+    /// <item>Primary and secondary are required, of the right slot, and unlocked (level reached or owned).</item>
+    /// <item>Perk and streaks may be empty. A perk must be known and unlocked; so must each streak, and no streak may repeat.</item>
+    /// </list>
+    /// <paramref name="perkLevels"/> and <paramref name="streakLevels"/> map item id to its unlock level. Returns null when
+    /// valid, otherwise a reason the client can show.
     /// </summary>
     public static string? ValidateLoadout(Loadout l, WeaponsFile weapons, int level, IEnumerable<Unlock> unlocks,
-        IReadOnlySet<string> perks, IReadOnlySet<string> streaks)
+        IReadOnlyDictionary<string, int> perkLevels, IReadOnlyDictionary<string, int> streakLevels)
     {
         if (ValidateSlot(l.Slot) is { } slotErr) return slotErr;
-        var owned = unlocks.Where(u => u.Kind == "weapon").Select(u => u.ItemId).ToHashSet();
+        var owned = unlocks.ToList();
+        var ownedWeapons = owned.Where(u => u.Kind == "weapon").Select(u => u.ItemId).ToHashSet();
 
-        if (Weapon(l.PrimaryWeapon, WeaponSlot.Primary, "primary", weapons, level, owned) is { } p) return p;
-        if (Weapon(l.SecondaryWeapon, WeaponSlot.Secondary, "secondary", weapons, level, owned) is { } s) return s;
+        if (Weapon(l.PrimaryWeapon, WeaponSlot.Primary, "primary", weapons, level, ownedWeapons) is { } p) return p;
+        if (Weapon(l.SecondaryWeapon, WeaponSlot.Secondary, "secondary", weapons, level, ownedWeapons) is { } s) return s;
 
-        if (l.Perk != "" && (l.Perk.Length > MaxItemIdBytes || !perks.Contains(l.Perk))) return $"unknown perk \"{Short(l.Perk)}\"";
+        if (l.Perk != "")
+        {
+            if (l.Perk.Length > MaxItemIdBytes || !perkLevels.TryGetValue(l.Perk, out var perkLevel))
+                return $"unknown perk \"{Short(l.Perk)}\"";
+            if (Locked(level, perkLevel, owned, "perk", l.Perk) is { } perkErr) return perkErr;
+        }
+
+        var seen = new HashSet<string>();
         foreach (var (id, n) in new[] { (l.Streak1, 1), (l.Streak2, 2), (l.Streak3, 3) })
-            if (id != "" && (id.Length > MaxItemIdBytes || !streaks.Contains(id))) return $"unknown killstreak {n} \"{Short(id)}\"";
+        {
+            if (id == "") continue;
+            if (id.Length > MaxItemIdBytes || !streakLevels.TryGetValue(id, out var streakLevel))
+                return $"unknown killstreak {n} \"{Short(id)}\"";
+            if (!seen.Add(id)) return $"killstreak \"{Short(id)}\" is selected more than once";
+            if (Locked(level, streakLevel, owned, "streak", id) is { } streakErr) return streakErr;
+        }
         return null;
     }
+
+    /// <summary>A perk or streak is usable at the level it unlocks at, or when the player owns it as an unlock row.</summary>
+    static string? Locked(int level, int unlockLevel, IEnumerable<Unlock> owned, string kind, string id) =>
+        level >= unlockLevel || owned.Any(u => u.Kind == kind && u.ItemId == id) ? null : $"{id} unlocks at level {unlockLevel}";
 
     static string? Weapon(string id, WeaponSlot slot, string label, WeaponsFile weapons, int level, HashSet<string> owned)
     {

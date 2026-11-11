@@ -32,6 +32,8 @@ public partial class NetServer : Node
         public PlayerWeapons W = null!;
         /// <summary>The player's perk values. Neutral until the loadout ticket sets them from the player's loadout.</summary>
         public PerkModifiers Perks = PerkModifiers.None;
+        /// <summary>XP granted to this player since the round began (the end-of-round summary).</summary>
+        public readonly List<XpGrant> RoundXp = new();
         public readonly SnapshotEncoder Enc = new();
         public readonly WorldSnapshotEncoder WEnc = new();
         public Vector3 Start;
@@ -67,6 +69,11 @@ public partial class NetServer : Node
     public double QuitAfter;
     /// <summary>Progression store (ADR 0003); null = every player is a guest. Set by the host, which owns and disposes it.</summary>
     public IProgressionStore? Progression;
+    /// <summary>perks.json: the perk of each loadout and its modifiers.</summary>
+    public PerksFile Perks = null!;
+    /// <summary>levels.json: the XP curve and awards.</summary>
+    public LevelsFile Levels = null!;
+    MatchXp _xp = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, Client> _clients = new();
@@ -107,6 +114,7 @@ public partial class NetServer : Node
             return;
         }
         if (ArenaMode) BuildArena();
+        _xp = new MatchXp(Levels.Awards);
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");
@@ -314,7 +322,7 @@ public partial class NetServer : Node
     void Join(Client c)
     {
         // health, death and respawn belong to the match state machine, not the body
-        c.W = new PlayerWeapons(Weapons, c.Perks);
+        ApplyLoadout(c);
         c.Recoil = new RecoilState(c.Id);
         c.Breath = new BreathState(c.Id);
         c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water };
@@ -393,10 +401,15 @@ public partial class NetServer : Node
         switch (e)
         {
             case ScoreboardChanged: BroadcastEvent(EventKind.MatchState, MatchCodec.Encode(BuildMatchState())); break;
-            case PhaseChanged { Phase: MatchPhase.Ending }: _roundsEnded++; GD.Print($"server: round over, winners {string.Join(",", _match.Winners)}"); break;
+            case PhaseChanged { Phase: MatchPhase.Ending }:
+                _roundsEnded++;
+                RoundEnded();
+                GD.Print($"server: round over, winners {string.Join(",", _match.Winners)}");
+                break;
             case PhaseChanged { Phase: MatchPhase.Running }:
                 ResetCars();
                 LossRoundStart();
+                RoundStarted();
                 if (_roundsEnded > 0) { _restarts++; _finishAt = _elapsed + 1.5; }
                 GD.Print("server: round started");
                 break;
@@ -406,6 +419,7 @@ public partial class NetServer : Node
                     sc.Body.Teleport(new Vector3(s.Position.X, s.Position.Y + 0.1f, s.Position.Z));
                     sc.Body.Health = MoveConsts.MaxHealth;
                     sc.Inputs.Clear(); sc.Start = sc.Body.GlobalPosition; sc.MaxMoved = 0;
+                    ApplyLoadout(sc); // a loadout changed while alive applies from this spawn on
                     sc.W.Reset(_elapsed);
                     sc.Recoil.Reset();
                     sc.Breath.Reset();
@@ -419,9 +433,11 @@ public partial class NetServer : Node
                 if (WeaponsSmoke && _kills >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5;
                 if (BazookaSmoke && _kills >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.5;
                 LossKill(k.Killer, k.Victim);
+                RecordKill(k);
+                AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause), _elapsed));
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon)));
                 break;
-            case PlayerDied d: LossDeath(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
+            case PlayerDied d: LossDeath(d.Victim); RecordDeath(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
         }
     }
 
@@ -567,6 +583,7 @@ public partial class NetServer : Node
     {
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
+        if (r == DamageResult.Damaged) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
         _hitsLanded++;
         LossHit(attackerId, victim, r == DamageResult.Killed);
         if (head) _headshots++;

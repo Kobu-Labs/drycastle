@@ -133,7 +133,8 @@ public class PersistenceTests
         using (var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
         {
             conn.Open();
-            Assert.Equal(1L, (long)new Microsoft.Data.Sqlite.SqliteCommand("SELECT COUNT(*) FROM schema_migrations;", conn).ExecuteScalar()!);
+            // one row per migration file (0001_init, 0002_roadkills)
+            Assert.Equal(2L, (long)new Microsoft.Data.Sqlite.SqliteCommand("SELECT COUNT(*) FROM schema_migrations;", conn).ExecuteScalar()!);
         }
         using (var store = SqliteProgressionStore.Open(path, Logged.Add, Curve))
         {

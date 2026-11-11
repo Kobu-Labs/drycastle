@@ -180,13 +180,13 @@ public sealed class SqliteProgressionStore : IProgressionStore
     {
         public Task<PlayerStats> GetAsync(long playerId) => db.Read(c =>
         {
-            long kills = 0, deaths = 0, matches = 0;
+            long kills = 0, deaths = 0, matches = 0, roadkills = 0;
             using (var cmd = c.CreateCommand())
             {
-                cmd.CommandText = "SELECT kills, deaths, matches FROM stats WHERE player_id = $id;";
+                cmd.CommandText = "SELECT kills, deaths, matches, roadkills FROM stats WHERE player_id = $id;";
                 cmd.Parameters.AddWithValue("$id", playerId);
                 using var r = cmd.ExecuteReader();
-                if (r.Read()) (kills, deaths, matches) = (r.GetInt64(0), r.GetInt64(1), r.GetInt64(2));
+                if (r.Read()) (kills, deaths, matches, roadkills) = (r.GetInt64(0), r.GetInt64(1), r.GetInt64(2), r.GetInt64(3));
             }
             var weapons = new Dictionary<string, long>();
             using (var cmd = c.CreateCommand())
@@ -196,15 +196,16 @@ public sealed class SqliteProgressionStore : IProgressionStore
                 using var r = cmd.ExecuteReader();
                 while (r.Read()) weapons[r.GetString(0)] = r.GetInt64(1);
             }
-            return new PlayerStats(kills, deaths, matches, weapons);
+            return new PlayerStats(kills, deaths, matches, weapons, roadkills);
         });
 
         // Kill, death and match counters share one transaction so a half-applied update cannot be read back.
-        public Task RecordKillAsync(long playerId, string weaponId) =>
+        public Task RecordKillAsync(long playerId, string weaponId, bool roadkill = false) =>
             db.Write("record kill", c =>
             {
                 using var tx = c.BeginTransaction();
                 Exec(c, "UPDATE stats SET kills = kills + 1 WHERE player_id = $id;", ("$id", playerId));
+                if (roadkill) Exec(c, "UPDATE stats SET roadkills = roadkills + 1 WHERE player_id = $id;", ("$id", playerId));
                 Exec(c, "INSERT INTO weapon_kills (player_id, weapon_id, kills) VALUES ($id, $w, 1) ON CONFLICT (player_id, weapon_id) DO UPDATE SET kills = kills + 1;",
                     ("$id", playerId), ("$w", weaponId));
                 tx.Commit();

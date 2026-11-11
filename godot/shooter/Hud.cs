@@ -12,7 +12,7 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class Hud : CanvasLayer
 {
-    const int Slots = 5, FeedRows = HudLogic.FeedMax, BoardRows = 16, Indicators = 4;
+    const int Slots = 3, FeedRows = HudLogic.FeedMax, BoardRows = 16, Indicators = 4;
     const float RefHeight = 1080f, MinBaseScale = 0.8f;
     const float CrossThick = 3, CrossLen = 12, CrossMinGap = 8;
 

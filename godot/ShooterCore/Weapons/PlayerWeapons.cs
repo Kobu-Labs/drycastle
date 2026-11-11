@@ -7,9 +7,14 @@ public readonly record struct WeaponInput(bool Fire, bool Reload, int Slot, bool
 public readonly record struct FireOutcome(WeaponDef Weapon, int WeaponIndex, float SpreadDegrees);
 
 /// <summary>
-/// Weapon state of one player: hotbar (slots 1-4 = the order of weapons.json), ammo per weapon, reload, switch and
-/// fire timers, spread. Godot-free and deterministic: time is passed in (seconds), the host calls <see cref="Update"/>
-/// once per processed input. A projectile pull (bazooka) consumes a round and returns the outcome; the host spawns the rocket.
+/// Weapon state of one player: hotbar, ammo per weapon, reload, switch and fire timers, spread. Godot-free and
+/// deterministic: time is passed in (seconds), the host calls <see cref="Update"/> once per processed input. A projectile
+/// pull (bazooka) consumes a round and returns the outcome; the host spawns the rocket.
+/// <para>
+/// Slots are 1-based indexes into weapons.json (the wire uses them). The hotbar is the player's loadout (primary,
+/// secondary, knife) when one is given; without one it is every weapon in file order. Only hotbar weapons can be
+/// selected, and "next" cycles through the hotbar.
+/// </para>
 /// </summary>
 public sealed class PlayerWeapons
 {
@@ -21,22 +26,32 @@ public sealed class PlayerWeapons
 
     readonly WeaponsFile _file;
     readonly PerkModifiers _perks;
+    readonly int[] _hotbar; // weapons.json indexes, in hotbar order
+    readonly int _startSlot; // the slot equipped at spawn
     readonly int[] _mag, _reserve;
     double _nextFire, _reloadDone, _swapReady, _lastNow;
     bool _prevFire;
     float _spreadExtra;
 
     /// <param name="perks">The player's perk values (run, reload and swap speed are read here); null = no perk.</param>
-    public PlayerWeapons(WeaponsFile file, PerkModifiers? perks = null)
+    /// <param name="hotbar">weapons.json indexes of the hotbar, in order (see <see cref="LoadoutHotbar"/>); null = every weapon.</param>
+    public PlayerWeapons(WeaponsFile file, PerkModifiers? perks = null, int[]? hotbar = null)
     {
         _file = file;
         _perks = perks ?? PerkModifiers.None;
+        _hotbar = hotbar is { Length: > 0 } h ? h.ToArray() : Enumerable.Range(0, file.Weapons.Count).ToArray();
+        _startSlot = hotbar is { Length: > 0 } ? _hotbar[0] + 1 : Math.Max(1, file.Weapons.FindIndex(w => w.Id == file.StartingWeapon) + 1);
         _mag = new int[file.Weapons.Count];
         _reserve = new int[file.Weapons.Count];
         Reset(0);
     }
 
-    public IReadOnlyList<WeaponDef> Hotbar => _file.Weapons;
+    /// <summary>Number of weapons in weapons.json (the ammo list on the wire has one entry per weapon).</summary>
+    public int WeaponCount => _file.Weapons.Count;
+    /// <summary>The hotbar weapons in hotbar order (the key order: 1, 2, 3 ...).</summary>
+    public IReadOnlyList<WeaponDef> Hotbar => _hotbar.Select(i => _file.Weapons[i]).ToList();
+    /// <summary>Whether a 1-based weapon slot is on the hotbar.</summary>
+    public bool OnHotbar(int slot) => Array.IndexOf(_hotbar, slot - 1) >= 0;
     /// <summary>Selected hotbar slot, 1-based.</summary>
     public int Slot { get; private set; }
     public WeaponDef Current => _file.Weapons[Slot - 1];
@@ -52,13 +67,13 @@ public sealed class PlayerWeapons
 
     /// <summary>Speed multiplier for the weapon in <paramref name="wantedSlot"/> (0 or invalid: the current one), times the perk's run speed.</summary>
     public float SpeedFor(int wantedSlot) =>
-        (wantedSlot >= 1 && wantedSlot <= _file.Weapons.Count ? _file.Weapons[wantedSlot - 1] : Current).MoveSpeedMultiplier * _perks.RunSpeed;
+        (OnHotbar(wantedSlot) ? _file.Weapons[wantedSlot - 1] : Current).MoveSpeedMultiplier * _perks.RunSpeed;
 
     /// <summary>Spawn state: full magazines and reserves, starting weapon, no timers.</summary>
     public void Reset(double now)
     {
         for (var i = 0; i < _mag.Length; i++) { _mag[i] = _file.Weapons[i].MagazineSize; _reserve[i] = _file.Weapons[i].ReserveAmmo; }
-        Slot = Math.Max(1, _file.Weapons.FindIndex(w => w.Id == _file.StartingWeapon) + 1);
+        Slot = _startSlot;
         Reloading = false; _spreadExtra = 0; _prevFire = false;
         _nextFire = _reloadDone = _swapReady = now; _lastNow = now;
         Changed = true;
@@ -82,8 +97,8 @@ public sealed class PlayerWeapons
 
         // switching: wanted slot or the next-weapon edge; cancels a reload
         var want = Slot;
-        if (input.Slot >= 1 && input.Slot <= _file.Weapons.Count) want = input.Slot;
-        if (input.Next && !_prevNext) want = Slot % _file.Weapons.Count + 1;
+        if (OnHotbar(input.Slot)) want = input.Slot;
+        if (input.Next && !_prevNext) want = NextOnHotbar(Slot);
         _prevNext = input.Next;
         if (want != Slot)
         {
@@ -128,6 +143,13 @@ public sealed class PlayerWeapons
     }
 
     bool _prevNext;
+
+    /// <summary>The hotbar slot after <paramref name="slot"/> (wraps around); a slot that is not on the hotbar goes to the first entry.</summary>
+    int NextOnHotbar(int slot)
+    {
+        var i = Array.IndexOf(_hotbar, slot - 1);
+        return _hotbar[(i + 1) % _hotbar.Length] + 1;
+    }
 
     bool CanReload(WeaponDef w) => !Reloading && w.MagazineSize > 0 && w.ReloadTime > 0 && _mag[Slot - 1] < w.MagazineSize && _reserve[Slot - 1] > 0;
 
