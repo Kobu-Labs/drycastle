@@ -120,13 +120,14 @@ public class WaterCraftTests
     public void ABoatAfloatAcceleratesHalfAsFastBelowPlaningThenFullSpeedAbove()
     {
         var b = Type("boat");
+        b.Handling.LaunchBoost = 1f; // this test is about the planing rule, not the standing-start boost
         var s = new CarState();
         for (var i = 0; i < 30; i++) CarModel.Step(ref s, b, 1, 0, false, 1f / 30, onWater: true);
-        Assert.InRange(s.Speed, 1.4f, 1.6f); // 3 m/s² at half rate below the 7 m/s planing speed
+        Assert.InRange(s.Speed, b.Acceleration * 0.5f - 0.05f, b.Acceleration * 0.5f + 0.05f); // half rate below the 7 m/s planing speed
 
         var planing = new CarState { Speed = b.PlaningSpeed + 1 };
         for (var i = 0; i < 30; i++) CarModel.Step(ref planing, b, 1, 0, false, 1f / 30, onWater: true);
-        Assert.InRange(planing.Speed, b.PlaningSpeed + 3.9f, b.PlaningSpeed + 4.1f); // full 3 m/s² once on the plane
+        Assert.InRange(planing.Speed, b.PlaningSpeed + 1 + b.Acceleration - 0.05f, b.PlaningSpeed + 1 + b.Acceleration + 0.05f); // the full rate once on the plane
     }
 
     [Fact]

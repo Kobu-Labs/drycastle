@@ -280,7 +280,7 @@ public static class CarModel
 
     /// <summary>
     /// One tick. <paramref name="throttle"/> and <paramref name="steer"/> are -1..1 (forward, right), <paramref name="handbrake"/> is Jump.
-    /// Longitudinal: linear acceleration to top speed (reverse capped by the handling), brake against travel, coast when idle.
+    /// Longitudinal: acceleration to top speed, boosted near a standstill (<see cref="VehicleHandling.LaunchBoost"/>) (reverse capped by the handling), brake against travel, coast when idle.
     /// Lateral: yaw rate is speed / <see cref="TurnRadiusAt"/>, so it is zero when standing still, tight at walking pace and
     /// capped at high speed; the actual yaw rate chases that target at a limited slew rate.
     /// <paramref name="onWater"/> is set while the vehicle floats: an amphibious then drives at its water speed, and a boat has its drive
@@ -306,6 +306,8 @@ public static class CarModel
         {
             accel *= 0.5f; // below the planing speed the hull pushes water aside: half the thrust until it lifts onto the plane
         }
+        // the launch boost: more thrust near a standstill, fading to the plain acceleration at h.LaunchSpeed (either direction of travel)
+        accel *= 1f + (h.LaunchBoost - 1f) * MathF.Max(0f, 1f - MathF.Abs(v) / MathF.Max(0.1f, h.LaunchSpeed));
         if (handbrake) v = Approach(v, 0, h.HandbrakeDecel * dt);
         else if (throttle > 0.05f)
             v = v < 0 ? Approach(v, 0, def.Brake * dt) : MathF.Min(top, v + accel * throttle * dt);

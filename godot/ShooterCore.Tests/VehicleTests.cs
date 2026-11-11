@@ -117,12 +117,24 @@ public class VehicleTests
     }
 
     [Fact]
-    public void CarReachesOneHundredKmhInAboutEightSeconds()
+    public void CarReachesOneHundredKmhInAboutFourAndAHalfSeconds()
     {
         var f = Shipped(); var def = f.Vehicles[0];
         var s = new CarState(); var t = 0f;
         while (s.Speed < 100 / 3.6f) { CarModel.Step(ref s, def, 1, 0, false, 1f / 60); t += 1f / 60; }
-        Assert.InRange(t, 7.5f, 8.5f);
+        Assert.InRange(t, 3.8f, 4.8f);
+    }
+
+    [Fact]
+    public void EveryMotorisedTypePullsAwayHardFromAStandstill()
+    {
+        // the launch boost: the first two seconds matter most, so each engine type is at 10 m/s (36 km/h) within 2 s of full throttle
+        foreach (var def in Shipped().Vehicles.Where(v => v.Id is "car" or "jeep" or "quad" or "motorcycle" or "amphibious"))
+        {
+            var s = new CarState(); var t = 0f;
+            while (s.Speed < 10f && t < 5f) { CarModel.Step(ref s, def, 1, 0, false, 1f / 60); t += 1f / 60; }
+            Assert.True(t <= 2f, $"{def.Id} took {t:F1} s to reach 10 m/s");
+        }
     }
 
     [Fact]

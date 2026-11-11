@@ -151,7 +151,11 @@ public class VehicleHandling
     /// <summary>Reverse top speed as a fraction of the forward top speed.</summary>
     public float ReverseTopFraction { get; set; } = 0.2f;
     /// <summary>How fast the yaw rate follows the steering target, rad/s². Real steering takes a fraction of a second to lock.</summary>
-    public float YawSlew { get; set; } = 6;
+    public float YawSlew { get; set; } = 8;
+    /// <summary>Extra thrust from a standstill: acceleration is multiplied by this at 0 m/s and fades linearly to 1 at <see cref="LaunchSpeed"/>, so the first couple of seconds are punchy while the top end stays as it was. 1 turns it off.</summary>
+    public float LaunchBoost { get; set; } = 2.5f;
+    /// <summary>Speed (m/s) at which the <see cref="LaunchBoost"/> has faded out.</summary>
+    public float LaunchSpeed { get; set; } = 12;
     /// <summary>Steering sharpening while the handbrake is held.</summary>
     public float HandbrakeSteerBoost { get; set; } = 1.5f;
 }
