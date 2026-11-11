@@ -97,8 +97,12 @@ A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the
 _Avoid_: killstreak weapon (ambiguous with the streak itself)
 
 **Pellet fan**:
-The pellets of one shotgun shot, sent as a seed and an aim so every client rebuilds the same spread. Pellets are individual hitscan rays against a 0.35 m body.
+The pellets of one shotgun shot, sent as a seed, an aim and a cone so every client rebuilds the same fan. Pellets are individual hitscan rays against a 0.35 m body. The cone follows the shot spread rule.
 _Avoid_: spread (alone), buckshot
+
+**Shot spread**:
+The half-angle of the cone a shot can land in. It starts from the weapon's own spread (base plus growth per shot, or the pellet cone of a shotgun), grows with the shooter's speed up to sprint speed and is at its widest in the air, and is then reduced by crouch, prone and aiming. The server and the crosshair use the same rule, so the crosshair gap is the cone.
+_Avoid_: accuracy, bloom, recoil (recoil moves the aim; spread scatters around it)
 
 **Camouflage**:
 A loadout's look (`camo.json`): the character (body model, skin tone, headgear), the suit's base colour and pattern, ghillie tufts and face paint. Chosen in the customiser and stored per loadout slot.

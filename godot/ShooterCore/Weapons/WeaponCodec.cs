@@ -20,7 +20,8 @@ public sealed record ExplosionMsg(ushort Id, ushort Owner, byte Weapon, Vector3 
 public sealed record VehicleExplosionMsg(ushort Id, ushort Attacker, Vector3 Position, float Radius);
 
 /// <summary>Shotgun pellet fan (broadcast): one event for the whole fan. Aim is the unit aim direction; the pellets are derived from Seed and the weapon's pellet spread.</summary>
-public sealed record PelletFanMsg(ushort Shooter, byte Weapon, Vector3 Origin, Vector3 Aim, uint Seed);
+/// <summary>One shotgun shot. <c>Cone</c> is the fan half-angle in degrees the server used (the pellet spread after stance, aim and movement).</summary>
+public sealed record PelletFanMsg(ushort Shooter, byte Weapon, Vector3 Origin, Vector3 Aim, uint Seed, float Cone);
 
 /// <summary>Owner-only ammo state: selected slot (1-based), seconds of reload left (0 = not reloading) and per slot magazine and reserve.</summary>
 public sealed record AmmoMsg(byte Slot, float ReloadRemaining, IReadOnlyList<(ushort Mag, ushort Reserve)> Slots)
@@ -35,7 +36,7 @@ public sealed record AmmoMsg(byte Slot, float ReloadRemaining, IReadOnlyList<(us
 ///   Hit:  u16 victim, u16 attacker, u8 weapon, u16 damage, u8 flags (1 headshot, 2 backstab, 4 kill)
 ///   Launch: u16 id, u16 owner, u8 weapon, f32 x3 origin, f32 x3 velocity
 ///   Explosion: u16 id, u16 owner, u8 weapon, f32 x3 position
-///   PelletFan: u16 shooter, u8 weapon, f32 x3 origin, f32 x3 aim, u32 seed
+///   PelletFan: u16 shooter, u8 weapon, f32 x3 origin, f32 x3 aim, u32 seed, f32 cone
 ///   Ammo: u8 slot, f32 reloadRemaining, u8 n, n * (u16 mag, u16 reserve)
 ///   Debug teleport (client to server, dev servers only): u8 2, u16 target, f32 x3 position
 /// </summary>
@@ -56,16 +57,17 @@ public static class WeaponCodec
 
     public static byte[] Encode(PelletFanMsg m)
     {
-        var b = new byte[31];
+        var b = new byte[35];
         BinaryPrimitives.WriteUInt16LittleEndian(b, m.Shooter);
         b[2] = m.Weapon;
         Put(b, 3, m.Origin); Put(b, 15, m.Aim);
         BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(27), m.Seed);
+        BinaryPrimitives.WriteSingleLittleEndian(b.AsSpan(31), m.Cone);
         return b;
     }
 
-    public static PelletFanMsg? DecodePelletFan(byte[] d) => d.Length < 31 ? null
-        : new PelletFanMsg(BinaryPrimitives.ReadUInt16LittleEndian(d), d[2], Get(d, 3), Get(d, 15), BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(27)));
+    public static PelletFanMsg? DecodePelletFan(byte[] d) => d.Length < 35 ? null
+        : new PelletFanMsg(BinaryPrimitives.ReadUInt16LittleEndian(d), d[2], Get(d, 3), Get(d, 15), BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(27)), BinaryPrimitives.ReadSingleLittleEndian(d.AsSpan(31)));
 
     public static byte[] Encode(HitMsg m)
     {

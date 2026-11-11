@@ -668,12 +668,13 @@ public partial class NetServer : Node
         var yaw = Quant.Yaw(i.Yaw); var pitch = Quant.Pitch(i.Pitch);
         var targets = LiveTargets();
         _shotsFired++;
-        if (w.Kind == WeaponKind.Hitscan && w.Pellets > 1) FirePellets(c, eye, yaw, pitch, w, (byte)shot.WeaponIndex);
+        var aiming = (i.Buttons & (ushort)MoveButtons.Aim) != 0;
+        if (w.Kind == WeaponKind.Hitscan && w.Pellets > 1) FirePellets(c, eye, yaw, pitch, w, (byte)shot.WeaponIndex, HitMath.ShotSpread(w.PelletSpread, w, c.Body.State, aiming));
         else if (w.Kind == WeaponKind.Hitscan)
         {
-            var kick = c.Recoil.Shot(w.Recoil, RecoilState.Multiplier(w.Recoil, (i.Buttons & (ushort)MoveButtons.Aim) != 0, c.Body.State.Stance));
+            var kick = c.Recoil.Shot(w.Recoil, RecoilState.Multiplier(w.Recoil, aiming, c.Body.State.Stance));
             var sway = c.Breath.AimError(c.Breath.SwayDegrees(w));
-            var d = HitMath.SpreadDirection(yaw + kick.YawRad + sway.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad + sway.PitchRad), HitMath.StanceSpread(shot.SpreadDegrees, w, c.Body.State.Stance), _rng);
+            var d = HitMath.SpreadDirection(yaw + kick.YawRad + sway.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad + sway.PitchRad), HitMath.ShotSpread(shot.SpreadDegrees, w, c.Body.State, aiming), _rng);
             var dir = new Vector3(d.X, d.Y, d.Z);
             var range = w.Range > 0 ? w.Range : MaxShotRange;
             var wall = WorldHit(eye, dir, range, out var shotCar);

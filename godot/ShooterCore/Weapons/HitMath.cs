@@ -21,8 +21,25 @@ public static class HitMath
     /// <summary>Height of the upright body for a stance (the prone figure is horizontal; see <see cref="Axis"/>).</summary>
     public static float Height(Stance stance) => MovementStep.CapsuleHeight(stance);
 
-    /// <summary>Spread in degrees for a stance: prone scales it by the weapon's prone spread multiplier, other stances leave it alone.</summary>
-    public static float StanceSpread(float degrees, WeaponDef w, Stance stance) => stance == Stance.Prone ? degrees * w.ProneSpreadMultiplier : degrees;
+    /// <summary>
+    /// Spread half-angle in degrees of a shot, from the weapon's own spread (<paramref name="degrees"/>: base plus per-shot
+    /// growth, or the pellet cone of a shotgun) and what the shooter is doing. Moving adds <see cref="WeaponDef.MoveSpread"/>
+    /// in proportion to the horizontal speed (all of it at sprint speed or in the air); crouch and prone then scale the
+    /// sum by the weapon's stance multiplier, and aiming by its ADS multiplier. The server and the crosshair both call this.
+    /// </summary>
+    public static float ShotSpread(float degrees, WeaponDef w, Stance stance, bool aiming, float horizontalSpeed, bool onFloor)
+    {
+        var move = onFloor ? Math.Clamp(horizontalSpeed / MoveConsts.SprintSpeed, 0f, 1f) : 1f;
+        var stanceMult = stance switch { Stance.Prone => w.ProneSpreadMultiplier, Stance.Crouch => w.CrouchSpreadMultiplier, _ => 1f };
+        return (degrees + w.MoveSpread * move) * stanceMult * (aiming ? w.AdsSpreadMultiplier : 1f);
+    }
+
+    /// <summary><see cref="ShotSpread(float, WeaponDef, Stance, bool, float, bool)"/> for a movement state.</summary>
+    public static float ShotSpread(float degrees, WeaponDef w, in MoveState s, bool aiming) =>
+        ShotSpread(degrees, w, s.Stance, aiming, MathF.Sqrt(s.Velocity.X * s.Velocity.X + s.Velocity.Z * s.Velocity.Z), s.OnFloor);
+
+    /// <summary>The weapon's own spread before stance, aim and movement: the pellet cone for a shotgun, else <paramref name="degrees"/>.</summary>
+    public static float OwnSpread(WeaponDef w, float degrees) => w.Pellets > 1 ? w.PelletSpread : degrees;
 
     /// <summary>
     /// The body's hit capsule axis (segment end points; the capsule radius is <see cref="PlayerHitBox.Radius"/>). Stand and crouch are upright
