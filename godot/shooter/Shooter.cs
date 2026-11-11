@@ -223,6 +223,7 @@ public partial class Shooter : Node3D
         AddChild(_map.Root);
         _map.Load(Path.GetFullPath(dir));
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Suchohrad.ShooterCore.Water.Empty : Suchohrad.ShooterCore.Water.Parse(_map.WaterJson);
+        WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
         var s = _map.Stats;
         // Lamps are solid, so the server gets the same pole colliders as the client (map 0.5.0+; none on older maps).
         if (_map.Lamps.Count > 0) AddChild(new StreetLamps { Bases = _map.Lamps.Select(l => l.Position).ToList() });
@@ -338,8 +339,11 @@ public partial class Shooter : Node3D
     }
 
     /// <summary>Sun, moon, sky and fog for the world (the day/night cycle; the server clock drives it when networked).</summary>
-    void AddLightAndSky() =>
+    void AddLightAndSky()
+    {
         AddChild(new DayNightCycle { LocalClock = _data.Environment.ToClock(), MinAmbient = _data.Environment.MinAmbient });
+        AddChild(new UnderwaterView { Water = _water });
+    }
 
     /// <summary>Client view: light, sky and the first-person player at a random spawn point.</summary>
     void BuildClientView()

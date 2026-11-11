@@ -46,6 +46,7 @@
     { "id": "footstep", "files": ["fantozzi-footsteps/Fantozzi-SandL1.ogg", "fantozzi-footsteps/Fantozzi-SandR1.ogg", "fantozzi-footsteps/Fantozzi-SandL2.ogg", "fantozzi-footsteps/Fantozzi-SandR2.ogg", "fantozzi-footsteps/Fantozzi-SandL3.ogg", "fantozzi-footsteps/Fantozzi-SandR3.ogg"], "bus": "SFX", "volume_db": -6, "pitch_variance": 0.08, "max_distance": 20, "priority": -1 },
     { "id": "land", "files": ["oga-combat-sound-effects-150/land.ogg"], "bus": "SFX", "volume_db": -8, "pitch": 0.7, "pitch_variance": 0.05, "max_distance": 20 },
     { "id": "vehicle.engine", "files": ["suchohrad-generated-sounds/vehicle_engine.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 80, "loop": true },
+    { "id": "water.splash", "files": ["oga-combat-sound-effects-150/land.ogg"], "bus": "SFX", "volume_db": -4, "pitch": 1.35, "pitch_variance": 0.08, "max_distance": 40, "priority": 1, "min_gap": 0.15 },
     { "id": "hit.tick", "files": ["kenney-interface-sounds/tick_001.ogg"], "bus": "SFX", "volume_db": -4, "pitch": 1.3, "max_distance": 0, "priority": 2 },
     { "id": "kill.confirm", "files": ["kenney-interface-sounds/confirmation_003.ogg"], "bus": "SFX", "volume_db": -4, "max_distance": 0, "priority": 2 },
     { "id": "death", "files": ["oga-combat-sound-effects-150/death.ogg"], "bus": "SFX", "volume_db": -2, "pitch": 0.75, "pitch_variance": 0.05, "max_distance": 30, "priority": 2 },

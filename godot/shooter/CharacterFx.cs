@@ -15,6 +15,7 @@ public sealed partial class CharacterView : Node3D
     AnimationPlayer? _anim;
     Node3D? _model;
     Stance _stance;
+    bool _swim;
     BoneAttachment3D? _hand;
     Node3D? _held;
     string _heldId = "";
@@ -38,9 +39,9 @@ public sealed partial class CharacterView : Node3D
             return;
         }
         HasModel = true;
+        _model = m;
         m.Scale = Vector3.One * Scale;
         m.RotationDegrees = new Vector3(0, 180, 0); // glTF characters face +Z, the game's forward is -Z
-        _model = m;
         AddChild(m);
         _anim = m.FindChildren("*", "AnimationPlayer", true, false).FirstOrDefault() as AnimationPlayer;
         if (_anim != null)
@@ -70,6 +71,15 @@ public sealed partial class CharacterView : Node3D
     /// <summary>Height the lying figure is lifted by so its front rests on the ground (half its thickness; a visual estimate).</summary>
     const float ProneLift = 0.2f;
 
+    /// <summary>Swimming pose: the body leans forward (<see cref="UnderwaterFx.SwimLeanDegrees"/>) and moves at the slow walk; stands up again when not swimming.</summary>
+    public void SetSwim(bool swimming)
+    {
+        if (swimming == _swim) return;
+        _swim = swimming;
+        if (_model != null) _model.RotationDegrees = new Vector3(swimming ? UnderwaterFx.SwimLeanDegrees : (_stance == Stance.Prone ? 90f : 0f), 180, 0);
+        if (_anim != null) _anim.SpeedScale = swimming ? 0.5f : 1f;
+    }
+
     /// <summary>Update from snapshot state: horizontal speed (m/s), whether it fired in the last moments, dead, and the weapon id it holds.</summary>
     public void Apply(float speed, bool firing, bool dead, string weaponId)
     {
@@ -78,6 +88,7 @@ public sealed partial class CharacterView : Node3D
         var twoHanded = weaponId is not ("pistol" or "glock17" or "deagle" or "knife"); // pistols are one-handed, every long gun is two-handed
         Play(dead ? "Defeat"
             : firing ? (weaponId == "knife" ? "Attack(1h)" : twoHanded ? "Shooting(2h)" : "Shooting(1h)")
+            : _swim ? (speed > 0.6f ? "Walk" : "Idle") // no swim clip in the rig: the slow walk, see SetSwim
             : speed > 6.2f ? "Run" : speed > 0.6f ? "Walk" : "Idle");
     }
 
