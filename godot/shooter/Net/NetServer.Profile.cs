@@ -144,7 +144,7 @@ public partial class NetServer
 
     void OnProfileMessage(Client c, ReliableMsg? m)
     {
-        if (m is SaveLoadoutMsg or SaveCamoMsg or EventMsg { Kind: (byte)EventKind.CopyLoadout or (byte)EventKind.ResetLoadout } && !AllowSave(c))
+        if (m is SaveLoadoutMsg or SelectSlotMsg or SaveCamoMsg or EventMsg { Kind: (byte)EventKind.CopyLoadout or (byte)EventKind.ResetLoadout } && !AllowSave(c))
         {
             if (m is SaveLoadoutMsg sl0) AckSave(c, sl0.Loadout.Slot, sl0.Seq, "Saving too fast, try again in a moment.");
             return;
@@ -241,6 +241,7 @@ public partial class NetServer
             Send(c, new ErrorMsg(err));
             return;
         }
+        if (p.Active == slot) { SendProfile(c); return; } // unchanged: answer the client, but no write and no broadcast
         p.Active = slot;
         if (p.Persist) _ = Progression!.Loadouts.SetActiveSlotAsync(p.DbId, slot);
         SendProfile(c);
