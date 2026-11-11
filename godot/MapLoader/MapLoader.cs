@@ -299,10 +299,17 @@ public sealed partial class MapLoader
         return n;
     }
 
+    /// <summary>
+    /// The one flat colour material every map mesh shares (vertex colours drive albedo, fully rough, no specular). Shared rather than
+    /// built per node: the map has about a thousand visual nodes with identical parameters (#171, T2-20). Nothing mutates a chunk
+    /// node's MaterialOverride, so one instance is safe.
+    /// </summary>
+    static StandardMaterial3D? _flatMaterial;
+
     /// <summary>Flat colour look: vertex colours drive albedo, fully rough, no specular.</summary>
     static void FixMaterials(MeshInstance3D mi)
     {
-        mi.MaterialOverride = new StandardMaterial3D
+        mi.MaterialOverride = _flatMaterial ??= new StandardMaterial3D
         {
             VertexColorUseAsAlbedo = true,
             VertexColorIsSrgb = true,
