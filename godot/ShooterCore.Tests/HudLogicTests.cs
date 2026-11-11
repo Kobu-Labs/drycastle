@@ -16,6 +16,15 @@ public class HudLogicTests
     }
 
     [Fact]
+    public void ScreenScaleFollowsHeightAndUiSetting()
+    {
+        Assert.Equal(1f, HudLogic.ScreenScale(1080, 1f), 3);
+        Assert.Equal(2f, HudLogic.ScreenScale(2160, 1f), 3);
+        Assert.Equal(1.5f, HudLogic.ScreenScale(1080, 1.5f), 3);
+        Assert.Equal(0.8f, HudLogic.ScreenScale(480, 1f), 3); // never under the floor
+    }
+
+    [Fact]
     public void ScoreShowsLeaderOrLeading()
     {
         var rows = new[] { new ScoreRow(1, "me", 3, 0, 10), new ScoreRow(2, "bob", 7, 1, 20), new ScoreRow(3, "cy", 5, 2, 30) };

@@ -13,7 +13,6 @@ namespace Suchohrad.Shooter;
 public partial class Hud : CanvasLayer
 {
     const int Slots = 3, FeedRows = HudLogic.FeedMax, BoardRows = 16, Indicators = 4;
-    const float RefHeight = 1080f, MinBaseScale = 0.8f;
     const float CrossThick = 3, CrossLen = 12, CrossMinGap = 8;
 
     public GameSettings Settings { get; private set; } = new();
@@ -192,10 +191,14 @@ public partial class Hud : CanvasLayer
         _root.Scale = new Vector2(s, s);
         _root.Position = Vector2.Zero;
         _root.Size = vp / s;
+        // the feed sits beside _root, so it follows the same resolution and UI scale itself
+        _feedRoot.Scale = new Vector2(s, s);
+        _feedRoot.Position = Vector2.Zero;
+        _feedRoot.Size = vp / s;
         _gap = -1;
     }
 
-    float UiFactor() => Math.Max(MinBaseScale, GetViewport().GetVisibleRect().Size.Y / RefHeight) * HudLogic.ClampUiScale(Settings.UiScale);
+    float UiFactor() => HudLogic.ScreenScale(GetViewport().GetVisibleRect().Size.Y, Settings.UiScale);
 
     // ---- build ----
 
@@ -412,7 +415,6 @@ public partial class Hud : CanvasLayer
     {
         // the feed sits beside the panels root, not under it, so a control session can hide the panels and keep the feed (ticket #154)
         _feedRoot = new Control { Theme = _root.Theme, MouseFilter = Control.MouseFilterEnum.Ignore };
-        _feedRoot.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(_feedRoot);
         var v = Place(new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore }, 1, 0, -ShooterTheme.Margin, ShooterTheme.Margin, 480, FeedRows * 40 + (FeedRows - 1) * 4);
         v.PivotOffset = new Vector2(480, 0); // the compact feed shrinks towards the top right corner

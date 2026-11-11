@@ -16,6 +16,7 @@ public partial class MissilePovOverlay : CanvasLayer
     const float StaticPeak = 0.85f;
 
     Control _root = null!;
+    Control _text = null!; // the title, readouts and hint: scaled like the HUD (the thermal view and markers work in screen pixels)
     ColorRect _thermal = null!;
     ColorRect _static = null!;
     Label _alt = null!, _time = null!, _eta = null!;
@@ -48,30 +49,34 @@ public partial class MissilePovOverlay : CanvasLayer
         _static.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _root.AddChild(_static);
 
+        _text = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _root.AddChild(_text);
+        _root.Resized += Rescale;
+
         // title and hint span the width and centre their text, so no size is needed before layout
         var title = MakeLabel(Strings.T("pov.title"), ShooterTheme.FontHead, ShooterTheme.Accent);
         title.SetAnchorsPreset(Control.LayoutPreset.TopWide);
         title.OffsetTop = ShooterTheme.Margin;
         title.OffsetBottom = ShooterTheme.Margin + 4 * ShooterTheme.Space;
-        _root.AddChild(title);
+        _text.AddChild(title);
 
         _alt = MakeLabel("", ShooterTheme.FontBody, ShooterTheme.Text);
         _alt.Position = new Vector2(ShooterTheme.Margin, ShooterTheme.Margin * 3);
-        _root.AddChild(_alt);
+        _text.AddChild(_alt);
 
         _time = MakeLabel("", ShooterTheme.FontBody, ShooterTheme.Text);
         _time.Position = new Vector2(ShooterTheme.Margin, ShooterTheme.Margin * 3 + 4 * ShooterTheme.Space);
-        _root.AddChild(_time);
+        _text.AddChild(_time);
 
         _eta = MakeLabel("", ShooterTheme.FontBody, ShooterTheme.Text);
         _eta.Position = new Vector2(ShooterTheme.Margin, ShooterTheme.Margin * 3 + 8 * ShooterTheme.Space);
-        _root.AddChild(_eta);
+        _text.AddChild(_eta);
 
         var hint = MakeLabel(Strings.T("pov.hint"), ShooterTheme.FontSmall, ShooterTheme.Dim);
         hint.SetAnchorsPreset(Control.LayoutPreset.BottomWide);
         hint.OffsetTop = -ShooterTheme.Margin * 2;
         hint.OffsetBottom = -ShooterTheme.Margin;
-        _root.AddChild(hint);
+        _text.AddChild(hint);
     }
 
     static Label MakeLabel(string text, int size, Color colour)
@@ -91,7 +96,16 @@ public partial class MissilePovOverlay : CanvasLayer
     public void SetMarkers(Camera3D? camera, List<Vector3>? points) => _markers.Set(camera, points);
 
     /// <summary>Shows or hides the whole overlay (the static, when it is still fading, is part of it).</summary>
-    public void SetOn(bool on) => _root.Visible = on;
+    public void SetOn(bool on) { _root.Visible = on; if (on) Rescale(); }
+
+    /// <summary>Sizes the text layer to the screen divided by the UI scale and scales it up, as the HUD root does.</summary>
+    void Rescale()
+    {
+        var s = ShooterTheme.ScreenScale(_root.Size);
+        _text.Scale = new Vector2(s, s);
+        _text.Position = Vector2.Zero;
+        _text.Size = _root.Size / s;
+    }
 
     /// <summary>
     /// The readout: altitude above the launch point, the seconds since the missile was used, and the estimated seconds to

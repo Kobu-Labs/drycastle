@@ -43,13 +43,25 @@ public partial class MoabBanner : Control
         _panel.GrowHorizontal = GrowDirection.Both;
         AddChild(_panel);
 
+        Resized += Rescale;
+        _panel.Resized += () => _panel.PivotOffset = new Vector2(_panel.Size.X / 2f, 0); // the text length changes the width
         _label = new Label { ThemeTypeVariation = "HudBig", HorizontalAlignment = HorizontalAlignment.Center, MouseFilter = MouseFilterEnum.Ignore };
         _panel.AddChild(_label);
+    }
+
+    /// <summary>Scales the banner with the screen and the UI scale setting, growing down and sideways from its top centre.</summary>
+    void Rescale()
+    {
+        var s = ShooterTheme.ScreenScale(Size);
+        _panel.Scale = new Vector2(s, s);
+        _panel.OffsetTop = ShooterTheme.Margin * 4 * s;
+        _panel.PivotOffset = new Vector2(_panel.Size.X / 2f, 0);
     }
 
     /// <summary>The countdown starts: the banner shows the seconds left until detonation.</summary>
     public void Armed(float seconds)
     {
+        Rescale();
         _countdownEnds = Now() + Math.Max(0, seconds);
         _bannerEnds = -1;
         _shownSeconds = -1;
@@ -59,6 +71,7 @@ public partial class MoabBanner : Control
     /// <summary>Detonation: a full-screen flash (none with reduce motion) and the "MOAB by X" banner.</summary>
     public void Blast(string owner)
     {
+        Rescale();
         _countdownEnds = -1;
         _bannerEnds = Now() + BlastBannerSeconds;
         _flashEnds = GameSettings.Current.ReduceMotion ? -1 : Now() + FlashSeconds;

@@ -148,7 +148,7 @@ public partial class GunshipOverlay : CanvasLayer
         {
             var font = ThemeDB.FallbackFont;
             var size = Size;
-            var s = Math.Clamp(size.Y / 1080f, 0.5f, 3f);
+            var s = ShooterTheme.ScreenScale(size);
             var body = (int)Math.Round(ShooterTheme.FontBody * s);
             var big = (int)Math.Round(ShooterTheme.FontBig * s);
             var m = ShooterTheme.Margin * s;

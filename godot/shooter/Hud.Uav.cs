@@ -9,13 +9,13 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class Hud
 {
-    Control _uavPanel = null!;
+    Control? _uavPanel;
     Label _uavTime = null!;
     int _uavShownSeconds = -1;
 
     void BuildUav()
     {
-        _uavPanel = Place(P("HudPanel"), 0, 0, ShooterTheme.Margin + 224 + ShooterTheme.Space, ShooterTheme.Margin + 32, 136, 64);
+        _uavPanel = Place(P("HudPanel"), 0, 0, ShooterTheme.Margin + Settings.MinimapSize + ShooterTheme.Space, ShooterTheme.Margin + 32, 136, 64);
         _uavPanel.Visible = false;
         _root.AddChild(_uavPanel);
         var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
