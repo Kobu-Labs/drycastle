@@ -325,6 +325,7 @@ public partial class NetServer
         car.ReturnAt = _elapsed + Vehicles.DestroyedReturnTime;
         _vehicleBlasts++;
         BroadcastEvent(EventKind.VehicleExplosion, WeaponCodec.Encode(new VehicleExplosionMsg(car.Id, attacker, N(at), e.Splash.Radius)));
+        BroadcastImpact(N(car.GlobalPosition), ImpactSize.Plume); // the blast throws up dirt or road where the car sits (ticket #154)
         GD.Print($"server: {car.Def.Id} {car.Id} exploded at ({at.X:F1},{at.Y:F1},{at.Z:F1}), credited to #{attacker}");
 
         foreach (var o in Occupants(car))

@@ -31,6 +31,7 @@ public partial class NetServer
         var radius = _missileTuning.SplashRadius;
         if (Vehicles != null) RocketVsVehicles(pos, w, i.Owner, SpecialWeapons.Missile, i.Car as ServerCar);
         BroadcastEvent(EventKind.MissileBlast, MissileCodec.EncodeBlast(i.Id, i.Owner, i.Position, radius));
+        BroadcastImpact(N(pos), ImpactSize.Plume, vehicle: i.Car != null); // ticket #154: the missile's plume
         foreach (var t in LiveTargets())
         {
             var isDirect = i.Victim == t.Id;

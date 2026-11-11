@@ -33,6 +33,7 @@ public partial class NetServer
         var at = OwnerPosition(owner, use);
         var seed = (uint)_rng.Next();
         BroadcastEvent(EventKind.Moab, MoabEvents.Encode(new MoabInfo(phase, owner, at, seed, (float)_elapsed)));
+        BroadcastImpact(at, ImpactSize.Plume); // the blast's plume on the ground (ticket #154)
 
         var victims = MoabStreak.Victims(LiveTargets().Select(t => t.Id), owner).ToList();
         foreach (var id in victims) _match.ApplyDamage(id, owner, MoabWeapon, 9999, ignoreProtection: true);

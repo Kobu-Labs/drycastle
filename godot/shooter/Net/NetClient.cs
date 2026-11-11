@@ -456,7 +456,7 @@ public partial class NetClient : Node
         TickBreath(mi);
         if (_gunship == null) PredictFire(mi); // rounds from a turret are the server's alone
         ClampGunnerView(ref mi);
-        _me.Yaw = mi.Yaw;
+        _me.Yaw = _gunship != null ? _gunAimYaw : mi.Yaw; // at the turret the world look stays unclamped (ticket #154)
         var ni = NetInput.From(++_seq, mi, _me.Pitch, (byte)(Weapons != null ? _wantSlot : 0));
         if (!_driving && !_controlling && _gunship == null) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         _pending.Add(new Pending { Input = ni, After = _me.State });
