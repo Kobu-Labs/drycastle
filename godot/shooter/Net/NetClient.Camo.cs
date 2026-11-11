@@ -23,11 +23,12 @@ public partial class NetClient
     /// Asks the server to replace one loadout slot's camouflage (#141). Answered with the new <see cref="ProfileMsg"/>
     /// (its <c>Camos</c> carry the saved look), and, for the active slot, an appearance broadcast; or an error.
     /// </summary>
-    public void SaveCamo(int slot, CamoSpec spec)
+    public bool SaveCamo(int slot, CamoSpec spec)
     {
-        if (_peer == null || !_welcomed) return;
+        if (_peer == null || !_welcomed) return false;
         Tx(_peer, Wire.ChanReliable, Wire.Encode(new SaveCamoMsg(slot, spec)), (int)ENetPacketPeer.FlagReliable);
         _conn.Flush();
+        return true;
     }
 
     void OnAppearanceEvent(EventKind kind, byte[] payload)

@@ -577,7 +577,7 @@ public partial class LoadoutScreen : MenuScreen
         var net = _net;
         var target = _tab;
         Shell.Push(new DialogScreen(Strings.F("loadout.reset.title", slot), Strings.F("loadout.reset.body", slot),
-            new[] { new DialogScreen.Choice(Strings.T("loadout.reset.confirm"), () => { net.FlushAutosave(); net.ResetLoadout(target); }, "MenuDanger") }));
+            new[] { new DialogScreen.Choice(Strings.T("loadout.reset.confirm"), () => { net.FlushAutosave(); if (!net.ResetLoadout(target)) Shell.Toast(Strings.T("net.not_sent"), ToastKind.Error); }, "MenuDanger") }));
     }
 
     /// <summary>Step one: pick the class to overwrite. Step two confirms the overwrite (the copy has no undo here).</summary>
@@ -595,7 +595,7 @@ public partial class LoadoutScreen : MenuScreen
         var net = _net;
         var from = _tab;
         Shell.Push(new DialogScreen(Strings.F("loadout.copy.overwrite.title", to + 1), Strings.F("loadout.copy.overwrite.body", from + 1, to + 1),
-            new[] { new DialogScreen.Choice(Strings.T("loadout.copy.confirm"), () => { net.FlushAutosave(); net.CopyLoadout(from, to); }, "MenuDanger") }));
+            new[] { new DialogScreen.Choice(Strings.T("loadout.copy.confirm"), () => { net.FlushAutosave(); if (!net.CopyLoadout(from, to)) Shell.Toast(Strings.T("net.not_sent"), ToastKind.Error); }, "MenuDanger") }));
     }
 
     /// <summary>Esc: one level up. A rename is cancelled, a picker closes, and the screen flushes unsent edits on the way out.</summary>
