@@ -18,6 +18,10 @@ public partial class NetServer : Node
         public ushort Id;
         public string Name = "";
         public bool Joined;
+        /// <summary>The client asked for sandbox mode in its hello (#156).</summary>
+        public bool SandboxRequested;
+        /// <summary>Sandbox mode granted (the server allows it and the client asked). See <see cref="SandboxRules"/>.</summary>
+        public bool Sandbox;
         public Player Body = null!;
         /// <summary>Recoil of this player's trigger hand; the server fires hitscan shots with its offset.</summary>
         public RecoilState Recoil = new(0);
@@ -55,6 +59,8 @@ public partial class NetServer : Node
     public DayClock Clock = new();
     /// <summary>Honour the client debug "kill" command (dev servers and the match smoke only).</summary>
     public bool DebugCommands;
+    /// <summary>--allow-sandbox: grant sandbox mode (godmode, every killstreak on demand) to clients that ask for it (#156). Dev servers only.</summary>
+    public bool AllowSandbox;
     /// <summary>Match smoke mode: QuitAfter is a failure deadline; the server finishes itself after one full round and restart.</summary>
     public bool MatchSmoke;
     /// <summary>weapons.json (hotbar, ammo, damage numbers).</summary>
@@ -299,6 +305,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || ArenaMode)) OnDebug(c, e.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpse } pu) OnPickUpCorpse(c, pu.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
             else if (c.Joined) OnProfileMessage(c, m);
         }
         else if (c.Joined && d[0] == Wire.TInput)
@@ -325,6 +332,7 @@ public partial class NetServer : Node
         }
         c.Id = _nextId++;
         c.Name = string.IsNullOrWhiteSpace(h.Name) ? $"player{c.Id}" : h.Name.Trim();
+        SandboxOnHello(c, h.Flags);
         StartProfileLoad(c, h.Token); // joins once the profile is in (or the wait times out)
         GD.Print($"server: {c.Name} #{c.Id} hello, loading profile");
     }
@@ -343,6 +351,7 @@ public partial class NetServer : Node
         foreach (var car in _cars) car.AddCollisionExceptionWith(c.Body);
         _byId[c.Id] = c;
         SendProfile(c);
+        SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick,
             (ushort)(Clock.StartMinute), (uint)Math.Round(Clock.DayLengthSeconds * 1000), Clock.Frozen));
         foreach (var o in _clients.Values.Where(o => o.Joined))
@@ -353,7 +362,7 @@ public partial class NetServer : Node
         foreach (var w in _match.Entities.Snapshot()) Send(c, new EventMsg((byte)EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State)));
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
-        _match.AddPlayer(c.Id, c.Name); // spawns the player (event) and broadcasts the scoreboard
+        _match.AddPlayer(c.Id, c.Name, c.Sandbox); // spawns the player (event) and broadcasts the scoreboard
         _host.Flush();
         GD.Print($"server: {c.Name} joined as #{c.Id} ({_clients.Count(x => x.Value.Joined)} players)");
     }
@@ -449,7 +458,7 @@ public partial class NetServer : Node
                 LossKill(k.Killer, k.Victim);
                 RecordKill(k);
                 var fromStreak = StreakKill(k);
-                AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause, fromStreak), _elapsed));
+                if (Scores(k.Killer)) AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause, fromStreak), _elapsed));
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon, k.Cause)));
                 break;
             case TargetKilled tk: OnTargetKilled(tk); break;
@@ -459,7 +468,7 @@ public partial class NetServer : Node
 
     MatchStateMsg BuildMatchState()
     {
-        var rows = _match.Ranking().Select(p => new ScoreRow(p.Id, p.Name, p.Kills, p.Deaths, Ping(p.Id))).ToList();
+        var rows = _match.Ranking().Select(p => new ScoreRow(p.Id, p.Sandbox ? p.Name + " [SANDBOX]" : p.Name, p.Kills, p.Deaths, Ping(p.Id))).ToList();
         return new MatchStateMsg(_match.Phase, _match.TimeRemaining, _match.Winners, rows);
     }
 

@@ -14,6 +14,8 @@ namespace Suchohrad.Shooter;
 ///   --match-set k=v,k=v       server: override match.json values (score_goal, time_limit, respawn_delay, spawn_protection, end_screen_time, min_spawn_distance, min_players)
 ///   --unlock-all              server: dev mode, every weapon, perk, killstreak and level-gated item unlocked (also SUCHOHRAD_UNLOCK_ALL=1); nothing is saved (issue #149)
 ///   --targets N               server: plant N stationary target dummies around the spawn area (0-64; default from match.json, 0; make shooter-server uses 24)
+///   --allow-sandbox           server: grant sandbox mode (godmode, unlimited ammo, every killstreak on demand, no XP or score) to clients that ask (#156); dev only, make SANDBOX=1
+///   --sandbox                 client: ask the server for sandbox mode (also SUCHOHRAD_SANDBOX=1); the server may refuse
 ///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
 ///   --match-bot alice|bob     client: scripted match smoke role (alice kills bob with the debug command, bob fires after each spawn)
 ///   --blast-smoke             server: flat arena with three cars, judges vehicle damage stages, the blast and the chain reaction; --blast-bot a|b client roles (ticket #103)
@@ -174,7 +176,7 @@ public partial class Shooter : Node3D
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
-                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(), KillY = killY, Water = _water, Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
+                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(null),
             };
             client.OnFailed = (why, joined) =>
@@ -185,6 +187,7 @@ public partial class Shooter : Node3D
             client.OpenLoadouts = () => _shell.Push(NewLoadouts());
             client.MenuOpen = () => _shell.Top != null;
             client.LevelUpReceived += lu => _shell.Toast(Strings.F("progress.levelup", lu.Level));
+            client.SandboxAnswered += a => _shell.Toast(a.Reason, a.Granted ? ToastKind.Info : ToastKind.Warn);
             AddChild(client);
             failure = await done.Task;
         }
@@ -276,7 +279,9 @@ public partial class Shooter : Node3D
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
             LossOut = cfg.Str("loss-out"),
             UnlockAll = DevUnlocks.Enabled(cfg.Flag("unlock-all"), System.Environment.GetEnvironmentVariable(DevUnlocks.EnvVar)),
+            AllowSandbox = cfg.Flag("allow-sandbox"),
         };
+        if (server.AllowSandbox) GD.Print("server: sandbox mode allowed (--allow-sandbox, #156)");
         if (server.UnlockAll) GD.Print("server: dev mode, every unlock on (not saved to the database)");
         if (server.Sim != null) GD.Print($"server: net-sim {server.Sim}");
         if (server.LossTest > 0 || server.Sim != null) Engine.MaxFps = 200; // delayed packets are released at frame rate
@@ -345,6 +350,10 @@ public partial class Shooter : Node3D
     }
 
     /// <summary>Networked client: light/sky, then prediction and interpolation via <see cref="NetClient"/>.</summary>
+    /// <summary>--sandbox or SUCHOHRAD_SANDBOX=1: the client asks for sandbox mode (#156).</summary>
+    static bool SandboxAsked(Config cfg) =>
+        cfg.Flag("sandbox") || System.Environment.GetEnvironmentVariable("SUCHOHRAD_SANDBOX") is "1" or "true";
+
     void BuildNetClient(Config cfg)
     {
         var target = cfg.Str("connect");

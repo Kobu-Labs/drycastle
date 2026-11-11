@@ -21,7 +21,10 @@ public partial class NetServer
         c.Perks = PerkModifiers.Of(Perks.Find(l.Perk));
         // Dev servers (smoke arenas, --debug-cmds) keep every weapon on the hotbar: the scripted bots and --fx-demo pick
         // by weapons.json slot, e.g. the bazooka at slot 3 (#133). A public server (no debug commands) gets the loadout hotbar.
-        c.W = new PlayerWeapons(Weapons, c.Perks, ArenaMode || DebugCommands ? LoadoutHotbar.All(Weapons) : LoadoutHotbar.Build(Weapons, l));
+        c.W = new PlayerWeapons(Weapons, c.Perks, ArenaMode || DebugCommands || c.Sandbox ? LoadoutHotbar.All(Weapons) : LoadoutHotbar.Build(Weapons, l))
+        {
+            Unlimited = c.Sandbox, // sandbox (#156): unlimited ammo, the whole hotbar
+        };
         StreakArm(c, l);
     }
 
@@ -66,7 +69,7 @@ public partial class NetServer
     /// <summary>Kill and roadkill counters. Suicides and kills by no player are not counted.</summary>
     void RecordKill(PlayerKilled k)
     {
-        if (k.Killer == k.Victim || Progression == null || !_byId.TryGetValue(k.Killer, out var c) || !c.Profile!.Persist) return;
+        if (k.Killer == k.Victim || Progression == null || !_byId.TryGetValue(k.Killer, out var c) || !c.Profile!.Persist || c.Sandbox) return;
         _ = Progression.Stats.RecordKillAsync(c.Profile.DbId, WeaponKey(k.Weapon), k.Cause == KillCause.Roadkill);
     }
 

@@ -199,7 +199,7 @@ public partial class NetClient : Node
             switch (ev)
             {
                 case ENetConnection.EventType.Connect:
-                    Tx(peer, Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName, Token)), (int)ENetPacketPeer.FlagReliable);
+                    Tx(peer, Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName, Token, SandboxRequested ? HelloFlags.Sandbox : (byte)0)), (int)ENetPacketPeer.FlagReliable);
                     _conn.Flush();
                     break;
                 case ENetConnection.EventType.Disconnect:
@@ -253,6 +253,7 @@ public partial class NetClient : Node
                 break;
             case EventMsg e:
                 if ((EventKind)e.Kind == EventKind.TargetRoster) OnTargetRoster(e.Payload); // target dummies' names (#148)
+                OnSandboxEvent((EventKind)e.Kind, e.Payload); // sandbox answer (#156)
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 OnProgressionEvent((EventKind)e.Kind, e.Payload);

@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -154,13 +154,23 @@ shooter-icons:
 # TARGETS: stationary target dummies planted for testing (issue #148); 0 turns them off. docs/shooter-server.md.
 TARGETS ?= 24
 
+# SANDBOX (issue #156): the dev server grants sandbox mode to clients that ask (godmode, unlimited ammo, every killstreak
+# on demand, no XP or score). SANDBOX=0 turns the grant off. Release servers never pass --allow-sandbox (docs/shooter-server.md).
+SANDBOX ?= 1
+SANDBOX_ARG = $(if $(filter 1 true,$(SANDBOX)),--allow-sandbox,)
+
 shooter-server:
 	dotnet build godot/shooter/shooter.csproj
-	godot --headless --path godot/shooter -- --role server --targets $(TARGETS) $(if $(SMOKE),--smoke,) $(UNLOCK_ARG) $(SHOOTER_MAP)
+	godot --headless --path godot/shooter -- --role server --targets $(TARGETS) $(if $(SMOKE),--smoke,) $(UNLOCK_ARG) $(SANDBOX_ARG) $(SHOOTER_MAP)
 
 shooter-client:
 	dotnet build godot/shooter/shooter.csproj
 	godot --path godot/shooter -- --role client $(if $(SMOKE),--smoke,) $(SHOOTER_MAP)
+
+# Client that asks the dev server for sandbox mode (--sandbox). The server must run with SANDBOX=1 (its default) to grant it.
+shooter-client-sandbox:
+	dotnet build godot/shooter/shooter.csproj
+	godot --path godot/shooter -- --role client --sandbox $(SHOOTER_MAP)
 
 # Headless server + 2 scripted bot clients: asserts both move and see each other.
 shooter-net-smoke:

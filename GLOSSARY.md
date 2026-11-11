@@ -68,6 +68,10 @@ _Avoid_: light, streetlight, lamp post
 A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary.
 _Avoid_: ragdoll, body, drop
 
+**Sandbox mode**:
+A dev-only player state, asked for by the client (`--sandbox`) and granted by a server started with `--allow-sandbox`: godmode, unlimited ammo, every killstreak on demand. Its kills, XP and stats count for nothing.
+_Avoid_: godmode (that is one part of it), debug mode
+
 **Care package**:
 The killstreak that gives its user a random Perk; better perks are rarer.
 _Avoid_: supply drop, crate
