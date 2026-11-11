@@ -684,6 +684,9 @@ public partial class NetClient : Node
             case EventKind.VehicleExplosion when WeaponCodec.DecodeVehicleExplosion(payload) is { } vx:
                 OnVehicleExplosion(vx);
                 break;
+            case EventKind.Moab when MoabEvents.Decode(payload) is { } mo:
+                OnMoab(mo);
+                break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 _hitLog.Add((Now, h));
                 SfxHit(h);

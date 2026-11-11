@@ -27,7 +27,7 @@ public static class Strings
         ("score.ping", "{0} ms"),
         ("weapon.pistol", "M1911"), ("weapon.ak47", "AK-47"), ("weapon.bazooka", "Bazooka"), ("weapon.knife", "Knife"), ("weapon.sniper", "Sniper"), ("weapon.glock17", "Glock 17"), ("weapon.deagle", "Desert Eagle"), ("weapon.m82", "Barrett M82"), ("weapon.awm", "AWM"), ("weapon.svd", "Dragunov SVD"),
         ("hud.breath.ready", "Breath: hold {0}"), ("hud.breath.held", "Breath held"), ("hud.breath.exhaled", "Breath out, steadying"), ("hud.breath.empty", "Breath empty, refilling"),
-        ("weapon.fall", "Fall"), ("weapon.drown", "Drowned"), ("weapon.void", "Void"), ("weapon.debug", "Debug"), ("weapon.vehicle", "Car"), ("weapon.vehicle_gun", "Jeep MG"), ("feed.roadkill", "Roadkill"), ("weapon.unknown", "?"),
+        ("weapon.fall", "Fall"), ("weapon.drown", "Drowned"), ("weapon.void", "Void"), ("weapon.debug", "Debug"), ("weapon.vehicle", "Car"), ("weapon.vehicle_gun", "Jeep MG"), ("weapon.moab", "MOAB"), ("moab.inbound", "MOAB inbound {0}"), ("moab.blast", "MOAB by {0}"), ("moab.cancelled", "MOAB cancelled"),("feed.roadkill", "Roadkill"), ("weapon.unknown", "?"),
         ("player.unknown", "Player {0}"),
         ("hud.corpse.hold", "Hold {0}  take {1} as primary     Tap {0}  choose slot"), ("hud.corpse.tap", "Tap {0}  take {1}"),
         ("corpse.title", "Take {0}"), ("corpse.option", "{0}  {1}"), ("corpse.primary", "Replace primary: {0}"), ("corpse.secondary", "Replace secondary: {0}"),

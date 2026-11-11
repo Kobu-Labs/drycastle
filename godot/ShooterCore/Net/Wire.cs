@@ -42,6 +42,8 @@ public enum EventKind : byte
     PickUpCorpse = 20,
     /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
     Hotbar = 21,
+    /// <summary>Server broadcast: a MOAB countdown armed, detonated or was cancelled (<see cref="MoabEvents"/>).</summary>
+    Moab = 70,
 }
 
 public abstract record ReliableMsg;

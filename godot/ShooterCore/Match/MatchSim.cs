@@ -13,6 +13,8 @@ public static class SpecialWeapons
     public const byte Drown = 251, Vehicle = 252, Debug = 253, Void = 254, Fall = 255;
     /// <summary>The jeep's roof gun (a gunner's rounds).</summary>
     public const byte VehicleGun = 250;
+    /// <summary>The MOAB's blast (ticket #129): its kills are streak kills.</summary>
+    public const byte Moab = 249;
 }
 
 public abstract record MatchEvent;

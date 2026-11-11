@@ -8,6 +8,6 @@
     { "id": "attack_helicopter", "name": "Attack Helicopter", "kills_required": 10, "unlock_level": 9, "max_active": 1, "duration_seconds": 0, "control": "pov" },
     { "id": "helicopter_helper", "name": "Helicopter Helper", "kills_required": 15, "unlock_level": 11, "max_active": 1, "duration_seconds": 0, "control": "none" },
     { "id": "ac130", "name": "AC-130", "kills_required": 18, "unlock_level": 14, "max_active": 1, "duration_seconds": 0, "control": "pov" },
-    { "id": "moab", "name": "MOAB", "kills_required": 24, "unlock_level": 20, "max_active": 1, "duration_seconds": 0, "control": "none" }
+    { "id": "moab", "name": "MOAB", "kills_required": 24, "unlock_level": 20, "max_active": 1, "duration_seconds": 5, "control": "none" }
   ]
 }
