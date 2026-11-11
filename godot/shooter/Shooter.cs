@@ -227,6 +227,7 @@ public partial class Shooter : Node3D
             if (!_worldLit) { AddLightAndSky(); _worldLit = true; }
             await Step(ld, "loading.connect", 0.85f);
             var done = new TaskCompletionSource<string?>();
+            ld.AllowCancel(() => done.TrySetResult("")); // empty failure = the player cancelled
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
@@ -256,7 +257,7 @@ public partial class Shooter : Node3D
         {
             DropClient();
             ShowMain();
-            _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n), failure));
+            _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n), failure.Length == 0 ? null : failure));
             return;
         }
         ld.Set("loading.ready", 1f);
@@ -277,9 +278,13 @@ public partial class Shooter : Node3D
     /// <summary>Back to the main menu; with a message when the server dropped us (what happened and what to do).</summary>
     void LeaveMatch(string? error)
     {
+        var lostEdits = _client is { } c && Enumerable.Range(0, Loadout.SlotCount).Any(c.Autosave.HasUnconfirmed);
         DropClient();
+        _shell.SetGameActive(false);
         ShowMain();
-        _shell.Toast(error == null ? Strings.T("disconnect.done") : error + " " + Strings.T("connect.err.help.lost"), error == null ? ToastKind.Info : ToastKind.Error);
+        var text = error == null ? Strings.T("disconnect.done") : error + " " + Strings.T("connect.err.help.lost");
+        if (lostEdits) text += " " + Strings.T("disconnect.lost.loadout");
+        _shell.Toast(text, error == null ? ToastKind.Info : ToastKind.Error);
     }
 
     static GameData LoadData()

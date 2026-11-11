@@ -245,7 +245,12 @@ public partial class SettingsScreen : MenuScreen
                 return true;
             }
         }
-        else if (_capturing != null && e is InputEventMouseButton { Pressed: true }) return Capture(e);
+        else if (_capturing != null && e is InputEventMouseButton { Pressed: true } mb)
+        {
+            // a left click away from the capturing row is a click on a tab, Back, etc: cancel capture and let it through
+            if (mb.ButtonIndex == MouseButton.Left && !_keyBtn[_capturing].GetGlobalRect().HasPoint(mb.GlobalPosition)) { EndCapture(); return false; }
+            return Capture(e);
+        }
         return false;
     }
 

@@ -128,6 +128,28 @@ public sealed class BindingMap
     public void CopyFrom(BindingMap o) { foreach (var kv in o._map) _map[kv.Key] = kv.Value; }
     public bool SameAs(BindingMap o) => _map.All(kv => o._map[kv.Key] == kv.Value);
 
+    /// <summary>
+    /// Loads every saved binding as one set, so a saved swap survives: entries are validated against each other (and against the
+    /// defaults of actions with no usable saved entry), not against the bindings currently in the map. Only true duplicates are
+    /// rejected (the earlier action wins); a rejected or missing entry keeps its default.
+    /// </summary>
+    public void LoadAll(IReadOnlyDictionary<string, string?> saved)
+    {
+        var chosen = new Dictionary<string, Binding>();
+        foreach (var a in Actions)
+            if (saved.TryGetValue(a, out var str) && Binding.Parse(str ?? "") is { } b && !chosen.ContainsValue(b)) chosen[a] = b;
+        // an action left on its default holds that key; drop saved entries that would collide with it until stable
+        for (var changed = true; changed;)
+        {
+            changed = false;
+            foreach (var (a, def) in _defaults)
+                if (!chosen.ContainsKey(a) && chosen.FirstOrDefault(kv => kv.Value == def) is { Key: not null } hit)
+                { chosen.Remove(hit.Key); changed = true; break; }
+        }
+        Reset();
+        foreach (var (a, b) in chosen) _map[a] = b;
+    }
+
     /// <summary>Loads a saved binding when it parses, is known and does not duplicate an earlier one; otherwise the default stays.</summary>
     public void Load(string action, string? saved)
     {

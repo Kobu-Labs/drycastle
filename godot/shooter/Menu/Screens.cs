@@ -154,6 +154,8 @@ public partial class LoadingScreen : MenuScreen
     readonly string _target;
     Label _stage = null!, _pct = null!;
     ProgressBar _bar = null!;
+    Button _cancel = null!;
+    Action? _onCancel;
     public LoadingScreen(string target) { _target = target; }
 
     protected override Control Build()
@@ -176,7 +178,19 @@ public partial class LoadingScreen : MenuScreen
         _pct.HorizontalAlignment = HorizontalAlignment.Right;
         row.AddChild(_stage); row.AddChild(_pct);
         v.AddChild(row);
+        _cancel = Ui.Btn(Strings.T("dialog.cancel"), Back, null, 160);
+        _cancel.Visible = false;
+        v.AddChild(Ui.Gap(ShooterTheme.Space * 2));
+        v.AddChild(_cancel);
         return v;
+    }
+
+    /// <summary>From the connect wait on: Esc and a visible Cancel button call <paramref name="onCancel"/> (earlier steps block the main thread and cannot be cancelled).</summary>
+    public void AllowCancel(Action onCancel)
+    {
+        _onCancel = onCancel;
+        _cancel.Visible = true;
+        _cancel.GrabFocus();
     }
 
     /// <summary>A frame this slow means a loading step blocked the main thread (the spinner stops): the log names the stage so it can be split up.</summary>
@@ -186,8 +200,8 @@ public partial class LoadingScreen : MenuScreen
     }
 
     protected override Control? FirstFocusTarget() => null;
-    /// <summary>Loading cannot be cancelled while a step blocks the main thread, so Esc is deliberately inert here.</summary>
-    public override void Back() { }
+    /// <summary>Loading cannot be cancelled while a step blocks the main thread, so Esc is inert until the connect wait (<see cref="AllowCancel"/>).</summary>
+    public override void Back() => _onCancel?.Invoke();
 
     public void Set(string stageKey, float fraction)
     {

@@ -149,7 +149,7 @@ public partial class ConnectScreen : MenuScreen
             var e = item;
             _recentBox.AddChild(Ui.Btn(e, () => Fill(e)));
         }
-        _recentBox.AddChild(Ui.Btn(Strings.T("connect.recent.clear"), () => { _recent.Clear(); Save(); RebuildRecent(); }));
+        _recentBox.AddChild(Ui.Btn(Strings.T("connect.recent.clear"), () => { _recent.Clear(); GameSettings.SaveConnect("recent", _recent.Serialize()); RebuildRecent(); }));
     }
 
     void Fill(string entry)
