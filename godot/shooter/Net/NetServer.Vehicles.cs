@@ -135,6 +135,7 @@ public partial class NetServer
         }
         if (best == null || !best.Seat.TryEnter(c.Id)) return false;
         c.Car = best; c.Throttle = c.Steer = 0; c.Handbrake = false;
+        best.Lights = Headlights.OnEnterAt(Clock.HourAt(_elapsed)); // night: on as the driver gets in
         c.Body.Teleport(best.GlobalPosition);
         _carEnters++;
         GD.Print($"server: {c.Name} entered {best.Def.Id} {best.Id}");
@@ -149,6 +150,7 @@ public partial class NetServer
         var car = c.Car;
         if (car == null) return;
         car.Seat.Exit(c.Id);
+        car.Lights = false;
         c.Car = null;
         _carExits++;
         if (placeOnGround) c.Body.Teleport(FreeSide(c, car));

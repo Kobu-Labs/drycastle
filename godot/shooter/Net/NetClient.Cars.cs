@@ -26,6 +26,9 @@ public partial class NetClient
         public bool Destroyed, Exploded;
         public double ExplodedAt;
         public VehicleFx.Damage? Smoke;
+        /// <summary>Headlights on (the record's bit), braking (speed fell this snapshot) and the lamps (null: the type has none).</summary>
+        public bool Lights, Braking;
+        public CarLights? Lamps;
     }
 
     readonly Dictionary<ushort, CarView> _cars = new();
@@ -40,12 +43,16 @@ public partial class NetClient
     {
         if (Vehicles == null) return; // never let a missing table abort the rest of the snapshot
         if (!_cars.TryGetValue(id, out var v)) { v = new CarView { Node = CarFx.Make(World, Vehicles!.Vehicles[Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1)], VehicleRecord.Colour(rec)), Kind = Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1), Pos = rec.Position, Yaw = rec.YawRad }; _cars[id] = v; }
+        v.Lamps ??= ShotFx.Enabled ? CarLights.Attach(v.Node, Vehicles!.Vehicles[v.Kind]) : null;
         v.Driver = VehicleRecord.Driver(rec);
+        v.Lights = VehicleRecord.Lights(rec);
         SetVehicleDamage(v, VehicleRecord.Stage(rec), rec.State == EntityState.Dead);
         if (tick > v.LastTick && v.LastTick != 0)
         {
             var d = NVec3.Distance(rec.Position, v.Pos) / ((tick - v.LastTick) / (float)Wire.TickRate);
+            var before = v.Kmh;
             v.Kmh += (d * 3.6f - v.Kmh) * 0.3f;
+            v.Braking = before - v.Kmh > 0.5f; // the record has no brake bit: a clear fall in speed reads as braking
         }
         v.LastTick = tick; v.Pos = rec.Position;
         v.Buf.Push(tick, rec.Position, rec.YawRad, 0);
@@ -95,8 +102,12 @@ public partial class NetClient
         if (_lastTick == 0) return;
         var rt = _lastTick + (Time.GetTicksMsec() / 1000.0 - _lastArrival) * Wire.TickRate - InterpDelayTicks;
         float? kmh = null;
+        // real spot lights go to the nearest lit vehicles only (CarLights.MaxBeams); the others show their cones and lenses
+        var beams = _cars.Values.Where(c => c.Lights && !c.Destroyed && c.Lamps != null)
+            .OrderBy(c => Sfx.ListenerDistance(new Vector3(c.Pos.X, c.Pos.Y, c.Pos.Z))).Take(CarLights.MaxBeams).ToHashSet();
         foreach (var v in _cars.Values)
         {
+            v.Lamps?.Set(v.Lights && !v.Destroyed, v.Braking, beams.Contains(v));
             if (v.Buf.At(rt) is not { } s) continue;
             var p = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
             v.Node.GlobalPosition = p;

@@ -39,6 +39,8 @@ public enum MoveButtons
     Use = 64,
     /// <summary>Switch to the next weapon (hotbar slot changes also travel as the selected slot).</summary>
     Switch = 128,
+    /// <summary>Headlights key (H), held: the server toggles on the press edge while driving (see <see cref="Headlights"/>).</summary>
+    Headlights = 256,
 }
 
 /// <summary>One tick of player input: movement axes (x = strafe right, y = forward, each -1..1), look yaw in radians, buttons.</summary>

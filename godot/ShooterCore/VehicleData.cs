@@ -38,12 +38,34 @@ public class VehiclesFile : IVersioned
             if (v.Hood.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: hood is [x, y, z]");
             if (v.Variants is < 1 or > 16) throw new DataFileException($"vehicles.json: {v.Id}: variants must be 1..16");
             if (v.Paints.Count > 0 && v.PaintMaterial == "") throw new DataFileException($"vehicles.json: {v.Id}: paints need paint_material");
+            if (v.Lights is { } l)
+            {
+                if (l.Head.Count is < 1 or > 4 || l.Tail.Count > 4) throw new DataFileException($"vehicles.json: {v.Id}: lights need 1 to 4 head and 0 to 4 tail lamps");
+                if (l.Head.Concat(l.Tail).Any(p => p is null || p.Length != 3)) throw new DataFileException($"vehicles.json: {v.Id}: each lamp is [x, y, z]");
+                if (l.BeamRange <= 0 || l.BeamAngle <= 0 || l.BeamAngle >= 89) throw new DataFileException($"vehicles.json: {v.Id}: beam_range must be positive, beam_angle 1..88 degrees");
+            }
         }
         if (f.DamageStages.Count != 3 || f.DamageStages.Any(x => x <= 0 || x >= 1) || f.DamageStages[0] <= f.DamageStages[1] || f.DamageStages[1] <= f.DamageStages[2])
             throw new DataFileException("vehicles.json: damage_stages are three descending fractions between 0 and 1");
         if (f.Explosion.Splash.Radius <= 0) throw new DataFileException("vehicles.json: explosion.splash.radius must be positive");
         return f;
     }
+}
+
+/// <summary>
+/// vehicles.json "lights" per type: lamp positions [x, y, z] in the vehicle frame (forward -Z, origin on the ground, as the hood).
+/// A boat's bow light is just another "head" point. Client and server only read it; the rules are in <see cref="Headlights"/>.
+/// </summary>
+public class VehicleLights
+{
+    /// <summary>Headlamp positions, 1 to 4 (a pair for a car). Each gets a beam while the lights are on.</summary>
+    public List<float[]> Head { get; set; } = new();
+    /// <summary>Tail lamp positions, 0 to 4 (red; brighter while braking).</summary>
+    public List<float[]> Tail { get; set; } = new();
+    /// <summary>Beam reach, metres.</summary>
+    public float BeamRange { get; set; } = 30;
+    /// <summary>Beam half angle (the cone's outer edge), degrees.</summary>
+    public float BeamAngle { get; set; } = 28;
 }
 
 /// <summary>A destroyed vehicle's blast (vehicles.json "explosion"): splash numbers like a weapon's, in absolute damage.</summary>
@@ -106,6 +128,8 @@ public class VehicleDef
     public string Model { get; set; } = "";
     public float ModelScale { get; set; } = 1;
     public float ModelYawDeg { get; set; }
+    /// <summary>Headlights and tail lights (vehicles.json "lights"); null for a type without lamps.</summary>
+    public VehicleLights? Lights { get; set; }
     /// <summary>Offset applied to the model node before scale, as [x, y, z].</summary>
     public float[] ModelOffset { get; set; } = { 0, 0, 0 };
     /// <summary>The model's own material that takes the colour variants, and the model's own materials whose colours the variants are (index = colour byte).</summary>

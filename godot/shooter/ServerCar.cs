@@ -45,6 +45,8 @@ public partial class ServerCar : CharacterBody3D
     public Vector3 OriginPos;
     public float OriginYaw;
     public readonly VehicleSeat Seat = new();
+    /// <summary>Headlights on (replicated as one bit, <see cref="VehicleRecord.Make"/>): set when a driver gets in at night, toggled by the H key, off when empty.</summary>
+    public bool Lights;
     public readonly AbandonTimer Abandon = new();
     public CarState State;
     public readonly Dictionary<ushort, double> HitCooldown = new();
@@ -97,6 +99,7 @@ public partial class ServerCar : CharacterBody3D
         Velocity = Vector3.Zero;
         Abandon.Reset();
         HitCooldown.Clear();
+        Lights = false;
     }
 
     public void Step(VehicleDef def, float throttle, float steer, bool handbrake, float dt)
