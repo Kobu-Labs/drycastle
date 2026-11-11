@@ -77,6 +77,8 @@ public sealed class TargetDummies
         public bool Alive;
         /// <summary>Time (seconds, the match clock) at which a dead dummy stands again at its spot.</summary>
         public double RespawnAt;
+        /// <summary>Where the dummy lies: its spot, or where a blast or car threw it (the ragdoll). Back on the spot when it stands again.</summary>
+        public ThrownBody Body = null!;
     }
 
     readonly List<Dummy> _all = new();
@@ -88,7 +90,7 @@ public sealed class TargetDummies
     {
         _respawnDelay = respawnDelay;
         for (int i = 0; i < spots.Count; i++)
-            _all.Add(new Dummy { Id = (ushort)(FirstId + i), Name = NameFor(i), Spot = spots[i], Health = MaxHealth, Alive = true });
+            _all.Add(new Dummy { Id = (ushort)(FirstId + i), Name = NameFor(i), Spot = spots[i], Health = MaxHealth, Alive = true, Body = new ThrownBody(spots[i].Feet) });
     }
 
     public IReadOnlyList<Dummy> All => _all;
@@ -122,7 +124,7 @@ public sealed class TargetDummies
     /// <summary>Round start: every dummy stands at full health on its spot.</summary>
     public void ResetAll()
     {
-        foreach (var d in _all) { d.Alive = true; d.Health = MaxHealth; d.RespawnAt = 0; }
+        foreach (var d in _all) { d.Alive = true; d.Health = MaxHealth; d.RespawnAt = 0; d.Body.Reset(d.Spot.Feet); }
     }
 
     /// <summary>Stands every dead dummy whose respawn time has come, at full health on its spot. Returns the ids that stood up.</summary>
@@ -134,6 +136,7 @@ public sealed class TargetDummies
             if (d.Alive || now < d.RespawnAt || !Respawns) continue;
             d.Alive = true;
             d.Health = MaxHealth;
+            d.Body.Reset(d.Spot.Feet);
             up.Add(d.Id);
         }
         return up;

@@ -291,3 +291,22 @@ public class CorpseThrowTests
         Assert.True(c.Velocity.Length() <= CorpseRules.MaxThrowSpeed + 0.01f);
     }
 }
+
+public class DummyThrowTests
+{
+    [Fact]
+    public void AThrownDummyFliesAndStandsBackOnItsSpotWhenItRespawns()
+    {
+        var spot = new TargetSpot(new Vector3(10, 0, 10), 0, Stance.Stand, 10);
+        var dummies = new TargetDummies(new[] { spot }, 3f);
+        var d = dummies.All[0];
+        Assert.Equal(spot.Feet, d.Body.Position);
+        Assert.Equal(DamageResult.Killed, dummies.Damage(d.Id, 1000, 0));
+        d.Body.Launch(new Vector3(8, 4, 0));
+        for (var i = 0; i < 300 && d.Body.Airborne; i++) d.Body.Fly(1f / 30, (from, dir, len) => dir.Y < -0.5f && from.Y / -dir.Y <= len ? from.Y / -dir.Y : null);
+        Assert.False(d.Body.Airborne);
+        Assert.True(d.Body.Position.X > spot.Feet.X + 3f);
+        Assert.Contains(d.Id, dummies.Update(10));
+        Assert.Equal(spot.Feet, d.Body.Position);
+    }
+}

@@ -72,18 +72,18 @@ public sealed class Corpse : IWorldEntity
 
     public Corpse(ushort owner, Vector3 position, float yaw, int weapon, int rounds)
     {
-        Owner = owner; Position = position; _yaw = yaw; Weapon = weapon; Rounds = rounds;
+        Owner = owner; _body = new ThrownBody(position); _yaw = yaw; Weapon = weapon; Rounds = rounds;
     }
 
     public byte TypeId => CorpseRules.TypeId;
     public ushort Owner { get; }
     public WorldDespawnReason? Ended { get; private set; }
-    public Vector3 Position { get; private set; }
+    readonly ThrownBody _body;
+    public Vector3 Position => _body.Position;
     /// <summary>Velocity while thrown (a blast, a car); zero at rest.</summary>
-    public Vector3 Velocity { get; private set; }
+    public Vector3 Velocity => _body.Velocity;
     /// <summary>True while the body is thrown and has not landed. Replicated in the pitch field (<see cref="CorpseRules.FlightPitch"/>) so the client tumbles it.</summary>
-    public bool Airborne { get; private set; }
-    float _flight;
+    public bool Airborne => _body.Airborne;
     /// <summary>weapons.json index of the weapon the corpse carries.</summary>
     public int Weapon { get; private set; }
     public int Rounds { get; private set; }
@@ -99,63 +99,10 @@ public sealed class Corpse : IWorldEntity
     public WorldState Serialize() => WorldState.Make(Position, _yaw, Airborne ? CorpseRules.FlightPitch : 0, Owner, (byte)Weapon, Rounds);
 
     /// <summary>Throws the body with <paramref name="velocity"/> (m/s). A zero push leaves it lying where it fell.</summary>
-    public void Launch(Vector3 velocity)
-    {
-        var v = velocity.Length() > CorpseRules.MaxThrowSpeed ? Vector3.Normalize(velocity) * CorpseRules.MaxThrowSpeed : velocity;
-        if (v.LengthSquared() < 1e-4f) return;
-        Velocity = v;
-        Airborne = true;
-        _flight = 0;
-        Position += Vector3.UnitY * 0.05f; // clear of the floor it stands on
-    }
+    public void Launch(Vector3 velocity) => _body.Launch(velocity);
 
-    /// <summary>
-    /// One step of the flight: gravity, then the horizontal move (stops dead against a wall), then the vertical one (lands on
-    /// the ground, bumps the ceiling). <paramref name="cast"/> gives the distance to the first solid along a ray from a point
-    /// (direction is unit length), or null when nothing is hit within the length. The flight ends after
-    /// <see cref="CorpseRules.MaxFlightSeconds"/> whatever happens.
-    /// </summary>
-    public void Fly(float dt, Func<Vector3, Vector3, float, float?> cast)
-    {
-        if (!Airborne) return;
-        _flight += dt;
-        var v = Velocity;
-        v.Y -= CorpseRules.Gravity * dt;
-        var p = Position;
-
-        var h = new Vector3(v.X, 0, v.Z) * dt;
-        var hl = h.Length();
-        if (hl > 1e-4f)
-        {
-            var dir = h / hl;
-            var hit = cast(p + Vector3.UnitY * 0.6f, dir, hl + CorpseRules.BodyRadius);
-            if (hit is { } d) { p += dir * MathF.Max(0, d - CorpseRules.BodyRadius); v.X = 0; v.Z = 0; }
-            else p += h;
-        }
-
-        var dy = v.Y * dt;
-        if (dy < 0)
-        {
-            var hit = cast(p + Vector3.UnitY * 0.3f, -Vector3.UnitY, 0.3f - dy);
-            if (hit is { } d) { p.Y += 0.3f - d; Land(p); return; }
-            p.Y += dy;
-        }
-        else
-        {
-            var hit = cast(p + Vector3.UnitY * 0.9f, Vector3.UnitY, dy + 0.1f);
-            if (hit != null) v.Y = 0; else p.Y += dy;
-        }
-        Position = p;
-        Velocity = v;
-        if (_flight >= CorpseRules.MaxFlightSeconds) Land(p);
-    }
-
-    void Land(Vector3 at)
-    {
-        Position = at;
-        Velocity = Vector3.Zero;
-        Airborne = false;
-    }
+    /// <summary>One step of the flight, see <see cref="ThrownBody.Fly"/>.</summary>
+    public void Fly(float dt, Func<Vector3, Vector3, float, float?> cast) => _body.Fly(dt, cast);
 
     /// <summary>Puts a weapon on the corpse (the one a taker swapped out).</summary>
     public void Carry(int weapon, int rounds)
@@ -252,5 +199,87 @@ public static class CorpseCodec
         weapons = new int[p[0]];
         for (var i = 0; i < weapons.Length; i++) weapons[i] = p[1 + i];
         return true;
+    }
+}
+
+/// <summary>
+/// A body in flight (the ragdoll): thrown with a velocity, falls under gravity, stops against walls and lands. Used by corpses and by
+/// target dummies. <see cref="Fly"/> is stepped by the server with a world ray cast; nothing here knows the physics engine.
+/// </summary>
+public sealed class ThrownBody
+{
+    float _flight;
+
+    public ThrownBody(Vector3 position) => Position = position;
+
+    public Vector3 Position { get; private set; }
+    public Vector3 Velocity { get; private set; }
+    public bool Airborne { get; private set; }
+
+    /// <summary>Throws the body with <paramref name="velocity"/> (m/s), capped at <see cref="CorpseRules.MaxThrowSpeed"/>. A zero push does nothing.</summary>
+    public void Launch(Vector3 velocity)
+    {
+        var v = velocity.Length() > CorpseRules.MaxThrowSpeed ? Vector3.Normalize(velocity) * CorpseRules.MaxThrowSpeed : velocity;
+        if (v.LengthSquared() < 1e-4f) return;
+        Velocity = v;
+        Airborne = true;
+        _flight = 0;
+        Position += Vector3.UnitY * 0.05f; // clear of the floor it stands on
+    }
+
+    /// <summary>Back on <paramref name="position"/> at rest (a dummy standing up again).</summary>
+    public void Reset(Vector3 position)
+    {
+        Position = position;
+        Velocity = Vector3.Zero;
+        Airborne = false;
+    }
+
+    /// <summary>
+    /// One step of the flight: gravity, then the horizontal move (stops dead against a wall), then the vertical one (lands on
+    /// the ground, bumps the ceiling). <paramref name="cast"/> gives the distance to the first solid along a ray from a point
+    /// (direction is unit length), or null when nothing is hit within the length. The flight ends after
+    /// <see cref="CorpseRules.MaxFlightSeconds"/> whatever happens.
+    /// </summary>
+    public void Fly(float dt, Func<Vector3, Vector3, float, float?> cast)
+    {
+        if (!Airborne) return;
+        _flight += dt;
+        var v = Velocity;
+        v.Y -= CorpseRules.Gravity * dt;
+        var p = Position;
+
+        var h = new Vector3(v.X, 0, v.Z) * dt;
+        var hl = h.Length();
+        if (hl > 1e-4f)
+        {
+            var dir = h / hl;
+            var hit = cast(p + Vector3.UnitY * 0.6f, dir, hl + CorpseRules.BodyRadius);
+            if (hit is { } d) { p += dir * MathF.Max(0, d - CorpseRules.BodyRadius); v.X = 0; v.Z = 0; }
+            else p += h;
+        }
+
+        var dy = v.Y * dt;
+        if (dy < 0)
+        {
+            var hit = cast(p + Vector3.UnitY * 0.3f, -Vector3.UnitY, 0.3f - dy);
+            if (hit is { } d) { p.Y += 0.3f - d; Land(p); return; }
+            p.Y += dy;
+        }
+        else
+        {
+            var hit = cast(p + Vector3.UnitY * 0.9f, Vector3.UnitY, dy + 0.1f);
+            if (hit != null) v.Y = 0; else p.Y += dy;
+        }
+        Position = p;
+        Velocity = v;
+        if (_flight >= CorpseRules.MaxFlightSeconds) Land(p);
+    }
+
+    void Land(Vector3 at)
+    {
+        Position = at;
+        Velocity = Vector3.Zero;
+        Airborne = false;
     }
 }

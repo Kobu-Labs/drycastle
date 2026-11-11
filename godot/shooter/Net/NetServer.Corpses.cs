@@ -33,18 +33,16 @@ public partial class NetServer
     /// <summary>Flies the thrown corpses one tick; they stop against the world (not the cars: a run-over body starts inside one).</summary>
     void StepCorpses(float dt)
     {
-        foreach (var body in _corpses.Bodies)
+        float? Cast(NVec3 from, NVec3 dir, float len)
         {
-            if (!body.Airborne) continue;
-            body.Fly(dt, (from, dir, len) =>
-            {
-                var a = new Vector3(from.X, from.Y, from.Z);
-                var q = PhysicsRayQueryParameters3D.Create(a, a + new Vector3(dir.X, dir.Y, dir.Z) * len);
-                q.CollisionMask = CollisionLayers.World;
-                var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
-                return r.Count == 0 ? null : a.DistanceTo(r["position"].AsVector3());
-            });
+            var a = new Vector3(from.X, from.Y, from.Z);
+            var q = PhysicsRayQueryParameters3D.Create(a, a + new Vector3(dir.X, dir.Y, dir.Z) * len);
+            q.CollisionMask = CollisionLayers.World;
+            var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+            return r.Count == 0 ? null : a.DistanceTo(r["position"].AsVector3());
         }
+        foreach (var body in _corpses.Bodies) body.Fly(dt, Cast);
+        foreach (var d in _match.Targets.All) if (!d.Alive) d.Body.Fly(dt, Cast); // a thrown dummy flies like a corpse
     }
 
     void OnPickUpCorpse(Client c, byte[] payload)

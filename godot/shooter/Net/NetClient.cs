@@ -13,7 +13,7 @@ namespace Suchohrad.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Stance Stance; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
+    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Stance Stance; public float Spin; public Vector3 Axis = Vector3.Right, TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -479,15 +479,53 @@ public partial class NetClient : Node
     {
         if (_lastTick == 0) return;
         var rt = _lastTick + (Time.GetTicksMsec() / 1000.0 - _lastArrival) * Wire.TickRate - InterpDelayTicks;
-        foreach (var r in _remotes.Values)
+        var dt = (float)GetProcessDeltaTime();
+        foreach (var (id, r) in _remotes)
             if (r.Buf.At(rt) is { } s)
             {
-                r.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
-                r.Node.Rotation = new Vector3(0, s.Yaw, 0);
-                r.Node.Visible = true; // riders are drawn in their seat (the server puts the body there), seated rather than standing
+                var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
+                var dead = r.State == EntityState.Dead;
+                TumbleRemote(r, at, s.Yaw, dead && TargetDummies.IsDummyId(id), dt);
+                // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
+                r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && CorpseOf(id)); // riders are drawn in their seat (the server puts the body there), seated rather than standing
                 r.View?.SetStance(r.State == EntityState.InVehicle ? Stance.Crouch : r.Stance);
                 AnimateRemote(r, s.Pos);
             }
+    }
+
+    /// <summary>
+    /// The ragdoll of a killed dummy: while it is thrown (it moves fast in the death pose) it tumbles about its middle, then settles
+    /// flat. Everything else is placed upright at its feet. Corpses do the same in <see cref="RenderCorpses"/>.
+    /// </summary>
+    void TumbleRemote(Remote r, Vector3 at, float yaw, bool dummyDown, float dt)
+    {
+        var v = dt > 0 ? (at - r.TumbleLast) / dt : Vector3.Zero;
+        r.TumbleLast = at;
+        var flying = dummyDown && v.Length() > 2.5f && v.Length() < 60f;
+        if (flying)
+        {
+            var h = new Vector3(v.X, 0, v.Z);
+            if (h.LengthSquared() > 1e-4f) r.Axis = Vector3.Up.Cross(h.Normalized()).Normalized();
+            r.Spin += TumbleRate * dt;
+        }
+        else if (r.Spin != 0)
+        {
+            var whole = Mathf.Round(r.Spin / Mathf.Tau) * Mathf.Tau; // the nearest full turn: lying flat again
+            r.Spin = Mathf.MoveToward(r.Spin, whole, TumbleSettle * dt);
+            if (Mathf.Abs(r.Spin - whole) < 0.01f) r.Spin = 0;
+        }
+        var tumbling = r.Spin != 0;
+        if (r.View != null) r.View.Position = tumbling ? new Vector3(0, -BodyMid, 0) : Vector3.Zero;
+        r.Node.GlobalPosition = tumbling ? at + Vector3.Up * BodyMid : at;
+        r.Node.Basis = new Basis(r.Axis, r.Spin) * new Basis(Vector3.Up, yaw);
+    }
+
+    /// <summary>True while a corpse of player <paramref name="owner"/> is on the map.</summary>
+    bool CorpseOf(ushort owner)
+    {
+        foreach (var id in _corpses.Keys)
+            if (WorldEntities.Entities.TryGetValue(id, out var e) && e.State.Owner == owner) return true;
+        return false;
     }
 
     /// <summary>Shows the held weapon of the current hotbar slot (the server-confirmed one once known) low on the right; hidden while dead or driving.</summary>
