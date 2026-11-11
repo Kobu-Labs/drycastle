@@ -7,8 +7,9 @@ namespace Suchohrad.Shooter;
 /// <summary>
 /// Aircraft on the server (ticket #125): the aircraft world entity, and the gunship turret of its owner. The streak tickets
 /// call <see cref="SpawnAircraft"/> from their <see cref="IKillstreak.Activate"/> and wrap the result with
-/// <see cref="GunshipFor"/>. Cannon rounds are resolved here like a hitscan rifle (walls, players, vehicles); rockets go into
-/// the player rocket sim, so their splash and direct hits are the same code.
+/// <see cref="GunshipFor"/>. Cannon rounds are resolved here: <see cref="GunshipRouting.Route"/> finds what the ray stops on,
+/// and a round with a blast (every cannon round of the AC-130 and the helicopter, every shell) goes through
+/// <see cref="GunshipBurst"/>. Rockets go into the player rocket sim, so their splash and direct hits are the same code.
 /// </summary>
 public partial class NetServer
 {
@@ -69,10 +70,36 @@ public partial class NetServer
         if (_byId.TryGetValue(owner, out var c)) Send(c, new EventMsg((byte)EventKind.GunshipStatus, GunshipCodec.Encode(s)));
     }
 
+    /// <summary>The world blocks at the blocking geometry only (layer 1; vehicles and player bodies are not walls for a gunship round).</summary>
+    float WorldWall(Vector3 from, Vector3 dir, float max)
+    {
+        var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
+        q.CollisionMask = 1;
+        var ex = new Godot.Collections.Array<Rid>();
+        foreach (var o in _byId.Values) ex.Add(o.Body.GetRid());
+        q.Exclude = ex;
+        var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        return r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3());
+    }
+
+    /// <summary>The live vehicles as the gunship routing sees them: the index is the position in <see cref="_cars"/>.</summary>
+    List<GunshipVehicle> GunshipVehicles()
+    {
+        var list = new List<GunshipVehicle>(_cars.Count);
+        for (var i = 0; i < _cars.Count; i++)
+        {
+            var c = _cars[i];
+            if (c.Destroyed) continue; // no collision: a destroyed vehicle is shot through
+            list.Add(new GunshipVehicle(i, N(c.GlobalPosition), c.State.Yaw, c.HalfWidth, c.HalfLength, c.Def.Height));
+        }
+        return list;
+    }
+
     /// <summary>
-    /// One round from a turret: a cannon round is a hitscan from the turret; a rocket joins the rocket sim; a shell is a trace
-    /// that bursts at its first hit (<see cref="Ac130Detonate"/>). <paramref name="credit"/> is the kill-feed weapon when the
-    /// turret credits its kills to a special weapon (the helicopter, the AC-130); null credits the weapons.json weapon of the round.
+    /// One round from a turret: a rocket joins the rocket sim; a cannon or shell is a trace that stops at what it hits
+    /// (<see cref="GunshipRouting.Route"/>), and a round with a blast bursts there (<see cref="GunshipBurst"/>). <paramref name="credit"/>
+    /// is the kill-feed weapon when the turret credits its kills to a special weapon (the helicopter, the AC-130); null credits the
+    /// weapons.json weapon of the round.
     /// </summary>
     void ResolveGunshipShot(ushort owner, GunshipShot shot, GunshipDef gun, int[] weaponIndex, byte? credit)
     {
@@ -95,22 +122,45 @@ public partial class NetServer
             return;
         }
 
-        var from = new Vector3(shot.Origin.X, shot.Origin.Y, shot.Origin.Z);
-        var dir = new Vector3(shot.Direction.X, shot.Direction.Y, shot.Direction.Z);
-        var range = def.RangeM;
-        var wall = WorldHit(from, dir, range, out var shotCar);
-        var hit = HitMath.Raycast(shot.Origin, shot.Direction, range, wall, LiveTargets(), owner);
-        var end = shot.Origin + shot.Direction * (hit?.Distance ?? Math.Min(wall, range));
+        var wall = WorldWall(new Vector3(shot.Origin.X, shot.Origin.Y, shot.Origin.Z), new Vector3(shot.Direction.X, shot.Direction.Y, shot.Direction.Z), def.RangeM);
+        var targets = LiveTargets();
+        var route = GunshipRouting.Route(def, shot.Origin, shot.Direction, wall, targets, owner, GunshipVehicles(), Vehicles?.BulletDamageMultiplier ?? 0f);
+        var end = shot.Origin + shot.Direction * route.Distance;
         BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(owner, (byte)weapon, shot.Origin, end)));
-        if (hit != null || wall <= range) // an impact on something: the surface decides the particles (tickets #152, #154)
-            BroadcastImpact(new System.Numerics.Vector3(end.X, end.Y, end.Z), SurfaceClassifier.SizeFor(def.Kind, def.Damage), hit != null, shotCar != null);
-        if (def.Kind == GunshipWeaponKind.Shell)
+        if (route.Impact != GunshipImpact.None)
+            BroadcastImpact(end, SurfaceClassifier.SizeFor(def.Kind, def.Damage, def.Splash?.Radius ?? 0), route.Impact == GunshipImpact.Body, route.Impact == GunshipImpact.Vehicle);
+
+        if (def.Splash != null && (def.Kind == GunshipWeaponKind.Shell || route.Impact != GunshipImpact.None))
         {
-            Ac130Detonate(owner, end, def, hit is { } sh ? sh.Id : null, shotCar as ServerCar);
+            GunshipBurst(owner, end, def, by, route, targets);
             return;
         }
-        if (hit is { } h) Deal(owner, by, h.Id, def.Damage, false, false);
-        else if (shotCar != null && Vehicles != null && wall <= range)
-            DamageVehicle(shotCar, def.Damage * Vehicles.BulletDamageMultiplier, owner, by, 0);
+        if (route.Impact == GunshipImpact.Body) Deal(owner, by, route.TargetId, route.Damage, false, false);
+        else if (route.Impact == GunshipImpact.Vehicle && Vehicles != null) DamageVehicle(_cars[route.VehicleIndex], route.Damage, owner, by, 0);
+    }
+
+    /// <summary>
+    /// The blast of a turret round at <paramref name="at"/>: the event for the clients, then the damage to every body and vehicle in the
+    /// radius (<see cref="GunshipRouting.Burst"/>; the hit point at full damage), with knockback for the bodies that live. The vehicle
+    /// damage uses the explosive multiplier; the owner is not hurt by its own guns (self multiplier 0 in killstreaks.json).
+    /// </summary>
+    void GunshipBurst(ushort owner, NVec3 at, GunshipWeaponDef def, byte credit, GunshipRoute route, List<HitTarget> targets)
+    {
+        var splash = def.Splash ?? throw new InvalidOperationException($"gunship weapon \"{def.Id}\" has no blast");
+        ushort? direct = route.Impact == GunshipImpact.Body ? route.TargetId : null;
+        var directCar = route.Impact == GunshipImpact.Vehicle ? route.VehicleIndex : -1;
+        BroadcastEvent(EventKind.Ac130Blast, Ac130Codec.EncodeBlast(owner, at, splash.Radius));
+        var hits = GunshipRouting.Burst(def, at, owner, direct, directCar, targets, GunshipVehicles(),
+            Vehicles?.RocketDamageMultiplier ?? 0f, id => _byId.TryGetValue(id, out var c) ? c.Perks.ExplosiveDamageTaken : 1f); // Flak Jacket
+        foreach (var h in hits)
+        {
+            if (h.IsVehicle) { DamageVehicle(_cars[h.VehicleIndex], h.Damage, owner, credit, 0); continue; }
+            var res = Deal(owner, credit, h.TargetId, h.Damage, false, false);
+            if (res == DamageResult.Ignored) continue; // spawn protected or a pilot at the gun: neither damage nor knockback
+            if (res == DamageResult.Killed || !_byId.TryGetValue(h.TargetId, out var v)) continue;
+            var t = targets.FirstOrDefault(x => x.Id == h.TargetId);
+            var k = ProjectileMath.Knockback(splash.KnockbackSpeed, at, HitMath.Centre(t), h.Fraction);
+            if (k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
+        }
     }
 }

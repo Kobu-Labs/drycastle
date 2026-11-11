@@ -142,7 +142,7 @@ not a streak weapon, so its kills do count (correction on #133).
 | Care Package | 6 | 6 | instant | none | drop lands, hold E 2 s opens it (crate gone), grants a random killstreak (weighted, section 3) |
 | Attack Helicopter | 10 | 9 | 45 s | POV | owner flies the helicopter (POV) for 45 s |
 | Helicopter Helper | 15 | 11 | 60 s | none | AI helicopter, bursts at enemies with a red-dot warning |
-| AC-130 | 18 | 14 | 40 s | POV | circling gunship, 25 mm / 40 mm / 105 mm |
+| AC-130 | 18 | 14 | 40 s | POV | circling gunship, 25 mm / 40 mm / 105 mm, unlimited ammo, no heat (#157) |
 | MOAB | 24 | 20 | 5 s countdown | none | 5 s countdown, then a blast that kills everyone in range |
 
 Attack missile time to ground (450 m spawn, 64 m/s, flat ground, no steering = 450 / (64 x sin(pitch))):
@@ -155,6 +155,24 @@ Attack missile time to ground (450 m spawn, 64 m/s, flat ground, no steering = 4
 | -80 deg (steepest) | 7.1 s |
 
 Shared aircraft code: `Aircraft` (circling path, replication, shared gunship control, #125).
+
+Gunship turrets (#157): no ammo and no heat. The streak's time limit is the only limit; the fire interval paces each weapon,
+and an interval shorter than the input period fires every round due (up to `GunshipControl.MaxRoundsPerInput` per input).
+Every cannon round has a blast (`splash` in killstreaks.json: full damage at the hit point, falloff to `edge_damage` at the
+radius). The owner is never hurt by its own blast, and the blast uses the vehicles.json rocket multiplier on vehicles. The
+routing is pure (`GunshipRouting.Route` and `GunshipRouting.Burst`, tested in `GunshipRoutingTests`). Direct damage per second
+on a body (the hit point), and rounds to destroy a 300 hp car (direct hit, rocket multiplier 1.5; Tank Hunter x1.25 is not in these):
+
+| Weapon | Interval | Damage | Direct DPS | Blast radius | Car rounds |
+|---|---|---|---|---|---|
+| Helicopter cannon (m82) | 0.15 s | 25 | 167 | 3 m | 8 |
+| AC-130 25 mm (m249) | 0.04 s | 6 | 150 | 3 m | 34 |
+| AC-130 40 mm (m82) | 0.2 s | 36 | 180 | 6 m | 6 |
+| AC-130 105 mm shell (bazooka) | 1.0 s | 150 | 150 | 14 m | 2 |
+
+Gunship rockets keep the bazooka's own blast (6 m) because the rocket sim owns the explosion. The enemy markers on the overlay
+are a red diamond per visible enemy player and target dummy, the nearest to the reticle larger (`GunshipOverlay`, from the
+remote replicas). The attack missile view has no markers yet.
 
 Reachability (#133, estimate): UAV and the turret are reachable in a first life at level 0-5. The 18 and 24 kill streaks
 need most of a 25-kill round in a single life; with `score_goal` 25 the MOAB is effectively a match-deciding streak.
@@ -250,8 +268,8 @@ Server and persistence:
 
 ## 9. Wire protocol
 
-Protocol version: **10** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
-versions. Version 10 (#156) added the hello flags byte (bit 0: sandbox requested), event kinds 150 (SandboxStatus, server to the joining player), 151 (SandboxGrant: hold a streak), 152 (SandboxAction: heal, teleport, vehicle, target respawn, use the held streak), 153 (SandboxState: the [SANDBOX] name tags), 154 (SandboxHeld) and 155 (SandboxNotice). The F4 panel (sandbox_panel, rebindable) is client-side only. Version 9 (#151) retired the care package's PerkGained (kind 51) and added StreakGranted (kind 23). Version 6 was bumped in #133 because the killstreak, aircraft, turret, missile, care package, corpse and MOAB
+Protocol version: **11** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
+versions. Version 11 (#157) cut the GunshipStatus payload to weapon and zoom (2 bytes): the turret has no ammo and no heat. Version 10 (#156) added the hello flags byte (bit 0: sandbox requested), event kinds 150 (SandboxStatus, server to the joining player), 151 (SandboxGrant: hold a streak), 152 (SandboxAction: heal, teleport, vehicle, target respawn, use the held streak), 153 (SandboxState: the [SANDBOX] name tags), 154 (SandboxHeld) and 155 (SandboxNotice). The F4 panel (sandbox_panel, rebindable) is client-side only. Version 9 (#151) retired the care package's PerkGained (kind 51) and added StreakGranted (kind 23). Version 6 was bumped in #133 because the killstreak, aircraft, turret, missile, care package, corpse and MOAB
 events and world entity types are new. Version 7 added the target dummies (#148: entity type 3 and event kind 140). Version 8
 added the loadout editor's autosave, rename, copy and reset (#145: event kinds 130-132, and `SaveLoadout` carries the name
 and the sequence number). Before 6, the last bump was 5 (camo per loadout slot).

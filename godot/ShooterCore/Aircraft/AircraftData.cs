@@ -20,7 +20,7 @@ public sealed class AircraftKindDef
 /// <summary>What a gunship weapon's shot is: a hitscan round or a rocket on the projectile sim.</summary>
 public enum GunshipWeaponKind : byte
 {
-    /// <summary>A hitscan round from the turret (walls, players, vehicles).</summary>
+    /// <summary>A hitscan round from the turret (walls, players, dummies, vehicles), with an optional blast.</summary>
     Cannon,
     /// <summary>A rocket on the player rocket sim (its splash is the weapons.json entry's).</summary>
     Rocket,
@@ -29,9 +29,10 @@ public enum GunshipWeaponKind : byte
 }
 
 /// <summary>
-/// One weapon a gunship's turret fires, with its own ammo and heat. <see cref="WeaponId"/> names a weapons.json entry: it
-/// gives the shot's sound and tracer (the shot index on the wire), and for a rocket the explosion numbers (the rocket sim
-/// is the player's). A cannon uses its own <see cref="Damage"/>, <see cref="RangeM"/> and <see cref="SpreadDeg"/>.
+/// One weapon a gunship's turret fires. There is no ammo and no heat: the streak's time limit is the only limit, and the
+/// fire interval is the pacing. <see cref="WeaponId"/> names a weapons.json entry: it gives the shot's sound and tracer (the
+/// shot index on the wire), and for a rocket the explosion numbers (the rocket sim is the player's). A cannon uses its own
+/// <see cref="Damage"/>, <see cref="RangeM"/>, <see cref="SpreadDeg"/> and optional <see cref="Splash"/>.
 /// </summary>
 public sealed class GunshipWeaponDef
 {
@@ -39,18 +40,15 @@ public sealed class GunshipWeaponDef
     public string Name { get; init; } = "";
     public GunshipWeaponKind Kind { get; init; }
     public string WeaponId { get; init; } = "";
+    /// <summary>Damage of the round at its hit point (a cannon: its own; a shell: its direct hit).</summary>
     public float Damage { get; init; }
     public float RangeM { get; init; }
     public float IntervalS { get; init; }
     public float SpreadDeg { get; init; }
-    /// <summary>Rounds for the whole streak use (no reserve, no reload).</summary>
-    public int Ammo { get; init; }
-    /// <summary>Heat added per round, and the level at which the weapon locks.</summary>
-    public float HeatPerShot { get; init; }
-    public float HeatMax { get; init; }
-    /// <summary>Heat lost per second. The lock lifts once heat falls to half of <see cref="HeatMax"/>.</summary>
-    public float HeatCoolPerS { get; init; }
-    /// <summary>A shell's blast (its own tuning, not weapons.json). Null for the other kinds.</summary>
+    /// <summary>
+    /// The blast of a round (its own tuning, not weapons.json): a shell always has one, a cannon round may have one (its hit
+    /// point takes the full damage, everything in the radius the falloff). Null for a rocket (the rocket sim's blast).
+    /// </summary>
     public SplashDef? Splash { get; init; }
 }
 
@@ -104,10 +102,6 @@ public static class AircraftData
         public float? RangeM { get; set; }
         public float? IntervalS { get; set; }
         public float? SpreadDeg { get; set; }
-        public int? Ammo { get; set; }
-        public float? HeatPerShot { get; set; }
-        public float? HeatMax { get; set; }
-        public float? HeatCoolPerS { get; set; }
         public SplashRaw? Splash { get; set; }
     }
 
@@ -184,10 +178,11 @@ public static class AircraftData
                 "shell" => GunshipWeaponKind.Shell,
                 _ => throw new DataFileException($"{F}: {where}: field \"kind\" must be cannon, rocket or shell"),
             };
+            if (kind == GunshipWeaponKind.Rocket && r.Splash != null)
+                throw new DataFileException($"{F}: {where}: a rocket's blast is weapons.json's, so it takes no \"splash\" block");
             SplashDef? splash = null;
-            if (kind == GunshipWeaponKind.Shell)
+            if (r.Splash is { } s)
             {
-                var s = r.Splash ?? throw new DataFileException($"{F}: {where}: a shell needs a \"splash\" block");
                 var radius = Need(s.Radius, where, "splash.radius", 0.1f);
                 var full = Need(s.FullDamageRadius, where, "splash.full_damage_radius", 0);
                 if (full >= radius) throw new DataFileException($"{F}: {where}: \"splash.full_damage_radius\" must be less than \"splash.radius\"");
@@ -200,12 +195,7 @@ public static class AircraftData
                     KnockbackSpeed = Need(s.KnockbackSpeed, where, "splash.knockback_speed", 0),
                 };
             }
-            else if (r.Splash != null) throw new DataFileException($"{F}: {where}: a \"splash\" block is only for a shell");
-            var ammo = r.Ammo ?? throw new DataFileException($"{F}: {where}: field \"ammo\" is required");
-            if (ammo < 1) throw new DataFileException($"{F}: {where}: field \"ammo\" must be at least 1");
-            var heatMax = Need(r.HeatMax, where, "heat_max", 1);
-            var heatPerShot = Need(r.HeatPerShot, where, "heat_per_shot", 0);
-            if (heatPerShot > heatMax) throw new DataFileException($"{F}: {where}: \"heat_per_shot\" must not exceed \"heat_max\"");
+            else if (kind == GunshipWeaponKind.Shell) throw new DataFileException($"{F}: {where}: a shell needs a \"splash\" block");
             weapons.Add(new GunshipWeaponDef
             {
                 Id = r.Id, Name = r.Name, Kind = kind, WeaponId = r.WeaponId,
@@ -213,8 +203,6 @@ public static class AircraftData
                 RangeM = Need(r.RangeM, where, "range_m", 1),
                 IntervalS = Need(r.IntervalS, where, "interval_s", 0.01f),
                 SpreadDeg = Need(r.SpreadDeg, where, "spread_deg", 0),
-                Ammo = ammo, HeatPerShot = heatPerShot, HeatMax = heatMax,
-                HeatCoolPerS = Need(r.HeatCoolPerS, where, "heat_cool_per_s", 0),
                 Splash = splash,
             });
         }
