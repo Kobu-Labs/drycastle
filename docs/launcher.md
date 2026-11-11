@@ -11,8 +11,7 @@ maintainer                      GitHub Releases (Kobu-Labs/drycastle)           
 make map AREA=village
 scripts/publish-map.sh  ------> map-<date>-<hash>   (map.zip, map.json)
 commit map-version.txt
-push to main            ------> dev-<run>           (game zips for Windows + Linux, manifest.json)
-tag vX.Y.Z              ------> vX.Y.Z              (same, stable)
+PR main -> release, merge ------> deploys the server to the VPS, THEN publishes v0.<run> (game zips for Windows + Linux, manifest.json)
 tag launcher-vX.Y.Z     ------> launcher-vX.Y.Z     (launcher zips)
                                                                                  download launcher once, run it
                                         <------ newest release of the channel (API) + manifest.json
@@ -21,20 +20,20 @@ tag launcher-vX.Y.Z     ------> launcher-vX.Y.Z     (launcher zips)
 ```
 
 **Player:** download the launcher zip from the Releases page (`docs/launcher-readme.txt` is inside it), unzip, run. First start installs the game and map; later starts update only
-what changed, then Play. **Maintainer, game update:** merge to `main` and wait for the `release` job. **Maintainer, stable release:** tag a green commit `vX.Y.Z`.
-**Maintainer, map change:** the first two lines above, commit `map-version.txt`, push. **Maintainer, launcher change:** tag `launcher-vX.Y.Z` and tell players to re-download.
+what changed, then Play. **Maintainer, release (game and server together):** open a PR `main` -> `release` and merge it; the pipeline deploys the server, then publishes the release. For a test build without deploying, run the `release` workflow manually on a branch.
+**Maintainer, map change:** the first two lines above, commit `map-version.txt`, push, then release as above. **Maintainer, launcher change:** tag `launcher-vX.Y.Z` and tell players to re-download.
 
 ## What is published
 
 | Release | Made by | Contains |
 |---|---|---|
-| `dev-<run>` (prerelease) | every push to `main` (`.github/workflows/release.yml`) | `suchohrad-game-windows.zip`, `suchohrad-game-linux.zip` (no map), `manifest.json` |
-| `vX.Y.Z` | pushing a tag `vX.Y.Z` (same workflow) | same, channel `stable` |
+| `v0.<run>` (stable) | merging a PR into the `release` branch (`.github/workflows/release.yml`, which also deploys the server first) | `suchohrad-game-windows.zip`, `suchohrad-game-linux.zip` (no map), `manifest.json` |
+| `dev-<run>` (prerelease) | manual run of the `release` workflow on any branch (no deploy) | same, channel `dev`; last 15 kept |
 | `map-<date>-<hash>` (prerelease) | you, `scripts/publish-map.sh` | `map.zip`, `map.json` |
 | `launcher-vX.Y.Z` (prerelease, so it is never GitHub "latest") | pushing a tag `launcher-v*` (`launcher.yml`) | `suchohrad-launcher-windows.zip`, `suchohrad-launcher-linux.zip` |
 
 `manifest.json` (schema 2) lists one build per platform (`windows`, `linux`: exe and game zip) and the map release, each with sha256 and size. The launcher picks the build for its own OS. Players on **stable** get the newest non-prerelease
-(`vX.Y.Z`, fetched through the API's `releases/latest` so map and dev releases never hide it); players on **dev** get the newest of the last 100. The last 15 `dev-*` releases are kept. There is no release branch: cut a stable release by tagging a green commit.
+(`v0.<run>`, fetched through the API's `releases/latest` so map and dev releases never hide it); players on **dev** get the newest of the last 100. Nothing is published on a plain push to `main`: only the `release` branch (or a manual run) produces release assets. Deploying and releasing are one pipeline, see `docs/release.md` ("Release pipeline").
 
 ## The map
 
