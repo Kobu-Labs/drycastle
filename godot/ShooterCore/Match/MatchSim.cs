@@ -23,6 +23,8 @@ public static class SpecialWeapons
     public const byte AttackHelicopter = 246;
     /// <summary>The AC-130's weapons (killstreak "ac130"): its kills are the streak's, whichever of its three weapons made them.</summary>
     public const byte Ac130 = 244;
+    /// <summary>The helicopter helper's rounds (killstreak "helicopter_helper"); its kills count as the streak's, under the weapon id helicopter_gun.</summary>
+    public const byte Helper = 245;
 }
 
 public abstract record MatchEvent;

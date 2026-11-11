@@ -10,8 +10,8 @@ public static class StreakWeapons
 {
     /// <summary>AC-130 gunship weapon (the AC-130 streak's kills).</summary>
     public const byte Ac130 = SpecialWeapons.Ac130;
-    /// <summary>Helper drone weapon (reserved).</summary>
-    public const byte Helper = 245;
+    /// <summary>The helicopter helper's rounds (its kills are the streak's).</summary>
+    public const byte Helper = SpecialWeapons.Helper;
     /// <summary>Attack helicopter weapon (the attack helicopter streak's kills).</summary>
     public const byte Heli = SpecialWeapons.AttackHelicopter;
 

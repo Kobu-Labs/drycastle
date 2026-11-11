@@ -58,6 +58,8 @@ public enum EventKind : byte
     UavPing = 90,
     /// <summary>Server broadcast: an AC-130 shell burst (owner, centre, splash radius). See <see cref="Ac130Codec"/>. Kinds 120-129 belong to the AC-130 streak.</summary>
     Ac130Blast = 120,
+    /// <summary>Server to the one player a helicopter helper is about to fire on: red-dot warning (<see cref="HelperWarningCodec"/>). Kinds 110-119 belong to the helicopter helper.</summary>
+    HelperWarning = 110,
 }
 
 public abstract record ReliableMsg;

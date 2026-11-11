@@ -24,6 +24,8 @@ public sealed class KillstreakDef
     public IReadOnlyDictionary<string, int> PerkWeights { get; init; } = new Dictionary<string, int>();
     /// <summary>The attack missile's tuning (its "missile" block); null for every other streak.</summary>
     public MissileTuning? Missile { get; init; }
+    /// <summary>The helicopter helper's tuning (its "helper" block); null for every other streak.</summary>
+    public HelicopterHelperTuning? Helper { get; init; }
 }
 
 /// <summary>
@@ -93,11 +95,14 @@ public sealed class KillstreakFile : IVersioned
                 throw new DataFileException($"{F}: {where}: field \"perk_weights\" is required for the care package");
             var isMissile = r.Id == AttackMissileStreak.StreakId;
             if (!isMissile && r.Missile != null) throw new DataFileException($"{F}: {where}: a \"missile\" block is only for the attack missile");
+            var isHelper = r.Id == HelicopterHelperStreak.StreakId;
+            if (!isHelper && r.Helper != null) throw new DataFileException($"{F}: {where}: a \"helper\" block is only for the helicopter helper");
             streaks.Add(new KillstreakDef
             {
                 Id = r.Id, Name = r.Name, KillsRequired = kills, UnlockLevel = unlock, MaxActive = maxActive,
                 DurationSeconds = duration, Control = control, PerkWeights = weights,
                 Missile = isMissile ? MissileTuning.From(r.Missile, F, where) : null,
+                Helper = isHelper ? HelicopterHelperTuning.From(r.Helper, where) : null,
             });
         }
 
@@ -133,5 +138,6 @@ public sealed class KillstreakFile : IVersioned
         public string? Control { get; set; }
         public Dictionary<string, int>? PerkWeights { get; set; }
         public MissileTuning.MissileRaw? Missile { get; set; }
+        public HelicopterHelperTuning.HelperRaw? Helper { get; set; }
     }
 }
