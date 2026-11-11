@@ -6,6 +6,8 @@
     <RootNamespace>Suchohrad.Shooter</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Culture data is not shipped (the server image has no ICU; #177). Set here, not only as a container env var. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>

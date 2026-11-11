@@ -86,7 +86,12 @@ public partial class Shooter : Node3D
             var data = _data = LoadData();
             GD.Print($"data: {data.Weapons.Weapons.Count} weapons, score goal {data.Match.ScoreGoal}, {data.Vehicles.Vehicles.Count} vehicle types");
             LoadMap(cfg);
-            if (role == "server" && !_smoke) BuildServer(cfg);
+            if (role == "server" && !_smoke)
+            {
+                SetReadyMarker(false);
+                BuildServer(cfg);
+                SetReadyMarker(true);
+            }
             if (role == "client" && cfg.Str("connect") != "") BuildNetClient(cfg);
             else if (role == "client") BuildClientView();
             if (role == "client" && _smokeMove) _smoke = false;
@@ -106,6 +111,20 @@ public partial class Shooter : Node3D
     {
         _progression?.Dispose();
         _progression = null;
+    }
+
+    /// <summary>Written once the dedicated server is listening; the container healthcheck in deploy/docker-compose.yml tests for it (#177).</summary>
+    const string ReadyMarker = "/tmp/suchohrad-ready";
+
+    static void SetReadyMarker(bool ready)
+    {
+        try
+        {
+            if (ready) File.WriteAllText(ReadyMarker, "ready\n");
+            else if (File.Exists(ReadyMarker)) File.Delete(ReadyMarker);
+        }
+        catch (IOException e) { GD.PrintErr($"ready marker: {e.Message}"); }
+        catch (UnauthorizedAccessException e) { GD.PrintErr($"ready marker: {e.Message}"); }
     }
 
     public override void _Process(double delta)
