@@ -16,15 +16,24 @@ public class StreakWeaponKillTests
     [InlineData(247)]
     [InlineData(248)]
     [InlineData(249)]
-    [InlineData(250)]
     public void StreakWeaponIdsAreStreakWeapons(byte weapon) => Assert.True(StreakWeapons.Is(weapon));
 
     [Theory]
     [InlineData(0)]
     [InlineData(243)]
+    [InlineData(250)]  // jeep roof gun: not a streak weapon (correction on #133)
     [InlineData(251)]
     [InlineData(255)]
     public void OrdinaryWeaponsAndSpecialDeathsAreNot(byte weapon) => Assert.False(StreakWeapons.Is(weapon));
+
+    [Fact]
+    public void VehicleRoofGunKillsAdvanceTheCounter()
+    {
+        var t = new KillstreakTracker(Streaks);
+        t.Arm(new[] { "uav", "", "" }, 0f);
+        t.OnKill(StreakWeapons.Is(SpecialWeapons.VehicleGun));
+        Assert.Equal(1, t.Kills);
+    }
 
     [Fact]
     public void TrackerSkipsStreakWeaponKills()
