@@ -50,6 +50,8 @@ public partial class ServerCar : CharacterBody3D
     /// <summary>A flak truck's turret: its yaw against the chassis (it turns with the vehicle when nobody aims it), the barrels' elevation, and which barrel fires next. See <see cref="FlakRules"/>.</summary>
     public float TurretLocalYaw, GunPitch;
     public int FlakBarrel;
+    /// <summary>The seat occupants last sent to the riders (<see cref="SeatCodec"/>); null until the first send. A change is sent again.</summary>
+    public ushort[]? SeatsSent;
     /// <summary>Headlights on (replicated as one bit, <see cref="VehicleRecord.Make"/>): set when a driver gets in at night, toggled by the H key, off when empty.</summary>
     public bool Lights;
     public readonly AbandonTimer Abandon = new();

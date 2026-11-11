@@ -88,6 +88,10 @@ _Avoid_: ship, watercraft
 A four-seat vehicle that drives on land like the war jeep (and runs people over there) and floats at reduced speed on water.
 _Avoid_: APC, amphib
 
+**Seat switch**:
+Moving to another seat of the vehicle you sit in, without getting out: while seated, the number keys (the weapon slot keys) take that seat (key 2 is the second seat of the vehicle's `seats` list), and a small top-down schematic in the bottom right shows each seat with its number (free: outlined; yours: filled, double ring; taken: struck through). A vehicle with no `seats` list has the one driver seat. A free seat is taken at once; a taken one is refused. Leaving the driver seat leaves the vehicle without input, so it coasts to a stop; a gunner's turret keeps its aim. One player can drive, go to the turret and drive again.
+_Avoid_: seat change, swap seat
+
 **Hotbar**:
 The weapons a player can select: the primary, the secondary and the knife of the active loadout (keys 1-3 and the next-weapon cycle). A corpse swap changes its primary or secondary position. Smoke arenas and `--debug-cmds` servers hold every weapon.
 _Avoid_: inventory, toolbar, slots

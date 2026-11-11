@@ -146,6 +146,20 @@ public sealed class VehicleSeat
         return true;
     }
 
+    /// <summary>
+    /// The seated <paramref name="player"/> moves to <paramref name="seat"/> without leaving the vehicle (the seat switch): the old seat is freed and the
+    /// new one taken in one step, so the vehicle is never empty in between. False (nothing changes) when the player is not seated here, the seat does not
+    /// exist, it is their own seat or another player has it.
+    /// </summary>
+    public bool TrySwitch(ushort player, int seat)
+    {
+        var from = SeatOf(player);
+        if (from < 0 || seat < 0 || seat >= _occupant.Length || seat == from || _occupant[seat] != 0) return false;
+        _occupant[from] = 0;
+        _occupant[seat] = player;
+        return true;
+    }
+
     public void Clear(int seat) => _occupant[seat] = 0;
     public void Clear() => Array.Clear(_occupant);
 

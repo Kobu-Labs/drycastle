@@ -116,6 +116,7 @@ public partial class NetClient : Node
         InitTurrets();
         InitAircraft();
         InitFlak();
+        InitSeats();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
         _peer = _conn.ConnectToHost(Host, Port, Wire.Channels, 0);
@@ -428,7 +429,7 @@ public partial class NetClient : Node
         {
             // entering or leaving a car: no prediction while driving; on exit take the server's position (the free side) as is
             _driving = inCar; _pending.Clear(); _me.InVehicle = inCar;
-            if (!inCar) { _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); _me.EndChase(_carYaw); }
+            if (!inCar) { _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); _me.EndChase(_carYaw); ClearSeats(); }
             return;
         }
         if (_driving || _controlling || _gunship != null) { _pending.Clear(); return; }
@@ -718,7 +719,7 @@ public partial class NetClient : Node
 
     void ReadSlotKeys()
     {
-        if (Dead || Input.MouseMode != Input.MouseModeEnum.Captured || ChooserOpen) return;
+        if (Dead || _driving || Input.MouseMode != Input.MouseModeEnum.Captured || ChooserOpen) return; // seated, the number keys are the seats' (HandleSeatInput)
         for (var k = 0; k < Math.Min(5, _hotbar.Length); k++)
             if (Input.IsActionPressed($"slot_{k + 1}")) _wantSlot = _hotbar[k] + 1;
     }
@@ -726,6 +727,7 @@ public partial class NetClient : Node
     public override void _UnhandledInput(InputEvent e)
     {
         if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
+        if (HandleSeatInput(e)) return; // a number key while seated takes that seat
         if (Bot || Weapons == null || Dead || ChooserOpen || Input.MouseMode != Input.MouseModeEnum.Captured) return;
         if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {

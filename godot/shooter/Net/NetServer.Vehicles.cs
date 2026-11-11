@@ -16,6 +16,7 @@ public partial class NetServer
     readonly List<ServerCar> _cars = new();
     const float EnterRange = 3f, RunOverCooldown = 0.8f;
     int _destroyedReturns, _vehicleHits, _vehicleBlasts, _blastHits, _chainHits;
+    int _seatSwitches;
     int _carEnters, _carExits, _runOvers, _runOverKills, _carReturns, _carResets;
     bool _carWasAway;
 
@@ -199,6 +200,43 @@ public partial class NetServer
         GD.Print($"server: {c.Name} left {car.Def.Id} {car.Id} (seat {seat})");
     }
 
+    /// <summary>A rider's request for another seat of the vehicle they sit in (<see cref="EventKind.SeatSwitch"/>). Anything invalid is ignored.</summary>
+    void OnSeatSwitch(Client c, byte[] payload)
+    {
+        if (SeatCodec.DecodeSwitch(payload) is not { } seat) return;
+        if (c.Car is not { Destroyed: false } car || _match.Get(c.Id)?.Life != PlayerLife.Alive) return;
+        if (_streaks.ControlOf(c.Id) != null) return; // flying a streak's point of view: the seat is not theirs to change now
+        SwitchSeat(c, car, seat);
+    }
+
+    /// <summary>
+    /// The seated player moves to <paramref name="seat"/> without leaving the vehicle: the old seat is freed (a driver's seat then has no input, so the
+    /// vehicle coasts to a stop; a gunner's turret keeps its aim) and the new one is set up as entering it does (the body on the seat, the gunner's ammo
+    /// sent anew). The vehicle stays occupied throughout, so the abandon timer never runs. False when the seat is refused.
+    /// </summary>
+    bool SwitchSeat(Client c, ServerCar car, int seat)
+    {
+        var from = c.CarSeat;
+        if (car.Seat.SeatOf(c.Id) != from || !car.Seat.TrySwitch(c.Id, seat)) return false;
+        c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.FlakSent = null;
+        c.Body.Teleport(SeatPos(car, seat));
+        _match.SetPosition(c.Id, N(c.Body.GlobalPosition));
+        _seatSwitches++;
+        GD.Print($"server: {c.Name} moved in {car.Def.Id} {car.Id} from seat {from} to seat {seat} ({car.Def.Seats[seat].Role})");
+        return true;
+    }
+
+    /// <summary>Tells the riders who sits where when that has changed since the last send (an entry, an exit, a switch, a seat freed by a death or a drop).</summary>
+    void SendSeatState(ServerCar car)
+    {
+        var now = new ushort[car.Seat.Count];
+        for (var s = 0; s < now.Length; s++) now[s] = car.Seat.Occupant(s);
+        if (car.SeatsSent != null && car.SeatsSent.AsSpan().SequenceEqual(now)) return;
+        car.SeatsSent = now;
+        var msg = new EventMsg((byte)EventKind.SeatState, SeatCodec.EncodeState(car.Id, now));
+        foreach (var o in Occupants(car)) Send(o, msg);
+    }
+
     /// <summary>World position of a seat of the car (its offset in the car's frame). A flak truck's gunner sits on the turret, so the seat turns with it.</summary>
     static Vector3 SeatPos(ServerCar car, int seat)
     {
@@ -279,6 +317,7 @@ public partial class NetServer
             }
             // seats of players who have gone (disconnect, death) are freed; the driver is seat 0 and only the driver steers
             for (var s = 0; s < car.Seat.Count; s++) if (car.Seat.Occupant(s) != 0 && OccupantAt(car, s) == null) car.Seat.Clear(s);
+            SendSeatState(car);
             var driver = OccupantAt(car, 0);
             car.PrevPos = car.GlobalPosition;
             if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt, Water);

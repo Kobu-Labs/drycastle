@@ -143,7 +143,8 @@ public partial class NetClient
             v.Node.GlobalPosition = p;
             v.Node.Rotation = new Vector3(0, s.Yaw, 0);
             if (v.Destroyed) continue;
-            if (v.Flak != null && RenderFlak(v, s, rt, dt)) flakGunner = true;
+            var flakMine = v.Flak != null && RenderFlak(v, s, rt, dt);
+            if (flakMine) flakGunner = true;
             v.Smoke?.Near(Sfx.ListenerDistance(p) < 90f); // far vehicles do not smoke: particle budget
             SfxCar(v, p);
             if (v.Driver == _myId && _driving && _me != null)
@@ -153,10 +154,12 @@ public partial class NetClient
                 kmh = v.Kmh;
                 ShowSelfInCar(v);
             }
+            else if (!flakMine && _driving && _me != null && _seats is { Mine: > 0 } st && st.CarId == v.Id) { RideSeat(v, st.Mine); kmh = v.Kmh; } // another seat: first person from it, the speed shown as the driver's is
         }
         if (!_driving) HideSelfInCar();
         if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; _me?.EndChase(_me.Yaw); } // the flak gunner's camera ends where the look pointed
         if (!_driving && _gunship == null) _me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
+        _hud?.SetSeats(SeatPanel());
         if (flakGunner) _hud?.SetVehicleReadout(FlakReadout());
         else _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
         string? prompt = null;

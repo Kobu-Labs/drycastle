@@ -124,6 +124,7 @@ public partial class Hud : CanvasLayer
         BuildStance();
         BuildAmmo();
         BuildProgress(); // level, XP bar and perk above the ammo block (ticket #143)
+        BuildSeats(); // the vehicle seat schematic above the vehicle readout
         BuildHotbar();
         BuildTop();
         BuildFeed();
@@ -151,6 +152,7 @@ public partial class Hud : CanvasLayer
         ApplyMinimapSettings();
         _gap = -1;
         _hintMode = null;
+        _seatsDef = null; // the seat hint names the (maybe rebound) keys: rebuilt on the next frame
         foreach (var tri in _indTri) tri.Color = ShooterTheme.Danger; // read at build time otherwise; the palette may have switched
         if (_crossRoot != null) _crossRoot.Visible = Settings.ShowCrosshair;
     }
