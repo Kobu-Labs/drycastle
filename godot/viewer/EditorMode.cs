@@ -94,6 +94,9 @@ public partial class EditorMode : Node
             Watcher.Failed += m => Say("error: " + m, true);
             Watcher.InstantApplied += (_, _) => _panelDirty = true;
             Watcher.ParseFailed += m => Say("edits file is not valid JSON yet: " + m, true);
+            Watcher.MapReloading += n => Say($"map re-exported: loading the buildings of {n} chunk{(n == 1 ? "" : "s")}...");
+            Watcher.MapReloaded += (n, _, ms) => Say($"map reloaded: buildings of {n} chunk{(n == 1 ? "" : "s")} in {ms:F0} ms");
+            Watcher.MapReloadFailed += m => Say("map not reloaded: " + m, true);
         }
         _seenEdits = Stat();
         ReloadGroups();

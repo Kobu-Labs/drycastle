@@ -68,6 +68,15 @@ viewing and headless servers are unaffected):
   until it changes again, a failed `parcel-run` only prints its error. Writers must replace the file atomically
   (temp file, then rename). When only placed `objects` changed (see Objects and undo) there is no subprocess:
   the objects are re-instanced in process.
+- Buildings are not in the edits file: they come from the pipeline (`overrides.yaml`, `config/buildings/`, the
+  model code) and reach the viewer only through the chunk files. So the map folder's `manifest.json` is polled
+  too (`EditsWatcher.Map.cs`). The export writes it last, with a `sha256` per chunk file; when it changes, every
+  chunk whose hash differs from what is loaded gets its building nodes (`parcel_<ID>_visual`,
+  `parcel_<ID>_collision`, `window_*`) swapped with `MapLoader.ReloadChunkBuildings`, one chunk per frame. The
+  viewer prints `map reloaded: buildings of N chunk(s) ...`, the editor shows it in the status line. So after
+  changing a building: `make rules export AREA=...`, no restart. Not reloaded: everything else baked into a chunk
+  (terrain, roads; fences, trees and regions keep following the edits file). A re-export with different parcels
+  or a new chunk is not swapped in; the viewer says to restart.
 - `editor-state.json` (written at most once a second while watching, an ignored build output):
   `{"camera": {"x": east, "y": north, "z": elevation, "yaw_deg": view direction counter-clockwise from east},
   "format_version": 1, "selected": []}`; x and y are in the map frame (local metres). `selected` is the list of
