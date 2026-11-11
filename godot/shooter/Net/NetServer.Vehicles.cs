@@ -129,30 +129,78 @@ public partial class NetServer
         var p = c.Body.GlobalPosition;
         foreach (var car in _cars)
         {
-            if (car.Destroyed || car.Seat.Occupied || Mathf.Abs(car.GlobalPosition.Y - p.Y) > 2.5f) continue;
+            if (car.Destroyed || !car.Seat.HasFree || Mathf.Abs(car.GlobalPosition.Y - p.Y) > 2.5f) continue;
             var d = new Vector2(car.GlobalPosition.X - p.X, car.GlobalPosition.Z - p.Z).Length();
             if (d <= bd) { best = car; bd = d; }
         }
-        if (best == null || !best.Seat.TryEnter(c.Id)) return false;
-        c.Car = best; c.Throttle = c.Steer = 0; c.Handbrake = false;
-        c.Body.Teleport(best.GlobalPosition);
+        if (best == null) return false;
+        // the free seat nearest to the player (a roof gunner seat is a little further out than the car's centre)
+        var seat = best.Seat.NearestFreeSeat(best.Def, N(best.GlobalPosition), best.State.Yaw, N(p), EnterRange + 1.5f);
+        if (seat < 0 || !best.Seat.TryEnter(c.Id, seat)) return false;
+        c.Car = best; c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false;
+        c.Body.Teleport(SeatPos(best, seat));
         _carEnters++;
-        GD.Print($"server: {c.Name} entered {best.Def.Id} {best.Id}");
+        GD.Print($"server: {c.Name} entered {best.Def.Id} {best.Id} seat {seat} ({best.Def.Seats[seat].Role})");
         return true;
     }
 
-    void ExitCar(Client c) => EjectDriver(c, true);
+    void ExitCar(Client c) => LeaveSeat(c, true);
 
-    /// <summary>The driver leaves the seat; <paramref name="placeOnGround"/> puts the body on a free side of the car (not for death, the respawn moves it).</summary>
-    void EjectDriver(Client c, bool placeOnGround)
+    /// <summary>The player leaves their seat (any seat); <paramref name="placeOnGround"/> puts the body on a free side of the car (not for death, the respawn moves it).</summary>
+    void LeaveSeat(Client c, bool placeOnGround)
     {
         var car = c.Car;
         if (car == null) return;
         car.Seat.Exit(c.Id);
+        var seat = c.CarSeat;
         c.Car = null;
         _carExits++;
         if (placeOnGround) c.Body.Teleport(FreeSide(c, car));
-        GD.Print($"server: {c.Name} left {car.Def.Id} {car.Id}");
+        GD.Print($"server: {c.Name} left {car.Def.Id} {car.Id} (seat {seat})");
+    }
+
+    /// <summary>World position of a seat of the car (its offset in the car's frame).</summary>
+    static Vector3 SeatPos(ServerCar car, int seat)
+    {
+        var p = VehicleSeat.SeatPosition(N(car.GlobalPosition), car.State.Yaw, car.Def.Seats[seat].Offset);
+        return new Vector3(p.X, p.Y, p.Z);
+    }
+
+    /// <summary>The connected player in <paramref name="seat"/>, or null (empty, or the player has gone).</summary>
+    Client? OccupantAt(ServerCar car, int seat)
+    {
+        var id = car.Seat.Occupant(seat);
+        return id != 0 && _byId.TryGetValue(id, out var c) ? c : null;
+    }
+
+    List<Client> Occupants(ServerCar car) => Enumerable.Range(0, car.Seat.Count).Select(s => OccupantAt(car, s)).OfType<Client>().ToList();
+
+    /// <summary>A gunner's inputs: reload when asked, then one round when the trigger is held and the gun is ready.</summary>
+    void GunnerInput(Client c, NetInput i)
+    {
+        var gun = c.Car!.Gun!;
+        if ((i.Buttons & (ushort)MoveButtons.Reload) != 0) gun.TryReload(_elapsed);
+        if (gun.TryFire(_elapsed, (i.Buttons & (ushort)MoveButtons.Fire) != 0)) FireGun(c, c.Car, i, gun.Def);
+    }
+
+    /// <summary>
+    /// One round of a car's gun from a gunner's seat: hitscan along the gunner's view with spread. The car's own riders are not targets,
+    /// and the gunner gets the kill (no roadkill: that is for the driver's run-over).
+    /// </summary>
+    void FireGun(Client c, ServerCar car, NetInput i, VehicleGunDef def)
+    {
+        var eye = SeatPos(car, c.CarSeat) + Vector3.Up * 1.4f;
+        var yaw = Quant.Yaw(i.Yaw); var pitch = Quant.Pitch(i.Pitch);
+        var d = HitMath.SpreadDirection(yaw, RecoilState.ClampPitch(pitch), def.SpreadDegrees, _rng);
+        var dir = new Vector3(d.X, d.Y, d.Z);
+        var wall = WorldHit(eye, dir, def.Range, out var shotCar);
+        var targets = LiveTargets().Where(t => car.Seat.SeatOf(t.Id) < 0).ToList();
+        var hit = HitMath.Raycast(N(eye), d, def.Range, wall, targets, c.Id);
+        var end = eye + dir * (hit?.Distance ?? Math.Min(wall, def.Range));
+        BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, SpecialWeapons.VehicleGun, N(eye), N(end))));
+        if (hit is { } h) Deal(c.Id, SpecialWeapons.VehicleGun, h.Id, def.Damage, false, false);
+        else if (shotCar != null && shotCar != car && Vehicles != null && wall <= def.Range)
+            DamageVehicle(shotCar, def.Damage * Vehicles.BulletDamageMultiplier, c.Id, SpecialWeapons.VehicleGun, 0);
     }
 
     /// <summary>Exit position: right, left, behind, in front of the car (first with ground and room for the capsule), else above the roof.</summary>
@@ -186,27 +234,30 @@ public partial class NetServer
                 if (_elapsed >= car.ReturnAt) { car.Reset(); _destroyedReturns++; if (BlastSmoke && _destroyedReturns >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5; GD.Print($"server: {def.Id} {car.Id} returned after its destruction"); }
                 continue;
             }
-            Client? driver = car.Seat.Occupied && _byId.TryGetValue(car.Seat.Driver, out var d) ? d : null;
-            if (car.Seat.Occupied && driver == null) car.Seat.Clear();
+            // seats of players who have gone (disconnect, death) are freed; the driver is seat 0 and only the driver steers
+            for (var s = 0; s < car.Seat.Count; s++) if (car.Seat.Occupant(s) != 0 && OccupantAt(car, s) == null) car.Seat.Clear(s);
+            var driver = OccupantAt(car, 0);
             if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt);
             else car.Step(def, 0, 0, false, dt);
-            if (car.GlobalPosition.Y < KillY) { if (driver != null) EjectDriver(driver, false); car.Reset(false); }
+            if (car.GlobalPosition.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); continue; }
             if (driver != null && car.LastImpact > Vehicles.CrashMinSpeedLoss)
                 DamageVehicle(car, (car.LastImpact - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, 0, SpecialWeapons.Vehicle, 0);
             if (car.DetonateAt >= 0 && _elapsed >= car.DetonateAt) { Detonate(car); continue; }
-            if (driver != null)
+            var occupied = car.Seat.Occupied;
+            foreach (var o in Occupants(car))
             {
-                driver.Body.Teleport(car.GlobalPosition);
-                _match.SetPosition(driver.Id, N(car.GlobalPosition));
-                RunOverCheck(car, driver);
+                var at = SeatPos(car, o.CarSeat);
+                o.Body.Teleport(at);
+                _match.SetPosition(o.Id, N(at));
             }
-            else if (car.Abandon.Update(false, car.AtOrigin, dt, Vehicles.AbandonReturnTime))
+            if (driver != null) RunOverCheck(car, driver);
+            if (!occupied && car.Abandon.Update(false, car.AtOrigin, dt, Vehicles.AbandonReturnTime))
             {
                 car.Reset(false); _carReturns++;
                 GD.Print($"server: {car.Def.Id} {car.Id} abandoned, returned to its origin");
             }
-            else if (!car.AtOrigin && car.GlobalPosition.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
-            if (driver != null && car.GlobalPosition.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
+            else if (!occupied && !car.AtOrigin && car.GlobalPosition.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
+            if (occupied && car.GlobalPosition.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
         }
     }
 
@@ -235,7 +286,7 @@ public partial class NetServer
     {
         var e = Vehicles!.Explosion;
         var at = car.GlobalPosition + Vector3.Up * 0.8f;
-        var driver = car.Seat.Occupied && _byId.TryGetValue(car.Seat.Driver, out var d) ? d : null;
+        var driver = OccupantAt(car, 0);
         var attacker = car.LastAttacker != 0 ? car.LastAttacker : driver?.Id ?? (ushort)0;
         var weapon = car.LastWeapon != 0 ? car.LastWeapon : SpecialWeapons.Vehicle;
         car.Destroy();
@@ -244,14 +295,14 @@ public partial class NetServer
         BroadcastEvent(EventKind.VehicleExplosion, WeaponCodec.Encode(new VehicleExplosionMsg(car.Id, attacker, N(at), e.Splash.Radius)));
         GD.Print($"server: {car.Def.Id} {car.Id} exploded at ({at.X:F1},{at.Y:F1},{at.Z:F1}), credited to #{attacker}");
 
-        if (driver != null)
+        foreach (var o in Occupants(car))
         {
-            Deal(attacker, weapon, driver.Id, e.DriverDamage, false, false);
-            if (driver.Car == car) EjectDriver(driver, true); // survived (spawn protection): thrown out, the seat is gone
+            Deal(attacker, weapon, o.Id, e.DriverDamage, false, false); // everyone still aboard (a gunner too)
+            if (o.Car == car) LeaveSeat(o, true); // survived (spawn protection): thrown out, the seat is gone
         }
         foreach (var t in LiveTargets())
         {
-            if (driver != null && t.Id == driver.Id) continue;
+            if (car.Seat.SeatOf(t.Id) >= 0) continue;
             var dist = ProjectileMath.DistanceToCapsule(N(at), t.Feet, HitMath.Height(t.Crouching), MoveConsts.CapsuleRadius);
             var dmg = VehicleDamage.BlastDamage(e, dist);
             if (dmg <= 0) continue;
@@ -298,7 +349,7 @@ public partial class NetServer
 
     void RunOverCheck(ServerCar car, Client driver)
     {
-        var dmg = RunOver.Damage(Vehicles!, car.State.Speed);
+        var dmg = RunOver.Damage(Vehicles!, car.State.Speed, Vehicles!.RunOverScale(car.Def));
         if (dmg <= 0) return;
         var fwd = car.Forward;
         var right = new Vector3(Mathf.Cos(car.State.Yaw), 0, -Mathf.Sin(car.State.Yaw));

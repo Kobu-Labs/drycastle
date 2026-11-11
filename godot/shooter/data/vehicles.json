@@ -25,6 +25,16 @@
       "id": "bicycle", "top_speed": 8.33, "acceleration": 1.5, "brake": 4, "turn_radius": 2.2, "max_lateral_accel": 4, "mass": 15, "hp": 60, "hood": [0, 0.75, -0.35], "spawn_count": 3, "half_width": 0.3, "half_length": 0.85,
       "model": "zsky-vehicles/bicycle.glb", "model_scale": 0.352, "model_yaw_deg": 0, "model_offset": [0.017, 1.5547, -0.072],
       "paint_material": "Green_Bike", "paints": ["Green_Bike", "Yellow_Bike", "Silver_Bike"]
+    },
+    {
+      "id": "jeep", "top_speed": 30, "acceleration": 3.0, "brake": 8, "turn_radius": 6, "max_lateral_accel": 7, "mass": 1800, "run_over_mass": 1500, "hp": 380, "hood": [0, 0.95, -1.4], "spawn_count": 3, "half_width": 1.15, "half_length": 2.2,
+      "model": "kenney-car-kit/suv.glb", "model_scale": 1.7, "model_yaw_deg": 180, "model_offset": [0, 0, 0], "tint": [0.33, 0.36, 0.2],
+      "seats": [{ "role": "driver", "offset": [0, 0, 0] }, { "role": "gunner", "offset": [0, 1.25, 0.25] }],
+      "gun": { "damage": 14, "fire_interval": 0.1, "range": 220, "spread_degrees": 1.2, "magazine": 60, "reserve": 240, "reload_time": 2.5 }
+    },
+    {
+      "id": "quad", "top_speed": 25, "acceleration": 5.0, "brake": 11, "turn_radius": 2.8, "max_lateral_accel": 9, "mass": 300, "run_over_mass": 300, "hp": 90, "hood": [0, 0.7, -0.6], "spawn_count": 4, "half_width": 0.6, "half_length": 1.0,
+      "tint": [0.36, 0.42, 0.26]
     }
   ]
 }

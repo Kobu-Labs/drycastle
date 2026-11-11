@@ -37,6 +37,8 @@ public partial class NetServer : Node
         public Vector3 Start;
         public float MaxMoved;
         public ServerCar? Car;
+        /// <summary>Seat of <see cref="Car"/> this player sits in (0 = driver).</summary>
+        public int CarSeat;
         public bool UseHeld, Handbrake;
         public float Throttle, Steer;
         public PlayerProfile? Profile;
@@ -339,7 +341,7 @@ public partial class NetServer : Node
     {
         if (!_clients.Remove(peer, out var c)) return;
         if (!c.Joined) return;
-        if (c.Car != null) { c.Car.Seat.Clear(); c.Car = null; }
+        if (c.Car != null) { c.Car.Seat.Exit(c.Id); c.Car = null; }
         c.Body.QueueFree();
         _byId.Remove(c.Id);
         foreach (var o in _clients.Values.Where(o => o.Joined)) Send(o, new LeaveMsg(c.Id));
@@ -412,12 +414,12 @@ public partial class NetServer : Node
                 BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(s.Id, s.Position, s.ProtectionSeconds)));
                 break;
             case PlayerKilled k:
-                if (_byId.TryGetValue(k.Victim, out var kv) && kv.Car != null) EjectDriver(kv, false);
+                if (_byId.TryGetValue(k.Victim, out var kv) && kv.Car != null) LeaveSeat(kv, false);
                 _kills += k.Killer != k.Victim ? 1 : 0;
                 if (WeaponsSmoke && _kills >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5;
                 if (BazookaSmoke && _kills >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.5;
                 LossKill(k.Killer, k.Victim);
-                BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon)));
+                BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon, k.Cause)));
                 break;
             case PlayerDied d: LossDeath(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
         }
@@ -446,8 +448,10 @@ public partial class NetServer : Node
             if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
             if (c.Car != null)
             {
-                // driving: the car is simulated in StepVehicles from these inputs; no walking, shooting or weapon timers
-                c.Throttle = Quant.Axis(i.MoveY); c.Steer = Quant.Axis(i.MoveX); c.Handbrake = (i.Buttons & (ushort)MoveButtons.Jump) != 0;
+                // driving: the car is simulated in StepVehicles from the driver's inputs; no walking or weapon timers.
+                // A gunner's inputs fire the car's gun instead (its aim is the view yaw and pitch).
+                if (c.CarSeat == 0) { c.Throttle = Quant.Axis(i.MoveY); c.Steer = Quant.Axis(i.MoveX); c.Handbrake = (i.Buttons & (ushort)MoveButtons.Jump) != 0; }
+                else if (c.Car.Gun != null) GunnerInput(c, i);
                 if (useEdge) ExitCar(c);
                 continue;
             }

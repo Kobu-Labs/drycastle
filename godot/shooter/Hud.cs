@@ -602,7 +602,7 @@ public partial class Hud : CanvasLayer
             var suicide = k.Killer == k.Victim;
             _feed[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
             Set(_feedKiller[i], suicide ? victim : killer);
-            Set(_feedWeapon[i], $"[{WeaponName(k.Weapon)}]");
+            Set(_feedWeapon[i], $"[{(k.Cause == KillCause.Roadkill ? Strings.T("feed.roadkill") : WeaponName(k.Weapon))}]");
             Set(_feedVictim[i], suicide ? "" : victim);
             _feed[i].Visible = true;
         }
@@ -611,7 +611,7 @@ public partial class Hud : CanvasLayer
     string WeaponName(byte id)
     {
         if (id < _weapons.Count) return _weapons.Names[id];
-        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), _ => Strings.T("weapon.unknown") };
+        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), SpecialWeapons.VehicleGun => Strings.T("weapon.vehicle_gun"), _ => Strings.T("weapon.unknown") };
     }
 
     /// <summary>Black outside a centred circle with a thin cross, drawn over the zoomed view.</summary>
