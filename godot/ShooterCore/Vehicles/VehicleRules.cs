@@ -132,49 +132,58 @@ public static class VehicleRecord
     public static int Kind(in EntityRecord r) => r.Weapon >> 4;
 }
 
-/// <summary>Planar arcade vehicle model (car, motorcycle, bicycle: same model, different constants in vehicles.json), Godot-free. The host supplies collision (the real speed after the physics move is fed back).</summary>
+/// <summary>
+/// Planar arcade vehicle model (car, motorcycle, bicycle: same model, different constants in vehicles.json), Godot-free.
+/// Only the server runs it: clients render snapshots, so there is no client-side mirror to keep in step.
+/// The host supplies collision (the real speed after the physics move is fed back).
+/// </summary>
 public struct CarState
 {
     /// <summary>Yaw in radians, Godot convention (0 faces -Z, positive turns left).</summary>
     public float Yaw;
     /// <summary>Signed speed along the facing direction, m/s (negative = reversing).</summary>
     public float Speed;
+    /// <summary>Current yaw rate, rad/s, eased toward the steering target at <see cref="VehicleHandling.YawSlew"/> so the nose never snaps round.</summary>
+    public float YawRate;
 }
 
 public static class CarModel
 {
-    // ---- driving feel knobs (code constants; vehicles.json carries top speed, acceleration and steering) ----
-    public const float BrakeDecel = 22f;       // m/s^2 braking against the direction of travel
-    public const float CoastDecel = 4f;        // m/s^2 rolling resistance with no input
-    public const float HandbrakeDecel = 30f;   // m/s^2 on Jump
-    public const float ReverseTopFraction = 0.35f;
-    public const float SteerFullSpeed = 12f;   // m/s at which steering reaches its full rate...
-    public const float SteerHighSpeedScale = 0.45f; // ...and falls to this fraction at top speed
-    public const float HandbrakeSteerBoost = 1.5f;
+    /// <summary>
+    /// Turn radius (m) at a speed: the steering lock radius at low speed, growing with v² once the lateral grip
+    /// (<see cref="VehicleDef.MaxLateralAccel"/>) is what limits the turn. Smooth: R = hypot(TurnRadius, v² / grip).
+    /// </summary>
+    public static float TurnRadiusAt(VehicleDef def, float speed)
+    {
+        var grip = MathF.Max(0.1f, def.MaxLateralAccel);
+        var lat = speed * speed / grip;
+        return MathF.Sqrt(def.TurnRadius * def.TurnRadius + lat * lat);
+    }
 
     
 
     /// <summary>
     /// One tick. <paramref name="throttle"/> and <paramref name="steer"/> are -1..1 (forward, right), <paramref name="handbrake"/> is Jump.
-    /// Steering rate (rad/s) is def.Steering at speed, scaled down by a speed curve and zero when standing still.
+    /// Longitudinal: linear acceleration to top speed (reverse capped by the handling), brake against travel, coast when idle.
+    /// Lateral: yaw rate is speed / <see cref="TurnRadiusAt"/>, so it is zero when standing still, tight at walking pace and
+    /// capped at high speed; the actual yaw rate chases that target at a limited slew rate.
     /// </summary>
     public static void Step(ref CarState s, VehicleDef def, float throttle, float steer, bool handbrake, float dt)
     {
-        var accel = def.Acceleration;
+        var h = def.Handling;
         var v = s.Speed;
-        if (handbrake) v = Approach(v, 0, HandbrakeDecel * dt);
+        if (handbrake) v = Approach(v, 0, h.HandbrakeDecel * dt);
         else if (throttle > 0.05f)
-            v = v < 0 ? Approach(v, 0, BrakeDecel * dt) : MathF.Min(def.TopSpeed, v + accel * throttle * dt);
+            v = v < 0 ? Approach(v, 0, def.Brake * dt) : MathF.Min(def.TopSpeed, v + def.Acceleration * throttle * dt);
         else if (throttle < -0.05f)
-            v = v > 0 ? Approach(v, 0, BrakeDecel * dt) : MathF.Max(-def.TopSpeed * ReverseTopFraction, v + accel * throttle * dt);
-        else v = Approach(v, 0, CoastDecel * dt);
+            v = v > 0 ? Approach(v, 0, def.Brake * dt) : MathF.Max(-def.TopSpeed * h.ReverseTopFraction, v + def.Acceleration * throttle * dt);
+        else v = Approach(v, 0, h.CoastDecel * dt);
         s.Speed = v;
 
-        var speedAbs = MathF.Abs(v);
-        var ramp = Math.Clamp(speedAbs / SteerFullSpeed, 0f, 1f);
-        var fall = 1f - (1f - SteerHighSpeedScale) * Math.Clamp((speedAbs - SteerFullSpeed) / MathF.Max(1f, def.TopSpeed - SteerFullSpeed), 0f, 1f);
-        var rate = def.Steering * ramp * fall * (handbrake ? HandbrakeSteerBoost : 1f);
-        s.Yaw += -steer * rate * MathF.Sign(v) * dt;
+        // steering: the wheel input sets the curvature; the handbrake sharpens it for a slide
+        var target = -steer * v / TurnRadiusAt(def, v) * (handbrake ? h.HandbrakeSteerBoost : 1f);
+        s.YawRate = Approach(s.YawRate, target, h.YawSlew * dt);
+        s.Yaw += s.YawRate * dt;
     }
 
     static float Approach(float v, float target, float step) => v < target ? MathF.Min(target, v + step) : MathF.Max(target, v - step);

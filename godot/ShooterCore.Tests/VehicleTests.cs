@@ -6,7 +6,7 @@ namespace Suchohrad.ShooterCore.Tests;
 
 public class VehicleTests
 {
-    static VehiclesFile Cfg() => new() { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 28, Acceleration = 9, Steering = 1.7f, Mass = 1200 } } };
+    static VehiclesFile Cfg() => new() { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
 
     /// <summary>The shipped vehicles.json (copied next to the test binary).</summary>
     static VehiclesFile Shipped() => VehiclesFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "vehicles.json"));
@@ -89,8 +89,8 @@ public class VehicleTests
     public void CarAcceleratesToTopSpeedAndNoFurther()
     {
         var def = Cfg().Vehicles[0]; var s = new CarState();
-        for (var i = 0; i < 30 * 10; i++) CarModel.Step(ref s, def, 1, 0, false, 1f / 30);
-        Assert.Equal(28f, s.Speed, 3);
+        for (var i = 0; i < 30 * 20; i++) CarModel.Step(ref s, def, 1, 0, false, 1f / 30);
+        Assert.Equal(def.TopSpeed, s.Speed, 3);
         Assert.Equal(0f, s.Yaw, 3);
     }
 
@@ -99,10 +99,52 @@ public class VehicleTests
     {
         var def = Cfg().Vehicles[0];
         var s = new CarState { Speed = 20 };
-        for (var i = 0; i < 30; i++) CarModel.Step(ref s, def, 0, 0, true, 1f / 30);
+        for (var i = 0; i < 30 * 3; i++) CarModel.Step(ref s, def, 0, 0, true, 1f / 30);
         Assert.Equal(0f, s.Speed, 3);
         for (var i = 0; i < 30 * 10; i++) CarModel.Step(ref s, def, -1, 0, false, 1f / 30);
-        Assert.Equal(-28f * CarModel.ReverseTopFraction, s.Speed, 3);
+        Assert.Equal(-def.TopSpeed * def.Handling.ReverseTopFraction, s.Speed, 3);
+    }
+
+    [Fact]
+    public void CarStopsWithinTheBrakingTargetFromOneHundredKmh()
+    {
+        // real-world reference: 100 to 0 km/h in about 40 m on dry tarmac
+        var f = Shipped(); var def = f.Vehicles[0];
+        var s = new CarState { Speed = 100 / 3.6f };
+        var dt = 1f / 60; var distance = 0f;
+        for (var i = 0; i < 60 * 30 && s.Speed > 0; i++) { distance += s.Speed * dt; CarModel.Step(ref s, def, -1, 0, false, dt); }
+        Assert.InRange(distance, 38f, 43f);
+    }
+
+    [Fact]
+    public void CarReachesOneHundredKmhInAboutEightSeconds()
+    {
+        var f = Shipped(); var def = f.Vehicles[0];
+        var s = new CarState(); var t = 0f;
+        while (s.Speed < 100 / 3.6f) { CarModel.Step(ref s, def, 1, 0, false, 1f / 60); t += 1f / 60; }
+        Assert.InRange(t, 7.5f, 8.5f);
+    }
+
+    [Fact]
+    public void TurnRadiusIsTheLockAtWalkingPaceAndWidensWithSpeed()
+    {
+        var def = Cfg().Vehicles[0];
+        Assert.Equal(def.TurnRadius, CarModel.TurnRadiusAt(def, 0), 3);
+        Assert.InRange(CarModel.TurnRadiusAt(def, 2), def.TurnRadius, def.TurnRadius + 0.1f);
+        Assert.True(CarModel.TurnRadiusAt(def, 28) > 80f, "lateral grip limits the turn at speed");
+        Assert.True(CarModel.TurnRadiusAt(def, 44) > CarModel.TurnRadiusAt(def, 28));
+    }
+
+    [Fact]
+    public void YawEasesInInsteadOfSnapping()
+    {
+        var def = Cfg().Vehicles[0];
+        var s = new CarState { Speed = 15 };
+        CarModel.Step(ref s, def, 0, 1, false, 1f / 30);
+        Assert.InRange(MathF.Abs(s.YawRate), 0f, def.Handling.YawSlew / 30 + 1e-4f); // one tick of slew only
+        for (var i = 0; i < 60; i++) CarModel.Step(ref s, def, 0, 1, false, 1f / 30);
+        var target = s.Speed / CarModel.TurnRadiusAt(def, s.Speed); // the steering target at the speed now (positive yaw = left)
+        Assert.Equal(-target, s.YawRate, 2);
     }
 
     [Fact]
@@ -125,7 +167,7 @@ public class VehicleTests
     {
         var f = Shipped();
         Assert.Equal(new[] { "car", "motorcycle", "bicycle" }, f.Vehicles.Select(v => v.Id));
-        Assert.Equal(new[] { 8, 3, 3 }, f.Vehicles.Select(v => v.SpawnCount));
+        Assert.Equal(new[] { 12, 3, 3 }, f.Vehicles.Select(v => v.SpawnCount)); // 12 cars: clustered around the spawn areas (c2c7cc9)
         Assert.All(f.Vehicles.Skip(1), v => { Assert.NotEqual("", v.Model); Assert.Equal(3, v.Variants); Assert.Contains(v.PaintMaterial, v.Paints); });
         Assert.Equal(VehicleColours.Palette.Length, f.Vehicles[0].Variants);
     }
@@ -134,9 +176,12 @@ public class VehicleTests
     public void BikesDifferFromTheCarAsSpecified()
     {
         var f = Shipped(); var car = f.Vehicles[0]; var moto = f.Vehicles[1]; var bike = f.Vehicles[2];
-        Assert.True(moto.TopSpeed > car.TopSpeed && car.TopSpeed > bike.TopSpeed);
+        Assert.True(car.TopSpeed > moto.TopSpeed && moto.TopSpeed > bike.TopSpeed, "bikes never outrun the car");
+        Assert.InRange(car.TopSpeed * 3.6f, 150f, 170f);    // about 160 km/h on the small map
+        Assert.InRange(moto.TopSpeed * 3.6f, 110f, 150f);
+        Assert.InRange(bike.TopSpeed * 3.6f, 25f, 35f);     // a bicycle: 25 to 35 km/h
         Assert.True(moto.Acceleration > car.Acceleration && car.Acceleration > bike.Acceleration);
-        Assert.True(moto.Steering > car.Steering);
+        Assert.True(moto.TurnRadius < car.TurnRadius, "the motorcycle turns in tighter");
         Assert.True(moto.Mass > bike.Mass);
         Assert.True(bike.TopSpeed > f.RunOverMinSpeed, "the bicycle must be able to run someone over");
         Assert.True(RunOver.Damage(f, moto.TopSpeed) >= f.RunOverMaxDamage, "the motorcycle kills at top speed");
@@ -152,7 +197,7 @@ public class VehicleTests
         var def = Shipped().Vehicles[kind]; var s = new CarState();
         for (var i = 0; i < 30 * 20; i++) CarModel.Step(ref s, def, 1, 0, false, 1f / 30);
         Assert.Equal(def.TopSpeed, s.Speed, 3);
-        for (var i = 0; i < 30 * 3; i++) CarModel.Step(ref s, def, 0, 0, true, 1f / 30);
+        for (var i = 0; i < 30 * 5; i++) CarModel.Step(ref s, def, 0, 0, true, 1f / 30);
         Assert.Equal(0f, s.Speed, 3);
     }
 

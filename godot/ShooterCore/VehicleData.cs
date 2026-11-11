@@ -33,6 +33,8 @@ public class VehiclesFile : IVersioned
         foreach (var v in f.Vehicles)
         {
             if (v.Hp <= 0) throw new DataFileException($"vehicles.json: {v.Id}: hp must be positive");
+            if (v.TopSpeed <= 0 || v.Acceleration <= 0 || v.Brake <= 0 || v.TurnRadius <= 0 || v.MaxLateralAccel <= 0)
+                throw new DataFileException($"vehicles.json: {v.Id}: top_speed, acceleration, brake, turn_radius and max_lateral_accel must be positive");
             if (v.Hood.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: hood is [x, y, z]");
             if (v.Variants is < 1 or > 16) throw new DataFileException($"vehicles.json: {v.Id}: variants must be 1..16");
             if (v.Paints.Count > 0 && v.PaintMaterial == "") throw new DataFileException($"vehicles.json: {v.Id}: paints need paint_material");
@@ -58,12 +60,38 @@ public class VehicleExplosionDef
     public float ChainDelay { get; set; } = 0.25f;
 }
 
+/// <summary>
+/// The reusable driving parameter set (vehicles.json "handling" per type; defaults here are the shared feel). A later type
+/// (jeep, quad, boat) reuses the model by data: only the keys it changes need to be written.
+/// </summary>
+public class VehicleHandling
+{
+    /// <summary>Rolling resistance with no input, m/s².</summary>
+    public float CoastDecel { get; set; } = 1.5f;
+    /// <summary>Deceleration on the handbrake (Jump), m/s².</summary>
+    public float HandbrakeDecel { get; set; } = 12;
+    /// <summary>Reverse top speed as a fraction of the forward top speed.</summary>
+    public float ReverseTopFraction { get; set; } = 0.2f;
+    /// <summary>How fast the yaw rate follows the steering target, rad/s². Real steering takes a fraction of a second to lock.</summary>
+    public float YawSlew { get; set; } = 6;
+    /// <summary>Steering sharpening while the handbrake is held.</summary>
+    public float HandbrakeSteerBoost { get; set; } = 1.5f;
+}
+
 public class VehicleDef
 {
     public string Id { get; set; } = "";
     public float TopSpeed { get; set; }
+    /// <summary>Forward acceleration, m/s² (linear up to top speed). 0-100 km/h takes 27.8 / Acceleration seconds.</summary>
     public float Acceleration { get; set; }
-    public float Steering { get; set; }
+    /// <summary>Braking deceleration against the direction of travel, m/s².</summary>
+    public float Brake { get; set; } = 9;
+    /// <summary>Tightest circle at low speed (the steering lock), metres. Turning circle diameter is twice this.</summary>
+    public float TurnRadius { get; set; } = 5.5f;
+    /// <summary>Lateral acceleration the tyres (or the lean) hold, m/s². Past the speed where v²/this beats TurnRadius, the turn widens with speed.</summary>
+    public float MaxLateralAccel { get; set; } = 8;
+    /// <summary>Shared driving knobs (coast, handbrake, reverse, steering slew). Overridable per type with a "handling" block.</summary>
+    public VehicleHandling Handling { get; set; } = new();
     public float Mass { get; set; }
     /// <summary>Hidden hit points; the damage stages are fractions of this (vehicles.json damage_stages).</summary>
     public float Hp { get; set; } = 300;
