@@ -98,6 +98,8 @@ public static class ShooterTheme
         Bar(t, "HealthBar", Good);
         Bar(t, "HealthBarLow", Danger);
         Bar(t, "ReloadBar", Warn);
+        Bar(t, "StatBar", Accent);       // loadout editor: the chosen item's stat
+        Bar(t, "StatBarSaved", Dim);     // loadout editor: the saved item's stat, for comparison
         t.SetFontSize("font_size", "ProgressBar", FontSmall);
         Menu(t);
     }

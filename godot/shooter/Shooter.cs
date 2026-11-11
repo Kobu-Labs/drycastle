@@ -121,7 +121,11 @@ public partial class Shooter : Node3D
 
     void StartMenus(Config cfg)
     {
-        _shell = new UiShell { PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null)) };
+        _shell = new UiShell
+        {
+            PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts())),
+            WantsFreeMouse = () => _client is { Dead: true }, // the respawn screen releases the mouse so its buttons can be clicked
+        };
         AddChild(_shell);
         GD.Print("SHOOTER_MENU role=client");
         var target = cfg.Str("connect");
@@ -133,8 +137,12 @@ public partial class Shooter : Node3D
     void ShowMain()
     {
         Sfx.MenuMusic(true);
-        _shell.Reset(new MainMenu(() => _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n))), () => _shell.Push(new SettingsScreen(false))));
+        _shell.Reset(new MainMenu(() => _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n))), () => _shell.Push(new SettingsScreen(false)),
+            () => _shell.Push(NewLoadouts())));
     }
+
+    /// <summary>The loadout editor, from the main menu (no connection: it says to join a server) or from pause or the respawn screen.</summary>
+    LoadoutScreen NewLoadouts() => new(() => _client, () => _data ??= LoadData());
 
     async Task Step(LoadingScreen ld, string key, float f)
     {
@@ -169,6 +177,9 @@ public partial class Shooter : Node3D
                 if (!joined) done.TrySetResult(Strings.F("connect.err.join", $"{host}:{port}", why));
                 else if (_client == client) LeaveMatch(Strings.F("connect.err.lost", $"{host}:{port}", why));
             };
+            client.OpenLoadouts = () => _shell.Push(NewLoadouts());
+            client.MenuOpen = () => _shell.Top != null;
+            client.LevelUpReceived += lu => _shell.Toast(Strings.F("progress.levelup", lu.Level));
             AddChild(client);
             failure = await done.Task;
         }

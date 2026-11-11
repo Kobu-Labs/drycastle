@@ -154,6 +154,21 @@ public sealed class GameSettings
         cf.Save(Path);
     }
 
+    /// <summary>Remembered UI state, such as the last-open loadout tab: a per-player convenience in the "ui" section.</summary>
+    public static string LoadUi(string key, string def)
+    {
+        var cf = new ConfigFile();
+        return cf.Load(Path) == Error.Ok ? (string)cf.GetValue("ui", key, def) : def;
+    }
+
+    public static void SaveUi(string key, string value)
+    {
+        var cf = new ConfigFile();
+        cf.Load(Path);
+        cf.SetValue("ui", key, value);
+        cf.Save(Path);
+    }
+
     /// <summary>The player token (ADR 0003): a GUID made on first use and kept in the connect section. It is the player's identity.</summary>
     public static string PlayerToken()
     {

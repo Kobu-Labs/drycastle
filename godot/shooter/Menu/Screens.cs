@@ -82,8 +82,9 @@ public partial class DialogScreen : MenuScreen
 public partial class MainMenu : MenuScreen
 {
     readonly Action _play, _settings;
+    readonly Action? _loadouts;
     Button _first = null!;
-    public MainMenu(Action play, Action settings) { _play = play; _settings = settings; }
+    public MainMenu(Action play, Action settings, Action? loadouts = null) { _play = play; _settings = settings; _loadouts = loadouts; }
 
     protected override Control Build()
     {
@@ -94,6 +95,7 @@ public partial class MainMenu : MenuScreen
         v.AddChild(Ui.Gap(ShooterTheme.Space * 4));
         _first = Ui.Btn(Strings.T("menu.play"), _play, "MenuPrimary");
         v.AddChild(_first);
+        if (_loadouts != null) v.AddChild(Ui.Btn(Strings.T("menu.loadouts"), _loadouts));
         v.AddChild(Ui.Btn(Strings.T("menu.settings"), _settings));
         v.AddChild(Ui.Btn(Strings.T("menu.quit"), Back));
         v.AddChild(Ui.Gap(ShooterTheme.Space * 3));
@@ -111,8 +113,9 @@ public partial class MainMenu : MenuScreen
 public partial class PauseScreen : MenuScreen
 {
     readonly Action _resume, _disconnect;
+    readonly Action? _loadouts;
     Button _first = null!;
-    public PauseScreen(Action resume, Action disconnect) : base("HudScrim") { _resume = resume; _disconnect = disconnect; }
+    public PauseScreen(Action resume, Action disconnect, Action? loadouts = null) : base("HudScrim") { _resume = resume; _disconnect = disconnect; _loadouts = loadouts; }
 
     protected override Control Build()
     {
@@ -122,6 +125,7 @@ public partial class PauseScreen : MenuScreen
         v.AddChild(Ui.Gap(ShooterTheme.Space * 3));
         _first = Ui.Btn(Strings.T("pause.resume"), Back, "MenuPrimary");
         v.AddChild(_first);
+        if (_loadouts != null) v.AddChild(Ui.Btn(Strings.T("pause.loadouts"), _loadouts));
         v.AddChild(Ui.Btn(Strings.T("menu.settings"), () => Shell.Push(new SettingsScreen(true))));
         v.AddChild(Ui.Btn(Strings.T("pause.disconnect"), () => Shell.Push(new DialogScreen(Strings.T("disconnect.title"), Strings.T("disconnect.body"),
             new[] { new DialogScreen.Choice(Strings.T("pause.disconnect"), _disconnect, "MenuDanger") }))));
