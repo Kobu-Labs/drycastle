@@ -36,6 +36,8 @@ public partial class DayNightCycle : Node3D
     readonly Godot.Environment _env = new();
     readonly ShaderMaterial _sky = new();
     DayClock? _serverClock;
+    double _server; // the server's time, advanced by delta between snapshots
+    bool _synced;
     double _elapsed; // seconds of server time (or local time offline)
 
     public override void _Ready()
@@ -66,11 +68,21 @@ public partial class DayNightCycle : Node3D
     }
 
     /// <summary>Networked: called on every snapshot with the server tick.</summary>
-    public void SetServerTick(uint tick) => _elapsed = tick / (double)Wire.TickRate;
+    public void SetServerTick(uint tick)
+    {
+        _server = tick / (double)Wire.TickRate;
+        if (!_synced || Math.Abs(_server - _elapsed) > 2) { _elapsed = _server; _synced = true; } // first snapshot or a jump: snap
+    }
 
     public override void _Process(double delta)
     {
         if (_serverClock == null) _elapsed += delta;
+        else
+        {
+            // between snapshots the clock keeps running, and eases onto the server's tick instead of jumping to it
+            _server += delta;
+            _elapsed += delta + (_server - _elapsed - delta) * Math.Min(1.0, delta * 4.0);
+        }
         var clock = _serverClock ?? LocalClock;
         Apply(clock.HourAt(_elapsed));
     }

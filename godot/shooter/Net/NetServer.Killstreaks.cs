@@ -57,7 +57,11 @@ public partial class NetServer
         return fromStreak;
     }
 
-    void StreakDeath(ushort victim) => _streaks.OnDeath(victim);
+    void StreakDeath(ushort victim)
+    {
+        _streaks.OnDeath(victim);
+        _match.Entities.DespawnOwned(victim, TurretRules.TypeId, WorldDespawnReason.Removed); // a turret does not outlive its owner
+    }
 
     void StreakRoundReset() => _streaks.Reset();
 
@@ -68,5 +72,9 @@ public partial class NetServer
         _helper?.Tick(dt);
     }
 
-    void StreakLeave(ushort id) => _streaks.Forget(id);
+    void StreakLeave(ushort id)
+    {
+        _streaks.Forget(id);
+        _match.Entities.DespawnOwned(id, TurretRules.TypeId, WorldDespawnReason.Removed);
+    }
 }

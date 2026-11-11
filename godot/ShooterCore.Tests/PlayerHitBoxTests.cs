@@ -85,6 +85,26 @@ public class PlayerHitBoxTests
     }
 
     [Fact]
+    public void ProneShotIntoTheFeetIsNotAHeadshotButFromTheFrontIs()
+    {
+        var feetFirst = Target(Stance.Prone); // faces -Z, away from a shooter at z 0: the head is the far end
+        var rear = Shoot(new Vector3(0, PlayerHitBox.ProneLift, 0), Feet + new Vector3(0, PlayerHitBox.ProneLift, 0), feetFirst);
+        Assert.True(rear is { Head: false });
+
+        var headFirst = Target(Stance.Prone, MathF.PI); // faces +Z, towards the shooter
+        var front = Shoot(new Vector3(0, PlayerHitBox.ProneLift, 0), Feet + new Vector3(0, PlayerHitBox.ProneLift, 0), headFirst);
+        Assert.True(front is { Head: true });
+    }
+
+    [Fact]
+    public void UprightShotAtTheHeadFromTheFrontStaysAHeadshot()
+    {
+        var t = Target(Stance.Stand);
+        var eye = new Vector3(0, 1.7f, 0);
+        Assert.True(Shoot(eye, HitMath.HeadCenter(t), t) is { Head: true });
+    }
+
+    [Fact]
     public void ProneBodyRotatesWithTheYaw()
     {
         // turned to face +X (yaw -pi/2): the body runs along X, so a shot along Z at the centre now clips the side of the body, not its length

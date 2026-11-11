@@ -162,9 +162,44 @@ public class StanceTests
         Assert.Equal(0.6f, RecoilState.Multiplier(def, false, Stance.Prone), 3);
         Assert.Equal(0.3f, RecoilState.Multiplier(def, true, Stance.Prone), 3);
         var w = new WeaponDef { ProneSpreadMultiplier = 0.4f };
-        Assert.Equal(0.8f, HitMath.StanceSpread(2f, w, Stance.Prone), 3);
-        Assert.Equal(2f, HitMath.StanceSpread(2f, w, Stance.Stand), 3);
-        Assert.Equal(2f, HitMath.StanceSpread(2f, w, Stance.Crouch), 3);
+        Assert.Equal(0.8f, HitMath.ShotSpread(2f, w, Stance.Prone, false, 0, true), 3);
+        Assert.Equal(2f, HitMath.ShotSpread(2f, w, Stance.Stand, false, 0, true), 3);
+        Assert.Equal(2f, HitMath.ShotSpread(2f, w, Stance.Crouch, false, 0, true), 3);
+    }
+
+    [Fact]
+    public void CrouchAndAimingTightenSpreadAndMovingWidensIt()
+    {
+        var w = new WeaponDef { ProneSpreadMultiplier = 0.5f, CrouchSpreadMultiplier = 0.8f, AdsSpreadMultiplier = 0.5f, MoveSpread = 2f };
+        Assert.Equal(1.6f, HitMath.ShotSpread(2f, w, Stance.Crouch, false, 0, true), 3);
+        Assert.Equal(1f, HitMath.ShotSpread(2f, w, Stance.Stand, true, 0, true), 3);
+        Assert.Equal(0.8f, HitMath.ShotSpread(2f, w, Stance.Crouch, true, 0, true), 3); // stance and aim stack
+        // moving adds in proportion to the speed, all of it at sprint speed and above
+        Assert.Equal(3f, HitMath.ShotSpread(2f, w, Stance.Stand, false, MoveConsts.SprintSpeed / 2, true), 3);
+        Assert.Equal(4f, HitMath.ShotSpread(2f, w, Stance.Stand, false, MoveConsts.SprintSpeed, true), 3);
+        Assert.Equal(4f, HitMath.ShotSpread(2f, w, Stance.Stand, false, MoveConsts.SprintSpeed * 3, true), 3);
+        // in the air counts as full movement, whatever the speed
+        Assert.Equal(4f, HitMath.ShotSpread(2f, w, Stance.Stand, false, 0, false), 3);
+        // the movement penalty is scaled by stance and aim too
+        Assert.Equal(2f, HitMath.ShotSpread(2f, w, Stance.Stand, true, MoveConsts.SprintSpeed, true), 3);
+        // the state overload reads stance, horizontal speed and the floor flag; falling speed does not count while on the floor
+        var s = new MoveState { Stance = Stance.Crouch, Velocity = new Vector3(3, -9, 4), OnFloor = true };
+        Assert.Equal((2f + 2f * 5f / MoveConsts.SprintSpeed) * 0.8f, HitMath.ShotSpread(2f, w, s, false), 3);
+    }
+
+    [Fact]
+    public void AShotgunSpreadsByItsPelletConeAndOtherWeaponsByTheirOwnSpread()
+    {
+        Assert.Equal(3f, HitMath.OwnSpread(new WeaponDef { Pellets = 8, PelletSpread = 3f }, 0.5f), 3);
+        Assert.Equal(0.5f, HitMath.OwnSpread(new WeaponDef { Pellets = 1, PelletSpread = 3f }, 0.5f), 3);
+    }
+
+    [Fact]
+    public void ThePelletFanCarriesItsCone()
+    {
+        var m = new PelletFanMsg(7, 3, new Vector3(1, 2, 3), new Vector3(0, 0, -1), 0xDEADBEEF, 2.25f);
+        Assert.Equal(m, WeaponCodec.DecodePelletFan(WeaponCodec.Encode(m)));
+        Assert.Null(WeaponCodec.DecodePelletFan(new byte[31])); // the old layout without the cone
     }
 
     [Fact]
@@ -191,6 +226,20 @@ public class StanceTests
         Assert.Equal(0.6f, file.Find("ak47")!.Recoil.ProneMultiplier, 3);
         Assert.Equal(1f, file.Find("pistol")!.Recoil.ProneMultiplier, 3); // no recoil model: nothing to scale
         foreach (var w in file.Weapons) Assert.True(w.ProneSpreadMultiplier > 0 && w.ProneSpreadMultiplier <= 1, w.Id);
+    }
+
+    [Fact]
+    public void ShippedGunsTightenWhenCrouchedOrAimedAndWidenWhenMoving()
+    {
+        var file = WeaponsFile.Load(Path.Combine(AppContext.BaseDirectory, "../../../../shooter/data/weapons.json"));
+        foreach (var w in file.Weapons)
+        {
+            Assert.True(w.CrouchSpreadMultiplier > 0 && w.CrouchSpreadMultiplier <= 1, w.Id);
+            Assert.True(w.AdsSpreadMultiplier > 0 && w.AdsSpreadMultiplier <= 1, w.Id);
+            Assert.True(w.ProneSpreadMultiplier <= w.CrouchSpreadMultiplier, w.Id); // lower stance, steadier aim
+            if (w.Kind != WeaponKind.Hitscan) continue;
+            Assert.True(w.CrouchSpreadMultiplier < 1 && w.AdsSpreadMultiplier < 1 && w.MoveSpread > 0, w.Id);
+        }
     }
 
     [Theory]

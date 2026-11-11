@@ -79,7 +79,7 @@ public sealed class GameSettings
             s.UiScale = HudLogic.ClampUiScale((float)(double)cf.GetValue("accessibility", "ui_scale", 1.0));
             s.ReduceMotion = (bool)cf.GetValue("accessibility", "reduce_motion", false);
             s.ColorBlind = (bool)cf.GetValue("accessibility", "colour_blind", false);
-            foreach (var a in s.Keys.Actions.ToList()) s.Keys.Load(a, (string)cf.GetValue("controls", a, ""));
+            s.Keys.LoadAll(s.Keys.Actions.ToDictionary(a => a, a => cf.GetValue("controls", a, "").AsString()));
         }
         return s;
     }

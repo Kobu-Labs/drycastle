@@ -21,6 +21,8 @@ public sealed partial class RagdollFlail : SkeletonModifier3D
 
     readonly List<Joint> _joints = new();
     float _t;
+    float _blend; // 0..1 since the flail began, so the limbs leave the clip pose smoothly
+    const float BlendTime = 0.12f;
 
     /// <summary>0 = the clip as it is, 1 = full flail. A landed body keeps a lower value so the limbs lie loose.</summary>
     public float Amount { get; set; }
@@ -59,7 +61,9 @@ public sealed partial class RagdollFlail : SkeletonModifier3D
 
     public override void _ProcessModificationWithDelta(double delta)
     {
-        if (GetSkeleton() is not { } sk || Amount <= 0.001f) return;
+        if (GetSkeleton() is not { } sk) return;
+        if (Amount <= 0.001f) { _blend = 0f; return; }
+        _blend = Mathf.Min(1f, _blend + (float)delta / BlendTime); // eases in from the clip pose instead of snapping to the bind pose
         if (!Frozen) _t += (float)delta;
         foreach (var j in _joints)
         {
@@ -77,7 +81,7 @@ public sealed partial class RagdollFlail : SkeletonModifier3D
                     j.Amp.Z * Mathf.Sin(_t * j.Freq.Z + j.Phase.Z)) * Amount;
                 q = Quaternion.FromEuler(e);
             }
-            sk.SetBonePoseRotation(j.Bone, j.Rest * q);
+            sk.SetBonePoseRotation(j.Bone, _blend >= 1f ? j.Rest * q : sk.GetBonePoseRotation(j.Bone).Slerp(j.Rest * q, _blend));
         }
     }
 }

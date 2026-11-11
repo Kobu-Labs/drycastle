@@ -57,4 +57,33 @@ public class MenuLogicTests
         Assert.Equal(Binding.MouseButton(1), m.Get("c"));
         Assert.Equal(Binding.Key(7), Binding.Parse(Binding.Key(7).ToString())!.Value);
     }
+
+    [Fact]
+    public void SavedSwapSurvivesLoadAll()
+    {
+        var m = Map();
+        m.Assign("a", Binding.Key(2)); // a<->b swap
+        var saved = m.Actions.ToDictionary(x => x, x => (string?)m.Get(x).ToString());
+        var loaded = Map();
+        loaded.LoadAll(saved);
+        Assert.True(loaded.SameAs(m));
+    }
+
+    [Fact]
+    public void LoadAllRejectsOnlyTrueDuplicates()
+    {
+        var m = Map();
+        m.LoadAll(new Dictionary<string, string?> { ["a"] = "k:50", ["b"] = "k:50", ["c"] = "garbage" });
+        Assert.Equal(Binding.Key(50), m.Get("a"));
+        Assert.Equal(Binding.Key(2), m.Get("b"));
+        Assert.Equal(Binding.MouseButton(1), m.Get("c"));
+    }
+
+    [Fact]
+    public void LoadAllNeverLeavesTwoActionsOnOneKey()
+    {
+        var m = Map();
+        m.LoadAll(new Dictionary<string, string?> { ["a"] = "k:2" }); // b missing, still defaults to k:2
+        Assert.Equal(m.Actions.Count(), m.Actions.Select(m.Get).Distinct().Count());
+    }
 }

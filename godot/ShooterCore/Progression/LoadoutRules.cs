@@ -16,6 +16,16 @@ public static class LoadoutRules
     public static string DefaultName(int slot) => $"Class {slot + 1}";
 
     /// <summary>
+    /// A display name from a hello, made safe (#197): control characters and brackets removed (the scoreboard adds a "[SANDBOX]"
+    /// tag, which a name must not fake), trimmed and cut to <see cref="MaxNameChars"/>. Empty when nothing is left.
+    /// </summary>
+    public static string SanitizePlayerName(string? raw)
+    {
+        var kept = new string((raw ?? "").Where(ch => !char.IsControl(ch) && ch != '[' && ch != ']').ToArray()).Trim();
+        return kept.Length > MaxNameChars ? kept[..MaxNameChars].TrimEnd() : kept;
+    }
+
+    /// <summary>
     /// Checks a submitted loadout name. Returns the trimmed name, or null with <paramref name="error"/> set. Profanity is not
     /// filtered (the ticket says so); control characters and an empty name are refused.
     /// </summary>

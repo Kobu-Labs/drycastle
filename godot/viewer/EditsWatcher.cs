@@ -25,6 +25,8 @@ public partial class EditsWatcher : Node
 {
     public const double PollSeconds = 0.5;
     public const double StateSeconds = 1.0;
+    /// <summary>A parcel-run or region-run that takes longer is killed (with its children) and reported as failed.</summary>
+    public const int RunTimeoutSeconds = 120;
 
     public string EditsPath { get; init; } = "";
     public string Area { get; init; } = "slice";
@@ -83,7 +85,7 @@ public partial class EditsWatcher : Node
     }
 
     Snapshot _applied = new("", new(), new(), new(), new(), new(), new());
-    (DateTime mtime, long len) _seen;
+    (DateTime mtime, long len) _seen, _parsedStat;
     double _pollT, _stateT;
     bool _dirty;
     long _dirtySinceMs;
@@ -181,6 +183,7 @@ public partial class EditsWatcher : Node
     {
         snap = null;
         string text;
+        _parsedStat = Stat(); // before the read: a write after it changes the stat and is picked up by the poll
         try { text = File.ReadAllText(EditsPath); }
         catch (Exception e) { error = e.Message; return false; }
         try
@@ -345,12 +348,13 @@ public partial class EditsWatcher : Node
         if (changed == null) return false;
         var t0 = Stopwatch.StartNew();
         var known = changed.ToList();
-        _seen = Stat();
-        _dirty = false;
-        if (known.Count == 0) { _applied = snap; return true; }
+        if (known.Count == 0) { _seen = _parsedStat; _dirty = false; _applied = snap; return true; }
         List<Suchohrad.MapLoader.PlacedObject> objects;
+        // on failure _applied stays as it was and the caller falls through to the parcel-run path
         try { objects = ReadObjects(snap.Text, known, origin); }
-        catch (Exception e) { Fail($"reading the placed objects failed: {e.Message}"); _applied = snap; return true; }
+        catch (Exception e) { Fail($"reading the placed objects failed: {e.Message}"); return false; }
+        _seen = _parsedStat; // the stat taken before the file was read, so a write in between is seen by the poll
+        _dirty = false;
         Map.ApplyObjects(known, objects);
         _applied = snap;
         InstantCount++;
@@ -443,10 +447,16 @@ public partial class EditsWatcher : Node
             using var p = Process.Start(psi) ?? throw new InvalidOperationException("could not start uv");
             run.Process = p;
             var stdout = p.StandardOutput.ReadToEndAsync();
-            var err = p.StandardError.ReadToEnd();
-            p.WaitForExit();
+            var stderr = p.StandardError.ReadToEndAsync();
+            if (!p.WaitForExit(RunTimeoutSeconds * 1000))
+            {
+                try { p.Kill(true); } catch { /* already gone */ }
+                p.WaitForExit(2000);
+                return (-1, $"timed out after {RunTimeoutSeconds} s and was killed");
+            }
+            p.WaitForExit(); // flush the redirected streams
             stdout.Wait();
-            return (p.ExitCode, err);
+            return (p.ExitCode, stderr.Result);
         }
         catch (Exception e)
         {

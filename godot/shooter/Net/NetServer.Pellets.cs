@@ -7,15 +7,16 @@ namespace Suchohrad.Shooter;
 /// <summary>
 /// Shotgun pellet fan (server side). One trigger pull draws a seeded fan of pellets; each pellet is traced against the
 /// current positions and the world, damage is summed per target and dealt once per target, and the fan goes out as one
-/// <see cref="EventKind.PelletFan"/> event so clients can redraw the same pellets for FX.
+/// <see cref="EventKind.PelletFan"/> event so clients can redraw the same pellets for FX. The fan half-angle is the
+/// pellet spread after stance, aim and movement (<see cref="HitMath.ShotSpread(float, WeaponDef, in MoveState, bool)"/>) and travels in the event.
 /// </summary>
 public partial class NetServer
 {
-    void FirePellets(Client c, Vector3 eye, float yaw, float pitch, WeaponDef w, byte weaponIdx)
+    void FirePellets(Client c, Vector3 eye, float yaw, float pitch, WeaponDef w, byte weaponIdx, float cone)
     {
         var aim = HitMath.Forward(yaw, pitch);
         var seed = (uint)_rng.Next();
-        var dirs = HitMath.PelletDirections(aim, w.PelletSpread, w.Pellets, seed);
+        var dirs = HitMath.PelletDirections(aim, cone, w.Pellets, seed);
         var range = w.Range > 0 ? w.Range : MaxShotRange;
 
         // world and vehicle stops per pellet (one physics ray each; player bodies are excluded)
@@ -32,7 +33,7 @@ public partial class NetServer
 
         var targets = LiveTargets();
         var totals = HitMath.ResolvePellets(w, N(eye), dirs, range, walls, targets, c.Id);
-        BroadcastEvent(EventKind.PelletFan, WeaponCodec.Encode(new PelletFanMsg(c.Id, weaponIdx, N(eye), aim, seed)));
+        BroadcastEvent(EventKind.PelletFan, WeaponCodec.Encode(new PelletFanMsg(c.Id, weaponIdx, N(eye), aim, seed, cone)));
         foreach (var (id, t) in totals) Deal(c.Id, weaponIdx, id, t.Damage, t.Head, false);
 
         // pellets that stopped on a car (and no player was closer) damage the car, summed per car

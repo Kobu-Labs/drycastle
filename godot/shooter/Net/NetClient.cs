@@ -217,7 +217,7 @@ public partial class NetClient : Node
         RenderMissilePov();
         RenderWater();
         UpdateViewmodel();
-        UpdateShake();
+        UpdateShake(delta);
         UpdateHud();
     }
 
@@ -490,6 +490,7 @@ public partial class NetClient : Node
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
         if (!Bot) { ReadSlotKeys(); ApplyScope(); TickCorpses(dt); TickCarePackages(dt); }
         FxDemoInput(ref mi);
+        _aimHeld = mi.Has(MoveButtons.Aim);
         TickRecoil(mi);
         TickBreath(mi);
         if (_gunship == null) PredictFire(mi); // rounds from a turret are the server's alone

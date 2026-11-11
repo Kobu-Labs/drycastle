@@ -173,6 +173,30 @@ public class PersistenceTests
         Assert.Contains(Logged, m => m.Contains("record kill"));
     }
 
+    [Fact]
+    public async Task SqliteCamoSaveFaultsTheReturnedTaskWhenTheWriteFails()
+    {
+        using var store = SqliteProgressionStore.Open(TempDb(), Logged.Add, Curve);
+        // No such player: the foreign key rejects the row. A save the server acknowledges must see that (#195).
+        await Assert.ThrowsAnyAsync<Exception>(() => store.Camo.SaveAsync(424242, 0, CamoSpec.Default));
+        var p = await store.Profiles.GetOrCreateAsync("ok");
+        await store.Camo.SaveAsync(p.Id, 0, CamoSpec.Default); // a good write still completes
+    }
+
+    [Fact]
+    public async Task SqliteReturningPlayerIsFoundAndLastSeenMoves()
+    {
+        using var store = SqliteProgressionStore.Open(TempDb(), Logged.Add, Curve);
+        var first = await store.Profiles.GetOrCreateAsync("again");
+        await store.Profiles.AddXpAsync(first.Id, 50);
+        await Task.Delay(20);
+        var again = await store.Profiles.GetOrCreateAsync("again");
+        Assert.Equal(first.Id, again.Id);
+        await store.Profiles.SetNameAsync(first.Id, "x"); // queued behind the last_seen touch
+        var found = await store.Profiles.FindAsync(first.Id);
+        Assert.True(found!.LastSeenUtc >= first.LastSeenUtc);
+    }
+
     [Theory]
     [InlineData(0, 1)]
     [InlineData(99, 1)]

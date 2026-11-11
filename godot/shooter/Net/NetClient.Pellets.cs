@@ -23,7 +23,7 @@ public partial class NetClient
         var from = G(pf.Origin);
         var aim = pf.Aim;
         Vector3? first = null;
-        foreach (var dir in HitMath.PelletDirections(aim, w.PelletSpread, w.Pellets, pf.Seed))
+        foreach (var dir in HitMath.PelletDirections(aim, pf.Cone, w.Pellets, pf.Seed))
         {
             var ray = G(dir);
             var q = PhysicsRayQueryParameters3D.Create(from, from + ray * range, CollisionLayers.WorldShots);

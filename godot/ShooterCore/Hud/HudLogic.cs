@@ -88,6 +88,12 @@ public static class HudLogic
         return a;
     }
 
+    /// <summary>Reference height of the UI (1080p) and the smallest resolution factor; below it the HUD stops shrinking.</summary>
+    public const float RefHeight = 1080f, MinBaseScale = 0.8f;
+
+    /// <summary>The one UI scale: the screen height over 1080 p (never under <see cref="MinBaseScale"/>) times the UI scale setting. The HUD and every overlay use it.</summary>
+    public static float ScreenScale(float viewportHeight, float uiScale) => Math.Max(MinBaseScale, viewportHeight / RefHeight) * ClampUiScale(uiScale);
+
     public static float ClampUiScale(float s) => Math.Clamp(float.IsNaN(s) ? 1f : s, UiScaleMin, UiScaleMax);
 
     /// <summary>Health bar turns to the low state at or under this many health points.</summary>

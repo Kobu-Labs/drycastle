@@ -143,6 +143,9 @@ public class WeaponsFile
             SpreadMax = Pick(r.SpreadMax, c.SpreadMax, 0),
             SpreadRecovery = Pick(r.SpreadRecovery, c.SpreadRecovery, 0),
             ProneSpreadMultiplier = Pick(r.ProneSpreadMultiplier, c.ProneSpreadMultiplier, 1),
+            CrouchSpreadMultiplier = Pick(r.CrouchSpreadMultiplier, c.CrouchSpreadMultiplier, 1),
+            AdsSpreadMultiplier = Pick(r.AdsSpreadMultiplier, c.AdsSpreadMultiplier, 1),
+            MoveSpread = Pick(r.MoveSpread, c.MoveSpread, 0),
             Recoil = MergeRecoil(r.Recoil, c.Recoil),
             Range = r.Range ?? 0,
             // scope_fov is the v2 name; zoom_fov (v1) is still read so existing files keep working.
@@ -184,6 +187,9 @@ public class WeaponsFile
         NonNegative(t.SpreadMax, where, "spread_max");
         NonNegative(t.SpreadRecovery, where, "spread_recovery");
         NonNegative(t.ProneSpreadMultiplier, where, "prone_spread_multiplier");
+        NonNegative(t.CrouchSpreadMultiplier, where, "crouch_spread_multiplier");
+        NonNegative(t.AdsSpreadMultiplier, where, "ads_spread_multiplier");
+        NonNegative(t.MoveSpread, where, "move_spread");
         if (t.Recoil is not { } rc) return;
         NonNegative(rc.VerticalPerShot, where, "recoil.vertical_per_shot");
         NonNegative(rc.HorizontalSway, where, "recoil.horizontal_sway");
@@ -251,6 +257,10 @@ public class WeaponsFile
         public float? SpreadMax { get; set; }
         public float? SpreadRecovery { get; set; }
         public float? ProneSpreadMultiplier { get; set; }
+        public float? CrouchSpreadMultiplier { get; set; }
+        public float? AdsSpreadMultiplier { get; set; }
+        /// <summary>Degrees of spread added at sprint speed or in the air; see <see cref="WeaponDef.MoveSpread"/>.</summary>
+        public float? MoveSpread { get; set; }
         public RecoilRaw? Recoil { get; set; }
     }
 
@@ -343,6 +353,12 @@ public class WeaponDef
     public float SpreadRecovery { get; set; }
     /// <summary>Spread multiplier while prone (1 = none; below 1 steadies the aim, snipers lowest).</summary>
     public float ProneSpreadMultiplier { get; set; } = 1;
+    /// <summary>Spread multiplier while crouched (1 = none).</summary>
+    public float CrouchSpreadMultiplier { get; set; } = 1;
+    /// <summary>Spread multiplier while the aim button is held (1 = none).</summary>
+    public float AdsSpreadMultiplier { get; set; } = 1;
+    /// <summary>Degrees of spread added while moving: the full value at sprint speed or in the air, scaled by speed below that.</summary>
+    public float MoveSpread { get; set; }
 
     /// <summary>Data-only recoil model (v2). Zero for weapons that do not set it; the runtime that applies it comes with the category work.</summary>
     public RecoilDef Recoil { get; set; } = new();

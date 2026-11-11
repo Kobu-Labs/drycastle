@@ -23,11 +23,12 @@ public partial class NetClient
     /// Asks the server to replace one loadout slot's camouflage (#141). Answered with the new <see cref="ProfileMsg"/>
     /// (its <c>Camos</c> carry the saved look), and, for the active slot, an appearance broadcast; or an error.
     /// </summary>
-    public void SaveCamo(int slot, CamoSpec spec)
+    public bool SaveCamo(int slot, CamoSpec spec)
     {
-        if (_peer == null || !_welcomed) return;
+        if (_peer == null || !_welcomed) return false;
         Tx(_peer, Wire.ChanReliable, Wire.Encode(new SaveCamoMsg(slot, spec)), (int)ENetPacketPeer.FlagReliable);
         _conn.Flush();
+        return true;
     }
 
     void OnAppearanceEvent(EventKind kind, byte[] payload)
@@ -35,6 +36,8 @@ public partial class NetClient
         if (kind != EventKind.Appearance || AppearanceCodec.Decode(payload) is not { } a) return;
         Appearances[a.PlayerId] = a.Spec;
         if (_remotes.TryGetValue(a.PlayerId, out var r) && r.View != null) r.View.SetCamo(a.Spec, CamoData);
+        foreach (var (id, c) in _corpses) // a look that arrives after the corpse spawned (#203)
+            if (WorldEntities.Entities.TryGetValue(id, out var e) && e.State.Owner == a.PlayerId) c.View.SetCamo(a.Spec, CamoData);
         AppearanceChanged?.Invoke(a.PlayerId, a.Spec);
     }
 }

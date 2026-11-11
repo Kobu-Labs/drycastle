@@ -52,6 +52,11 @@ public partial class NetServer : Node
         public float Throttle, Steer;
         public PlayerProfile? Profile;
         public ProfileLoad? Loading;
+        /// <summary>Server time of the connect, for the hello deadline.</summary>
+        public double ConnectedAt;
+        public CatchUpBudget CatchUp;
+        /// <summary>The profile token from the hello ("" = guest). One live session per token.</summary>
+        public string Token = "";
         public int PacketsThisTick;
         public double SaveTokens = 10;
         public long BytesOut;
@@ -92,7 +97,7 @@ public partial class NetServer : Node
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, Client> _clients = new();
     uint _tick;
-    ushort _nextId = 1;
+    readonly PlayerIds _ids = new();
     double _elapsed;
     int _peakPlayers;
     readonly Dictionary<string, float> _movedByName = new();
@@ -174,7 +179,10 @@ public partial class NetServer : Node
         foreach (var cl in _clients.Values) cl.PacketsThisTick = 0;
         Poll();
         CompleteProfileLoads();
+        CompleteSaves();
+        DropSilentPeers();
         _match.Update();
+        if (_tick % Wire.TickRate == 0 && _clients.Count > 0) BroadcastEvent(EventKind.MatchState, MatchCodec.Encode(BuildMatchState())); // about once a second, so the scoreboard ping is not stale
         _match.Entities.Tick((float)delta);
         StreakTick((float)delta);
         foreach (var c in _clients.Values.ToList()) if (c.Joined) SimulateClient(c, (float)delta);
@@ -189,7 +197,7 @@ public partial class NetServer : Node
         TickTelemetry(tickStartUs, delta);
         LossTickEnd(tickStartUs);
         if (_clients.Count > _peakPlayers) _peakPlayers = _clients.Count;
-        foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved;
+        if (QuitAfter > 0) foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved; // only the smoke verdict reads it; a production server keeps no per-name history
         if (_tick % (Wire.TickRate * 2) == 0 && _clients.Count > 0)
             GD.Print($"server: tick {_tick}, players {string.Join(", ", _clients.Values.Where(c => c.Joined).Select(c => $"{c.Name}#{c.Id}@({c.Body.GlobalPosition.X:F1},{c.Body.GlobalPosition.Y:F1},{c.Body.GlobalPosition.Z:F1}) ack={c.Ack}"))}");
         if (BazookaSmoke)
@@ -308,7 +316,7 @@ public partial class NetServer : Node
             {
                 case ENetConnection.EventType.Connect:
                     if (_clients.Count >= MaxPeers) Reject(new Client { Peer = peer }, $"The server is full ({MaxPeers} players). Try again later.");
-                    else _clients[peer] = new Client { Peer = peer };
+                    else _clients[peer] = new Client { Peer = peer, ConnectedAt = _elapsed };
                     break;
                 case ENetConnection.EventType.Disconnect: Drop(peer); break;
                 case ENetConnection.EventType.Receive:
@@ -341,7 +349,7 @@ public partial class NetServer : Node
         {
             _scratch.Clear();
             if (!Wire.TryDecodeInputs(d, _scratch, out var snapTick)) return;
-            if (snapTick != Wire.NoTick && (c.SnapAck == Wire.NoTick || snapTick > c.SnapAck)) c.SnapAck = snapTick; // an older input's ack arriving late changes nothing
+            if (snapTick != Wire.NoTick && snapTick <= _tick && _sentStates.Has(snapTick) && (c.SnapAck == Wire.NoTick || snapTick > c.SnapAck)) c.SnapAck = snapTick; // an older input's ack arriving late changes nothing
             foreach (var i in _scratch)
             {
                 // redundant copies of already-seen inputs are skipped
@@ -360,9 +368,13 @@ public partial class NetServer : Node
             Reject(c, $"Protocol mismatch: this server speaks protocol {Wire.ProtocolVersion}, your game speaks {h.Version}. Update the game to the server's build.");
             return;
         }
-        c.Id = _nextId++;
-        c.Name = string.IsNullOrWhiteSpace(h.Name) ? $"player{c.Id}" : h.Name.Trim();
+        c.Id = _ids.Allocate(id => _clients.Values.Any(o => o.Id == id) || _byId.ContainsKey(id));
+        if (c.Id == 0) { Reject(c, "The server is full."); return; }
+        var name = LoadoutRules.SanitizePlayerName(h.Name);
+        c.Name = name.Length == 0 ? $"player{c.Id}" : name;
         SandboxOnHello(c, h.Flags);
+        c.Token = h.Token;
+        DropSessionsWithToken(c); // a quick reconnect wins over its ghost, which would otherwise run on the same profile until its peer times out
         StartProfileLoad(c, h.Token); // joins once the profile is in (or the wait times out)
         GD.Print($"server: {c.Name} #{c.Id} hello, loading profile");
     }
@@ -416,6 +428,31 @@ public partial class NetServer : Node
         foreach (var o in _clients.Values.Where(o => o.Joined)) Send(o, new LeaveMsg(c.Id));
         _match.RemovePlayer(c.Id);
         GD.Print($"server: {c.Name} #{c.Id} left");
+    }
+
+    /// <summary>Drops every other client that uses <paramref name="keep"/>'s token, so a profile never has two live sessions.</summary>
+    void DropSessionsWithToken(Client keep)
+    {
+        if (keep.Token.Length == 0) return;
+        foreach (var o in _clients.Values.Where(o => o != keep && o.Token == keep.Token).ToList())
+        {
+            GD.Print($"server: {o.Name} #{o.Id} replaced by a new session with the same token");
+            Drop(o.Peer);
+            o.Peer.PeerDisconnectLater(0);
+        }
+    }
+
+    /// <summary>How long a connection may stay without a hello before it is dropped (#197); it holds one of <see cref="MaxPeers"/> slots.</summary>
+    public const double HelloDeadlineSeconds = 5;
+
+    void DropSilentPeers()
+    {
+        foreach (var c in _clients.Values.Where(c => c.Id == 0 && _elapsed - c.ConnectedAt > HelloDeadlineSeconds).ToList())
+        {
+            GD.Print("server: dropping a connection that sent no hello");
+            Drop(c.Peer);
+            c.Peer.PeerDisconnectLater(0);
+        }
     }
 
     void Tx(ENetPacketPeer peer, int chan, byte[] data, int flags)
@@ -519,7 +556,7 @@ public partial class NetServer : Node
     void SimulateClient(Client c, float dt)
     {
         // normally one input per tick; if the queue backs up (jitter), catch up with a second one
-        var n = c.Inputs.Count > 3 ? 2 : 1;
+        var n = c.CatchUp.Steps(c.Inputs.Count); // a second input only while the catch-up credit lasts (#197)
         for (var k = 0; k < n && c.Inputs.Count > 0; k++)
         {
             var i = c.Inputs.Dequeue();
@@ -549,7 +586,6 @@ public partial class NetServer : Node
                 continue;
             }
             if (useEdge && TryEnterCar(c)) continue;
-            if ((i.Buttons & (ushort)MoveButtons.Fire) != 0 && _match.NotifyFired(c.Id)) _earlyProtectionEnds++;
             c.Body.Yaw = Quant.Yaw(i.Yaw);
             c.Body.Pitch = Quant.Pitch(i.Pitch);
             c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
@@ -558,7 +594,11 @@ public partial class NetServer : Node
             c.Breath.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Aim) != 0 && c.W.Current.ZoomFov > 0,
                 (i.Buttons & (ushort)MoveButtons.Sprint) != 0, c.W.Current, c.Perks.HoldBreathTime);
             var wi = new WeaponInput((i.Buttons & (ushort)MoveButtons.Fire) != 0 && !c.Body.HeadUnder, (i.Buttons & (ushort)MoveButtons.Reload) != 0, i.Slot, (i.Buttons & (ushort)MoveButtons.Switch) != 0);
-            if (c.W.Update(_elapsed, wi) is { } shot) FireWeapon(c, i, shot);
+            if (c.W.Update(_elapsed, wi) is { } shot)
+            {
+                if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++; // spawn protection ends on a real shot, not on Fire held with an empty magazine
+                FireWeapon(c, i, shot);
+            }
             if (c.W.Changed) SendAmmo(c);
             c.Slot = (byte)(c.W.Slot - 1);
             if (c.Body.LastFallDamage > 0) _match.ApplyDamage(c.Id, c.Id, SpecialWeapons.Fall, c.Body.LastFallDamage);
@@ -628,12 +668,13 @@ public partial class NetServer : Node
         var yaw = Quant.Yaw(i.Yaw); var pitch = Quant.Pitch(i.Pitch);
         var targets = LiveTargets();
         _shotsFired++;
-        if (w.Kind == WeaponKind.Hitscan && w.Pellets > 1) FirePellets(c, eye, yaw, pitch, w, (byte)shot.WeaponIndex);
+        var aiming = (i.Buttons & (ushort)MoveButtons.Aim) != 0;
+        if (w.Kind == WeaponKind.Hitscan && w.Pellets > 1) FirePellets(c, eye, yaw, pitch, w, (byte)shot.WeaponIndex, HitMath.ShotSpread(w.PelletSpread, w, c.Body.State, aiming));
         else if (w.Kind == WeaponKind.Hitscan)
         {
-            var kick = c.Recoil.Shot(w.Recoil, RecoilState.Multiplier(w.Recoil, (i.Buttons & (ushort)MoveButtons.Aim) != 0, c.Body.State.Stance));
+            var kick = c.Recoil.Shot(w.Recoil, RecoilState.Multiplier(w.Recoil, aiming, c.Body.State.Stance));
             var sway = c.Breath.AimError(c.Breath.SwayDegrees(w));
-            var d = HitMath.SpreadDirection(yaw + kick.YawRad + sway.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad + sway.PitchRad), HitMath.StanceSpread(shot.SpreadDegrees, w, c.Body.State.Stance), _rng);
+            var d = HitMath.SpreadDirection(yaw + kick.YawRad + sway.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad + sway.PitchRad), HitMath.ShotSpread(shot.SpreadDegrees, w, c.Body.State, aiming), _rng);
             var dir = new Vector3(d.X, d.Y, d.Z);
             var range = w.Range > 0 ? w.Range : MaxShotRange;
             var wall = WorldHit(eye, dir, range, out var shotCar);
@@ -678,7 +719,7 @@ public partial class NetServer : Node
         if (_streaks.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
-        if (r == DamageResult.Damaged) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
+        if (r == DamageResult.Damaged && Scores(attackerId)) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
         _hitsLanded++;
         LossHit(attackerId, victim, r == DamageResult.Killed);
         if (head) _headshots++;

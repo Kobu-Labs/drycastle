@@ -25,6 +25,8 @@ void vertex() {
 }
 
 void fragment() {
+	// a tapered blade, not the whole quad: the width shrinks to a point at the tip
+	if (abs(UV.x - 0.5) * 2.0 > 1.0 - tip) discard;
 	float t = clamp(tip * 0.5 + variation * colour_variation, 0.0, 1.0);
 	ALBEDO = mix(base_color.rgb, secondary_color.rgb, t);
 	ROUGHNESS = 0.95;

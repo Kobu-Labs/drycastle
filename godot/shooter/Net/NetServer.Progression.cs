@@ -41,7 +41,7 @@ public partial class NetServer
     {
         StreakRoundReset();
         _shells.Clear();
-        AwardXp(_xp.OnMatchEnd(_match.Winners, _match.Ranking().Select(p => p.Id).ToList()));
+        AwardXp(_xp.OnMatchEnd(_match.Winners, _match.Ranking().Where(p => !p.Sandbox).Select(p => p.Id).ToList()));
         foreach (var c in _clients.Values.Where(c => c.Joined))
         {
             var p = c.Profile!;
@@ -82,5 +82,5 @@ public partial class NetServer
 
     /// <summary>The stats key of a weapon byte: its weapons.json id, or a name for the special causes (vehicle, debug, void, fall).</summary>
     string WeaponKey(byte weapon) =>
-        weapon < Weapons.Weapons.Count ? Weapons.Weapons[weapon].Id : weapon == SpecialWeapons.Vehicle ? "vehicle" : weapon == SpecialWeapons.Moab ? MoabStreak.OwnedWeapon : weapon == SpecialWeapons.Missile ? AttackMissileStreak.StreakId : weapon == SpecialWeapons.Turret ? TurretStreak.WeaponId : weapon == SpecialWeapons.AttackHelicopter ? AttackHelicopterStreak.StreakId : weapon == SpecialWeapons.Ac130 ? Ac130Streak.StreakId : weapon == SpecialWeapons.Helper ? HelicopterHelperStreak.WeaponId : "other";
+        weapon < Weapons.Weapons.Count ? Weapons.Weapons[weapon].Id : weapon == SpecialWeapons.Vehicle ? "vehicle" : weapon == SpecialWeapons.VehicleGun ? "vehicle_gun" : weapon == SpecialWeapons.Moab ? MoabStreak.OwnedWeapon : weapon == SpecialWeapons.Missile ? AttackMissileStreak.StreakId : weapon == SpecialWeapons.Turret ? TurretStreak.WeaponId : weapon == SpecialWeapons.AttackHelicopter ? AttackHelicopterStreak.StreakId : weapon == SpecialWeapons.Ac130 ? Ac130Streak.StreakId : weapon == SpecialWeapons.Helper ? HelicopterHelperStreak.WeaponId : "other";
 }

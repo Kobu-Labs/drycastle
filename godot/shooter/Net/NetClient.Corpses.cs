@@ -51,6 +51,7 @@ public partial class NetClient
         if (e.Type != CorpseRules.TypeId) return;
         var node = new Node3D { Name = $"Corpse{e.Id}" };
         var view = CharacterView.Make();
+        if (Appearances.TryGetValue(e.State.Owner, out var look)) view.SetCamo(look, CamoData); // the dead player's look (#203)
         view.Position = new Vector3(0, -RagdollTumble.Half, 0); // the node sits at the body's middle, so a thrown body spins about its centre
         node.AddChild(view);
         Owned.AddChild(node);

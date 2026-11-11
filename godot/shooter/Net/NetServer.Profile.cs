@@ -103,7 +103,9 @@ public partial class NetServer
                 slots[i] = slots[i] with { Name = LoadoutRules.DefaultName(i) }; // a row from before loadout names (#145)
             }
             else slots[i] = defaults(i);
-            if (saveDefaults) await store.Loadouts.SaveAsync(p.Id, slots[i]);
+            if (!saveDefaults) continue;
+            try { await store.Loadouts.SaveAsync(p.Id, slots[i]); }
+            catch (Exception e) { GD.PrintErr($"server: could not save the default loadout of slot {i}: {e.Message}"); } // the join goes on with it in memory
         }
         return new PlayerProfile
         {
@@ -144,7 +146,7 @@ public partial class NetServer
 
     void OnProfileMessage(Client c, ReliableMsg? m)
     {
-        if (m is SaveLoadoutMsg or SaveCamoMsg or EventMsg { Kind: (byte)EventKind.CopyLoadout or (byte)EventKind.ResetLoadout } && !AllowSave(c))
+        if (m is SaveLoadoutMsg or SelectSlotMsg or SaveCamoMsg or EventMsg { Kind: (byte)EventKind.CopyLoadout or (byte)EventKind.ResetLoadout } && !AllowSave(c))
         {
             if (m is SaveLoadoutMsg sl0) AckSave(c, sl0.Loadout.Slot, sl0.Seq, "Saving too fast, try again in a moment.");
             return;
@@ -156,6 +158,26 @@ public partial class NetServer
             case SaveCamoMsg sc: OnSaveCamo(c, sc.Slot, sc.Spec); break;
             case EventMsg { Kind: (byte)EventKind.CopyLoadout } cp: OnCopyLoadout(c, cp.Payload); break;
             case EventMsg { Kind: (byte)EventKind.ResetLoadout } rs: OnResetLoadout(c, rs.Payload); break;
+        }
+    }
+
+    const string SaveFailed = "Could not save, try again in a moment.";
+
+    /// <summary>A save whose answer waits for the database write (#195). Only the task crosses threads; <see cref="Done"/> runs on the tick.</summary>
+    readonly List<(Task Write, Client C, Action<bool> Done)> _pendingSaves = new();
+
+    /// <summary>Runs <paramref name="done"/> on a later tick with whether the write succeeded (a dropped or failed write is false).</summary>
+    void AfterWrite(Task write, Action<bool> done, Client c) => _pendingSaves.Add((write, c, done));
+
+    /// <summary>Answers every save whose write has finished. A client that left in the meantime is not answered. Runs on the tick.</summary>
+    void CompleteSaves()
+    {
+        for (var i = _pendingSaves.Count - 1; i >= 0; i--)
+        {
+            var (write, c, done) = _pendingSaves[i];
+            if (!write.IsCompleted) continue;
+            _pendingSaves.RemoveAt(i);
+            if (_clients.ContainsKey(c.Peer)) done(write.IsCompletedSuccessfully);
         }
     }
 
@@ -184,8 +206,9 @@ public partial class NetServer
             return;
         }
         p.Loadouts[l.Slot] = l;
-        if (p.Persist) _ = Progression!.Loadouts.SaveAsync(p.DbId, l);
-        AckSave(c, l.Slot, m.Seq, null);
+        var slot = l.Slot;
+        if (p.Persist) AfterWrite(Progression!.Loadouts.SaveAsync(p.DbId, l), ok => AckSave(c, slot, m.Seq, ok ? null : SaveFailed), c);
+        else AckSave(c, slot, m.Seq, null);
         SendProfile(c);
     }
 
@@ -241,6 +264,7 @@ public partial class NetServer
             Send(c, new ErrorMsg(err));
             return;
         }
+        if (p.Active == slot) { SendProfile(c); return; } // unchanged: answer the client, but no write and no broadcast
         p.Active = slot;
         if (p.Persist) _ = Progression!.Loadouts.SetActiveSlotAsync(p.DbId, slot);
         SendProfile(c);

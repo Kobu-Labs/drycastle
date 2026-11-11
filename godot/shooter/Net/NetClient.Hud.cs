@@ -9,13 +9,23 @@ public partial class NetClient
     Hud? _hud;
     readonly SpreadEstimator _spread = new();
     int _hudRestarts;
+    /// <summary>The aim button of the last input tick; the crosshair spread uses it as the server uses the input's Aim bit.</summary>
+    bool _aimHeld;
 
     WeaponDef? CurrentWeapon => Ammo is { } a && Weapons != null && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1] : null;
+
+    /// <summary>Spread the next shot would get, for the crosshair gap: the same rule as the server's shot (stance, aim, movement).</summary>
+    float CrosshairSpread()
+    {
+        if (CurrentWeapon is not { } w) return 0f;
+        var own = HitMath.OwnSpread(w, _spread.Degrees(w, Now));
+        return _me is { } me ? HitMath.ShotSpread(own, w, me.State, _aimHeld) : own;
+    }
 
     void HudWelcome()
     {
         if (!ShotFx.Enabled || _hud != null) return; // headless runs have no HUD
-        _hud = new Hud { MyId = _myId, Scoped = () => _me is { ZoomFov: > 0 }, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Spread = () => CurrentWeapon is { } w ? HitMath.StanceSpread(_spread.Degrees(w, Now), w, _me?.State.Stance ?? Stance.Stand) : 0f, StanceOf = () => _me?.State.Stance ?? Stance.Stand };
+        _hud = new Hud { MyId = _myId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => _me is { ZoomFov: > 0 }, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Spread = CrosshairSpread, StanceOf = () => _me?.State.Stance ?? Stance.Stand };
         AddChild(_hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
         _hud.SetSandbox(SandboxGranted, SandboxHeldStreak); // the SANDBOX badge (#156)
         WireLoadoutHud(_hud);

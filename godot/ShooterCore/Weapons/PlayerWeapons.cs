@@ -197,7 +197,7 @@ public sealed class PlayerWeapons
         var i = Slot - 1;
         _mag[i]++; _reserve[i]--;
         Changed = true;
-        if (_mag[i] < Current.MagazineSize && _reserve[i] > 0) _reloadDone = now + Current.ReloadTime;
+        if (_mag[i] < Current.MagazineSize && _reserve[i] > 0) _reloadDone = now + Current.ReloadTime / _perks.ReloadSpeed;
         else Reloading = false;
     }
 
