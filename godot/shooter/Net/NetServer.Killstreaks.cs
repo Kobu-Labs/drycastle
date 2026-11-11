@@ -16,12 +16,15 @@ public partial class NetServer
     KillstreakService _streaks = null!;
 
     /// <summary>Builds the service once the table is set. Each streak runs its logging stub until its own ticket replaces it.</summary>
-    void BuildStreaks() =>
+    void BuildStreaks()
+    {
+        _uav = BuildUav();
         _streaks = new KillstreakService(
             Killstreaks,
-            Killstreaks.Streaks.Select(s => s.Id == MoabStreak.StreakId ? (IKillstreak)new MoabStreak(OnMoabPhase) : new LoggingKillstreak(s.Id)),
+            Killstreaks.Streaks.Select(s => s.Id switch { MoabStreak.StreakId => (IKillstreak)new MoabStreak(OnMoabPhase), UavStreak.StreakId => _uav, _ => new LoggingKillstreak(s.Id) }),
             (owner, kind, payload) => { if (_byId.TryGetValue(owner, out var c)) Send(c, new EventMsg((byte)kind, payload)); },
             s => GD.Print($"server: {s}"));
+    }
 
     /// <summary>A life starts at spawn (join and every spawn, like the perk): the loadout's streaks and the perk's cost reduction.</summary>
     void StreakArm(Client c, Loadout l) => _streaks.Arm(c.Id, new[] { l.Streak1, l.Streak2, l.Streak3 }, c.Perks.StreakCostReduction);
@@ -45,7 +48,7 @@ public partial class NetServer
 
     void StreakRoundReset() => _streaks.Reset();
 
-    void StreakTick() => _streaks.Tick(_elapsed);
+    void StreakTick() { _streaks.Tick(_elapsed); _uav.Tick(_elapsed); }
 
     void StreakLeave(ushort id) => _streaks.Forget(id);
 }

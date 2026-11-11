@@ -53,6 +53,7 @@
     { "id": "round.start", "files": ["kenney-music-jingles/jingles_STEEL07.ogg"], "bus": "Music", "volume_db": -4, "max_distance": 0 },
     { "id": "round.end", "files": ["kenney-music-jingles/jingles_STEEL03.ogg"], "bus": "Music", "volume_db": -4, "max_distance": 0 },
     { "id": "ui.click", "files": ["kenney-interface-sounds/click_003.ogg"], "bus": "UI", "volume_db": -6, "max_distance": 0 },
+    { "id": "uav.ping", "files": ["kenney-interface-sounds/tick_001.ogg"], "bus": "UI", "volume_db": -12, "max_distance": 0 },
     { "id": "ui.hover", "files": ["kenney-interface-sounds/tick_002.ogg"], "bus": "UI", "volume_db": -12, "max_distance": 0 },
     { "id": "ui.accept", "files": ["kenney-interface-sounds/confirmation_002.ogg"], "bus": "UI", "volume_db": -6, "max_distance": 0 },
     { "id": "ui.back", "files": ["kenney-interface-sounds/back_002.ogg"], "bus": "UI", "volume_db": -6, "max_distance": 0 },

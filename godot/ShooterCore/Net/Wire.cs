@@ -46,6 +46,8 @@ public enum EventKind : byte
     Appearance = 22,
     /// <summary>Server broadcast: a MOAB countdown armed, detonated or was cancelled (<see cref="MoabEvents"/>).</summary>
     Moab = 70,
+    /// <summary>Server to the owner only: the UAV's enemy pulse and seconds left (<see cref="UavEvents"/>), every second while up.</summary>
+    UavPing = 90,
 }
 
 public abstract record ReliableMsg;
