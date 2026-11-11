@@ -3,8 +3,9 @@ using Godot;
 namespace Suchohrad.Shooter;
 
 /// <summary>
-/// The attack missile's point-of-view overlay: a title, altitude and time readout, the control hint, and the static that
-/// fades in on impact. Shown only while the owner controls a missile (<see cref="NetClient"/> drives it). Mouse-only input
+/// The attack missile's point-of-view overlay: the infrared grade (the thermal shader, white hot, with auto exposure so day
+/// and night read alike), a title, altitude, time and impact estimate, the control hint, and the static that fades in on
+/// impact. Shown only while the owner controls a missile (<see cref="NetClient"/> drives it). Mouse-only input
 /// by design; it takes no focus and no clicks. Layout and colour come from <see cref="ShooterTheme"/> tokens and every
 /// string from <see cref="Strings"/>; the readouts are rewritten only when their whole-number value changes.
 /// </summary>
@@ -15,9 +16,10 @@ public partial class MissilePovOverlay : CanvasLayer
     const float StaticPeak = 0.85f;
 
     Control _root = null!;
+    ColorRect _thermal = null!;
     ColorRect _static = null!;
-    Label _alt = null!, _time = null!;
-    int _shownAlt = int.MinValue, _shownTime = int.MinValue;
+    Label _alt = null!, _time = null!, _eta = null!;
+    int _shownAlt = int.MinValue, _shownTime = int.MinValue, _shownEta = int.MinValue;
     double _impactAt = double.NegativeInfinity;
 
     public override void _Ready()
@@ -26,6 +28,15 @@ public partial class MissilePovOverlay : CanvasLayer
         _root = new Control { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
         _root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(_root);
+
+        // the infrared view: the thermal grade in white-hot mode, with the exposure following the scene's brightness
+        _thermal = new ColorRect { MouseFilter = Control.MouseFilterEnum.Ignore };
+        var grade = new ShaderMaterial { Shader = GD.Load<Shader>(GunshipOverlay.ShaderPath) };
+        grade.SetShaderParameter("mono", 1f);
+        grade.SetShaderParameter("auto_expose", 1f);
+        _thermal.Material = grade;
+        _thermal.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        _root.AddChild(_thermal);
 
         _static = new ColorRect { Color = new Color(0.82f, 0.84f, 0.88f, 0f), MouseFilter = Control.MouseFilterEnum.Ignore };
         _static.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -45,6 +56,10 @@ public partial class MissilePovOverlay : CanvasLayer
         _time = MakeLabel("", ShooterTheme.FontBody, ShooterTheme.Text);
         _time.Position = new Vector2(ShooterTheme.Margin, ShooterTheme.Margin * 3 + 4 * ShooterTheme.Space);
         _root.AddChild(_time);
+
+        _eta = MakeLabel("", ShooterTheme.FontBody, ShooterTheme.Text);
+        _eta.Position = new Vector2(ShooterTheme.Margin, ShooterTheme.Margin * 3 + 8 * ShooterTheme.Space);
+        _root.AddChild(_eta);
 
         var hint = MakeLabel(Strings.T("pov.hint"), ShooterTheme.FontSmall, ShooterTheme.Dim);
         hint.SetAnchorsPreset(Control.LayoutPreset.BottomWide);
@@ -66,13 +81,18 @@ public partial class MissilePovOverlay : CanvasLayer
     /// <summary>Shows or hides the whole overlay (the static, when it is still fading, is part of it).</summary>
     public void SetOn(bool on) => _root.Visible = on;
 
-    /// <summary>The readout: altitude above the launch point and the seconds since the missile was used. Whole numbers only.</summary>
-    public void SetReadout(float altitudeMetres, double seconds)
+    /// <summary>
+    /// The readout: altitude above the launch point, the seconds since the missile was used, and the estimated seconds to
+    /// the ground (NaN when unknown, the line is then blank). Whole numbers only.
+    /// </summary>
+    public void SetReadout(float altitudeMetres, double seconds, float etaSeconds)
     {
         var a = (int)MathF.Round(altitudeMetres);
         var t = (int)seconds;
+        var e = float.IsFinite(etaSeconds) ? (int)MathF.Round(etaSeconds) : -1;
         if (a != _shownAlt) { _shownAlt = a; _alt.Text = Strings.F("pov.alt", a); }
         if (t != _shownTime) { _shownTime = t; _time.Text = Strings.F("pov.time", t); }
+        if (e != _shownEta) { _shownEta = e; _eta.Text = e < 0 ? "" : Strings.F("pov.eta", e); }
     }
 
     /// <summary>The missile hit: the screen goes to static and clears over <see cref="StaticSeconds"/>.</summary>

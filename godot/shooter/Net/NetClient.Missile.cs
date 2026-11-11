@@ -107,7 +107,12 @@ public partial class NetClient
         _me.Camera.Current = false;
         _povCam.Current = true;
         _pov.SetOn(true);
-        _pov.SetReadout(p.Y - _me.GlobalPosition.Y, Now - _povSince);
+        // the estimate: height over the speed's downward part, on flat ground at the body's height (the ground under it is not sent)
+        var alt = p.Y - _me.GlobalPosition.Y;
+        var missile = Killstreaks?.Find(AttackMissileStreak.StreakId)?.Missile;
+        var sink = missile == null ? 0f : missile.SpeedMps * MathF.Sin(-s.PitchRad);
+        var eta = sink > 0 ? MathF.Max(0, alt) / sink : float.NaN;
+        _pov.SetReadout(alt, Now - _povSince, eta);
     }
 
     /// <summary>The blast: the bazooka's blast look at the missile's own radius, the shake, and the static on the owner's screen.</summary>

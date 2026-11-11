@@ -137,7 +137,7 @@ not a streak weapon, so its kills do count (correction on #133).
 | Streak | Kills | Unlock | Duration | Control | Notes |
 |---|---|---|---|---|---|
 | UAV | 4 | 0 | 60 s | none | enemy pings every second to the owner; no visible UAV model |
-| Attack Missile | 5 | 4 | flies 20 s | POV | steered missile, 100 dmg, splash 12 m |
+| Attack Missile | 5 | 4 | dives to the ground (about 7-40 s, #155) | POV | steered missile from 450 m, dive limited to -10 to -80 deg, infrared view, 100 dmg, splash 12 m |
 | Sentry Turret | 6 | 5 | 15 s | none | placed on the ground, 500 hp, 12 dmg per shot |
 | Care Package | 6 | 6 | instant | none | drop lands, hold E 2 s opens it (crate gone), grants a random killstreak (weighted, section 3) |
 | Attack Helicopter | 10 | 9 | 45 s | POV | owner flies the helicopter (POV) for 45 s |

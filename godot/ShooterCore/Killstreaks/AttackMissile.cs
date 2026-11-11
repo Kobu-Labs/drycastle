@@ -24,10 +24,15 @@ public sealed class MissileTuning
 {
     public float SpeedMps { get; init; }
     public float TurnRateRad { get; init; }
+    /// <summary>Hard safety cap on the flight, seconds. The ground ends the flight long before this.</summary>
     public float LifeSeconds { get; init; }
     /// <summary>Metres above the owner where the missile appears.</summary>
     public float SpawnHeight { get; init; }
     public float SpawnPitchRad { get; init; }
+    /// <summary>The shallowest pitch the owner can steer to (negative, radians; the least steep dive, e.g. -10 deg).</summary>
+    public float ShallowPitchRad { get; init; }
+    /// <summary>The steepest pitch the owner can steer to (negative, radians; e.g. -80 deg, never straight down).</summary>
+    public float SteepPitchRad { get; init; }
     public float Damage { get; init; }
     public float EdgeDamage { get; init; }
     public float FullDamageRadius { get; init; }
@@ -66,9 +71,19 @@ public sealed class MissileTuning
                 throw new DataFileException($"{file}: {where}: field \"missile.{field}\" is required and must be 0 or more");
             return (float)x;
         }
-        var pitch = r.SpawnPitchDeg ?? throw new DataFileException($"{file}: {where}: field \"missile.spawn_pitch_deg\" is required");
-        if (!double.IsFinite(pitch) || pitch > -1 || pitch < -89)
-            throw new DataFileException($"{file}: {where}: field \"missile.spawn_pitch_deg\" must be between -89 and -1 (negative is down)");
+        double Dive(double? v, string field)
+        {
+            if (v is not { } x || !double.IsFinite(x) || x > -1 || x < -89)
+                throw new DataFileException($"{file}: {where}: field \"missile.{field}\" is required and must be between -89 and -1 (negative is down)");
+            return x;
+        }
+        var shallow = Dive(r.PitchMinDeg, "pitch_min_deg");
+        var steep = Dive(r.PitchMaxDeg, "pitch_max_deg");
+        if (steep >= shallow)
+            throw new DataFileException($"{file}: {where}: field \"missile.pitch_max_deg\" (the steepest) must be below \"pitch_min_deg\" (the shallowest)");
+        var pitch = Dive(r.SpawnPitchDeg, "spawn_pitch_deg");
+        if (pitch > shallow || pitch < steep)
+            throw new DataFileException($"{file}: {where}: field \"missile.spawn_pitch_deg\" must lie between \"pitch_max_deg\" and \"pitch_min_deg\"");
         var full = NonNeg(r.FullDamageRadius, "full_damage_radius");
         var radius = Pos(r.SplashRadius, "splash_radius");
         if (full >= radius) throw new DataFileException($"{file}: {where}: field \"missile.full_damage_radius\" must be less than \"splash_radius\"");
@@ -79,6 +94,8 @@ public sealed class MissileTuning
             LifeSeconds = Pos(r.LifeSeconds, "life_seconds"),
             SpawnHeight = Pos(r.SpawnHeight, "spawn_height"),
             SpawnPitchRad = (float)(pitch * Math.PI / 180.0),
+            ShallowPitchRad = (float)(shallow * Math.PI / 180.0),
+            SteepPitchRad = (float)(steep * Math.PI / 180.0),
             Damage = NonNeg(r.Damage, "damage"),
             EdgeDamage = NonNeg(r.EdgeDamage, "edge_damage"),
             FullDamageRadius = full,
@@ -95,6 +112,8 @@ public sealed class MissileTuning
         public double? LifeSeconds { get; set; }
         public double? SpawnHeight { get; set; }
         public double? SpawnPitchDeg { get; set; }
+        public double? PitchMinDeg { get; set; }
+        public double? PitchMaxDeg { get; set; }
         public double? Damage { get; set; }
         public double? EdgeDamage { get; set; }
         public double? FullDamageRadius { get; set; }
@@ -164,8 +183,9 @@ public interface IMissileWorld
 
 /// <summary>
 /// One attack missile in flight: a world entity that the owner steers. Its heading turns towards the owner's aim at
-/// <see cref="MissileTuning.TurnRateRad"/> at most, it flies at constant speed, and it ends on impact (which detonates) or
-/// when its life runs out (which does not). It has no hit points: the server's blast is its only damage.
+/// <see cref="MissileTuning.TurnRateRad"/> at most, and its pitch is kept inside the dive cone (shallow to steep limit), so
+/// it always loses height and reaches the ground in a bounded time. It flies at constant speed and ends on impact (which
+/// detonates) or when its life cap runs out (which does not). It has no hit points: the server's blast is its only damage.
 /// </summary>
 public sealed class AttackMissileEntity : IWorldEntity
 {
@@ -176,8 +196,8 @@ public sealed class AttackMissileEntity : IWorldEntity
     public AttackMissileEntity(ushort owner, MissileTuning tuning, IMissileWorld world, Vector3 start, float yaw, float pitch)
     {
         Owner = owner; _t = tuning; _world = world;
-        Position = start; Yaw = yaw; Pitch = pitch;
-        _wantYaw = yaw; _wantPitch = pitch;
+        Position = start; Yaw = yaw; Pitch = ClampPitch(pitch);
+        _wantYaw = yaw; _wantPitch = Pitch;
     }
 
     /// <summary>The manager's id, set once the missile is spawned.</summary>
@@ -194,10 +214,11 @@ public sealed class AttackMissileEntity : IWorldEntity
     public void Aim(float yaw, float pitch)
     {
         _wantYaw = yaw;
-        _wantPitch = Math.Clamp(pitch, -MaxPitch, MaxPitch);
+        _wantPitch = ClampPitch(pitch);
     }
 
-    const float MaxPitch = MathF.PI / 2 - 0.02f;
+    /// <summary>The pitch stays inside the owner's dive cone: never level, never up, never steeper than the steepest limit.</summary>
+    float ClampPitch(float pitch) => Math.Clamp(pitch, _t.SteepPitchRad, _t.ShallowPitchRad);
 
     public void Tick(float dt)
     {
@@ -226,7 +247,7 @@ public sealed class AttackMissileEntity : IWorldEntity
     {
         var max = _t.TurnRateRad * dt;
         Yaw = WrapAngle(Yaw + Math.Clamp(WrapAngle(_wantYaw - Yaw), -max, max));
-        Pitch += Math.Clamp(_wantPitch - Pitch, -max, max);
+        Pitch = ClampPitch(Pitch + Math.Clamp(_wantPitch - Pitch, -max, max));
     }
 
     static float WrapAngle(float a)
