@@ -64,7 +64,7 @@ public sealed class SqliteProgressionStore : IProgressionStore
         public Task<Profile> GetOrCreateAsync(string token)
         {
             if (string.IsNullOrWhiteSpace(token)) throw new ArgumentException("token is required", nameof(token));
-            return db.Read(c =>
+            return db.Mutate(c => // writes (a new profile), so it runs on the write connection behind the queued writes
             {
                 using var tx = c.BeginTransaction();
                 var now = Stamp(DateTime.UtcNow);

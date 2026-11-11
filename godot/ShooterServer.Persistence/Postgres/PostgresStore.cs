@@ -27,7 +27,16 @@ public sealed class PostgresProgressionStore : IProgressionStore
     /// Connects (retrying while the database starts) and migrates it. <paramref name="curve"/> (from levels.json) turns XP into the Level on read.
     /// Throws if it cannot be opened or migrated; <paramref name="log"/> receives write failures later.
     /// </summary>
-    public static PostgresProgressionStore Open(string connectionString, Action<string> log, LevelCurve curve) => new(PostgresWorker.Open(connectionString, log), curve);
+    public static PostgresProgressionStore Open(string connectionString, Action<string> log, LevelCurve curve) => new(PostgresWorker.Open(WithTimeouts(connectionString), log), curve);
+
+    /// <summary>Connect and command timeouts of 5 s unless the connection string sets them (T2-14): a database that stops answering fails a job, not the queue.</summary>
+    static string WithTimeouts(string connectionString)
+    {
+        var b = new NpgsqlConnectionStringBuilder(connectionString);
+        if (!b.ContainsKey("Timeout")) b.Timeout = 5;
+        if (!b.ContainsKey("Command Timeout")) b.CommandTimeout = 5;
+        return b.ToString();
+    }
 
     public int QueueDepth => _db.QueueDepth;
     public void Dispose() => _db.Dispose();
@@ -60,7 +69,7 @@ public sealed class PostgresProgressionStore : IProgressionStore
         public Task<Profile> GetOrCreateAsync(string token)
         {
             if (string.IsNullOrWhiteSpace(token)) throw new ArgumentException("token is required", nameof(token));
-            return db.Read(c =>
+            return db.Mutate(c => // writes (a new profile), so it runs on the write connection behind the queued writes
             {
                 using var tx = c.BeginTransaction();
                 var now = DateTime.UtcNow;
