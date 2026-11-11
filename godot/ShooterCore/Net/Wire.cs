@@ -38,6 +38,10 @@ public enum EventKind : byte
     StreakUsed = 18,
     /// <summary>Server to the owner: an active killstreak ended, with the reason (<see cref="KillstreakEvents"/>).</summary>
     StreakEnded = 19,
+    /// <summary>Client to server: take a corpse's weapon into a hotbar position (<see cref="CorpseCodec"/>).</summary>
+    PickUpCorpse = 20,
+    /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
+    Hotbar = 21,
 }
 
 public abstract record ReliableMsg;

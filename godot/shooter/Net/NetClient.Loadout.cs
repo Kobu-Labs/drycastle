@@ -52,6 +52,9 @@ public partial class NetClient
     {
         switch (kind)
         {
+            case EventKind.Hotbar when CorpseCodec.TryDecodeHotbar(payload, out var hot):
+                ApplyHotbar(hot);
+                break;
             case EventKind.LevelUp when ProgressionEvents.DecodeLevelUp(payload) is { } lu:
                 if (Profile is { } p) Profile = p with { Level = lu.Level, Xp = lu.Xp };
                 GD.Print($"client {PlayerName}: level up to {lu.Level}");
