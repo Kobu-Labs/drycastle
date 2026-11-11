@@ -27,3 +27,47 @@ _Avoid_: merged parcel, estate
 
 **Hand edit**:
 A deliberate, developer-made change to a parcel's or property group's contents (fence, trees, placed objects) that survives every pipeline re-run.
+
+**Loadout**:
+One of a player's five saved sets: a primary weapon, a secondary weapon, a perk and three killstreaks. Edited in game and switched on death.
+_Avoid_: build, class, kit
+
+**Perk**:
+A passive modifier a loadout carries (e.g. Fleet Foot, Quick Hands, Flak Jacket, Swift Swap, Tank Hunter, Hot Streak, Steady Lung, Ghost). One perk per loadout.
+_Avoid_: ability, skill, upgrade
+
+**Killstreak**:
+A reward a loadout selects (up to three), unlocked by the Streak counter reaching a kill threshold and usable until the player dies. Examples: UAV, turret, care package, attack helicopter, AC-130, MOAB.
+_Avoid_: streak (alone), ultimate, power-up
+
+**Streak counter**:
+The number of kills a player has made since their last death; it decides which killstreaks are available. Only kills count, and it resets on death. Kills made by a killstreak's own weapons do not advance it.
+_Avoid_: kill count, combo
+
+**Player token**:
+The client-generated GUID that is the player's identity in v2. Stored in the client config file and mapped to a Profile on the server. Not a password: whoever holds it is that player.
+_Avoid_: account, login, user id
+
+**Profile**:
+A player's persistent server-side record, keyed by player token: display name, XP, Level, Unlocks and Loadouts.
+_Avoid_: account, save, player data
+
+**XP / Level**:
+Experience points earned from play; a Level is reached at each XP threshold. Reaching a Level unlocks weapons, perks and killstreaks.
+_Avoid_: rank, prestige
+
+**Unlock**:
+A weapon, perk or killstreak that a player's Level makes available to their Loadouts.
+_Avoid_: reward, achievement
+
+**Corpse**:
+A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary.
+_Avoid_: ragdoll, body, drop
+
+**Care package**:
+The killstreak that gives its user a random Perk; better perks are rarer.
+_Avoid_: supply drop, crate
+
+**Weapon category**:
+A class of primary weapon (machine guns, assault rifles, shotguns, SMGs, sniper rifles) that shares a base recoil pattern; individual weapons may override it. Pistols form the secondary category.
+_Avoid_: weapon type, class
