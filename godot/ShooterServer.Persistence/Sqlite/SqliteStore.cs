@@ -124,20 +124,25 @@ public sealed class SqliteProgressionStore : IProgressionStore
 
     sealed class CamoRepo(SqliteWorker db) : ICamoRepository
     {
-        public Task<CamoSpec?> GetAsync(long playerId) => db.Read<CamoSpec?>(c =>
+        public Task<IReadOnlyList<(int Slot, CamoSpec Spec)>> GetAllAsync(long playerId) => db.Read<IReadOnlyList<(int, CamoSpec)>>(c =>
         {
             using var cmd = c.CreateCommand();
-            cmd.CommandText = "SELECT spec FROM camo WHERE player_id = $id;";
+            cmd.CommandText = "SELECT slot, spec FROM loadout_camo WHERE player_id = $id ORDER BY slot;";
             cmd.Parameters.AddWithValue("$id", playerId);
-            return cmd.ExecuteScalar() is byte[] blob ? CamoSpec.TryDecode(blob) : null;
+            using var r = cmd.ExecuteReader();
+            var list = new List<(int, CamoSpec)>();
+            while (r.Read())
+                if (CamoSpec.TryDecode((byte[])r[1]) is { } spec) list.Add((r.GetInt32(0), spec));
+            return list;
         });
 
-        public Task SaveAsync(long playerId, CamoSpec spec)
+        public Task SaveAsync(long playerId, int slot, CamoSpec spec)
         {
+            RequireSlot(slot);
             var blob = spec.Encode();
             return db.Write("save camo", c => Exec(c,
-                "INSERT INTO camo (player_id, spec) VALUES ($id, $spec) ON CONFLICT (player_id) DO UPDATE SET spec = excluded.spec;",
-                ("$id", playerId), ("$spec", blob)));
+                "INSERT INTO loadout_camo (player_id, slot, spec) VALUES ($id, $slot, $spec) ON CONFLICT (player_id, slot) DO UPDATE SET spec = excluded.spec;",
+                ("$id", playerId), ("$slot", slot), ("$spec", blob)));
         }
     }
 

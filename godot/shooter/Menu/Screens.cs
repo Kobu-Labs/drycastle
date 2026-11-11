@@ -82,9 +82,9 @@ public partial class DialogScreen : MenuScreen
 public partial class MainMenu : MenuScreen
 {
     readonly Action _play, _settings;
-    readonly Action? _loadouts;
+    readonly Action? _loadouts, _customize;
     Button _first = null!;
-    public MainMenu(Action play, Action settings, Action? loadouts = null) { _play = play; _settings = settings; _loadouts = loadouts; }
+    public MainMenu(Action play, Action settings, Action? loadouts = null, Action? customize = null) { _play = play; _settings = settings; _loadouts = loadouts; _customize = customize; }
 
     protected override Control Build()
     {
@@ -96,6 +96,7 @@ public partial class MainMenu : MenuScreen
         _first = Ui.Btn(Strings.T("menu.play"), _play, "MenuPrimary");
         v.AddChild(_first);
         if (_loadouts != null) v.AddChild(Ui.Btn(Strings.T("menu.loadouts"), _loadouts));
+        if (_customize != null) v.AddChild(Ui.Btn(Strings.T("menu.customize"), _customize));
         v.AddChild(Ui.Btn(Strings.T("menu.settings"), _settings));
         v.AddChild(Ui.Btn(Strings.T("menu.quit"), Back));
         v.AddChild(Ui.Gap(ShooterTheme.Space * 3));

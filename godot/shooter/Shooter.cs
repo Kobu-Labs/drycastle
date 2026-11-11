@@ -138,11 +138,14 @@ public partial class Shooter : Node3D
     {
         Sfx.MenuMusic(true);
         _shell.Reset(new MainMenu(() => _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n))), () => _shell.Push(new SettingsScreen(false)),
-            () => _shell.Push(NewLoadouts())));
+            () => _shell.Push(NewLoadouts()), () => _shell.Push(NewCustomization(-1))));
     }
 
     /// <summary>The loadout editor, from the main menu (no connection: it says to join a server) or from pause or the respawn screen.</summary>
-    LoadoutScreen NewLoadouts() => new(() => _client, () => _data ??= LoadData());
+    LoadoutScreen NewLoadouts() => new(() => _client, () => _data ??= LoadData()) { CustomizeFactory = slot => NewCustomization(slot) };
+
+    /// <summary>The camouflage customiser for one loadout slot (-1: the active one), from the main menu or the loadout editor (#141).</summary>
+    CustomizationScreen NewCustomization(int slot) => new(() => _client, () => _data ??= LoadData(), slot);
 
     async Task Step(LoadingScreen ld, string key, float f)
     {

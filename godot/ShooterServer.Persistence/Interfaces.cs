@@ -38,12 +38,12 @@ public interface IStatsRepository
     Task RecordMatchAsync(long playerId);
 }
 
-/// <summary>A player's camouflage (ticket #140): one encoded <see cref="CamoSpec"/> per player. Validated against camo.json by the caller.</summary>
+/// <summary>A loadout's camouflage (tickets #140, #141): one encoded <see cref="CamoSpec"/> per player and slot. Validated against camo.json by the caller.</summary>
 public interface ICamoRepository
 {
-    /// <summary>The saved camouflage, or null when the player never saved one (the default look applies).</summary>
-    Task<CamoSpec?> GetAsync(long playerId);
-    Task SaveAsync(long playerId, CamoSpec spec);
+    /// <summary>The saved camouflage of every slot that has one (slot 0..4). A slot with no row uses the default look.</summary>
+    Task<IReadOnlyList<(int Slot, CamoSpec Spec)>> GetAllAsync(long playerId);
+    Task SaveAsync(long playerId, int slot, CamoSpec spec);
 }
 
 /// <summary>One store = one database (or in-memory set). Disposing it stops the background writer.</summary>

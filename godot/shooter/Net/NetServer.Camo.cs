@@ -23,16 +23,28 @@ public partial class NetServer
         }
     }
 
-    void OnSaveCamo(Client c, CamoSpec spec)
+    /// <summary>Saves one loadout slot's look (#141). Only the active slot is broadcast: it is the look others see.</summary>
+    void OnSaveCamo(Client c, int slot, CamoSpec spec)
     {
         var p = c.Profile!;
+        if (LoadoutRules.ValidateSlot(slot) is { } slotErr)
+        {
+            Send(c, new ErrorMsg(slotErr));
+            return;
+        }
         if (spec.Validate(CamoData) is { } err)
         {
             Send(c, new ErrorMsg(err));
             return;
         }
-        p.Camo = spec;
-        if (p.Persist) _ = Progression!.Camo.SaveAsync(p.DbId, spec);
+        p.Camos[slot] = spec;
+        if (p.Persist) _ = Progression!.Camo.SaveAsync(p.DbId, slot, spec);
+        SendProfile(c);
+        if (slot == p.Active) BroadcastAppearance(c);
+    }
+
+    void BroadcastAppearance(Client c)
+    {
         var ev = AppearanceEvent(c);
         foreach (var o in _clients.Values.Where(o => o.Joined)) Send(o, ev);
     }

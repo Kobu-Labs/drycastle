@@ -141,9 +141,9 @@ public class CamoTests
     public void ServerValidatesAndWireCarriesTheCamoMessages()
     {
         var spec = Varied();
-        var save = Wire.Encode(new SaveCamoMsg(spec));
+        var save = Wire.Encode(new SaveCamoMsg(3, spec));
         Assert.Equal(Wire.TSaveCamo, save[0]);
-        Assert.Equal(new SaveCamoMsg(spec), Wire.DecodeReliable(save));
+        Assert.Equal(new SaveCamoMsg(3, spec), Wire.DecodeReliable(save));
         Assert.Null(Wire.DecodeReliable(save.AsSpan(0, save.Length - 1)));
 
         // every reliable message type sits below the input channel's type byte, so the router still tells them apart
@@ -154,20 +154,24 @@ public class CamoTests
 
     [Theory]
     [MemberData(nameof(Backends))]
-    public async Task SavedCamoRoundTripsAndDefaultsWhenUnset(string backend)
+    public async Task SavedCamoIsPerLoadoutSlotAndDefaultsWhenUnset(string backend)
     {
         var curve = Data.Levels.Curve;
         var path = Path.Combine(Path.GetTempPath(), $"shooter-camo-{Guid.NewGuid():N}", "shooter.db");
         using IProgressionStore store = backend == "memory" ? new InMemoryProgressionStore(curve) : SqliteProgressionStore.Open(path, _ => { }, curve);
         var player = await store.Profiles.GetOrCreateAsync("camo-token");
-        Assert.Null(await store.Camo.GetAsync(player.Id));
+        Assert.Empty(await store.Camo.GetAllAsync(player.Id));
 
         var spec = Varied();
-        await store.Camo.SaveAsync(player.Id, spec);
-        Assert.Equal(spec, await store.Camo.GetAsync(player.Id));
+        await store.Camo.SaveAsync(player.Id, 2, spec);
+        await store.Camo.SaveAsync(player.Id, 4, CamoSpec.Default);
+        var all = await store.Camo.GetAllAsync(player.Id);
+        Assert.Equal(2, all.Count);
+        Assert.Equal((2, spec), all[0]);
+        Assert.Equal((4, CamoSpec.Default), all[1]);
 
-        await store.Camo.SaveAsync(player.Id, CamoSpec.Default);
-        Assert.Equal(CamoSpec.Default, await store.Camo.GetAsync(player.Id));
+        await store.Camo.SaveAsync(player.Id, 2, CamoSpec.Default);
+        Assert.Equal((2, CamoSpec.Default), (await store.Camo.GetAllAsync(player.Id))[0]);
     }
 
     public static IEnumerable<object[]> Backends => new[] { new object[] { "memory" }, new object[] { "sqlite" } };

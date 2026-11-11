@@ -146,6 +146,11 @@ public static class ShooterTheme
         t.SetStylebox("hover_pressed", "CheckBox", Box(Hover, Space / 2, null, 0));
         t.SetStylebox("disabled", "CheckBox", Box(Colors.Transparent, Space / 2, null, 0));
 
+        // camouflage customiser sliders (#141): a dark track, an accent fill, and the same focus ring as the buttons
+        t.SetStylebox("slider", "HSlider", Box(new Color(0, 0, 0, 0.55f), 0, Line, Border, 2));
+        t.SetStylebox("grabber_area", "HSlider", Box(Accent, 0, null, 0, 2));
+        t.SetStylebox("grabber_area_highlight", "HSlider", Box(Accent, 0, null, 0, 2));
+        t.SetStylebox("focus", "HSlider", Ring(pad));
         t.SetStylebox("normal", "LineEdit", Box(Backdrop, pad, Line));
         t.SetStylebox("focus", "LineEdit", Box(Backdrop, pad, Accent, BorderStrong));
         t.SetStylebox("read_only", "LineEdit", Box(Surface, pad, Line));
