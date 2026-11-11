@@ -79,7 +79,7 @@ public partial class EditorMode
     FenceDraft? InheritedGroupFence()
         => _target == null || _target.IsGroup ? null : EditModel.GroupFenceOf(Disk(), _target.Parcels[0]);
 
-    void AfterEdit() { _panelDirty = true; _outlinesDirty = true; }
+    void AfterEdit() { _panelDirty = true; MarkAllOutlines(); }
 
     bool EditFence(Action<FenceDraft> change, bool needCustom = false)
     {
@@ -616,7 +616,7 @@ public partial class EditorMode
         try { SyncControls(); }
         finally { _syncing = false; }
         RebuildGateMarkers();
-        _outlinesDirty = true;
+        MarkAllOutlines();
     }
 
     void SyncControls()

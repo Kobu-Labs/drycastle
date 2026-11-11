@@ -171,6 +171,7 @@ public sealed partial class MapLoader
     /// <summary>Instance one object (replacing a node of the same id).</summary>
     void AddObject(PlacedObject o)
     {
+        GeometryChanged();
         RemoveObject(o.Id);
         var group = o.Group;
         if (!_groupNodes.TryGetValue(group, out var container))
@@ -240,6 +241,7 @@ public sealed partial class MapLoader
 
     bool RemoveObject(string id)
     {
+        GeometryChanged();
         if (!_objectNodes.Remove(id, out var node)) return false;
         var group = _objectGroup[id];
         _objectGroup.Remove(id);
@@ -358,6 +360,7 @@ public sealed partial class MapLoader
         Node3D? scene = null;
         if (glbPath != "") scene = LoadGltf(glbPath);
 
+        GeometryChanged();
         var set = replaces.ToHashSet();
         var propsNodes = 0;
         foreach (var id in replaces)
@@ -405,6 +408,7 @@ public sealed partial class MapLoader
 
     void RemoveDynamic(string id)
     {
+        GeometryChanged();
         if (!_dynamicProps.Remove(id, out var c)) return;
         c.GetParent()?.RemoveChild(c);
         c.QueueFree();
@@ -412,6 +416,7 @@ public sealed partial class MapLoader
 
     void HideBaked(string id)
     {
+        GeometryChanged();
         if (_propsVisuals.TryGetValue(id, out var v)) v.Visible = false;
         if (_propsShapes.TryGetValue(id, out var shapes))
             foreach (var s in shapes) s.SetDeferred(CollisionShape3D.PropertyName.Disabled, true);
@@ -420,6 +425,7 @@ public sealed partial class MapLoader
     /// <summary>Undo ApplyFragment for one parcel: drop its dynamic props and objects, show the baked props and objects.</summary>
     public void RevertParcel(string id)
     {
+        GeometryChanged();
         RemoveDynamic(id);
         _swapped.Remove(id);
         if (_propsVisuals.TryGetValue(id, out var v)) v.Visible = true;

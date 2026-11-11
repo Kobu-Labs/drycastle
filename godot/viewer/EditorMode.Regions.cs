@@ -48,6 +48,8 @@ public partial class EditorMode
     Node3D _handleRoot = null!;
     readonly List<MeshInstance3D> _handles = new();
     StandardMaterial3D _handleMat = null!, _handleHot = null!;
+    // one sphere for every corner handle (the handles differ only by transform and material)
+    readonly SphereMesh _handleMesh = new() { Radius = 1f, Height = 2f, RadialSegments = 12, Rings = 6 };
 
     public string? SelectedRegionId { get; private set; }
     public IReadOnlyList<(double x, double y)> RegionDraft => _draft;
@@ -82,23 +84,30 @@ public partial class EditorMode
     }
 
     /// <summary>Regions in the file as last read, sorted by ID.</summary>
-    public List<RegionInfo> Regions()
+    public List<RegionInfo> Regions() => new(RegionList());
+
+    /// <summary>The cached region list of the file on disk (shared: callers must not keep it across a reload).</summary>
+    List<RegionInfo> RegionList()
     {
         var disk = Disk(); // _disk is replaced on every reload, so its identity keys the cache
-        if (ReferenceEquals(disk, _regionsFor) && _regionsCache != null) return new(_regionsCache);
+        if (ReferenceEquals(disk, _regionsFor) && _regionsCache != null) return _regionsCache;
         var list = new List<RegionInfo>();
         _regionsFor = disk;
         _regionsCache = list;
-        if (RegionsOf(disk) is not { } ro) return new(list);
-        foreach (var (id, e) in ro)
-            if (e is Obj r && r.GetValueOrDefault("colour") is string c && ParsePolygon(r.GetValueOrDefault("polygon")) is { } ring)
-                list.Add(new RegionInfo(id, c, ring));
-        return new(list);
+        if (RegionsOf(disk) is { } ro)
+            foreach (var (id, e) in ro)
+                if (e is Obj r && r.GetValueOrDefault("colour") is string c && ParsePolygon(r.GetValueOrDefault("polygon")) is { } ring)
+                    list.Add(new RegionInfo(id, c, ring));
+        return list;
     }
     Obj? _regionsFor;
     List<RegionInfo>? _regionsCache;
 
-    public RegionInfo? Region(string id) => Regions().FirstOrDefault(r => r.Id == id);
+    public RegionInfo? Region(string id)
+    {
+        foreach (var r in RegionList()) if (r.Id == id) return r;
+        return null;
+    }
 
     /// <summary>Next free ID: one above the highest R-NNNN in use (mcp_server._next_id).</summary>
     public string NextRegionIdOf(string text) => NextRegionId(EditsFile.Parse(text));
@@ -636,7 +645,7 @@ public partial class EditorMode
         // corner handles: sized by distance so they stay grabbable from any height
         while (_handles.Count < show.Count)
         {
-            var mi = new MeshInstance3D { Mesh = new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 12, Rings = 6 }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            var mi = new MeshInstance3D { Mesh = _handleMesh, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
             _handleRoot.AddChild(mi);
             _handles.Add(mi);
         }

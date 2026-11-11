@@ -57,6 +57,7 @@ public sealed partial class MapLoader
 
     public RegionResult ApplyRegions(string summaryJsonPath)
     {
+        GeometryChanged();
         string glbPath;
         List<string> replaces;
         using (var doc = JsonDocument.Parse(File.ReadAllText(summaryJsonPath)))
@@ -98,6 +99,7 @@ public sealed partial class MapLoader
 
     void RemoveDynamicRegion(string id)
     {
+        GeometryChanged();
         if (!_dynamicRegions.Remove(id, out var c)) return;
         c.GetParent()?.RemoveChild(c);
         c.QueueFree();

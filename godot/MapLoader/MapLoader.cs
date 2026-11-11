@@ -38,6 +38,13 @@ public sealed partial class MapLoader
     /// <summary>Rule values (fence and tree defaults) from the manifest (map 0.4.0+); null for older maps.</summary>
     public EditDefaults? EditDefaults { get; private set; }
     public LoadStats Stats { get; } = new();
+    /// <summary>
+    /// Counts changes to the physics of the map (placed objects, parcel and props swaps, regions). A cached ray result
+    /// is valid only for the version it was cast in.
+    /// </summary>
+    public int GeometryVersion { get; private set; }
+    /// <summary>Records a change of the map's physics; called by every method that adds or removes colliders.</summary>
+    void GeometryChanged() => GeometryVersion++;
     /// <summary>Per-parcel props visuals and colliders by parcel ID (for the runtime props swap).</summary>
     public IReadOnlyDictionary<string, MeshInstance3D> PropsVisuals => _propsVisuals;
     public IReadOnlyDictionary<string, List<CollisionShape3D>> PropsShapes => _propsShapes;
@@ -479,6 +486,7 @@ public sealed partial class MapLoader
         if (!_parcels.TryGetValue(parcelId, out var info))
             throw new KeyNotFoundException($"unknown parcel {parcelId}");
         RestoreParcel(parcelId);
+        GeometryChanged();
         if (_visuals.TryGetValue(parcelId, out var vis)) vis.Visible = false;
         if (_shapes.TryGetValue(parcelId, out var shapes))
             foreach (var s in shapes) s.SetDeferred(CollisionShape3D.PropertyName.Disabled, true);
@@ -496,6 +504,7 @@ public sealed partial class MapLoader
     /// <summary>Undo ReplaceParcel: free the replacement, show the visual, re-enable collision.</summary>
     public void RestoreParcel(string parcelId)
     {
+        GeometryChanged();
         if (_replacements.Remove(parcelId, out var inst)) inst.QueueFree();
         if (_visuals.TryGetValue(parcelId, out var vis)) vis.Visible = true;
         if (_shapes.TryGetValue(parcelId, out var shapes))
