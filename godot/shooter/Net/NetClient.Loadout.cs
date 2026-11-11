@@ -37,6 +37,7 @@ public partial class NetClient
         if (Weapons != null) _hotbar = LoadoutHotbar.Build(Weapons, active);
         Perks = PerkModifiers.Of(PerkData?.Find(active?.Perk ?? ""));
         if (Weapons != null && _hud != null) _hud.SetWeapons(_hotbar.Select(i => WeaponName(Weapons.Weapons[i].Id)).ToList());
+        ArmStreaks(); // the HUD tracker's counter starts at this spawn (ticket #119)
     }
 
     /// <summary>Position of a weapons.json slot (1-based) on the hotbar, 0-based; -1 when it is not on the hotbar.</summary>
@@ -114,6 +115,9 @@ public partial class NetClient
                 if (Profile is { } p) Profile = p with { Level = lu.Level, Xp = lu.Xp };
                 GD.Print($"client {PlayerName}: level up to {lu.Level}");
                 LevelUpReceived?.Invoke(lu);
+                break;
+            case EventKind.StreakEarned or EventKind.StreakUsed or EventKind.StreakEnded:
+                OnStreakEvent(kind, payload);
                 break;
             case EventKind.XpSummary when ProgressionEvents.DecodeXpSummary(payload) is { } xs:
                 LastXpSummary = xs;

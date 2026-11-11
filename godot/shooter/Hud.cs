@@ -126,6 +126,8 @@ public partial class Hud : CanvasLayer
         BuildRespawn();
         BuildBoard();
         BuildXpPanel();
+        BuildMinimap();
+        BuildStreaks();
         Relayout();
         GetViewport().SizeChanged += Relayout;
         SetHealth(100);

@@ -18,7 +18,12 @@ public partial class NetClient
         _hud = new Hud { MyId = _myId, Scoped = () => _me is { ZoomFov: > 0 }, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Spread = () => CurrentWeapon is { } w ? HitMath.StanceSpread(_spread.Degrees(w, Now), w, _me?.State.Stance ?? Stance.Stand) : 0f, StanceOf = () => _me?.State.Stance ?? Stance.Stand };
         AddChild(_hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
         WireLoadoutHud(_hud);
+        _hud.Minimap.Build(Map); // once per connection; the texture comes from the map's parcels and roads (ticket #119)
     }
+
+    /// <summary>The loaded map (set by the host): the minimap's texture source.</summary>
+    public Suchohrad.MapLoader.MapLoader? Map;
+    readonly List<Vector2> _carDots = new();
 
     static string WeaponName(string id)
     {
@@ -54,5 +59,14 @@ public partial class NetClient
     {
         _hud?.SetHealth(Mathf.CeilToInt(_me?.Health ?? 100));
         if (_me != null) _hud?.SetBreath(Breath.AirLeft(_me.State), _me.HeadUnder);
+        if (_me != null && _hud != null)
+        {
+            var g = _me.GlobalPosition;
+            _hud.Minimap.SetPlayer(new Vector2(g.X, g.Z), _me.Yaw);
+            _carDots.Clear();
+            foreach (var c in _cars.Values)
+                if (!c.Destroyed) _carDots.Add(new Vector2(c.Node.GlobalPosition.X, c.Node.GlobalPosition.Z));
+            _hud.Minimap.SetVehicleDots(_carDots);
+        }
     }
 }

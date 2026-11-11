@@ -266,6 +266,7 @@ public partial class NetClient : Node
             case EventKind.Kill:
                 var k = Match.KillFeed[^1];
                 _hud?.AddKill(k, Match.NameOf(k.Killer), Match.NameOf(k.Victim));
+                OnStreakKill(k);
                 GD.Print($"client {PlayerName}: kill feed: {Match.NameOf(k.Killer)} -> {Match.NameOf(k.Victim)} (weapon {k.Weapon})");
                 break;
             case EventKind.Spawn:
@@ -284,7 +285,7 @@ public partial class NetClient : Node
                 var d = Match.LastDeath.Values.Last();
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 SfxDeath(d);
-                if (d.Victim == _myId) { Dead = true; _deaths++; _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay); _hud?.SetProtection(0); }
+                if (d.Victim == _myId) { Dead = true; _deaths++; _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay); _hud?.SetProtection(0); OnStreakDeath(); }
                 break;
         }
     }
