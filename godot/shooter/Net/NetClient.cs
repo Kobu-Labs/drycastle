@@ -586,6 +586,7 @@ public partial class NetClient : Node
                 if (EchoOfPredicted(sh.Shooter)) break; // already played and drawn by prediction
                 var endV = new Vector3(sh.End.X, sh.End.Y, sh.End.Z);
                 SfxShot(sh, melee);
+                if (!melee) { if (sh.Shooter == _myId) _viewmodel?.Flash(0.4f); else if (_remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
                 ShotFx.Spawn(World, MuzzleOf(sh.Shooter, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV), endV, melee);
                 break;
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
@@ -597,7 +598,7 @@ public partial class NetClient : Node
                     var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);
                     _rockets[l.Id] = new Rocket { Node = RocketFx.Make(World), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length() };
                 }
-                if (!EchoOfPredicted(l.Owner)) SfxLaunch(l);
+                if (!EchoOfPredicted(l.Owner)) { SfxLaunch(l); if (l.Owner == _myId) _viewmodel?.Flash(0.5f); else if (_remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f); }
                 break;
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
                 _explosionLog.Add((Now, ex));

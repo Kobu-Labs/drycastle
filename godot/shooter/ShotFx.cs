@@ -3,8 +3,7 @@ using Godot;
 namespace Suchohrad.Shooter;
 
 /// <summary>
-/// Shot effects: a short bright tracer streak that flies from the muzzle to the end point at 250 m/s, a muzzle flash
-/// (sphere plus a brief light) at the muzzle, and a small spark burst where a shot ends in the world. Meshes and
+/// Shot effects: a short bright tracer streak that flies from the muzzle to the end point at 250 m/s, and a small spark burst where a shot ends in the world. (Muzzle flashes live on the weapon models, see MuzzleFlash.) Meshes and
 /// materials are built once and shared. Skipped on headless runs.
 /// </summary>
 public static class ShotFx
@@ -14,8 +13,8 @@ public static class ShotFx
     const float TracerSpeed = 250f, TracerLength = 4.5f, MaxShotRange = 300f;
 
     static BoxMesh? _tracerMesh;
-    static SphereMesh? _flashMesh, _sparkMesh;
-    static StandardMaterial3D? _tracerMat, _flashMat, _sparkMat;
+    static SphereMesh? _sparkMesh;
+    static StandardMaterial3D? _tracerMat, _sparkMat;
 
     static StandardMaterial3D Glow(Color c) => new()
     {
@@ -27,15 +26,13 @@ public static class ShotFx
     {
         if (_tracerMesh != null) return;
         _tracerMat = Glow(new Color(1f, 0.92f, 0.55f));
-        _flashMat = Glow(new Color(1f, 0.75f, 0.3f));
         _sparkMat = Glow(new Color(1f, 0.8f, 0.4f));
         _tracerMesh = new BoxMesh { Size = new Vector3(0.03f, 0.03f, 1f), Material = _tracerMat };
-        _flashMesh = new SphereMesh { Radius = 0.12f, Height = 0.24f, RadialSegments = 12, Rings = 6, Material = _flashMat };
         _sparkMesh = new SphereMesh { Radius = 0.025f, Height = 0.05f, RadialSegments = 6, Rings = 3, Material = _sparkMat };
     }
 
     /// <summary>Shot from the muzzle <paramref name="from"/> to <paramref name="to"/>. Melee swings have no effect here.</summary>
-    public static void Spawn(Node3D world, Vector3 from, Vector3 to, bool melee, bool impact = true, float flashScale = 1f)
+    public static void Spawn(Node3D world, Vector3 from, Vector3 to, bool melee, bool impact = true)
     {
         if (!Enabled || melee || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree()) return;
         var dir = to - from;
@@ -43,18 +40,8 @@ public static class ShotFx
         if (dist < 0.05f) return;
         Init();
         dir /= dist;
-        Flash(world, from, flashScale);
         Tracer(world, from, to, dir, dist);
         if (impact && dist < MaxShotRange - 1f) Impact(world, to, -dir);
-    }
-
-    static void Flash(Node3D world, Vector3 at, float scale)
-    {
-        var flash = new MeshInstance3D { Mesh = _flashMesh, Position = at, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Scale = Vector3.One * 1.2f * scale };
-        var light = new OmniLight3D { LightColor = new Color(1f, 0.7f, 0.3f), LightEnergy = 3f, OmniRange = 7f, ShadowEnabled = false };
-        flash.AddChild(light);
-        world.AddChild(flash);
-        Expire(world, flash, 0.06f);
     }
 
     static void Tracer(Node3D world, Vector3 from, Vector3 to, Vector3 dir, float dist)

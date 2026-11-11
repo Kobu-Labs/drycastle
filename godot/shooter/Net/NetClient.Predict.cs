@@ -84,12 +84,13 @@ public partial class NetClient
         var from = cam.GlobalPosition;
         var dir = -cam.GlobalTransform.Basis.Z;
         var muzzle = _viewmodel?.MuzzlePosition ?? from + dir * 0.8f;
-        if (projectile) { ShotFx.Spawn(World, muzzle, muzzle + dir * 0.4f, false, impact: false, flashScale: 0.5f); return; } // flash only; the rocket itself comes from the server
+        _viewmodel?.Flash(projectile ? 0.5f : 0.4f);
+        if (projectile) return; // the rocket itself comes from the server
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * 300f);
         q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
         var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         var end = hit.Count > 0 ? hit["position"].AsVector3() : from + dir * 300f;
-        ShotFx.Spawn(World, muzzle, end, false, flashScale: 0.4f);
+        ShotFx.Spawn(World, muzzle, end, false);
         if (hit.Count > 0) Sfx.Play3D("impact", end);
     }
 
@@ -181,6 +182,7 @@ public partial class NetClient
         }
         _wantSlot = t < 6 ? 3 : 2;
         _me.Pitch = t < 6 ? -0.2f : -0.05f;
+        if (t > 7) { mi.MoveX = t < 7.2 ? 1 : -1; mi.Yaw += (float)(t - 7) * 0.8f; } // strafe + turn: the flash must stay on the barrel
         if ((t is > 3 and < 3.1) || (t is > 7 and < 8)) mi.Buttons |= MoveButtons.Fire;
         if (_demoNext < DemoShots.Length && t >= DemoShots[_demoNext]) _ = DemoShot(FxDemo, DemoShots[_demoNext++]);
         if (t > 9) GetTree().Quit();
