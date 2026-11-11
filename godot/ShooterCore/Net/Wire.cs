@@ -42,6 +42,10 @@ public enum EventKind : byte
     PickUpCorpse = 20,
     /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
     Hotbar = 21,
+    /// <summary>Client to server: open a landed care package (<see cref="CarePackageCodec"/>).</summary>
+    OpenCarePackage = 50,
+    /// <summary>Server to the opener: the perk a care package gave until death (<see cref="CarePackageCodec"/>).</summary>
+    PerkGained = 51,
 }
 
 public abstract record ReliableMsg;

@@ -96,6 +96,7 @@ public partial class NetClient : Node
     {
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
         InitCorpses();
+        InitCarePackages();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
         _peer = _conn.ConnectToHost(Host, Port, Wire.Channels, 0);
@@ -169,6 +170,7 @@ public partial class NetClient : Node
         }
         RenderRemotes();
         RenderCorpses();
+        RenderCarePackages();
         RenderCars();
         RenderRockets();
         RenderWater();
@@ -432,7 +434,7 @@ public partial class NetClient : Node
             mi = new MoveInput { MoveY = 1, Yaw = yaw, Buttons = jump, SpeedScale = 1 };
         }
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
-        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickCorpses(dt); }
+        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickCorpses(dt); TickCarePackages(dt); }
         FxDemoInput(ref mi);
         TickRecoil(mi);
         TickBreath(mi);

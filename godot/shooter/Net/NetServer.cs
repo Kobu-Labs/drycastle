@@ -117,7 +117,6 @@ public partial class NetServer : Node
         }
         if (ArenaMode) BuildArena();
         _xp = new MatchXp(Levels.Awards);
-        BuildStreaks();
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");
@@ -125,6 +124,8 @@ public partial class NetServer : Node
         _match.Entities.Despawned += w => BroadcastEvent(EventKind.WorldDespawn, WorldCodec.EncodeDespawn(w.Id, w.Reason));
         CorpseRules.Register(WorldEntityRegistry.Shared);
         _corpses = new CorpseBook(_match.Entities);
+        BuildCarePackages();
+        BuildStreaks(); // after the match and the crate book: the care package streak needs both
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");
@@ -295,6 +296,7 @@ public partial class NetServer : Node
             if (m is HelloMsg h && c.Id == 0) OnHello(c, h);
             else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || ArenaMode)) OnDebug(c, e.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpse } pu) OnPickUpCorpse(c, pu.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
             else if (c.Joined) OnProfileMessage(c, m);
         }
         else if (c.Joined && d[0] == Wire.TInput)

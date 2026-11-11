@@ -19,7 +19,7 @@ public partial class NetServer
     void BuildStreaks() =>
         _streaks = new KillstreakService(
             Killstreaks,
-            Killstreaks.Streaks.Select(s => (IKillstreak)new LoggingKillstreak(s.Id)),
+            Killstreaks.Streaks.Select(s => s.Id == CarePackageRules.StreakId ? CarePackageImpl() : new LoggingKillstreak(s.Id)),
             (owner, kind, payload) => { if (_byId.TryGetValue(owner, out var c)) Send(c, new EventMsg((byte)kind, payload)); },
             s => GD.Print($"server: {s}"));
 

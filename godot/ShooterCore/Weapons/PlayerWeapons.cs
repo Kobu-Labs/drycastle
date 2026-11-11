@@ -25,7 +25,10 @@ public sealed class PlayerWeapons
     public const double SecondarySwapSeconds = 0.35;
 
     readonly WeaponsFile _file;
-    readonly PerkModifiers _perks;
+    PerkModifiers _perks;
+
+    /// <summary>Replaces the perk values (a care package perk until death). Takes effect at the next weapon step.</summary>
+    public void SetPerks(PerkModifiers perks) => _perks = perks;
     readonly int[] _hotbar; // weapons.json indexes, in hotbar order
     readonly int _startSlot; // the slot equipped at spawn
     readonly int[] _mag, _reserve;

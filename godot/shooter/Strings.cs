@@ -30,6 +30,7 @@ public static class Strings
         ("weapon.fall", "Fall"), ("weapon.drown", "Drowned"), ("weapon.void", "Void"), ("weapon.debug", "Debug"), ("weapon.vehicle", "Car"), ("weapon.vehicle_gun", "Jeep MG"), ("feed.roadkill", "Roadkill"), ("weapon.unknown", "?"),
         ("player.unknown", "Player {0}"),
         ("hud.corpse.hold", "Hold {0}  take {1} as primary     Tap {0}  choose slot"), ("hud.corpse.tap", "Tap {0}  take {1}"),
+        ("hud.crate.hold", "Hold {0}  open care package"), ("hud.crate.opening", "Opening care package... {0} s"), ("toast.crate.perk", "Care package: {0} until you die."),
         ("corpse.title", "Take {0}"), ("corpse.option", "{0}  {1}"), ("corpse.primary", "Replace primary: {0}"), ("corpse.secondary", "Replace secondary: {0}"),
         ("corpse.cancel", "{0}  Cancel"),
         ("app.title", "SUCHOHRAD"), ("app.subtitle", "Shooter"),

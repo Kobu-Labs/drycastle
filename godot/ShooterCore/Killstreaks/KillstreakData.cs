@@ -17,6 +17,11 @@ public sealed class KillstreakDef
     /// <summary>How long an active instance lasts. 0 = until the streak ends it or its owner dies.</summary>
     public double DurationSeconds { get; init; }
     public KillstreakControl Control { get; init; }
+    /// <summary>
+    /// Care package only: the weight of each perk id in the random roll (higher = more common). Empty for every other streak.
+    /// The ids are checked against perks.json where the table is built (see <see cref="PerkTable"/>).
+    /// </summary>
+    public IReadOnlyDictionary<string, int> PerkWeights { get; init; } = new Dictionary<string, int>();
 }
 
 /// <summary>
@@ -68,10 +73,19 @@ public sealed class KillstreakFile : IVersioned
                 "pov" => KillstreakControl.Pov,
                 _ => throw new DataFileException($"{F}: {where}: field \"control\" must be none or pov"),
             };
+            var weights = new Dictionary<string, int>();
+            foreach (var (perk, w) in r.PerkWeights ?? new())
+            {
+                if (string.IsNullOrEmpty(perk)) throw new DataFileException($"{F}: {where}: \"perk_weights\" has an empty perk id");
+                if (w < 1) throw new DataFileException($"{F}: {where}: perk_weights \"{perk}\" must be 1 or more");
+                weights[perk] = w;
+            }
+            if (r.Id == CarePackageRules.StreakId && weights.Count == 0)
+                throw new DataFileException($"{F}: {where}: field \"perk_weights\" is required for the care package");
             streaks.Add(new KillstreakDef
             {
                 Id = r.Id, Name = r.Name, KillsRequired = kills, UnlockLevel = unlock, MaxActive = maxActive,
-                DurationSeconds = duration, Control = control,
+                DurationSeconds = duration, Control = control, PerkWeights = weights,
             });
         }
 
@@ -101,5 +115,6 @@ public sealed class KillstreakFile : IVersioned
         public int? MaxActive { get; set; }
         public double? DurationSeconds { get; set; }
         public string? Control { get; set; }
+        public Dictionary<string, int>? PerkWeights { get; set; }
     }
 }
