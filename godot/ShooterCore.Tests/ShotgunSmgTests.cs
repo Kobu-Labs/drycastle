@@ -101,13 +101,16 @@ public class ShotgunSmgTests
     {
         var r = Def("aa12");
         var near = T(2, 0, 0, -4);
-        var far = T(3, 1.2f, 0, -10);
-        var side = Vector3.Normalize(new Vector3(0.12f, 0, -1));
+        var far = T(3, 2.0f, 0, -10);
+        // the side pellets pass 0.8 m wide of the near target (its radius is 0.56 m) and enter the far one
+        var side = Vector3.Normalize(new Vector3(0.2f, 0, -1));
         var dirs = new[] { new Vector3(0, 0, -1), side, side };
         var walls = new[] { float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity };
-        var totals = HitMath.ResolvePellets(r, new Vector3(0, 1, 0), dirs, 60, walls, new[] { near, far }, 1);
+        var origin = new Vector3(0, 1, 0);
+        var totals = HitMath.ResolvePellets(r, origin, dirs, 60, walls, new[] { near, far }, 1);
+        var dFar = HitMath.Raycast(origin, side, 60, float.PositiveInfinity, new[] { far }, 1)!.Value.Distance;
         Assert.Equal(r.DamagePerPellet, totals[2].Damage, 0);
-        Assert.Equal(2 * HitMath.PelletDamage(r, 9.7f, false), totals[3].Damage, 0); // the pellets enter the far capsule at about 9.7 m
+        Assert.Equal(2 * HitMath.PelletDamage(r, dFar, false), totals[3].Damage, 0); // the pellets enter the far capsule
     }
 
     // ---- schema flags and shipped entries ----------------------------------------------------------------------------

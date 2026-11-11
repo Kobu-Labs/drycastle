@@ -10,8 +10,8 @@ namespace Suchohrad.Shooter;
 public sealed partial class CharacterView : Node3D
 {
     const string Model = "kaykit-character-animations/animated-character.glb";
-    /// <summary>The model is a head-and-torso figure about 1.1 m tall; scaled up so it fills the 1.8 m capsule (hit boxes are capsules).</summary>
-    const float Scale = 1.6f;
+    /// <summary>The model is 1.899 m tall as authored (measured, see <see cref="PlayerHitBox"/>); scaled to the 1.8 m stand height so the drawn body matches the hit volume.</summary>
+    const float Scale = PlayerHitBox.DrawScale;
     AnimationPlayer? _anim;
     Node3D? _model;
     Stance _stance;
@@ -56,8 +56,9 @@ public sealed partial class CharacterView : Node3D
     }
 
     /// <summary>
-    /// Remote stance pose. Prone lays the figure face down (a quarter turn about its forward axis) and lowers it onto the ground;
-    /// stand and crouch keep the upright figure, since no crouch animation exists and the walk cycle reads well at crawl speed.
+    /// Remote stance pose, matching the hit volume (<see cref="HitMath.Axis"/>). Prone rolls the figure onto its front, rests it on the
+    /// ground and centres it on the snapshot position. Crouch squashes the figure to the crouch height (no crouch animation exists).
+    /// Stand is upright.
     /// </summary>
     public void SetStance(Stance stance)
     {
@@ -65,11 +66,10 @@ public sealed partial class CharacterView : Node3D
         _stance = stance;
         var prone = stance == Stance.Prone;
         _model.RotationDegrees = new Vector3(prone ? 90 : 0, 180, 0);
-        _model.Position = new Vector3(0, prone ? ProneLift : 0, 0);
+        _model.Position = prone ? new Vector3(0, PlayerHitBox.ProneLift, PlayerHitBox.ProneCentreShift) : Vector3.Zero;
+        var squash = stance == Stance.Crouch ? MovementStep.CapsuleHeight(Stance.Crouch) / PlayerHitBox.StandHeight : 1f;
+        _model.Scale = new Vector3(Scale, Scale * squash, Scale);
     }
-
-    /// <summary>Height the lying figure is lifted by so its front rests on the ground (half its thickness; a visual estimate).</summary>
-    const float ProneLift = 0.2f;
 
     /// <summary>Swimming pose: the body leans forward (<see cref="UnderwaterFx.SwimLeanDegrees"/>) and moves at the slow walk; stands up again when not swimming.</summary>
     public void SetSwim(bool swimming)

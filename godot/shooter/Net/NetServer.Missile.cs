@@ -34,7 +34,7 @@ public partial class NetServer
         foreach (var t in LiveTargets())
         {
             var isDirect = i.Victim == t.Id;
-            var dist = ProjectileMath.DistanceToCapsule(N(pos), t.Feet, HitMath.Height(t.Stance), MoveConsts.CapsuleRadius);
+            var dist = HitMath.DistanceToBody(N(pos), t);
             var self = t.Id == i.Owner;
             var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, self);
             if (dmg <= 0) continue;
@@ -43,7 +43,7 @@ public partial class NetServer
             if (res == DamageResult.Ignored) continue; // spawn protected: neither damage nor knockback
             if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v))
             {
-                var center = t.Feet + new NVec3(0, HitMath.Height(t.Stance) / 2, 0);
+                var center = HitMath.Centre(t);
                 var k = ProjectileMath.Knockback(w, N(pos), center, isDirect ? 1f : ProjectileMath.SplashFraction(w, dist));
                 if (k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
             }

@@ -42,7 +42,7 @@ public class BazookaTests
     {
         var t = new[] { new HitTarget(2, new Vector3(0, 0, -10), Stance.Stand, 0) };
         var r = ProjectileMath.Sweep(new Vector3(0, 1, 0), -Vector3.UnitZ, 20, 15, t, 1);
-        Assert.Equal(ImpactKind.Player, r.Kind); Assert.Equal(2, r.Victim); Assert.Equal(9.7f, r.Distance, 0.05f);
+        Assert.Equal(ImpactKind.Player, r.Kind); Assert.Equal(2, r.Victim); Assert.Equal(10f - PlayerHitBox.Radius, r.Distance, 0.05f);
     }
 
     [Fact]
