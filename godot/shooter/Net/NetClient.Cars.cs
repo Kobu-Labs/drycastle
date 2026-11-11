@@ -24,6 +24,7 @@ public partial class NetClient
         /// <summary>Damage stage 0..3 from the record, whether the vehicle is destroyed, and whether its blast was already drawn (event or state, whichever came first).</summary>
         public int Stage;
         public bool Destroyed, Exploded;
+        public double ExplodedAt;
         public VehicleFx.Damage? Smoke;
     }
 
@@ -54,9 +55,12 @@ public partial class NetClient
     void SetVehicleDamage(CarView v, int stage, bool destroyed)
     {
         v.Stage = stage;
+        // the blast event is reliable and can overtake a snapshot that still shows the old damage stage: ignore those, or they would bring the smoke back on a gone vehicle
+        if (!destroyed && v.Exploded && !v.Destroyed && Now - v.ExplodedAt < 1.0) return;
         if (destroyed)
         {
             if (!v.Destroyed) { v.Destroyed = true; if (!v.Exploded) ExplodeVehicle(v, new Vector3(v.Pos.X, v.Pos.Y + 0.8f, v.Pos.Z), Vehicles?.Explosion.Splash.Radius ?? 9f); }
+            if (v.Smoke != null) { v.Smoke.QueueFree(); v.Smoke = null; }
             return;
         }
         if (v.Destroyed) { v.Destroyed = false; v.Exploded = false; v.Node.Visible = true; }
@@ -70,7 +74,8 @@ public partial class NetClient
     {
         v.Exploded = true;
         v.Snd?.Release(); v.Snd = null;
-        v.Smoke?.Stop();
+        v.ExplodedAt = Now;
+        if (v.Smoke != null) { v.Smoke.Stop(); v.Smoke.QueueFree(); v.Smoke = null; } // freed with its particles, not just stopped: nothing of the smoke outlives the vehicle
         v.Node.Visible = false;
         VehicleFx.Explode(World, at, radius);
         if (Sfx.Enabled) Sfx.Play3D("explosion.vehicle", at);
