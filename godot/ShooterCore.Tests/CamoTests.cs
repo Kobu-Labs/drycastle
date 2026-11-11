@@ -132,7 +132,7 @@ public class CamoTests
         Assert.Throws<DataFileException>(() => CamoFile.Parse(good.Replace("#4b5a32", "4b5a32")));
         Assert.Throws<DataFileException>(() => CamoFile.Parse(good.Replace("\"pattern\": \"blotch\"", "\"pattern\": \"nope\"")));
         Assert.Throws<DataFileException>(() => CamoFile.Parse(good.Replace("\"spotting_min_multiplier\": 0.35", "\"spotting_min_multiplier\": 0")));
-        Assert.Throws<DataFileException>(() => CamoFile.Parse(good.Replace("\"tuft_size_m\": [0.03, 0.22]", "\"tuft_size_m\": [0.5, 0.1]")));
+        Assert.Throws<DataFileException>(() => CamoFile.Parse(good.Replace("\"tuft_size_m\": [0.05, 0.30]", "\"tuft_size_m\": [0.5, 0.1]")));
         Assert.Throws<DataFileException>(() => CamoFile.Parse(good.Replace("\"full_speed_mps\": 6.0", "\"full_speed_mps\": 0")));
     }
 

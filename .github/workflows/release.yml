@@ -1,72 +1,134 @@
-# Every push to main publishes a game release `dev-<run>` (prerelease, channel "dev"). Pushing a tag vX.Y.Z publishes a stable release.
-# Windows and Linux game zips + manifest.json. The launcher (docs/launcher.md) reads manifest.json from the newest release of the player's channel.
+# Release pipeline. Merging a PR into the `release` branch (usually main -> release):
+#   build   tests, Windows + Linux game zips, server export with the map
+#   deploy  rsync + docker compose to the production VPS (environment `production`: secrets, optional required reviewers)
+#   publish GitHub release vX (stable channel): game zips + manifest.json, which the launcher reads (docs/launcher.md)
+# Clients only see the new release after the server is live. A manual run on any other branch skips deploy and publishes a `dev-<run>` prerelease.
 name: release
 on:
   push:
-    branches: [main]
-    tags: ['v*']
+    branches: [release]
   workflow_dispatch:
 concurrency: { group: release, cancel-in-progress: false }
-permissions: { contents: write }
+permissions: { contents: read }
 env:
-  GODOT_VERSION: 4.7.2
   GH_TOKEN: ${{ github.token }}
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      channel: ${{ steps.v.outputs.channel }}
     steps:
       - uses: actions/checkout@v4
-      - name: Check a map is published
-        id: gate
-        run: |
-          if grep -q PLACEHOLDER map-version.txt; then
-            echo "::warning::No release published: map-version.txt is still the placeholder. Run scripts/publish-map.sh once and commit map-version.txt (docs/launcher.md)."
-            echo "ok=false" >> $GITHUB_OUTPUT
-          else echo "ok=true" >> $GITHUB_OUTPUT; fi
       - uses: actions/setup-dotnet@v4
-        if: steps.gate.outputs.ok == 'true'
         with: { dotnet-version: 8.0.x }
       - name: Tests
-        if: steps.gate.outputs.ok == 'true'
         run: dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj
-      - name: Install Godot ${{ env.GODOT_VERSION }} mono and export templates
-        if: steps.gate.outputs.ok == 'true'
-        run: |
-          base=https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable
-          curl -fsSL -o godot.zip $base/Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip
-          curl -fsSL -o templates.tpz $base/Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz
-          unzip -q godot.zip -d "$RUNNER_TEMP/godot"
-          sudo ln -sf "$(ls -d $RUNNER_TEMP/godot/*/ | head -1)Godot_v${GODOT_VERSION}-stable_mono_linux.x86_64" /usr/local/bin/godot
-          tpl=$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono
-          mkdir -p "$tpl" && unzip -q templates.tpz -d "$RUNNER_TEMP/tpl" && cp -r "$RUNNER_TEMP/tpl/templates/." "$tpl/"
-      - name: Build game zip (no map)
-        if: steps.gate.outputs.ok == 'true'
-        run: make shooter-package-game
-      - name: Resolve version and map
-        if: steps.gate.outputs.ok == 'true'
+      - name: Install Godot mono and export templates
+        uses: ./.github/actions/setup-godot
+      - name: Version
         id: v
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT; echo "channel=stable" >> $GITHUB_OUTPUT; echo "pre=" >> $GITHUB_OUTPUT
-          else
-            echo "tag=dev-${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT; echo "channel=dev" >> $GITHUB_OUTPUT; echo "pre=--prerelease" >> $GITHUB_OUTPUT
-          fi
+          if [[ "$GITHUB_REF" == refs/heads/release ]]; then tag="v0.${GITHUB_RUN_NUMBER}"; channel=stable; else tag="dev-${GITHUB_RUN_NUMBER}"; channel=dev; fi
+          echo "tag=$tag" >> $GITHUB_OUTPUT; echo "channel=$channel" >> $GITHUB_OUTPUT
           echo "map=$(tr -d '[:space:]' < map-version.txt)" >> $GITHUB_OUTPUT
           echo "protocol=$(grep -oP 'ProtocolVersion = \K[0-9]+' godot/ShooterCore/Net/Wire.cs)" >> $GITHUB_OUTPUT
+      - name: Game zips (no map)
+        run: make shooter-package-game
+      - name: Download the map named in map-version.txt
+        run: |
+          mkdir -p "$RUNNER_TEMP/map" out/village/map
+          gh release download "${{ steps.v.outputs.map }}" --pattern map.zip --pattern map.json --dir "$RUNNER_TEMP/map"
+          python3 - <<PY
+          import hashlib, json, os
+          d = os.environ["RUNNER_TEMP"] + "/map"
+          want = json.load(open(d + "/map.json"))["sha256"]
+          got = hashlib.sha256(open(d + "/map.zip", "rb").read()).hexdigest()
+          assert got == want, f"map.zip checksum mismatch: {got} != {want}"
+          PY
+          unzip -q "$RUNNER_TEMP/map/map.zip" -d out/village/map
+      - name: Server export (with map)
+        run: make shooter-export-server
       - name: Manifest
-        if: steps.gate.outputs.ok == 'true'
         run: |
-          gh release download "${{ steps.v.outputs.map }}" --pattern map.json --dir "$RUNNER_TEMP"
           python3 scripts/make_manifest.py --repo "$GITHUB_REPOSITORY" --tag "${{ steps.v.outputs.tag }}" --channel "${{ steps.v.outputs.channel }}" \
-            --commit "$GITHUB_SHA" --protocol "${{ steps.v.outputs.protocol }}" --windows-zip out/shooter/suchohrad-game-windows.zip --linux-zip out/shooter/suchohrad-game-linux.zip \
-            --map-tag "${{ steps.v.outputs.map }}" --map-json "$RUNNER_TEMP/map.json" --out out/shooter/manifest.json
-      - name: Publish release
-        if: steps.gate.outputs.ok == 'true'
+            --commit "$GITHUB_SHA" --protocol "${{ steps.v.outputs.protocol }}" \
+            --windows-zip out/shooter/suchohrad-game-windows.zip --linux-zip out/shooter/suchohrad-game-linux.zip \
+            --map-tag "${{ steps.v.outputs.map }}" --map-json "$RUNNER_TEMP/map/map.json" --out out/shooter/manifest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: |
+            out/shooter/suchohrad-game-windows.zip
+            out/shooter/suchohrad-game-linux.zip
+            out/shooter/manifest.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-export
+          path: out/shooter/linux-server
+          if-no-files-found: error
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/release'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: server-export
+          path: out/shooter/linux-server
+      - name: SSH setup
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
-          gh release create "${{ steps.v.outputs.tag }}" ${{ steps.v.outputs.pre }} --target "$GITHUB_SHA" --generate-notes \
-            --title "${{ steps.v.outputs.tag }}" out/shooter/suchohrad-game-windows.zip out/shooter/suchohrad-game-linux.zip out/shooter/manifest.json
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod +x out/shooter/linux-server/suchohrad-server.x86_64   # artifacts drop the execute bit
+      - name: Back up the database first
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$DEPLOY_HOST" bash -s -- "$GITHUB_SHA" <<'REMOTE'
+          set -euo pipefail
+          sha="$1"; dir=/opt/suchohrad
+          if [ -d "$dir/deploy" ] && [ -n "$(cd "$dir/deploy" && docker compose ps -q db)" ]; then
+            mkdir -p "$dir/backups"
+            (cd "$dir/deploy" && docker compose exec -T db pg_dump -U shooter shooter) > "$dir/backups/pre-deploy-${sha:0:8}.sql"
+            ls -1t "$dir"/backups/*.sql | tail -n +11 | xargs -r rm --
+            echo "backup written: $dir/backups/pre-deploy-${sha:0:8}.sql"
+          else
+            echo "no running database yet (first deploy): skipping backup"
+          fi
+          REMOTE
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_OPTS: -i /home/runner/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes
+        run: deploy/deploy.sh "$DEPLOY_HOST"
+
+  publish:
+    needs: [build, deploy]
+    # deploy is skipped on manual dev runs; anything else must have succeeded
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.deploy.result == 'success' || needs.deploy.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: assets
+      - name: Publish release
+        run: |
+          tag="${{ needs.build.outputs.tag }}"
+          [ "${{ needs.build.outputs.channel }}" = dev ] && pre=--prerelease || pre=--latest
+          gh release create "$tag" $pre --target "$GITHUB_SHA" --generate-notes --title "$tag" assets/*
       - name: Prune old dev releases (keep 15)
-        if: steps.gate.outputs.ok == 'true'
         run: |
           gh release list --limit 200 --json tagName --jq '.[].tagName | select(startswith("dev-"))' \
             | sort -t- -k2 -n -r | tail -n +16 | xargs -r -n1 gh release delete --yes --cleanup-tag

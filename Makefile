@@ -264,13 +264,21 @@ shooter-package: shooter-export
 
 # Launcher distribution (docs/launcher.md). The CI release job runs these; they work locally too.
 # Game zips WITHOUT the map (the launcher installs the map from its own release): out/shooter/suchohrad-game-{windows,linux}.zip, files at the zip root.
-.PHONY: shooter-package-game map-package launcher-build launcher-export launcher-test
+.PHONY: shooter-export-server shooter-package-game map-package launcher-build launcher-export launcher-test
 shooter-package-game:
 	$(MAKE) shooter-export SHOOTER_NO_MAP=1
 	rm -f out/shooter/suchohrad-game-windows.zip out/shooter/suchohrad-game-linux.zip
 	cd out/shooter/windows && zip -qr ../suchohrad-game-windows.zip . -x 'map/*'
 	cd out/shooter/linux-client && zip -qr ../suchohrad-game-linux.zip . -x 'map/*'
 	@echo "packages: out/shooter/suchohrad-game-{windows,linux}.zip"
+
+# Linux server export only (used by the release pipeline to deploy): out/shooter/linux-server with assets/ and map/ (SHOOTER_PKG_MAP).
+shooter-export-server: shooter-export-check
+	dotnet build godot/shooter/shooter.csproj
+	mkdir -p out/shooter/linux-server/assets out/shooter/linux-server/map
+	godot --headless --path godot/shooter --export-release "Linux Server"
+	cp -r assets/. out/shooter/linux-server/assets/
+	cp -r $(SHOOTER_PKG_MAP)/. out/shooter/linux-server/map/
 
 # Map archive for the launcher: out/village/map.zip + out/village/map.json (name, size, sha256). Publish with scripts/publish-map.sh.
 map-package:

@@ -19,6 +19,8 @@ public static class ShooterTheme
     public const float FeedCompactScale = 0.75f;
     public const int FeedCompactRows = 3;
     public const int Border = 1, BorderStrong = 3;
+    /// <summary>Opacity of a form row whose control is disabled (the customiser's inert rows): dimmed, still readable.</summary>
+    public const float DisabledAlpha = 0.45f;
 
     // text sizes (five); body text is 20 and nothing is under 16 at 1080p
     public const int FontSmall = 16, FontBody = 20, FontHead = 24, FontBig = 32, FontDisplay = 48;
@@ -180,6 +182,11 @@ public static class ShooterTheme
         t.SetColor("font_color", "PopupMenu", Text);
         t.SetColor("font_hover_color", "PopupMenu", Text);
         t.SetFontSize("font_size", "PopupMenu", FontBody);
+
+        // tooltips (what a control does, its shortcut): the raised surface, small text
+        t.SetStylebox("panel", "TooltipPanel", Box(Raised with { A = 0.97f }, Space, Line));
+        t.SetColor("font_color", "TooltipLabel", Text);
+        t.SetFontSize("font_size", "TooltipLabel", FontSmall);
 
         PanelVariation(t, "MenuBackdrop", Box(Backdrop, 0, null, 0, 0));
         PanelVariation(t, "MenuCard", Box(Surface with { A = 0.94f }, Space * 3, Line));

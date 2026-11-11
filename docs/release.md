@@ -25,7 +25,30 @@ The server address is not baked into the client: players type it on the connect 
 - `zip` on the build machine.
 - `make shooter-export-check` verifies presets and templates.
 
-## Cutting a release
+## Release pipeline (CI)
+
+Merging a PR into the **`release`** branch (open it as `main` -> `release`) runs `.github/workflows/release.yml`:
+
+1. **build**: tests, Windows and Linux game zips, the server export with the map named in `map-version.txt`.
+2. **deploy** (environment `production`): backs up the database on the VPS (`/opt/suchohrad/backups/pre-deploy-<sha>.sql`, last 10 kept), then runs `deploy/deploy.sh`
+   (rsync plus `docker compose up --wait`; the job fails if the server does not become healthy, and then nothing is published).
+3. **publish**: creates release `v0.<run>` with the game zips and `manifest.json`; the launcher picks it up as the stable channel.
+
+Clients only learn about the new version after the server is live. Nothing else publishes release assets (a manual run on another branch publishes a `dev-<run>` prerelease without deploying).
+
+**One-time setup** (secrets live in the GitHub environment `production`, never in the repo; use a dedicated deploy key, not your personal one):
+```bash
+ssh-keygen -t ed25519 -N "" -C github-deploy -f ~/.ssh/suchohrad-deploy
+ssh-copy-id -i ~/.ssh/suchohrad-deploy.pub -o IdentitiesOnly=yes -i ~/.ssh/suchohrad-vps root@159.195.244.164   # authorises it on the VPS
+gh secret set DEPLOY_SSH_KEY --env production < ~/.ssh/suchohrad-deploy
+gh secret set DEPLOY_HOST --env production --body root@159.195.244.164
+ssh-keygen -F 159.195.244.164 | grep -v '^#' | gh secret set DEPLOY_KNOWN_HOSTS --env production   # pinned host key (from your known_hosts)
+git push origin main:release       # first run creates the branch (and deploys); afterwards use PRs main -> release
+```
+Optional hardening: required reviewers on the `production` environment (Settings > Environments), and a branch rule on `release` that requires a pull request.
+Rollback: re-run the workflow on an older commit of `release`, or restore a backup (see "Backups" below).
+
+## Cutting a release (manual path)
 
 1. Make sure `main` is green: `make shooter-test` (and `make test` for the pipeline if the map changed).
 2. Build the full map if it changed: `make map AREA=village`. Every export bundles `out/village/map` as `map/` next to the binary (override with `SHOOTER_PKG_MAP=<dir>`), and `make shooter-export` stops if it is missing. The server and the clients must run the **same map build**, which the bundling guarantees as long as you deploy the server from the same export.

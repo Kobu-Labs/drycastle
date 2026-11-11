@@ -1,0 +1,20 @@
+name: Set up Godot mono
+description: Installs Godot mono and its export templates, and puts `godot` on the PATH.
+inputs:
+  version:
+    description: Godot version (stable)
+    default: "4.7.2"
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        V: ${{ inputs.version }}
+      run: |
+        base=https://github.com/godotengine/godot-builds/releases/download/${V}-stable
+        curl -fsSL -o "$RUNNER_TEMP/godot.zip" $base/Godot_v${V}-stable_mono_linux_x86_64.zip
+        curl -fsSL -o "$RUNNER_TEMP/templates.tpz" $base/Godot_v${V}-stable_mono_export_templates.tpz
+        unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+        sudo ln -sf "$(ls -d $RUNNER_TEMP/godot/*/ | head -1)Godot_v${V}-stable_mono_linux.x86_64" /usr/local/bin/godot
+        tpl=$HOME/.local/share/godot/export_templates/${V}.stable.mono
+        mkdir -p "$tpl" && unzip -q "$RUNNER_TEMP/templates.tpz" -d "$RUNNER_TEMP/tpl" && cp -r "$RUNNER_TEMP/tpl/templates/." "$tpl/"
