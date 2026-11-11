@@ -93,11 +93,30 @@ public partial class NetClient
 
     void OnVehicleExplosion(VehicleExplosionMsg m)
     {
-        _vehicleExplosionLog.Add((Now, m));
+        if (KeepEventLogs) _vehicleExplosionLog.Add((Now, m));
         if (_cars.TryGetValue(m.Id, out var v) && !v.Exploded) ExplodeVehicle(v, new Vector3(m.Position.X, m.Position.Y, m.Position.Z), m.Radius);
     }
 
     readonly List<(double T, VehicleExplosionMsg M)> _vehicleExplosionLog = new();
+
+    readonly List<(float D, int I, CarView V)> _beamCands = new();
+    readonly HashSet<CarView> _beams = new();
+
+    /// <summary>The nearest lit vehicles that get real beams (ties keep the order of the car list). Reuses its buffers: no LINQ per frame (#173, T3-031).</summary>
+    HashSet<CarView> PickBeams()
+    {
+        _beamCands.Clear();
+        var i = 0;
+        foreach (var c in _cars.Values)
+        {
+            if (c.Lights && !c.Destroyed && c.Lamps != null) _beamCands.Add((Sfx.ListenerDistance(new Vector3(c.Pos.X, c.Pos.Y, c.Pos.Z)), i, c));
+            i++;
+        }
+        _beamCands.Sort((a, b) => a.D != b.D ? a.D.CompareTo(b.D) : a.I.CompareTo(b.I));
+        _beams.Clear();
+        for (var k = 0; k < _beamCands.Count && k < CarLights.MaxBeams; k++) _beams.Add(_beamCands[k].V);
+        return _beams;
+    }
 
     void RenderCars()
     {
@@ -105,8 +124,7 @@ public partial class NetClient
         var rt = _lastTick + (Time.GetTicksMsec() / 1000.0 - _lastArrival) * Wire.TickRate - InterpDelayTicks;
         float? kmh = null;
         // real spot lights go to the nearest lit vehicles only (CarLights.MaxBeams); the others show their cones and lenses
-        var beams = _cars.Values.Where(c => c.Lights && !c.Destroyed && c.Lamps != null)
-            .OrderBy(c => Sfx.ListenerDistance(new Vector3(c.Pos.X, c.Pos.Y, c.Pos.Z))).Take(CarLights.MaxBeams).ToHashSet();
+        var beams = PickBeams();
         foreach (var v in _cars.Values)
         {
             v.Lamps?.Set(v.Lights && !v.Destroyed, v.Braking, beams.Contains(v));

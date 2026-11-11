@@ -14,6 +14,7 @@ public partial class NetClient
     bool _meInWater;
     readonly Dictionary<ushort, bool> _remoteInWater = new();
     readonly Dictionary<ushort, bool> _rocketInWater = new();
+    readonly List<ushort> _staleWater = new(); // reused each frame to drop the swimmers who left (#173, T3-033)
 
     void RenderWater()
     {
@@ -36,7 +37,12 @@ public partial class NetClient
             // swimming (deep enough to swim): lowered into the water, leaned forward, the slow walk; wading stays upright
             r.View?.SetSwim(depth >= WaterConsts.SwimDepth);
         }
-        foreach (var id in _remoteInWater.Keys.Where(k => !_remotes.ContainsKey(k)).ToList()) _remoteInWater.Remove(id);
+        if (_remoteInWater.Count > 0)
+        {
+            _staleWater.Clear();
+            foreach (var k in _remoteInWater.Keys) if (!_remotes.ContainsKey(k)) _staleWater.Add(k);
+            foreach (var k in _staleWater) _remoteInWater.Remove(k);
+        }
         foreach (var (id, rk) in _rockets)
         {
             if (rk.Node == null || !GodotObject.IsInstanceValid(rk.Node)) continue;

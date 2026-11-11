@@ -71,6 +71,8 @@ public partial class NetClient : Node
     readonly List<(double T, HitMsg M)> _hitLog = new();
     readonly List<(double T, LaunchMsg M)> _launchLog = new();
     readonly List<(double T, ExplosionMsg M)> _explosionLog = new();
+    /// <summary>The event logs are read only by the scripted bots (the weapons, bazooka, blast and car checks), so a normal match keeps none of them: they grew for the whole match (#173, T3-028).</summary>
+    bool KeepEventLogs => WeaponsBot != "" || BazookaBot != "" || BlastBot != "" || CarBot != "";
     sealed class Rocket { public double Born; public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; }
     readonly Dictionary<ushort, Rocket> _rockets = new();
     readonly HashSet<ushort> _deadRockets = new();
@@ -745,7 +747,7 @@ public partial class NetClient : Node
                 OnPelletFan(pf);
                 break;
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
-                _launchLog.Add((Now, l));
+                if (KeepEventLogs) _launchLog.Add((Now, l));
                 if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
                 // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the bazooka's)
                 if (_rockets.TryGetValue(l.Id, out var known)) known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length();
@@ -758,7 +760,7 @@ public partial class NetClient : Node
                 if (!EchoOfPredicted(l.Owner)) { SfxLaunch(l); if (l.Owner == _myId) _viewmodel?.Flash(0.5f); else if (_remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f); }
                 break;
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
-                _explosionLog.Add((Now, ex));
+                if (KeepEventLogs) _explosionLog.Add((Now, ex));
                 if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(Owned, rk.Node); }
                 SfxExplosion(ex);
                 _dec.Forget(ex.Id);
@@ -794,7 +796,7 @@ public partial class NetClient : Node
                 OnHelperWarning(hw);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
-                _hitLog.Add((Now, h));
+                if (KeepEventLogs) _hitLog.Add((Now, h));
                 SfxHit(h);
                 HudHit(h);
                 break;

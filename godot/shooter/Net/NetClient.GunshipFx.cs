@@ -14,7 +14,7 @@ public partial class NetClient
     /// <summary>A tracer, from a shot event or a gunship tick: the muzzle, the tracer, the hole and the sound (prediction echo skipped).</summary>
     void OnShot(ShotMsg sh, float? speed = null, float? length = null, bool impact = true)
     {
-        _shotLog.Add((Now, sh));
+        if (KeepEventLogs) _shotLog.Add((Now, sh));
         if (_remotes.TryGetValue(sh.Shooter, out var shooter)) shooter.FireUntil = Now + 0.45;
         if (sh.Shooter == _myId && Weapons != null && sh.Weapon < Weapons.Weapons.Count) _spread.Shot(Weapons.Weapons[sh.Weapon], Now);
         var melee = Weapons != null && sh.Weapon < Weapons.Weapons.Count && Weapons.Weapons[sh.Weapon].Kind == WeaponKind.Melee;
