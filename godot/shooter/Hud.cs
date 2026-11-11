@@ -27,8 +27,13 @@ public partial class Hud : CanvasLayer
     public Func<bool>? Scoped { get; set; }
     /// <summary>Iron-sight aim amount 0..1; the crosshair fades out as it rises (the weapon's own sight takes over).</summary>
     public Func<float>? Aim { get; set; }
+    /// <summary>Sniper breath meter: whether it shows, the breath left (0..1) and the phase. Read each frame; the owner sets it.</summary>
+    public Func<(bool Show, float Meter, BreathState.BreathPhase Phase)>? Breath { get; set; }
     float _crossAlpha = 1;
     Control _scope = null!;
+    Control _breath = null!;
+    BreathBar _breathBar = null!;
+    Label _breathLabel = null!;
 
     Control _root = null!;
     // crosshair, hit marker, indicators
@@ -99,6 +104,7 @@ public partial class Hud : CanvasLayer
         _scope.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _root.AddChild(_scope);
         BuildCrosshair();
+        BuildBreath();
         BuildHealth();
         BuildAmmo();
         BuildHotbar();
@@ -562,6 +568,7 @@ public partial class Hud : CanvasLayer
         for (var i = 0; i < Indicators; i++) UpdateIndicator(i, now);
         UpdateFeed(now);
         UpdateCrosshair();
+        UpdateBreath();
         RefreshHint();
         var want = ForceScoreboard ?? (Input.IsActionPressed("scoreboard") || _phase == MatchPhase.Ending);
         if (want != _boardShown || (want && _boardDirty)) UpdateBoard(want);
@@ -621,6 +628,64 @@ public partial class Hud : CanvasLayer
             DrawLine(new Vector2(c.X - r, c.Y), new Vector2(c.X + r, c.Y), line, 1.5f);
             DrawLine(new Vector2(c.X, c.Y - r), new Vector2(c.X, c.Y + r), line, 1.5f);
             DrawCircle(c, 2f, new Color(0.9f, 0.1f, 0.1f));
+        }
+
+        public override void _Notification(int what) { if (what == NotificationResized) QueueRedraw(); }
+    }
+
+    /// <summary>Breath meter under the crosshair, shown only while scoped with a breath hold. The state is in words as well as colour.</summary>
+    void BuildBreath()
+    {
+        const float w = 240;
+        var box = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
+        _breathLabel = L("", "HudSmall", HorizontalAlignment.Center);
+        _breathBar = new BreathBar { CustomMinimumSize = new Vector2(w, 12), MouseFilter = Control.MouseFilterEnum.Ignore };
+        box.AddChild(_breathLabel);
+        box.AddChild(_breathBar);
+        _breath = Place(box, 0.5f, 0.5f, -w / 2, 40, w, 40);
+        _root.AddChild(_breath);
+    }
+
+    void UpdateBreath()
+    {
+        var b = Breath?.Invoke() ?? (false, 0f, BreathState.BreathPhase.Ready);
+        if (_breath.Visible != b.Show) _breath.Visible = b.Show;
+        if (!b.Show) return;
+        _breathBar.Set(b.Meter, b.Phase);
+        var key = InputBindings.Name("sprint");
+        Set(_breathLabel, b.Phase switch
+        {
+            BreathState.BreathPhase.Holding => Strings.T("hud.breath.held"),
+            BreathState.BreathPhase.Exhaled => Strings.T("hud.breath.exhaled"),
+            _ => b.Meter <= 0.01f ? Strings.T("hud.breath.empty") : Strings.F("hud.breath.ready", key),
+        });
+    }
+
+    /// <summary>Breath bar: fill = breath left. Blue while held, amber when low, red while forced out, green otherwise.</summary>
+    sealed partial class BreathBar : Control
+    {
+        float _meter = 1;
+        BreathState.BreathPhase _phase;
+
+        public void Set(float meter, BreathState.BreathPhase phase)
+        {
+            if (Mathf.IsEqualApprox(meter, _meter) && phase == _phase) return;
+            _meter = meter; _phase = phase; QueueRedraw();
+        }
+
+        public override void _Draw()
+        {
+            var s = Size;
+            var b = ShooterTheme.Border;
+            DrawRect(new Rect2(Vector2.Zero, s), ShooterTheme.Surface);
+            var fill = _phase switch
+            {
+                BreathState.BreathPhase.Holding => ShooterTheme.Accent,
+                BreathState.BreathPhase.Exhaled => ShooterTheme.Danger,
+                _ => _meter < 0.25f ? ShooterTheme.Warn : ShooterTheme.Good,
+            };
+            DrawRect(new Rect2(b, b, Mathf.Max(0, (s.X - 2 * b) * _meter), s.Y - 2 * b), fill);
+            DrawRect(new Rect2(Vector2.Zero, s), ShooterTheme.Line, false, b);
         }
 
         public override void _Notification(int what) { if (what == NotificationResized) QueueRedraw(); }

@@ -81,7 +81,7 @@ public sealed class RecoilState
     static float Settle(float v, float step) => v > 0 ? Math.Max(0, v - step) : Math.Min(0, v + step);
 
     /// <summary>Deterministic value in [-1, 1] for shot <paramref name="n"/> of the stream <paramref name="seed"/> (SplitMix64).</summary>
-    static float Unit(ulong seed, int n)
+    internal static float Unit(ulong seed, int n)
     {
         var z = seed + ((ulong)n + 1) * 0x9E3779B97F4A7C15UL;
         z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;

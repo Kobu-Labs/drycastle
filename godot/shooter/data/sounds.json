@@ -55,6 +55,21 @@
     { "id": "ui.accept", "files": ["kenney-interface-sounds/confirmation_002.ogg"], "bus": "UI", "volume_db": -6, "max_distance": 0 },
     { "id": "ui.back", "files": ["kenney-interface-sounds/back_002.ogg"], "bus": "UI", "volume_db": -6, "max_distance": 0 },
     { "id": "ui.error", "files": ["kenney-interface-sounds/error_004.ogg"], "bus": "UI", "volume_db": -6, "max_distance": 0 },
-    { "id": "music.menu", "files": ["oga-chiptune-adventures/menu_stage_select.ogg"], "bus": "Music", "volume_db": -6, "max_distance": 0, "loop": true }
+    { "id": "music.menu", "files": ["oga-chiptune-adventures/menu_stage_select.ogg"], "bus": "Music", "volume_db": -6, "max_distance": 0, "loop": true },
+    { "id": "shot.glock17", "files": ["free-firearm-sound-library/pistol_1911.ogg"], "bus": "SFX", "volume_db": -3, "pitch": 1.1, "pitch_variance": 0.04, "max_distance": 120, "priority": 3 },
+    { "id": "reload.glock17", "files": ["suchohrad-generated-sounds/reload_pistol.ogg"], "bus": "SFX", "volume_db": -6, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
+    { "id": "dry.glock17", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.9, "pitch_variance": 0.03, "max_distance": 0 },
+    { "id": "shot.deagle", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": 1, "pitch": 0.8, "pitch_variance": 0.04, "max_distance": 160, "priority": 3 },
+    { "id": "reload.deagle", "files": ["suchohrad-generated-sounds/reload_pistol.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.9, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
+    { "id": "dry.deagle", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.7, "pitch_variance": 0.03, "max_distance": 0 },
+    { "id": "shot.m82", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": 2, "pitch": 0.6, "pitch_variance": 0.04, "max_distance": 450, "priority": 3 },
+    { "id": "reload.m82", "files": ["suchohrad-generated-sounds/reload_ak47.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.8, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
+    { "id": "dry.m82", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.55, "pitch_variance": 0.03, "max_distance": 0 },
+    { "id": "shot.awm", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": 2, "pitch": 0.65, "pitch_variance": 0.04, "max_distance": 450, "priority": 3 },
+    { "id": "reload.awm", "files": ["suchohrad-generated-sounds/reload_ak47.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.8, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
+    { "id": "dry.awm", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.6, "pitch_variance": 0.03, "max_distance": 0 },
+    { "id": "shot.svd", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": 1, "pitch": 0.75, "pitch_variance": 0.04, "max_distance": 400, "priority": 3 },
+    { "id": "reload.svd", "files": ["suchohrad-generated-sounds/reload_ak47.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.9, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
+    { "id": "dry.svd", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.6, "pitch_variance": 0.03, "max_distance": 0 }
   ]
 }

@@ -5,7 +5,7 @@
     "pistol": { "move_speed_multiplier": 1.0, "spread_base": 0.4, "spread_per_shot": 0.3, "spread_max": 4, "spread_recovery": 0.4 },
     "machine_gun": { "move_speed_multiplier": 0.7, "ads_move_speed_multiplier": 0.55, "spread_base": 1.4, "spread_per_shot": 0.12, "spread_max": 4.5, "spread_recovery": 0.5, "recoil": { "vertical_per_shot": 0.5, "horizontal_sway": 0.3, "recovery_rate": 4, "max_climb": 15 } },
     "assault_rifle": { "move_speed_multiplier": 0.95, "spread_base": 1.0, "spread_per_shot": 0.25, "spread_max": 4, "spread_recovery": 0.6, "recoil": { "vertical_per_shot": 0.6, "horizontal_sway": 0.25, "recovery_rate": 6, "max_climb": 10 } },
-    "sniper": { "move_speed_multiplier": 0.8, "spread_base": 0.02, "spread_per_shot": 0, "spread_max": 0.02, "spread_recovery": 0.5 }
+    "sniper": { "move_speed_multiplier": 0.8, "spread_base": 0.02, "spread_per_shot": 0, "spread_max": 0.02, "spread_recovery": 0.5, "recoil": { "vertical_per_shot": 1.2, "recovery_rate": 5, "max_climb": 3 } }
   },
   "weapons": [
     {
@@ -39,7 +39,8 @@
       "damage": 85, "headshot_multiplier": 3, "fire_interval": 1.4,
       "magazine_size": 5, "reserve_ammo": 15, "reload_time": 3.2,
       "range": 600, "scope_fov": 20, "zoom_levels": 1,
-      "falloff_start": 600, "falloff_end": 600, "falloff_multiplier": 1.0
+      "falloff_start": 600, "falloff_end": 600, "falloff_multiplier": 1.0,
+      "sway_amount": 0.5, "breath_hold_seconds": 4.0, "breath_recover_seconds": 1.0
     },
     {
       "id": "m4a1", "category": "assault_rifle", "slot": "primary", "unlock_level": 1, "kind": "hitscan", "full_auto": true,
@@ -82,6 +83,48 @@
       "damage": 26, "headshot_multiplier": 2, "fire_interval": 0.0923,
       "magazine_size": 100, "reserve_ammo": 200, "reload_time": 6.5,
       "falloff_start": 35, "falloff_end": 90, "falloff_multiplier": 0.65
+    },
+    {
+      "id": "glock17", "category": "pistol", "slot": "secondary", "unlock_level": 3, "kind": "hitscan", "full_auto": false,
+      "damage": 18, "headshot_multiplier": 2, "fire_interval": 0.11,
+      "magazine_size": 17, "reserve_ammo": 102, "reload_time": 1.5,
+      "falloff_start": 20, "falloff_end": 50, "falloff_multiplier": 0.7,
+      "spread_base": 0.6, "spread_per_shot": 0.2, "spread_max": 3.5, "spread_recovery": 0.6
+    },
+    {
+      "id": "deagle", "category": "pistol", "slot": "secondary", "unlock_level": 5, "kind": "hitscan", "full_auto": false,
+      "damage": 60, "headshot_multiplier": 2, "fire_interval": 0.35,
+      "magazine_size": 7, "reserve_ammo": 35, "reload_time": 2.2,
+      "falloff_start": 30, "falloff_end": 70, "falloff_multiplier": 0.8,
+      "spread_base": 0.5, "spread_per_shot": 0.5, "spread_max": 5, "spread_recovery": 0.4,
+      "recoil": { "vertical_per_shot": 1.2, "recovery_rate": 6, "max_climb": 6 }
+    },
+    {
+      "id": "m82", "category": "sniper", "slot": "primary", "unlock_level": 7, "kind": "hitscan", "full_auto": false,
+      "damage": 120, "headshot_multiplier": 2.5, "fire_interval": 1.0, "move_speed_multiplier": 0.75,
+      "magazine_size": 10, "reserve_ammo": 30, "reload_time": 4.0,
+      "range": 800, "scope_fov": 15, "zoom_levels": 1,
+      "falloff_start": 800, "falloff_end": 800, "falloff_multiplier": 1.0,
+      "sway_amount": 0.7, "breath_hold_seconds": 3.5, "breath_recover_seconds": 1.2,
+      "recoil": { "vertical_per_shot": 2.0, "recovery_rate": 5, "max_climb": 5 }
+    },
+    {
+      "id": "awm", "category": "sniper", "slot": "primary", "unlock_level": 11, "kind": "hitscan", "full_auto": false,
+      "damage": 150, "headshot_multiplier": 2, "fire_interval": 1.5, "move_speed_multiplier": 0.75,
+      "magazine_size": 5, "reserve_ammo": 20, "reload_time": 3.6,
+      "range": 700, "scope_fov": 12, "zoom_levels": 1,
+      "falloff_start": 700, "falloff_end": 700, "falloff_multiplier": 1.0,
+      "sway_amount": 0.35, "breath_hold_seconds": 5.0, "breath_recover_seconds": 1.4,
+      "recoil": { "vertical_per_shot": 1.6, "recovery_rate": 5, "max_climb": 4 }
+    },
+    {
+      "id": "svd", "category": "sniper", "slot": "primary", "unlock_level": 9, "kind": "hitscan", "full_auto": false,
+      "damage": 55, "headshot_multiplier": 2.5, "fire_interval": 0.4, "move_speed_multiplier": 0.85,
+      "magazine_size": 10, "reserve_ammo": 40, "reload_time": 3.0,
+      "range": 600, "scope_fov": 18, "zoom_levels": 1,
+      "falloff_start": 250, "falloff_end": 600, "falloff_multiplier": 0.6,
+      "sway_amount": 0.45, "breath_hold_seconds": 3.0, "breath_recover_seconds": 0.8,
+      "recoil": { "vertical_per_shot": 0.9, "recovery_rate": 6, "max_climb": 3 }
     }
   ]
 }
