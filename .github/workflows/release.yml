@@ -122,12 +122,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: release-assets
-          path: assets
+          path: release-assets
       - name: Publish release
         run: |
           tag="${{ needs.build.outputs.tag }}"
           [ "${{ needs.build.outputs.channel }}" = dev ] && pre=--prerelease || pre=--latest
-          gh release create "$tag" $pre --target "$GITHUB_SHA" --generate-notes --title "$tag" assets/*
+          gh release create "$tag" $pre --target "$GITHUB_SHA" --generate-notes --title "$tag" release-assets/*
       - name: Prune old dev releases (keep 15)
         run: |
           gh release list --limit 200 --json tagName --jq '.[].tagName | select(startswith("dev-"))' \
