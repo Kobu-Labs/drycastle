@@ -4,16 +4,20 @@ using Suchohrad.ShooterCore;
 namespace Suchohrad.Shooter;
 
 /// <summary>
-/// Server-side car: a kinematic CharacterBody3D driven by <see cref="CarModel"/> (arcade planar model: speed along the facing, yaw rate
+/// Server-side vehicle (car, motorcycle or bicycle, the def sets the footprint): a kinematic CharacterBody3D driven by <see cref="CarModel"/> (arcade planar model: speed along the facing, yaw rate
 /// from steering) with the physics move providing wall collision, slopes and gravity. Chosen over VehicleBody3D (Jolt) because
 /// it is deterministic, cannot flip or jitter, and needs no per-wheel tuning. Layer 2: players and bullets (mask 1) pass through it;
 /// run-over is an overlap test in the server. Mask 1 = world only (players are excluded per body with collision exceptions).
 /// </summary>
 public partial class ServerCar : CharacterBody3D
 {
-    public const float HalfWidth = 1.1f, HalfLength = 2.15f;
+    public float HalfWidth = 1.1f, HalfLength = 2.15f;
 
     public ushort Id;
+    /// <summary>Type: index into vehicles.json and its def (car, motorcycle, bicycle share this class).</summary>
+    public int Kind;
+    public VehicleDef Def = null!;
+    /// <summary>Weapon byte of the entity record: type index and colour variant (<see cref="VehicleRecord.Pack"/>).</summary>
     public byte Colour;
     public Vector3 OriginPos;
     public float OriginYaw;

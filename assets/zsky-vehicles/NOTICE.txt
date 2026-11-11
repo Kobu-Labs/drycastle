@@ -1,0 +1,6 @@
+LICENCE UNVERIFIED.
+
+motorbike.glb ("Military Motorbike by Zsky - 9SwnIlPjNv.glb") and bicycle.glb ("Bike by Zsky - NHjJnFYYCc.glb")
+were provided by the project owner as local files. Their source page, author terms and licence have NOT been
+confirmed, and they are NOT claimed to be CC0. Before any release or public distribution the owner must confirm
+the licence and the required attribution, then replace this notice with the real licence text (or remove the files).

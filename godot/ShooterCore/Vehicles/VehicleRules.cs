@@ -64,32 +64,37 @@ public static class VehicleColours
         (0.95f, 0.50f, 0.12f), (0.95f, 0.95f, 0.95f), (0.55f, 0.30f, 0.75f), (0.12f, 0.12f, 0.14f),
     };
 
-    /// <summary>A random colour index, preferring ones not in <paramref name="taken"/> (all taken: any).</summary>
-    public static byte Pick(Random rng, IEnumerable<byte> taken)
+    /// <summary>A random colour index below <paramref name="variants"/> (default: the car palette), preferring ones not in <paramref name="taken"/> (all taken: any).</summary>
+    public static byte Pick(Random rng, IEnumerable<byte> taken, int variants = 0)
     {
+        var n = variants > 0 ? variants : Palette.Length;
         var t = new HashSet<byte>(taken);
-        var free = Enumerable.Range(0, Palette.Length).Where(i => !t.Contains((byte)i)).ToList();
-        return free.Count > 0 ? (byte)free[rng.Next(free.Count)] : (byte)rng.Next(Palette.Length);
+        var free = Enumerable.Range(0, n).Where(i => !t.Contains((byte)i)).ToList();
+        return free.Count > 0 ? (byte)free[rng.Next(free.Count)] : (byte)rng.Next(n);
     }
 }
 
-/// <summary>How a vehicle travels in a snapshot entity record: yaw as usual, driver id in the (otherwise unused) pitch field, colour index in the weapon byte.</summary>
+/// <summary>How a vehicle travels in a snapshot entity record: yaw as usual, driver id in the (otherwise unused) pitch field, colour index (low 4 bits) and type index into vehicles.json (high 4 bits) in the weapon byte.</summary>
 public static class VehicleRecord
 {
     public const ushort FirstId = 0x4000;
 
-    public static EntityRecord Make(ushort id, Vector3 pos, float yaw, ushort driver, byte colour)
+    public static EntityRecord Make(ushort id, Vector3 pos, float yaw, ushort driver, byte colourAndKind)
     {
-        var r = EntityRecord.Make(id, EntityType.Vehicle, pos, yaw, 0, 0, driver != 0 ? EntityState.InVehicle : EntityState.Alive, colour);
+        var r = EntityRecord.Make(id, EntityType.Vehicle, pos, yaw, 0, 0, driver != 0 ? EntityState.InVehicle : EntityState.Alive, colourAndKind);
         r.Pitch = unchecked((short)driver);
         return r;
     }
 
+    /// <summary>Weapon byte of a vehicle record: type index in the high nibble, colour variant in the low one.</summary>
+    public static byte Pack(int kind, byte colour) => (byte)((kind << 4) | (colour & 0xF));
+
     public static ushort Driver(in EntityRecord r) => unchecked((ushort)r.Pitch);
-    public static byte Colour(in EntityRecord r) => r.Weapon;
+    public static byte Colour(in EntityRecord r) => (byte)(r.Weapon & 0xF);
+    public static int Kind(in EntityRecord r) => r.Weapon >> 4;
 }
 
-/// <summary>Planar arcade car model, Godot-free. The host supplies collision (the real speed after the physics move is fed back).</summary>
+/// <summary>Planar arcade vehicle model (car, motorcycle, bicycle: same model, different constants in vehicles.json), Godot-free. The host supplies collision (the real speed after the physics move is fed back).</summary>
 public struct CarState
 {
     /// <summary>Yaw in radians, Godot convention (0 faces -Z, positive turns left).</summary>

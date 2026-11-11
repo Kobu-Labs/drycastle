@@ -8,6 +8,9 @@ public class VehicleTests
 {
     static VehiclesFile Cfg() => new() { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 28, Acceleration = 9, Steering = 1.7f, Mass = 1200 } } };
 
+    /// <summary>The shipped vehicles.json (copied next to the test binary).</summary>
+    static VehiclesFile Shipped() => VehiclesFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "vehicles.json"));
+
     [Theory]
     [InlineData(0f, 0f)]
     [InlineData(8f, 0f)]      // at the threshold: nothing
@@ -115,5 +118,76 @@ public class VehicleTests
         var l = new CarState { Speed = 15 };
         for (var i = 0; i < 10; i++) CarModel.Step(ref l, def, 1, -1, false, 1f / 30);
         Assert.True(l.Yaw > 0.1f);
+    }
+
+    [Fact]
+    public void ShippedFileHasCarMotorcycleAndBicycleWithTheAgreedSpawnCounts()
+    {
+        var f = Shipped();
+        Assert.Equal(new[] { "car", "motorcycle", "bicycle" }, f.Vehicles.Select(v => v.Id));
+        Assert.Equal(new[] { 8, 3, 3 }, f.Vehicles.Select(v => v.SpawnCount));
+        Assert.All(f.Vehicles.Skip(1), v => { Assert.NotEqual("", v.Model); Assert.Equal(3, v.Variants); Assert.Contains(v.PaintMaterial, v.Paints); });
+        Assert.Equal(VehicleColours.Palette.Length, f.Vehicles[0].Variants);
+    }
+
+    [Fact]
+    public void BikesDifferFromTheCarAsSpecified()
+    {
+        var f = Shipped(); var car = f.Vehicles[0]; var moto = f.Vehicles[1]; var bike = f.Vehicles[2];
+        Assert.True(moto.TopSpeed > car.TopSpeed && car.TopSpeed > bike.TopSpeed);
+        Assert.True(moto.Acceleration > car.Acceleration && car.Acceleration > bike.Acceleration);
+        Assert.True(moto.Steering > car.Steering);
+        Assert.True(moto.Mass > bike.Mass);
+        Assert.True(bike.TopSpeed > f.RunOverMinSpeed, "the bicycle must be able to run someone over");
+        Assert.True(RunOver.Damage(f, moto.TopSpeed) >= f.RunOverMaxDamage, "the motorcycle kills at top speed");
+        Assert.InRange(RunOver.Damage(f, bike.TopSpeed), 1f, 99f); // the bicycle hurts but does not one-shot
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void EveryTypeReachesItsTopSpeedAndStopsOnTheHandbrake(int kind)
+    {
+        var def = Shipped().Vehicles[kind]; var s = new CarState();
+        for (var i = 0; i < 30 * 20; i++) CarModel.Step(ref s, def, 1, 0, false, 1f / 30);
+        Assert.Equal(def.TopSpeed, s.Speed, 3);
+        for (var i = 0; i < 30 * 3; i++) CarModel.Step(ref s, def, 0, 0, true, 1f / 30);
+        Assert.Equal(0f, s.Speed, 3);
+    }
+
+    [Fact]
+    public void MotorcycleTurnsTighterThanTheCarAtTheSameSpeed()
+    {
+        var f = Shipped();
+        float YawAfter(VehicleDef d) { var s = new CarState { Speed = 12 }; for (var i = 0; i < 15; i++) CarModel.Step(ref s, d, 0.4f, 1, false, 1f / 30); return -s.Yaw; }
+        Assert.True(YawAfter(f.Vehicles[1]) > YawAfter(f.Vehicles[0]));
+    }
+
+    [Fact]
+    public void RecordCarriesTypeAndColourInOneByte()
+    {
+        var r = VehicleRecord.Make(0x4010, new Vector3(1, 0, 2), 0.5f, 7, VehicleRecord.Pack(2, 2));
+        Assert.Equal(2, VehicleRecord.Kind(r));
+        Assert.Equal((byte)2, VehicleRecord.Colour(r));
+        var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
+        foreach (var p in enc.Encode(1, 0, new[] { r })) Assert.True(dec.Apply(p, out _));
+        Assert.Equal(2, VehicleRecord.Kind(dec.States[0x4010]));
+        Assert.Equal((ushort)7, VehicleRecord.Driver(dec.States[0x4010]));
+    }
+
+    [Fact]
+    public void ColourPickStaysBelowTheVariantCount()
+    {
+        var rng = new Random(9); var taken = new List<byte>();
+        for (var i = 0; i < 3; i++) { var c = VehicleColours.Pick(rng, taken, 3); Assert.True(c < 3); Assert.DoesNotContain(c, taken); taken.Add(c); }
+        Assert.True(VehicleColours.Pick(rng, taken, 3) < 3);
+    }
+
+    [Fact]
+    public void PaintsWithoutMaterialAreRejected()
+    {
+        var f = Cfg(); f.Vehicles[0].Paints.Add("X");
+        Assert.Throws<DataFileException>(() => VehiclesFile.Validate(f));
     }
 }

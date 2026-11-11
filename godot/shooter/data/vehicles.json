@@ -4,8 +4,17 @@
   "run_over_damage_per_speed": 10,
   "run_over_max_damage": 100,
   "abandon_return_time": 30,
-  "spawn_count": 8,
   "vehicles": [
-    { "id": "car", "top_speed": 28, "acceleration": 9, "steering": 1.7, "mass": 1200 }
+    { "id": "car", "top_speed": 28, "acceleration": 9, "steering": 1.7, "mass": 1200, "spawn_count": 8, "half_width": 1.1, "half_length": 2.15 },
+    {
+      "id": "motorcycle", "top_speed": 34, "acceleration": 12, "steering": 2.4, "mass": 230, "spawn_count": 3, "half_width": 0.4, "half_length": 1.05,
+      "model": "zsky-vehicles/motorbike.glb", "model_scale": 0.403, "model_yaw_deg": 180, "model_offset": [-0.005, 1.1578, 0.1775],
+      "paint_material": "Green_Motor", "paints": ["Green_Motor", "Red_Motor", "Yellow_Motor"]
+    },
+    {
+      "id": "bicycle", "top_speed": 11, "acceleration": 3.5, "steering": 2.2, "mass": 15, "spawn_count": 3, "half_width": 0.3, "half_length": 0.85,
+      "model": "zsky-vehicles/bicycle.glb", "model_scale": 0.352, "model_yaw_deg": 0, "model_offset": [0.017, 1.5547, -0.072],
+      "paint_material": "Green_Bike", "paints": ["Green_Bike", "Yellow_Bike", "Silver_Bike"]
+    }
   ]
 }

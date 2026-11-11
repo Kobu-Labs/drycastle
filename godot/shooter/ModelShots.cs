@@ -1,9 +1,10 @@
 using Godot;
+using Suchohrad.ShooterCore;
 
 namespace Suchohrad.Shooter;
 
 /// <summary>
-/// <c>--model-shots DIR</c>: renders the remote character in each animation (with each weapon in hand) and the first-person
+/// <c>--model-shots DIR</c>: renders the vehicles (car, each motorcycle and bicycle colour), the remote character in each animation (with each weapon in hand) and the first-person
 /// viewmodel per weapon over a plain floor, saves PNGs and prints the clip names. Needs a display (not --headless).
 /// </summary>
 public static class ModelShots
@@ -40,6 +41,24 @@ public static class ModelShots
             ok &= Save(vp, Path.Combine(dir, $"characters_{f}.png"));
         }
         foreach (var v in views) v.QueueFree();
+        // vehicles: the car, then each colour variant of the motorcycle and the bicycle, with a 1.8 m post as the player's height; they face -Z (away from the camera is wrong, so turned to show the side)
+        var vf = VehiclesFile.Load(ProjectSettings.GlobalizePath("res://data/vehicles.json"));
+        var vnodes = new List<Node3D>();
+        var vx = -7f;
+        vp.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(0.2f, 1.8f, 0.2f) }, Position = new Vector3(vx - 1.5f, 0.9f, 0) });
+        foreach (var def in vf.Vehicles)
+            for (var c = 0; c < (def.Id == "car" ? 1 : def.Variants); c++)
+            {
+                var n = CarFx.Make(vp, def, (byte)c);
+                n.Position = new Vector3(vx += 2.4f, 0, 0);
+                n.RotationDegrees = new Vector3(0, -90 + 25, 0); // side view, slightly from the front
+                vnodes.Add(n);
+            }
+        cam.Fov = 45; cam.Position = new Vector3(0, 2.2f, 16f); cam.LookAt(new Vector3(0, 0.6f, 0));
+        await HudShots.Frames(host, 20);
+        ok &= Save(vp, Path.Combine(dir, "vehicles.png"));
+        foreach (var n in vnodes) n.QueueFree();
+        cam.Fov = 60; cam.RotationDegrees = Vector3.Zero;
         // viewmodel per weapon, from a camera at the origin looking down -Z, with a ground and a post as reference
         vp.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(0.3f, 3, 0.3f) }, Position = new Vector3(0, 1, -6) });
         cam.Position = new Vector3(0, 1.6f, 0); cam.Fov = 90;

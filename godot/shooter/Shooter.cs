@@ -12,7 +12,7 @@ namespace Suchohrad.Shooter;
 ///   --match-set k=v,k=v       server: override match.json values (score_goal, time_limit, respawn_delay, spawn_protection, end_screen_time, min_spawn_distance, min_players)
 ///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
 ///   --match-bot alice|bob     client: scripted match smoke role (alice kills bob with the debug command, bob fires after each spawn)
-///   --car-smoke               server: flat test arena with three cars, judges the vehicle scenario; --car-bot a|b client roles; --vehicle-set abandon_return_time=3 overrides vehicles.json
+///   --car-smoke               server: flat test arena with three cars, judges the vehicle scenario; --car-bot a|b client roles; --car-kind car|motorcycle|bicycle picks the vehicle type of the smoke (default car); --vehicle-set abandon_return_time=3 overrides vehicles.json
 ///   --weapons-smoke           server: flat test arena with a wall (far from the map), honours debug commands, judges the weapons scenario
 ///   --bazooka-smoke           server: same flat arena, judges the bazooka scenario
 ///   --bazooka-bot a|b         client: scripted bazooka smoke role (a shoots, b is the target)
@@ -223,7 +223,7 @@ public partial class Shooter : Node3D
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")),
             RoadSpawns = _map.SpawnPoints.Where(sp => sp.Kind == "road").OrderBy(sp => sp.Highway is "path" or "footway" or "steps" or "track" ? 1 : 0)
                 .Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
-            CarSmoke = cfg.Flag("car-smoke"),
+            CarSmoke = cfg.Flag("car-smoke"), SmokeKind = cfg.Str("car-kind", "car"),
             Weapons = _data.Weapons, WeaponsSmoke = cfg.Flag("weapons-smoke"), BazookaSmoke = cfg.Flag("bazooka-smoke"),
             MatchSmoke = cfg.Flag("match-smoke"), DebugCommands = cfg.Flag("debug-cmds") || cfg.Flag("match-smoke"),
             Port = int.TryParse(cfg.Str("port", "27015"), out var port) ? port : 27015,
@@ -241,7 +241,6 @@ public partial class Shooter : Node3D
             switch (p[0])
             {
                 case "abandon_return_time": v.AbandonReturnTime = x; break;
-                case "spawn_count": v.SpawnCount = (int)x; break;
                 case "run_over_min_speed": v.RunOverMinSpeed = x; break;
                 default: throw new InvalidOperationException($"unknown vehicle key {p[0]}");
             }
@@ -285,7 +284,7 @@ public partial class Shooter : Node3D
         {
             World = this, Host = host, Port = port, PlayerName = cfg.Str("name", "player"), Bot = bot, KillY = killY,
             BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6,
-            MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), BazookaBot = cfg.Str("bazooka-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons,
+            MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), BazookaBot = cfg.Str("bazooka-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, Vehicles = _data.Vehicles,
         });
     }
 
