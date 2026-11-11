@@ -125,7 +125,8 @@ public partial class NetServer : Node
 
     public override void _Ready()
     {
-        var err = _host.CreateHostBound("*", Port, 32, Wire.Channels, 0, 0);
+        // one peer slot more than the players allowed: the connection past the limit is seen and told the server is full (T3-020)
+        var err = _host.CreateHostBound("*", Port, MaxPeers + 1, Wire.Channels, 0, 0);
         if (err != Error.Ok)
         {
             GD.PrintErr($"server: cannot listen on port {Port}: {err}");
@@ -305,7 +306,10 @@ public partial class NetServer : Node
             var peer = (ENetPacketPeer)r[1].AsGodotObject();
             switch (ev)
             {
-                case ENetConnection.EventType.Connect: _clients[peer] = new Client { Peer = peer }; break;
+                case ENetConnection.EventType.Connect:
+                    if (_clients.Count >= MaxPeers) Reject(new Client { Peer = peer }, $"The server is full ({MaxPeers} players). Try again later.");
+                    else _clients[peer] = new Client { Peer = peer };
+                    break;
                 case ENetConnection.EventType.Disconnect: Drop(peer); break;
                 case ENetConnection.EventType.Receive:
                     while (peer.GetAvailablePacketCount() > 0)
@@ -395,6 +399,9 @@ public partial class NetServer : Node
         _host.Flush();
         GD.Print($"server: {c.Name} joined as #{c.Id} ({_clients.Count(x => x.Value.Joined)} players)");
     }
+
+    /// <summary>Players the server takes; the ENet host has one more slot, so a connection past this is told the server is full.</summary>
+    public const int MaxPeers = 32;
 
     void Drop(ENetPacketPeer peer)
     {
