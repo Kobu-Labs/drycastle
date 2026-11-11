@@ -335,9 +335,13 @@ public partial class NetClient : Node
     {
         if (_deadRockets.Contains(id)) return;
         var dir = HitMath.Forward(rec.YawRad, rec.PitchRad);
-        var speed = Weapons != null && rec.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[rec.Weapon].ProjectileSpeed : 40f;
-        if (!_rockets.TryGetValue(id, out var r)) { r = new Rocket { Node = RocketFx.Make(World), Born = Now }; _rockets[id] = r; }
-        r.Pos = rec.Position; r.Dir = dir; r.At = Now; r.Speed = speed;
+        // the speed is the launch's (set there); a snapshot before the launch falls back to the weapon's, and the launch corrects it
+        if (!_rockets.TryGetValue(id, out var r))
+        {
+            var speed = Weapons != null && rec.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[rec.Weapon].ProjectileSpeed : 40f;
+            r = new Rocket { Node = RocketFx.Make(World), Born = Now, Speed = speed }; _rockets[id] = r;
+        }
+        r.Pos = rec.Position; r.Dir = dir; r.At = Now;
     }
 
     void RenderRockets()
@@ -673,7 +677,9 @@ public partial class NetClient : Node
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
                 _launchLog.Add((Now, l));
                 if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
-                if (_rockets.ContainsKey(l.Id) == false && !_deadRockets.Contains(l.Id) && ShotFx.Enabled && Weapons != null)
+                // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the bazooka's)
+                if (_rockets.TryGetValue(l.Id, out var known)) known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length();
+                else if (!_deadRockets.Contains(l.Id) && ShotFx.Enabled && Weapons != null)
                 {
                     // show the rocket at once from the launch event; snapshots take over
                     var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);

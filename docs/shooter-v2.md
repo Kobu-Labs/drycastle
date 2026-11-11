@@ -184,7 +184,7 @@ sends it with every input while a turret is steered (`NetInput.HasAim`, the wire
 rebuild the point from the look angles: doing that from its own, later muzzle intersected the same ray from a point the platform
 had travelled on, so every round landed the platform's travel over the lag to one side of the reticle (about 10 m at 70 m/s and
 150 ms, which the old scheme shows in `GunshipAimLagTests`). `GunshipControl.OnInput` takes the point, bounds it (`GunshipAim.ClampAim`:
-no farther than the orbit's reach plus the longest weapon range plus a 50 m lag allowance, measured from the orbit centre, and never
+no farther than the orbit's reach plus the longest weapon range (3000 m, so any point on the map) plus a 50 m lag allowance, measured from the orbit centre, and never
 below the ground plane), and fires from its muzzle along the view to it. The bound is from the centre and not the muzzle on purpose:
 a stabilised point is out of range of the moving muzzle for part of every orbit, and a clamp to the muzzle would pull it off the
 reticle. A turret with no aim yet does not fire. Parallax remains: the rounds leave the server's muzzle, which is a few metres from
@@ -192,14 +192,25 @@ the client's, so the ray differs by a few tenths of a degree, but the impact is 
 The helicopter gunner and the AC-130 share this path; the attack missile is steered by its own input and is unchanged.
 
 Tracers (#160): a cannon round's and a shell's tracer speed and length come from killstreaks.json (`tracer_speed_mps`, `tracer_length_m`;
-cannon 1500 m/s and 14 m, the 105 mm shell 1200 m/s, so it reaches 800 m in about 0.66 s). They ride the GunshipShots message and
-`ShotFx.Spawn` takes them as optional parameters (the generic 250 m/s stays for every other weapon). Rockets have no tracer data.
-The damage is still the server's and instant; the 105 mm burst is at the server's resolution, not at the shell's arrival (a known
-gap: the blast can show about 0.66 s before the shell visually arrives).
+cannon 1500 m/s and 14 m; the 105 mm shell is 1500 m/s too, so a shell reaches 800 m in about 0.53 s and its 3000 m range in about 2 s).
+They ride the GunshipShots message and `ShotFx.Spawn` takes them as optional parameters (the generic 250 m/s stays for every other
+weapon). Rockets have no tracer data. A gunship's impact is its own message (GunshipImpacts), so its tracer does not also draw the
+generic spark (`ShotFx`'s 300 m cut-off would skip it for a long round). A sky shot's tracer is drawn only to
+`GunshipFxLimits.MaxSkyTracerM` (1500 m); the round still flies its full range. The damage is still the server's and instant; the
+105 mm burst is at the server's resolution, not at the shell's arrival (a known gap: with the shell at 1500 m/s the blast can show up
+to about 0.5 s before the shell visually arrives at 800 m, and about 2 s at 3000 m; a fix needs the flight time on the wire, or
+the shell as a rocket-sim projectile, which changes its damage routing).
 
 Gunship rockets (#159) have their own 8 m blast: a `splash` block on the rockets entry in killstreaks.json (radius 8, full damage
 to 2 m, edge 20, no self damage). The rocket sim takes it per launch (`Rocket.Blast`, `ProjectileMath.WithBlast`), so the bazooka
-keeps weapons.json's 6 m, and the explosion's radius rides the Explosion event (protocol 12). The enemy markers are a red diamond
+keeps weapons.json's 6 m, and the explosion's radius rides the Explosion event (protocol 12).
+
+Gunship rocket flight (protocol 15): the rockets entry has `projectile_speed_mps` (250, default 250). A rocket launched with it flies
+at that speed and lives out its whole range: its life is `RocketFlight.LifeFor(range_m, speed)` (range over speed, plus 0.5 s), carried
+in the server's `Rocket` (`Speed`, `Life`; zero keeps the weapon's own). Before this, a gunship rocket flew the bazooka's 40 m/s and
+expired after 3.75 s, about 150 m out, so it never reached a target 400 m or more away. The Launch event's velocity is the flight
+(speed and direction), so clients animate it at that speed; a snapshot no longer resets a rocket's speed to the bazooka's. The
+per-tick rule is `RocketFlight.Step` (pure, tested in `RocketFlightTests`); the bazooka keeps weapons.json's 40 m/s and 3.75 s. The enemy markers are a red diamond
 per visible enemy player and target dummy, the nearest to the reticle larger. One helper draws them for both the gunship overlay
 and the attack missile's infrared view (`EnemyMarkers`, from the remote replicas), so the two cannot drift apart.
 
@@ -320,8 +331,9 @@ Server and persistence:
 
 ## 9. Wire protocol
 
-Protocol version: **15** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
-versions. Version 15 (#161) gives the input a flags byte (bit 0: the gunner's aim follows, a ground point as three int32 quantised
+Protocol version: **16** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
+versions. Version 16 (gunship rocket flight): a gunship rocket flies at its own `projectile_speed_mps` and lives out its range, and
+clients take its speed from the Launch velocity (no new fields; the bump is the behaviour change). Version 15 (#161) gives the input a flags byte (bit 0: the gunner's aim follows, a ground point as three int32 quantised
 positions, 12 bytes). An input is 12 bytes, or 24 with the aim; the packet is up to 3 inputs. Only a steered turret sends an aim.
 Version 14 grows the camo spec to 33 bytes (codec 2: body, skin tone, headgear; migration 0006). Version 13 (#160) adds each tracer's speed (u16 m/s) and length (u16 cm) to GunshipShots (tracer 29 bytes, was 25).
 Version 12 (#159) coalesces the gunship FX: the per-round Shot, ImpactFx and Ac130Blast of the turrets are replaced by

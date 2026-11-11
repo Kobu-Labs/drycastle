@@ -31,6 +31,7 @@ ac-130
 - an ac-130 starts circling around the map, user controls the turret and can fire it, POV
 - unlimited ammo: the streak's time is the only limit (no ammo count, no overheating); the fire rate is the pacing
 - 25 mm (fastest), 40 mm and 105 mm (slow shell); every round has a blast, so a near miss still hurts
+- rounds reach anywhere on the map (3000 m range); rockets fly at 250 m/s, so a rocket reaches a target across the map
 - enemy players and target dummies show a red diamond on the screen while the turret is in use
 moab
 - 24 kills

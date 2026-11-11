@@ -151,21 +151,33 @@ public class GunshipAimLagTests
     }
 
     [Fact]
-    public void A_stabilised_aim_out_of_range_of_the_moving_muzzle_is_not_pulled_back()
+    public void A_stabilised_ground_point_out_of_range_of_the_moving_muzzle_is_not_pulled_back()
     {
-        // a ground point just outside the orbit, seen from the near side. Half an orbit later the muzzle is on the far side and the
-        // point is past the longest weapon range plus the allowance from it. A clamp to the muzzle would pull it off the reticle
-        // (the bug this guards); the bound is from the orbit centre, so the point stays where the owner put it.
+        // a ground point 660 m from the orbit's centre, on the near side of the orbit. Half an orbit later the muzzle is on the far
+        // side and the point is about 1080 m from it: farther than the old 800 m ranges ever allowed, and within the map. Any aim point
+        // on the map is valid now (the longest range is 3000 m), so the clamp must leave it alone. A clamp to the muzzle would pull it
+        // off the reticle (the bug this guards); the bound is from the orbit centre, so the point stays where the owner put it.
         var a = Orbit(0f, clockwise: false);
         var outward = Vector3.Normalize(new Vector3(a.Position.X - a.Centre.X, 0, a.Position.Z - a.Centre.Z));
-        var aim = new Vector3(a.Position.X + 240f * outward.X, a.GroundY, a.Position.Z + 240f * outward.Z);
+        var aim = new Vector3(a.Centre.X + 660f * outward.X, a.GroundY, a.Centre.Z + 660f * outward.Z);
         var control = new GunshipControl(Gun, a, _ => { }, _ => { }, new Random(1));
         control.OnInput(NetInput.From(1, new MoveInput(), 0f, 0, aim), 0);
         a.Tick(MathF.PI * Kind.RadiusM / Kind.SpeedMps); // half an orbit
-        var reach = GunshipAim.MaxDistance(Gun) + GunshipAim.AimSlackM;
-        Assert.True(Vector3.Distance(control.Muzzle, aim) > reach, "the point is out of range of the muzzle now");
+        Assert.True(Vector3.Distance(control.Muzzle, aim) > 850f, "the point is beyond the old 800 m ranges from the muzzle now");
+        Assert.True(Vector3.Distance(control.Muzzle, aim) < GunshipAim.MaxDistance(Gun), "and still inside the longest range");
         control.OnInput(NetInput.From(2, new MoveInput(), 0f, 0, aim), 1.0);
         Assert.True(Vector3.Distance(control.AimPoint, aim) < 0.01f, "the aim point did not move with the platform");
+    }
+
+    [Fact]
+    public void The_longest_range_is_the_3000_metre_gunship_range_and_a_horizon_look_is_that_far()
+    {
+        Assert.Equal(3000f, GunshipAim.MaxDistance(Gun));
+        var p = GunshipAim.AimPoint(new Vector3(0, 100, 0), 0f, 0f, 0f, GunshipAim.MaxDistance(Gun));
+        Assert.Equal(3000f, Vector3.Distance(p, new Vector3(0, 100, 0)), 0.01f); // a horizontal look finds no ground: the full range
+        var down = GunshipAim.AimPoint(new Vector3(0, 100, 0), 0f, -0.2f, 0f, GunshipAim.MaxDistance(Gun));
+        Assert.Equal(0f, down.Y, 0.01f);                                          // a look down meets the ground plane first
+        Assert.True(Vector3.Distance(down, new Vector3(0, 100, 0)) < 3000f);
     }
 
     [Fact]

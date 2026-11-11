@@ -210,9 +210,9 @@ public class GunshipGroundAimTests
         var rockets = Gun.Weapons.Single(w => w.Kind == GunshipWeaponKind.Rocket);
         Assert.Null(rockets.TracerSpeedMps); // rockets fly in the rocket sim, with their own look
         var shell = Shipping.Ac130!.Weapons.Single(w => w.Kind == GunshipWeaponKind.Shell);
-        Assert.Equal(1200f, shell.TracerSpeedMps);
-        // the 105 mm shell reaches 800 m in under 0.7 s (its visual only; the burst is at the server's resolution)
-        Assert.True((800f - shell.TracerLengthM!.Value) / shell.TracerSpeedMps!.Value < 0.7f);
+        Assert.Equal(1500f, shell.TracerSpeedMps); // as fast as the cannons: a shell is a fast round
+        // the 105 mm shell reaches its 3000 m range in about 2 s (its visual only; the burst is at the server's resolution)
+        Assert.True((shell.RangeM - shell.TracerLengthM!.Value) / shell.TracerSpeedMps!.Value < 2.1f);
     }
 
     [Fact]

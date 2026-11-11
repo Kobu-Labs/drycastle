@@ -115,16 +115,18 @@ public partial class NetServer
         var by = credit ?? (byte)weapon;
         if (def.Kind == GunshipWeaponKind.Rocket)
         {
+            // the rocket flies at the gunship's own speed and lives out its whole range (the bazooka's 40 m/s would burst it ~150 m out)
             var rocket = new Rocket
             {
                 Id = _nextRocket, Owner = owner, Weapon = (byte)weapon, Blast = def.Splash,
                 Pos = new Vector3(shot.Origin.X, shot.Origin.Y, shot.Origin.Z),
                 Dir = new Vector3(shot.Direction.X, shot.Direction.Y, shot.Direction.Z),
+                Speed = def.ProjectileSpeedMps, Life = RocketFlight.LifeFor(def.RangeM, def.ProjectileSpeedMps),
             };
             _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
             _rockets.Add(rocket);
             _rocketsFired++;
-            BroadcastEvent(EventKind.Launch, WeaponCodec.Encode(new LaunchMsg(rocket.Id, owner, rocket.Weapon, shot.Origin, shot.Direction * w.ProjectileSpeed)));
+            BroadcastEvent(EventKind.Launch, WeaponCodec.Encode(new LaunchMsg(rocket.Id, owner, rocket.Weapon, shot.Origin, shot.Direction * rocket.Speed)));
             return;
         }
 
@@ -132,7 +134,9 @@ public partial class NetServer
         var targets = LiveTargets();
         var route = GunshipRouting.Route(def, shot.Origin, shot.Direction, wall, targets, owner, GunshipVehicles(), Vehicles?.BulletDamageMultiplier ?? 0f);
         var end = shot.Origin + shot.Direction * route.Distance;
-        _gunFx.Tracer(owner, new GunshipTracer((byte)weapon, shot.Origin, end, def.TracerSpeedMps ?? 0f, def.TracerLengthM ?? 0f));
+        // a sky shot (no hit) is drawn only to GunshipFxLimits.MaxSkyTracerM: the round still flew its full range, the streak need not
+        var drawn = route.Impact == GunshipImpact.None ? shot.Origin + shot.Direction * MathF.Min(route.Distance, GunshipFxLimits.MaxSkyTracerM) : end;
+        _gunFx.Tracer(owner, new GunshipTracer((byte)weapon, shot.Origin, drawn, def.TracerSpeedMps ?? 0f, def.TracerLengthM ?? 0f));
 
         // the damage, now; the owner's hit markers are collected for the tick (see Deal)
         var kill = false;
