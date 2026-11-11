@@ -42,6 +42,8 @@ public enum EventKind : byte
     PickUpCorpse = 20,
     /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
     Hotbar = 21,
+    /// <summary>Server broadcast: an attack missile blew up (id, owner, centre, splash radius). See <see cref="MissileCodec"/>.</summary>
+    MissileBlast = 30,
 }
 
 public abstract record ReliableMsg;

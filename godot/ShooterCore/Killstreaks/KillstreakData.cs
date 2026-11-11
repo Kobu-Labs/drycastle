@@ -17,6 +17,8 @@ public sealed class KillstreakDef
     /// <summary>How long an active instance lasts. 0 = until the streak ends it or its owner dies.</summary>
     public double DurationSeconds { get; init; }
     public KillstreakControl Control { get; init; }
+    /// <summary>The attack missile's tuning (its "missile" block); null for every other streak.</summary>
+    public MissileTuning? Missile { get; init; }
 }
 
 /// <summary>
@@ -68,10 +70,13 @@ public sealed class KillstreakFile : IVersioned
                 "pov" => KillstreakControl.Pov,
                 _ => throw new DataFileException($"{F}: {where}: field \"control\" must be none or pov"),
             };
+            var isMissile = r.Id == AttackMissileStreak.StreakId;
+            if (!isMissile && r.Missile != null) throw new DataFileException($"{F}: {where}: a \"missile\" block is only for the attack missile");
             streaks.Add(new KillstreakDef
             {
                 Id = r.Id, Name = r.Name, KillsRequired = kills, UnlockLevel = unlock, MaxActive = maxActive,
                 DurationSeconds = duration, Control = control,
+                Missile = isMissile ? MissileTuning.From(r.Missile, F, where) : null,
             });
         }
 
@@ -101,5 +106,6 @@ public sealed class KillstreakFile : IVersioned
         public int? MaxActive { get; set; }
         public double? DurationSeconds { get; set; }
         public string? Control { get; set; }
+        public MissileTuning.MissileRaw? Missile { get; set; }
     }
 }

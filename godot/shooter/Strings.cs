@@ -80,6 +80,8 @@ public static class Strings
         ("bind.jump", "Jump"), ("bind.sprint", "Sprint"), ("bind.crouch", "Crouch"), ("bind.prone", "Prone"), ("bind.fire", "Fire"), ("bind.reload", "Reload"),
         ("bind.interact", "Interact"), ("bind.scoreboard", "Scoreboard (hold)"),
         ("bind.slot_1", "Weapon slot 1"), ("bind.slot_2", "Weapon slot 2"), ("bind.slot_3", "Weapon slot 3"), ("bind.slot_4", "Weapon slot 4"), ("bind.slot_5", "Weapon slot 5"), ("bind.zoom", "Scope zoom"), ("bind.headlights", "Vehicle headlights"), ("bind.killstreak", "Use killstreak"),
+        ("weapon.attack_missile", "Attack Missile"),
+        ("pov.title", "ATTACK MISSILE"), ("pov.alt", "ALT {0} m"), ("pov.time", "TIME {0} s"), ("pov.hint", "Mouse: steer the missile. It turns at a limited rate. Your body stays where it is."),
         ("toast.info", "Info:"), ("toast.warn", "Notice:"), ("toast.error", "Problem:"),
     };
 

@@ -476,6 +476,7 @@ public partial class NetServer : Node
             c.StreakHeld = streakDown;
             if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
             if (streakEdge) StreakActivate(c);
+            if (c.Car == null && _streaks.RouteInput(c.Id, i)) continue; // controlling a streak entity (the missile): the body stands still
             if (c.Car != null)
             {
                 // driving: the car is simulated in StepVehicles from the driver's inputs; no walking or weapon timers.

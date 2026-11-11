@@ -13,6 +13,8 @@ public static class SpecialWeapons
     public const byte Drown = 251, Vehicle = 252, Debug = 253, Void = 254, Fall = 255;
     /// <summary>The jeep's roof gun (a gunner's rounds).</summary>
     public const byte VehicleGun = 250;
+    /// <summary>The attack missile's blast (killstreak "attack_missile"): the kill feed and the stats name it.</summary>
+    public const byte Missile = 249;
 }
 
 public abstract record MatchEvent;
