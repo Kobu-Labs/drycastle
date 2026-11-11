@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Server-only persistence (ADR 0003). No Godot reference. Repository interfaces + SQLite and in-memory stores. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Suchohrad.ShooterServer.Persistence</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Suchohrad.ShooterCore" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
+    <ProjectReference Include="../ShooterCore/ShooterCore.csproj" />
+    <!-- numbered migrations, applied in order at server start -->
+    <EmbeddedResource Include="migrations/*.sql" LogicalName="migrations/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

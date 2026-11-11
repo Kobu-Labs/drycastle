@@ -56,6 +56,7 @@ Flags (after `--`):
 | `--role server` | run as the dedicated server (default role is client) |
 | `--port N` | UDP listen port, default 27015 |
 | `--map DIR` | map folder (else `SUCHOHRAD_MAP`) |
+| `--db PATH` | progression database file, default `./shooter.db` (relative to the working directory); created and migrated at start, the server refuses to start if it cannot be opened |
 | `--match-set k=v,k=v` | override match options, see below |
 | `--debug-cmds` | honour the client debug kill command; leave off on a public server |
 | `--quit-after SECONDS` | end the server with a verdict (testing only) |
@@ -76,6 +77,14 @@ Defaults come from `godot/shooter/data/match.json`; override any of them per ser
 | `min_players` | 1 | players needed before a round runs |
 
 A bad key or value makes the server refuse to start with an error naming the entry.
+
+### Progression database (`--db`)
+
+The dedicated server keeps profiles, loadouts, unlocks and stats in one SQLite file (ADR 0003). Schema changes are numbered
+`.sql` migrations in `godot/ShooterServer.Persistence/migrations/`, applied once each in order at start. Back the file up
+like any other data; deleting it wipes every player's progression. Writes run on a background thread and a failed write
+is logged to the server output, never thrown into the match. Netcode does not read or write it yet (next ticket).
+Players are identified by a client-generated token, not an account (ADR 0003: anyone with the token is that player).
 
 ## 4. Firewall
 

@@ -27,11 +27,13 @@ namespace Suchohrad.Shooter;
 ///   --hud-shots DIR           render the HUD with fake data at 1280x720 and 3840x2160 into DIR as PNGs, then exit (needs a display)
 ///   --smoke-move              client only: scripted movement check on the map collision (SHOOTER_SMOKE_MOVE_OK, exit 0; else exit 2)
 ///   --smoke                   load everything, print SHOOTER_SMOKE_OK and exit 0 (exit 2 on failure)
+///   --db PATH                 server: SQLite progression database (default ./shooter.db); created and migrated at start (ADR 0003)
 /// No gameplay yet: this only boots the role on the loaded map.
 /// </summary>
 public partial class Shooter : Node3D
 {
     readonly Suchohrad.MapLoader.MapLoader _map = new();
+    Suchohrad.ShooterServer.Persistence.IProgressionStore? _progression;
     bool _smoke;
     bool _smokeMove;
     readonly Random _rng = new();
@@ -217,6 +219,11 @@ public partial class Shooter : Node3D
 
     void BuildServer(Config cfg)
     {
+        // Opened here so a bad path or failed migration stops the server at start, like a bad --match-set.
+        // Netcode does not use it yet (next ticket); write failures are logged by the store, never thrown into the match.
+        var dbPath = cfg.Str("db", "./shooter.db");
+        _progression = Suchohrad.ShooterServer.Persistence.Sqlite.SqliteProgressionStore.Open(dbPath, s => GD.PrintErr(s));
+        GD.Print($"server: progression db {Path.GetFullPath(dbPath)}");
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var server = new NetServer
         {

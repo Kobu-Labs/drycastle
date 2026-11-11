@@ -7,6 +7,10 @@ __pycache__/
 *.pyc
 # godot / dotnet
 .godot/
+# shooter server progression database (--db default), with SQLite WAL side files
+shooter.db
+shooter.db-wal
+shooter.db-shm
 .mono/
 bin/
 obj/
