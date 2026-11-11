@@ -72,19 +72,29 @@ def _relation_polygon(rel: dict) -> BaseGeometry | None:
     return geom if not geom.is_empty else None
 
 
+def is_street_lamp(tags: dict) -> bool:
+    return tags.get("highway") == "street_lamp" or tags.get("man_made") == "street_lamp"
+
+
 def parse_osm(raw: dict) -> dict[str, list[OsmFeature]]:
-    """Group OSM elements (``out geom`` JSON) into buildings, highways and landuse features."""
+    """Group OSM elements (``out geom`` JSON) into buildings, highways, landuse, trees and street lamps."""
     out: dict[str, list[OsmFeature]] = {
         "buildings": [],
         "highways": [],
         "landuse": [],
         "trees": [],
+        "street_lamps": [],
     }
     for el in raw.get("elements", []):
         tags = el.get("tags", {})
         if el["type"] == "node":
-            if tags.get("natural") == "tree" and "lon" in el and "lat" in el:
-                out["trees"].append(OsmFeature(f"n{el['id']}", {}, Point(el["lon"], el["lat"])))
+            if "lon" in el and "lat" in el:
+                if tags.get("natural") == "tree":
+                    out["trees"].append(OsmFeature(f"n{el['id']}", {}, Point(el["lon"], el["lat"])))
+                if is_street_lamp(tags):
+                    out["street_lamps"].append(
+                        OsmFeature(f"n{el['id']}", {}, Point(el["lon"], el["lat"]))
+                    )
             continue
         if el["type"] == "way" and el.get("geometry"):
             pts = _points(el["geometry"])
@@ -185,6 +195,10 @@ def run_normalise(
         [_feature(frame.to_local(f.geom), _highway_props(f)) for f in osm["highways"]],
     )
     write("trees", [_feature(frame.to_local(f.geom), {"osm_id": f.osm_id}) for f in osm["trees"]])
+    write(
+        "street_lamps",
+        [_feature(frame.to_local(f.geom), {"osm_id": f.osm_id}) for f in osm["street_lamps"]],
+    )
     write(
         "landuse",
         [_feature(frame.to_local(f.geom), _landuse_props(f)) for f in osm["landuse"]],

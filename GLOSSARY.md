@@ -60,6 +60,10 @@ _Avoid_: rank, prestige
 A weapon, perk or killstreak that a player's Level makes available to their Loadouts.
 _Avoid_: reward, achievement
 
+**Street lamp**:
+A lamp post of the base map, placed from OSM street lamp nodes or along roads by the pipeline (`lamps.json`). In the shooter it is solid and lights up at night (see the night factor); the viewer does not show it.
+_Avoid_: light, streetlight, lamp post
+
 **Corpse**:
 A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary.
 _Avoid_: ragdoll, body, drop

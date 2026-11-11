@@ -148,6 +148,19 @@ with a warning; schema errors fail the stage.
 garden, field and other parcels, at least `min_building_distance_m` from any building, with
 elevation, parcel, highway type (roads) and chunk index.
 
+**Street lamps** (`lamps.py`, run by the props stage, `make props`): `data/work/lamps.json` holds
+one point per lamp (`id` `L-NNNN`, `x`, `y`, `z` elevation, `source` `osm` or `rule`, `osm_id`,
+`highway`, `parcel`, `chunk`). OSM `highway=street_lamp` and `man_made=street_lamp` nodes are in the
+Overpass query and in `normalised/street_lamps.geojson`; each one is kept if it is inside the terrain
+coverage and outside building footprints (grown by `lamps.building_clearance_m`). Where a rule road
+(`lamps.rule_highways`) has no lamp within `lamps.min_lamp_distance_m`, rule lamps are placed every
+`lamps.spacing_m` along each edge, alternating sides, `road_offset_m` beyond the carriageway edge.
+Rule lamps also stay out of `lamps.avoid_kinds` parcels (house plots and gardens). Placement is
+deterministic (no random numbers). Raw data fetched before street lamps were queried has no
+lamp nodes: run `make fetch --force` once, then `make normalise` and `make props`. The export copies
+`lamps.json` to `out/map/` (map version 0.5.0, `files.lamps`); lamps are not in the chunk GLBs. The game
+builds the pole, the head and the light from primitives, so the viewer ignores them.
+
 ## Regions
 
 A region (`regions` in `edits.json`) is a hand-drawn colour shape, independent of parcel borders. It

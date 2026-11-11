@@ -210,7 +210,7 @@ def test_dmr_params_snap_outwards_and_osm_query_covers_layers() -> None:
     e0, e1 = (int(v) for v in params["subset"][0][2:-1].split(","))
     assert e0 <= bbox.min_e and e1 >= bbox.max_e
     q = fetch.osm_query(bbox)
-    for key in ("building", "highway", "barrier", "landuse", "tree|wood|water"):
+    for key in ("building", "highway", "barrier", "landuse", "tree|wood|water", "street_lamp"):
         assert key in q
 
 

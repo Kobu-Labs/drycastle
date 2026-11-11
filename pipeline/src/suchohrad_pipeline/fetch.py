@@ -72,6 +72,8 @@ def osm_query(bbox: Bbox) -> str:
         f'  nwr["barrier"]({b});\n'
         f'  nwr["landuse"]({b});\n'
         f'  nwr["natural"~"^(tree|wood|water)$"]({b});\n'
+        f'  nwr["highway"="street_lamp"]({b});\n'
+        f'  nwr["man_made"="street_lamp"]({b});\n'
         ");\n"
         "out geom;"
     )

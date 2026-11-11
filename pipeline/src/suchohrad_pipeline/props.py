@@ -33,6 +33,7 @@ from suchohrad_pipeline.edits import (
     load_edits,
     resolve_fence,
 )
+from suchohrad_pipeline.lamps import make_lamps, read_osm_lamps, write_lamps
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.roads import edge_lines
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
@@ -607,11 +608,23 @@ def run_props(
     }
     for name, doc in (("props.json", props), ("spawns.json", spawn_doc)):
         (work_dir / name).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    lamps_cfg = load_section("lamps", rules_path, area)
+    lamps = make_lamps(
+        parcels,
+        buildings,
+        graph,
+        read_osm_lamps(work_dir),
+        terrain,
+        lamps_cfg,
+        float(parcels_doc["chunk_size_m"]),
+    )
+    write_lamps(work_dir, lamps, float(parcels_doc["chunk_size_m"]), float(lamps_cfg["spacing_m"]))
     return {
         "fences": len(fences),
         "trees": len(trees),
         "spawns": len(spawns),
         "objects": len(plan.objects),
+        "lamps": len(lamps),
     }
 
 
