@@ -20,6 +20,13 @@ public partial class NetServer
     int _carEnters, _carExits, _runOvers, _runOverKills, _carReturns, _carResets;
     bool _carWasAway;
 
+    FlightBounds? _mapFlightBounds;
+    /// <summary>The flyable rectangle of the map (the box around its parcels); a smoke arena has none.</summary>
+    FlightBounds MapFlightBounds => _mapFlightBounds ??= FlightProbe.MapBounds(Map);
+
+    /// <summary>A pilot whose inputs have not arrived for this many ticks is flown by the stabiliser (a hover), so a stalled client does not freeze the helicopter in the air.</summary>
+    const uint FlightStarveTicks = 6;
+
     const float ClusterRadius = 120f;
     static float Dist2D(NVec3 a, NVec3 b) => MathF.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Z - b.Z) * (a.Z - b.Z));
 
@@ -75,6 +82,7 @@ public partial class NetServer
             var roadRank = new Dictionary<NVec3, int>();
             for (var i = 0; i < RoadSpawns.Count; i++) roadRank.TryAdd(RoadSpawns[i], i);
             int Rank(NVec3 s) => roadRank.TryGetValue(s, out var r) ? r : RoadSpawns.Count + 1;
+            var fitProbes = new Dictionary<int, FlightProbe>();
             bool Place(int kind, IEnumerable<NVec3> cands)
             {
                 var def0 = Vehicles.Vehicles[kind];
@@ -83,6 +91,12 @@ public partial class NetServer
                     if (spots.Any(s => NVec3.Distance(s.Pos, p) < 12f)) continue;
                     var yaw = (float)(_rng.NextDouble() * Math.PI * 2);
                     if (ServerCar.RestHeight(space, new Vector3(p.X, p.Y, p.Z), yaw, def0.HalfWidth, def0.HalfLength, p.Y) is not { } gy) continue;
+                    if (def0.Flight != null)
+                    {
+                        // a helicopter needs room for its rotor as well as flat ground for its skids
+                        if (!fitProbes.TryGetValue(kind, out var fit)) { fitProbes[kind] = fit = FlightProbe.Make(def0, Water, FlightBounds.None); World.AddChild(fit); }
+                        if (!fit.Fits(new Vector3(p.X, gy, p.Z), yaw)) continue;
+                    }
                     spots.Add((new NVec3(p.X, gy, p.Z), yaw, kind));
                     return true;
                 }
@@ -122,6 +136,7 @@ public partial class NetServer
                     || Place(kind, Spawns.OrderBy(Rank).ThenBy(_ => _rng.Next()));
                 if (!ok) GD.PrintErr($"server: no spot for {def.Id}");
             }
+            foreach (var fit in fitProbes.Values) fit.QueueFree();
             // players must not respawn inside a vehicle: drop the spawn candidates next to one (keep a healthy pool)
             var free = Spawns.Where(s => spots.All(v => NVec3.Distance(v.Pos, s) > 4f)).ToList();
             if (free.Count >= 20) { Spawns.Clear(); Spawns.AddRange(free); }
@@ -142,9 +157,10 @@ public partial class NetServer
             {
                 Name = $"{def.Id}{_cars.Count}", Id = (ushort)(VehicleRecord.FirstId + _cars.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, colour),
                 HalfWidth = def.HalfWidth, HalfLength = def.HalfLength, OriginPos = new Vector3(pos.X, pos.Y + 0.02f, pos.Z), OriginYaw = yaw,
+                FlightWater = Water, FlightBounds = MapFlightBounds,
             };
             World.AddChild(car);
-            foreach (var cl in _clients.Values.Where(x => x.Joined)) car.AddCollisionExceptionWith(cl.Body);
+            foreach (var cl in _clients.Values.Where(x => x.Joined)) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); }
             _cars.Add(car);
         }
         GD.Print($"server: {_cars.Count} vehicles spawned ({string.Join(", ", colours.Select(k => $"{Vehicles!.Vehicles[k.Key].Id} x{k.Value.Count} colours {string.Join(",", k.Value)}"))})");
@@ -242,7 +258,7 @@ public partial class NetServer
     {
         var offset = car.Def.Seats[seat].Offset;
         if (car.Def.Flak is { } flak && car.Def.Seats[seat].Role == "gunner") offset = FlakRules.TurretSeatOffset(flak, offset, car.TurretLocalYaw);
-        var p = VehicleSeat.SeatPosition(N(car.GlobalPosition), car.State.Yaw, offset);
+        var p = car.Flies ? car.Flight.ToWorld(offset) : VehicleSeat.SeatPosition(N(car.GlobalPosition), car.State.Yaw, offset); // a helicopter's seats tilt with it
         return new Vector3(p.X, p.Y, p.Z);
     }
 
@@ -291,6 +307,19 @@ public partial class NetServer
         var fwd = car.Forward; var right = new Vector3(Mathf.Cos(yaw), 0, -Mathf.Sin(yaw));
         var space = World.GetWorld3D().DirectSpaceState;
         var side = car.HalfWidth + 1f; var along = car.HalfLength + 1.05f; // 2.1 / 3.2 m for the car
+        if (car.Flies && !car.Flight.Grounded)
+        {
+            // out of a helicopter in the air: through the door on the rider's own side, at the cabin floor, and from there it is a fall
+            // (the fall damage rules decide what it costs; a low hover is free)
+            var seatX = car.Def.Seats[c.CarSeat].Offset[0];
+            var first = seatX < 0 ? -1f : 1f;
+            foreach (var s in new[] { first, -first })
+            {
+                var p = car.GlobalPosition + right * (s * side) + Vector3.Up * car.Def.Seats[c.CarSeat].Offset[1];
+                if (!c.Body.TestMove(new Transform3D(Basis.Identity, p), Vector3.Zero)) return p;
+            }
+            return car.GlobalPosition + right * (first * side) + Vector3.Up * car.Def.Seats[c.CarSeat].Offset[1];
+        }
         foreach (var off in new[] { right * side, -right * side, -fwd * along, fwd * along })
         {
             var p = car.GlobalPosition + off;
@@ -320,10 +349,12 @@ public partial class NetServer
             SendSeatState(car);
             var driver = OccupantAt(car, 0);
             car.PrevPos = car.GlobalPosition;
-            if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt, Water);
+            if (car.Flies) StepFlyingVehicle(car, driver, dt);
+            else if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt, Water);
             else car.Step(def, 0, 0, false, dt, Water);
             if (car.GlobalPosition.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); continue; }
-            if (driver != null && car.Def.CrashDamage && car.LastImpact > Vehicles.CrashMinSpeedLoss)
+            // a wall takes speed from a driven car; a helicopter is hurt by what it hits whoever flies it, or nobody
+            if ((driver != null || car.Flies) && car.Def.CrashDamage && car.LastImpact > Vehicles.CrashMinSpeedLoss)
                 DamageVehicle(car, (car.LastImpact - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, 0, SpecialWeapons.Vehicle, 0);
             if (car.DetonateAt >= 0 && _elapsed >= car.DetonateAt) { Detonate(car); continue; }
             var occupied = car.Seat.Occupied;
@@ -342,6 +373,21 @@ public partial class NetServer
             else if (!occupied && !car.AtOrigin && car.GlobalPosition.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
             if (occupied && car.GlobalPosition.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
         }
+    }
+
+    /// <summary>
+    /// The tick of a flying vehicle (the utility helicopter, ADR 0006). With a pilot, the flight was already stepped in <see cref="SimulateClient"/>, once
+    /// for each of the pilot's inputs (that is what lets the pilot's client predict it), so there is nothing to step here unless the inputs have
+    /// stopped arriving. Without one the stabiliser flies: a hover while riders are aboard, then down (<see cref="FlightModel"/>). The hardest impact
+    /// since the last tick goes to the crash damage rules, and skids in water cost hit points every second.
+    /// </summary>
+    void StepFlyingVehicle(ServerCar car, Client? pilot, float dt)
+    {
+        if (pilot == null) car.StepFlight(FlightInput.Pilotless(car.Seat.Occupied), dt, _tick);
+        else if (_tick - car.FlightTick > FlightStarveTicks) car.StepFlight(FlightInput.Idle, dt, _tick);
+        car.LastImpact = car.FlightImpact;
+        car.FlightImpact = 0;
+        if (car.Flight.InWater) DamageVehicle(car, car.Def.Flight!.WaterDamagePerSecond * dt, 0, SpecialWeapons.Vehicle, 0);
     }
 
     /// <summary>

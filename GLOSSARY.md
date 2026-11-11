@@ -89,7 +89,7 @@ A four-seat vehicle that drives on land like the war jeep (and runs people over 
 _Avoid_: APC, amphib
 
 **Seat switch**:
-Moving to another seat of the vehicle you sit in, without getting out: while seated, the number keys (the weapon slot keys) take that seat (key 2 is the second seat of the vehicle's `seats` list), and a small top-down schematic in the bottom right shows each seat with its number (free: outlined; yours: filled, double ring; taken: struck through). A vehicle with no `seats` list has the one driver seat. A free seat is taken at once; a taken one is refused. Leaving the driver seat leaves the vehicle without input, so it coasts to a stop; a gunner's turret keeps its aim. One player can drive, go to the turret and drive again.
+Moving to another seat of the vehicle you sit in, without getting out: while seated, the number keys (the weapon slot keys) take that seat (key 2 is the second seat of the vehicle's `seats` list), and a small top-down schematic in the bottom right shows each seat with its number (free: outlined; yours: filled, double ring; taken: struck through). A vehicle with no `seats` list has the one driver seat. A free seat is taken at once; a taken one is refused. Leaving the driver seat leaves the vehicle without input, so it coasts to a stop (a utility helicopter in the air holds a hover, then sets itself down); a gunner's turret keeps its aim. One player can drive, go to the turret and drive again.
 _Avoid_: seat change, swap seat
 
 **Hotbar**:
@@ -145,8 +145,12 @@ A value from the day clock that drives street lamp light, headlight and window g
 _Avoid_: darkness, night mode
 
 **Aircraft**:
-A flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper and the AC-130 gunship. It is replicated as one world entity type, and its guns are controlled by the owner. It has hit points (600 for the helicopter, 1500 for the gunship) and can be shot down by flak: its streak then ends and the owner is released from the gun.
-_Avoid_: plane (for helicopters), drone
+A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper and the AC-130 gunship. Nobody boards or flies it; its owner only works its guns. It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship) and can be shot down by flak: its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
+_Avoid_: plane (for helicopters), drone, helicopter (alone)
+
+**Utility helicopter**:
+The vehicle a player flies: boarded, left and destroyed like any other vehicle, and flown freely by whoever sits in its pilot seat (the vehicle's driver seat). Hands off it levels itself, stops and holds a hover; with nobody in the pilot seat it hovers briefly, then sets itself down.
+_Avoid_: helicopter (alone), chopper, Huey, aircraft (that is the circling killstreak entity), flyable helicopter
 
 **Flak truck**:
 A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every other vehicle.

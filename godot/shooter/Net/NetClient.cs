@@ -146,7 +146,7 @@ public partial class NetClient : Node
         foreach (var r in _rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         _rockets.Clear();
         foreach (var v in _cars.Values) if (GodotObject.IsInstanceValid(v.Node)) v.Node.QueueFree();
-        _cars.Clear();
+        _cars.Clear(); _flights.Clear(); _pilot = null; // the probe is under Owned and goes with it
         if (_me != null && GodotObject.IsInstanceValid(_me)) _me.QueueFree();
         _me = null;
         FreeOwned();
@@ -349,19 +349,21 @@ public partial class NetClient : Node
         LossOnSnapshot(h);
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         DayNightCycle.Current?.SetServerTick(h.Tick);
-        foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); } }
+        foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); _flights.Remove(id); } }
         foreach (var (id, rec) in _dec.States)
         {
             if (id == _myId) { OnSelf(rec, h.Ack); continue; }
             if (rec.Type == EntityType.Projectile) { OnRocketState(id, rec); continue; }
             if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
             if (rec.Type == EntityType.Turret) { OnTurretState(rec, h.Tick); continue; }
+            if (rec.Type == EntityType.Flight) { OnFlightState(rec, h.Tick); continue; }
             if (rec.Type is not (EntityType.Player or EntityType.Target)) continue;
             if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); _remotes[id] = r; }
             r.State = rec.State; r.Stance = rec.Stance; r.Slot = rec.Weapon;
             r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
         }
+        UpdatePiloting(h.Ack); // the helicopter this player flies is predicted, and reconciled here (ADR 0006)
         LossAfterSnapshot(h);
     }
 
@@ -501,6 +503,7 @@ public partial class NetClient : Node
         if (_gunship == null) _me.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? _wantSlot : 0), GunnerAim);
         if (!_driving && !_controlling && _gunship == null) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
+        PredictFlight(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
         _pending.Add(new Pending { Input = ni, After = _me.State });
         if (_pending.Count > 120) _pending.RemoveAt(0);
         var recent = new NetInput[Math.Min(3, _pending.Count)];

@@ -6,7 +6,8 @@ namespace Suchohrad.Shooter;
 
 /// <summary>
 /// Client side of vehicles (#91): car entities are drawn interpolated about 100 ms in the past like remote players, including the
-/// driver's own car (no prediction in v1). While driving the body follows the car, a chase camera replaces the first-person one,
+/// driver's own car (no prediction in v1; the one exception is the utility helicopter, which its pilot's client predicts, ADR 0006 and
+/// NetClient.Flight.cs). While driving the body follows the car, a chase camera replaces the first-person one,
 /// and the HUD shows the speed and the exit prompt; near a free car it shows the enter prompt.
 /// </summary>
 public partial class NetClient
@@ -134,23 +135,27 @@ public partial class NetClient
         // real spot lights go to the nearest lit vehicles only (CarLights.MaxBeams); the others show their cones and lenses
         var beams = PickBeams();
         var flakGunner = false;
+        FlightState? flown = null; // the helicopter the local player flies, for the pilot's readout and prompt
         var dt = (float)GetProcessDeltaTime();
         foreach (var v in _cars.Values)
         {
             v.Lamps?.Set(v.Lights && !v.Destroyed, v.Braking, beams.Contains(v));
             if (v.Buf.At(rt) is not { } s) continue;
             var p = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
+            var rot = new Vector3(0, s.Yaw, 0);
+            var flies = FlightDef(v) != null;
+            if (flies) PoseFlight(v, rt, dt, ref p, ref rot); // a helicopter pitches and rolls; the one this player flies is drawn from its prediction
             v.Node.GlobalPosition = p;
-            v.Node.Rotation = new Vector3(0, s.Yaw, 0);
+            v.Node.Rotation = rot;
             if (v.Destroyed) continue;
             var flakMine = v.Flak != null && RenderFlak(v, s, rt, dt);
             if (flakMine) flakGunner = true;
             v.Smoke?.Near(Sfx.ListenerDistance(p) < 90f); // far vehicles do not smoke: particle budget
-            SfxCar(v, p);
+            if (!flies) SfxCar(v, p); // a helicopter has no car engine
             if (v.Driver == _myId && _driving && _me != null)
             {
-                _carYaw = s.Yaw;
-                _me.Chase(p, s.Yaw);
+                _carYaw = rot.Y;
+                if (flies) { ChaseFlight(v, p, rot, dt); flown = FlightOf(v); } else _me.Chase(p, s.Yaw);
                 kmh = v.Kmh;
                 ShowSelfInCar(v);
             }
@@ -161,10 +166,11 @@ public partial class NetClient
         if (!_driving && _gunship == null) _me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
         _hud?.SetSeats(SeatPanel());
         if (flakGunner) _hud?.SetVehicleReadout(FlakReadout());
+        else if (flown is { } fr) _hud?.SetVehicleReadout(FlightReadout(fr));
         else _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
         string? prompt = null;
-        if (_driving) prompt = Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
-        else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) != null) prompt = Strings.F("hud.vehicle.enter", InputBindings.Name("interact"));
+        if (_driving) prompt = flown is { } fp ? FlightPrompt(fp) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
         _hud?.SetPrompt(TurretPrompt() ?? prompt ?? CratePrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
     }
 
@@ -240,7 +246,7 @@ public partial class NetClient
         CarView? best = null; var bd = 3f;
         foreach (var v in _cars.Values)
         {
-            if (v.Driver != 0) continue;
+            if (v.Driver != 0 || Mathf.Abs(v.Pos.Y - p.Y) > 2.5f) continue; // as the server: not one hovering overhead
             var d = new Vector2(v.Pos.X - p.X, v.Pos.Z - p.Z).Length();
             if (d <= bd) { best = v; bd = d; }
         }

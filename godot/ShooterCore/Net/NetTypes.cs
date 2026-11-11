@@ -2,8 +2,12 @@ using System.Numerics;
 
 namespace Suchohrad.ShooterCore;
 
-/// <summary>Target: a stationary target dummy (#148), drawn like a player with the target look. Turret: a flak truck's turret aim (<see cref="FlakRecord"/>), one record per flak vehicle.</summary>
-public enum EntityType : byte { Player = 0, Projectile = 1, Vehicle = 2, Target = 3, Turret = 4 }
+/// <summary>
+/// Target: a stationary target dummy (#148), drawn like a player with the target look. Turret: the aim of a vehicle's gun (<see cref="FlakRecord"/>),
+/// one record per flak truck and per utility helicopter (its door gun). Flight: a flying vehicle's velocity, pitch, roll and rotor
+/// (<see cref="FlightRecord"/>), one record per utility helicopter next to its Vehicle record.
+/// </summary>
+public enum EntityType : byte { Player = 0, Projectile = 1, Vehicle = 2, Target = 3, Turret = 4, Flight = 5 }
 
 /// <summary>State byte of a snapshot entity.</summary>
 public enum EntityState : byte { Alive = 0, Protected = 1, InVehicle = 2, Dead = 3 }

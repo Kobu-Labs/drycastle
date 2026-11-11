@@ -86,7 +86,7 @@ public partial class Player : CharacterBody3D
     {
         if (!_camera.IsInsideTree()) return;
         if (!_chase) _camera.Rotation = new Vector3(RecoilState.ClampPitch(_pitch + AimKick.X + ViewSway.X), _yaw + AimKick.Y + ViewSway.Y, 0);
-        var target = ZoomFov > 0 ? ZoomFov : GameSettings.Current.Fov;
+        var target = ZoomFov > 0 ? ZoomFov : GameSettings.Current.Fov + FovBoost;
         if (Mathf.IsEqualApprox(_fovNow, target)) return;
         _fovNow = Mathf.Lerp(_fovNow, target, 1f - Mathf.Exp(-18f * (float)delta));
         _camera.Fov = _fovNow;
@@ -122,7 +122,7 @@ public partial class Player : CharacterBody3D
     public void Chase(Vector3 carPos, float carYaw)
     {
         if (!_chase) { _yaw = carYaw; _pitch = -0.22f; }
-        _chase = true;
+        _chase = true; _flightChase = false; FovBoost = 0;
         GlobalPosition = carPos;
         _pitch = Mathf.Clamp(_pitch, -1.2f, 0.6f);
         if (!_camera.IsInsideTree()) return; // headless bots have no camera
@@ -132,10 +132,60 @@ public partial class Player : CharacterBody3D
         _camera.GlobalRotation = rot;
     }
 
+    /// <summary>Degrees added to the field of view (the helicopter's chase camera widens with speed); eased like the scope.</summary>
+    public float FovBoost { get; set; }
+
+    bool _flightChase;
+    Vector3 _chaseFocus, _chaseFocusVel;
+    Godot.Collections.Array<Rid>? _selfOnly;
+
+    /// <summary>
+    /// The pilot's chase camera on a helicopter. The view turns with the mouse at once (its yaw is also the heading the nose swings to), so the
+    /// response to the hand is never late; the camera's place follows the helicopter on a critically damped spring, so the airframe pulls away as
+    /// it accelerates and settles back; the camera takes a share of the airframe's pitch and roll, so the horizon tilts with it; and the field of
+    /// view widens with speed. The settings' reduce-motion switch turns the tilt and the widening off. <see cref="EndChase"/> ends it.
+    /// </summary>
+    /// <param name="at">The helicopter's origin as drawn this frame; <paramref name="yaw"/>, <paramref name="pitch"/>, <paramref name="roll"/> its attitude.</param>
+    /// <param name="speedFraction">Its speed over its top speed, 0 to 1.</param>
+    public void FlightChase(Vector3 at, float yaw, float pitch, float roll, float speedFraction, FlightCameraDef cam, float dt)
+    {
+        if (!_chase || !_flightChase) { _yaw = yaw; _pitch = -0.14f; _chaseFocus = at; _chaseFocusVel = Vector3.Zero; }
+        _chase = true; _flightChase = true;
+        GlobalPosition = at;
+        _pitch = Mathf.Clamp(_pitch, -1.1f, 0.5f);
+        if (!_camera.IsInsideTree()) return; // headless bots have no camera
+        // the spring is stepped in slices no longer than a tick, so a slow frame cannot make it ring
+        for (var left = Mathf.Min(dt, 0.25f); left > 1e-5f; left -= 1f / 30f)
+        {
+            var h = Mathf.Min(left, 1f / 30f);
+            _chaseFocusVel += (cam.Follow * cam.Follow * (at - _chaseFocus) - 2f * cam.Follow * _chaseFocusVel) * h;
+            _chaseFocus += _chaseFocusVel * h;
+        }
+        var lag = at - _chaseFocus;
+        if (lag.Length() > cam.MaxLag) _chaseFocus = at - lag.Normalized() * cam.MaxLag;
+
+        // the airframe's tilt as the camera sees it from its own heading: side on, a pitch reads as a roll
+        var share = GameSettings.Current.ReduceMotion ? 0f : cam.Tilt;
+        var (sd, cd) = Mathf.SinCos(_yaw - yaw);
+        var rot = new Vector3(_pitch + share * (pitch * cd - roll * sd), _yaw, share * (pitch * sd + roll * cd));
+        var look = -Basis.FromEuler(new Vector3(_pitch, _yaw, 0)).Z;
+        var focus = _chaseFocus + Vector3.Up * cam.Height;
+        var want = focus - look * cam.Distance;
+        // keep the camera out of the ground and the walls: it comes in along its own line of sight
+        var q = PhysicsRayQueryParameters3D.Create(focus, want);
+        q.CollisionMask = CollisionLayers.World;
+        q.Exclude = _selfOnly ??= new Godot.Collections.Array<Rid> { GetRid() };
+        var hit = GetWorld3D().DirectSpaceState.IntersectRay(q);
+        if (hit.Count > 0) want = hit["position"].AsVector3() + look * 0.4f;
+        _camera.GlobalPosition = want;
+        _camera.GlobalRotation = rot;
+        FovBoost = GameSettings.Current.ReduceMotion ? 0f : cam.FovBoostDeg * Mathf.Clamp(speedFraction, 0f, 1f) * Mathf.Clamp(speedFraction, 0f, 1f);
+    }
+
     /// <summary>Turret camera (a gunship's owner): the camera sits at the turret and looks along the given world yaw and pitch. The body does not move; <see cref="EndChase"/> ends it.</summary>
     public void Turret(Vector3 at, float yaw, float pitch)
     {
-        _chase = true;
+        _chase = true; _flightChase = false; FovBoost = 0;
         if (!_camera.IsInsideTree()) return;
         _camera.GlobalPosition = at;
         _camera.GlobalRotation = new Vector3(pitch, yaw, 0);
@@ -145,7 +195,7 @@ public partial class Player : CharacterBody3D
     public void EndChase(float yaw)
     {
         if (!_chase) return;
-        _chase = false;
+        _chase = false; _flightChase = false; FovBoost = 0;
         _yaw = yaw; _pitch = 0;
         _camera.Rotation = new Vector3(0, _yaw, 0);
         SetStanceShape(_state.Stance);

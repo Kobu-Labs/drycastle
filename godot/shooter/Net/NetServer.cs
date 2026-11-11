@@ -395,7 +395,7 @@ public partial class NetServer : Node
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
         c.Joined = true;
-        foreach (var car in _cars) car.AddCollisionExceptionWith(c.Body);
+        foreach (var car in _cars) { car.AddCollisionExceptionWith(c.Body); car.Probe?.Ignore(c.Body); }
         _byId[c.Id] = c;
         _playerRidsDirty = true;
         c.Enc = new SnapshotEncoder(_sentStates);
@@ -426,7 +426,7 @@ public partial class NetServer : Node
         if (!c.Joined) return;
         StreakLeave(c.Id);
         if (c.Car != null) { c.Car.Seat.Exit(c.Id); c.Car = null; }
-        foreach (var car in _cars) car.RemoveCollisionExceptionWith(c.Body); // the exception outlives the freed body otherwise (T3-014)
+        foreach (var car in _cars) { car.RemoveCollisionExceptionWith(c.Body); car.Probe?.Unignore(c.Body); } // the exception outlives the freed body otherwise (T3-014)
         c.Body.QueueFree();
         _byId.Remove(c.Id);
         _playerRidsDirty = true;
@@ -584,7 +584,9 @@ public partial class NetServer : Node
             {
                 // driving: the car is simulated in StepVehicles from the driver's inputs; no walking or weapon timers.
                 // A gunner's inputs fire the car's gun instead (its aim is the view yaw and pitch).
-                if (c.CarSeat == 0) { c.Throttle = Quant.Axis(i.MoveY); c.Steer = Quant.Axis(i.MoveX); c.Handbrake = (i.Buttons & (ushort)MoveButtons.Jump) != 0; }
+                // The pilot of a helicopter steps it here, once per input, as the body on foot is: the pilot's client predicts the same steps (ADR 0006).
+                if (c.CarSeat == 0 && c.Car.Flies) c.Car.StepFlight(FlightInput.FromNet(i, handsOff: controlled), dt, _tick);
+                else if (c.CarSeat == 0) { c.Throttle = Quant.Axis(i.MoveY); c.Steer = Quant.Axis(i.MoveX); c.Handbrake = (i.Buttons & (ushort)MoveButtons.Jump) != 0; }
                 else if (c.Car.Gun != null) GunnerInput(c, i);
                 if (lightsEdge) c.Car.Lights = Headlights.Toggle(c.Car.Lights);
                 if (useEdge) ExitCar(c);
@@ -811,6 +813,7 @@ public partial class NetServer : Node
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot, c.Body.State.Stance));
         foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed, car.Lights));
         foreach (var car in _cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model
+        foreach (var car in _cars) if (car.Flies) ents.Add(FlightRecord.Make(car.Id, car.Flight)); // a helicopter's velocity, tilt and rotor (ADR 0006)
         ents.AddRange(TargetRecords()); // target dummies (#148)
         foreach (var r in _rockets)
             ents.Add(EntityRecord.Make(r.Id, EntityType.Projectile, N(r.Pos),

@@ -11,7 +11,7 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public sealed partial class SandboxScreen : MenuScreen
 {
-    static readonly string[] Vehicles = { "car", "jeep", "quad", "boat", "amphibious", "flak", "bus" };
+    static readonly string[] Vehicles = { "car", "jeep", "quad", "boat", "amphibious", "flak", "bus", "utility_helicopter" };
 
     readonly NetClient _client;
     readonly Func<GameData> _data;
@@ -55,7 +55,7 @@ public sealed partial class SandboxScreen : MenuScreen
         _body.AddChild(actions);
 
         _body.AddChild(Ui.Lbl(Strings.T("sandbox.panel.vehicles"), "HudDim"));
-        var vehicles = Ui.HBox();
+        var vehicles = new GridContainer { Columns = 4 }; // a grid, as the killstreaks above: the row of buttons does not outgrow the panel
         foreach (var id in Vehicles)
         {
             var index = data.Vehicles.Vehicles.FindIndex(v => v.Id == id);
