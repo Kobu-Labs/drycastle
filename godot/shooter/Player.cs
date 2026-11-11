@@ -118,14 +118,18 @@ public partial class Player : CharacterBody3D
 
     bool _chase;
 
-    /// <summary>Third-person chase camera behind a car (driving): the body sits in the car, the camera follows its yaw.</summary>
+    /// <summary>Third-person camera on a car (driving): the body sits in the car and the mouse orbits the camera freely around it; the keys alone steer. Starts behind the car.</summary>
     public void Chase(Vector3 carPos, float carYaw)
     {
+        if (!_chase) { _yaw = carYaw; _pitch = -0.22f; }
         _chase = true;
         GlobalPosition = carPos;
+        _pitch = Mathf.Clamp(_pitch, -1.2f, 0.6f);
         if (!_camera.IsInsideTree()) return; // headless bots have no camera
-        _camera.GlobalPosition = carPos + Vector3.Up * 2.8f + new Vector3(Mathf.Sin(carYaw), 0, Mathf.Cos(carYaw)) * 6.5f;
-        _camera.GlobalRotation = new Vector3(-0.22f, carYaw, 0);
+        var rot = new Vector3(_pitch, _yaw, 0);
+        var fwd = -Basis.FromEuler(rot).Z;
+        _camera.GlobalPosition = carPos + Vector3.Up * 1.5f - fwd * 6.5f;
+        _camera.GlobalRotation = rot;
     }
 
     /// <summary>Turret camera (a gunship's owner): the camera sits at the turret and looks along the given world yaw and pitch. The body does not move; <see cref="EndChase"/> ends it.</summary>

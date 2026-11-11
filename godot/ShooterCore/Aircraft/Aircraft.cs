@@ -76,6 +76,8 @@ public sealed class Aircraft : IWorldEntity
     public int Kind => _kind;
     /// <summary>Height of the ground under the circle centre (the plane the gunship's aim points are on, #160).</summary>
     public float GroundY => _centre.Y;
+    /// <summary>The orbit's centre (its Y is the ground under it).</summary>
+    public Vector3 Centre => _centre;
     /// <summary>Seconds flown since spawn.</summary>
     public float Age => _age;
 

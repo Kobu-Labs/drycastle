@@ -24,8 +24,8 @@ public partial class NetClient
     /// <summary>The local player's gunship while it exists (null otherwise).</summary>
     AircraftView? _gunship;
     /// <summary>
-    /// The turret's look, world yaw and pitch (#160): the mouse moves it, zoom-scaled. It is what the owner sends as the aim, so it
-    /// changes only when the mouse does; the view is the direction from the turret to <see cref="_aimPoint"/>, not this.
+    /// The turret's look, world yaw and pitch (#160): the mouse moves it, zoom-scaled. It changes only when the mouse does. The
+    /// aim the server gets is <see cref="_aimPoint"/> (#161), the point this look meets the ground at, not these angles.
     /// </summary>
     float _lookYaw, _lookPitch;
     /// <summary>The raw look (the player's mouse yaw and pitch) last seen, so this frame's mouse move is the difference from it.</summary>
@@ -180,8 +180,8 @@ public partial class NetClient
     }
 
     /// <summary>
-    /// At the turret the input carries the turret's look (the aim the server anchors to the ground), not the raw mouse look, which
-    /// stays the player's own. Returns the pitch to send. Called on the input tick.
+    /// At the turret the input carries the turret's look, not the raw mouse look, which stays the player's own. Returns the pitch to
+    /// send. The aim point (#161) goes with it: <see cref="GunnerAim"/> is what the server fires at. Called on the input tick.
     /// </summary>
     float GunnerLook(ref MoveInput mi)
     {
@@ -189,4 +189,10 @@ public partial class NetClient
         mi.Yaw = _lookYaw;
         return _lookPitch;
     }
+
+    /// <summary>
+    /// The aim the input carries while steering a turret (#161): the ground point the reticle is on, from this client's own muzzle.
+    /// The server fires from its later muzzle toward this point, so the rounds land where the reticle is. Null when not at a turret.
+    /// </summary>
+    System.Numerics.Vector3? GunnerAim => _gunship != null && _me != null ? _aimPoint : null;
 }

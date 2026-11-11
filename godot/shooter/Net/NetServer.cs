@@ -103,7 +103,8 @@ public partial class NetServer : Node
     // weapons smoke bookkeeping
     int _shotsFired, _hitsLanded, _headshots, _wallBlocked, _backstabs, _refills;
     // rockets: server-owned projectile entities, ids from 0x8000 up (player ids count up from 1)
-    sealed class Rocket { public ushort Id, Owner; public byte Weapon; public Vector3 Pos, Dir; public float Age; public SplashDef? Blast; }
+    /// <summary>A rocket in flight. Speed and Life are per launch when set (a gunship's, killstreaks.json); zero keeps the weapon's own.</summary>
+    sealed class Rocket { public ushort Id, Owner; public byte Weapon; public Vector3 Pos, Dir; public float Age; public SplashDef? Blast; public float Speed, Life; }
     readonly List<Rocket> _rockets = new();
     ushort _nextRocket = 0x8000;
     public bool BazookaSmoke;
@@ -169,7 +170,9 @@ public partial class NetServer : Node
         StreakTick((float)delta);
         foreach (var c in _clients.Values.ToList()) if (c.Joined) SimulateClient(c, (float)delta);
         StepRockets((float)delta);
+        StepCorpses((float)delta);
         StepVehicles((float)delta);
+        DetonateShells();  // shells whose tracer has arrived burst now (#162)
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
         if (catchUp && LossTest == 0) _skippedSnapshots++; // the next regular tick sends the current state
@@ -660,25 +663,27 @@ public partial class NetServer : Node
         {
             var r = _rockets[k];
             var w = Weapons.Weapons[r.Weapon];
-            var len = w.ProjectileSpeed * dt;
+            var speed = r.Speed > 0 ? r.Speed : w.ProjectileSpeed;
+            var life = r.Life > 0 ? r.Life : w.ProjectileLife;
+            var len = speed * dt;
             var wall = WorldHit(r.Pos, r.Dir, len, out var hitCar);
-            var sweep = ProjectileMath.Sweep(N(r.Pos), N(r.Dir), len, wall, LiveTargets(), r.Owner);
-            switch (sweep.Kind)
+            var step = RocketFlight.Step(N(r.Pos), N(r.Dir), r.Age, speed, life, dt, wall, LiveTargets(), r.Owner);
+            switch (step.Outcome)
             {
-                case ImpactKind.Player:
+                case RocketOutcome.Player:
                     _rockets.RemoveAt(k);
-                    Explode(r, w, r.Pos + r.Dir * sweep.Distance, sweep.Victim);
+                    Explode(r, w, r.Pos + r.Dir * step.Distance, step.Victim);
                     continue;
-                case ImpactKind.World:
+                case RocketOutcome.World:
                     _rockets.RemoveAt(k);
                     _worldExplosions++;
                     // pulled back a hair so the blast centre is in front of the surface, not inside it
-                    Explode(r, w, r.Pos + r.Dir * MathF.Max(0, sweep.Distance - 0.02f), null, hitCar);
+                    Explode(r, w, r.Pos + r.Dir * MathF.Max(0, step.Distance - 0.02f), null, hitCar);
                     continue;
             }
             r.Pos += r.Dir * len;
             r.Age += dt;
-            if (r.Age >= w.ProjectileLife) { _rockets.RemoveAt(k); _expiredRockets++; Explode(r, w, r.Pos, null); }
+            if (step.Outcome == RocketOutcome.Expired) { _rockets.RemoveAt(k); _expiredRockets++; Explode(r, w, r.Pos, null); }
         }
     }
 
@@ -701,15 +706,13 @@ public partial class NetServer : Node
             var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, self);
             if (dmg <= 0) continue;
             if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
+            var k = ProjectileMath.Knockback(w, N(pos), HitMath.Centre(t), isDirect ? 1f : ProjectileMath.SplashFraction(w, dist));
+            PushOnDeath(t.Id, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
             var res = Deal(r.Owner, r.Weapon, t.Id, dmg, false, false);
+            ClearPush(t.Id, res);
             if (res == DamageResult.Ignored) continue; // spawn protected: neither damage nor knockback
             if (isDirect) _directHits++; else if (self) _selfHits++; else _splashHits++;
-            if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v))
-            {
-                var center = HitMath.Centre(t);
-                var k = ProjectileMath.Knockback(w, N(pos), center, isDirect ? 1f : ProjectileMath.SplashFraction(w, dist));
-                if (k != NVec3.Zero) { v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z)); _knocked++; }
-            }
+            if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) { v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z)); _knocked++; }
         }
     }
 

@@ -13,6 +13,41 @@ public static class RunOver
     }
 }
 
+/// <summary>
+/// Where a vehicle hits a body: the car's oriented footprint against the body's circle, swept along the path the car drove this tick so
+/// a fast or small vehicle cannot step over a body between two ticks. Players and target dummies share it.
+/// </summary>
+public static class CarFootprint
+{
+    /// <summary>The path is sampled at most this far apart (metres); a body circle is wider than this, so no gap is left.</summary>
+    public const float StepMetres = 0.5f;
+    /// <summary>A longer jump than this in one tick is a teleport (reset, respawn), not driving: only the end point counts.</summary>
+    public const float MaxSweepMetres = 20f;
+
+    /// <summary>The car at <paramref name="p"/> with <paramref name="yaw"/> touches a body standing at <paramref name="body"/> (feet) with <paramref name="radius"/>: the footprint's nearest point within the radius, the feet between 0.6 m below and 2 m above the car's origin.</summary>
+    public static bool Overlaps(Vector3 p, float yaw, float halfWidth, float halfLength, Vector3 body, float radius)
+    {
+        var d = body - p;
+        if (d.Y < -0.6f || d.Y > 2f) return false;
+        var lx = d.X * MathF.Cos(yaw) - d.Z * MathF.Sin(yaw);
+        var lz = -d.X * MathF.Sin(yaw) - d.Z * MathF.Cos(yaw);
+        var dx = MathF.Max(MathF.Abs(lx) - halfWidth, 0);
+        var dz = MathF.Max(MathF.Abs(lz) - halfLength, 0);
+        return dx * dx + dz * dz <= radius * radius;
+    }
+
+    /// <summary>The same test along the path from <paramref name="from"/> to <paramref name="to"/> (the car's origin at the start and end of the tick; the end yaw is used all along).</summary>
+    public static bool Hits(Vector3 from, Vector3 to, float yaw, float halfWidth, float halfLength, Vector3 body, float radius)
+    {
+        var travel = Vector3.Distance(from, to);
+        if (travel > MaxSweepMetres) return Overlaps(to, yaw, halfWidth, halfLength, body, radius);
+        var steps = Math.Max(1, (int)MathF.Ceiling(travel / StepMetres));
+        for (var i = 0; i <= steps; i++)
+            if (Overlaps(Vector3.Lerp(from, to, (float)i / steps), yaw, halfWidth, halfLength, body, radius)) return true;
+        return false;
+    }
+}
+
 /// <summary>Hidden vehicle HP (ticket #103): smoke stage from the remaining fraction, blast damage falloff and the box distance of a blast to a vehicle.</summary>
 public static class VehicleDamage
 {
@@ -123,10 +158,11 @@ public sealed class VehicleSeat
 
     /// <summary>
     /// The free seat of <paramref name="def"/> nearest to <paramref name="from"/> (horizontal distance, metres), within <paramref name="range"/>;
-    /// -1 if none. Ties go to the lower seat index, so the driver's seat wins when the player stands at the centre.
+    /// -1 if none. An empty vehicle always gives the driver's seat; ties go to the lower seat index.
     /// </summary>
     public int NearestFreeSeat(VehicleDef def, Vector3 carPos, float yaw, Vector3 from, float range)
     {
+        if (!Occupied && _occupant.Length > 0) return 0; // an empty vehicle: whoever gets in first is the driver, wherever they stand
         var best = -1; var bd = range;
         for (var i = 0; i < _occupant.Length && i < def.Seats.Count; i++)
         {
@@ -266,23 +302,21 @@ public struct CarState
 public static class CarModel
 {
     /// <summary>
-    /// Turn radius (m) at a speed: the steering lock radius at low speed, growing with v² once the lateral grip
-    /// (<see cref="VehicleDef.MaxLateralAccel"/>) is what limits the turn. Smooth: R = hypot(TurnRadius, v² / grip).
+    /// Turn radius (m) at a speed: the steering lock radius at a standstill, widening linearly with the fraction of top speed
+    /// to <see cref="VehicleDef.HighSpeedRadiusFactor"/> times that at top speed. The yaw rate (v / radius) then eases up with
+    /// speed instead of collapsing, so the car stays responsive when fast.
     /// </summary>
     public static float TurnRadiusAt(VehicleDef def, float speed)
     {
-        var grip = MathF.Max(0.1f, def.MaxLateralAccel);
-        var lat = speed * speed / grip;
-        return MathF.Sqrt(def.TurnRadius * def.TurnRadius + lat * lat);
+        var t = Math.Clamp(MathF.Abs(speed) / MathF.Max(0.1f, def.TopSpeed), 0f, 1f);
+        return def.TurnRadius * (1f + (def.HighSpeedRadiusFactor - 1f) * t);
     }
-
-    
 
     /// <summary>
     /// One tick. <paramref name="throttle"/> and <paramref name="steer"/> are -1..1 (forward, right), <paramref name="handbrake"/> is Jump.
     /// Longitudinal: acceleration to top speed, boosted near a standstill (<see cref="VehicleHandling.LaunchBoost"/>) (reverse capped by the handling), brake against travel, coast when idle.
     /// Lateral: yaw rate is speed / <see cref="TurnRadiusAt"/>, so it is zero when standing still, tight at walking pace and
-    /// capped at high speed; the actual yaw rate chases that target at a limited slew rate.
+    /// only moderately wider at top speed; the actual yaw rate chases that target at a limited slew rate.
     /// <paramref name="onWater"/> is set while the vehicle floats: an amphibious then drives at its water speed, and a boat has its drive
     /// (with planing); a boat not on water has none and coasts to a stop at its land deceleration.
     /// </summary>

@@ -269,6 +269,7 @@ public partial class NetServer
             // seats of players who have gone (disconnect, death) are freed; the driver is seat 0 and only the driver steers
             for (var s = 0; s < car.Seat.Count; s++) if (car.Seat.Occupant(s) != 0 && OccupantAt(car, s) == null) car.Seat.Clear(s);
             var driver = OccupantAt(car, 0);
+            car.PrevPos = car.GlobalPosition;
             if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt, Water);
             else car.Step(def, 0, 0, false, dt, Water);
             if (car.GlobalPosition.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); continue; }
@@ -342,15 +343,13 @@ public partial class NetServer
             var self = t.Id == attacker;
             if (self) dmg = MathF.Max(1f, MathF.Round(dmg * e.Splash.SelfDamageMultiplier));
             if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
+            var k = ProjectileMath.Knockback(e.Splash.KnockbackSpeed, N(at), HitMath.Centre(t), dmg / e.Damage);
+            PushOnDeath(t.Id, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
             var res = Deal(attacker, weapon, t.Id, dmg, false, false);
+            ClearPush(t.Id, res);
             if (res == DamageResult.Ignored) continue;
             _blastHits++;
-            if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v))
-            {
-                var centre = HitMath.Centre(t);
-                var k = ProjectileMath.Knockback(e.Splash.KnockbackSpeed, N(at), centre, dmg / e.Damage);
-                if (k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
-            }
+            if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
         }
         foreach (var other in _cars)
         {
@@ -380,23 +379,26 @@ public partial class NetServer
         }
     }
 
+    /// <summary>The car's footprint, swept over this tick's drive, touches a body standing at <paramref name="feet"/> (players and dummies alike).</summary>
+    bool CarHits(ServerCar car, Vector3 feet) =>
+        CarFootprint.Hits(N(car.PrevPos), N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(feet), MoveConsts.CapsuleRadius);
+
     void RunOverCheck(ServerCar car, Client driver)
     {
         var dmg = RunOver.Damage(Vehicles!, car.State.Speed, Vehicles!.RunOverScale(car.Def));
         if (dmg <= 0) return;
         RunOverTargets(car, driver, dmg); // target dummies (#148)
         var fwd = car.Forward;
-        var right = new Vector3(Mathf.Cos(car.State.Yaw), 0, -Mathf.Sin(car.State.Yaw));
         foreach (var t in _byId.Values)
         {
             if (t == driver || t.Car != null || _match.Get(t.Id)?.Life != PlayerLife.Alive) continue;
-            var d = t.Body.GlobalPosition - car.GlobalPosition;
-            if (d.Y < -0.6f || d.Y > 2f) continue;
-            var lx = d.Dot(right); var lz = d.Dot(fwd);
-            if (Mathf.Abs(lx) > car.HalfWidth + MoveConsts.CapsuleRadius || Mathf.Abs(lz) > car.HalfLength + MoveConsts.CapsuleRadius) continue;
+            if (!CarHits(car, t.Body.GlobalPosition)) continue;
             if (car.HitCooldown.TryGetValue(t.Id, out var until) && _elapsed < until) continue;
             car.HitCooldown[t.Id] = _elapsed + RunOverCooldown;
+            var fwdN = N(fwd);
+            PushOnDeath(t.Id, CorpseRules.ThrowFromCar(fwdN, car.State.Speed)); // a roadkill is thrown ahead of the car (the ragdoll)
             var r = Deal(driver.Id, SpecialWeapons.Vehicle, t.Id, dmg, false, false, KillCause.Roadkill);
+            ClearPush(t.Id, r);
             if (r == DamageResult.Ignored) continue;
             _runOvers++;
             if (r == DamageResult.Killed) _runOverKills++;

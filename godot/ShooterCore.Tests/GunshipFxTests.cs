@@ -201,7 +201,7 @@ public class GunshipFxTests
         var batch = new GunshipFxBatch();
         var bytes = 0;
         var rounds = 0;
-        var fire = new NetInput { Yaw = Quant.Yaw(0f), Pitch = Quant.Pitch(-0.5f), Buttons = (ushort)MoveButtons.Fire, Slot = 0 };
+        var fire = GunnerInputs.Look(control, 0f, -0.5f, MoveButtons.Fire);
 
         for (var tick = 0; tick < Wire.TickRate; tick++)
         {

@@ -141,8 +141,9 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 ///   SaveCamo(10): u8 slot, then the fixed-size CamoSpec encoding (<see cref="CamoSpec"/>)
 ///   Profile(6) also ends with: u8 camoCount, camoCount * CamoSpec (one per slot, #141)
 ///   Strings are u8 length + utf8 (clamped to 255 bytes). Hello also carries u8 tokenLen, token after the name.
-/// ch1 client to server, Input(11): u8 count (1..3, newest last), count * 11 bytes:
-///   u16 seq, i8 mx, i8 my, u16 yaw, i16 pitch, u16 buttons, u8 slot
+/// ch1 client to server, Input(11): u8 count (1..3, newest last), count inputs of 12 bytes:
+///   u16 seq, i8 mx, i8 my, u16 yaw, i16 pitch, u16 buttons, u8 slot, u8 flags (bit 0: aim)
+///   when bit 0 is set, 12 more bytes follow the input: i32 aimX, i32 aimY, i32 aimZ (Quant.Pos units, #161)
 /// ch1 server to client, Snapshot(20): u32 tick, u16 ackSeq, u8 count, then count entities:
 ///   u16 id, u8 type, u8 flags, then per flag
 ///     PosAbs(1):   i32 x, i32 y, i32 z   (1/128 m)
@@ -154,15 +155,19 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 /// </summary>
 public static class Wire
 {
-    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-155 (sandbox status, grant, action, state, held streak and notice, #156); v11: GunshipStatus is weapon and zoom only (2 bytes; ammo and heat are gone, #157); v12: the gunship FX is coalesced per tick (event kinds 121-123 replace the per-round Shot, ImpactFx and Ac130Blast of the gunships, #159), and the Explosion carries its blast radius (a gunship rocket's is 8 m); v13: GunshipShots carries each tracer's speed and length (#160); v14: the camo spec grows from 30 to 33 bytes (codec 2: body, skin tone, headgear).</summary>
-    public const byte ProtocolVersion = 14;
+    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-155 (sandbox status, grant, action, state, held streak and notice, #156); v11: GunshipStatus is weapon and zoom only (2 bytes; ammo and heat are gone, #157); v12: the gunship FX is coalesced per tick (event kinds 121-123 replace the per-round Shot, ImpactFx and Ac130Blast of the gunships, #159), and the Explosion carries its blast radius (a gunship rocket's is 8 m); v13: GunshipShots carries each tracer's speed and length (#160); v14: the camo spec grows from 30 to 33 bytes (codec 2: body, skin tone, headgear); v15: an input carries the gunner's aim, a ground point (flags byte, 12 more bytes when set), so the rounds land on the reticle (#161); v16: a gunship rocket flies at its own speed (killstreaks.json projectile_speed_mps) and lives out its range, so clients animate it at its Launch velocity's speed, not the bazooka's 40 m/s.</summary>
+    public const byte ProtocolVersion = 16;
     public const byte TickRate = 30;
     public const int ChanReliable = 0, ChanData = 1, Channels = 2;
     public const int KeyEvery = 30;
     public const int MaxInputsPerPacket = 3;
     public const int MaxNameBytes = 24;
     public const int MaxTokenBytes = 64;
-    public const int InputBytes = 11;
+    /// <summary>An input is this many bytes; a flags byte (bit 0: the gunner's aim follows) is its last.</summary>
+    public const int InputBytes = 12;
+    /// <summary>The gunner's aim (#161): three int32 quantised positions, after the input when its flags say so.</summary>
+    public const int AimBytes = 12;
+    public const byte InputFlagAim = 1;
 
     public const byte THello = 1, TWelcome = 2, TJoin = 3, TLeave = 4, TEvent = 5, TProfile = 6, TSaveLoadout = 7, TSelectSlot = 8, TError = 9, TSaveCamo = 10;
     public const byte TInput = 11, TSnapshot = 20, TWorldSnapshot = 21;
@@ -349,35 +354,53 @@ public static class Wire
         return null;
     }
 
-    /// <summary>Encode the newest inputs (up to 3, oldest first) as one packet.</summary>
+    /// <summary>Encode the newest inputs (up to 3, oldest first) as one packet. An input with an aim adds <see cref="AimBytes"/>.</summary>
     public static byte[] EncodeInputs(ReadOnlySpan<NetInput> inputs)
     {
         var n = Math.Min(inputs.Length, MaxInputsPerPacket);
-        var b = new byte[2 + n * InputBytes];
+        var size = 2;
+        for (var i = 0; i < n; i++) size += InputSize(inputs[inputs.Length - n + i]);
+        var b = new byte[size];
         b[0] = TInput; b[1] = (byte)n;
+        var at = 2;
         for (var i = 0; i < n; i++)
         {
-            var s = b.AsSpan(2 + i * InputBytes);
             var x = inputs[inputs.Length - n + i];
+            var s = b.AsSpan(at);
             BinaryPrimitives.WriteUInt16LittleEndian(s, x.Seq);
             s[2] = (byte)x.MoveX; s[3] = (byte)x.MoveY;
             BinaryPrimitives.WriteUInt16LittleEndian(s[4..], x.Yaw);
             BinaryPrimitives.WriteInt16LittleEndian(s[6..], x.Pitch);
             BinaryPrimitives.WriteUInt16LittleEndian(s[8..], x.Buttons);
             s[10] = x.Slot;
+            s[11] = x.HasAim ? InputFlagAim : (byte)0;
+            at += InputBytes;
+            if (x.HasAim)
+            {
+                BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(at), x.AimX);
+                BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(at + 4), x.AimY);
+                BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(at + 8), x.AimZ);
+                at += AimBytes;
+            }
         }
         return b;
     }
 
+    static int InputSize(in NetInput x) => InputBytes + (x.HasAim ? AimBytes : 0);
+
+    /// <summary>Decodes a packet of inputs (the newest up to 3 in order). False when the packet is malformed or truncated.</summary>
     public static bool TryDecodeInputs(ReadOnlySpan<byte> d, List<NetInput> into)
     {
         if (d.Length < 2 || d[0] != TInput) return false;
         int n = d[1];
-        if (n < 1 || n > MaxInputsPerPacket || d.Length < 2 + n * InputBytes) return false;
+        if (n < 1 || n > MaxInputsPerPacket) return false;
+        var at = 2;
         for (var i = 0; i < n; i++)
         {
-            var s = d[(2 + i * InputBytes)..];
-            into.Add(new NetInput
+            if (d.Length < at + InputBytes) return false;
+            var s = d[at..];
+            var flags = s[11];
+            var x = new NetInput
             {
                 Seq = BinaryPrimitives.ReadUInt16LittleEndian(s),
                 MoveX = (sbyte)s[2], MoveY = (sbyte)s[3],
@@ -385,7 +408,18 @@ public static class Wire
                 Pitch = BinaryPrimitives.ReadInt16LittleEndian(s[6..]),
                 Buttons = BinaryPrimitives.ReadUInt16LittleEndian(s[8..]),
                 Slot = s[10],
-            });
+            };
+            at += InputBytes;
+            if ((flags & InputFlagAim) != 0)
+            {
+                if (d.Length < at + AimBytes) return false;
+                x.HasAim = true;
+                x.AimX = BinaryPrimitives.ReadInt32LittleEndian(d[at..]);
+                x.AimY = BinaryPrimitives.ReadInt32LittleEndian(d[(at + 4)..]);
+                x.AimZ = BinaryPrimitives.ReadInt32LittleEndian(d[(at + 8)..]);
+                at += AimBytes;
+            }
+            into.Add(x);
         }
         return true;
     }

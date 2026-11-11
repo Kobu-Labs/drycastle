@@ -16,10 +16,7 @@ public class Ac130Tests
 
     static string ShippedJson => File.ReadAllText(Path.Combine(DataDir, "killstreaks.json"));
 
-    static NetInput Input(MoveButtons buttons, byte slot = 0, float yaw = 0, float pitch = -0.5f) => new()
-    {
-        Yaw = Quant.Yaw(yaw), Pitch = Quant.Pitch(pitch), Buttons = (ushort)buttons, Slot = slot,
-    };
+    static NetInput Input(GunshipControl c, MoveButtons buttons, byte slot = 0, float yaw = 0, float pitch = -0.5f) => GunnerInputs.Look(c, yaw, pitch, buttons, slot);
 
     [Fact]
     public void Shipped_turret_has_a_cannon_pair_and_a_shell_with_its_own_splash()
@@ -66,13 +63,13 @@ public class Ac130Tests
     {
         var shots = new List<GunshipShot>();
         var control = new GunshipControl(Turret, new Aircraft(Shipping.AircraftKinds[1], 1, Vector3.Zero, 0, true, Owner), shots.Add, _ => { }, new Random(1));
-        control.OnInput(Input(0, slot: 2), 1.0);
+        control.OnInput(Input(control, 0, slot: 2), 1.0);
         Assert.Equal(1, control.Weapon);
-        control.OnInput(Input(0, slot: 9), 1.1); // no such weapon: ignored
+        control.OnInput(Input(control, 0, slot: 9), 1.1); // no such weapon: ignored
         Assert.Equal(1, control.Weapon);
-        control.OnInput(Input(MoveButtons.Reload, slot: 9), 1.2); // the reload key steps on; the unchanged slot does not undo it
+        control.OnInput(Input(control, MoveButtons.Reload, slot: 9), 1.2); // the reload key steps on; the unchanged slot does not undo it
         Assert.Equal(2, control.Weapon);
-        control.OnInput(Input(MoveButtons.Reload, slot: 9), 1.3); // held, not a new press
+        control.OnInput(Input(control, MoveButtons.Reload, slot: 9), 1.3); // held, not a new press
         Assert.Equal(2, control.Weapon);
     }
 
@@ -81,12 +78,12 @@ public class Ac130Tests
     {
         var shots = new List<GunshipShot>();
         var control = new GunshipControl(Turret, new Aircraft(Shipping.AircraftKinds[1], 1, Vector3.Zero, 0, true, Owner), shots.Add, _ => { }, new Random(1));
-        control.OnInput(Input(MoveButtons.Fire, slot: 3), 1.0);
-        control.OnInput(Input(MoveButtons.Fire, slot: 3), 1.5); // inside the 1 s interval
+        control.OnInput(Input(control, MoveButtons.Fire, slot: 3), 1.0);
+        control.OnInput(Input(control, MoveButtons.Fire, slot: 3), 1.5); // inside the 1 s interval
         Assert.Single(shots);
         Assert.Equal(GunshipWeaponKind.Shell, shots[0].Kind);
 
-        control.OnInput(Input(MoveButtons.Fire, slot: 3), 2.1);
+        control.OnInput(Input(control, MoveButtons.Fire, slot: 3), 2.1);
         Assert.Equal(2, shots.Count);
     }
 
@@ -95,8 +92,8 @@ public class Ac130Tests
     {
         var shots = new List<GunshipShot>();
         var control = new GunshipControl(Turret, new Aircraft(Shipping.AircraftKinds[1], 1, Vector3.Zero, 0, true, Owner), shots.Add, _ => { }, new Random(1));
-        control.OnInput(Input(MoveButtons.Fire, slot: 2), 1.0);
-        control.OnInput(Input(MoveButtons.Fire, slot: 2), 1.61); // the 40 mm's 0.2 s: rounds due at 1.0, 1.2, 1.4 and 1.6
+        control.OnInput(Input(control, MoveButtons.Fire, slot: 2), 1.0);
+        control.OnInput(Input(control, MoveButtons.Fire, slot: 2), 1.61); // the 40 mm's 0.2 s: rounds due at 1.0, 1.2, 1.4 and 1.6
         Assert.Equal(4, shots.Count);
         Assert.All(shots, s => Assert.Equal(1, s.WeaponIndex));
     }

@@ -11,6 +11,12 @@ namespace Suchohrad.ShooterCore;
 /// </summary>
 public static class GunshipAim
 {
+    /// <summary>
+    /// How far past the longest weapon range an aim point may lie from the muzzle and still be taken as sent (#161). The owner's
+    /// point is on the ground from the owner's own, lagging muzzle, so it can sit a few metres beyond the server's range.
+    /// </summary>
+    public const float AimSlackM = 50f;
+
     /// <summary>Wraps an angle to [-pi, pi]. For a difference of two angles; never for a value that is drawn.</summary>
     public static float Wrap(float a) => MathF.IEEERemainder(a, MathF.PI * 2f);
 
@@ -19,6 +25,28 @@ public static class GunshipAim
     /// sequence, so the camera never takes the long way round at the +-pi cut.
     /// </summary>
     public static float Unwrap(float previous, float next) => previous + Wrap(next - previous);
+
+    /// <summary>
+    /// How far the muzzle of a platform on its orbit can be from the orbit's centre (its radius and altitude, in quadrature).
+    /// </summary>
+    public static float OrbitReach(AircraftKindDef kind) => MathF.Sqrt(kind.RadiusM * kind.RadiusM + kind.AltitudeM * kind.AltitudeM);
+
+    /// <summary>
+    /// The server's bounds on an aim point the owner sent (#161): no farther from the orbit's centre than the muzzle can be on
+    /// the orbit, plus the longest range and <see cref="AimSlackM"/>, and never below the ground plane. The bound is measured from
+    /// the centre, not the muzzle: a stabilised aim is out of range of the moving muzzle for part of every orbit, and clamping it
+    /// to the muzzle would pull it off the ground point the reticle is on. A legitimate point always passes; a crafted one
+    /// cannot reach beyond the orbit's area.
+    /// </summary>
+    public static Vector3 ClampAim(Vector3 centre, float orbitReachM, Vector3 point, float groundY, float maxDistance)
+    {
+        var d = point - centre;
+        var len = d.Length();
+        var reach = orbitReachM + maxDistance + AimSlackM;
+        if (len > reach) point = centre + d * (reach / len);
+        if (point.Y < groundY) point.Y = groundY;
+        return point;
+    }
 
     /// <summary>Clamps a pitch (radians) to the turret's range.</summary>
     public static float ClampPitch(float pitch, GunshipDef def) =>

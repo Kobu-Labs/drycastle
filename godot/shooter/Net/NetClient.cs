@@ -13,7 +13,7 @@ namespace Suchohrad.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Stance Stance; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
+    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -335,9 +335,13 @@ public partial class NetClient : Node
     {
         if (_deadRockets.Contains(id)) return;
         var dir = HitMath.Forward(rec.YawRad, rec.PitchRad);
-        var speed = Weapons != null && rec.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[rec.Weapon].ProjectileSpeed : 40f;
-        if (!_rockets.TryGetValue(id, out var r)) { r = new Rocket { Node = RocketFx.Make(World), Born = Now }; _rockets[id] = r; }
-        r.Pos = rec.Position; r.Dir = dir; r.At = Now; r.Speed = speed;
+        // the speed is the launch's (set there); a snapshot before the launch falls back to the weapon's, and the launch corrects it
+        if (!_rockets.TryGetValue(id, out var r))
+        {
+            var speed = Weapons != null && rec.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[rec.Weapon].ProjectileSpeed : 40f;
+            r = new Rocket { Node = RocketFx.Make(World), Born = Now, Speed = speed }; _rockets[id] = r;
+        }
+        r.Pos = rec.Position; r.Dir = dir; r.At = Now;
     }
 
     void RenderRockets()
@@ -459,7 +463,7 @@ public partial class NetClient : Node
         if (_gunship == null) PredictFire(mi); // rounds from a turret are the server's alone
         var sentPitch = GunnerLook(ref mi); // at the turret the aim is sent (ground-stabilised, #160), and the player's own look is left alone
         if (_gunship == null) _me.Yaw = mi.Yaw;
-        var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(Weapons != null ? _wantSlot : 0));
+        var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? _wantSlot : 0), GunnerAim);
         if (!_driving && !_controlling && _gunship == null) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         _pending.Add(new Pending { Input = ni, After = _me.State });
         if (_pending.Count > 120) _pending.RemoveAt(0);
@@ -475,15 +479,46 @@ public partial class NetClient : Node
     {
         if (_lastTick == 0) return;
         var rt = _lastTick + (Time.GetTicksMsec() / 1000.0 - _lastArrival) * Wire.TickRate - InterpDelayTicks;
-        foreach (var r in _remotes.Values)
+        var dt = (float)GetProcessDeltaTime();
+        foreach (var (id, r) in _remotes)
             if (r.Buf.At(rt) is { } s)
             {
-                r.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
-                r.Node.Rotation = new Vector3(0, s.Yaw, 0);
-                r.Node.Visible = r.State != EntityState.InVehicle;
-                r.View?.SetStance(r.Stance);
+                var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
+                var dead = r.State == EntityState.Dead;
+                TumbleRemote(r, at, s.Yaw, dead && TargetDummies.IsDummyId(id), dt);
+                // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
+                r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && CorpseOf(id)); // riders are drawn in their seat (the server puts the body there), seated rather than standing
+                r.View?.SetStance(r.State == EntityState.InVehicle ? Stance.Crouch : r.Stance);
                 AnimateRemote(r, s.Pos);
             }
+    }
+
+    /// <summary>
+    /// The ragdoll of a killed dummy: while it is thrown (dead and moving fast) it spins about its middle with its limbs flailing, then lies flat with
+    /// them loose. A dummy that fell where it stood plays the death clip; everything else stands upright at its feet. Corpses do the same in <see cref="RenderCorpses"/>.
+    /// </summary>
+    void TumbleRemote(Remote r, Vector3 at, float yaw, bool dummyDown, float dt)
+    {
+        var t = r.Tumble;
+        if (!dummyDown) { if (t.Thrown) { t.Reset(); r.View?.SetRagdoll(false); } }
+        else
+        {
+            var speed = dt > 0 ? (at - r.TumbleLast).Length() / dt : 0;
+            t.Update(at, speed > 2.5f && speed < 60f, dt);
+            if (t.Thrown) r.View?.SetRagdoll(true, t.Amount, t.AtRest);
+        }
+        r.TumbleLast = at;
+        if (r.View != null) r.View.Position = t.Thrown ? new Vector3(0, -RagdollTumble.Half, 0) : Vector3.Zero;
+        r.Node.GlobalPosition = t.Thrown ? at + Vector3.Up * t.PivotHeight : at;
+        r.Node.Basis = t.Thrown ? t.BasisFor(yaw) : new Basis(Vector3.Up, yaw);
+    }
+
+    /// <summary>True while a corpse of player <paramref name="owner"/> is on the map.</summary>
+    bool CorpseOf(ushort owner)
+    {
+        foreach (var id in _corpses.Keys)
+            if (WorldEntities.Entities.TryGetValue(id, out var e) && e.State.Owner == owner) return true;
+        return false;
     }
 
     /// <summary>Shows the held weapon of the current hotbar slot (the server-confirmed one once known) low on the right; hidden while dead or driving.</summary>
@@ -637,6 +672,15 @@ public partial class NetClient : Node
                 && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
     }
 
+    /// <summary>At a turret the slot sent is the key held (1-5, 0 none), not the body's hotbar weapon: the turret reads it as its weapon number (the AC-130's 1-3).</summary>
+    byte TurretKey()
+    {
+        if (Dead || Input.MouseMode != Input.MouseModeEnum.Captured) return 0;
+        for (var k = 0; k < 5; k++)
+            if (Input.IsActionPressed($"slot_{k + 1}")) return (byte)(k + 1);
+        return 0;
+    }
+
     void ReadSlotKeys()
     {
         if (Dead || Input.MouseMode != Input.MouseModeEnum.Captured || ChooserOpen) return;
@@ -673,7 +717,9 @@ public partial class NetClient : Node
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
                 _launchLog.Add((Now, l));
                 if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
-                if (_rockets.ContainsKey(l.Id) == false && !_deadRockets.Contains(l.Id) && ShotFx.Enabled && Weapons != null)
+                // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the bazooka's)
+                if (_rockets.TryGetValue(l.Id, out var known)) known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length();
+                else if (!_deadRockets.Contains(l.Id) && ShotFx.Enabled && Weapons != null)
                 {
                     // show the rocket at once from the launch event; snapshots take over
                     var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);

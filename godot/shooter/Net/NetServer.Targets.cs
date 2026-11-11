@@ -53,7 +53,7 @@ public partial class NetServer
     {
         var list = new List<EntityRecord>(_match.Targets.All.Count);
         foreach (var d in _match.Targets.All)
-            list.Add(EntityRecord.Make(d.Id, EntityType.Target, d.Spot.Feet, d.Spot.Yaw, 0, MathF.Max(0, MathF.Ceiling(d.Health)),
+            list.Add(EntityRecord.Make(d.Id, EntityType.Target, d.Body.Position, d.Spot.Yaw, 0, MathF.Max(0, MathF.Ceiling(d.Health)),
                 d.Alive ? EntityState.Alive : EntityState.Dead, 0, d.Spot.Pose));
         return list;
     }
@@ -72,6 +72,7 @@ public partial class NetServer
     /// </summary>
     void OnTargetKilled(TargetKilled tk)
     {
+        if (_deathPush.Remove(tk.Target.Id, out var push)) tk.Target.Body.Launch(push); // thrown by the blast or the car (the ragdoll)
         var killed = new PlayerKilled(tk.Killer, tk.Target.Id, tk.Weapon, tk.Cause);
         var fromStreak = StreakKill(killed);
         if (MatchConfig.TargetsAwardXp && Scores(tk.Killer)) AwardXp(_xp.OnKill(new KillFacts(tk.Killer, tk.Target.Id, tk.Cause, fromStreak), _elapsed));
@@ -82,18 +83,14 @@ public partial class NetServer
     /// <summary>Roadkill: a car drives over dummies like players (the same footprint test, the same damage).</summary>
     void RunOverTargets(ServerCar car, Client driver, float dmg)
     {
-        var fwd = car.Forward;
-        var right = new Vector3(Mathf.Cos(car.State.Yaw), 0, -Mathf.Sin(car.State.Yaw));
         foreach (var t in _match.Targets.All)
         {
             if (!t.Alive) continue;
-            var d = new Vector3(t.Spot.Feet.X, t.Spot.Feet.Y, t.Spot.Feet.Z) - car.GlobalPosition;
-            if (d.Y < -0.6f || d.Y > 2f) continue;
-            var lx = d.Dot(right); var lz = d.Dot(fwd);
-            if (Mathf.Abs(lx) > car.HalfWidth + MoveConsts.CapsuleRadius || Mathf.Abs(lz) > car.HalfLength + MoveConsts.CapsuleRadius) continue;
+            if (!CarHits(car, new Vector3(t.Spot.Feet.X, t.Spot.Feet.Y, t.Spot.Feet.Z))) continue;
             if (car.HitCooldown.TryGetValue(t.Id, out var until) && _elapsed < until) continue;
             car.HitCooldown[t.Id] = _elapsed + RunOverCooldown;
-            Deal(driver.Id, SpecialWeapons.Vehicle, t.Id, dmg, false, false, KillCause.Roadkill);
+            PushOnDeath(t.Id, CorpseRules.ThrowFromCar(N(car.Forward), car.State.Speed)); // a roadkill is thrown ahead of the car (the ragdoll)
+            ClearPush(t.Id, Deal(driver.Id, SpecialWeapons.Vehicle, t.Id, dmg, false, false, KillCause.Roadkill));
         }
     }
 }

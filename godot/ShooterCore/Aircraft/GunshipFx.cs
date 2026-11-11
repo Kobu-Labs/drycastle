@@ -13,6 +13,8 @@ public static class GunshipFxLimits
 {
     /// <summary>Tracer segments one gunner may send in one tick (the rest are fired and resolved, but not drawn).</summary>
     public const int MaxTracersPerTick = 8;
+    /// <summary>The farthest a sky shot's tracer is drawn (a round with no hit). A gunship round's range is 3000 m; the streak stops here.</summary>
+    public const float MaxSkyTracerM = 1500f;
     /// <summary>Impacts sent in one tick, all gunners together. Kills are always kept, so the cap may be exceeded by kills.</summary>
     public const int MaxImpactsPerTick = 6;
     /// <summary>Blasts one gunner may send in one tick (the smallest are dropped).</summary>

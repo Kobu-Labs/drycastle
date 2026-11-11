@@ -11,7 +11,8 @@ public readonly record struct GunshipShot(int WeaponIndex, GunshipWeaponKind Kin
 /// steps the zoom, Reload steps the weapon, Fire fires it. There is no ammo and no heat: the fire interval paces each weapon,
 /// and the streak's time limit is the only limit. An interval shorter than the input period fires several rounds in one
 /// input (up to <see cref="MaxRoundsPerInput"/>), so the effective rate is the interval's. Server side; the rules are pure so
-/// they run in the tests. The aim is a ground-stabilised world point (<see cref="GunshipAim"/>, #160); the server fires along the view from the muzzle to it.
+/// they run in the tests. The aim is a ground-stabilised world point (<see cref="GunshipAim"/>, #160) that the owner's client
+/// sends with each input (#161); the server fires along the view from its own muzzle to that point, so the rounds land on the reticle.
 /// </summary>
 public sealed class GunshipControl
 {
@@ -30,6 +31,8 @@ public sealed class GunshipControl
     int _slot;
     readonly double[] _nextShot;
     bool _aimWas, _reloadWas;
+    /// <summary>False until the owner has sent an aim: a turret with no aim has nothing to fire at, so it does not fire.</summary>
+    bool _haveAim;
     /// <summary>The hotbar key last seen (1 = the first weapon); only a change of it selects a weapon, so Reload still cycles.</summary>
     byte _key;
 
@@ -42,6 +45,7 @@ public sealed class GunshipControl
         _status = status;
         _rng = rng ?? new Random();
         _maxDistance = GunshipAim.MaxDistance(def);
+        _orbitReach = GunshipAim.OrbitReach(aircraft.Def);
         _weapons = (weapons ?? Enumerable.Range(0, def.Weapons.Count).ToList()).ToArray();
         if (_weapons.Length == 0) throw new ArgumentException("a gunship control needs at least one weapon", nameof(weapons));
         _nextShot = new double[def.Weapons.Count];
@@ -55,12 +59,11 @@ public sealed class GunshipControl
     /// <summary>The turret's view, world yaw and pitch in radians: the direction from the muzzle to <see cref="AimPoint"/>.</summary>
     public float TurretYaw { get; private set; }
     public float TurretPitch { get; private set; }
-    /// <summary>The world point the turret is on (ground-stabilised, #160). It moves only when the owner's look moves.</summary>
+    /// <summary>The world point the turret is on (ground-stabilised, #160): the owner's aim, bounded by <see cref="GunshipAim.ClampAim"/>.</summary>
     public Vector3 AimPoint { get; private set; }
-    bool _haveLook;
-    ushort _lookYaw;
-    short _lookPitch;
     readonly float _maxDistance;
+    /// <summary>How far the muzzle can be from the orbit's centre (the aim's bound, see <see cref="GunshipAim.ClampAim"/>).</summary>
+    readonly float _orbitReach;
     public float Magnification => _def.ZoomLevels[Zoom];
     public GunshipDef Def => _def;
     public Aircraft Aircraft => _aircraft;
@@ -70,21 +73,20 @@ public sealed class GunshipControl
     /// <summary>Where a round leaves the turret, in world space (under the airframe).</summary>
     public Vector3 Muzzle => _aircraft.Position - Vector3.UnitY * TurretDropM;
 
-    /// <summary>Applies one input from the owner. <paramref name="now"/> is the match clock in seconds.</summary>
+    /// <summary>
+    /// Applies one input from the owner. <paramref name="now"/> is the match clock in seconds. An input with an aim (#161) moves
+    /// <see cref="AimPoint"/> to it (bounded); one without keeps the last. The view is the direction from this muzzle to the aim
+    /// point, so the rounds leave along it. The input's look angles are not used: re-intersecting them from this later muzzle is the bug.
+    /// </summary>
     public void OnInput(NetInput input, double now)
     {
         if (Ended) return;
-        // the look moves the aim point only when it changes (the mouse moved): the point is then anchored to the ground from
-        // where the turret is now, and it stays put while the owner's mouse is still, however the airframe turns (#160)
-        if (!_haveLook || input.Yaw != _lookYaw || input.Pitch != _lookPitch)
+        if (input.HasAim)
         {
-            _haveLook = true;
-            _lookYaw = input.Yaw;
-            _lookPitch = input.Pitch;
-            var pitch = GunshipAim.ClampPitch(Quant.Pitch(input.Pitch), _def);
-            AimPoint = GunshipAim.AimPoint(Muzzle, Quant.Yaw(input.Yaw), pitch, _aircraft.GroundY, _maxDistance);
+            AimPoint = GunshipAim.ClampAim(_aircraft.Centre, _orbitReach, input.Aim, _aircraft.GroundY, _maxDistance);
+            _haveAim = true;
         }
-        (TurretYaw, TurretPitch) = GunshipAim.View(Muzzle, AimPoint, _def);
+        if (_haveAim) (TurretYaw, TurretPitch) = GunshipAim.View(Muzzle, AimPoint, _def);
 
         var aim = Held(input, MoveButtons.Aim);
         var reload = Held(input, MoveButtons.Reload);
@@ -101,7 +103,7 @@ public sealed class GunshipControl
             if (pick >= 0 && pick != _slot) { _slot = pick; changed = true; }
         }
 
-        if (fire) FireDue(now);
+        if (fire && _haveAim) FireDue(now);
         if (changed) _status(Status());
     }
 

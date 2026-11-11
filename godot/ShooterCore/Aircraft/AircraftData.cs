@@ -57,6 +57,12 @@ public sealed class GunshipWeaponDef
     /// </summary>
     public float? TracerSpeedMps { get; init; }
     public float? TracerLengthM { get; init; }
+    /// <summary>
+    /// A rocket's flight speed, m/s (killstreaks.json <c>projectile_speed_mps</c>, default 250). It replaces the bazooka's 40 m/s for this
+    /// launch, so a rocket can reach a target across the map; its life is <see cref="RocketFlight.LifeFor"/> of its range and this speed.
+    /// Zero for the other kinds.
+    /// </summary>
+    public float ProjectileSpeedMps { get; init; }
 }
 
 /// <summary>The gunship turret: aim limits relative to the airframe, zoom levels, and its weapons (killstreaks.json "gunship").</summary>
@@ -109,6 +115,7 @@ public static class AircraftData
         public SplashRaw? Splash { get; set; }
         public float? TracerSpeedMps { get; set; }
         public float? TracerLengthM { get; set; }
+        public float? ProjectileSpeedMps { get; set; }
     }
 
     internal sealed class SplashRaw
@@ -210,6 +217,7 @@ public static class AircraftData
                 Splash = splash,
                 TracerSpeedMps = kind == GunshipWeaponKind.Rocket ? r.TracerSpeedMps : Need(r.TracerSpeedMps, where, "tracer_speed_mps", 50),
                 TracerLengthM = kind == GunshipWeaponKind.Rocket ? r.TracerLengthM : Need(r.TracerLengthM, where, "tracer_length_m", 0.5f),
+                ProjectileSpeedMps = kind == GunshipWeaponKind.Rocket ? Need(r.ProjectileSpeedMps ?? 250f, where, "projectile_speed_mps", 1) : 0,
             });
         }
         if (weapons.Count == 0) throw new DataFileException($"{F}: {section}: at least one weapon is required");

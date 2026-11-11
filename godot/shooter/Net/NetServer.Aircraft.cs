@@ -18,6 +18,9 @@ public partial class NetServer
     /// <summary>The gunner whose round is resolving right now (its hit markers go to _gunFx); null otherwise.</summary>
     ushort? _gunFxOwner;
 
+    /// <summary>Shells in the air, by their detonation time (the server's clock). Cleared on a round reset.</summary>
+    readonly TimedQueue<PendingShell> _shells = new();
+
     /// <summary>weapons.json index per gunship weapon (same order as the gunship's weapons), resolved once at start.</summary>
     int[] _gunshipWeaponIndex = Array.Empty<int>();
 
@@ -115,16 +118,18 @@ public partial class NetServer
         var by = credit ?? (byte)weapon;
         if (def.Kind == GunshipWeaponKind.Rocket)
         {
+            // the rocket flies at the gunship's own speed and lives out its whole range (the bazooka's 40 m/s would burst it ~150 m out)
             var rocket = new Rocket
             {
                 Id = _nextRocket, Owner = owner, Weapon = (byte)weapon, Blast = def.Splash,
                 Pos = new Vector3(shot.Origin.X, shot.Origin.Y, shot.Origin.Z),
                 Dir = new Vector3(shot.Direction.X, shot.Direction.Y, shot.Direction.Z),
+                Speed = def.ProjectileSpeedMps, Life = RocketFlight.LifeFor(def.RangeM, def.ProjectileSpeedMps),
             };
             _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
             _rockets.Add(rocket);
             _rocketsFired++;
-            BroadcastEvent(EventKind.Launch, WeaponCodec.Encode(new LaunchMsg(rocket.Id, owner, rocket.Weapon, shot.Origin, shot.Direction * w.ProjectileSpeed)));
+            BroadcastEvent(EventKind.Launch, WeaponCodec.Encode(new LaunchMsg(rocket.Id, owner, rocket.Weapon, shot.Origin, shot.Direction * rocket.Speed)));
             return;
         }
 
@@ -132,19 +137,40 @@ public partial class NetServer
         var targets = LiveTargets();
         var route = GunshipRouting.Route(def, shot.Origin, shot.Direction, wall, targets, owner, GunshipVehicles(), Vehicles?.BulletDamageMultiplier ?? 0f);
         var end = shot.Origin + shot.Direction * route.Distance;
-        _gunFx.Tracer(owner, new GunshipTracer((byte)weapon, shot.Origin, end, def.TracerSpeedMps ?? 0f, def.TracerLengthM ?? 0f));
+        var isShell = def.Kind == GunshipWeaponKind.Shell;
+        // a cannon sky shot (no hit) is drawn only to GunshipFxLimits.MaxSkyTracerM; a shell's streak runs to where it bursts, so it is not cut short
+        var drawn = route.Impact == GunshipImpact.None && !isShell ? shot.Origin + shot.Direction * MathF.Min(route.Distance, GunshipFxLimits.MaxSkyTracerM) : end;
+        _gunFx.Tracer(owner, new GunshipTracer((byte)weapon, shot.Origin, drawn, def.TracerSpeedMps ?? 0f, def.TracerLengthM ?? 0f));
 
-        // the damage, now; the owner's hit markers are collected for the tick (see Deal)
+        var from = new NVec3(shot.Origin.X, shot.Origin.Y, shot.Origin.Z);
+        var timing = isShell ? ShellFlight.Plan(from, end, def.TracerSpeedMps ?? 0f, _elapsed, 1.0 / Wire.TickRate) : new ShellTiming(false, _elapsed);
+        if (timing.Deferred)
+        {
+            // the shell bursts when its tracer arrives: the point and the route are fixed now (no homing); the damage waits
+            _shells.Add(timing.DueAt, new PendingShell(owner, def, by, route, end));
+            return;
+        }
+        DetonateRound(owner, def, by, route, end);
+    }
+
+    /// <summary>
+    /// A round's damage and FX at its point: the blast (or the direct hit of a cannon round), the hit markers for the owner, and the impact.
+    /// Runs at the fire for a cannon round, and at the tracer's arrival for a shell (<see cref="DetonateShells"/>). The victims are the live
+    /// ones at this moment; the direct hit is the route's, from the fire.
+    /// </summary>
+    void DetonateRound(ushort owner, GunshipWeaponDef def, byte credit, GunshipRoute route, NVec3 end)
+    {
+        var targets = LiveTargets();
         var kill = false;
         _gunFxOwner = owner;
         if (def.Splash != null && (def.Kind == GunshipWeaponKind.Shell || route.Impact != GunshipImpact.None))
-            kill = GunshipBurst(owner, end, def, by, route, targets);
+            kill = GunshipBurst(owner, end, def, credit, route, targets);
         else if (route.Impact == GunshipImpact.Body)
-            kill = Deal(owner, by, route.TargetId, route.Damage, false, false) == DamageResult.Killed;
+            kill = Deal(owner, credit, route.TargetId, route.Damage, false, false) == DamageResult.Killed;
         else if (route.Impact == GunshipImpact.Vehicle && Vehicles != null)
         {
             var car = _cars[route.VehicleIndex];
-            DamageVehicle(car, route.Damage, owner, by, 0);
+            DamageVehicle(car, route.Damage, owner, credit, 0);
             kill = car.Destroyed;
         }
         _gunFxOwner = null;
@@ -153,6 +179,15 @@ public partial class NetServer
             _gunFx.Impact(new GunshipImpactFx(
                 ImpactAt(end, SurfaceClassifier.SizeFor(def.Kind, def.Damage, def.Splash?.Radius ?? 0), route.Impact == GunshipImpact.Body, route.Impact == GunshipImpact.Vehicle),
                 kill));
+    }
+
+    /// <summary>A shell in the air: its detonation (damage, blast, impact) at the tick its tracer arrives. Round resets clear them.</summary>
+    sealed record PendingShell(ushort Owner, GunshipWeaponDef Def, byte Credit, GunshipRoute Route, NVec3 End);
+
+    /// <summary>The shells whose tracer has arrived by now detonate; called once a tick, before the tick's FX are sent.</summary>
+    void DetonateShells()
+    {
+        foreach (var s in _shells.TakeDue(_elapsed)) DetonateRound(s.Owner, s.Def, s.Credit, s.Route, s.End);
     }
 
     /// <summary>
@@ -179,12 +214,14 @@ public partial class NetServer
                 if (h.Direct && car.Destroyed) kill = true;
                 continue;
             }
+            var t = targets.FirstOrDefault(x => x.Id == h.TargetId);
+            var k = ProjectileMath.Knockback(splash.KnockbackSpeed, at, HitMath.Centre(t), h.Fraction);
+            PushOnDeath(h.TargetId, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
             var res = Deal(owner, credit, h.TargetId, h.Damage, false, false);
+            ClearPush(h.TargetId, res);
             if (res == DamageResult.Ignored) continue; // spawn protected or a pilot at the gun: neither damage nor knockback
             if (h.Direct && res == DamageResult.Killed) kill = true;
             if (res == DamageResult.Killed || !_byId.TryGetValue(h.TargetId, out var v)) continue;
-            var t = targets.FirstOrDefault(x => x.Id == h.TargetId);
-            var k = ProjectileMath.Knockback(splash.KnockbackSpeed, at, HitMath.Centre(t), h.Fraction);
             if (k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
         }
         return kill;

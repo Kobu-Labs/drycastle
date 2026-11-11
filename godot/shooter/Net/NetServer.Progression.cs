@@ -31,6 +31,7 @@ public partial class NetServer
     void RoundStarted()
     {
         StreakRoundReset();
+        _shells.Clear(); // a round reset takes the shells in the air with it
         _xp.Reset();
         foreach (var c in _clients.Values) c.RoundXp.Clear();
     }
@@ -39,6 +40,7 @@ public partial class NetServer
     void RoundEnded()
     {
         StreakRoundReset();
+        _shells.Clear();
         AwardXp(_xp.OnMatchEnd(_match.Winners, _match.Ranking().Select(p => p.Id).ToList()));
         foreach (var c in _clients.Values.Where(c => c.Joined))
         {

@@ -46,17 +46,35 @@ public struct NetInput
     public short Pitch;
     public ushort Buttons;
     public byte Slot;
+    /// <summary>
+    /// True when the input carries the gunner's aim: a world point on the ground (#161), sent while a turret is steered. The
+    /// coordinates are the quantised positions (<see cref="Quant.Pos"/>), so an input round-trips bit for bit.
+    /// </summary>
+    public bool HasAim;
+    public int AimX, AimY, AimZ;
 
-    public static NetInput From(ushort seq, in MoveInput m, float pitch, byte slot) => new()
+    /// <summary>The aim point in metres (only meaningful when <see cref="HasAim"/>).</summary>
+    public readonly Vector3 Aim => new(Quant.Pos(AimX), Quant.Pos(AimY), Quant.Pos(AimZ));
+
+    public static NetInput From(ushort seq, in MoveInput m, float pitch, byte slot, Vector3? aim = null)
     {
-        Seq = seq,
-        MoveX = Quant.Axis(m.MoveX),
-        MoveY = Quant.Axis(m.MoveY),
-        Yaw = Quant.Yaw(m.Yaw),
-        Pitch = Quant.Pitch(pitch),
-        Buttons = (ushort)m.Buttons,
-        Slot = slot,
-    };
+        var n = new NetInput
+        {
+            Seq = seq,
+            MoveX = Quant.Axis(m.MoveX),
+            MoveY = Quant.Axis(m.MoveY),
+            Yaw = Quant.Yaw(m.Yaw),
+            Pitch = Quant.Pitch(pitch),
+            Buttons = (ushort)m.Buttons,
+            Slot = slot,
+        };
+        if (aim is { } a)
+        {
+            n.HasAim = true;
+            n.AimX = Quant.Pos(a.X); n.AimY = Quant.Pos(a.Y); n.AimZ = Quant.Pos(a.Z);
+        }
+        return n;
+    }
 
     /// <summary>The movement input both sides simulate with (the dequantised values, so prediction matches the server).</summary>
     public readonly MoveInput ToMove(float speedScale = 1f) => new()

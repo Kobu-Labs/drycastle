@@ -128,10 +128,7 @@ public class AircraftTests
 
     // The turret aim is ground-stabilised and world-space now (#160): its limits and continuity are in GunshipGroundAimTests.
 
-    static NetInput Input(float yaw, float pitch, MoveButtons buttons) => new()
-    {
-        Yaw = Quant.Yaw(yaw), Pitch = Quant.Pitch(pitch), Buttons = (ushort)buttons,
-    };
+    static NetInput Input(GunshipControl c, float yaw, float pitch, MoveButtons buttons) => GunnerInputs.Look(c, yaw, pitch, buttons);
 
     sealed class Gunner
     {
@@ -151,7 +148,7 @@ public class AircraftTests
     public void Trigger_fires_the_cannon_from_under_the_airframe_with_the_clamped_aim()
     {
         var g = new Gunner(new Aircraft(Shipping.AircraftKinds[1], 1, Vector3.Zero, 0, true, 3));
-        g.Control.OnInput(Input(0, -0.5f, MoveButtons.Fire), 1.0);
+        g.Control.OnInput(Input(g.Control, 0, -0.5f, MoveButtons.Fire), 1.0);
         Assert.Single(g.Shots);
         var s = g.Shots[0];
         Assert.Equal(GunshipWeaponKind.Cannon, s.Kind);
@@ -162,10 +159,10 @@ public class AircraftTests
     public void Cannon_respects_its_interval()
     {
         var g = new Gunner();
-        g.Control.OnInput(Input(0, -0.5f, MoveButtons.Fire), 1.0);
-        g.Control.OnInput(Input(0, -0.5f, MoveButtons.Fire), 1.05); // inside the 0.15 s interval
+        g.Control.OnInput(Input(g.Control, 0, -0.5f, MoveButtons.Fire), 1.0);
+        g.Control.OnInput(Input(g.Control, 0, -0.5f, MoveButtons.Fire), 1.05); // inside the 0.15 s interval
         Assert.Single(g.Shots);
-        g.Control.OnInput(Input(0, -0.5f, MoveButtons.Fire), 1.2);
+        g.Control.OnInput(Input(g.Control, 0, -0.5f, MoveButtons.Fire), 1.2);
         Assert.Equal(2, g.Shots.Count);
     }
 
@@ -179,7 +176,7 @@ public class AircraftTests
         // 300 inputs held on fire: far past any old ammo count or heat lock, and none of it stops the trigger
         for (var i = 0; i < 300; i++, t += cannon.IntervalS + 0.01)
         {
-            g.Control.OnInput(Input(0, -0.5f, MoveButtons.Fire), t);
+            g.Control.OnInput(Input(g.Control, 0, -0.5f, MoveButtons.Fire), t);
             last = t;
         }
         // the rate is the interval's: rounds due from the first press to the last input (the schedule catches up when an input is late)
@@ -193,7 +190,7 @@ public class AircraftTests
         // the AC-130's 25 mm: 0.04 s between rounds, so an input 0.25 s after the last one has six rounds due (1.04 .. 1.24)
         var shots = new List<GunshipShot>();
         var control = new GunshipControl(Shipping.Ac130!, new Aircraft(Shipping.AircraftKinds[1], 1, Vector3.Zero, 0, true, 3), shots.Add, _ => { }, new Random(1));
-        var fire25 = Input(0, -0.5f, MoveButtons.Fire) with { Slot = 1 }; // key 1: the AC-130's 25 mm
+        var fire25 = Input(control, 0, -0.5f, MoveButtons.Fire) with { Slot = 1 }; // key 1: the AC-130's 25 mm
         control.OnInput(fire25, 1.0);
         Assert.Single(shots);
         control.OnInput(fire25, 1.25);
@@ -205,18 +202,18 @@ public class AircraftTests
     public void Reload_steps_to_the_rockets_and_aim_steps_the_zoom()
     {
         var g = new Gunner();
-        g.Control.OnInput(Input(0, -0.5f, MoveButtons.Reload), 1.0);
+        g.Control.OnInput(Input(g.Control, 0, -0.5f, MoveButtons.Reload), 1.0);
         Assert.Equal(1, g.Control.Weapon);
-        g.Control.OnInput(Input(0, -0.5f, MoveButtons.Fire), 1.5);
+        g.Control.OnInput(Input(g.Control, 0, -0.5f, MoveButtons.Fire), 1.5);
         Assert.Single(g.Shots);
         Assert.Equal(GunshipWeaponKind.Rocket, g.Shots[0].Kind);
         Assert.Equal(1, g.Shots[0].WeaponIndex);
 
-        g.Control.OnInput(Input(0, -0.5f, MoveButtons.Aim), 2.0);
+        g.Control.OnInput(Input(g.Control, 0, -0.5f, MoveButtons.Aim), 2.0);
         Assert.Equal(1, g.Control.Zoom);
         Assert.Equal(2.5f, g.Control.Magnification);
         // a held button steps once, not every input
-        g.Control.OnInput(Input(0, -0.5f, MoveButtons.Aim), 2.05);
+        g.Control.OnInput(Input(g.Control, 0, -0.5f, MoveButtons.Aim), 2.05);
         Assert.Equal(1, g.Control.Zoom);
     }
 
@@ -225,7 +222,7 @@ public class AircraftTests
     {
         var g = new Gunner(new Aircraft(Heli, 0, Vector3.Zero, 0, true, 3, lifetimeS: 1));
         g.Air.Tick(2);
-        g.Control.OnInput(Input(0, -0.5f, MoveButtons.Fire), 1.0);
+        g.Control.OnInput(Input(g.Control, 0, -0.5f, MoveButtons.Fire), 1.0);
         Assert.Empty(g.Shots);
         Assert.True(g.Control.Ended);
     }

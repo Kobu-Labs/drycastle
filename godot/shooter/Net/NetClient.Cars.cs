@@ -122,14 +122,42 @@ public partial class NetClient
                 _carYaw = s.Yaw;
                 _me.Chase(p, s.Yaw);
                 kmh = v.Kmh;
+                ShowSelfInCar(v);
             }
         }
+        if (!_driving) HideSelfInCar();
         if (!_driving && _gunship == null) _me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
         _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
         string? prompt = null;
         if (_driving) prompt = Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) != null) prompt = Strings.F("hud.vehicle.enter", InputBindings.Name("interact"));
         _hud?.SetPrompt(TurretPrompt() ?? prompt ?? CratePrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
+    }
+
+    CharacterView? _selfView;
+
+    /// <summary>The chase camera sees your own character: a body view seated at the driver's seat, a child of the car so it moves with it.</summary>
+    void ShowSelfInCar(CarView car)
+    {
+        if (Vehicles == null) return;
+        var seats = Vehicles.Vehicles[car.Kind].Seats;
+        var o = seats.Count > 0 && seats[0].Offset.Length == 3 ? seats[0].Offset : new float[3];
+        if (_selfView == null || _selfView.GetParent() != car.Node)
+        {
+            _selfView?.QueueFree();
+            _selfView = CharacterView.Make();
+            if (Appearances.TryGetValue(_myId, out var look)) _selfView.SetCamo(look, CamoData);
+            _selfView.SetStance(Stance.Crouch); // seated: there is no sitting animation, the crouch squash is the closest pose
+            car.Node.AddChild(_selfView);
+        }
+        _selfView.Position = new Vector3(o[0], o[1], o[2]);
+    }
+
+    void HideSelfInCar()
+    {
+        if (_selfView == null) return;
+        _selfView.QueueFree();
+        _selfView = null;
     }
 
     static NVec3 NV(Vector3 v) => new(v.X, v.Y, v.Z);

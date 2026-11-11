@@ -27,7 +27,7 @@ public class GunshipAimAndImpactTests
         var toCentre = new Vector3(Centre.X - a.Position.X, 0, Centre.Z - a.Position.Z);
         var yaw = YawToward(toCentre);
         var control = new GunshipControl(Gun, a, _ => { }, _ => { }, new Random(1));
-        control.OnInput(new NetInput { Yaw = Quant.Yaw(yaw), Pitch = Quant.Pitch(-0.4f) }, 1.0);
+        control.OnInput(GunnerInputs.Look(control, yaw, -0.4f), 1.0);
         Assert.InRange(MathF.Abs(GunshipAim.Wrap(control.TurretYaw - yaw)), 0, 0.001f);
     }
 
@@ -39,7 +39,7 @@ public class GunshipAimAndImpactTests
         var shots = new List<GunshipShot>();
         var control = new GunshipControl(Gun, a, shots.Add, _ => { }, new Random(1), weapons: new[] { 0 });
         var yaw = a.YawRad;
-        control.OnInput(Input(yaw, -0.4f, MoveButtons.Fire), 0.0);
+        control.OnInput(Input(control, yaw, -0.4f, MoveButtons.Fire), 0.0);
         Assert.Single(shots);
         var shot = shots[0];
         var spot = shot.Origin + shot.Direction * 30f;
@@ -87,8 +87,5 @@ public class GunshipAimAndImpactTests
         Assert.Null(ImpactCodec.Decode(bad));
     }
 
-    static NetInput Input(float yaw, float pitch, MoveButtons buttons) => new()
-    {
-        Yaw = Quant.Yaw(yaw), Pitch = Quant.Pitch(pitch), Buttons = (ushort)buttons,
-    };
+    static NetInput Input(GunshipControl c, float yaw, float pitch, MoveButtons buttons) => GunnerInputs.Look(c, yaw, pitch, buttons);
 }

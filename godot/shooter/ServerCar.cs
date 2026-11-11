@@ -12,6 +12,8 @@ namespace Suchohrad.Shooter;
 public partial class ServerCar : CharacterBody3D
 {
     public float HalfWidth = 1.1f, HalfLength = 2.15f;
+    /// <summary>Where the car was at the start of the tick (set by the server before the step): the run-over test sweeps from here to the end.</summary>
+    public Vector3 PrevPos;
     /// <summary>Origin height for a vehicle standing on the real ground: the highest ground under the footprint centre and corners, so the box starts flush instead of inside the terrain. Null when any sample has no ground (a hole) or the footprint is steeper than 0.8 m.</summary>
     public static float? RestHeight(PhysicsDirectSpaceState3D space, Vector3 pos, float yaw, float halfWidth, float halfLength, float hint)
     {

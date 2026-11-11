@@ -12,7 +12,7 @@ namespace Suchohrad.Shooter;
 public partial class NetClient
 {
     /// <summary>A tracer, from a shot event or a gunship tick: the muzzle, the tracer, the hole and the sound (prediction echo skipped).</summary>
-    void OnShot(ShotMsg sh, float? speed = null, float? length = null)
+    void OnShot(ShotMsg sh, float? speed = null, float? length = null, bool impact = true)
     {
         _shotLog.Add((Now, sh));
         if (_remotes.TryGetValue(sh.Shooter, out var shooter)) shooter.FireUntil = Now + 0.45;
@@ -22,7 +22,8 @@ public partial class NetClient
         var endV = new Vector3(sh.End.X, sh.End.Y, sh.End.Z);
         SfxShot(sh, melee);
         if (!melee) { if (sh.Shooter == _myId) _viewmodel?.Flash(0.4f); else if (_remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
-        ShotFx.Spawn(World, MuzzleOf(sh.Shooter, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV), endV, melee, speed: speed, length: length);
+        // a gunship's impact is its own message (OnGunshipImpacts), so its tracer does not draw one too: no 300 m cut-off for a long round
+        ShotFx.Spawn(World, MuzzleOf(sh.Shooter, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV), endV, melee, impact: impact, speed: speed, length: length);
         if (!melee) ShotHole(new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV);
         if (!melee) BulletSurfaceHit(new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV);
     }
@@ -30,7 +31,7 @@ public partial class NetClient
     /// <summary>One gunner's tracers this tick: each one drawn as its own shot.</summary>
     void OnGunshipShots(GunshipShotsMsg m)
     {
-        foreach (var t in m.Tracers) OnShot(new ShotMsg(m.Owner, t.Weapon, t.Origin, t.End), t.SpeedMps > 0 ? t.SpeedMps : null, t.LengthM > 0 ? t.LengthM : null);
+        foreach (var t in m.Tracers) OnShot(new ShotMsg(m.Owner, t.Weapon, t.Origin, t.End), t.SpeedMps > 0 ? t.SpeedMps : null, t.LengthM > 0 ? t.LengthM : null, impact: false);
     }
 
     /// <summary>The tick's gunship impacts (kills included): each one drawn as an ImpactFx.</summary>
