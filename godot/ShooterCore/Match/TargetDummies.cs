@@ -65,6 +65,8 @@ public sealed class TargetDummies
     /// <summary>First fake player id. Client ids count up from 1, so the two ranges never meet on a real server.</summary>
     public const ushort FirstId = 50000;
     public const float MaxHealth = MoveConsts.MaxHealth;
+    /// <summary>Seconds a killed dummy stays down before it stands again on its spot.</summary>
+    public const float RespawnDelay = 3f;
 
     public sealed class Dummy
     {
@@ -113,6 +115,12 @@ public sealed class TargetDummies
         d.Alive = false;
         d.RespawnAt = now + _respawnDelay;
         return DamageResult.Killed;
+    }
+
+    /// <summary>Round start: every dummy stands at full health on its spot.</summary>
+    public void ResetAll()
+    {
+        foreach (var d in _all) { d.Alive = true; d.Health = MaxHealth; d.RespawnAt = 0; }
     }
 
     /// <summary>Stands every dead dummy whose respawn time has come, at full health on its spot. Returns the ids that stood up.</summary>

@@ -147,7 +147,7 @@ public partial class NetServer : Node
         _tick++;
         if (!_spawnsChecked)
         {
-            if (_tick >= 3) { CheckSpawnGround(); SpawnCars(); }
+            if (_tick >= 3) { CheckSpawnGround(); SpawnCars(); PlanTargets(); }
             return; // not accepting connections until the spawn list is validated
         }
         _elapsed += delta;
@@ -351,6 +351,7 @@ public partial class NetServer : Node
             if (o != c) Send(o, new JoinMsg(c.Id, c.Name));
         }
         foreach (var w in _match.Entities.Snapshot()) Send(c, new EventMsg((byte)EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State)));
+        SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
         _match.AddPlayer(c.Id, c.Name); // spawns the player (event) and broadcasts the scoreboard
         _host.Flush();
@@ -451,6 +452,7 @@ public partial class NetServer : Node
                 AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause, fromStreak), _elapsed));
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon, k.Cause)));
                 break;
+            case TargetKilled tk: OnTargetKilled(tk); break;
             case PlayerDied d: LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
         }
     }
@@ -530,7 +532,7 @@ public partial class NetServer : Node
 
     List<HitTarget> LiveTargets() =>
         _byId.Values.Where(o => _match.Get(o.Id)?.Life == PlayerLife.Alive)
-            .Select(o => new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw)).ToList();
+            .Select(o => new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw)).Concat(TargetHitTargets()).ToList();
 
     /// <summary>Distance from <paramref name="from"/> along <paramref name="dir"/> to the first world collider (player bodies excluded), or infinity.</summary>
     float WorldDistance(Vector3 from, Vector3 dir, float max) => WorldHit(from, dir, max, out _);
@@ -691,6 +693,7 @@ public partial class NetServer : Node
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot, c.Body.State.Stance));
         foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed, car.Lights));
+        ents.AddRange(TargetRecords()); // target dummies (#148)
         foreach (var r in _rockets)
             ents.Add(EntityRecord.Make(r.Id, EntityType.Projectile, N(r.Pos),
                 MathF.Atan2(-r.Dir.X, -r.Dir.Z), MathF.Asin(Math.Clamp(r.Dir.Y, -1f, 1f)), 0, EntityState.Alive, r.Weapon));

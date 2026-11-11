@@ -168,7 +168,12 @@ public sealed class ClientMatchState
         LastSpawn.Remove(id); LastDeath.Remove(id); SpawnedAt.Remove(id); DiedAt.Remove(id);
     }
 
-    public string NameOf(ushort id) => Rows.FirstOrDefault(r => r.Id == id).Name ?? $"#{id}";
+    readonly Dictionary<ushort, string> _targetNames = new();
+
+    /// <summary>Target dummies are not on the scoreboard; their names come from the roster (#148).</summary>
+    public void NameTarget(ushort id, string name) => _targetNames[id] = name;
+
+    public string NameOf(ushort id) => Rows.FirstOrDefault(r => r.Id == id).Name ?? (_targetNames.TryGetValue(id, out var t) ? t : $"#{id}");
 
     public string ScoreboardText(double now)
     {

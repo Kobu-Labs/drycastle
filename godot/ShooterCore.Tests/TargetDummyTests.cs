@@ -142,4 +142,51 @@ public class TargetDummyTests
         Assert.Equal(0, c.Targets);
         Assert.True(c.TargetsAwardXp);
     }
+
+    [Fact]
+    public void RosterCodecRoundTripsAndRejectsGarbage()
+    {
+        var roster = new List<(ushort, string)> { (50000, "Target 01"), (50007, "Target 08") };
+        var back = TargetCodec.DecodeRoster(TargetCodec.EncodeRoster(roster));
+        Assert.Equal(roster, back);
+        Assert.Null(TargetCodec.DecodeRoster(new byte[] { 2, 0, 1 }));          // truncated
+        Assert.Equal(new List<(ushort, string)>(), TargetCodec.DecodeRoster(new byte[] { 0, 0 }));
+    }
+
+    [Fact]
+    public void DummyDamageGoesThroughTheMatchAndCreditsTheShooter()
+    {
+        var ev = new List<MatchEvent>();
+        var m = Sim(ev, new MatchConfig { ScoreGoal = 1 });
+        m.AddPlayer(1, "shooter");
+        m.SetTargets(TargetPlacement.Plan(Vector3.Zero, 2, FlatGround));
+        var id = m.Targets.All[0].Id;
+        Assert.Equal(DamageResult.Damaged, m.ApplyDamage(id, 1, 3, 60));
+        Assert.Equal(DamageResult.Killed, m.ApplyDamage(id, 1, 3, 60, cause: KillCause.Headshot));
+        Assert.Equal(1, m.Get(1)!.Kills);
+        Assert.Equal(MatchPhase.Running, m.Phase);             // a target kill never ends the round
+        Assert.Equal(DamageResult.Ignored, m.ApplyDamage(id, 1, 3, 60));
+        Assert.Contains(ev, e => e is TargetKilled { Cause: KillCause.Headshot, Killer: 1 });
+        Assert.DoesNotContain(ev, e => e is PlayerKilled);     // no player kill, so no stats row
+        Assert.Single(m.Players);
+    }
+
+    [Fact]
+    public void DummyRespawnsOnTheMatchClockAndResetsAtRoundStart()
+    {
+        double now = 0;
+        var m = new MatchSim(new MatchConfig(), () => now, new[] { Vector3.Zero }, new Random(1));
+        m.AddPlayer(1, "a");
+        m.SetTargets(TargetPlacement.Plan(Vector3.Zero, 1, FlatGround));
+        var id = m.Targets.All[0].Id;
+        m.ApplyDamage(id, 1, 0, 500);
+        Assert.False(m.Targets.IsHittable(id));
+        now = 2.9; m.Update();
+        Assert.False(m.Targets.IsHittable(id));
+        now = 3.0; m.Update();
+        Assert.True(m.Targets.IsHittable(id));
+        m.ApplyDamage(id, 1, 0, 500);
+        m.Targets.ResetAll();                                 // a new round starts with every dummy up
+        Assert.True(m.Targets.IsHittable(id));
+    }
 }
