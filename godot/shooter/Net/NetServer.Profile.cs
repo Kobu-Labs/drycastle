@@ -103,7 +103,9 @@ public partial class NetServer
                 slots[i] = slots[i] with { Name = LoadoutRules.DefaultName(i) }; // a row from before loadout names (#145)
             }
             else slots[i] = defaults(i);
-            if (saveDefaults) await store.Loadouts.SaveAsync(p.Id, slots[i]);
+            if (!saveDefaults) continue;
+            try { await store.Loadouts.SaveAsync(p.Id, slots[i]); }
+            catch (Exception e) { GD.PrintErr($"server: could not save the default loadout of slot {i}: {e.Message}"); } // the join goes on with it in memory
         }
         return new PlayerProfile
         {
@@ -159,6 +161,26 @@ public partial class NetServer
         }
     }
 
+    const string SaveFailed = "Could not save, try again in a moment.";
+
+    /// <summary>A save whose answer waits for the database write (#195). Only the task crosses threads; <see cref="Done"/> runs on the tick.</summary>
+    readonly List<(Task Write, Client C, Action<bool> Done)> _pendingSaves = new();
+
+    /// <summary>Runs <paramref name="done"/> on a later tick with whether the write succeeded (a dropped or failed write is false).</summary>
+    void AfterWrite(Task write, Action<bool> done, Client c) => _pendingSaves.Add((write, c, done));
+
+    /// <summary>Answers every save whose write has finished. A client that left in the meantime is not answered. Runs on the tick.</summary>
+    void CompleteSaves()
+    {
+        for (var i = _pendingSaves.Count - 1; i >= 0; i--)
+        {
+            var (write, c, done) = _pendingSaves[i];
+            if (!write.IsCompleted) continue;
+            _pendingSaves.RemoveAt(i);
+            if (_clients.ContainsKey(c.Peer)) done(write.IsCompletedSuccessfully);
+        }
+    }
+
     /// <summary>Answers one save (ticket #145): the client matches it by seq. Failures change nothing on the server.</summary>
     void AckSave(Client c, int slot, uint seq, string? error)
     {
@@ -184,8 +206,9 @@ public partial class NetServer
             return;
         }
         p.Loadouts[l.Slot] = l;
-        if (p.Persist) _ = Progression!.Loadouts.SaveAsync(p.DbId, l);
-        AckSave(c, l.Slot, m.Seq, null);
+        var slot = l.Slot;
+        if (p.Persist) AfterWrite(Progression!.Loadouts.SaveAsync(p.DbId, l), ok => AckSave(c, slot, m.Seq, ok ? null : SaveFailed), c);
+        else AckSave(c, slot, m.Seq, null);
         SendProfile(c);
     }
 

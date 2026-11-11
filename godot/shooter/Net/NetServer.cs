@@ -176,6 +176,7 @@ public partial class NetServer : Node
         foreach (var cl in _clients.Values) cl.PacketsThisTick = 0;
         Poll();
         CompleteProfileLoads();
+        CompleteSaves();
         _match.Update();
         _match.Entities.Tick((float)delta);
         StreakTick((float)delta);

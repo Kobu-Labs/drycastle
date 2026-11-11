@@ -61,9 +61,29 @@ public sealed class SqliteProgressionStore : IProgressionStore
     {
         const string Select = "SELECT id, token, name, xp, created_at, last_seen FROM players";
 
-        public Task<Profile> GetOrCreateAsync(string token)
+        /// <summary>
+        /// A returning player is found on the read connection, so a join does not wait behind the write queue (#195); last_seen is a
+        /// queued write. Only a new token goes through the write connection. A just-queued XP grant may not show yet: the server adds
+        /// XP as "xp = xp + n", so the stored total stays right.
+        /// </summary>
+        public async Task<Profile> GetOrCreateAsync(string token)
         {
             if (string.IsNullOrWhiteSpace(token)) throw new ArgumentException("token is required", nameof(token));
+            var found = await db.Read(c =>
+            {
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = Select + " WHERE token = $t;";
+                cmd.Parameters.AddWithValue("$t", token);
+                using var r = cmd.ExecuteReader();
+                return r.Read() ? ReadProfile(r) : null;
+            });
+            if (found == null) return await Create(token);
+            _ = db.Write("touch last seen", c => Exec(c, "UPDATE players SET last_seen = $now WHERE id = $id;", ("$now", Stamp(DateTime.UtcNow)), ("$id", found.Id)));
+            return found;
+        }
+
+        Task<Profile> Create(string token)
+        {
             return db.Mutate(c => // writes (a new profile), so it runs on the write connection behind the queued writes
             {
                 using var tx = c.BeginTransaction();
@@ -143,7 +163,7 @@ public sealed class SqliteProgressionStore : IProgressionStore
             var blob = spec.Encode();
             return db.Write("save camo", c => Exec(c,
                 "INSERT INTO loadout_camo (player_id, slot, spec) VALUES ($id, $slot, $spec) ON CONFLICT (player_id, slot) DO UPDATE SET spec = excluded.spec;",
-                ("$id", playerId), ("$slot", slot), ("$spec", blob)));
+                ("$id", playerId), ("$slot", slot), ("$spec", blob)), report: true);
         }
     }
 
@@ -167,7 +187,7 @@ public sealed class SqliteProgressionStore : IProgressionStore
             return db.Write("save loadout", c => Exec(c,
                 "UPDATE loadouts SET primary_weapon = $p, secondary_weapon = $s, perk = $k, streak1 = $r1, streak2 = $r2, streak3 = $r3, name = $n WHERE player_id = $id AND slot = $slot;",
                 ("$p", l.PrimaryWeapon), ("$s", l.SecondaryWeapon), ("$k", l.Perk),
-                ("$r1", l.Streak1), ("$r2", l.Streak2), ("$r3", l.Streak3), ("$n", l.Name), ("$id", playerId), ("$slot", l.Slot)));
+                ("$r1", l.Streak1), ("$r2", l.Streak2), ("$r3", l.Streak3), ("$n", l.Name), ("$id", playerId), ("$slot", l.Slot)), report: true);
         }
 
         public Task<int> GetActiveSlotAsync(long playerId) => db.Read(c =>

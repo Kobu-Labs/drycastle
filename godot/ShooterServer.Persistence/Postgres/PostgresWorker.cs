@@ -82,27 +82,30 @@ internal sealed class PostgresWorker : IDisposable
 
     /// <summary>
     /// Fire-and-forget write. A failure is logged (rate-limited) and never thrown, so a database problem cannot crash the match.
-    /// Past the write budget the write is dropped and counted instead (T2-14).
+    /// Past the write budget the write is dropped and counted instead (T2-14). With <paramref name="report"/> the returned task
+    /// faults when the write fails or is dropped, so a caller that tells a player "saved" can tell the truth (#195); it is still
+    /// logged, and a caller that ignores the task is unaffected.
     /// </summary>
-    public Task Write(string what, Action<NpgsqlConnection> work)
+    public Task Write(string what, Action<NpgsqlConnection> work, bool report = false)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!_budget.TryReserve(what))
         {
-            tcs.SetResult();
+            if (report) tcs.SetException(new IOException($"db write dropped, queue full ({what})")); else tcs.SetResult();
             return tcs.Task;
         }
         if (!_writer.TryAdd(c =>
             {
+                Exception? failure = null;
                 try { work(c); }
-                catch (Exception e) { _log.Write($"db write failed ({what}): {e.Message}"); }
+                catch (Exception e) { failure = e; _log.Write($"db write failed ({what}): {e.Message}"); }
                 finally { _budget.Release(); }
-                tcs.SetResult();
+                if (failure != null && report) tcs.SetException(failure); else tcs.SetResult();
             }))
         {
             _budget.Release();
             _log.Write($"db write dropped, store is closed ({what})");
-            tcs.SetResult();
+            if (report) tcs.SetException(new ObjectDisposedException(nameof(PostgresWorker))); else tcs.SetResult();
         }
         return tcs.Task;
     }
