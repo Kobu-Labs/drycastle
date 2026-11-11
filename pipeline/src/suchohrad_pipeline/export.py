@@ -291,9 +291,9 @@ def run_export(
     _dump(out_dir / "parcels.json", parcels_file)
     water_file = out_dir / "water.json"
     if scene.terrain is not None:
-        water_doc, water_skipped = build_water(parcels_out, scene.terrain)
+        water_doc, water_skipped = build_water(parcels_out, scene.terrain, scene.regions)
         for pid in water_skipped:
-            print(f"export: warning: water parcel {pid} has no terrain under it; no water body", file=sys.stderr)
+            print(f"export: warning: water parcel/region {pid} has no terrain under it (or none below its surface); no water body", file=sys.stderr)
         _dump(water_file, water_doc)
         files["water"] = "water.json"
     elif water_file.exists():

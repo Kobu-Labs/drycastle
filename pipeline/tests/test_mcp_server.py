@@ -641,7 +641,7 @@ def test_through_mcp_session(env):
             assert names == {
                 "list_assets", "find_parcels", "get_parcel", "set_fence", "reset_fence", "set_trees",
                 "reset_trees", "place_object", "remove_object", "move_object", "create_group", "merge_groups",
-                "dissolve_group", "create_region", "set_region_colour", "move_region_point",
+                "dissolve_group", "create_region", "set_region_colour", "set_region_water", "move_region_point",
                 "delete_region", "list_regions",
             }
             tool = next(t for t in (await client.list_tools()).tools if t.name == "place_object")

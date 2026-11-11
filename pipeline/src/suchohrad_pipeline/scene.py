@@ -59,6 +59,7 @@ class ParcelColours:
 @dataclass
 class MapScene:
     terrain: Terrain | None = None
+    regions: dict = field(default_factory=dict)  # planned regions by ID (water.json takes the ones with a water_y)
     building_elevation: dict[str, float] = field(default_factory=dict)
     parcels: dict[Chunk, list[tuple[str, Mesh, Mesh]]] = field(default_factory=dict)
     # terrain, roads, props, ...; a "<node>_tex_<texture id>" entry is a TexturedMesh (textures.py)
@@ -176,6 +177,7 @@ def build_scene(
 
     rplan = plan_regions(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), t)
     scene.warnings += rplan.warnings
+    scene.regions = rplan.regions
     if rplan.regions:
         meshes = region_meshes(
             rplan, t, scene.graph, load_section("roads", rules_path), load_section("regions", rules_path)

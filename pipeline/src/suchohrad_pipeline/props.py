@@ -31,6 +31,7 @@ from suchohrad_pipeline.edits import (
     EditsError,
     FenceSpec,
     load_edits,
+    region_ring,
     resolve_fence,
 )
 from suchohrad_pipeline.lamps import make_lamps, read_osm_lamps, write_lamps
@@ -229,6 +230,7 @@ def make_trees(
     objects: list[tuple[float, float]] | None = None,
     only: set[str] | None = None,
     include_osm: bool = True,
+    water: BaseGeometry | None = None,
 ) -> list[dict]:
     """OSM trees plus seeded rule-based trees in parcels (gardens, forests, ...).
 
@@ -237,7 +239,8 @@ def make_trees(
 
     ``overrides`` maps a parcel ID to its edited trees (``density_per_1000m2`` or ``count``, and
     ``seed_offset``). ``objects`` are placed object positions (local metres) that trees keep
-    ``object_clearance_m`` away from.
+    ``object_clearance_m`` away from. ``water`` (local metres) is the area of the water regions:
+    rule-based trees get no trunk in it (their crowns may overhang it from the bank).
     """
     bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
     bzone = unary_union(bpolys).buffer(float(cfg["building_clearance_m"])) if bpolys else None
@@ -248,7 +251,7 @@ def make_trees(
         else None
     )
     shapely.prepare(terrain.coverage)
-    for g in (bzone, rzone, ozone):
+    for g in (bzone, rzone, ozone, water):
         if g is not None:
             shapely.prepare(g)
     trees: list[dict] = []
@@ -318,6 +321,8 @@ def make_trees(
             if rzone is not None and shapely.contains_xy(rzone, x, y):
                 continue
             if ozone is not None and shapely.contains_xy(ozone, x, y):
+                continue
+            if water is not None and shapely.contains_xy(water, x, y):
                 continue
             if any(math.hypot(x - a, y - b) < spacing for a, b in placed):
                 continue
@@ -469,6 +474,7 @@ class EditPlan:
     objects: list[dict] = field(default_factory=list)  # objects.json entries, sorted by id
     object_owner: dict[str, str] = field(default_factory=dict)  # object id -> parcel listing it
     warnings: list[str] = field(default_factory=list)
+    water: BaseGeometry | None = None  # union of the water regions (local metres): no tree trunks in it
 
 
 def _local_xy(x: float, y: float, origin: list[float] | None) -> tuple[float, float]:
@@ -541,6 +547,12 @@ def plan_edits(
                 }
             )
     plan.objects.sort(key=lambda o: o["id"])
+    pools = [
+        Polygon([_local_xy(x, y, origin) for x, y in region_ring(r["polygon"])])
+        for _, r in sorted(edits.regions.items())
+        if "water_y" in r
+    ]
+    plan.water = unary_union(pools) if pools else None
     return plan
 
 
@@ -591,6 +603,7 @@ def run_props(
         fcfg["trees"],
         overrides=plan.tree_overrides,
         objects=[(o["position"][0], o["position"][1]) for o in plan.objects],
+        water=plan.water,
     )
     trees = cap_trees(trees, chunk_m, int(fcfg["trees"]["max_per_chunk"]))
     spawns = make_spawns(

@@ -7,7 +7,7 @@ parcel outline), the bed is the lowest terrain height inside. A parcel with no t
 
 import numpy as np
 from shapely import contains_xy
-from shapely.geometry import shape
+from shapely.geometry import mapping, shape
 
 WATER_FORMAT_VERSION = 1
 SAMPLE_STEP_M = 2.0
@@ -40,8 +40,27 @@ def water_heights(geom, terrain, step: float = SAMPLE_STEP_M) -> tuple[float, fl
     return round(surface, 3), round(bed, 3)
 
 
-def build_water(parcels: list[dict], terrain) -> tuple[dict, list[str]]:
-    """The ``water.json`` document for the parcels of kind ``water``, and the ids skipped for lack of terrain."""
+def region_bed(geom, terrain, step: float = SAMPLE_STEP_M) -> float | None:
+    """The lowest terrain height inside a water region's polygon, or None when the terrain does not cover it."""
+    minx, miny, maxx, maxy = geom.bounds
+    gx, gy = np.meshgrid(np.arange(minx + step / 2, maxx, step), np.arange(miny + step / 2, maxy, step))
+    gx, gy = gx.ravel(), gy.ravel()
+    inside = contains_xy(geom, gx, gy)
+    gx, gy = gx[inside], gy[inside]
+    covered = contains_xy(terrain.coverage, gx, gy)
+    gx, gy = gx[covered], gy[covered]
+    if gx.size == 0:
+        return None
+    return round(float(np.min(terrain.surface(gx, gy))), 3)
+
+
+def build_water(parcels: list[dict], terrain, regions: dict | None = None) -> tuple[dict, list[str]]:
+    """The ``water.json`` document for the parcels of kind ``water``, and the ids skipped for lack of terrain.
+
+    ``regions`` (``plan_regions(...).regions``) adds one body per region that has a ``water_y``: its polygon, that
+    surface and the lowest terrain inside as the bed. A region whose terrain is nowhere below its surface holds no
+    water and is skipped too.
+    """
     bodies, skipped = [], []
     for p in sorted(parcels, key=lambda p: p["id"]):
         if p["kind"] != "water":
@@ -52,6 +71,14 @@ def build_water(parcels: list[dict], terrain) -> tuple[dict, list[str]]:
             continue
         surface, bed = heights
         bodies.append({"id": p["id"], "polygon": p["polygon"], "surface_y": surface, "bed_y": bed})
+    for rid, region in sorted((regions or {}).items()):
+        if region.water_y is None:
+            continue
+        bed = region_bed(region.polygon, terrain)
+        if bed is None or bed >= region.water_y:
+            skipped.append(rid)
+            continue
+        bodies.append({"id": rid, "polygon": mapping(region.polygon), "surface_y": round(region.water_y, 3), "bed_y": bed})
     doc = {
         "version": WATER_FORMAT_VERSION,
         "axes": "polygon: local metres, x east, y north (as parcels.json); heights: metres, as terrain.json",

@@ -1374,6 +1374,7 @@ class ParcelEditTools:
         return {
             "id": rid,
             "colour": entry["colour"],
+            **({"water_y": entry["water_y"]} if "water_y" in entry else {}),
             "area_m2": round(poly.area, 1),
             "points": len(entry["polygon"]),
             "bbox": [_r3(v) for v in poly.bounds],
@@ -1401,8 +1402,10 @@ class ParcelEditTools:
         polygon: list[list[float]] | None = None,
         parcel: str | None = None,
         points: list | None = None,
+        water_y: float | None = None,
     ) -> dict:
         """Create a region (see the registered tool description)."""
+        level = None if water_y is None else _check_num("water_y", water_y)
         col = self._region_colour(colour)
         if (polygon is None) == (points is None):
             raise ToolError(
@@ -1438,11 +1441,11 @@ class ParcelEditTools:
 
         def change(edits: Edits) -> dict:
             rid = _next_id("R", list(edits.regions))
-            edits.regions[rid] = {"colour": col, "polygon": pts}
+            edits.regions[rid] = {"colour": col, "polygon": pts, **({} if level is None else {"water_y": level})}
             return {"id": rid, "warnings": self._overlap_warnings(edits, rid)}
 
         out = self._write(change)
-        row = self._region_row(out["id"], {"colour": col, "polygon": pts})
+        row = self._region_row(out["id"], {"colour": col, "polygon": pts, **({} if level is None else {"water_y": level})})
         return {
             "summary": f"created {out['id']} ({col}, {row['points']} points, {row['area_m2']} m2)"
             + (f", {len(out['warnings'])} warning(s)" if out["warnings"] else ""),
@@ -1450,6 +1453,23 @@ class ParcelEditTools:
             "polygon": pts,
             "warnings": out["warnings"],
         }
+
+    def set_region_water(self, id: str, water_y: float | None) -> dict:
+        """Make a region a body of water at a flat height (terrain datum, metres), or None to make it ground paint again."""
+        rid = self._region_id(id)
+        level = None if water_y is None else _check_num("water_y", water_y)
+
+        def change(edits: Edits) -> object:
+            entry = self._region_entry(edits, rid)
+            old = entry.get("water_y")
+            if level is None:
+                entry.pop("water_y", None)
+            else:
+                entry["water_y"] = level
+            return old
+
+        old = self._write(change)
+        return {"summary": f"{rid} water_y {old} -> {level}", "id": rid, "water_y": level, "warnings": []}
 
     def set_region_colour(self, id: str, colour: str) -> dict:
         """Change a region's colour."""
@@ -1728,14 +1748,25 @@ def build_server(settings: Settings) -> Any:
         "as place_object: along grows right, inward grows away from the road; see get_parcel). "
         "Needs 3+ points; edges may not cross or touch each other. Invalid shapes are refused "
         "and nothing is written. Where regions overlap the higher ID wins (reported in "
-        "`warnings`). Returns the id, area, bbox and the final absolute polygon."))
+        "`warnings`). Optional `water_y` makes it a body of water with a flat surface at that height "
+        "(metres, terrain datum): see set_region_water. Returns the id, area, bbox and the final "
+        "absolute polygon."))
     def create_region(
         colour: str,
         polygon: list[list[float]] | None = None,
         parcel: str | None = None,
         points: list[list[float]] | None = None,
+        water_y: float | None = None,
     ) -> dict:
-        return tools.create_region(colour, polygon, parcel, points)
+        return tools.create_region(colour, polygon, parcel, points, water_y)
+
+    @server.tool(description=(
+        "Make a region a real body of water: a flat surface at `water_y` (metres on the terrain's "
+        "datum, e.g. 185.6) that stays level over the terrain, also written to water.json "
+        "(swimming, the shooter's water surface). The region's colour tints it. `water_y` null "
+        "turns it back into ground paint. Raise or lower the level by calling this again."))
+    def set_region_water(id: str, water_y: float | None) -> dict:
+        return tools.set_region_water(id, water_y)
 
     @server.tool(description="Change a region's colour (\"#rrggbb\"). Use list_regions for ids.")
     def set_region_colour(id: str, colour: str) -> dict:

@@ -215,6 +215,7 @@ def compute_fragment(
             objects=objects_xy,
             only=ids,
             include_osm=False,
+            water=plan.water,
         )
 
     trees = trees_of(target_set, [polys[pid] for pid in targets])

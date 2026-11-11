@@ -121,6 +121,7 @@ All inputs and outputs are JSON. Write tools return `summary`, `warnings` and th
 | `dissolve_group` | `id` | removes the group; members and their own fence edits stay |
 | `create_region` | `colour`, and either `polygon` `[[x,y],..]` or `parcel` + `points` `[[along,inward],..]` | new `R-NNNN`; see Regions |
 | `set_region_colour` | `id`, `colour` | |
+| `set_region_water` | `id`, `water_y` (null = ground paint again) | makes the region a body of water: flat surface at `water_y` (metres, terrain datum), also in `water.json`; no tree trunks inside it |
 | `move_region_point` | `id`, `index`, `position?` `[x,y]` or `offset?` `{dx,dy}` | exactly one of position / offset |
 | `delete_region` | `id` | |
 | `list_regions` | `near?` `{x,y,radius_m?}` or `{parcel,radius_m?}`, `limit?` | id, colour, `area_m2`, `points`, `bbox`, `centroid`; `distance_m` when `near` |

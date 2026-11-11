@@ -63,6 +63,11 @@ formatting is fixed, so git diffs stay small. Version 1::
                         self-intersection (edges may not cross or touch each other). Regions are
                         independent of parcel boundaries. Where regions overlap, the higher ID
                         wins. The ``regions`` key is only written when there are regions.
+    water_y             optional number: the region is a body of water whose flat surface is at this
+                        height, in metres on the terrain's datum (as terrain.json, e.g. 185.6). The
+                        colour then tints the surface in the editor view; the body is also written
+                        to water.json (swimming, drowning, the shooter's water surface) with its bed
+                        at the lowest terrain inside the polygon. Without it the region is ground paint.
 
 Unknown keys are validation errors. Entries that refer to parcels that no longer exist are not
 errors: the props stage warns about them and skips them (see props.plan_edits).
@@ -109,7 +114,7 @@ GAP_KEYS = ("at", "width_m")
 TREE_KEYS = ("density_per_1000m2", "count", "seed_offset")
 OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour")
 GROUP_KEYS = ("parcels", "fence")
-REGION_KEYS = ("colour", "polygon")
+REGION_KEYS = ("colour", "polygon", "water_y")
 
 _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")
@@ -340,6 +345,8 @@ def _check_region(entry: object, path: str, errors: list[str]) -> None:
         errors.append(f"{path}.colour: required")
     else:
         _check_colour(entry["colour"], f"{path}.colour", errors)
+    if "water_y" in entry and not (_is_num(entry["water_y"]) and math.isfinite(entry["water_y"])):
+        errors.append(f"{path}.water_y: must be a number (metres, terrain datum)")
     if "polygon" not in entry:
         errors.append(f"{path}.polygon: required")
         return
