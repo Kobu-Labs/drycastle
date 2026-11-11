@@ -258,8 +258,12 @@ one match and level 20 after about six good matches. No telemetry exists yet.
   material; a body entry says which materials are the `suit` (camo shader), the `gear` (vest and belts, a dark tint of the suit's secondary colour),
   the `headgear` (helmet: as modelled, covered in the suit pattern, or hidden, `headgear` list order is fixed) and the `hair`. `Skin` and `Face` take
   the chosen skin tone (the boots, which the model puts in `Skin`, are darkened by a vertex colour added when the model loads). The model has a blank
-  face plate, so two dark eyes are added on the head bone. Foliage tufts are scattered on the actual suit, gear and headgear triangles (seeded by
-  the spec) and ride on the bones, so they follow the animation. Face paint is a Decal on the face plate.
+  face plate, so two dark eyes are added on the head bone. Foliage tufts are scattered on the actual suit, gear, hair and
+  headgear triangles (the scalp when no helmet is shown) and ride on the bones, so they follow the animation. The scatter is a fixed sequence per
+  body region: a region's density is its tuft count per square metre, the layers are the cards per tuft, the size is the card length and the
+  vegetation index is the card's shape and hang (grass, fern, bush), so each control changes one thing and nothing else moves. Face paint is a
+  Decal on the face plate; its coverage is how much of the face the marks fill. The suit's contrast is the distance between its two colours
+  (half is the colours as picked).
 - Arms: the rig has no rifle clips, so `ArmsReadyPose` (a skeleton modifier) poses both arms on the weapon over any clip with a two-bone solve
   (right hand at the chest, left hand on the foregrip); pistols use the right arm only, a knife swing plays `SwordSlash`.
 - Hit volume: `PlayerHitBox` is measured from these models (3.147 units tall in their T-pose, scaled to 1.8 m); the 0.56 m radius is unchanged.
@@ -292,8 +296,7 @@ Not built:
 - Perk icon. The HUD shows the perk as a text label (#143); there is no icon asset.
 - HUD XP bar; minimap size, opacity and zoom as settings (#119, #143). Enemy minimap dots are fed only by UAV pings (#121).
 - Scope zoom levels above 1 (#113). Sniper sway reduction (#139): `sway_amount` is read but never applied.
-- Concealment wired into the tick, name tags and kill cam; suit visible in first person; vegetation index changes nothing
-  (only one tuft card ships); tufts do not follow limbs (#140, #141).
+- Concealment wired into the tick, name tags and kill cam; suit visible in first person; tufts do not follow limbs (#140, #141).
 - Water: water surface mesh, underwater fog and muffling, bubbles, light shafts, remote swim animation, splash on entry
   for predicted shots (#138, #142). Holes in water bodies are not cut out of the surface (an island in a lake is covered).
 - Boats and amphibious vehicles are server-only visually (primitive boxes, no CC0 model in `assets/manifest.json`).

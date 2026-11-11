@@ -45,9 +45,9 @@
     { "id": "dark", "name": "Dark", "colour": "#5b3924" }
   ],
   "tuft_max_layers": 3,
-  "tuft_size_m": [0.03, 0.22],
+  "tuft_size_m": [0.05, 0.30],
   "tuft_sway_m": [0.0, 0.06],
-  "pattern_scale_per_m": [0.6, 3.0],
+  "pattern_scale_per_m": [2.0, 14.0],
   "spotting_min_multiplier": 0.35,
   "concealment": {
     "stand": 0.3,

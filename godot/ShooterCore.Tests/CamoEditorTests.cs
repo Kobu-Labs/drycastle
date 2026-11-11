@@ -33,7 +33,7 @@ public class CamoEditorTests
         // the customiser must reach every field: a field nobody can tweak is a broken promise in the ticket
         var parms = CamoEditor.Params(Camo);
         var groups = parms.Select(p => p.Group).Distinct().ToList();
-        Assert.Equal(5, groups.Count);
+        Assert.Equal(4, groups.Count);
         Assert.Contains(parms, p => p.Key == "suit_base" && p.Kind == CamoParamKind.Colour);
         Assert.Contains(parms, p => p.Key == "tuft_layers" && p.Max == Camo.TuftMaxLayers);
         Assert.Contains(parms, p => p.Key == "face_colour_c" && p.Group == CamoGroup.FacePaint);
@@ -49,6 +49,54 @@ public class CamoEditorTests
         var rng = new Random(141);
         for (var i = 0; i < 200; i++)
             Assert.Null(CamoEditor.Randomize(Camo, rng).Validate(Camo));
+    }
+
+    [Fact]
+    public void RandomizeStaysMutedAndNeverLeavesFoliageOrPaintHalfOn()
+    {
+        var rng = new Random(9);
+        for (var i = 0; i < 200; i++)
+        {
+            var s = CamoEditor.Randomize(Camo, rng);
+            // camouflage, not neon: no channel is far above the others
+            foreach (var c in new[] { s.SuitBase, s.SuitSecondary })
+                Assert.True(Math.Max(c.R, Math.Max(c.G, c.B)) - Math.Min(c.R, Math.Min(c.G, c.B)) <= 110, $"{c}");
+            // foliage is either off or visible somewhere
+            Assert.Equal(s.TuftLayers > 0, s.TuftHead + s.TuftChest + s.TuftArms + s.TuftLegs > 0);
+        }
+    }
+
+    [Fact]
+    public void SwitchingFoliageOnAlwaysShowsSome()
+    {
+        var layers = CamoEditor.Params(Camo).Single(p => p.Key == "tuft_layers");
+        var on = layers.Set(CamoSpec.Default, 1);
+        Assert.Equal(CamoEditor.StarterTuftDensity, on.TuftChest);
+        Assert.Equal(CamoEditor.StarterTuftDensity, on.TuftHead);
+        // densities the player already chose are kept
+        var chosen = CamoSpec.Default with { TuftArms = 40 };
+        Assert.Equal(0, layers.Set(chosen, 2).TuftChest);
+        Assert.Equal(40, layers.Set(chosen, 2).TuftArms);
+        // changing the thickness of foliage that is already on leaves the densities alone
+        Assert.Equal(on with { TuftLayers = 3 }, layers.Set(on, 3));
+    }
+
+    [Fact]
+    public void InertControlsAreNamedWithAReason()
+    {
+        var plain = CamoSpec.Default;
+        Assert.Equal("foliage_off", CamoEditor.Inert("tuft_size", plain, Camo));
+        Assert.Equal("foliage_off", CamoEditor.Inert("vegetation", plain, Camo));
+        Assert.Null(CamoEditor.Inert("tuft_layers", plain, Camo));
+        Assert.Null(CamoEditor.Inert("tuft_size", plain with { TuftLayers = 1 }, Camo));
+        Assert.Equal("face_off", CamoEditor.Inert("face_colour_a", plain, Camo));
+        Assert.Null(CamoEditor.Inert("face_coverage", plain, Camo));
+        Assert.Null(CamoEditor.Inert("face_pattern", plain with { FaceCoverage = 1 }, Camo));
+        var bare = (byte)Camo.Bodies.ToList().FindIndex(b => b.Headgear.Count == 0);
+        var helmet = (byte)Camo.Bodies.ToList().FindIndex(b => b.Headgear.Count > 0);
+        Assert.Equal("no_headgear", CamoEditor.Inert("headgear", plain with { Body = bare }, Camo));
+        Assert.Null(CamoEditor.Inert("headgear", plain with { Body = helmet }, Camo));
+        Assert.Null(CamoEditor.Inert("suit_base", plain, Camo));
     }
 
     [Fact]
