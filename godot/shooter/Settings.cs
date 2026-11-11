@@ -148,6 +148,16 @@ public sealed class GameSettings
         cf.SetValue("connect", key, value);
         cf.Save(Path);
     }
+
+    /// <summary>The player token (ADR 0003): a GUID made on first use and kept in the connect section. It is the player's identity.</summary>
+    public static string PlayerToken()
+    {
+        var t = LoadConnect("player_token", "");
+        if (Guid.TryParse(t, out _)) return t;
+        t = Guid.NewGuid().ToString();
+        SaveConnect("player_token", t);
+        return t;
+    }
 }
 
 /// <summary>The one input map: action ids, defaults and the mapping onto Godot's InputMap (physical keys, so WASD follows position).</summary>

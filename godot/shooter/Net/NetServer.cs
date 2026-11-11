@@ -1,5 +1,6 @@
 using Godot;
 using Suchohrad.ShooterCore;
+using Suchohrad.ShooterServer.Persistence;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Suchohrad.Shooter;
@@ -35,6 +36,8 @@ public partial class NetServer : Node
         public ServerCar? Car;
         public bool UseHeld, Handbrake;
         public float Throttle, Steer;
+        public PlayerProfile? Profile;
+        public ProfileLoad? Loading;
     }
 
     public Node3D World = null!;
@@ -55,6 +58,8 @@ public partial class NetServer : Node
     public NetSim? Sim;
     /// <summary>Quit after this many seconds and report whether two players were seen moving (smoke test); 0 = run forever.</summary>
     public double QuitAfter;
+    /// <summary>Progression store (ADR 0003); null = every player is a guest. Set by the host, which owns and disposes it.</summary>
+    public IProgressionStore? Progression;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, Client> _clients = new();
@@ -121,6 +126,7 @@ public partial class NetServer : Node
         }
         _elapsed += delta;
         Poll();
+        CompleteProfileLoads();
         _match.Update();
         foreach (var c in _clients.Values.ToList()) if (c.Joined) SimulateClient(c, (float)delta);
         StepRockets((float)delta);
@@ -261,8 +267,9 @@ public partial class NetServer : Node
         if (d[0] < Wire.TInput) // message type tells the channel apart (Godot does not expose it per packet)
         {
             var m = Wire.DecodeReliable(d);
-            if (m is HelloMsg h && !c.Joined) OnHello(c, h);
+            if (m is HelloMsg h && c.Id == 0) OnHello(c, h);
             else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || ArenaMode)) OnDebug(c, e.Payload);
+            else if (c.Joined) OnProfileMessage(c, m);
         }
         else if (c.Joined && d[0] == Wire.TInput)
         {
@@ -281,9 +288,20 @@ public partial class NetServer : Node
 
     void OnHello(Client c, HelloMsg h)
     {
-        if (h.Version != Wire.ProtocolVersion) { GD.Print($"server: rejecting {h.Name}: protocol {h.Version}"); c.Peer.PeerDisconnect(); return; }
+        if (h.Version != Wire.ProtocolVersion)
+        {
+            Reject(c, $"Protocol mismatch: this server speaks protocol {Wire.ProtocolVersion}, your game speaks {h.Version}. Update the game to the server's build.");
+            return;
+        }
         c.Id = _nextId++;
         c.Name = string.IsNullOrWhiteSpace(h.Name) ? $"player{c.Id}" : h.Name.Trim();
+        StartProfileLoad(c, h.Token); // joins once the profile is in (or the wait times out)
+        GD.Print($"server: {c.Name} #{c.Id} hello, loading profile");
+    }
+
+    /// <summary>Joins a client: body, welcome, profile, the join broadcast and the spawn. Called once the client has a profile.</summary>
+    void Join(Client c)
+    {
         // health, death and respawn belong to the match state machine, not the body
         c.W = new PlayerWeapons(Weapons, c.Perks);
         c.Recoil = new RecoilState(c.Id);
@@ -293,6 +311,7 @@ public partial class NetServer : Node
         c.Joined = true;
         foreach (var car in _cars) car.AddCollisionExceptionWith(c.Body);
         _byId[c.Id] = c;
+        SendProfile(c);
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick));
         foreach (var o in _clients.Values.Where(o => o.Joined))
         {

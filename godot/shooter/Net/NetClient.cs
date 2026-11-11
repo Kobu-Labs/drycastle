@@ -22,6 +22,13 @@ public partial class NetClient : Node
     public string Host = "127.0.0.1";
     public int Port = 27015;
     public string PlayerName = "player";
+    /// <summary>Player token sent in the hello (ADR 0003). Empty = a fresh one is generated (bots and CLI clients).</summary>
+    public string Token = "";
+    /// <summary>The server's profile for this player (level, XP, loadouts, active slot); null until it arrives.</summary>
+    public ProfileMsg? Profile { get; private set; }
+    /// <summary>Raised for an error the server sends after the join (for example an invalid loadout).</summary>
+    public event Action<string>? ServerError;
+    string? _rejectReason;
     public bool Bot;
     /// <summary>Network impairment for the loss and latency test (--net-sim); null = none.</summary>
     public NetSim? Sim;
@@ -83,6 +90,7 @@ public partial class NetClient : Node
 
     public override void _Ready()
     {
+        if (Token.Length == 0) Token = Guid.NewGuid().ToString();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
         _peer = _conn.ConnectToHost(Host, Port, Wire.Channels, 0);
@@ -127,6 +135,22 @@ public partial class NetClient : Node
         if (Sim != null) Sim.Send(peer, chan, data, flags); else peer.Send(chan, data, flags);
     }
 
+    /// <summary>Asks the server to replace a loadout slot. The server answers with the new profile, or with <see cref="ServerError"/>.</summary>
+    public void SaveLoadout(Loadout loadout)
+    {
+        if (_peer == null || !_welcomed) return;
+        Tx(_peer, Wire.ChanReliable, Wire.Encode(new SaveLoadoutMsg(loadout)), (int)ENetPacketPeer.FlagReliable);
+        _conn.Flush();
+    }
+
+    /// <summary>Asks the server to make a loadout slot the active one. Answered like <see cref="SaveLoadout"/>.</summary>
+    public void SelectSlot(int slot)
+    {
+        if (_peer == null || !_welcomed) return;
+        Tx(_peer, Wire.ChanReliable, Wire.Encode(new SelectSlotMsg(slot)), (int)ENetPacketPeer.FlagReliable);
+        _conn.Flush();
+    }
+
     public override void _Process(double delta)
     {
         if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
@@ -157,11 +181,11 @@ public partial class NetClient : Node
             switch (ev)
             {
                 case ENetConnection.EventType.Connect:
-                    Tx(peer, Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName)), (int)ENetPacketPeer.FlagReliable);
+                    Tx(peer, Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName, Token)), (int)ENetPacketPeer.FlagReliable);
                     _conn.Flush();
                     break;
                 case ENetConnection.EventType.Disconnect:
-                    if (!_done) Fail("server disconnected");
+                    if (!_done) Fail(_rejectReason ?? "server disconnected");
                     return;
                 case ENetConnection.EventType.Receive:
                     while (peer.GetAvailablePacketCount() > 0) OnPacket(peer.GetPacket());
@@ -191,6 +215,15 @@ public partial class NetClient : Node
                 HudWelcome();
                 OnWelcomed?.Invoke();
                 GD.Print($"client: welcome, id {_myId}, server tick {w.ServerTick}");
+                break;
+            case ProfileMsg p:
+                Profile = p;
+                GD.Print($"client: profile {p.Name}, level {p.Level}, xp {p.Xp}, active slot {p.ActiveSlot}");
+                break;
+            case ErrorMsg er:
+                GD.PrintErr($"client: server error: {er.Reason}");
+                if (!_welcomed) _rejectReason = er.Reason; // the server disconnects after a refused hello
+                ServerError?.Invoke(er.Reason);
                 break;
             case JoinMsg j: _names[j.PlayerId] = j.Name; GD.Print($"client: {j.Name} #{j.PlayerId} joined"); break;
             case LeaveMsg l:
