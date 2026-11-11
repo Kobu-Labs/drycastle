@@ -174,9 +174,9 @@ public class AttackHelicopterTests
         var shots = new List<GunshipShot>();
         var control = new GunshipControl(gun, aircraft, shots.Add, _ => { }, new Random(1), new[] { cannon });
 
-        control.OnInput(Press(MoveButtons.Reload), 1.0);
+        control.OnInput(GunnerInputs.Look(control, 0f, -0.5f, MoveButtons.Reload), 1.0);
         Assert.Equal(cannon, control.Weapon);
-        control.OnInput(Press(MoveButtons.Fire), 1.5);
+        control.OnInput(GunnerInputs.Look(control, 0f, -0.5f, MoveButtons.Fire), 1.5);
         Assert.Single(shots);
         Assert.Equal(GunshipWeaponKind.Cannon, shots[0].Kind);
     }

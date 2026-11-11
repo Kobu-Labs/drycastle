@@ -459,7 +459,7 @@ public partial class NetClient : Node
         if (_gunship == null) PredictFire(mi); // rounds from a turret are the server's alone
         var sentPitch = GunnerLook(ref mi); // at the turret the aim is sent (ground-stabilised, #160), and the player's own look is left alone
         if (_gunship == null) _me.Yaw = mi.Yaw;
-        var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(Weapons != null ? _wantSlot : 0));
+        var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(Weapons != null ? _wantSlot : 0), GunnerAim);
         if (!_driving && !_controlling && _gunship == null) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         _pending.Add(new Pending { Input = ni, After = _me.State });
         if (_pending.Count > 120) _pending.RemoveAt(0);

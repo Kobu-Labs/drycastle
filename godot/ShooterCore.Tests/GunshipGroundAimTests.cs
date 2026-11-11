@@ -19,10 +19,7 @@ public class GunshipGroundAimTests
 
     static Aircraft Orbit(float phase = 0, float? life = null) => new(Kind, 1, Centre, phase, false, 3, life);
 
-    static NetInput Look(float yaw, float pitch, MoveButtons b = MoveButtons.None) => new()
-    {
-        Yaw = Quant.Yaw(yaw), Pitch = Quant.Pitch(pitch), Buttons = (ushort)b,
-    };
+    static NetInput Look(GunshipControl c, float yaw, float pitch, MoveButtons b = MoveButtons.None) => GunnerInputs.Look(c, yaw, pitch, b);
 
     static Vector3 Dir(float yaw, float pitch) => HitMath.Forward(yaw, pitch);
 
@@ -33,7 +30,7 @@ public class GunshipGroundAimTests
     {
         var a = Orbit(0, life: 200);
         var control = new GunshipControl(Gun, a, _ => { }, _ => { }, new Random(1));
-        var input = Look(0.7f, -0.45f);
+        var input = Look(control, 0.7f, -0.45f);
         control.OnInput(input, 0);
         var anchor = control.AimPoint;
         Assert.InRange(anchor.Y, -0.01f, 0.01f); // on the ground plane (the look reaches it inside the range)
@@ -57,12 +54,12 @@ public class GunshipGroundAimTests
     {
         var a = Orbit(0, life: 200);
         var control = new GunshipControl(Gun, a, _ => { }, _ => { }, new Random(1));
-        control.OnInput(Look(-2.0f, -0.3f), 0);
+        control.OnInput(Look(control, -2.0f, -0.3f), 0);
         var t = 0.0;
         for (var step = 0; step < 400; step++, t += 0.1)
         {
             a.Tick(0.1f);
-            control.OnInput(Look(-2.0f, -0.3f), t);
+            control.OnInput(Look(control, -2.0f, -0.3f), t);
             var toAim = control.AimPoint - control.Muzzle;
             Assert.True(Angle(Dir(control.TurretYaw, control.TurretPitch), toAim) < 1e-3f);
         }
@@ -88,11 +85,11 @@ public class GunshipGroundAimTests
     {
         var a = Orbit(0, life: 200);
         var control = new GunshipControl(Gun, a, _ => { }, _ => { }, new Random(1));
-        control.OnInput(Look(0.2f, -0.4f), 0);
+        control.OnInput(Look(control, 0.2f, -0.4f), 0);
         var before = control.AimPoint;
-        control.OnInput(Look(0.2f, -0.4f), 0.1); // still
+        control.OnInput(Look(control, 0.2f, -0.4f), 0.1); // still
         Assert.Equal(before, control.AimPoint);
-        control.OnInput(Look(0.4f, -0.4f), 0.2); // moved
+        control.OnInput(Look(control, 0.4f, -0.4f), 0.2); // moved
         Assert.True(Vector3.Distance(before, control.AimPoint) > 1f);
     }
 
@@ -105,7 +102,7 @@ public class GunshipGroundAimTests
         Assert.Equal(Gun.PitchMinDeg * MathF.PI / 180f, down, 4);
 
         var control = new GunshipControl(Gun, Orbit(0), _ => { }, _ => { }, new Random(1));
-        control.OnInput(Look(0.1f, 0.5f), 0);
+        control.OnInput(Look(control, 0.1f, 0.5f), 0);
         Assert.Equal(Gun.PitchMaxDeg * MathF.PI / 180f, control.TurretPitch, 0.002f);
     }
 
@@ -115,7 +112,7 @@ public class GunshipGroundAimTests
         var a = Orbit(0, life: 200);
         var control = new GunshipControl(Gun, a, _ => { }, _ => { }, new Random(1));
         var back = a.YawRad + MathF.PI;
-        control.OnInput(Look(back, -0.4f), 0);
+        control.OnInput(Look(control, back, -0.4f), 0);
         Assert.True(Angle(Dir(control.TurretYaw, control.TurretPitch), Dir(back, -0.4f)) < 1e-3f);
     }
 
@@ -133,7 +130,7 @@ public class GunshipGroundAimTests
         // heading = phase + rate * age; the orbit is 37.7 s, so 720 degrees is 75.4 s
         var a = Orbit(0, life: 200);
         var control = new GunshipControl(Gun, a, _ => { }, _ => { }, new Random(1));
-        var input = Look(-1.2f, -0.35f);
+        var input = Look(control, -1.2f, -0.35f);
         control.OnInput(input, 0);
         var prevDir = Dir(control.TurretYaw, control.TurretPitch);
         var unwrapped = control.TurretYaw;
@@ -167,7 +164,7 @@ public class GunshipGroundAimTests
         // the look yaw goes from -pi - 0.6 to pi + 0.6 in small mouse steps: across the cut at +-pi (and wrapped by Quant)
         for (var yaw = -MathF.PI - 0.6f; yaw <= MathF.PI + 0.6f; yaw += 0.004f, t += 0.03)
         {
-            control.OnInput(Look(yaw, -0.4f), t);
+            control.OnInput(Look(control, yaw, -0.4f), t);
             var d = Dir(control.TurretYaw, control.TurretPitch);
             if (first) { prevDir = d; prevUnwrapped = control.TurretYaw; first = false; continue; }
             var u = GunshipAim.Unwrap(prevUnwrapped, control.TurretYaw);
@@ -185,12 +182,12 @@ public class GunshipGroundAimTests
         var a = Orbit(0, life: 200);
         var shots = new List<GunshipShot>();
         var control = new GunshipControl(Gun, a, shots.Add, _ => { }, new Random(7));
-        control.OnInput(Look(0.9f, -0.5f), 0);
+        control.OnInput(Look(control, 0.9f, -0.5f), 0);
         var view = Dir(control.TurretYaw, control.TurretPitch);
         // one weapon at a time: the hotbar key picks it (key 1 is the turret's first weapon)
         for (var w = 0; w < Gun.Weapons.Count; w++)
         {
-            var input = Look(0.9f, -0.5f, MoveButtons.Fire);
+            var input = Look(control, 0.9f, -0.5f, MoveButtons.Fire);
             input.Slot = (byte)(w + 1);
             control.OnInput(input, 100.0 + w * 10);
             control.OnInput(input, 100.0 + w * 10 + 0.5); // a second press, past every interval, fires again
