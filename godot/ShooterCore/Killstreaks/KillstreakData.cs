@@ -44,6 +44,11 @@ public sealed class KillstreakFile : IVersioned
     /// <summary>The streak with this id, or null when the id is not in the file.</summary>
     public KillstreakDef? Find(string id) => Streaks.FirstOrDefault(s => s.Id == id);
 
+    /// <summary>Aircraft kinds (killstreaks.json "aircraft"): how each circles the map. Empty when the file has none.</summary>
+    public IReadOnlyList<AircraftKindDef> AircraftKinds { get; init; } = Array.Empty<AircraftKindDef>();
+    /// <summary>The gunship turret and its weapons (killstreaks.json "gunship"), or null when the file has none.</summary>
+    public GunshipDef? Gunship { get; init; }
+
     public static KillstreakFile Load(string path) => Resolve(DataFile.Load<KillstreakRaw>(path, SupportedVersion));
 
     public static KillstreakFile Parse(string json) => Resolve(DataFile.Parse<KillstreakRaw>(json, "killstreaks.json", SupportedVersion));
@@ -99,7 +104,8 @@ public sealed class KillstreakFile : IVersioned
             ?? throw new DataFileException($"{F}: the starter streak \"{KillstreakIds.StarterStreak}\" is missing");
         if (starter.UnlockLevel != 0) throw new DataFileException($"{F}: the starter streak \"{starter.Id}\" must have unlock_level 0");
 
-        return new KillstreakFile { Version = raw.Version, Streaks = streaks };
+        var (kinds, gunship) = AircraftData.Resolve(raw.Aircraft, raw.Gunship);
+        return new KillstreakFile { Version = raw.Version, Streaks = streaks, AircraftKinds = kinds, Gunship = gunship };
     }
 
     static int Need(int? value, string file, string where, string field, int min) =>
@@ -109,6 +115,8 @@ public sealed class KillstreakFile : IVersioned
     {
         public int Version { get; set; }
         public List<StreakRaw>? Streaks { get; set; }
+        public List<AircraftData.AircraftRaw>? Aircraft { get; set; }
+        public AircraftData.GunshipRaw? Gunship { get; set; }
     }
 
     internal sealed class StreakRaw

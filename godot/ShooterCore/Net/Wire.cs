@@ -52,6 +52,8 @@ public enum EventKind : byte
     PerkGained = 51,
     /// <summary>Server broadcast: an attack missile blew up (id, owner, centre, splash radius). See <see cref="MissileCodec"/>.</summary>
     MissileBlast = 30,
+    /// <summary>Server to the owner of a gunship: weapon, ammo, heat, zoom (<see cref="GunshipCodec"/>). Kinds 60-69 belong to the aircraft streaks.</summary>
+    GunshipStatus = 60,
 }
 
 public abstract record ReliableMsg;

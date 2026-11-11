@@ -125,6 +125,7 @@ public partial class NetServer : Node
         CorpseRules.Register(WorldEntityRegistry.Shared);
         TurretRules.Register(WorldEntityRegistry.Shared);
         _corpses = new CorpseBook(_match.Entities);
+        InitAircraft();
         BuildCarePackages();
         BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
@@ -484,7 +485,7 @@ public partial class NetServer : Node
             c.StreakHeld = streakDown;
             if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
             if (streakEdge && !controlled) StreakActivate(c);
-            if (c.Car == null && _streaks.ControlOf(c.Id) is { FreezesBody: true }) continue; // controlling a streak entity that holds the body (the missile): the body stands still
+            if (c.Car == null && _streaks.ControlOf(c.Id) is { FreezesBody: true }) continue; // controlling a streak entity that holds the body (the missile, a gunship): the body stands still
             if (c.Car != null)
             {
                 // driving: the car is simulated in StepVehicles from the driver's inputs; no walking or weapon timers.
