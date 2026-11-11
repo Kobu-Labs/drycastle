@@ -32,7 +32,7 @@
   "gunship": {
     "yaw_limit_deg": 150, "pitch_min_deg": -70, "pitch_max_deg": -5, "zoom_levels": [1, 2.5, 5],
     "weapons": [
-      { "id": "cannon", "name": "Cannon", "kind": "cannon", "weapon_id": "m82", "damage": 75, "range_m": 400, "interval_s": 0.15, "spread_deg": 0.6,
+      { "id": "cannon", "name": "Cannon", "kind": "cannon", "weapon_id": "m82", "damage": 75, "range_m": 400, "interval_s": 0.15, "spread_deg": 0.3,
         "splash": { "radius": 3, "full_damage_radius": 1, "edge_damage": 8, "self_damage_multiplier": 0, "knockback_speed": 4 } },
       { "id": "rockets", "name": "Rockets", "kind": "rocket", "weapon_id": "bazooka", "damage": 0, "range_m": 600, "interval_s": 1.2, "spread_deg": 0.3,
         "splash": { "radius": 8, "full_damage_radius": 2, "edge_damage": 20, "self_damage_multiplier": 0, "knockback_speed": 4.5 } }
@@ -41,9 +41,9 @@
   "ac130": {
     "yaw_limit_deg": 150, "pitch_min_deg": -75, "pitch_max_deg": -5, "zoom_levels": [1, 2.5, 4],
     "weapons": [
-      { "id": "gun25", "name": "25 mm", "kind": "cannon", "weapon_id": "m249", "damage": 50, "range_m": 500, "interval_s": 0.04, "spread_deg": 1.2,
+      { "id": "gun25", "name": "25 mm", "kind": "cannon", "weapon_id": "m249", "damage": 50, "range_m": 500, "interval_s": 0.04, "spread_deg": 0.6,
         "splash": { "radius": 3, "full_damage_radius": 1, "edge_damage": 2, "self_damage_multiplier": 0, "knockback_speed": 3 } },
-      { "id": "gun40", "name": "40 mm", "kind": "cannon", "weapon_id": "m82", "damage": 80, "range_m": 600, "interval_s": 0.2, "spread_deg": 0.8,
+      { "id": "gun40", "name": "40 mm", "kind": "cannon", "weapon_id": "m82", "damage": 80, "range_m": 600, "interval_s": 0.2, "spread_deg": 0.4,
         "splash": { "radius": 6, "full_damage_radius": 2, "edge_damage": 12, "self_damage_multiplier": 0, "knockback_speed": 5 } },
       { "id": "howitzer", "name": "105 mm", "kind": "shell", "weapon_id": "bazooka", "damage": 150, "range_m": 800, "interval_s": 1.0, "spread_deg": 0.3,
         "splash": { "radius": 14, "full_damage_radius": 4, "edge_damage": 25, "self_damage_multiplier": 0, "knockback_speed": 8 } }
