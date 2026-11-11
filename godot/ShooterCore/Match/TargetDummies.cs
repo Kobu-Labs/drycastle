@@ -44,8 +44,8 @@ public static class TargetPlacement
                 var pose = Poses[candidate % Poses.Length];
                 candidate++;
                 if (y is not float ground) continue;
-                // Face the centre: the direction from the spot back towards the centre, as a yaw (radians, Godot convention).
-                var yaw = MathF.Atan2(centre.X - x, centre.Z - z);
+                // Face the centre: a yaw (radians, Godot convention) whose forward vector (-sin, -cos) points from the spot to the centre.
+                var yaw = MathF.Atan2(x - centre.X, z - centre.Z);
                 var spot = new TargetSpot(new Vector3(x, ground, z), yaw, pose, r);
                 if (accept != null && !accept(spot)) continue;
                 spots.Add(spot);

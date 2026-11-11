@@ -668,7 +668,7 @@ public partial class NetServer : Node
         foreach (var t in LiveTargets())
         {
             var isDirect = direct == t.Id;
-            var dist = ProjectileMath.DistanceToCapsule(N(pos), t.Feet, HitMath.Height(t.Stance), MoveConsts.CapsuleRadius);
+            var dist = HitMath.DistanceToBody(N(pos), t);
             var self = t.Id == r.Owner;
             var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, self);
             if (dmg <= 0) continue;
@@ -678,7 +678,7 @@ public partial class NetServer : Node
             if (isDirect) _directHits++; else if (self) _selfHits++; else _splashHits++;
             if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v))
             {
-                var center = t.Feet + new NVec3(0, HitMath.Height(t.Stance) / 2, 0);
+                var center = HitMath.Centre(t);
                 var k = ProjectileMath.Knockback(w, N(pos), center, isDirect ? 1f : ProjectileMath.SplashFraction(w, dist));
                 if (k != NVec3.Zero) { v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z)); _knocked++; }
             }

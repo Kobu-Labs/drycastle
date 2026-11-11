@@ -42,7 +42,7 @@ public partial class NetServer
         foreach (var t in LiveTargets())
         {
             var isDirect = direct == t.Id;
-            var dist = ProjectileMath.DistanceToCapsule(at, t.Feet, HitMath.Height(t.Stance), MoveConsts.CapsuleRadius);
+            var dist = HitMath.DistanceToBody(at, t);
             var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, t.Id == owner);
             if (dmg <= 0) continue;
             if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
@@ -50,7 +50,7 @@ public partial class NetServer
             if (res == DamageResult.Ignored) continue; // spawn protected: neither damage nor knockback
             if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v))
             {
-                var center = t.Feet + new NVec3(0, HitMath.Height(t.Stance) / 2, 0);
+                var center = HitMath.Centre(t);
                 var k = ProjectileMath.Knockback(w, at, center, isDirect ? 1f : ProjectileMath.SplashFraction(w, dist));
                 if (k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
             }

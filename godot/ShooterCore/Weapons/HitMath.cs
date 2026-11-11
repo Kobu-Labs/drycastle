@@ -14,17 +14,56 @@ public readonly record struct MeleeHit(ushort Id, bool Backstab, float Distance)
 /// </summary>
 public static class HitMath
 {
-    public const float HeadRadius = 0.2f;
+    public const float HeadRadius = PlayerHitBox.HeadRadius;
     public const float MeleeHalfAngleDegrees = 60f;
     public const float MeleeVerticalReach = 1.6f;
 
+    /// <summary>Height of the upright body for a stance (the prone figure is horizontal; see <see cref="Axis"/>).</summary>
     public static float Height(Stance stance) => MovementStep.CapsuleHeight(stance);
 
     /// <summary>Spread in degrees for a stance: prone scales it by the weapon's prone spread multiplier, other stances leave it alone.</summary>
     public static float StanceSpread(float degrees, WeaponDef w, Stance stance) => stance == Stance.Prone ? degrees * w.ProneSpreadMultiplier : degrees;
 
-    /// <summary>Head hit sphere centre: the top of the body capsule minus the head radius.</summary>
-    public static Vector3 HeadCenter(in HitTarget t) => t.Feet + new Vector3(0, Height(t.Stance) - HeadRadius, 0);
+    /// <summary>
+    /// The body's hit capsule axis (segment end points; the capsule radius is <see cref="PlayerHitBox.Radius"/>). Stand and crouch are upright
+    /// from the feet. Prone is horizontal along the facing direction, centred on the feet, as the drawn figure lies.
+    /// </summary>
+    public static (Vector3 A, Vector3 B) Axis(in HitTarget t)
+    {
+        if (t.Stance == Stance.Prone)
+        {
+            var half = PlayerHitBox.StandHeight / 2f - PlayerHitBox.Radius;
+            var up = new Vector3(0, PlayerHitBox.ProneLift, 0);
+            var along = Forward(t.Yaw, 0) * half;
+            return (t.Feet + up - along, t.Feet + up + along);
+        }
+        return (t.Feet + new Vector3(0, PlayerHitBox.Radius, 0), t.Feet + new Vector3(0, Height(t.Stance) - PlayerHitBox.Radius, 0));
+    }
+
+    /// <summary>Centre of the body's hit capsule.</summary>
+    public static Vector3 Centre(in HitTarget t)
+    {
+        var (a, b) = Axis(t);
+        return (a + b) / 2f;
+    }
+
+    /// <summary>Head hit sphere centre: upright, the top of the body minus the head radius; prone, forward of the body centre at the head height.</summary>
+    public static Vector3 HeadCenter(in HitTarget t)
+    {
+        if (t.Stance == Stance.Prone)
+            return t.Feet + Forward(t.Yaw, 0) * PlayerHitBox.ProneHeadOffset + new Vector3(0, PlayerHitBox.ProneLift, 0);
+        return t.Feet + new Vector3(0, Height(t.Stance) - HeadRadius, 0);
+    }
+
+    /// <summary>Distance from a point to the body's hit volume (0 inside it), for projectiles and splash.</summary>
+    public static float DistanceToBody(Vector3 p, in HitTarget t)
+    {
+        var (a, b) = Axis(t);
+        var ab = b - a;
+        var len2 = ab.LengthSquared();
+        var s = len2 > 1e-8f ? Math.Clamp(Vector3.Dot(p - a, ab) / len2, 0f, 1f) : 0f;
+        return MathF.Max(0, Vector3.Distance(p, a + ab * s) - PlayerHitBox.Radius);
+    }
 
     /// <summary>Unit view direction for Godot yaw (0 faces -Z, positive turns left) and pitch (positive looks up).</summary>
     public static Vector3 Forward(float yaw, float pitch)
@@ -132,7 +171,8 @@ public static class HitMath
         foreach (var t in targets)
         {
             if (t.Id == shooter) continue;
-            if (RayCapsule(origin, dir, t.Feet, Height(t.Stance), MoveConsts.CapsuleRadius) is not { } d || d > limit) continue;
+            var (p0, p1) = Axis(t);
+            if (RayCapsule(origin, dir, p0, p1, PlayerHitBox.Radius) is not { } d || d > limit) continue;
             if (best is { } b && b.Distance <= d) continue;
             var head = RaySphere(origin, dir, HeadCenter(t), HeadRadius) is not null;
             best = new RayHit(t.Id, d, head);
@@ -152,30 +192,42 @@ public static class HitMath
         return MathF.Max(0, -b - MathF.Sqrt(disc));
     }
 
-    /// <summary>Ray against an upright capsule (feet position, total height, radius): cylinder side plus two end spheres.</summary>
-    public static float? RayCapsule(Vector3 o, Vector3 d, Vector3 feet, float height, float radius)
+    /// <summary>Ray against an upright capsule (feet position, total height, radius), as <see cref="RayCapsule(Vector3, Vector3, Vector3, Vector3, float)"/>.</summary>
+    public static float? RayCapsule(Vector3 o, Vector3 d, Vector3 feet, float height, float radius) =>
+        RayCapsule(o, d, feet + new Vector3(0, radius, 0), feet + new Vector3(0, height - radius, 0), radius);
+
+    /// <summary>Ray against a capsule with end points <paramref name="a"/> and <paramref name="b"/> (the axis) and radius: two end spheres plus the cylinder between them.</summary>
+    public static float? RayCapsule(Vector3 o, Vector3 d, Vector3 a, Vector3 b, float radius)
     {
-        var y0 = feet.Y + radius; var y1 = feet.Y + height - radius;
         float? best = null;
         void Take(float? t) { if (t is { } v && (best is null || v < best)) best = v; }
-        Take(RaySphere(o, d, new Vector3(feet.X, y0, feet.Z), radius));
-        Take(RaySphere(o, d, new Vector3(feet.X, y1, feet.Z), radius));
-        // side: infinite cylinder around the vertical axis, clipped to y0..y1
-        var ox = o.X - feet.X; var oz = o.Z - feet.Z;
-        var a = d.X * d.X + d.Z * d.Z;
-        if (a > 1e-8f)
+        Take(RaySphere(o, d, a, radius));
+        Take(RaySphere(o, d, b, radius));
+        // side: infinite cylinder around the axis, clipped to the segment a..b
+        var axis = b - a;
+        var len2 = axis.LengthSquared();
+        if (len2 > 1e-8f)
         {
-            var b = ox * d.X + oz * d.Z;
-            var c = ox * ox + oz * oz - radius * radius;
-            var disc = b * b - a * c;
-            if (disc >= 0)
+            var len = MathF.Sqrt(len2);
+            var u = axis / len;
+            var oo = o - a;
+            var dPerp = d - u * Vector3.Dot(d, u);
+            var oPerp = oo - u * Vector3.Dot(oo, u);
+            var qa = dPerp.LengthSquared();
+            if (qa > 1e-8f)
             {
-                var s = MathF.Sqrt(disc);
-                foreach (var t in new[] { (-b - s) / a, (-b + s) / a })
+                var qb = Vector3.Dot(oPerp, dPerp);
+                var qc = oPerp.LengthSquared() - radius * radius;
+                var disc = qb * qb - qa * qc;
+                if (disc >= 0)
                 {
-                    if (t < 0) continue;
-                    var y = o.Y + d.Y * t;
-                    if (y >= y0 && y <= y1) { Take(t); break; }
+                    var s = MathF.Sqrt(disc);
+                    foreach (var t in new[] { (-qb - s) / qa, (-qb + s) / qa })
+                    {
+                        if (t < 0) continue;
+                        var along = Vector3.Dot(oo + d * t, u);
+                        if (along >= 0 && along <= len) { Take(t); break; }
+                    }
                 }
             }
         }
@@ -207,9 +259,9 @@ public static class HitMath
             if (MathF.Abs(to.Y) > MeleeVerticalReach) continue;
             to.Y = 0;
             var len = to.Length();
-            var edge = len - MoveConsts.CapsuleRadius;
+            var edge = len - PlayerHitBox.Radius;
             if (edge > reach) continue;
-            if (len > MoveConsts.CapsuleRadius && Vector3.Dot(to / len, fwd) < cos) continue;
+            if (len > PlayerHitBox.Radius && Vector3.Dot(to / len, fwd) < cos) continue;
             if (best is { } b && b.Distance <= edge) continue;
             best = new MeleeHit(t.Id, IsBackstab(attackerFeet, t.Feet, t.Yaw), edge);
         }

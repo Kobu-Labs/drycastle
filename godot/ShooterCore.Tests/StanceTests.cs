@@ -150,9 +150,9 @@ public class StanceTests
     public void HeadZoneFollowsTheStance()
     {
         var feet = Vector3.Zero;
-        Assert.Equal(0.5f, HitMath.HeadCenter(new HitTarget(1, feet, Stance.Prone, 0)).Y, 3);
-        Assert.Equal(1.0f, HitMath.HeadCenter(new HitTarget(1, feet, Stance.Crouch, 0)).Y, 3);
-        Assert.Equal(1.6f, HitMath.HeadCenter(new HitTarget(1, feet, Stance.Stand, 0)).Y, 3);
+        Assert.Equal(PlayerHitBox.ProneLift, HitMath.HeadCenter(new HitTarget(1, feet, Stance.Prone, 0)).Y, 3);
+        Assert.Equal(1.2f - PlayerHitBox.HeadRadius, HitMath.HeadCenter(new HitTarget(1, feet, Stance.Crouch, 0)).Y, 3);
+        Assert.Equal(1.8f - PlayerHitBox.HeadRadius, HitMath.HeadCenter(new HitTarget(1, feet, Stance.Stand, 0)).Y, 3);
     }
 
     [Fact]
