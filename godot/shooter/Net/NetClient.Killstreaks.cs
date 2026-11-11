@@ -1,3 +1,4 @@
+using Godot;
 using Suchohrad.ShooterCore;
 
 namespace Suchohrad.Shooter;
@@ -29,6 +30,11 @@ public partial class NetClient
     /// <summary>StreakEarned, StreakUsed and StreakEnded from the server (owner only). Used and ended also reach the streak's own view (the missile's POV).</summary>
     void OnStreakEvent(EventKind kind, byte[] payload)
     {
+        if (kind == EventKind.StreakGranted)
+        {
+            if (KillstreakEvents.DecodeGranted(payload) is { } g) OnRewardGranted(g);
+            return;
+        }
         if (_streaks == null) return;
         switch (kind)
         {
@@ -50,6 +56,26 @@ public partial class NetClient
         }
         RefreshStreaks();
     }
+
+    IconRegistry? _icons;
+
+    /// <summary>
+    /// A care package reward (ticket #151): a toast names the streak with its icon and the key that uses it. When the reward
+    /// slots were full, the toast also names the reward it replaced. Rewards do not show in the loadout tracker.
+    /// </summary>
+    void OnRewardGranted(StreakGrantedInfo g)
+    {
+        _icons ??= new IconRegistry(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(),
+            Killstreaks?.Streaks.Select(s => s.Id) ?? Array.Empty<string>());
+        var icon = ResourceLoader.Load<Texture2D>(_icons.Resolve(IconKind.Streak, g.StreakId, p => ResourceLoader.Exists(p)));
+        var name = RewardStreakName(g.StreakId);
+        var text = g.ReplacedId is { } old
+            ? Strings.F("toast.streak.replaced", name, RewardStreakName(old), InputBindings.Name("killstreak"))
+            : Strings.F("toast.streak.granted", name, InputBindings.Name("killstreak"));
+        UiShell.Instance?.Toast(text, ToastKind.Info, icon);
+    }
+
+    string RewardStreakName(string id) => Killstreaks?.Find(id)?.Name ?? id;
 
     /// <summary>A kill from the match feed. The owner's own kills (not suicides, not a streak's weapon) advance the counter.</summary>
     void OnStreakKill(KillMsg k)

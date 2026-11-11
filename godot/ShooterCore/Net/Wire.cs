@@ -40,6 +40,8 @@ public enum EventKind : byte
     StreakUsed = 18,
     /// <summary>Server to the owner: an active killstreak ended, with the reason (<see cref="KillstreakEvents"/>).</summary>
     StreakEnded = 19,
+    /// <summary>Server to the owner: a care package granted a reward streak, and the older reward it replaced if the slots were full (<see cref="KillstreakEvents"/>).</summary>
+    StreakGranted = 23,
     /// <summary>Client to server: take a corpse's weapon into a hotbar position (<see cref="CorpseCodec"/>).</summary>
     PickUpCorpse = 20,
     /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
@@ -50,8 +52,7 @@ public enum EventKind : byte
     Moab = 70,
     /// <summary>Client to server: open a landed care package (<see cref="CarePackageCodec"/>).</summary>
     OpenCarePackage = 50,
-    /// <summary>Server to the opener: the perk a care package gave until death (<see cref="CarePackageCodec"/>).</summary>
-    PerkGained = 51,
+    // 51 was PerkGained (the care package's perk, retired in protocol 9); it is not reused.
     /// <summary>Server broadcast: an attack missile blew up (id, owner, centre, splash radius). See <see cref="MissileCodec"/>.</summary>
     MissileBlast = 30,
     /// <summary>Server to the owner of a gunship: weapon, ammo, heat, zoom (<see cref="GunshipCodec"/>). Kinds 60-69 belong to the aircraft streaks.</summary>
@@ -126,8 +127,8 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 /// </summary>
 public static class Wire
 {
-    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq).</summary>
-    public const byte ProtocolVersion = 8;
+    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51).</summary>
+    public const byte ProtocolVersion = 9;
     public const byte TickRate = 30;
     public const int ChanReliable = 0, ChanData = 1, Channels = 2;
     public const int KeyEvery = 30;

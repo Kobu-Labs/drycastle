@@ -4,7 +4,10 @@ using Xunit;
 
 namespace Suchohrad.ShooterCore.Tests;
 
-/// <summary>Ticket #124: the care package crate, its weighted perk table, opening and the perk it grants.</summary>
+/// <summary>
+/// Ticket #124 and #151: the care package crate, its weighted reward table (killstreaks.json "streak_weights"), opening
+/// (the crate despawns at once) and the reward streak it grants into the held reward slots.
+/// </summary>
 public class CarePackageTests
 {
     static string DataDir => Path.Combine(AppContext.BaseDirectory, "data");
@@ -22,146 +25,172 @@ public class CarePackageTests
         return manager;
     }
 
-    static PerkTable ShippingTable() =>
-        PerkTable.Build(Shipped.Killstreaks.Find(CarePackageRules.StreakId)!.PerkWeights, Shipped.Perks);
-
-    static PerkTable Table(params (string Id, int W)[] weights) =>
-        PerkTable.Build(weights.ToDictionary(w => w.Id, w => w.W), Shipped.Perks);
+    static StreakRewards ShippingRewards() => Shipped.Killstreaks.Rewards;
 
     /// <summary>Drops a crate and lets it fall to the ground. Returns the book and the crate's id.</summary>
-    static (CarePackageBook Book, ushort Id) LandedCrate(WorldEntityManager manager, PerkTable? table = null)
+    static (CarePackageBook Book, ushort Id) LandedCrate(WorldEntityManager manager, StreakRewards? rewards = null)
     {
-        var book = new CarePackageBook(manager, table ?? ShippingTable());
+        var book = new CarePackageBook(manager, rewards ?? ShippingRewards());
         var id = book.Drop(Owner, Ground)!.Value;
         manager.Tick(CarePackageRules.StartHeightMetres / CarePackageRules.FallSpeedMetresPerSecond + 0.1f);
         return (book, id);
     }
 
-    // ---- weighted perk pick ----
+    /// <summary>A killstreak service over the shipped table; every streak is a logging stub, the care package is the real one when given.</summary>
+    static KillstreakService Service(List<(ushort Owner, EventKind Kind, byte[] Payload)> sent, IKillstreak? care = null)
+    {
+        var killstreaks = Shipped.Killstreaks;
+        return new KillstreakService(killstreaks,
+            killstreaks.Streaks.Select(s => s.Id == CarePackageRules.StreakId && care != null ? care : new LoggingKillstreak(s.Id)),
+            (o, k, p) => sent.Add((o, k, p)), _ => { });
+    }
+
+    // ---- the reward table ----
 
     [Fact]
-    public void Shipped_table_has_the_agreed_weights_and_totals_100()
+    public void Shipped_rewards_are_the_agreed_weights_and_total_97()
     {
-        var entries = ShippingTable().Entries.ToDictionary(e => e.Id, e => e.Weight);
-        Assert.Equal(22, entries["fleet_foot"]);
-        Assert.Equal(22, entries["quick_hands"]);
-        Assert.Equal(16, entries["swift_swap"]);
-        Assert.Equal(14, entries["flak_jacket"]);
-        Assert.Equal(10, entries["steady_lung"]);
-        Assert.Equal(8, entries["tank_hunter"]);
-        Assert.Equal(5, entries["ghost"]);
-        Assert.Equal(3, entries["hot_streak"]);
-        Assert.Equal(8, entries.Count);
-        Assert.Equal(100, ShippingTable().Total);
+        var entries = ShippingRewards().Entries.ToDictionary(e => e.Id, e => e.Weight);
+        Assert.Equal(30, entries["uav"]);
+        Assert.Equal(22, entries["attack_missile"]);
+        Assert.Equal(18, entries["turret"]);
+        Assert.Equal(10, entries["helicopter_helper"]);
+        Assert.Equal(9, entries["attack_helicopter"]);
+        Assert.Equal(6, entries["ac130"]);
+        Assert.Equal(2, entries["moab"]);
+        Assert.Equal(7, entries.Count);
+        Assert.Equal(97, ShippingRewards().Total);
     }
 
     [Fact]
-    public void Better_perks_have_smaller_weights_than_the_common_ones()
+    public void The_care_package_never_rewards_another_care_package()
     {
-        var entries = ShippingTable().Entries.ToDictionary(e => e.Id, e => e.Weight);
-        Assert.True(entries["hot_streak"] < entries["ghost"]);
-        Assert.True(entries["ghost"] < entries["tank_hunter"]);
-        Assert.True(entries["tank_hunter"] < entries["steady_lung"]);
-        Assert.True(entries["steady_lung"] < entries["flak_jacket"]);
-        Assert.True(entries["fleet_foot"] > entries["hot_streak"]);
+        Assert.DoesNotContain(CarePackageRules.StreakId, ShippingRewards().Entries.Select(e => e.Id));
+    }
+
+    [Fact]
+    public void Better_streaks_have_smaller_weights()
+    {
+        var entries = ShippingRewards().Entries.ToDictionary(e => e.Id, e => e.Weight);
+        Assert.True(entries["moab"] < entries["ac130"]);
+        Assert.True(entries["ac130"] < entries["attack_helicopter"]);
+        Assert.True(entries["attack_helicopter"] < entries["helicopter_helper"]);
+        Assert.True(entries["helicopter_helper"] < entries["turret"]);
+        Assert.True(entries["turret"] < entries["attack_missile"]);
+        Assert.True(entries["attack_missile"] < entries["uav"]);
     }
 
     [Theory]
-    [InlineData(0, "fleet_foot")]
-    [InlineData(21, "fleet_foot")]
-    [InlineData(22, "quick_hands")]
-    [InlineData(43, "quick_hands")]
-    // bands follow perks.json order: fleet 22, quick 22, flak 14, swift 16, tank 8, hot 3, steady 10, ghost 5
-    [InlineData(44, "flak_jacket")]
-    [InlineData(57, "flak_jacket")]
-    [InlineData(58, "swift_swap")]
-    [InlineData(73, "swift_swap")]
-    [InlineData(74, "tank_hunter")]
-    [InlineData(81, "tank_hunter")]
-    [InlineData(82, "hot_streak")]
-    [InlineData(84, "hot_streak")]
-    [InlineData(85, "steady_lung")]
-    [InlineData(94, "steady_lung")]
-    [InlineData(95, "ghost")]
-    [InlineData(99, "ghost")]
-    public void A_roll_picks_the_perk_whose_weight_band_it_falls_in(int roll, string expected) =>
-        Assert.Equal(expected, ShippingTable().Pick(roll));
+    [InlineData(0, "uav")]
+    [InlineData(29, "uav")]
+    [InlineData(30, "attack_missile")]
+    [InlineData(51, "attack_missile")]
+    [InlineData(52, "turret")]
+    [InlineData(69, "turret")]
+    // bands follow killstreaks.json order: uav 30, attack missile 22, turret 18, attack helicopter 9, helicopter helper 10, ac130 6, moab 2
+    [InlineData(70, "attack_helicopter")]
+    [InlineData(78, "attack_helicopter")]
+    [InlineData(79, "helicopter_helper")]
+    [InlineData(88, "helicopter_helper")]
+    [InlineData(89, "ac130")]
+    [InlineData(94, "ac130")]
+    [InlineData(95, "moab")]
+    [InlineData(96, "moab")]
+    public void A_roll_picks_the_streak_whose_weight_band_it_falls_in(int roll, string expected) =>
+        Assert.Equal(expected, ShippingRewards().Pick(roll));
 
     [Fact]
-    public void Over_many_rolls_each_perk_comes_up_in_proportion_to_its_weight()
+    public void Over_every_roll_each_streak_comes_up_in_proportion_to_its_weight()
     {
-        var table = ShippingTable();
+        var rewards = ShippingRewards();
         var counts = new Dictionary<string, int>();
-        for (var roll = 0; roll < table.Total; roll++)
+        for (var roll = 0; roll < rewards.Total; roll++)
         {
-            var id = table.Pick(roll);
+            var id = rewards.Pick(roll);
             counts[id] = counts.GetValueOrDefault(id) + 1;
         }
-        foreach (var (id, w) in table.Entries) Assert.Equal(w, counts[id]);
+        foreach (var (id, w) in rewards.Entries) Assert.Equal(w, counts[id]);
     }
 
     [Fact]
-    public void Random_picks_stay_in_the_table_and_favour_the_common_perks()
+    public void Random_picks_favour_the_common_streaks_and_never_give_a_care_package()
     {
-        var table = ShippingTable();
-        var rng = new Random(124);
+        var rewards = ShippingRewards();
+        var rng = new Random(151);
         var counts = new Dictionary<string, int>();
         for (var i = 0; i < 20000; i++)
         {
-            var id = table.Pick(rng);
+            var id = rewards.Pick(rng);
             counts[id] = counts.GetValueOrDefault(id) + 1;
         }
-        Assert.Equal(8, counts.Count);
-        Assert.True(counts["fleet_foot"] > counts["hot_streak"] * 3, "a 22 weight should come up far more often than a 3");
-        Assert.InRange(counts["fleet_foot"] / 20000.0, 0.19, 0.25);
+        Assert.Equal(7, counts.Count);
+        Assert.DoesNotContain(CarePackageRules.StreakId, counts.Keys);
+        Assert.True(counts["uav"] > counts["moab"] * 5, "a 30 weight should come up far more often than a 2");
+        Assert.InRange(counts["uav"] / 20000.0, 0.28, 0.34);
     }
 
     [Theory]
     [InlineData(-1)]
-    [InlineData(100)]
+    [InlineData(97)]
     public void A_roll_outside_the_range_is_refused(int roll) =>
-        Assert.Throws<ArgumentOutOfRangeException>(() => ShippingTable().Pick(roll));
+        Assert.Throws<ArgumentOutOfRangeException>(() => ShippingRewards().Pick(roll));
 
-    [Fact]
-    public void A_table_with_an_unknown_perk_is_refused()
-    {
-        var ex = Assert.Throws<InvalidOperationException>(() => Table(("fleet_foot", 1), ("nope", 2)));
-        Assert.Contains("nope", ex.Message);
-    }
+    // ---- the loader checks streak_weights ----
 
-    [Fact]
-    public void A_table_with_a_zero_weight_or_no_entries_is_refused()
-    {
-        Assert.Throws<InvalidOperationException>(() => Table(("fleet_foot", 0)));
-        Assert.Throws<InvalidOperationException>(() => PerkTable.Build(new Dictionary<string, int>(), Shipped.Perks));
-    }
-
-    [Fact]
-    public void Killstreaks_json_gives_weights_to_the_care_package_only()
-    {
-        foreach (var s in Shipped.Killstreaks.Streaks)
-        {
-            if (s.Id == CarePackageRules.StreakId) Assert.Equal(8, s.PerkWeights.Count);
-            else Assert.Empty(s.PerkWeights);
-        }
-    }
-
-    /// <summary>A minimal killstreaks.json: the starter UAV and a care package whose tail (its perk weights) the test chooses.</summary>
-    static string StreaksJson(string careTail) =>
-        "{ \"version\": 1, \"streaks\": [ { \"id\": \"uav\", \"name\": \"UAV\", \"kills_required\": 4, \"unlock_level\": 0, \"control\": \"none\" }, " +
+    /// <summary>A minimal killstreaks.json with two streaks, the top-level <paramref name="weights"/> object and the care package's tail.</summary>
+    static string StreaksJson(string weights, string careTail = "") =>
+        "{ \"version\": 1" + (weights == "" ? "" : ", " + weights) + ", \"streaks\": [ " +
+        "{ \"id\": \"uav\", \"name\": \"UAV\", \"kills_required\": 4, \"unlock_level\": 0, \"control\": \"none\" }, " +
         "{ \"id\": \"care_package\", \"name\": \"Care Package\", \"kills_required\": 6, \"unlock_level\": 6, \"control\": \"none\"" + careTail + " } ] }";
 
     [Fact]
-    public void A_care_package_without_perk_weights_is_refused_by_the_loader()
+    public void A_valid_table_loads_and_keeps_the_file_order()
     {
-        var ex = Assert.Throws<DataFileException>(() => KillstreakFile.Parse(StreaksJson("")));
-        Assert.Contains("perk_weights", ex.Message);
+        var file = KillstreakFile.Parse(StreaksJson("\"streak_weights\": { \"uav\": 3 }"));
+        Assert.Equal(3, file.Rewards.Total);
+        Assert.Equal("uav", file.Rewards.Pick(2));
     }
 
     [Fact]
-    public void A_perk_weight_below_one_is_refused_by_the_loader()
+    public void A_file_without_streak_weights_is_refused()
     {
-        Assert.Throws<DataFileException>(() => KillstreakFile.Parse(StreaksJson(", \"perk_weights\": { \"ghost\": 0 }")));
+        var ex = Assert.Throws<DataFileException>(() => KillstreakFile.Parse(StreaksJson("")));
+        Assert.Contains("streak_weights", ex.Message);
+    }
+
+    [Fact]
+    public void An_empty_streak_weights_table_is_refused()
+    {
+        Assert.Throws<DataFileException>(() => KillstreakFile.Parse(StreaksJson("\"streak_weights\": {}")));
+    }
+
+    [Fact]
+    public void A_care_package_in_streak_weights_is_refused()
+    {
+        var ex = Assert.Throws<DataFileException>(() => KillstreakFile.Parse(StreaksJson("\"streak_weights\": { \"uav\": 1, \"care_package\": 1 }")));
+        Assert.Contains("care package", ex.Message);
+    }
+
+    [Fact]
+    public void A_streak_weights_id_that_is_not_a_streak_is_refused()
+    {
+        var ex = Assert.Throws<DataFileException>(() => KillstreakFile.Parse(StreaksJson("\"streak_weights\": { \"uav\": 1, \"nuke\": 1 }")));
+        Assert.Contains("nuke", ex.Message);
+    }
+
+    [Fact]
+    public void A_streak_weight_below_one_is_refused()
+    {
+        var ex = Assert.Throws<DataFileException>(() => KillstreakFile.Parse(StreaksJson("\"streak_weights\": { \"uav\": 0 }")));
+        Assert.Contains("uav", ex.Message);
+    }
+
+    [Fact]
+    public void The_retired_per_care_package_perk_weights_are_not_read()
+    {
+        // the old perk_weights key on the care package is ignored; the table above is what counts
+        var file = KillstreakFile.Parse(StreaksJson("\"streak_weights\": { \"uav\": 1 }", ", \"perk_weights\": { \"ghost\": 5 }"));
+        Assert.Equal(1, file.Rewards.Total);
     }
 
     // ---- the crate: falling, landing, lifetime ----
@@ -170,7 +199,7 @@ public class CarePackageTests
     public void The_crate_falls_on_its_parachute_and_lands_on_the_ground()
     {
         var manager = World(out _);
-        var book = new CarePackageBook(manager, ShippingTable());
+        var book = new CarePackageBook(manager, ShippingRewards());
         var id = book.Drop(Owner, Ground)!.Value;
 
         var fallen = manager.Snapshot().Single(e => e.Id == id);
@@ -193,7 +222,7 @@ public class CarePackageTests
         var manager = World(out _);
         var reasons = new List<WorldDespawnReason>();
         manager.Despawned += d => reasons.Add(d.Reason);
-        var book = new CarePackageBook(manager, ShippingTable());
+        var book = new CarePackageBook(manager, ShippingRewards());
         book.Drop(Owner, Ground);
 
         manager.Tick(59.5f);
@@ -203,18 +232,18 @@ public class CarePackageTests
         Assert.Equal(WorldDespawnReason.Expired, reasons.Single());
     }
 
-    // ---- opening ----
+    // ---- opening: the crate is gone at once ----
 
     [Fact]
     public void A_crate_still_on_its_parachute_cannot_be_opened()
     {
         var manager = World(out _);
-        var book = new CarePackageBook(manager, ShippingTable());
+        var book = new CarePackageBook(manager, ShippingRewards());
         var id = book.Drop(Owner, Ground)!.Value;
         manager.Tick(1f);
 
-        Assert.Equal(OpenResult.NotLanded, book.TryOpen(id, Ground, new Random(1), out var perk));
-        Assert.Null(perk);
+        Assert.Equal(OpenResult.NotLanded, book.TryOpen(id, Ground, new Random(1), out var streak));
+        Assert.Null(streak);
         Assert.Equal(1, book.Count);
     }
 
@@ -230,7 +259,7 @@ public class CarePackageTests
     }
 
     [Fact]
-    public void A_player_within_reach_opens_the_crate_once_and_it_is_gone()
+    public void Opening_despawns_the_crate_at_once_with_reason_opened_and_grants_a_streak()
     {
         var manager = World(out _);
         var reasons = new List<WorldDespawnReason>();
@@ -238,20 +267,21 @@ public class CarePackageTests
         var (book, id) = LandedCrate(manager);
         var near = Ground + new Vector3(CarePackageRules.ReachMetres - 0.5f, 0, 0);
 
-        Assert.Equal(OpenResult.Ok, book.TryOpen(id, near, new Random(7), out var perk));
-        Assert.NotNull(perk);
+        Assert.Equal(OpenResult.Ok, book.TryOpen(id, near, new Random(7), out var streak));
+        Assert.NotNull(streak);
         Assert.Equal(0, book.Count);
+        Assert.Empty(manager.Snapshot());
         Assert.Equal(WorldDespawnReason.Opened, reasons.Single());
         Assert.Equal(OpenResult.Gone, book.TryOpen(id, near, new Random(7), out _));
     }
 
     [Fact]
-    public void The_perk_an_opening_grants_is_drawn_from_the_table()
+    public void The_streak_an_opening_grants_is_drawn_from_the_table()
     {
         var manager = World(out _);
-        var (book, id) = LandedCrate(manager, Table(("ghost", 1)));
-        Assert.Equal(OpenResult.Ok, book.TryOpen(id, Ground, new Random(3), out var perk));
-        Assert.Equal("ghost", perk);
+        var (book, id) = LandedCrate(manager, new StreakRewards(new[] { ("turret", 1) }));
+        Assert.Equal(OpenResult.Ok, book.TryOpen(id, Ground, new Random(3), out var streak));
+        Assert.Equal("turret", streak);
     }
 
     [Fact]
@@ -264,46 +294,96 @@ public class CarePackageTests
         Assert.Equal(Owner, manager.Snapshot().Single(e => e.Id == id).State.Owner);
     }
 
-    // ---- the perk it grants ----
+    // ---- the reward: held slots, the counter, replacement ----
 
     [Fact]
-    public void A_granted_perk_replaces_the_loadout_perk_without_stacking()
+    public void A_reward_goes_into_a_held_slot_at_once_and_does_not_touch_the_counter()
     {
-        var loadout = Shipped.Perks.Find("quick_hands")!;
-        var granted = Shipped.Perks.Find("fleet_foot")!;
-        // the opener's values are the granted perk's alone: the loadout perk's reload bonus is gone
-        var replaced = PerkModifiers.Of(granted);
-        Assert.Equal(1.12f, replaced.RunSpeed);
-        Assert.Equal(1f, replaced.ReloadSpeed);
-        Assert.NotEqual(PerkModifiers.Of(loadout).ReloadSpeed, replaced.ReloadSpeed);
-    }
-
-    [Fact]
-    public void A_hot_streak_perk_gained_mid_life_lowers_the_next_thresholds()
-    {
-        var killstreaks = Shipped.Killstreaks;
-        var sent = new List<(ushort Owner, EventKind Kind)>();
-        var service = new KillstreakService(killstreaks,
-            killstreaks.Streaks.Select(s => (IKillstreak)new LoggingKillstreak(s.Id)),
-            (o, k, _) => sent.Add((o, k)), _ => { });
-        service.Arm(Opener, new[] { CarePackageRules.StreakId, "", "" }, 0f);
-        for (var i = 0; i < 5; i++) service.OnKill(Opener, 99, false);
-        Assert.Empty(service.Held(Opener)); // threshold 6 without the perk
-
-        service.SetCostReduction(Opener, 1f);
+        var sent = new List<(ushort Owner, EventKind Kind, byte[] Payload)>();
+        var service = Service(sent);
+        service.Arm(Opener, new[] { "", "", "" }, 0f);
         service.OnKill(Opener, 99, false);
-        Assert.Contains(CarePackageRules.StreakId, service.Held(Opener)); // threshold 5 now
+        service.OnKill(Opener, 99, false);
+
+        var grant = service.Grant(Opener, "ac130");
+
+        Assert.NotNull(grant);
+        Assert.Null(grant!.Replaced);
+        Assert.Equal(new[] { "ac130" }, service.HeldRewards(Opener));
+        Assert.Equal(2, service.KillCount(Opener));
+        var (o, kind, payload) = sent.Single();
+        Assert.Equal(Opener, o);
+        Assert.Equal(EventKind.StreakGranted, kind);
+        var info = KillstreakEvents.DecodeGranted(payload);
+        Assert.Equal("ac130", info!.StreakId);
+        Assert.Null(info.ReplacedId);
     }
 
     [Fact]
-    public void A_perk_gained_by_one_player_does_not_change_another_players_thresholds()
+    public void A_full_set_of_reward_slots_replaces_the_oldest_reward_and_says_so()
     {
-        var service = new KillstreakService(Shipped.Killstreaks,
-            Shipped.Killstreaks.Streaks.Select(s => (IKillstreak)new LoggingKillstreak(s.Id)), (_, _, _) => { }, _ => { });
-        service.Arm(Owner, new[] { CarePackageRules.StreakId, "", "" }, 0f);
-        service.SetCostReduction(Opener, 1f); // opener not armed: no effect on another player
-        for (var i = 0; i < 5; i++) service.OnKill(Owner, 99, false);
-        Assert.Empty(service.Held(Owner));
+        var sent = new List<(ushort Owner, EventKind Kind, byte[] Payload)>();
+        var service = Service(sent);
+        service.Arm(Opener, new[] { "", "", "" }, 0f);
+        service.Grant(Opener, "uav");
+        service.Grant(Opener, "turret");
+        service.Grant(Opener, "moab");
+
+        var grant = service.Grant(Opener, "ac130");
+
+        Assert.Equal("uav", grant!.Replaced);
+        Assert.Equal(new[] { "turret", "moab", "ac130" }, service.HeldRewards(Opener));
+        var info = KillstreakEvents.DecodeGranted(sent.Last().Payload);
+        Assert.Equal("ac130", info!.StreakId);
+        Assert.Equal("uav", info.ReplacedId);
+    }
+
+    [Fact]
+    public void A_reward_is_used_with_the_activation_key_and_leaves_its_slot()
+    {
+        var sent = new List<(ushort Owner, EventKind Kind, byte[] Payload)>();
+        var service = Service(sent);
+        service.Arm(Opener, new[] { "", "", "" }, 0f);
+        service.Grant(Opener, "turret");
+
+        Assert.True(service.Activate(Opener, 0, Vector3.Zero));
+        Assert.Empty(service.HeldRewards(Opener));
+        Assert.Contains(sent, s => s.Kind == EventKind.StreakUsed);
+        Assert.False(service.Activate(Opener, 0, Vector3.Zero)); // nothing left to use
+    }
+
+    [Fact]
+    public void Rewards_are_used_after_the_loadout_streaks()
+    {
+        var sent = new List<(ushort Owner, EventKind Kind, byte[] Payload)>();
+        var service = Service(sent);
+        service.Arm(Opener, new[] { "uav", "", "" }, 0f);
+        for (var i = 0; i < 4; i++) service.OnKill(Opener, 99, false);
+        service.Grant(Opener, "turret");
+
+        service.Activate(Opener, 0, Vector3.Zero);
+        Assert.Empty(service.Held(Opener));
+        Assert.Equal(new[] { "turret" }, service.HeldRewards(Opener));
+    }
+
+    [Fact]
+    public void A_death_loses_the_held_rewards()
+    {
+        var sent = new List<(ushort Owner, EventKind Kind, byte[] Payload)>();
+        var service = Service(sent);
+        service.Arm(Opener, new[] { "", "", "" }, 0f);
+        service.Grant(Opener, "uav");
+
+        service.OnDeath(Opener);
+
+        Assert.Empty(service.HeldRewards(Opener));
+    }
+
+    [Fact]
+    public void A_reward_for_a_player_without_a_life_is_refused()
+    {
+        var service = Service(new List<(ushort Owner, EventKind Kind, byte[] Payload)>());
+        Assert.Null(service.Grant(Opener, "uav"));
     }
 
     // ---- the streak: drop ahead of the owner ----
@@ -324,12 +404,9 @@ public class CarePackageTests
     public void Using_the_streak_drops_a_crate_at_the_landing_point_and_ends_the_use()
     {
         var manager = World(out _);
-        var book = new CarePackageBook(manager, ShippingTable());
-        var streak = new CarePackageStreak(book, _ => 0f, p => 2f);
-        var killstreaks = Shipped.Killstreaks;
-        var service = new KillstreakService(killstreaks,
-            killstreaks.Streaks.Select(s => s.Id == CarePackageRules.StreakId ? streak : (IKillstreak)new LoggingKillstreak(s.Id)),
-            (_, _, _) => { }, _ => { });
+        var book = new CarePackageBook(manager, ShippingRewards());
+        var care = new CarePackageStreak(book, _ => 0f, p => 2f);
+        var service = Service(new List<(ushort Owner, EventKind Kind, byte[] Payload)>(), care);
         service.Arm(Owner, new[] { CarePackageRules.StreakId, "", "" }, 0f);
         for (var i = 0; i < 6; i++) service.OnKill(Owner, 99, false);
         Assert.Contains(CarePackageRules.StreakId, service.Held(Owner));
@@ -347,12 +424,9 @@ public class CarePackageTests
     public void With_no_ground_under_the_drop_point_the_streak_is_kept()
     {
         var manager = World(out _);
-        var book = new CarePackageBook(manager, ShippingTable());
-        var streak = new CarePackageStreak(book, _ => 0f, _ => null);
-        var killstreaks = Shipped.Killstreaks;
-        var service = new KillstreakService(killstreaks,
-            killstreaks.Streaks.Select(s => s.Id == CarePackageRules.StreakId ? streak : (IKillstreak)new LoggingKillstreak(s.Id)),
-            (_, _, _) => { }, _ => { });
+        var book = new CarePackageBook(manager, ShippingRewards());
+        var care = new CarePackageStreak(book, _ => 0f, _ => null);
+        var service = Service(new List<(ushort Owner, EventKind Kind, byte[] Payload)>(), care);
         service.Arm(Owner, new[] { CarePackageRules.StreakId, "", "" }, 0f);
         for (var i = 0; i < 6; i++) service.OnKill(Owner, 99, false);
 
@@ -372,10 +446,15 @@ public class CarePackageTests
     }
 
     [Fact]
-    public void The_perk_event_round_trips_and_rejects_bad_lengths()
+    public void The_granted_event_round_trips_with_and_without_a_replaced_reward()
     {
-        Assert.Equal("fleet_foot", CarePackageCodec.DecodePerk(CarePackageCodec.EncodePerk("fleet_foot")));
-        Assert.Null(CarePackageCodec.DecodePerk(new byte[] { 5, (byte)'a' }));
-        Assert.Null(CarePackageCodec.DecodePerk(Array.Empty<byte>()));
+        var plain = KillstreakEvents.DecodeGranted(KillstreakEvents.EncodeGranted("moab", null));
+        Assert.Equal(new StreakGrantedInfo("moab", null), plain);
+
+        var replaced = KillstreakEvents.DecodeGranted(KillstreakEvents.EncodeGranted("ac130", "uav"));
+        Assert.Equal(new StreakGrantedInfo("ac130", "uav"), replaced);
+
+        Assert.Null(KillstreakEvents.DecodeGranted(new byte[] { 5, (byte)'a' }));
+        Assert.Null(KillstreakEvents.DecodeGranted(Array.Empty<byte>()));
     }
 }

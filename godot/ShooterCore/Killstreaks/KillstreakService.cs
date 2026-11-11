@@ -10,11 +10,20 @@ namespace Suchohrad.ShooterCore;
 /// Rules: only kills count, a suicide does not, and a kill by a streak's own weapon does not advance the counter. The
 /// counter and every held or used streak reset on death. A streak is earned once per life, and stays held until used.
 /// Hot Streak lowers each threshold by its <c>streak_cost_reduction</c> (never below one kill).
+///
+/// Rewards (ticket #151): a care package grants a random streak that goes into one of <see cref="RewardSlots"/> reward
+/// slots at once. A reward does not touch the Streak counter, is used with the same key (after the loadout's streaks), and
+/// is lost on death. When the reward slots are full the oldest reward is replaced.
 /// </summary>
 public sealed class KillstreakService
 {
     /// <summary>Loadout streak slots per player.</summary>
     public const int Slots = 3;
+    /// <summary>Held reward slots per player (care package rewards). A full set replaces the oldest reward.</summary>
+    public const int RewardSlots = 3;
+
+    /// <summary>A reward granted to an owner: the streak, and the older reward it replaced (null when a slot was free).</summary>
+    public sealed record RewardGrant(string StreakId, string? Replaced);
 
     sealed class Life
     {
@@ -23,6 +32,8 @@ public sealed class KillstreakService
         public int Kills;
         public readonly HashSet<string> Earned = new();
         public readonly HashSet<string> Used = new();
+        /// <summary>Held reward streaks, oldest first.</summary>
+        public readonly List<string> Rewards = new();
     }
 
     readonly KillstreakFile _data;
@@ -82,13 +93,29 @@ public sealed class KillstreakService
         }
     }
 
-    /// <summary>Sets the owner's Hot Streak reduction for this life (a care package perk gained mid-life). Thresholds apply from the next kill.</summary>
-    public void SetCostReduction(ushort owner, float costReduction)
+    /// <summary>
+    /// Puts a care package reward into the owner's reward slots (ticket #151). Does not change the Streak counter. When all
+    /// slots are full the oldest reward is replaced and named in the result. Null when the owner has no life armed.
+    /// </summary>
+    public RewardGrant? Grant(ushort owner, string streakId)
     {
-        if (_lives.TryGetValue(owner, out var life)) life.CostReduction = costReduction;
+        if (!_lives.TryGetValue(owner, out var life) || _data.Find(streakId) == null) return null;
+        string? replaced = null;
+        if (life.Rewards.Count >= RewardSlots)
+        {
+            replaced = life.Rewards[0];
+            life.Rewards.RemoveAt(0);
+        }
+        life.Rewards.Add(streakId);
+        _send(owner, EventKind.StreakGranted, KillstreakEvents.EncodeGranted(streakId, replaced));
+        return new RewardGrant(streakId, replaced);
     }
 
-    /// <summary>The owner died: the counter, the earned and used streaks reset, and their active instances end.</summary>
+    /// <summary>The owner's held reward streaks, oldest first.</summary>
+    public IReadOnlyList<string> HeldRewards(ushort owner) =>
+        _lives.TryGetValue(owner, out var life) ? life.Rewards.ToList() : Array.Empty<string>();
+
+    /// <summary>The owner died: the counter, the earned, used and reward streaks reset, and their active instances end.</summary>
     public void OnDeath(ushort owner)
     {
         EndAllFor(owner, KillstreakEndReason.OwnerDied);
@@ -96,6 +123,7 @@ public sealed class KillstreakService
         life.Kills = 0;
         life.Earned.Clear();
         life.Used.Clear();
+        life.Rewards.Clear();
     }
 
     /// <summary>The owner left the server.</summary>
@@ -114,6 +142,7 @@ public sealed class KillstreakService
             life.Kills = 0;
             life.Earned.Clear();
             life.Used.Clear();
+            life.Rewards.Clear();
         }
     }
 
@@ -129,7 +158,13 @@ public sealed class KillstreakService
             if (id == "" || !life.Earned.Contains(id) || life.Used.Contains(id)) continue;
             if (_data.Find(id) is not { } def) continue;
             if (ActiveCount(owner, id) >= def.MaxActive) continue;
-            if (Start(life, def, owner, now, position)) return true;
+            if (Start(def, owner, now, position, () => life.Used.Add(id))) return true;
+        }
+        foreach (var id in life.Rewards.ToList())
+        {
+            if (_data.Find(id) is not { } def) continue;
+            if (ActiveCount(owner, id) >= def.MaxActive) continue;
+            if (Start(def, owner, now, position, () => life.Rewards.Remove(id))) return true;
         }
         return false;
     }
@@ -175,7 +210,8 @@ public sealed class KillstreakService
 
     static int Threshold(KillstreakDef def, Life life) => Threshold(def, life.CostReduction);
 
-    bool Start(Life life, KillstreakDef def, ushort owner, double now, Vector3 position)
+    /// <param name="consume">Takes the streak out of the owner's held set once its activation is accepted.</param>
+    bool Start(KillstreakDef def, ushort owner, double now, Vector3 position, Action consume)
     {
         var use = new KillstreakUse(this, owner, def, position, now);
         _active.Add(use);
@@ -190,7 +226,7 @@ public sealed class KillstreakService
             _active.Remove(use);
             return false;
         }
-        life.Used.Add(def.Id);
+        consume();
         _send(owner, EventKind.StreakUsed, KillstreakEvents.EncodeUsed(def.Id));
         if (!use.IsOpen) Complete(use); // ended during Activate: its end follows its use
         return true;

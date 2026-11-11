@@ -26,6 +26,7 @@ public partial class UiShell : CanvasLayer
     readonly List<MenuScreen> _stack = new();
     PanelContainer _toast = null!;
     Label _toastText = null!;
+    TextureRect _toastIcon = null!;
     int _toastId;
     Tween? _fade;
     MenuScreen? _fading;
@@ -45,8 +46,20 @@ public partial class UiShell : CanvasLayer
         _stackHost.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _root.AddChild(_stackHost);
         _toast = new PanelContainer { Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore, ThemeTypeVariation = "MenuToast" };
+        var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        row.AddThemeConstantOverride("separation", ShooterTheme.Space * 2);
+        _toastIcon = new TextureRect
+        {
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            CustomMinimumSize = new Vector2(ShooterTheme.Space * 6, ShooterTheme.Space * 6),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Visible = false,
+        };
         _toastText = new Label { MouseFilter = Control.MouseFilterEnum.Ignore };
-        _toast.AddChild(_toastText);
+        row.AddChild(_toastIcon);
+        row.AddChild(_toastText);
+        _toast.AddChild(row);
         _root.AddChild(_toast);
         Relayout();
         GetViewport().SizeChanged += Relayout;
@@ -175,11 +188,14 @@ public partial class UiShell : CanvasLayer
 
     // ---- toast: the one notification pattern ----
 
-    public void Toast(string text, ToastKind kind = ToastKind.Info)
+    /// <summary>Shows the one toast. <paramref name="icon"/> (optional) sits before the text; the text always says what happened.</summary>
+    public void Toast(string text, ToastKind kind = ToastKind.Info, Texture2D? icon = null)
     {
         var prefix = Strings.T(kind switch { ToastKind.Warn => "toast.warn", ToastKind.Error => "toast.error", _ => "toast.info" });
         _toast.ThemeTypeVariation = kind switch { ToastKind.Warn => "MenuToastWarn", ToastKind.Error => "MenuToastError", _ => "MenuToast" };
         _toastText.Text = $"{prefix}  {text}";
+        _toastIcon.Texture = icon;
+        _toastIcon.Visible = icon != null;
         if (kind == ToastKind.Error) Sfx.Ui("ui.error");
         _toast.Visible = true;
         _toast.Modulate = Colors.White;

@@ -61,6 +61,7 @@ public partial class Hud : CanvasLayer
     float _airShown = -1, _breathTarget;
     // ammo
     Label _wName = null!, _mag = null!, _reserve = null!, _reloadText = null!, _speed = null!, _prompt = null!;
+    RadialProgress _radial = null!;
     ProgressBar _reloadBar = null!;
     double _reloadUntil, _reloadLen;
     // hotbar
@@ -323,6 +324,15 @@ public partial class Hud : CanvasLayer
         _prompt = Place(L("", "HudHead", HorizontalAlignment.Center), 0.5f, 0.7f, -200, 0, 400, 32); // context prompt (enter / exit a vehicle)
         _prompt.Visible = false;
         _root.AddChild(_prompt);
+        // the hold ring (care package open, #151) sits just above the prompt line, its label under the ring
+        _radial = new RadialProgress { Text = Strings.T("hud.crate.opening"), Visible = false };
+        _radial.AnchorLeft = _radial.AnchorRight = 0.5f;
+        _radial.AnchorTop = _radial.AnchorBottom = 0.7f;
+        _radial.OffsetLeft = -RadialProgress.Width / 2;
+        _radial.OffsetRight = RadialProgress.Width / 2;
+        _radial.OffsetBottom = -ShooterTheme.Space * 4;
+        _radial.OffsetTop = _radial.OffsetBottom - RadialProgress.Height;
+        _root.AddChild(_radial);
         var p = Place(P("HudPanel"), 1, 1, -ShooterTheme.Margin, -ShooterTheme.Margin, 320, 112);
         _root.AddChild(p);
         var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -620,6 +630,13 @@ public partial class Hud : CanvasLayer
     {
         _prompt.Visible = text != null;
         if (text != null) Set(_prompt, text);
+    }
+
+    /// <summary>The hold ring above the prompt (care package open, #151): a fill from 0 to 1, or null to hide it.</summary>
+    public void SetRadial(float? fraction)
+    {
+        _radial.Visible = fraction != null;
+        if (fraction is { } f) _radial.Value = f;
     }
 
     /// <summary>Vehicle speed readout (km/h); null hides it. Hook for the vehicles issue, unused by the match HUD today.</summary>

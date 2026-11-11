@@ -14,9 +14,12 @@ turret
 - can be destroyed by 3 meele attacks, or 5 person worth of damage
 - 6 kills
 care package
-- random perk is given
 - 6 kills
-- better perks should be more rare
+- opening the crate (hold E) gives a random killstreak, not a perk; the crate is gone once opened
+- weights (killstreaks.json streak_weights, out of 97): uav 30, attack missile 22, turret 18, helicopter helper 10,
+  attack helicopter 9, ac-130 6, moab 2; better streaks are more rare; never another care package
+- the reward goes into a held slot at once and does not count toward the kill counter; three reward slots, the oldest
+  is replaced when they are full
 attack helicopter
 - 10 kills
 - a helicopter starts circling around the map, user controls the turret and can fire it, POV

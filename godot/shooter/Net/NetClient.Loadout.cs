@@ -165,7 +165,7 @@ public partial class NetClient
                 Autosave.Acknowledge(ack);
                 LoadoutAcked?.Invoke(ack);
                 break;
-            case EventKind.StreakEarned or EventKind.StreakUsed or EventKind.StreakEnded:
+            case EventKind.StreakEarned or EventKind.StreakUsed or EventKind.StreakEnded or EventKind.StreakGranted:
                 OnStreakEvent(kind, payload);
                 break;
             case EventKind.XpSummary when ProgressionEvents.DecodeXpSummary(payload) is { } xs:

@@ -1,17 +1,20 @@
-using System.Globalization;
 using Godot;
 using Suchohrad.ShooterCore;
 
 namespace Suchohrad.Shooter;
 
 /// <summary>
-/// Care packages on the client (ticket #124): the crate on its parachute while it falls and on the ground once landed, the
-/// open prompt within reach, the hold of the interact key (<see cref="CarePackageRules.OpenHoldSeconds"/>; releasing early
-/// cancels it), and the perk the server grants (<see cref="EventKind.PerkGained"/>), which replaces <see cref="Perks"/>
-/// for prediction and raises the toast. The server checks the reach and the state again.
+/// Care packages on the client (ticket #124, reworked in #151): the crate on its parachute while it falls and on the ground
+/// once landed, the open prompt within reach, and the hold of the interact key (<see cref="CarePackageRules.OpenHoldSeconds"/>).
+/// The hold shows a <see cref="RadialProgress"/> ring that fills over the hold and drains when the key is released. The
+/// crate is freed the moment the server despawns it (opened or expired). The reward streak arrives as StreakGranted, which
+/// <see cref="NetClient.Killstreaks"/> turns into a toast.
 /// </summary>
 public partial class NetClient
 {
+    /// <summary>Seconds for the open ring to drain back to empty after the key is released (instant with reduce motion).</summary>
+    const float RingDrainSeconds = 0.25f;
+
     sealed class CrateView
     {
         public Node3D Node = null!;
@@ -25,14 +28,15 @@ public partial class NetClient
     double _crateHeld;
     /// <summary>The open request for this hold has been sent; nothing more until the key is released.</summary>
     bool _crateSent;
+    /// <summary>The ring's shown fill (0 to 1): follows the hold up and drains down after a release.</summary>
+    float _ringShown;
 
-    /// <summary>Called once from <see cref="_Ready"/>: registers the crate type, follows the crate entities and listens for the perk.</summary>
+    /// <summary>Called once from <see cref="_Ready"/>: registers the crate type and follows the crate entities.</summary>
     void InitCarePackages()
     {
         CarePackageRules.Register(WorldEntityRegistry.Shared);
         WorldEntities.Spawned += OnCrateSpawned;
         WorldEntities.Despawned += OnCrateDespawned;
-        EventReceived += OnCarePackageEvent;
     }
 
     static StandardMaterial3D CrateMaterial(Color colour) => new() { AlbedoColor = colour };
@@ -60,11 +64,22 @@ public partial class NetClient
         _crates[e.Id] = new CrateView { Node = node, Canopy = canopy };
     }
 
+    /// <summary>
+    /// The server despawned the crate (opened, expired or round end): the node is freed at once, and the open ring
+    /// goes with it when this was the crate in reach.
+    /// </summary>
     void OnCrateDespawned(ushort id)
     {
         if (!_crates.Remove(id, out var v)) return;
         v.Node.QueueFree();
-        if (_crateNear == id) _crateNear = null;
+        if (_crateNear == id)
+        {
+            _crateNear = null;
+            _crateHeld = 0;
+            _crateSent = false;
+            _ringShown = 0;
+            _hud?.SetRadial(null);
+        }
     }
 
     /// <summary>Places the crates (the canopy shows while they fall) and finds the one in reach.</summary>
@@ -95,13 +110,14 @@ public partial class NetClient
         return best;
     }
 
-    /// <summary>The crate prompt in reach: the hold hint, then the countdown while the key is held; null otherwise.</summary>
+    /// <summary>
+    /// The crate prompt in reach while the key is not held. While the key is held the open ring carries the state
+    /// ("Opening..."), so the prompt steps aside; null otherwise.
+    /// </summary>
     string? CratePrompt()
     {
-        if (_crateNear == null) return null;
-        if (_crateHeld <= 0) return Strings.F("hud.crate.hold", InputBindings.Name("interact"));
-        var left = Math.Max(0, CarePackageRules.OpenHoldSeconds - _crateHeld);
-        return Strings.F("hud.crate.opening", left.ToString("0.0", CultureInfo.InvariantCulture));
+        if (_crateNear == null || _crateHeld > 0) return null;
+        return Strings.F("hud.crate.hold", InputBindings.Name("interact"));
     }
 
     /// <summary>
@@ -115,28 +131,32 @@ public partial class NetClient
         {
             _crateHeld = 0;
             _crateSent = false;
-            return;
         }
-        if (_crateNear is not { } id)
+        else if (_crateNear is not { } id)
         {
             _crateHeld = 0;
-            return;
         }
-        if (_crateSent) return;
-        _crateHeld += dt;
-        if (_crateHeld < CarePackageRules.OpenHoldSeconds) return;
-        SendOpenCarePackage(id);
-        _crateSent = true;
+        else if (!_crateSent)
+        {
+            _crateHeld += dt;
+            if (_crateHeld >= CarePackageRules.OpenHoldSeconds)
+            {
+                SendOpenCarePackage(id);
+                _crateSent = true;
+            }
+        }
+        ShowCrateRing(dt);
+    }
+
+    /// <summary>The ring fills with the hold and drains after a release; with reduce motion the drain is instant.</summary>
+    void ShowCrateRing(double dt)
+    {
+        var target = _crateHeld > 0 && _crateNear != null ? (float)Math.Min(1.0, _crateHeld / CarePackageRules.OpenHoldSeconds) : 0f;
+        if (target >= _ringShown || GameSettings.Current.ReduceMotion) _ringShown = target;
+        else _ringShown = Mathf.MoveToward(_ringShown, target, (float)dt / RingDrainSeconds);
+        _hud?.SetRadial(_ringShown > 0 ? _ringShown : null);
     }
 
     void SendOpenCarePackage(ushort crate) =>
         Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.OpenCarePackage, CarePackageCodec.EncodeOpen(crate))), (int)ENetPacketPeer.FlagReliable);
-
-    /// <summary>The perk the server granted: it replaces the perk used for prediction, and the toast names it.</summary>
-    void OnCarePackageEvent(EventKind kind, byte[] payload)
-    {
-        if (kind != EventKind.PerkGained || CarePackageCodec.DecodePerk(payload) is not { } id || PerkData?.Find(id) is not { } perk) return;
-        Perks = PerkModifiers.Of(perk);
-        UiShell.Instance?.Toast(Strings.F("toast.crate.perk", perk.Name), ToastKind.Info);
-    }
 }

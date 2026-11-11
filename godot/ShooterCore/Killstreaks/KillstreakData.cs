@@ -17,11 +17,6 @@ public sealed class KillstreakDef
     /// <summary>How long an active instance lasts. 0 = until the streak ends it or its owner dies.</summary>
     public double DurationSeconds { get; init; }
     public KillstreakControl Control { get; init; }
-    /// <summary>
-    /// Care package only: the weight of each perk id in the random roll (higher = more common). Empty for every other streak.
-    /// The ids are checked against perks.json where the table is built (see <see cref="PerkTable"/>).
-    /// </summary>
-    public IReadOnlyDictionary<string, int> PerkWeights { get; init; } = new Dictionary<string, int>();
     /// <summary>The attack missile's tuning (its "missile" block); null for every other streak.</summary>
     public MissileTuning? Missile { get; init; }
     /// <summary>The helicopter helper's tuning (its "helper" block); null for every other streak.</summary>
@@ -39,6 +34,8 @@ public sealed class KillstreakFile : IVersioned
 
     public int Version { get; init; }
     public IReadOnlyList<KillstreakDef> Streaks { get; init; } = Array.Empty<KillstreakDef>();
+    /// <summary>The care package's random reward table (killstreaks.json "streak_weights"); see <see cref="StreakRewards"/>.</summary>
+    public StreakRewards Rewards { get; init; } = null!;
 
     /// <summary>Unlock level of every streak, by id (the map levels.json and loadout validation use).</summary>
     public IReadOnlyDictionary<string, int> UnlockLevels => Streaks.ToDictionary(s => s.Id, s => s.UnlockLevel);
@@ -84,15 +81,6 @@ public sealed class KillstreakFile : IVersioned
                 "pov" => KillstreakControl.Pov,
                 _ => throw new DataFileException($"{F}: {where}: field \"control\" must be none or pov"),
             };
-            var weights = new Dictionary<string, int>();
-            foreach (var (perk, w) in r.PerkWeights ?? new())
-            {
-                if (string.IsNullOrEmpty(perk)) throw new DataFileException($"{F}: {where}: \"perk_weights\" has an empty perk id");
-                if (w < 1) throw new DataFileException($"{F}: {where}: perk_weights \"{perk}\" must be 1 or more");
-                weights[perk] = w;
-            }
-            if (r.Id == CarePackageRules.StreakId && weights.Count == 0)
-                throw new DataFileException($"{F}: {where}: field \"perk_weights\" is required for the care package");
             var isMissile = r.Id == AttackMissileStreak.StreakId;
             if (!isMissile && r.Missile != null) throw new DataFileException($"{F}: {where}: a \"missile\" block is only for the attack missile");
             var isHelper = r.Id == HelicopterHelperStreak.StreakId;
@@ -100,7 +88,7 @@ public sealed class KillstreakFile : IVersioned
             streaks.Add(new KillstreakDef
             {
                 Id = r.Id, Name = r.Name, KillsRequired = kills, UnlockLevel = unlock, MaxActive = maxActive,
-                DurationSeconds = duration, Control = control, PerkWeights = weights,
+                DurationSeconds = duration, Control = control,
                 Missile = isMissile ? MissileTuning.From(r.Missile, F, where) : null,
                 Helper = isHelper ? HelicopterHelperTuning.From(r.Helper, where) : null,
             });
@@ -111,8 +99,26 @@ public sealed class KillstreakFile : IVersioned
             ?? throw new DataFileException($"{F}: the starter streak \"{KillstreakIds.StarterStreak}\" is missing");
         if (starter.UnlockLevel != 0) throw new DataFileException($"{F}: the starter streak \"{starter.Id}\" must have unlock_level 0");
 
+        var rewards = ResolveRewards(raw.StreakWeights, streaks);
+
         var (kinds, gunship, ac130) = AircraftData.Resolve(raw.Aircraft, raw.Gunship, raw.Ac130);
-        return new KillstreakFile { Version = raw.Version, Streaks = streaks, AircraftKinds = kinds, Gunship = gunship, Ac130 = ac130 };
+        return new KillstreakFile { Version = raw.Version, Streaks = streaks, Rewards = rewards, AircraftKinds = kinds, Gunship = gunship, Ac130 = ac130 };
+    }
+
+    /// <summary>The care package's reward weights: required, at least one streak, each a streak in the table (never care_package), each weight 1 or more.</summary>
+    static StreakRewards ResolveRewards(Dictionary<string, int>? raw, List<KillstreakDef> streaks)
+    {
+        const string F = "killstreaks.json";
+        if (raw is null || raw.Count == 0) throw new DataFileException($"{F}: field \"streak_weights\" is required and must list at least one streak");
+        foreach (var (id, w) in raw)
+        {
+            if (string.IsNullOrEmpty(id)) throw new DataFileException($"{F}: \"streak_weights\" has an empty streak id");
+            if (id == CarePackageRules.StreakId) throw new DataFileException($"{F}: \"streak_weights\" cannot give a care package (a crate never drops another)");
+            if (!streaks.Any(s => s.Id == id)) throw new DataFileException($"{F}: \"streak_weights\" names \"{id}\", which is not a streak");
+            if (w < 1) throw new DataFileException($"{F}: \"streak_weights\" \"{id}\" must be 1 or more");
+        }
+        // killstreaks.json order, so the table reads like the file
+        return new StreakRewards(streaks.Where(s => raw.ContainsKey(s.Id)).Select(s => (s.Id, raw[s.Id])).ToArray());
     }
 
     static int Need(int? value, string file, string where, string field, int min) =>
@@ -122,6 +128,7 @@ public sealed class KillstreakFile : IVersioned
     {
         public int Version { get; set; }
         public List<StreakRaw>? Streaks { get; set; }
+        public Dictionary<string, int>? StreakWeights { get; set; }
         public List<AircraftData.AircraftRaw>? Aircraft { get; set; }
         public AircraftData.GunshipRaw? Gunship { get; set; }
         public AircraftData.GunshipRaw? Ac130 { get; set; }
@@ -136,7 +143,6 @@ public sealed class KillstreakFile : IVersioned
         public int? MaxActive { get; set; }
         public double? DurationSeconds { get; set; }
         public string? Control { get; set; }
-        public Dictionary<string, int>? PerkWeights { get; set; }
         public MissileTuning.MissileRaw? Missile { get; set; }
         public HelicopterHelperTuning.HelperRaw? Helper { get; set; }
     }

@@ -9,6 +9,8 @@ public sealed record StreakEarnedInfo(string StreakId, int Kills);
 public sealed record StreakUsedInfo(string StreakId);
 /// <summary>An active streak ended (<see cref="EventKind.StreakEnded"/>).</summary>
 public sealed record StreakEndedInfo(string StreakId, KillstreakEndReason Reason);
+/// <summary>A care package reward was granted; <paramref name="ReplacedId"/> is the reward it pushed out, or null (<see cref="EventKind.StreakGranted"/>).</summary>
+public sealed record StreakGrantedInfo(string StreakId, string? ReplacedId);
 
 /// <summary>
 /// Payloads of the owner-only killstreak events (reliable, sent to the owner alone). Layout: u8 length + utf8 streak id,
@@ -26,6 +28,20 @@ public static class KillstreakEvents
     }
 
     public static byte[] EncodeUsed(string streakId) => Id(streakId);
+
+    /// <summary>Granted: the streak id, then the replaced reward's id (empty when none).</summary>
+    public static byte[] EncodeGranted(string streakId, string? replacedId)
+    {
+        var b = new List<byte>(Id(streakId));
+        b.AddRange(Id(replacedId ?? ""));
+        return b.ToArray();
+    }
+
+    public static StreakGrantedInfo? DecodeGranted(ReadOnlySpan<byte> d)
+    {
+        if (!ReadId(d, out var id, out var rest) || !ReadId(rest, out var replaced, out _)) return null;
+        return new StreakGrantedInfo(id, replaced == "" ? null : replaced);
+    }
 
     public static byte[] EncodeEnded(string streakId, KillstreakEndReason reason)
     {

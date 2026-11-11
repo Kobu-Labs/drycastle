@@ -1,14 +1,13 @@
 using System.Buffers.Binary;
 using System.Numerics;
-using System.Text;
 
 namespace Suchohrad.ShooterCore;
 
 /// <summary>
-/// Care package rules (ticket #124): the killstreak that drops a crate on a parachute. The owner's crate lands
-/// <see cref="DropDistanceMetres"/> ahead of them; any living player within reach holds the interact key for
-/// <see cref="OpenHoldSeconds"/> to open it and gets a random perk until they die. An unopened crate disappears after
-/// <see cref="LifetimeSeconds"/>.
+/// Care package rules (ticket #124, reward reworked in #151): the killstreak that drops a crate on a parachute. The owner's
+/// crate lands <see cref="DropDistanceMetres"/> ahead of them; any living player within reach holds the interact key for
+/// <see cref="OpenHoldSeconds"/> to open it. Opening grants a random killstreak from <see cref="StreakRewards"/> and the
+/// crate despawns at once. An unopened crate disappears after <see cref="LifetimeSeconds"/>.
 /// </summary>
 public static class CarePackageRules
 {
@@ -49,58 +48,6 @@ public static class CarePackageRules
 
     public static bool InReach(Vector3 player, Vector3 crate, float slack = 0) =>
         Vector3.Distance(player, crate) <= ReachMetres + slack;
-}
-
-/// <summary>
-/// The perk weights of the care package (killstreaks.json "perk_weights"). A roll picks one perk with a probability
-/// proportional to its weight, so the better perks (smaller weights) are rarer. Entries keep perks.json order.
-/// </summary>
-public sealed class PerkTable
-{
-    readonly (string Id, int Weight)[] _entries;
-
-    PerkTable((string Id, int Weight)[] entries, int total)
-    {
-        _entries = entries;
-        Total = total;
-    }
-
-    /// <summary>Sum of all weights: the roll range is [0, Total).</summary>
-    public int Total { get; }
-
-    public IReadOnlyList<(string Id, int Weight)> Entries => _entries;
-
-    /// <summary>
-    /// Builds the table, checking every weighted id against perks.json. Throws on an empty table, an unknown perk, or a
-    /// weight below 1; the server refuses to start with a bad table.
-    /// </summary>
-    public static PerkTable Build(IReadOnlyDictionary<string, int> weights, PerksFile perks)
-    {
-        if (weights.Count == 0) throw new InvalidOperationException("care package: no perk weights");
-        foreach (var (id, w) in weights)
-        {
-            if (perks.Find(id) == null) throw new InvalidOperationException($"care package: perk \"{id}\" is not in perks.json");
-            if (w < 1) throw new InvalidOperationException($"care package: perk \"{id}\" needs a weight of 1 or more");
-        }
-        var entries = perks.Perks.Where(p => weights.ContainsKey(p.Id)).Select(p => (p.Id, weights[p.Id])).ToArray();
-        return new PerkTable(entries, entries.Sum(e => e.Item2));
-    }
-
-    /// <summary>The perk for a roll in [0, <see cref="Total"/>). Throws outside that range.</summary>
-    public string Pick(int roll)
-    {
-        if (roll < 0 || roll >= Total) throw new ArgumentOutOfRangeException(nameof(roll), roll, $"roll must be in [0, {Total})");
-        var acc = 0;
-        foreach (var (id, w) in _entries)
-        {
-            acc += w;
-            if (roll < acc) return id;
-        }
-        throw new InvalidOperationException("unreachable: the weights cover the roll range");
-    }
-
-    /// <summary>A random perk from the weights.</summary>
-    public string Pick(Random rng) => Pick(rng.Next(Total));
 }
 
 /// <summary>Why a crate could not be opened.</summary>
@@ -148,18 +95,18 @@ public sealed class CarePackage : IWorldEntity
 
 /// <summary>
 /// The care packages on the map. Owned by the match next to the entity manager; a crate that the manager despawns (expiry,
-/// opened, round end) is forgotten. Opening rolls the perk from the table, so the caller only applies it.
+/// opened, round end) is forgotten. Opening draws the reward streak from the table, so the caller only grants it.
 /// </summary>
 public sealed class CarePackageBook
 {
     readonly WorldEntityManager _world;
-    readonly PerkTable _table;
+    readonly StreakRewards _rewards;
     readonly Dictionary<ushort, CarePackage> _crates = new();
 
-    public CarePackageBook(WorldEntityManager world, PerkTable table)
+    public CarePackageBook(WorldEntityManager world, StreakRewards rewards)
     {
         _world = world;
-        _table = table;
+        _rewards = rewards;
         world.Despawned += d => _crates.Remove(d.Id);
     }
 
@@ -175,16 +122,17 @@ public sealed class CarePackageBook
     }
 
     /// <summary>
-    /// Opens a crate for a player at <paramref name="player"/>. On <see cref="OpenResult.Ok"/> the rolled perk id is in
-    /// <paramref name="perk"/> and the crate is gone. Nothing changes otherwise.
+    /// Opens a crate for a player at <paramref name="player"/>. On <see cref="OpenResult.Ok"/> the rolled reward streak id is
+    /// in <paramref name="streakId"/> and the crate is gone (despawned with <see cref="WorldDespawnReason.Opened"/>).
+    /// Nothing changes otherwise.
     /// </summary>
-    public OpenResult TryOpen(ushort crateId, Vector3 player, Random rng, out string? perk, float slack = CarePackageRules.LatencySlackMetres)
+    public OpenResult TryOpen(ushort crateId, Vector3 player, Random rng, out string? streakId, float slack = CarePackageRules.LatencySlackMetres)
     {
-        perk = null;
+        streakId = null;
         if (!_crates.TryGetValue(crateId, out var crate)) return OpenResult.Gone;
         if (!crate.Landed) return OpenResult.NotLanded;
         if (!CarePackageRules.InReach(player, crate.Position, slack)) return OpenResult.OutOfReach;
-        perk = _table.Pick(rng);
+        streakId = _rewards.Pick(rng);
         crate.MarkOpened();
         _world.Despawn(crateId, WorldDespawnReason.Opened);
         return OpenResult.Ok;
@@ -234,7 +182,7 @@ public sealed class CarePackageStreak : IKillstreak
     }
 }
 
-/// <summary>Payloads of the care package event kinds (little-endian).</summary>
+/// <summary>Payloads of the care package's client-to-server event (little-endian).</summary>
 public static class CarePackageCodec
 {
     /// <summary>Client to server, <see cref="EventKind.OpenCarePackage"/>: u16 crate id.</summary>
@@ -251,23 +199,5 @@ public static class CarePackageCodec
         if (p.Length != 2) return false;
         crate = BinaryPrimitives.ReadUInt16LittleEndian(p);
         return true;
-    }
-
-    /// <summary>Server to the opener, <see cref="EventKind.PerkGained"/>: u8 length + utf8 perk id.</summary>
-    public static byte[] EncodePerk(string perkId)
-    {
-        var bytes = Encoding.UTF8.GetBytes(perkId ?? "");
-        if (bytes.Length > byte.MaxValue) Array.Resize(ref bytes, byte.MaxValue);
-        var o = new byte[1 + bytes.Length];
-        o[0] = (byte)bytes.Length;
-        bytes.CopyTo(o, 1);
-        return o;
-    }
-
-    /// <summary>The perk id, or null on malformed input.</summary>
-    public static string? DecodePerk(ReadOnlySpan<byte> p)
-    {
-        if (p.Length < 1 || p.Length != 1 + p[0]) return null;
-        return Encoding.UTF8.GetString(p[1..]);
     }
 }

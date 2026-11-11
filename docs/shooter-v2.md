@@ -113,9 +113,20 @@ Perk numbers are the first set from the brief (#115), not tuned by play. Two of 
 attached to: Hot Streak removes 1 kill from the 4-kill UAV (25 %) and from the 24-kill MOAB (4 %). Whether that is the
 intended feel is an open question (section 10).
 
-Care package perk table (killstreak, #124): Fleet Foot 22, Quick Hands 22, Swift Swap 16, Flak Jacket 14, Steady Lung 10,
-Tank Hunter 8, Ghost 5, Hot Streak 3 (weights out of 100). A care-package perk lasts until death. The HUD strip shows the
-loadout perk, not the care-package perk (#143).
+Care package reward (#151, replaces the perk table of #124): opening a crate grants a random killstreak from
+`killstreaks.json` `streak_weights` (weights out of 97): UAV 30, Attack Missile 22, Turret 18, Helicopter Helper 10,
+Attack Helicopter 9, AC-130 6, MOAB 2. Better streaks are rarer. The care package never gives another care package, and
+Hot Streak does not affect the reward. The table is validated at load: every id must be a streak, care_package is refused,
+and each weight is 1 or more.
+- The reward goes into one of three held reward slots at once, without touching the Streak counter. It is used with the
+  Killstreak key after the loadout's streaks. A full set replaces the oldest reward, and the toast says what was replaced.
+- Rewards are lost on death, like earned streaks.
+- The opener gets a toast with the streak's icon (`IconRegistry`, `streaks/<id>.png`) that names the key. The loadout
+  tracker does not show reward slots yet (open).
+- The crate is freed as soon as it is opened (the server despawns it with reason Opened and the client frees its node).
+  An unopened crate is freed when it expires.
+- Opening is a hold of E (2 s). A radial ring (`RadialProgress`, labelled "Opening...") fills over the hold and drains
+  on release. Its reduce-motion path is an instant drain. No numeric countdown.
 
 ## 4. Killstreaks
 
@@ -128,7 +139,7 @@ not a streak weapon, so its kills do count (correction on #133).
 | UAV | 4 | 0 | 60 s | none | enemy pings every second to the owner; no visible UAV model |
 | Attack Missile | 5 | 4 | flies 20 s | POV | steered missile, 100 dmg, splash 12 m |
 | Sentry Turret | 6 | 5 | 15 s | none | placed on the ground, 500 hp, 12 dmg per shot |
-| Care Package | 6 | 6 | instant | none | drop lands, E opens it, grants a perk until death |
+| Care Package | 6 | 6 | instant | none | drop lands, hold E 2 s opens it (crate gone), grants a random killstreak (weighted, section 3) |
 | Attack Helicopter | 10 | 9 | 45 s | POV | owner flies the helicopter (POV) for 45 s |
 | Helicopter Helper | 15 | 11 | 60 s | none | AI helicopter, bursts at enemies with a red-dot warning |
 | AC-130 | 18 | 14 | 40 s | POV | circling gunship, 25 mm / 40 mm / 105 mm |
@@ -194,6 +205,9 @@ Not built:
 - Corpse pickup and the care package crate both use E; holding E on a corpse under a falling crate can take the corpse
   first (#124).
 - Steady Lung does not apply in water (#138).
+- Care package (#151): the reward streaks are not shown in the loadout tracker (only the toast names them). The corpse
+  pickup hold still uses its own prompt, not `RadialProgress`. The ring, the toast icon and the crate despawn on open were
+  not checked in the running game (the brief forbade it).
 
 Not verified (compiled, not run; the brief for these tickets forbade running the game):
 - Shaders: `water_surface.gdshader` and `underwater.gdshader` (shore fade uses `hint_depth_texture`, which needs the Forward+
@@ -221,8 +235,8 @@ Server and persistence:
 
 ## 9. Wire protocol
 
-Protocol version: **8** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
-versions. Version 6 was bumped in #133 because the killstreak, aircraft, turret, missile, care package, corpse and MOAB
+Protocol version: **9** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
+versions. Version 9 (#151) retired the care package's PerkGained (kind 51) and added StreakGranted (kind 23). Version 6 was bumped in #133 because the killstreak, aircraft, turret, missile, care package, corpse and MOAB
 events and world entity types are new. Version 7 added the target dummies (#148: entity type 3 and event kind 140). Version 8
 added the loadout editor's autosave, rename, copy and reset (#145: event kinds 130-132, and `SaveLoadout` carries the name
 and the sequence number). Before 6, the last bump was 5 (camo per loadout slot).
@@ -234,7 +248,7 @@ Event kinds (`EventKind`, one byte in the event message):
 | 1 | Spawn | 22 | Appearance (camo) |
 | 2 | Shot | 30 | MissileBlast |
 | 3 | Hit | 50 | OpenCarePackage (client to server) |
-| 4 | Kill | 51 | PerkGained |
+| 4 | Kill | 51 | retired (was PerkGained, protocol 8) |
 | 5 | MatchState | 60 | GunshipStatus (kinds 60-69 are the aircraft streaks) |
 | 6 | Explosion | 70 | Moab |
 | 7 | Death | 90 | UavPing |

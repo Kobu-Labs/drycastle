@@ -5,22 +5,22 @@ using NVec3 = System.Numerics.Vector3;
 namespace Suchohrad.Shooter;
 
 /// <summary>
-/// Care packages on the server (ticket #124): the crates the care package killstreak drops, the opening request
-/// (<see cref="EventKind.OpenCarePackage"/>) and the perk it grants until death (<see cref="EventKind.PerkGained"/>).
-/// The rules live in <see cref="CarePackageBook"/>, <see cref="CarePackage"/> and <see cref="PerkTable"/>; this file wires
-/// them to the match, the physics ground and the player.
+/// Care packages on the server (ticket #124, reward reworked in #151): the crates the care package killstreak drops and the
+/// opening request (<see cref="EventKind.OpenCarePackage"/>). Opening grants a random killstreak from killstreaks.json
+/// (<see cref="StreakRewards"/>) into the opener's reward slots (<see cref="KillstreakService.Grant"/>), which tells the
+/// owner through <see cref="EventKind.StreakGranted"/>. The rules live in <see cref="CarePackageBook"/>; this file wires
+/// them to the match, the physics ground and the streak service.
 /// </summary>
 public partial class NetServer
 {
     CarePackageBook _carePackages = null!;
     readonly Random _carePackageRng = new();
 
-    /// <summary>Registers the crate type and builds the book from the care package's perk weights. Runs after the match exists.</summary>
+    /// <summary>Registers the crate type and builds the book from the killstreak reward table. Runs after the match exists.</summary>
     void BuildCarePackages()
     {
         CarePackageRules.Register(WorldEntityRegistry.Shared);
-        var weights = Killstreaks.Find(CarePackageRules.StreakId)?.PerkWeights ?? new Dictionary<string, int>();
-        _carePackages = new CarePackageBook(_match.Entities, PerkTable.Build(weights, Perks));
+        _carePackages = new CarePackageBook(_match.Entities, Killstreaks.Rewards);
     }
 
     /// <summary>The care package implementation for <see cref="BuildStreaks"/>.</summary>
@@ -44,25 +44,14 @@ public partial class NetServer
     {
         if (!CarePackageCodec.TryDecodeOpen(payload, out var crate)) return;
         if (!c.Joined || c.W == null || c.Car != null || _match.Get(c.Id)?.Life != PlayerLife.Alive) return;
-        var result = _carePackages.TryOpen(crate, N(c.Body.GlobalPosition), _carePackageRng, out var perkId);
-        if (result != OpenResult.Ok || perkId == null || Perks.Find(perkId) is not { } perk)
+        var result = _carePackages.TryOpen(crate, N(c.Body.GlobalPosition), _carePackageRng, out var streakId);
+        if (result != OpenResult.Ok || streakId == null)
         {
             GD.Print($"server: {c.Name} care package {crate} not opened: {result}");
             return;
         }
-        GrantPerk(c, perk);
-    }
-
-    /// <summary>
-    /// The opener's perk is replaced until death. The loadout's perk comes back at the next spawn (<see cref="ApplyLoadout"/>),
-    /// so nothing needs undoing here. Hot Streak also lowers the owner's streak thresholds for the rest of this life.
-    /// </summary>
-    void GrantPerk(Client c, PerkDef perk)
-    {
-        c.Perks = PerkModifiers.Of(perk);
-        c.W.SetPerks(c.Perks);
-        _streaks.SetCostReduction(c.Id, c.Perks.StreakCostReduction);
-        Send(c, new EventMsg((byte)EventKind.PerkGained, CarePackageCodec.EncodePerk(perk.Id)));
-        GD.Print($"server: {c.Name} opened a care package: {perk.Name}");
+        // the reward does not touch the Streak counter; the service sends StreakGranted to the opener
+        var grant = _streaks.Grant(c.Id, streakId);
+        GD.Print($"server: {c.Name} opened a care package: {streakId}" + (grant?.Replaced is { } old ? $" (replaced {old})" : ""));
     }
 }
