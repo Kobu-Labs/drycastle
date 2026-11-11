@@ -66,8 +66,9 @@ public sealed class CamoFile : IVersioned
     /// <summary>The spotting range multiplier at full concealment (1 = no effect). Name tags and kill-cam use it.</summary>
     public float SpottingMinMultiplier { get; private init; } = 0.35f;
 
-    public CamoPreset? SuitPreset(string id) => SuitPresets.FirstOrDefault(p => p.Id == id);
-    public CamoPreset? FacePreset(string id) => FacePresets.FirstOrDefault(p => p.Id == id);
+    Dictionary<string, CamoPreset>? _suitById, _faceById;
+    public CamoPreset? SuitPreset(string id) => DataIndex.Find(ref _suitById, SuitPresets, p => p.Id, id);
+    public CamoPreset? FacePreset(string id) => DataIndex.Find(ref _faceById, FacePresets, p => p.Id, id);
 
     public float TuftSizeOf(byte v) => Lerp(TuftSizeM, CamoSpec.Unit(v));
     public float TuftSwayOf(byte v) => Lerp(TuftSwayM, CamoSpec.Unit(v));

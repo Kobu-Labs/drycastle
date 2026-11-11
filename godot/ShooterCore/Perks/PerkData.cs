@@ -93,7 +93,8 @@ public sealed class PerksFile
     public int Version { get; init; }
     public IReadOnlyList<PerkDef> Perks { get; init; } = Array.Empty<PerkDef>();
 
-    public PerkDef? Find(string id) => Perks.FirstOrDefault(p => p.Id == id);
+    Dictionary<string, PerkDef>? _byId;
+    public PerkDef? Find(string id) => DataIndex.Find(ref _byId, Perks, p => p.Id, id);
 
     public static PerksFile Load(string path) => Resolve(DataFile.Load<PerksRaw>(path, SupportedVersion));
 

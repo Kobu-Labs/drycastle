@@ -115,6 +115,10 @@ public partial class NetServer
         BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(c.Id, s, 0)));
     }
 
+    /// <summary>Sandbox vehicles per server run. Spawned cars are never removed, so an uncapped count would eventually wrap the vehicle id (T3-016).</summary>
+    const int SandboxVehicleCap = 8;
+    int _sandboxVehicles;
+
     /// <summary>
     /// Spawns a vehicle a few metres in front of the player, facing the way they look (the same construction as the
     /// map's cars). <paramref name="kind"/> indexes vehicles.json.
@@ -123,6 +127,8 @@ public partial class NetServer
     {
         if (Vehicles == null || kind >= Vehicles.Vehicles.Count) { SandboxNote(c, "Unknown vehicle."); return; }
         if (c.Car != null) { SandboxNote(c, "Leave the vehicle first."); return; }
+        if (_sandboxVehicles >= SandboxVehicleCap) { SandboxNote(c, $"The sandbox vehicle limit ({SandboxVehicleCap}) is reached until the server restarts."); return; }
+        _sandboxVehicles++;
         var def = Vehicles.Vehicles[kind];
         var yaw = c.Body.Yaw;
         var p = c.Body.GlobalPosition;

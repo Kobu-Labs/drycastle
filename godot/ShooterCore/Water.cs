@@ -59,6 +59,14 @@ public sealed class WaterBody
         return best;
     }
 
+    /// <summary>Distance (m) from (x, z) to the bounding box of this body; 0 inside it.</summary>
+    public float BoxDistance(float x, float z)
+    {
+        var dx = MathF.Max(MathF.Max(MinX - x, 0f), x - MaxX);
+        var dz = MathF.Max(MathF.Max(MinZ - z, 0f), z - MaxZ);
+        return MathF.Sqrt(dx * dx + dz * dz);
+    }
+
     internal static float SegmentDistance(Vector2 p, Vector2 a, Vector2 b)
     {
         var d = b - a;
@@ -91,16 +99,23 @@ public sealed class Water
 {
     public static readonly Water Empty = new(Array.Empty<WaterBody>());
 
-    public IReadOnlyList<WaterBody> Bodies { get; }
+    /// <summary>Stored as an array: the queries run twice per player per tick and an array loop does not box an enumerator.</summary>
+    readonly WaterBody[] _bodies;
 
-    public Water(IReadOnlyList<WaterBody> bodies) => Bodies = bodies;
+    public IReadOnlyList<WaterBody> Bodies => _bodies;
+
+    public Water(IReadOnlyList<WaterBody> bodies) => _bodies = bodies.ToArray();
 
     /// <summary>The body with the highest surface containing (x, z), or null when the point is dry.</summary>
     public WaterBody? BodyAt(float x, float z)
     {
         WaterBody? best = null;
-        foreach (var b in Bodies)
+        var bodies = _bodies;
+        for (var i = 0; i < bodies.Length; i++)
+        {
+            var b = bodies[i];
             if ((best is null || b.SurfaceY > best.SurfaceY) && b.Contains(x, z)) best = b;
+        }
         return best;
     }
 
@@ -108,7 +123,13 @@ public sealed class Water
     public float ShoreDistance(float x, float z)
     {
         var best = float.MaxValue;
-        foreach (var b in Bodies) best = MathF.Min(best, b.ShoreDistance(x, z));
+        var bodies = _bodies;
+        for (var i = 0; i < bodies.Length; i++)
+        {
+            var b = bodies[i];
+            if (b.BoxDistance(x, z) >= best) continue; // cannot beat the best so far
+            best = MathF.Min(best, b.ShoreDistance(x, z));
+        }
         return best;
     }
 

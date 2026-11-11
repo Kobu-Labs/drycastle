@@ -28,7 +28,15 @@ public partial class NetServer
         var uncovered = spawns.ToList(); var anchors = new List<NVec3>();
         while (anchors.Count < count && uncovered.Count > 0)
         {
-            var best = spawns.OrderByDescending(a => uncovered.Count(u => Dist2D(a, u) <= radius)).First();
+            // plain loops, no sort: the first candidate with the most uncovered neighbours wins, as with a stable OrderByDescending(...).First()
+            var best = spawns[0];
+            var bestScore = -1;
+            foreach (var a in spawns)
+            {
+                var score = 0;
+                foreach (var u in uncovered) if (Dist2D(a, u) <= radius) score++;
+                if (score > bestScore) { best = a; bestScore = score; }
+            }
             anchors.Add(best);
             uncovered.RemoveAll(u => Dist2D(best, u) <= radius);
         }

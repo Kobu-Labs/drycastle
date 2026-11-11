@@ -23,7 +23,8 @@ public class WeaponsFile
     public string StartingWeapon { get; init; } = "";
     public List<WeaponDef> Weapons { get; init; } = new();
 
-    public WeaponDef? Find(string id) => Weapons.FirstOrDefault(w => w.Id == id);
+    Dictionary<string, WeaponDef>? _byId;
+    public WeaponDef? Find(string id) => DataIndex.Find(ref _byId, Weapons, w => w.Id, id);
 
     public static WeaponsFile Load(string path) => Resolve(DataFile.Load<WeaponsRaw>(path, SupportedVersion));
 

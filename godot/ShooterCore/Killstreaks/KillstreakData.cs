@@ -38,10 +38,12 @@ public sealed class KillstreakFile : IVersioned
     public StreakRewards Rewards { get; init; } = null!;
 
     /// <summary>Unlock level of every streak, by id (the map levels.json and loadout validation use).</summary>
-    public IReadOnlyDictionary<string, int> UnlockLevels => Streaks.ToDictionary(s => s.Id, s => s.UnlockLevel);
+    Dictionary<string, int>? _unlockLevels;
+    public IReadOnlyDictionary<string, int> UnlockLevels => _unlockLevels ??= Streaks.ToDictionary(s => s.Id, s => s.UnlockLevel);
 
     /// <summary>The streak with this id, or null when the id is not in the file.</summary>
-    public KillstreakDef? Find(string id) => Streaks.FirstOrDefault(s => s.Id == id);
+    Dictionary<string, KillstreakDef>? _byId;
+    public KillstreakDef? Find(string id) => DataIndex.Find(ref _byId, Streaks, s => s.Id, id);
 
     /// <summary>Aircraft kinds (killstreaks.json "aircraft"): how each circles the map. Empty when the file has none.</summary>
     public IReadOnlyList<AircraftKindDef> AircraftKinds { get; init; } = Array.Empty<AircraftKindDef>();

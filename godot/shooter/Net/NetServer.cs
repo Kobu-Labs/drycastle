@@ -409,6 +409,7 @@ public partial class NetServer : Node
         if (!c.Joined) return;
         StreakLeave(c.Id);
         if (c.Car != null) { c.Car.Seat.Exit(c.Id); c.Car = null; }
+        foreach (var car in _cars) car.RemoveCollisionExceptionWith(c.Body); // the exception outlives the freed body otherwise (T3-014)
         c.Body.QueueFree();
         _byId.Remove(c.Id);
         _playerRidsDirty = true;

@@ -251,11 +251,19 @@ public partial class Player : CharacterBody3D
         return TestMove(GlobalTransform, Vector3.Up * (up + 0.02f));
     }
 
+    /// <summary>The stance whose capsule is on the body now; the capsule is only written when the stance changes (T3-010).</summary>
+    Stance? _shapeStance;
+
     void SetStanceShape(Stance stance)
     {
-        var h = MovementStep.CapsuleHeight(stance);
-        _capsule.Height = h;
-        _shape.Position = new Vector3(0, h / 2, 0);
+        if (_shapeStance != stance)
+        {
+            _shapeStance = stance;
+            var h = MovementStep.CapsuleHeight(stance);
+            _capsule.Height = h;
+            _shape.Position = new Vector3(0, h / 2, 0);
+        }
+        // the camera is set every call: the chase camera moves it, and EndChase relies on this to put it back
         _camera.Position = new Vector3(0, MovementStep.EyeHeight(stance), 0);
     }
 
