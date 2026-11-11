@@ -39,7 +39,7 @@ Clients only learn about the new version after the server is live. Nothing else 
 **One-time setup** (secrets live in the GitHub environment `production`, never in the repo; use a dedicated deploy key, not your personal one):
 ```bash
 ssh-keygen -t ed25519 -N "" -C github-deploy -f ~/.ssh/suchohrad-deploy
-ssh-copy-id -i ~/.ssh/suchohrad-deploy.pub -o IdentityFile=~/.ssh/suchohrad-vps -o IdentitiesOnly=yes root@159.195.244.164   # installs the new key on the VPS, logging in with the old one
+ssh-copy-id -f -i ~/.ssh/suchohrad-deploy.pub -o IdentityFile=~/.ssh/suchohrad-vps -o IdentitiesOnly=yes root@159.195.244.164   # installs the new key on the VPS, logging in with the old one
 gh secret set DEPLOY_SSH_KEY --env production < ~/.ssh/suchohrad-deploy
 gh secret set DEPLOY_HOST --env production --body root@159.195.244.164
 ssh-keygen -F 159.195.244.164 | grep -v '^#' | gh secret set DEPLOY_KNOWN_HOSTS --env production   # pinned host key (from your known_hosts)
