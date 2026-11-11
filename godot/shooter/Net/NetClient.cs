@@ -174,6 +174,7 @@ public partial class NetClient : Node
         }
         PumpAutosave(); // loadout saves whose debounce ran out go out here, whichever screen is open (#145)
         RenderRemotes();
+        if (PoseDemo && !_poseDemoDone && _me != null) SpawnPoseDemo();
         RenderCorpses();
         RenderCarePackages();
         RenderTurrets();

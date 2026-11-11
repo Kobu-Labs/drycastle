@@ -10,10 +10,10 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public sealed partial class ArmsReadyPose : SkeletonModifier3D
 {
-    /// <summary>Where the right hand holds the weapon, metres in the model's own frame (x is to the character's left, z forward).</summary>
-    static readonly Vector3 RightHand = new(-0.12f, 1.28f, 0.34f);
-    /// <summary>How far ahead of the right hand the left hand reaches along the barrel, metres.</summary>
-    const float Foregrip = 0.42f;
+    /// <summary>Where the right hand holds the weapon, metres in the model's own frame (x is to the character's left, z forward). These bodies have big heads and short arms: the shoulders are at 1.07 m, so the chest is about 0.85 m, not the 1.3 m of a realistic figure. The torso's front is about 0.13 m ahead of the spine, so the hand is held well in front of it, or the weapon's butt (0.16 m behind the hand) goes through the body.</summary>
+    static readonly Vector3 RightHand = new(-0.06f, 0.85f, 0.36f);
+    /// <summary>How far ahead of the right hand the left hand reaches along the barrel, metres (the arms are short: a full arm is about 0.54 m).</summary>
+    const float Foregrip = 0.12f;
 
     sealed class Arm
     {
@@ -24,8 +24,21 @@ public sealed partial class ArmsReadyPose : SkeletonModifier3D
         public float Out; // sign of the side the elbow points to
     }
 
+    /// <summary>Which way the weapon points (model frame: z forward), a little above level.</summary>
+    static readonly Vector3 Barrel = new Vector3(0, 0.04f, 1).Normalized();
+    /// <summary>How far behind the right hand the weapon's origin (its butt end) sits for a two-handed weapon and a pistol, metres.</summary>
+    const float ButtBehindHand = 0.16f, GripBehindHand = 0.03f;
+
     Arm? _right, _left;
+
+    /// <summary>The node the weapon hangs on while armed. Placed here, not on the fist bone, so the weapon points exactly along <see cref="Barrel"/> whatever the hand's roll: the hands are posed onto it, it is not posed by them.</summary>
+    public Node3D? Aim { get; set; }
     float _rigPerMetre = 1f;
+
+    float _recoil;
+
+    /// <summary>One shot: the weapon kicks back and up and the hands follow, then settles (about 0.1 s).</summary>
+    public void Kick() => _recoil = 1f;
 
     /// <summary>The left arm reaches for the foregrip too.</summary>
     public bool TwoHanded { get; set; } = true;
@@ -61,8 +74,19 @@ public sealed partial class ArmsReadyPose : SkeletonModifier3D
     public override void _ProcessModificationWithDelta(double delta)
     {
         if (GetSkeleton() is not { } sk || _right == null || _left == null) return;
-        var hand = Solve(sk, _right, RightHand * _rigPerMetre, out var forward);
-        if (TwoHanded) Solve(sk, _left, hand + forward * (Foregrip * _rigPerMetre), out _);
+        _recoil = Mathf.Max(0f, _recoil - (float)delta * 9f);
+        // a shot pushes the weapon back along the barrel and lifts the muzzle; the targets move, so the arms recoil with it
+        var barrel = (Barrel + Vector3.Up * (_recoil * 0.12f)).Normalized();
+        var rightTarget = (RightHand - barrel * (_recoil * 0.05f)) * _rigPerMetre;
+        Solve(sk, _right, rightTarget, out _);
+        if (TwoHanded) Solve(sk, _left, rightTarget + barrel * (Foregrip * _rigPerMetre), out _);
+        if (Aim != null)
+        {
+            var z = -barrel;
+            var x = Vector3.Up.Cross(z).Normalized();
+            var origin = rightTarget - barrel * ((TwoHanded ? ButtBehindHand : GripBehindHand) * _rigPerMetre);
+            Aim.Transform = new Transform3D(new Basis(x, z.Cross(x), z), origin);
+        }
     }
 
     /// <summary>Bends the arm so its hand reaches <paramref name="target"/> (skeleton space). Returns where the hand ends up and the forearm's direction.</summary>

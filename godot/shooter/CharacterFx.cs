@@ -25,6 +25,11 @@ public sealed partial class CharacterView : Node3D
     BoneAttachment3D? _hand;
     Node3D? _grip;
     ArmsReadyPose? _arms;
+    Node3D? _aim;
+    bool _aimed, _shooting;
+    float _fireTimer;
+    /// <summary>Flash the muzzle on every animated shot. Off for real remote players (the server's shot events flash them); on for the pose demo.</summary>
+    public bool FlashOnShot;
     Node3D? _held;
     string _heldId = "";
     string _playing = "";
@@ -67,7 +72,7 @@ public sealed partial class CharacterView : Node3D
                 if (_anim.HasAnimation(n)) _anim.GetAnimation(n).LoopMode = Animation.LoopModeEnum.Linear;
         _skeleton = m.FindChildren("*", "Skeleton3D", true, false).FirstOrDefault() as Skeleton3D;
         _mesh = m.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>().FirstOrDefault();
-        _hand = null; _grip = null; _arms = null;
+        _hand = null; _grip = null; _arms = null; _aim = null; _aimed = false;
         if (_skeleton != null && _mesh?.Skin != null)
         {
             PrepareMesh(_mesh, path);
@@ -98,7 +103,13 @@ public sealed partial class CharacterView : Node3D
         _grip = new Node3D { Name = "Grip", Transform = new Transform3D(bind[fist].Basis.Inverse() * weapon, new Vector3(0, 0.1f, 0)) };
         _hand.AddChild(_grip);
         _arms = ArmsReadyPose.Create(sk, bind, 1f / Scale);
-        if (_arms != null) sk.AddChild(_arms);
+        if (_arms != null)
+        {
+            _aim = new Node3D { Name = "Aim" };
+            sk.AddChild(_aim);
+            _arms.Aim = _aim;
+            sk.AddChild(_arms);
+        }
     }
 
     /// <summary>The bind-pose (T-pose) global transform of every skinned bone, by bone index.</summary>
@@ -150,7 +161,7 @@ public sealed partial class CharacterView : Node3D
     public void ShowCorpse(string weaponId)
     {
         SetWeapon(weaponId);
-        if (_arms != null) _arms.Active = false;
+        SetAimed(false);
         Play("Death", 0);
         if (_anim != null && _anim.HasAnimation("Death")) _anim.Seek(_anim.GetAnimation("Death").Length, true);
     }
@@ -165,12 +176,37 @@ public sealed partial class CharacterView : Node3D
         var swing = firing && knife && !dead;
         var armed = !dead && weaponId != "" && !swing;
         var twoHanded = weaponId is not ("pistol" or "glock17" or "deagle" or "knife"); // pistols are one-handed, every long gun is two-handed
-        if (_arms != null) { _arms.TwoHanded = twoHanded; _arms.Active = armed; }
+        if (_arms != null) _arms.TwoHanded = twoHanded;
+        SetAimed(armed);
+        _shooting = armed && firing;
         Play(dead ? "Death"
             : swing ? "SwordSlash"
             : _swim ? (speed > 0.6f ? "Walk" : "Idle") // no swim clip in the rig: the slow walk, see SetSwim
             : speed > 6.2f ? "Run" : speed > 0.6f ? "Walk" : "Idle");
     }
+
+    /// <summary>While a gun is firing the weapon kicks about every 0.11 s (a steady automatic rate; the real shots arrive as events, this is the pose only).</summary>
+    public override void _Process(double delta)
+    {
+        if (!_shooting || _arms == null) { _fireTimer = 0; return; }
+        _fireTimer -= (float)delta;
+        if (_fireTimer > 0) return;
+        _fireTimer = 0.11f;
+        _arms.Kick();
+        if (FlashOnShot) Flash();
+    }
+
+    /// <summary>Armed and posed: the weapon hangs on the aim node and the arms are posed onto it. Otherwise it sits in the right fist and the clip plays as it is.</summary>
+    void SetAimed(bool aimed)
+    {
+        if (_arms == null || _aim == null) return;
+        _arms.Active = aimed;
+        if (aimed == _aimed) return;
+        _aimed = aimed;
+        if (_held != null && GodotObject.IsInstanceValid(_held)) _held.Reparent(WeaponParent(), false);
+    }
+
+    Node3D? WeaponParent() => _aimed ? _aim : _grip;
 
     void Play(string anim, double blend = 0.12)
     {
@@ -187,13 +223,13 @@ public sealed partial class CharacterView : Node3D
 
     void SetWeapon(string id)
     {
-        if (id == _heldId || _grip == null) return;
+        if (id == _heldId || WeaponParent() == null) return;
         _heldId = id;
         _held?.QueueFree();
         _held = id == "" ? null : WeaponFx.Make(id);
         if (_held == null) return;
         // the weapon is built in metres and the rig is scaled by Scale
         _held.Scale = Vector3.One / Scale;
-        _grip.AddChild(_held);
+        WeaponParent()!.AddChild(_held);
     }
 }
