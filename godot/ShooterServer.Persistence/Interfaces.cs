@@ -32,7 +32,8 @@ public interface IUnlockRepository
 public interface IStatsRepository
 {
     Task<PlayerStats> GetAsync(long playerId);
-    Task RecordKillAsync(long playerId, string weaponId);
+    /// <summary>Counts one kill with <paramref name="weaponId"/>; a roadkill (vehicle run-over) also counts in the roadkill total.</summary>
+    Task RecordKillAsync(long playerId, string weaponId, bool roadkill = false);
     Task RecordDeathAsync(long playerId);
     Task RecordMatchAsync(long playerId);
 }

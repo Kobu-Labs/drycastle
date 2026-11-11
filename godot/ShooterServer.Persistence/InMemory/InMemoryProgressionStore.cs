@@ -16,7 +16,7 @@ public sealed class InMemoryProgressionStore : IProgressionStore
     readonly LevelCurve _curve;
     long _nextId = 1;
 
-    sealed record StatsRow(long Kills, long Deaths, long Matches, Dictionary<string, long> Weapons);
+    sealed record StatsRow(long Kills, long Deaths, long Matches, Dictionary<string, long> Weapons, long Roadkills = 0);
 
     public InMemoryProgressionStore(LevelCurve curve)
     {
@@ -150,17 +150,17 @@ public sealed class InMemoryProgressionStore : IProgressionStore
             lock (s._gate)
             {
                 if (!s._stats.TryGetValue(playerId, out var st)) return Task.FromResult(PlayerStats.Zero);
-                return Task.FromResult(new PlayerStats(st.Kills, st.Deaths, st.Matches, new Dictionary<string, long>(st.Weapons)));
+                return Task.FromResult(new PlayerStats(st.Kills, st.Deaths, st.Matches, new Dictionary<string, long>(st.Weapons), st.Roadkills));
             }
         }
 
-        public Task RecordKillAsync(long playerId, string weaponId)
+        public Task RecordKillAsync(long playerId, string weaponId, bool roadkill = false)
         {
             lock (s._gate)
                 if (s._stats.TryGetValue(playerId, out var st))
                 {
                     st.Weapons[weaponId] = st.Weapons.GetValueOrDefault(weaponId) + 1;
-                    s._stats[playerId] = st with { Kills = st.Kills + 1 };
+                    s._stats[playerId] = st with { Kills = st.Kills + 1, Roadkills = st.Roadkills + (roadkill ? 1 : 0) };
                 }
             return Task.CompletedTask;
         }

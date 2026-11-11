@@ -21,10 +21,10 @@ public sealed record Loadout(int Slot, string PrimaryWeapon, string SecondaryWea
 /// <summary>Something a player owns: kind is "weapon", "perk" or "streak"; item id is the data-file id.</summary>
 public sealed record Unlock(string Kind, string ItemId);
 
-/// <summary>Lifetime counters. Per-weapon kills are keyed by weapon id.</summary>
-public sealed record PlayerStats(long Kills, long Deaths, long Matches, IReadOnlyDictionary<string, long> WeaponKills)
+/// <summary>Lifetime counters. Per-weapon kills are keyed by weapon id; roadkills are a subset of kills.</summary>
+public sealed record PlayerStats(long Kills, long Deaths, long Matches, IReadOnlyDictionary<string, long> WeaponKills, long Roadkills = 0)
 {
-    public static PlayerStats Zero { get; } = new(0, 0, 0, new Dictionary<string, long>());
+    public static PlayerStats Zero { get; } = new(0, 0, 0, new Dictionary<string, long>(), 0);
 }
 
 /// <summary>

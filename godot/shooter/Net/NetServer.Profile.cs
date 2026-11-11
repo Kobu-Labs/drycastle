@@ -15,10 +15,6 @@ public partial class NetServer
     /// <summary>How long a join waits for the profile before it falls back to a guest profile.</summary>
     public const double ProfileTimeoutMs = 3000;
 
-    /// <summary>Perk and killstreak ids the server accepts. Their data files do not exist yet, so none are accepted.</summary>
-    static readonly IReadOnlySet<string> KnownPerks = new HashSet<string>();
-    static readonly IReadOnlySet<string> KnownStreaks = new HashSet<string>();
-
     /// <summary>What the server keeps for a joined player. Persist is false for guests: their changes live only in memory.</summary>
     sealed class PlayerProfile
     {
@@ -45,7 +41,7 @@ public partial class NetServer
             Join(c);
             return;
         }
-        c.Loading = new ProfileLoad { Work = LoadProfileAsync(Progression, token), StartedMs = Time.GetTicksMsec() };
+        c.Loading = new ProfileLoad { Work = LoadProfileAsync(Progression, token, slot => LoadoutRules.DefaultLoadout(slot, Weapons, Perks)), StartedMs = Time.GetTicksMsec() };
     }
 
     /// <summary>Joins every client whose profile arrived, or whose wait ran out (guest). Runs on the tick.</summary>
@@ -74,7 +70,8 @@ public partial class NetServer
         }
     }
 
-    static async Task<PlayerProfile> LoadProfileAsync(IProgressionStore store, string token)
+    /// <summary>Reads the profile. A slot with no primary was never set (a new profile): it gets the default kit, saved at once.</summary>
+    static async Task<PlayerProfile> LoadProfileAsync(IProgressionStore store, string token, Func<int, Loadout> defaults)
     {
         var p = await store.Profiles.GetOrCreateAsync(token);
         var rows = await store.Loadouts.GetAllAsync(p.Id);
@@ -82,6 +79,12 @@ public partial class NetServer
         var unlocks = await store.Unlocks.GetAllAsync(p.Id);
         var slots = Enumerable.Range(0, Loadout.SlotCount).Select(Loadout.Empty).ToArray();
         foreach (var l in rows) if (l.Slot is >= 0 and <= Loadout.MaxSlot) slots[l.Slot] = l;
+        for (var i = 0; i < slots.Length; i++)
+        {
+            if (slots[i].PrimaryWeapon != "") continue;
+            slots[i] = defaults(i);
+            await store.Loadouts.SaveAsync(p.Id, slots[i]);
+        }
         return new PlayerProfile
         {
             DbId = p.Id, Persist = true, Name = p.Name, Xp = p.Xp, Level = p.Level,
@@ -91,7 +94,7 @@ public partial class NetServer
 
     PlayerProfile GuestProfile()
     {
-        var slots = Enumerable.Range(0, Loadout.SlotCount).Select(i => LoadoutRules.DefaultLoadout(i, Weapons)).ToArray();
+        var slots = Enumerable.Range(0, Loadout.SlotCount).Select(i => LoadoutRules.DefaultLoadout(i, Weapons, Perks)).ToArray();
         return new PlayerProfile { Persist = false, Level = 1, Loadouts = slots };
     }
 
@@ -129,7 +132,7 @@ public partial class NetServer
     void OnSaveLoadout(Client c, Loadout l)
     {
         var p = c.Profile!;
-        if (LoadoutRules.ValidateLoadout(l, Weapons, p.Level, p.Unlocks, KnownPerks, KnownStreaks) is { } err)
+        if (LoadoutRules.ValidateLoadout(l, Weapons, p.Level, p.Unlocks, PerkLevels, KillstreakIds.Placeholder) is { } err)
         {
             Send(c, new ErrorMsg(err));
             return;

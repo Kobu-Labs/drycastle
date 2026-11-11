@@ -28,6 +28,10 @@ public enum EventKind : byte
     WorldSpawn = 13,
     /// <summary>Server broadcast: a world entity was despawned (id, reason). See <see cref="WorldCodec"/>.</summary>
     WorldDespawn = 14,
+    /// <summary>Server to one player: the player reached a new level (<see cref="ProgressionEvents"/>).</summary>
+    LevelUp = 15,
+    /// <summary>Server to one player at the end of a round: XP earned in it, with the reasons (<see cref="ProgressionEvents"/>).</summary>
+    XpSummary = 16,
 }
 
 public abstract record ReliableMsg;

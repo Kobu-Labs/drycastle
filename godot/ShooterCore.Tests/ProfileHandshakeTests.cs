@@ -122,11 +122,11 @@ public class ProfileHandshakeTests
         var w = Weapons();
         var perk = new Loadout(0, "ak47", "pistol", "ghost", "", "", "");
         Assert.Contains("unknown perk \"ghost\"", LoadoutRules.ValidateLoadout(perk, w, 1, Array.Empty<Unlock>(), Empty(), Empty()));
-        Assert.Null(LoadoutRules.ValidateLoadout(perk, w, 1, Array.Empty<Unlock>(), new HashSet<string> { "ghost" }, Empty()));
+        Assert.Null(LoadoutRules.ValidateLoadout(perk, w, 1, Array.Empty<Unlock>(), new Dictionary<string, int> { ["ghost"] = 0 }, Empty()));
 
         var streak = new Loadout(0, "ak47", "pistol", "", "", "uav", "");
         Assert.Contains("unknown killstreak 2 \"uav\"", LoadoutRules.ValidateLoadout(streak, w, 1, Array.Empty<Unlock>(), Empty(), Empty()));
-        Assert.Null(LoadoutRules.ValidateLoadout(streak, w, 1, Array.Empty<Unlock>(), Empty(), new HashSet<string> { "uav" }));
+        Assert.Null(LoadoutRules.ValidateLoadout(streak, w, 1, Array.Empty<Unlock>(), Empty(), new Dictionary<string, int> { ["uav"] = 0 }));
     }
 
     [Fact]
@@ -139,16 +139,44 @@ public class ProfileHandshakeTests
     }
 
     [Fact]
-    public void DefaultLoadoutUsesTheFirstUnlockedWeapons()
+    public void DefaultLoadoutUsesTheFirstUnlockedItemsAndTheStarterKit()
     {
         var w = Weapons();
-        var d = LoadoutRules.DefaultLoadout(3, w);
+        var perks = PerksFile.Parse("{\"version\":1,\"perks\":[" +
+            "{\"id\":\"fleet_foot\",\"name\":\"Fleet Foot\",\"unlock_level\":0,\"modifiers\":{\"run_speed\":1.12}}," +
+            "{\"id\":\"ghost\",\"name\":\"Ghost\",\"unlock_level\":20,\"modifiers\":{\"uav_visibility\":0}}]}");
+        var d = LoadoutRules.DefaultLoadout(3, w, perks);
         Assert.Equal(3, d.Slot);
         Assert.Equal("ak47", d.PrimaryWeapon); // lmg is locked at level 5, so the first open primary is ak47
         Assert.Equal("pistol", d.SecondaryWeapon);
-        Assert.Equal("", d.Perk);
-        Assert.Null(LoadoutRules.ValidateLoadout(d, w, 1, Array.Empty<Unlock>(), Empty(), Empty()));
+        Assert.Equal("fleet_foot", d.Perk); // the first perk open at level 0
+        Assert.Equal(KillstreakIds.StarterStreak, d.Streak1);
+        Assert.Null(LoadoutRules.ValidateLoadout(d, w, 1, Array.Empty<Unlock>(), LevelsOf(perks), KillstreakIds.Placeholder));
     }
 
-    static IReadOnlySet<string> Empty() => new HashSet<string>();
+    [Fact]
+    public void LockedPerkNeedsTheLevelOrAnUnlock()
+    {
+        var w = Weapons();
+        var perks = PerksFile.Parse("{\"version\":1,\"perks\":[{\"id\":\"ghost\",\"name\":\"Ghost\",\"unlock_level\":20,\"modifiers\":{\"uav_visibility\":0}}]}");
+        var ghost = new Loadout(0, "ak47", "pistol", "ghost", "", "", "");
+        Assert.Equal("ghost unlocks at level 20", LoadoutRules.ValidateLoadout(ghost, w, 19, Array.Empty<Unlock>(), LevelsOf(perks), Empty()));
+        Assert.Null(LoadoutRules.ValidateLoadout(ghost, w, 20, Array.Empty<Unlock>(), LevelsOf(perks), Empty()));
+        Assert.Null(LoadoutRules.ValidateLoadout(ghost, w, 1, new[] { new Unlock("perk", "ghost") }, LevelsOf(perks), Empty()));
+    }
+
+    [Fact]
+    public void KillstreakMayNotRepeatInALoadout()
+    {
+        var w = Weapons();
+        var twice = new Loadout(0, "ak47", "pistol", "", "uav", "", "uav");
+        Assert.Contains("\"uav\" is selected more than once", LoadoutRules.ValidateLoadout(twice, w, 1, Array.Empty<Unlock>(), Empty(), KillstreakIds.Placeholder));
+        var locked = new Dictionary<string, int> { ["uav"] = 4 };
+        var streak = new Loadout(0, "ak47", "pistol", "", "uav", "", "");
+        Assert.Equal("uav unlocks at level 4", LoadoutRules.ValidateLoadout(streak, w, 3, Array.Empty<Unlock>(), Empty(), locked));
+    }
+
+    static IReadOnlyDictionary<string, int> LevelsOf(PerksFile perks) => perks.Perks.ToDictionary(p => p.Id, p => p.UnlockLevel);
+
+    static IReadOnlyDictionary<string, int> Empty() => new Dictionary<string, int>();
 }

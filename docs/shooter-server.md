@@ -83,7 +83,7 @@ A bad key or value makes the server refuse to start with an error naming the ent
 The dedicated server keeps profiles, loadouts, unlocks and stats in one SQLite file (ADR 0003). Schema changes are numbered
 `.sql` migrations in `godot/ShooterServer.Persistence/migrations/`, applied once each in order at start. Back the file up
 like any other data; deleting it wipes every player's progression. Writes run on a background thread and a failed write
-is logged to the server output, never thrown into the match. Netcode does not read or write it yet (next ticket).
+is logged to the server output, never thrown into the match. The netcode reads a profile at join (3 s timeout, then a guest profile), applies the active loadout at each spawn (perk, hotbar), writes XP and kill stats, and sends `LevelUp` and round XP summary events. Guests earn XP in memory only.
 Players are identified by a client-generated token, not an account (ADR 0003: anyone with the token is that player).
 
 ## 4. Firewall

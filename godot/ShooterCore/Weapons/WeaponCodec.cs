@@ -144,7 +144,7 @@ public static class WeaponCodec
     }
 
     public static AmmoMsg BuildAmmo(PlayerWeapons w, double now) =>
-        new((byte)w.Slot, w.ReloadRemaining(now), Enumerable.Range(1, w.Hotbar.Count).Select(s => ((ushort)w.Mag(s), (ushort)w.Reserve(s))).ToList());
+        new((byte)w.Slot, w.ReloadRemaining(now), Enumerable.Range(1, w.WeaponCount).Select(s => ((ushort)w.Mag(s), (ushort)w.Reserve(s))).ToList());
 
     public static byte[] EncodeDebugTeleport(ushort target, Vector3 pos)
     {
