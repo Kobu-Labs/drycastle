@@ -13,7 +13,7 @@ namespace Suchohrad.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public EntityState State; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
+    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed; public EntityState State; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -48,6 +48,7 @@ public partial class NetClient : Node
     readonly HashSet<ushort> _deadRockets = new();
     readonly List<(double T, AmmoMsg M)> _ammoLog = new();
     int _wantSlot = 1;
+    WeaponViewmodel? _viewmodel;
     double _ammoAt;
 
     readonly ENetConnection _conn = new();
@@ -127,6 +128,7 @@ public partial class NetClient : Node
         RenderRemotes();
         RenderCars();
         RenderRockets();
+        UpdateViewmodel();
         UpdateHud();
     }
 
@@ -169,6 +171,7 @@ public partial class NetClient : Node
                 _myId = w.PlayerId; _welcomed = true;
                 _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY };
                 World.AddChild(_me);
+                if (!Bot && ShotFx.Enabled) { _viewmodel = new WeaponViewmodel(); _me.Camera.AddChild(_viewmodel); }
                 if (WeaponsBot != "" || CarBot != "") NetServer.AddArenaColliders(World);
                 if (Bot) _me.InputOverride = new MoveInput { SpeedScale = 1 };
                 HudWelcome();
@@ -239,7 +242,7 @@ public partial class NetClient : Node
             if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
             if (rec.Type != EntityType.Player) continue;
             if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id); _remotes[id] = r; }
-            r.State = rec.State;
+            r.State = rec.State; r.Slot = rec.Weapon;
             r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
         }
@@ -269,11 +272,8 @@ public partial class NetClient : Node
     Remote MakeRemote(ushort id)
     {
         var node = new Node3D { Name = $"Remote{id}" };
-        node.AddChild(new MeshInstance3D
-        {
-            Mesh = new CapsuleMesh { Radius = MoveConsts.CapsuleRadius, Height = MoveConsts.CapsuleHeight },
-            Position = new Vector3(0, MoveConsts.CapsuleHeight / 2, 0),
-        });
+        var view = CharacterView.Make();
+        node.AddChild(view);
         node.AddChild(new Label3D
         {
             Text = _names.TryGetValue(id, out var n) ? n : $"#{id}",
@@ -282,7 +282,7 @@ public partial class NetClient : Node
             PixelSize = 0.005f, NoDepthTest = true,
         });
         World.AddChild(node);
-        return new Remote { Node = node };
+        return new Remote { Node = node, View = view };
     }
 
     void OnSelf(EntityRecord rec, ushort ack)
@@ -384,7 +384,35 @@ public partial class NetClient : Node
                 r.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 r.Node.Rotation = new Vector3(0, s.Yaw, 0);
                 r.Node.Visible = r.State != EntityState.InVehicle;
+                AnimateRemote(r, s.Pos);
             }
+    }
+
+    /// <summary>Shows the held weapon of the current hotbar slot (the server-confirmed one once known) low on the right; hidden while dead or driving.</summary>
+    void UpdateViewmodel()
+    {
+        if (_viewmodel == null) return;
+        var slot = Ammo?.Slot ?? _wantSlot;
+        var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
+        _viewmodel.Show(id);
+        _viewmodel.Visible = !Dead && !_driving && _myState != EntityState.InVehicle;
+    }
+
+    /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
+    void AnimateRemote(Remote r, NVec3 pos)
+    {
+        var now = Now;
+        var p = new Vector3(pos.X, pos.Y, pos.Z);
+        if (r.LastT > 0 && now > r.LastT + 0.001)
+        {
+            var d = p - r.LastPos; d.Y = 0;
+            var sp = d.Length() / (float)(now - r.LastT);
+            if (sp > 30f) sp = 0; // a teleport (respawn), not running
+            r.Speed = Mathf.Lerp(r.Speed, sp, 0.3f);
+        }
+        r.LastPos = p; r.LastT = now;
+        var weaponId = Weapons != null && r.Slot >= 1 && r.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[r.Slot - 1].Id : "";
+        r.View?.Apply(r.Speed, now < r.FireUntil, r.State == EntityState.Dead, weaponId);
     }
 
     void Debug(ushort victim)
@@ -521,12 +549,14 @@ public partial class NetClient : Node
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
                 _shotLog.Add((Now, sh));
+                if (_remotes.TryGetValue(sh.Shooter, out var shooter)) shooter.FireUntil = Now + 0.45;
                 if (sh.Shooter == _myId && Weapons != null && sh.Weapon < Weapons.Weapons.Count) _spread.Shot(Weapons.Weapons[sh.Weapon], Now);
                 var melee = Weapons != null && sh.Weapon < Weapons.Weapons.Count && Weapons.Weapons[sh.Weapon].Kind == WeaponKind.Melee;
                 ShotFx.Spawn(World, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), new Vector3(sh.End.X, sh.End.Y, sh.End.Z), melee);
                 break;
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
                 _launchLog.Add((Now, l));
+                if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
                 break;
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
                 _explosionLog.Add((Now, ex));

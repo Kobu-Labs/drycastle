@@ -24,11 +24,21 @@ the full packs are not.
 | `kenney-car-kit` (3.1) | Kenney, https://kenney.nl/assets/car-kit | 16 vehicles | OpenGameArt mirror (see below) |
 | `kenney-city-kit-suburban` (2.0) | Kenney, https://kenney.nl/assets/city-kit-suburban | fences, driveways, paths, planter, 2 trees | OpenGameArt mirror |
 | `quaternius-stylized-nature-megakit` (Standard, free) | Quaternius, https://quaternius.com/packs/stylizednaturemegakit.html | 2 bushes, 4 flowers, grass, fern, plants, clover | OpenGameArt mirror |
+| `kaykit-character-animations` (1.2) | Kay Lousberg, https://opengameart.org/content/kaykit-character-animations | 1 animated character GLB (Prototype Pete: head and torso, 6 bones, 30 clips incl. Idle, Walk, Run, Shooting, Defeat) | OpenGameArt (publisher's own listing) |
+| `quaternius-ultimate-gun-pack` (July 2019) | Quaternius, https://opengameart.org/content/low-poly-guns-pack | pistol, assault rifle, bayonet, converted OBJ to GLB | OpenGameArt |
 
 kenney.nl answered automated requests with HTTP 403, and Quaternius distributes through itch.io or
 Patreon pages. Neither was circumvented. The same CC0 archives are published openly by their creators
 on OpenGameArt.org (`opengameart.org/content/car-kit`, `/city-kit-suburban`, `/stylized-nature-megakit`),
 which is where the files came from, on 2026-11-10, with a plain `curl` request.
+
+Shooter models (2026-11-11): used by `godot/shooter` (`CharacterFx.cs`, `WeaponFx.cs`). The KayKit Adventurers
+character pack (itch.io, CC0 on the publisher's page) needs itch's download flow and was not fetched, so the
+remote player is the animated character bundled in the KayKit Animations pack (same rig and clips). The Quaternius
+pack ships OBJ/FBX/Blend only, so the three used guns were converted OBJ+MTL to GLB (geometry and diffuse colours
+unchanged). It has no knife (the bayonet stands in) and no launcher (the bazooka is a code-built tube). The pack
+archive has no licence file; `LICENSE.txt` records the CC0 shown on its OpenGameArt page. No first-person arms pack
+is used: the viewmodel is the weapon alone, lower right.
 
 Not included: the Quaternius trees (their bark textures alone are 8 to 10 MB per tree type, over the repository
 budget for this ticket), buildings, rocks, mushrooms and pebbles. Quaternius's Pro/Source tier models

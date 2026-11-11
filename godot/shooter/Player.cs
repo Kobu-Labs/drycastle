@@ -31,6 +31,8 @@ public partial class Player : CharacterBody3D
     public bool CaptureMouse { get; set; } = true;
     /// <summary>False on the dedicated server (no camera node).</summary>
     public bool UseCamera { get; set; } = true;
+    /// <summary>The first-person camera (viewmodel parent).</summary>
+    public Camera3D Camera => _camera;
     /// <summary>True: this node runs its own physics tick from keyboard/mouse. False: a network driver calls <see cref="Simulate"/>.</summary>
     public bool AutoSim { get; set; } = true;
     /// <summary>True applies fall damage, death and respawn (offline play and the server); a predicting client leaves them to the server.</summary>

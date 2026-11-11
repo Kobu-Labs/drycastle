@@ -1,0 +1,83 @@
+using Godot;
+using Suchohrad.ShooterCore;
+
+namespace Suchohrad.Shooter;
+
+/// <summary>
+/// A remote player's body: the KayKit animated character (rig has idle/walk/run/shoot/death) with the held weapon on the
+/// right hand slot. Falls back to the original capsule when the model is missing (headless runs).
+/// </summary>
+public sealed partial class CharacterView : Node3D
+{
+    const string Model = "kaykit-character-animations/animated-character.glb";
+    /// <summary>The model is a head-and-torso figure about 1.1 m tall; scaled up so it fills the 1.8 m capsule (hit boxes are capsules).</summary>
+    const float Scale = 1.6f;
+    AnimationPlayer? _anim;
+    BoneAttachment3D? _hand;
+    Node3D? _held;
+    string _heldId = "";
+    string _playing = "";
+    public bool HasModel { get; private set; }
+    public string CurrentAnim => _playing;
+
+    public static CharacterView Make()
+    {
+        var v = new CharacterView();
+        v.Build();
+        return v;
+    }
+
+    void Build()
+    {
+        var m = ModelLib.Instance(Model);
+        if (m == null)
+        {
+            AddChild(new MeshInstance3D { Mesh = new CapsuleMesh { Radius = MoveConsts.CapsuleRadius, Height = MoveConsts.CapsuleHeight }, Position = new Vector3(0, MoveConsts.CapsuleHeight / 2, 0) });
+            return;
+        }
+        HasModel = true;
+        m.Scale = Vector3.One * Scale;
+        m.RotationDegrees = new Vector3(0, 180, 0); // glTF characters face +Z, the game's forward is -Z
+        AddChild(m);
+        _anim = m.FindChildren("*", "AnimationPlayer", true, false).FirstOrDefault() as AnimationPlayer;
+        if (_anim != null)
+            foreach (var n in new[] { "Idle", "Walk", "Run", "Shooting(1h)", "Shooting(2h)" })
+                if (_anim.HasAnimation(n)) _anim.GetAnimation(n).LoopMode = Animation.LoopModeEnum.Linear;
+        if (m.FindChildren("*", "Skeleton3D", true, false).FirstOrDefault() is Skeleton3D sk && sk.FindBone("handSlotRight") >= 0)
+        {
+            _hand = new BoneAttachment3D { BoneName = "handSlotRight" };
+            sk.AddChild(_hand);
+        }
+        Play("Idle");
+    }
+
+    /// <summary>Update from snapshot state: horizontal speed (m/s), whether it fired in the last moments, dead, and the weapon id it holds.</summary>
+    public void Apply(float speed, bool firing, bool dead, string weaponId)
+    {
+        SetWeapon(dead ? "" : weaponId);
+        if (!HasModel) return;
+        var twoHanded = weaponId is "ak47" or "bazooka";
+        Play(dead ? "Defeat"
+            : firing ? (weaponId == "knife" ? "Attack(1h)" : twoHanded ? "Shooting(2h)" : "Shooting(1h)")
+            : speed > 6.2f ? "Run" : speed > 0.6f ? "Walk" : "Idle");
+    }
+
+    void Play(string anim)
+    {
+        if (_anim == null || anim == _playing || !_anim.HasAnimation(anim)) return;
+        _playing = anim;
+        _anim.Play(anim, 0.12);
+    }
+
+    void SetWeapon(string id)
+    {
+        if (id == _heldId || _hand == null) return;
+        _heldId = id;
+        _held?.QueueFree();
+        _held = id == "" ? null : WeaponFx.Make(id);
+        if (_held == null) return;
+        // the hand slot sits at the end of the arm; the weapon is built in metres and the rig is scaled by Scale
+        _held.Scale = Vector3.One / Scale;
+        _hand.AddChild(_held);
+    }
+}
