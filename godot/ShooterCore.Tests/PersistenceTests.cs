@@ -13,10 +13,12 @@ public class PersistenceTests
 
     static readonly List<string> Logged = new();
 
+    static readonly LevelCurve Curve = GameData.Load(Path.Combine(AppContext.BaseDirectory, "data")).Levels.Curve;
+
     static string TempDb() => Path.Combine(Path.GetTempPath(), $"shooter-test-{Guid.NewGuid():N}", "shooter.db");
 
     static IProgressionStore Create(string backend, string? path = null) =>
-        backend == "memory" ? new InMemoryProgressionStore() : SqliteProgressionStore.Open(path ?? TempDb(), Logged.Add);
+        backend == "memory" ? new InMemoryProgressionStore(Curve) : SqliteProgressionStore.Open(path ?? TempDb(), Logged.Add, Curve);
 
     [Theory]
     [MemberData(nameof(Backends))]
@@ -42,14 +44,14 @@ public class PersistenceTests
         using var store = Create(backend);
         var p = await store.Profiles.GetOrCreateAsync("t");
         await store.Profiles.SetNameAsync(p.Id, "Alice");
-        await store.Profiles.AddXpAsync(p.Id, 60);
-        await store.Profiles.AddXpAsync(p.Id, 60);
+        await store.Profiles.AddXpAsync(p.Id, 100);
+        await store.Profiles.AddXpAsync(p.Id, 100);
 
         var got = await store.Profiles.FindAsync(p.Id);
         Assert.NotNull(got);
         Assert.Equal("Alice", got!.Name);
-        Assert.Equal(120, got.Xp);
-        Assert.Equal(LevelCurve.LevelForXp(120), got.Level);
+        Assert.Equal(200, got.Xp);
+        Assert.Equal(Curve.LevelForXp(200), got.Level);
         Assert.Equal(2, got.Level);
         Assert.Null(await store.Profiles.FindAsync(999_999));
         Assert.Throws<ArgumentOutOfRangeException>(() => { _ = store.Profiles.AddXpAsync(p.Id, -1); });
@@ -120,7 +122,7 @@ public class PersistenceTests
     {
         var path = TempDb();
         long id;
-        using (var store = SqliteProgressionStore.Open(path, Logged.Add))
+        using (var store = SqliteProgressionStore.Open(path, Logged.Add, Curve))
         {
             id = (await store.Profiles.GetOrCreateAsync("durable")).Id;
             await store.Profiles.SetNameAsync(id, "Kept");
@@ -133,7 +135,7 @@ public class PersistenceTests
             conn.Open();
             Assert.Equal(1L, (long)new Microsoft.Data.Sqlite.SqliteCommand("SELECT COUNT(*) FROM schema_migrations;", conn).ExecuteScalar()!);
         }
-        using (var store = SqliteProgressionStore.Open(path, Logged.Add))
+        using (var store = SqliteProgressionStore.Open(path, Logged.Add, Curve))
         {
             var p = await store.Profiles.GetOrCreateAsync("durable");
             Assert.Equal(id, p.Id);
@@ -145,7 +147,7 @@ public class PersistenceTests
     [Fact]
     public async Task SqliteFailedWriteIsLoggedAndDoesNotThrow()
     {
-        using var store = SqliteProgressionStore.Open(TempDb(), Logged.Add);
+        using var store = SqliteProgressionStore.Open(TempDb(), Logged.Add, Curve);
         Logged.Clear();
         // No such player: the foreign key rejects the weapon_kills row. The write must log, not throw.
         await store.Stats.RecordKillAsync(424242, "ak47");
@@ -157,8 +159,11 @@ public class PersistenceTests
     [Theory]
     [InlineData(0, 1)]
     [InlineData(99, 1)]
-    [InlineData(100, 2)]
-    [InlineData(400, 3)]
-    public void LevelCurveIsMonotonicAndStartsAtOne(int xp, int level) =>
-        Assert.Equal(level, LevelCurve.LevelForXp(xp));
+    [InlineData(149, 1)]
+    [InlineData(150, 2)]
+    [InlineData(310, 3)]
+    [InlineData(46390, 40)]
+    [InlineData(999_999, 40)]
+    public void LevelCurveFromLevelsJsonStartsAtOneAndCapsAtForty(int xp, int level) =>
+        Assert.Equal(level, Curve.LevelForXp(xp));
 }

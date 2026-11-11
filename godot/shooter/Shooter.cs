@@ -207,7 +207,7 @@ public partial class Shooter : Node3D
         static string Read(string f) =>
             Godot.FileAccess.Open($"res://data/{f}", Godot.FileAccess.ModeFlags.Read)?.GetAsText()
             ?? throw new DataFileException($"{f}: cannot open ({Godot.FileAccess.GetOpenError()})");
-        return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"));
+        return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"));
     }
 
     void LoadMap(Config cfg)
@@ -229,7 +229,7 @@ public partial class Shooter : Node3D
         // Opened here so a bad path or failed migration stops the server at start, like a bad --match-set.
         // Write failures are logged by the store, never thrown into the match. Disposed in _ExitTree (flushes queued writes).
         var dbPath = cfg.Str("db", "./shooter.db");
-        _progression = Suchohrad.ShooterServer.Persistence.Sqlite.SqliteProgressionStore.Open(dbPath, s => GD.PrintErr(s));
+        _progression = Suchohrad.ShooterServer.Persistence.Sqlite.SqliteProgressionStore.Open(dbPath, s => GD.PrintErr(s), _data.Levels.Curve);
         GD.Print($"server: progression db {Path.GetFullPath(dbPath)}");
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var server = new NetServer

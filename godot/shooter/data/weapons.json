@@ -39,14 +39,14 @@
       "move_speed_multiplier": 1.1
     },
     {
-      "id": "sniper", "category": "sniper", "slot": "primary", "unlock_level": 0, "kind": "hitscan", "full_auto": false,
+      "id": "sniper", "category": "sniper", "slot": "primary", "unlock_level": 5, "kind": "hitscan", "full_auto": false,
       "damage": 85, "headshot_multiplier": 3, "fire_interval": 1.4,
       "magazine_size": 5, "reserve_ammo": 15, "reload_time": 3.2,
       "range": 600, "scope_fov": 20, "zoom_levels": 1,
       "falloff_start": 600, "falloff_end": 600, "falloff_multiplier": 1.0
     },
     {
-      "id": "m4a1", "category": "assault_rifle", "slot": "primary", "unlock_level": 1, "kind": "hitscan", "full_auto": true,
+      "id": "m4a1", "category": "assault_rifle", "slot": "primary", "unlock_level": 2, "kind": "hitscan", "full_auto": true,
       "damage": 26, "headshot_multiplier": 2, "fire_interval": 0.0857,
       "magazine_size": 30, "reserve_ammo": 90, "reload_time": 2.2,
       "falloff_start": 45, "falloff_end": 110, "falloff_multiplier": 0.6, "spread_base": 0.8, "spread_per_shot": 0.2, "recoil": { "vertical_per_shot": 0.5, "horizontal_sway": 0.2 }
@@ -64,7 +64,7 @@
       "falloff_start": 55, "falloff_end": 130, "falloff_multiplier": 0.7, "spread_base": 0.9
     },
     {
-      "id": "rpk", "category": "machine_gun", "slot": "primary", "unlock_level": 2, "kind": "hitscan", "full_auto": true,
+      "id": "rpk", "category": "machine_gun", "slot": "primary", "unlock_level": 3, "kind": "hitscan", "full_auto": true,
       "damage": 28, "headshot_multiplier": 2, "fire_interval": 0.1,
       "magazine_size": 75, "reserve_ammo": 150, "reload_time": 5.0,
       "falloff_start": 35, "falloff_end": 90, "falloff_multiplier": 0.65, "recoil": { "vertical_per_shot": 0.7 }

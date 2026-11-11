@@ -311,7 +311,7 @@ public partial class NetServer
             if (Mathf.Abs(lx) > car.HalfWidth + MoveConsts.CapsuleRadius || Mathf.Abs(lz) > car.HalfLength + MoveConsts.CapsuleRadius) continue;
             if (car.HitCooldown.TryGetValue(t.Id, out var until) && _elapsed < until) continue;
             car.HitCooldown[t.Id] = _elapsed + RunOverCooldown;
-            var r = Deal(driver.Id, SpecialWeapons.Vehicle, t.Id, dmg, false, false);
+            var r = Deal(driver.Id, SpecialWeapons.Vehicle, t.Id, dmg, false, false, KillCause.Roadkill);
             if (r == DamageResult.Ignored) continue;
             _runOvers++;
             if (r == DamageResult.Killed) _runOverKills++;

@@ -8,10 +8,10 @@ public sealed class SqliteProgressionStore : IProgressionStore
 {
     readonly SqliteWorker _db;
 
-    SqliteProgressionStore(SqliteWorker db)
+    SqliteProgressionStore(SqliteWorker db, LevelCurve curve)
     {
         _db = db;
-        Profiles = new ProfileRepo(db);
+        Profiles = new ProfileRepo(db, curve);
         Loadouts = new LoadoutRepo(db);
         Unlocks = new UnlockRepo(db);
         Stats = new StatsRepo(db);
@@ -22,8 +22,11 @@ public sealed class SqliteProgressionStore : IProgressionStore
     public IUnlockRepository Unlocks { get; }
     public IStatsRepository Stats { get; }
 
-    /// <summary>Opens (creating if needed) and migrates the database. Throws if it cannot be opened or migrated; <paramref name="log"/> receives write failures later.</summary>
-    public static SqliteProgressionStore Open(string path, Action<string> log) => new(SqliteWorker.Open(path, log));
+    /// <summary>
+    /// Opens (creating if needed) and migrates the database. <paramref name="curve"/> (from levels.json) turns XP into the Level on read.
+    /// Throws if it cannot be opened or migrated; <paramref name="log"/> receives write failures later.
+    /// </summary>
+    public static SqliteProgressionStore Open(string path, Action<string> log, LevelCurve curve) => new(SqliteWorker.Open(path, log), curve);
 
     public void Dispose() => _db.Dispose();
 
@@ -51,7 +54,7 @@ public sealed class SqliteProgressionStore : IProgressionStore
         if (slot < 0 || slot > Loadout.MaxSlot) throw new ArgumentOutOfRangeException(nameof(slot), slot, $"slot must be 0..{Loadout.MaxSlot}");
     }
 
-    sealed class ProfileRepo(SqliteWorker db) : IProfileRepository
+    sealed class ProfileRepo(SqliteWorker db, LevelCurve curve) : IProfileRepository
     {
         const string Select = "SELECT id, token, name, xp, created_at, last_seen FROM players";
 
@@ -112,9 +115,9 @@ public sealed class SqliteProgressionStore : IProgressionStore
             return db.Write("add xp", c => Exec(c, "UPDATE players SET xp = xp + $a WHERE id = $id;", ("$a", amount), ("$id", playerId)));
         }
 
-        static Profile ReadProfile(SqliteDataReader r) => new(
+        Profile ReadProfile(SqliteDataReader r) => new(
             Id: r.GetInt64(0), Token: r.GetString(1), Name: r.GetString(2), Xp: r.GetInt32(3),
-            Level: LevelCurve.LevelForXp(r.GetInt32(3)), CreatedUtc: ParseStamp(r.GetString(4)), LastSeenUtc: ParseStamp(r.GetString(5)));
+            Level: curve.LevelForXp(r.GetInt32(3)), CreatedUtc: ParseStamp(r.GetString(4)), LastSeenUtc: ParseStamp(r.GetString(5)));
     }
 
     sealed class LoadoutRepo(SqliteWorker db) : ILoadoutRepository

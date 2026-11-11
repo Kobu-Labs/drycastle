@@ -1,27 +1,40 @@
 namespace Suchohrad.ShooterCore;
 
-/// <summary>All three data files, loaded from one directory.</summary>
+/// <summary>All data files, loaded from one directory. Levels are checked against the weapons and perks, so it loads last.</summary>
 public class GameData
 {
     public required WeaponsFile Weapons { get; init; }
     public required MatchConfig Match { get; init; }
     public required VehiclesFile Vehicles { get; init; }
     public required PerksFile Perks { get; init; }
+    public required LevelsFile Levels { get; init; }
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson) => new()
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson)
     {
-        Weapons = WeaponsFile.Parse(weaponsJson),
-        Match = DataFile.Parse<MatchConfig>(matchJson, "match.json"),
-        Vehicles = VehiclesFile.Validate(DataFile.Parse<VehiclesFile>(vehiclesJson, "vehicles.json")),
-        Perks = PerksFile.Parse(perksJson),
-    };
+        var weapons = WeaponsFile.Parse(weaponsJson);
+        var perks = PerksFile.Parse(perksJson);
+        return new()
+        {
+            Weapons = weapons,
+            Match = DataFile.Parse<MatchConfig>(matchJson, "match.json"),
+            Vehicles = VehiclesFile.Validate(DataFile.Parse<VehiclesFile>(vehiclesJson, "vehicles.json")),
+            Perks = perks,
+            Levels = LevelsFile.Parse(levelsJson, weapons, perks),
+        };
+    }
 
-    public static GameData Load(string dir) => new()
+    public static GameData Load(string dir)
     {
-        Weapons = WeaponsFile.Load(Path.Combine(dir, "weapons.json")),
-        Match = MatchConfig.Load(Path.Combine(dir, "match.json")),
-        Vehicles = VehiclesFile.Load(Path.Combine(dir, "vehicles.json")),
-        Perks = PerksFile.Load(Path.Combine(dir, "perks.json")),
-    };
+        var weapons = WeaponsFile.Load(Path.Combine(dir, "weapons.json"));
+        var perks = PerksFile.Load(Path.Combine(dir, "perks.json"));
+        return new()
+        {
+            Weapons = weapons,
+            Match = MatchConfig.Load(Path.Combine(dir, "match.json")),
+            Vehicles = VehiclesFile.Load(Path.Combine(dir, "vehicles.json")),
+            Perks = perks,
+            Levels = LevelsFile.Load(Path.Combine(dir, "levels.json"), weapons, perks),
+        };
+    }
 }

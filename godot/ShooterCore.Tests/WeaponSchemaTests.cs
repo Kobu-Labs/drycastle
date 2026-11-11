@@ -50,6 +50,7 @@ public class WeaponSchemaTests
         var sniper = d.Weapons.Find("sniper")!;
         Assert.Equal(WeaponCategory.Sniper, sniper.Category);
         Assert.Equal(WeaponSlot.Primary, sniper.Slot);
+        Assert.Equal(5, sniper.UnlockLevel); // rebalanced in #116 (levels.json)
         Assert.Equal(0.8f, sniper.MoveSpeedMultiplier);
         Assert.Equal(0.02f, sniper.SpreadBase);
         Assert.Equal(20f, sniper.ZoomFov);
@@ -70,7 +71,6 @@ public class WeaponSchemaTests
         {
             Assert.Equal(0, w.Recoil.VerticalPerShot);
             Assert.Empty(w.Recoil.Pattern);
-            Assert.Equal(0, w.UnlockLevel);
         }
     }
 
