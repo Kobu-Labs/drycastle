@@ -14,6 +14,7 @@ import shapely
 
 from suchohrad_pipeline.buildings import hex_to_rgb
 from suchohrad_pipeline.edits import DEFAULT_EDITS, load_edits
+from suchohrad_pipeline.landmarks import build_landmark
 from suchohrad_pipeline.meshes import Mesh, building_mesh, collision_mesh
 from suchohrad_pipeline.propmeshes import fence_mesh, parcel_props_meshes, trees_mesh
 from suchohrad_pipeline.regions import node_name, plan_regions, region_meshes
@@ -118,8 +119,12 @@ def build_scene(
         vis, col = [], []
         for bid in ids:
             dz = scene.building_elevation.get(bid, 0.0)
+            b = buildings[bid]
             for meshes, fn in ((vis, building_mesh), (col, collision_mesh)):
-                m = fn(buildings[bid])
+                if b.get("model"):  # hand-modelled landmark: detailed visual, plain-massing collision
+                    m = build_landmark(b, detail=fn is building_mesh)
+                else:
+                    m = fn(b)
                 meshes.append(Mesh(m.tris + [0, 0, dz], m.colours))
         scene.parcels.setdefault(tuple(p["chunk"]), []).append(
             (p["id"], Mesh.concat(vis), Mesh.concat(col))

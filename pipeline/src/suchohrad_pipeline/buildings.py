@@ -27,7 +27,16 @@ from suchohrad_pipeline.rules import DEFAULT_RULES
 DEFAULT_OVERRIDES = PIPELINE_DIR / "config" / "overrides.yaml"
 BUILDINGS_FORMAT_VERSION = 1
 ROOFS = ("flat", "gabled", "hipped")
-OVERRIDE_FIELDS = ("height_m", "levels", "roof", "ridge_dir", "wall_colour", "roof_colour")
+OVERRIDE_FIELDS = (
+    "height_m",
+    "levels",
+    "roof",
+    "ridge_dir",
+    "wall_colour",
+    "roof_colour",
+    "model",
+    "model_axis",
+)
 _COLOUR = re.compile(r"^#[0-9a-fA-F]{6}$")
 _NUMBER = re.compile(r"^\s*(-?\d+(?:[.,]\d+)?)\s*(m)?\s*$")
 
@@ -116,6 +125,13 @@ def load_overrides(path: Path = DEFAULT_OVERRIDES) -> dict[str, dict]:
                 raise RulesError(f"overrides: {key}: unknown field {name}")
             if name == "roof" and value not in ROOFS:
                 raise RulesError(f"overrides: {key}: roof must be one of {ROOFS}")
+            if name == "model":
+                from suchohrad_pipeline.landmarks import MODELS
+
+                if value not in MODELS:
+                    raise RulesError(f"overrides: {key}: model must be one of {sorted(MODELS)}")
+            if name == "model_axis" and not isinstance(value, int | float):
+                raise RulesError(f"overrides: {key}: model_axis must be a number (radians)")
             if name.endswith("_colour") and not _COLOUR.match(str(value)):
                 raise RulesError(f"overrides: {key}: {name} must be #rrggbb")
     return {str(k): dict(v) for k, v in out.items()}
@@ -269,7 +285,13 @@ def derive_building(
 
     exterior = [[round(x, 3), round(y, 3)] for x, y in footprint.exterior.coords[:-1]]
     holes = [[[round(x, 3), round(y, 3)] for x, y in r.coords[:-1]] for r in footprint.interiors]
+    landmark = (
+        {"model": str(ov["model"]), "model_axis": float(ov.get("model_axis", 0.0))}
+        if ov.get("model")
+        else {}
+    )
     return {
+        **landmark,
         "id": building_id,
         "parcel": parcel_id,
         "footprint": {"exterior": exterior, "holes": holes},

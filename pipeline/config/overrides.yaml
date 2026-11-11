@@ -13,6 +13,9 @@
 #              ridge_dir     ridge direction in radians (counter-clockwise from east, 0..pi)
 #              wall_colour   "#rrggbb"
 #              roof_colour   "#rrggbb"
+#              model         name of a hand-modelled landmark (pipeline/src/suchohrad_pipeline/landmarks.py)
+#                            that replaces the generated mesh, e.g. church
+#              model_axis    with model: bearing of the model's front in radians, counter-clockwise from east
 # Keys that match no building are reported as a warning.
 #
 # Example (commented out):
@@ -22,4 +25,10 @@
 #   w123456:
 #     height_m: 9.5
 #     roof: hipped
-buildings: {}
+buildings:
+  # The church (dominant of the village): modelled by hand from photos, on its real footprint.
+  # Its front (tower and porch) faces 56.66 degrees (north-east).
+  w378900220:
+    model: church
+    model_axis: 0.9890
+
