@@ -238,8 +238,8 @@ shooter-export-check:
 	@test -f godot/shooter/export_presets.cfg || { echo "missing godot/shooter/export_presets.cfg"; exit 1; }
 	@grep -q 'include_filter="data/\*.json"' godot/shooter/export_presets.cfg || { echo "export_presets.cfg does not pack data/*.json (#133)"; exit 1; }
 	@for f in weapons match vehicles sounds perks levels killstreaks turret environment camo; do test -f godot/shooter/data/$$f.json || { echo "missing godot/shooter/data/$$f.json"; exit 1; }; done
-	@test -f $(SHOOTER_PKG_MAP)/manifest.json || { echo "map not built: $(SHOOTER_PKG_MAP)/manifest.json missing. Exports bundle the full village map: run 'make map AREA=village' (or set SHOOTER_PKG_MAP=<map dir>)"; exit 1; }
-	@echo "$$(grep -c '^name=' godot/shooter/export_presets.cfg) export presets found; bundling map $(SHOOTER_PKG_MAP)"
+	@[ -n "$(SHOOTER_NO_MAP)" ] || test -f $(SHOOTER_PKG_MAP)/manifest.json || { echo "map not built: $(SHOOTER_PKG_MAP)/manifest.json missing. Exports bundle the full village map: run 'make map AREA=village' (or set SHOOTER_PKG_MAP=<map dir>)"; exit 1; }
+	@echo "$$(grep -c '^name=' godot/shooter/export_presets.cfg) export presets found; map: $(if $(SHOOTER_NO_MAP),not bundled (SHOOTER_NO_MAP),bundling $(SHOOTER_PKG_MAP))"
 	@if [ -d "$(SHOOTER_TEMPLATES)" ] && [ -n "$$(ls -A $(SHOOTER_TEMPLATES) 2>/dev/null)" ]; then echo "export templates: OK ($(SHOOTER_TEMPLATES))"; \
 	else echo "export templates: MISSING at $(SHOOTER_TEMPLATES) (install the 4.7.2 mono templates: Editor > Manage Export Templates)"; exit 1; fi
 
@@ -249,7 +249,7 @@ shooter-export: shooter-export-check
 	godot --headless --path godot/shooter --export-release "Windows Client"
 	godot --headless --path godot/shooter --export-release "Linux Client"
 	godot --headless --path godot/shooter --export-release "Linux Server"
-	for d in windows linux-client linux-server; do cp -r assets/. out/shooter/$$d/assets/; cp -r $(SHOOTER_PKG_MAP)/. out/shooter/$$d/map/; done
+	for d in windows linux-client linux-server; do cp -r assets/. out/shooter/$$d/assets/; [ -n "$(SHOOTER_NO_MAP)" ] || cp -r $(SHOOTER_PKG_MAP)/. out/shooter/$$d/map/; done
 	@echo "exported to out/shooter/ (assets/ and map/ next to each binary; see docs/shooter-server.md)"
 
 # Double-click Windows package: out/shooter/suchohrad-windows.zip (exe + assets/ + map/ + README.txt).
@@ -261,3 +261,36 @@ shooter-package: shooter-export
 	ln -sfn "$$PWD/docs/player-readme.txt" out/shooter/package/Suchohrad/README.txt
 	cd out/shooter/package && zip -qrFS ../suchohrad-windows.zip Suchohrad
 	@echo "package: out/shooter/suchohrad-windows.zip ($$(du -h out/shooter/suchohrad-windows.zip | cut -f1))"
+
+# Launcher distribution (docs/launcher.md). The CI release job runs these; they work locally too.
+# Game zips WITHOUT the map (the launcher installs the map from its own release): out/shooter/suchohrad-game-{windows,linux}.zip, files at the zip root.
+.PHONY: shooter-package-game map-package launcher-build launcher-export launcher-test
+shooter-package-game:
+	$(MAKE) shooter-export SHOOTER_NO_MAP=1
+	rm -f out/shooter/suchohrad-game-windows.zip out/shooter/suchohrad-game-linux.zip
+	cd out/shooter/windows && zip -qr ../suchohrad-game-windows.zip . -x 'map/*'
+	cd out/shooter/linux-client && zip -qr ../suchohrad-game-linux.zip . -x 'map/*'
+	@echo "packages: out/shooter/suchohrad-game-{windows,linux}.zip"
+
+# Map archive for the launcher: out/village/map.zip + out/village/map.json (name, size, sha256). Publish with scripts/publish-map.sh.
+map-package:
+	@test -f $(SHOOTER_PKG_MAP)/manifest.json || { echo "map not built: run 'make map AREA=village'"; exit 1; }
+	rm -f out/village/map.zip
+	cd $(SHOOTER_PKG_MAP) && zip -qr $(abspath out/village/map.zip) .
+	python3 scripts/map_json.py out/village/map.zip out/village/map.json
+
+launcher-build:
+	dotnet build godot/launcher/launcher.csproj
+
+launcher-test:
+	dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj --filter "FullyQualifiedName~Launcher"
+
+# Exports godot/launcher to out/launcher/ (Windows and Linux zips). Needs the same 4.7.2 mono templates as shooter-export.
+launcher-export: launcher-build
+	mkdir -p out/launcher/windows out/launcher/linux
+	godot --headless --path godot/launcher --export-release "Windows Launcher"
+	godot --headless --path godot/launcher --export-release "Linux Launcher"
+	cp docs/launcher-readme.txt out/launcher/windows/README.txt; cp docs/launcher-readme.txt out/launcher/linux/README.txt
+	rm -f out/launcher/suchohrad-launcher-windows.zip out/launcher/suchohrad-launcher-linux.zip
+	cd out/launcher/windows && zip -qr ../suchohrad-launcher-windows.zip .
+	cd out/launcher/linux && zip -qr ../suchohrad-launcher-linux.zip .

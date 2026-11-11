@@ -1,0 +1,72 @@
+# Every push to main publishes a game release `dev-<run>` (prerelease, channel "dev"). Pushing a tag vX.Y.Z publishes a stable release.
+# Windows and Linux game zips + manifest.json. The launcher (docs/launcher.md) reads manifest.json from the newest release of the player's channel.
+name: release
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+concurrency: { group: release, cancel-in-progress: false }
+permissions: { contents: write }
+env:
+  GODOT_VERSION: 4.7.2
+  GH_TOKEN: ${{ github.token }}
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check a map is published
+        id: gate
+        run: |
+          if grep -q PLACEHOLDER map-version.txt; then
+            echo "::warning::No release published: map-version.txt is still the placeholder. Run scripts/publish-map.sh once and commit map-version.txt (docs/launcher.md)."
+            echo "ok=false" >> $GITHUB_OUTPUT
+          else echo "ok=true" >> $GITHUB_OUTPUT; fi
+      - uses: actions/setup-dotnet@v4
+        if: steps.gate.outputs.ok == 'true'
+        with: { dotnet-version: 8.0.x }
+      - name: Tests
+        if: steps.gate.outputs.ok == 'true'
+        run: dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj
+      - name: Install Godot ${{ env.GODOT_VERSION }} mono and export templates
+        if: steps.gate.outputs.ok == 'true'
+        run: |
+          base=https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable
+          curl -fsSL -o godot.zip $base/Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip
+          curl -fsSL -o templates.tpz $base/Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz
+          unzip -q godot.zip -d "$RUNNER_TEMP/godot"
+          sudo ln -sf "$(ls -d $RUNNER_TEMP/godot/*/ | head -1)Godot_v${GODOT_VERSION}-stable_mono_linux.x86_64" /usr/local/bin/godot
+          tpl=$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono
+          mkdir -p "$tpl" && unzip -q templates.tpz -d "$RUNNER_TEMP/tpl" && cp -r "$RUNNER_TEMP/tpl/templates/." "$tpl/"
+      - name: Build game zip (no map)
+        if: steps.gate.outputs.ok == 'true'
+        run: make shooter-package-game
+      - name: Resolve version and map
+        if: steps.gate.outputs.ok == 'true'
+        id: v
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT; echo "channel=stable" >> $GITHUB_OUTPUT; echo "pre=" >> $GITHUB_OUTPUT
+          else
+            echo "tag=dev-${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT; echo "channel=dev" >> $GITHUB_OUTPUT; echo "pre=--prerelease" >> $GITHUB_OUTPUT
+          fi
+          echo "map=$(tr -d '[:space:]' < map-version.txt)" >> $GITHUB_OUTPUT
+          echo "protocol=$(grep -oP 'ProtocolVersion = \K[0-9]+' godot/ShooterCore/Net/Wire.cs)" >> $GITHUB_OUTPUT
+      - name: Manifest
+        if: steps.gate.outputs.ok == 'true'
+        run: |
+          gh release download "${{ steps.v.outputs.map }}" --pattern map.json --dir "$RUNNER_TEMP"
+          python3 scripts/make_manifest.py --repo "$GITHUB_REPOSITORY" --tag "${{ steps.v.outputs.tag }}" --channel "${{ steps.v.outputs.channel }}" \
+            --commit "$GITHUB_SHA" --protocol "${{ steps.v.outputs.protocol }}" --windows-zip out/shooter/suchohrad-game-windows.zip --linux-zip out/shooter/suchohrad-game-linux.zip \
+            --map-tag "${{ steps.v.outputs.map }}" --map-json "$RUNNER_TEMP/map.json" --out out/shooter/manifest.json
+      - name: Publish release
+        if: steps.gate.outputs.ok == 'true'
+        run: |
+          gh release create "${{ steps.v.outputs.tag }}" ${{ steps.v.outputs.pre }} --target "$GITHUB_SHA" --generate-notes \
+            --title "${{ steps.v.outputs.tag }}" out/shooter/suchohrad-game-windows.zip out/shooter/suchohrad-game-linux.zip out/shooter/manifest.json
+      - name: Prune old dev releases (keep 15)
+        if: steps.gate.outputs.ok == 'true'
+        run: |
+          gh release list --limit 200 --json tagName --jq '.[].tagName | select(startswith("dev-"))' \
+            | sort -t- -k2 -n -r | tail -n +16 | xargs -r -n1 gh release delete --yes --cleanup-tag
