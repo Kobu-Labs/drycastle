@@ -275,11 +275,11 @@ public class VehicleTests
     public void DistanceToBoxIsZeroInsideAndMeasuredFromTheSurface()
     {
         var c = new Vector3(10, 0, 10);
-        Assert.Equal(0f, VehicleDamage.DistanceToBox(c + new Vector3(0.5f, 0.8f, 1f), c, 0, 1.1f, 2.15f), 1e-4f);
-        Assert.Equal(3f, VehicleDamage.DistanceToBox(c + new Vector3(4.1f, 0.5f, 0), c, 0, 1.1f, 2.15f), 1e-3f);   // beside the car
-        Assert.Equal(2f, VehicleDamage.DistanceToBox(c + new Vector3(0, 0.5f, -4.15f), c, 0, 1.1f, 2.15f), 1e-3f); // in front (forward is -Z)
-        Assert.Equal(2f, VehicleDamage.DistanceToBox(c + new Vector3(0, 0.5f, 4.15f), c, MathF.PI, 1.1f, 2.15f), 1e-3f); // turned round: that side is its front now
-        Assert.Equal(2f, VehicleDamage.DistanceToBox(c + new Vector3(0, 3.5f, 0), c, 0, 1.1f, 2.15f), 1e-3f);     // above the roof (1.5 m)
+        Assert.Equal(0f, VehicleDamage.DistanceToBox(c + new Vector3(0.5f, 0.8f, 1f), c, 0, 1.1f, 2.15f, 1.5f), 1e-4f);
+        Assert.Equal(3f, VehicleDamage.DistanceToBox(c + new Vector3(4.1f, 0.5f, 0), c, 0, 1.1f, 2.15f, 1.5f), 1e-3f);   // beside the car
+        Assert.Equal(2f, VehicleDamage.DistanceToBox(c + new Vector3(0, 0.5f, -4.15f), c, 0, 1.1f, 2.15f, 1.5f), 1e-3f); // in front (forward is -Z)
+        Assert.Equal(2f, VehicleDamage.DistanceToBox(c + new Vector3(0, 0.5f, 4.15f), c, MathF.PI, 1.1f, 2.15f, 1.5f), 1e-3f); // turned round: that side is its front now
+        Assert.Equal(2f, VehicleDamage.DistanceToBox(c + new Vector3(0, 3.5f, 0), c, 0, 1.1f, 2.15f, 1.5f), 1e-3f);     // above the roof (1.5 m, the height passed in)
     }
 
     [Fact]

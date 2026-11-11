@@ -35,8 +35,8 @@ public static class VehicleDamage
         return MathF.Max(1f, MathF.Round(e.Damage + (s.EdgeDamage - e.Damage) * t));
     }
 
-    /// <summary>Distance from a blast centre to the surface of an upright box (the vehicle: centre on the ground, yaw as in <see cref="CarState"/>, 1.5 m tall).</summary>
-    public static float DistanceToBox(Vector3 blast, Vector3 centre, float yaw, float halfWidth, float halfLength)
+    /// <summary>Distance from a blast centre to the surface of an upright box (the vehicle's <see cref="VehicleBox"/>: centre on the ground, yaw as in <see cref="CarState"/>, <paramref name="height"/> tall).</summary>
+    public static float DistanceToBox(Vector3 blast, Vector3 centre, float yaw, float halfWidth, float halfLength, float height)
     {
         var d = blast - centre;
         var fwd = new Vector3(-MathF.Sin(yaw), 0, -MathF.Cos(yaw));
@@ -44,9 +44,19 @@ public static class VehicleDamage
         var lx = d.X * right.X + d.Z * right.Z; var lz = d.X * fwd.X + d.Z * fwd.Z;
         var dx = MathF.Max(0, MathF.Abs(lx) - halfWidth);
         var dz = MathF.Max(0, MathF.Abs(lz) - halfLength);
-        var dy = d.Y < 0 ? -d.Y : MathF.Max(0, d.Y - 1.5f);
+        var dy = d.Y < 0 ? -d.Y : MathF.Max(0, d.Y - height);
         return MathF.Sqrt(dx * dx + dy * dy + dz * dz);
     }
+}
+
+/// <summary>
+/// Lifetime of a destroyed vehicle's blast visuals (client, <c>VehicleFx.Explode</c>), in seconds from the blast. The burning spot's
+/// fire and black smoke column stop emitting after <see cref="EmitSeconds"/>; the last column puff dies <see cref="ColumnLife"/> later;
+/// the whole effect node is freed at <see cref="FreeAfter"/>. Nothing of the blast outlives that, so no smoke stands where the car was.
+/// </summary>
+public static class VehicleBlastFx
+{
+    public const float EmitSeconds = 1.2f, ColumnLife = 2.0f, FreeAfter = 3.5f;
 }
 
 /// <summary>

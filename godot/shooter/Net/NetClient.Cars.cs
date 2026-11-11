@@ -54,7 +54,7 @@ public partial class NetClient
             v.Kmh += (d * 3.6f - v.Kmh) * 0.3f;
             v.Braking = before - v.Kmh > 0.5f; // the record has no brake bit: a clear fall in speed reads as braking
         }
-        v.LastTick = tick; v.Pos = rec.Position;
+        v.LastTick = tick; v.Pos = rec.Position; v.Yaw = rec.YawRad;
         v.Buf.Push(tick, rec.Position, rec.YawRad, 0);
     }
 
@@ -62,14 +62,15 @@ public partial class NetClient
     void SetVehicleDamage(CarView v, int stage, bool destroyed)
     {
         v.Stage = stage;
-        // the blast event is reliable and can overtake a snapshot that still shows the old damage stage: ignore those, or they would bring the smoke back on a gone vehicle
-        if (!destroyed && v.Exploded && !v.Destroyed && Now - v.ExplodedAt < 1.0) return;
         if (destroyed)
         {
             if (!v.Destroyed) { v.Destroyed = true; if (!v.Exploded) ExplodeVehicle(v, new Vector3(v.Pos.X, v.Pos.Y + 0.8f, v.Pos.Z), Vehicles?.Explosion.Splash.Radius ?? 9f); }
             if (v.Smoke != null) { v.Smoke.QueueFree(); v.Smoke = null; }
             return;
         }
+        // the blast event is reliable and can overtake a snapshot that still shows the old damage stage: ignore those for a second, or they would bring the smoke back on a gone vehicle
+        if (v.Exploded && Now - v.ExplodedAt < 1.0) return;
+        // a live record after the blast means the server returned it (30 s later): it is shown again, and only then
         if (v.Destroyed) { v.Destroyed = false; v.Exploded = false; v.Node.Visible = true; }
         if (!ShotFx.Enabled) return;
         if (stage > 0 && v.Smoke == null && Vehicles != null) v.Smoke = VehicleFx.Damage.Make(v.Node, Vehicles.Vehicles[v.Kind]);
@@ -83,6 +84,7 @@ public partial class NetClient
         v.Snd?.Release(); v.Snd = null;
         v.ExplodedAt = Now;
         if (v.Smoke != null) { v.Smoke.Stop(); v.Smoke.QueueFree(); v.Smoke = null; } // freed with its particles, not just stopped: nothing of the smoke outlives the vehicle
+        v.Destroyed = true; // the wreck is gone until the server returns it: a live record must not bring it back or its smoke
         v.Node.Visible = false;
         VehicleFx.Explode(World, at, radius);
         if (Sfx.Enabled) Sfx.Play3D("explosion.vehicle", at);
@@ -128,6 +130,47 @@ public partial class NetClient
         if (_driving) prompt = Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) != null) prompt = Strings.F("hud.vehicle.enter", InputBindings.Name("interact"));
         _hud?.SetPrompt(TurretPrompt() ?? prompt ?? CratePrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
+    }
+
+    static NVec3 NV(Vector3 v) => new(v.X, v.Y, v.Z);
+
+    /// <summary>
+    /// The nearest vehicle the ray (<paramref name="from"/>, <paramref name="dir"/>) enters within <paramref name="maxDistance"/>, on the
+    /// vehicle's hit box (<see cref="VehicleBox"/>, the server's own collider) at its latest snapshot: the position the server resolved the shot against.
+    /// </summary>
+    bool VehicleAlong(Vector3 from, Vector3 dir, float maxDistance, out CarView car, out VehicleBoxHit hit)
+    {
+        car = null!; hit = default;
+        if (Vehicles == null) return false;
+        var best = float.MaxValue;
+        foreach (var v in _cars.Values)
+        {
+            if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count) continue;
+            var def = Vehicles.Vehicles[v.Kind];
+            if (VehicleBox.Ray(NV(from), NV(dir), maxDistance, v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, def.Height) is not { } h || h.Distance >= best) continue;
+            best = h.Distance; hit = h; car = v;
+        }
+        return car != null;
+    }
+
+    /// <summary>A point in a vehicle's node frame (as <see cref="VehicleBoxHit"/>) in world space, where the car is drawn now.</summary>
+    static Vector3 ToWorld(CarView v, Vector3 local) => v.Node.GlobalTransform * local;
+
+    /// <summary>
+    /// Bullet hole for a hitscan shot that the server stopped at <paramref name="end"/>: on the vehicle the ray enters at the end (a car
+    /// is hit at its hit box, and the hole rides its node), otherwise on the world.
+    /// </summary>
+    void ShotHole(Vector3 from, Vector3 end)
+    {
+        var d = end - from;
+        var len = d.Length();
+        if (len < 0.05f) return;
+        if (VehicleAlong(from, d / len, len + 0.5f, out var car, out var hit) && hit.Distance >= len - 0.5f)
+        {
+            BulletHoles.PlaceOn(World, car.Node, G(hit.Local), G(hit.LocalNormal));
+            return;
+        }
+        BulletHoles.PlaceFromShot(World, from, end);
     }
 
     CarView? NearestFreeCar(Vector3 p)

@@ -128,6 +128,17 @@ public partial class NetClient
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * 300f);
         q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
         var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        var worldDist = hit.Count == 0 ? 300f : from.DistanceTo(hit["position"].AsVector3());
+        if (VehicleAlong(from, dir, MathF.Min(300f, worldDist), out var car, out var vh))
+        {
+            // the predicted shot stops on a car: the tracer ends on its hit box, the hole rides the car's node
+            var vat = ToWorld(car, G(vh.Local));
+            var vnormal = car.Node.GlobalTransform.Basis * G(vh.LocalNormal);
+            ShotFx.Spawn(World, muzzle, vat, false, true, vnormal);
+            Sfx.Play3D("impact", vat);
+            BulletHoles.PlaceOn(World, car.Node, G(vh.Local), G(vh.LocalNormal));
+            return;
+        }
         var end = hit.Count > 0 ? hit["position"].AsVector3() : from + dir * 300f;
         ShotFx.Spawn(World, muzzle, end, false, true, hit.Count > 0 ? hit["normal"].AsVector3() : null);
         if (hit.Count > 0) { Sfx.Play3D("impact", end); if (hit["collider"].AsGodotObject() is CollisionObject3D { CollisionLayer: var l } && (l & 1) != 0) BulletHoles.Place(World, end, hit["normal"].AsVector3()); }

@@ -354,7 +354,7 @@ public partial class NetServer
         foreach (var other in _cars)
         {
             if (other == car || other.Destroyed) continue;
-            var dist = VehicleDamage.DistanceToBox(N(at), N(other.GlobalPosition), other.State.Yaw, other.HalfWidth, other.HalfLength);
+            var dist = VehicleDamage.DistanceToBox(N(at), N(other.GlobalPosition), other.State.Yaw, other.HalfWidth, other.HalfLength, other.Def.Height);
             var dmg = VehicleDamage.BlastDamage(e, dist) * e.VehicleDamageMultiplier;
             if (dmg <= 0) continue;
             _chainHits++;
@@ -372,7 +372,7 @@ public partial class NetServer
             if (car == direct) dmg = w.Damage;
             else
             {
-                var dist = VehicleDamage.DistanceToBox(N(pos), N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength);
+                var dist = VehicleDamage.DistanceToBox(N(pos), N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, car.Def.Height);
                 dmg = ProjectileMath.SplashDamage(w, dist, false);
             }
             DamageVehicle(car, dmg * Vehicles!.RocketDamageMultiplier, owner, weapon, 0);

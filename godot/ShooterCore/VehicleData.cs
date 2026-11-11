@@ -60,6 +60,7 @@ public class VehiclesFile : IVersioned
                     throw new DataFileException($"vehicles.json: {v.Id}: gun damage, fire_interval, range and magazine must be positive, reserve and reload_time not negative");
                 if (!v.Seats.Any(x => x.Role == "gunner")) throw new DataFileException($"vehicles.json: {v.Id}: a gun needs a gunner seat");
             }
+            if (v.Height <= 0 || v.HalfWidth <= 0 || v.HalfLength <= 0) throw new DataFileException($"vehicles.json: {v.Id}: height, half_width and half_length must be positive");
             if (v.RunOverMass is { } rm && rm <= 0) throw new DataFileException($"vehicles.json: {v.Id}: run_over_mass must be positive");
             if (!VehicleMedium.All.Contains(v.Medium)) throw new DataFileException($"vehicles.json: {v.Id}: medium {v.Medium} is not land, amphibious or boat");
             if (v.Medium != VehicleMedium.Land && (v.WaterTopSpeed <= 0 || v.WaterAcceleration <= 0 || v.LandDecel <= 0 || v.PlaningSpeed < 0))
@@ -179,6 +180,11 @@ public class VehicleDef
     /// <summary>Half extents of the footprint (server collision box and run-over test), metres.</summary>
     public float HalfWidth { get; set; } = 1.1f;
     public float HalfLength { get; set; } = 2.15f;
+    /// <summary>
+    /// Height of the hit volume, metres from the ground: the top of the visible body (roof, cabin, rider's head). A bullet that passes over
+    /// it misses; one that enters the footprint below it hits. See <see cref="VehicleBox"/>.
+    /// </summary>
+    public float Height { get; set; } = 1.2f;
     /// <summary>Seats in order; seat 0 is the driver. Default: one driver seat.</summary>
     public List<VehicleSeatDef> Seats { get; set; } = new() { new VehicleSeatDef { Role = "driver" } };
     /// <summary>The gun a gunner seat fires. Null: no gun.</summary>

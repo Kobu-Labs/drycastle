@@ -25,8 +25,19 @@ public partial class NetClient
         Vector3? first = null;
         foreach (var dir in HitMath.PelletDirections(aim, w.PelletSpread, w.Pellets, pf.Seed))
         {
-            var q = PhysicsRayQueryParameters3D.Create(from, from + G(dir) * range, 1);
+            var ray = G(dir);
+            var q = PhysicsRayQueryParameters3D.Create(from, from + ray * range, 1);
             var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+            var worldDist = hit.Count == 0 ? float.MaxValue : from.DistanceTo(hit["position"].AsVector3());
+            if (VehicleAlong(from, ray, MathF.Min(range, worldDist), out var car, out var vh))
+            {
+                // a pellet that stops on a car: the hole rides the car's node, the spark is where the car is drawn
+                BulletHoles.PlaceOn(World, car.Node, G(vh.Local), G(vh.LocalNormal));
+                var vat = ToWorld(car, G(vh.Local));
+                ShotFx.Spark(World, vat, car.Node.GlobalTransform.Basis * G(vh.LocalNormal));
+                first ??= vat;
+                continue;
+            }
             if (hit.Count == 0) continue;
             var at = hit["position"].AsVector3();
             var normal = hit["normal"].AsVector3();

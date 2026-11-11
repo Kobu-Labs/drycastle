@@ -112,20 +112,20 @@ public static partial class VehicleFx
         fire.Amount = 18; fire.Lifetime = 0.9; fire.Spread = 25; fire.InitialVelocityMin = 1f; fire.InitialVelocityMax = 2.5f;
         fire.Gravity = new Vector3(0, 1.5f, 0); fire.ScaleAmountMin = 0.8f; fire.ScaleAmountMax = 1.4f; fire.Emitting = true;
         var column = Stream(root, rc.Smoke, C.Black, C.Grow);
-        column.Amount = 26; column.Lifetime = 4.0; column.Spread = 12; column.InitialVelocityMin = 3f; column.InitialVelocityMax = 5f;
-        column.Gravity = new Vector3(0, 0.8f, 0); column.ScaleAmountMin = 1.0f; column.ScaleAmountMax = 1.8f; column.Emitting = true;
+        column.Amount = 26; column.Lifetime = VehicleBlastFx.ColumnLife; column.Spread = 12; column.InitialVelocityMin = 1.5f; column.InitialVelocityMax = 3f;
+        column.Gravity = new Vector3(0, 0.3f, 0); column.ScaleAmountMin = 1.0f; column.ScaleAmountMax = 1.8f; column.Emitting = true;
 
         var light = new OmniLight3D { LightColor = new Color(1f, 0.5f, 0.15f), LightEnergy = 3f, OmniRange = r * 1.6f, ShadowEnabled = false, Position = new Vector3(0, 0.6f, 0) };
         root.AddChild(light);
         var tl = light.CreateTween();
-        tl.TweenProperty(light, "light_energy", 0f, 5f).SetDelay(0.4f);
+        tl.TweenProperty(light, "light_energy", 0f, VehicleBlastFx.FreeAfter - 0.4f).SetDelay(0.4f);
 
         var tree = world.GetTree();
-        tree.CreateTimer(5.0).Timeout += () =>
+        tree.CreateTimer(VehicleBlastFx.EmitSeconds).Timeout += () =>
         {
             if (GodotObject.IsInstanceValid(fire)) fire.Emitting = false;
             if (GodotObject.IsInstanceValid(column)) column.Emitting = false;
         };
-        ShotFx.Expire(world, root, 10f);
+        ShotFx.Expire(world, root, VehicleBlastFx.FreeAfter); // the whole blast is freed here, whatever is still in the air
     }
 }

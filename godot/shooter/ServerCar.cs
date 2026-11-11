@@ -12,9 +12,6 @@ namespace Suchohrad.Shooter;
 public partial class ServerCar : CharacterBody3D
 {
     public float HalfWidth = 1.1f, HalfLength = 2.15f;
-    /// <summary>Collision box height; its bottom is the origin (the vehicle origin is the ground contact, like the models and <see cref="CarFx"/>).</summary>
-    public const float BoxHeight = 1.2f;
-
     /// <summary>Origin height for a vehicle standing on the real ground: the highest ground under the footprint centre and corners, so the box starts flush instead of inside the terrain. Null when any sample has no ground (a hole) or the footprint is steeper than 0.8 m.</summary>
     public static float? RestHeight(PhysicsDirectSpaceState3D space, Vector3 pos, float yaw, float halfWidth, float halfLength, float hint)
     {
@@ -71,7 +68,7 @@ public partial class ServerCar : CharacterBody3D
         CollisionLayer = 2; CollisionMask = 1;
         Hp = Def.Hp;
         Seat = new VehicleSeat(Def.Seats.Count);
-        AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(HalfWidth * 2, BoxHeight, HalfLength * 2) }, Position = new Vector3(0, BoxHeight / 2, 0) });
+        AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(HalfWidth * 2, Def.Height, HalfLength * 2) }, Position = new Vector3(0, Def.Height / 2, 0) }); // the hit volume (VehicleBox): ground to the top of the body
         FloorSnapLength = 0.4f;
         FloorMaxAngle = Mathf.DegToRad(50);
         SetPhysicsProcess(false); // stepped by the server
