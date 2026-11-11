@@ -90,6 +90,13 @@ public partial class Shooter : Node3D
         }
     }
 
+    /// <summary>Server shutdown: closes the progression store, which writes out the queued saves before it returns.</summary>
+    public override void _ExitTree()
+    {
+        _progression?.Dispose();
+        _progression = null;
+    }
+
     public override void _Process(double delta)
     {
         // let a few frames run so physics and the scene tree settle before a smoke exit
@@ -149,7 +156,7 @@ public partial class Shooter : Node3D
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
-                World = this, Host = host, Port = port, PlayerName = name, KillY = killY, Weapons = _data.Weapons, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
+                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(), KillY = killY, Weapons = _data.Weapons, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(null),
             };
             client.OnFailed = (why, joined) =>
@@ -220,14 +227,14 @@ public partial class Shooter : Node3D
     void BuildServer(Config cfg)
     {
         // Opened here so a bad path or failed migration stops the server at start, like a bad --match-set.
-        // Netcode does not use it yet (next ticket); write failures are logged by the store, never thrown into the match.
+        // Write failures are logged by the store, never thrown into the match. Disposed in _ExitTree (flushes queued writes).
         var dbPath = cfg.Str("db", "./shooter.db");
         _progression = Suchohrad.ShooterServer.Persistence.Sqlite.SqliteProgressionStore.Open(dbPath, s => GD.PrintErr(s));
         GD.Print($"server: progression db {Path.GetFullPath(dbPath)}");
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var server = new NetServer
         {
-            World = this, KillY = killY,
+            World = this, KillY = killY, Progression = _progression,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             MatchConfig = ApplyOverrides(_data.Match, cfg.Str("match-set")),
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")),
