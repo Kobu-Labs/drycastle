@@ -297,13 +297,22 @@ detail:
     # Parcels of which only a part is the dike (the rest keeps its own recipe): the ground within within_m of a road way.
     clips:
       P-1057: {osm_id: w825140517, within_m: 12}
-    track_extra_m: 0.2       # the track is at least this much wider than the road (it must hide the road's flat colour)
+      P-1021: {osm_id: w825140517, within_m: 12}
+    track_width_m: 1.5       # the gravel track: this wide plus the wandering of its edges (about 2.2 m on average); the road under it is wider, the lawn covers the rest
     track_wobble_m: 0.7      # how far the edge of the track wanders out beyond that, each side (waves of 1.4 to 16 m)
     track_lift_m: 0.08       # above the terrain: over the road ribbon (roads.lift_m 0.05 plus 3 mm per class rank) so the texture shows
     spill:                   # loose pebbles beyond the edge of the track: blobs every spacing_m (varied), radius, how far out
       {spacing_m: 0.9, radius_m: [0.1, 0.38], reach_m: 0.45}
     piece_m: 8.0             # the texture is laid in pieces of this length, each along its own direction and start
     lawn_colours: ["#86b362", "#7aa858", "#6e9c50"]
+    border:                  # the parcel's outline is only a guide: the green flows over it, at random
+      inward_m: 0.0          # the lawn's edge lies this much inside the parcel line at most (0: never, the plot colour would show) ...
+      outward_m: 3.5         # ... and this much outside at most (smooth waves of 7 to 32 m)
+      blob_spacing_m: 1.6    # loose lawn blobs beyond the edge: about one per this many metres of it (varied)
+      blob_radius_m: [0.3, 1.1]
+      blob_reach_m: 4.5      # how far out they lie (most close to the edge, smaller the further out)
+      fade_m: 3.0            # the grass is half as dense on the parcel line, full this far inside, gone this far outside
+      lawn_lift_m: 0.07      # above the terrain: over the neighbours' own patches (detail.lift_m) and over the road ribbons (roads.lift_m 0.05 plus 3 mm per class rank), under the track
     grass:
       spacing_m: 0.95
       scale: [0.95, 1.4]

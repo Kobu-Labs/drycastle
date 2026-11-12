@@ -4,9 +4,9 @@ Recipe ``dike`` of the detail stage (``detail.dike`` in ``rules.yaml``; the parc
 north of the village). The parcel is the dike: its polygon is the foot of the hill, so no profile is made up here, the
 patches and the clutter lie on the terrain (the terrain already holds the hill).
 
-* **track**: the road edges inside the parcel, wider than their carriageway by ``track_extra_m`` plus a wandering edge,
-  textured ``dike_gravel`` (fine light gravel, hard-edged grass patches) and lifted above the road so the texture
-  shows. It is laid in pieces of ``piece_m``, each turned along its own stretch of road and started at another place of
+* **track**: the road edges inside the parcel as a gravel strip ``track_width_m`` wide (narrower than the carriageway)
+  with a wandering edge, textured ``dike_gravel`` (fine light gravel, hard-edged grass patches) and lifted above the lawn,
+  which is lifted above the road ribbon and so covers what the track leaves of it. It is laid in pieces of ``piece_m``, each turned along its own stretch of road and started at another place of
   the tile, so the grass patches do not repeat in rows;
 * **slopes**: the free ground of the parcel in flat greens (the ``lawn`` layer);
 * **grass**: instances of ``tall_grass``, ``tuft`` and ``straw`` (meshes of ``clutter_meshes.glb``) over the free
@@ -14,12 +14,15 @@ patches and the clutter lie on the terrain (the terrain already holds the hill).
   sit on the drawn patches).
 """
 
+import dataclasses
 import math
 import random
 
 import matplotlib.image as mpimg
 import numpy as np
+import shapely
 from shapely.geometry import LineString, Polygon
+from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
 from drycastle_pipeline.assets import ASSETS_DIR
@@ -79,6 +82,32 @@ def _ribbon(line: LineString, half: float, extra: float, rng: random.Random, spi
     return unary_union(parts)
 
 
+def _closed_wander(rng: random.Random, length: float, s: np.ndarray) -> np.ndarray:
+    """Rough noise 0..1 along a closed ring of ``length`` metres (whole numbers of waves, so it joins up)."""
+    out = np.zeros_like(s)
+    for wl, amp in ((7.0, 0.5), (14.0, 0.8), (32.0, 0.7)):  # long, so that the stage's 25 cm simplifying leaves it round
+        out += amp * np.sin(s / length * math.tau * max(1, round(length / wl)) + rng.random() * math.tau)
+    return 0.5 + 0.5 * np.clip(1.5 * out / 2.0, -1.0, 1.0)
+
+
+def _ragged(poly: Polygon, rng: random.Random, inward: float, outward: float) -> tuple[Polygon, np.ndarray, np.ndarray, np.ndarray]:
+    """The parcel's outline pushed in by up to ``inward`` and out by up to ``outward`` metres, smoothly and at random.
+    Returns the polygon and the outline's points, outward normals and offsets (for the blobs beyond it)."""
+    poly = orient(poly.buffer(0))
+    ring = LineString(poly.exterior.coords)
+    n = max(8, int(ring.length / 0.7))
+    s = np.linspace(0.0, ring.length, n, endpoint=False)
+    pts = np.array([ring.interpolate(float(d)).coords[0] for d in s])
+    tan = np.roll(pts, -1, axis=0) - np.roll(pts, 1, axis=0)
+    tan /= np.maximum(np.linalg.norm(tan, axis=1, keepdims=True), 1e-9)
+    nor = np.stack([tan[:, 1], -tan[:, 0]], axis=1)  # outward for a counter-clockwise ring
+    off = -inward + (inward + outward) * _closed_wander(rng, ring.length, s) ** 1.3
+    hull = Polygon(pts + nor * off[:, None]).buffer(0)
+    if hull.is_empty or hull.geom_type != "Polygon":
+        hull = max(_polys(hull), key=lambda g: g.area, default=poly)
+    return hull, pts, nor, off
+
+
 def _texel(u: np.ndarray, v: np.ndarray) -> np.ndarray:
     if not _IMAGE:
         _IMAGE.append((mpimg.imread(ASSETS_DIR / "drycastle-generated-textures" / f"{TEXTURE_ID}.png")[..., :3] * 255).round())
@@ -104,7 +133,7 @@ def _track_pieces(ctx: ParcelContext, rc: dict, rng: random.Random) -> list[Patc
         for seg in (inside.geoms if hasattr(inside, "geoms") else [inside]):
             if seg.is_empty or seg.length < 0.5 or not isinstance(seg, LineString):
                 continue
-            track_parts.append(_ribbon(seg, width / 2 + float(rc["track_extra_m"]) / 2, float(rc["track_wobble_m"]), rng, rc["spill"]))
+            track_parts.append(_ribbon(seg, float(rc["track_width_m"]) / 2, float(rc["track_wobble_m"]), rng, rc["spill"]))
             k = max(1, round(seg.length / float(rc["piece_m"])))
             for i in range(k):
                 a, b = seg.interpolate(seg.length * i / k), seg.interpolate(seg.length * (i + 1) / k)
@@ -139,13 +168,36 @@ def dike_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
     res = DetailResult(pid)
     rng = seeded(f"{pid}:detail:dike")
     track_patches = _track_pieces(ctx, rc, rng)
-    res.patches += track_patches
     track = unary_union([p.geom for p in track_patches]) if track_patches else Polygon()
 
-    free = free_area(ctx, cfg)
+    bc = rc["border"]
+    hull, ring, nor, off = _ragged(ctx.polygon, rng, float(bc["inward_m"]), float(bc["outward_m"]))
+    wide = dataclasses.replace(ctx, polygon=hull)  # the same ground rules (buildings, fences, road, ...) on the ragged outline
+    # the lawn covers the road inside the parcel (the track is narrower than the carriageway under it), not beyond the parcel line
+    free = free_area(dataclasses.replace(wide, road=None), cfg)
+    if ctx.road is not None and not ctx.road.is_empty:
+        free = free.difference(ctx.road.difference(ctx.polygon.buffer(0.3)).buffer(float(cfg["road_clearance_m"]), join_style="mitre"))
     cols = [hex_to_rgb(h) for h in rc["lawn_colours"]]
+    lawn = len(res.patches)
     got = _assemble(res, free, {"lawn": free}, {"lawn": cols}, {}, seeded(f"{pid}:detail:colours"))
-    grass = got.get("lawn", Polygon())
+    for p in res.patches[lawn:]:
+        p.lift = float(bc["lawn_lift_m"])  # over the neighbours' own patches, which lie at lift_m
+    covered = got.get("lawn", Polygon())
+    # loose blobs of lawn beyond the border, smaller the further out, so the green frays into what lies there
+    reach = free_area(dataclasses.replace(ctx, polygon=hull.buffer(float(bc["blob_reach_m"]) + 2.0)), cfg)
+    blobs, d = [], rng.random() * float(bc["blob_spacing_m"])
+    step = float(bc["blob_spacing_m"])
+    while d < len(ring) * 0.7:
+        i = min(len(ring) - 1, int(d / 0.7))
+        away = rng.random() ** 1.5 * float(bc["blob_reach_m"])  # most of them close to the border
+        r = float(bc["blob_radius_m"][1]) * (1.0 - 0.75 * away / float(bc["blob_reach_m"])) * (0.5 + 0.5 * rng.random())
+        c = ring[i] + nor[i] * (off[i] + away)
+        blobs.append(blob(rng, float(c[0]), float(c[1]), max(r, float(bc["blob_radius_m"][0])), wobble=0.5, stretch=1.0 + rng.random()))
+        d += step * (0.4 + 1.2 * rng.random())
+    spill = _clean(unary_union(blobs).intersection(reach).difference(hull), 0.1) if blobs else Polygon()
+    for poly in _polys(spill):
+        res.patches.append(Patch("lawn", poly, colour=cols[rng.randrange(len(cols))], lift=float(bc["lawn_lift_m"])))
+    grass = unary_union([covered, spill])
     if not track.is_empty:
         grass = grass.difference(track.buffer(0.05))
 
@@ -153,14 +205,21 @@ def dike_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
     gc = rc["grass"]
     g = _gen(pid, "dike_grass")
     pts = _zones(g, [(grass, 1.0)], float(gc["spacing_m"]))
+    if len(pts):  # the grass thins out across the border (half as dense on it, none beyond fade_m outside, full inside)
+        inside = shapely.contains_xy(ctx.polygon, pts[:, 0], pts[:, 1])
+        dist = shapely.distance(shapely.points(pts[:, 0], pts[:, 1]), ctx.polygon.exterior)
+        keep = g.random(len(pts)) < np.clip(0.5 + np.where(inside, dist, -dist) / (2.0 * float(bc["fade_m"])), 0.0, 1.0)
+        pts = pts[keep]
     emitted = []
     for k, sub in _split_kinds(g, pts, gc["kinds"]).items():
         emitted += _emit(g, k, sub, gc["scale"], ctx, cfg)
     if emitted:
         dist = distance_to(track)(np.array([c["x"] for c in emitted]), np.array([c["y"] for c in emitted]))
-        for c, d in zip(emitted, dist, strict=True):  # taller the further from the track: the sides of the dike
-            c["scale"] = round(c["scale"] * (1.0 + float(gc["reach_scale"]) * min(1.0, d / float(gc["reach_m"]))), 3)
+        for c, dd in zip(emitted, dist, strict=True):  # taller the further from the track: the sides of the dike
+            c["scale"] = round(c["scale"] * (1.0 + float(gc["reach_scale"]) * min(1.0, dd / float(gc["reach_m"]))), 3)
     out += emitted
+
+    res.patches += track_patches  # last, so that a painter's-order preview shows it over the lawn like the game does (higher lift)
 
     pt = rc["patch_tuft"]
     g2 = _gen(pid, "dike_patch_tuft")
