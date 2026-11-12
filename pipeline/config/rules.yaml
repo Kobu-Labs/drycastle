@@ -561,6 +561,8 @@ spawns:
 # building_clearance_m) and outside parcels of avoid_kinds (house plots and gardens). OSM lamps
 # only get the coverage and building checks, since their position is taken as given.
 lamps:
+  # false: no street lamps at all (OSM ones included); the poles and lamps of the edits are placed objects, not these.
+  enabled: true
   spacing_m: 30
   # Gap between the carriageway edge and the lamp pole, metres.
   road_offset_m: 1.0
@@ -577,6 +579,8 @@ lamps:
 # weak GPUs): fewer fences without collision, fewer trees, a few more spawn candidates.
 areas:
   village:
+    lamps:
+      enabled: false
     ground:
       types:
         forest: {trees: {per_1000m2: 4.0}}

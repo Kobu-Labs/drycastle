@@ -95,6 +95,17 @@ def test_osm_lamps_kept_unless_under_a_building_or_off_coverage(ws) -> None:
     assert kept[0]["x"] == 120.0 and kept[0]["parcel"] == "P-0002"
 
 
+def test_lamps_can_be_switched_off_and_the_village_has_them_off(ws) -> None:
+    assert lamps_for(ws, [osm_lamp("n1", 120.0, 60.0)])  # on by default
+    off = make_lamps(
+        ws["parcels"], ws["buildings"], ws["graph"], [osm_lamp("n1", 120.0, 60.0)], ws["terrain"],
+        {**LAMPS, "enabled": False}, 250.0,
+    )
+    assert off == []  # rule lamps and OSM lamps alike
+    assert load_section("lamps")["enabled"] is True
+    assert load_section("lamps", area="village")["enabled"] is False
+
+
 def test_rule_lamps_yield_to_nearby_osm_lamps(ws) -> None:
     # an OSM lamp right where the first rule lamp would stand
     probe = next(lp for lp in lamps_for(ws) if lp["source"] == "rule")
