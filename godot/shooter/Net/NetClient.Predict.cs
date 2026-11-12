@@ -61,7 +61,7 @@ public partial class NetClient
     /// <summary>Predicts this tick's trigger pull / reload key; plays sounds and own-shot effects at once.</summary>
     void PredictFire(MoveInput mi)
     {
-        if (!PredictionOn || Dead || _driving || _controlling || Ammo is not { } a || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count || a.Slot != _wantSlot) return;
+        if (!PredictionOn || Dead || _driving && !InArmedSeat || _controlling || Ammo is not { } a || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count || a.Slot != _wantSlot) return;
         var w = Weapons.Weapons[a.Slot - 1];
         var now = Now;
         if (_pReloadUntil > 0 && now >= _pReloadUntil) { _pMag = _pMagAfter; _pReloadUntil = 0; }
@@ -91,7 +91,7 @@ public partial class NetClient
         if (w.Kind == WeaponKind.Hitscan && _me != null)
         {
             // same offset step as the server's shot; the viewmodel kicks by the same (ADS / crouch scaled) climb
-            var mult = RecoilState.Multiplier(w.Recoil, mi.Has(MoveButtons.Aim), _me.State.Stance);
+            var mult = RecoilState.Multiplier(w.Recoil, mi.Has(MoveButtons.Aim), InArmedSeat ? Stance.Stand : _me.State.Stance); // a seat steadies it no more than standing does, as on the server
             _recoil.Shot(w.Recoil, mult);
             _breath.AimError(_breath.SwayDegrees(w)); // the server's per-shot aim error; kept in step (the tracer follows the camera, like recoil)
             _viewmodel?.Kick(w.Recoil.VerticalPerShot * mult);
@@ -129,7 +129,7 @@ public partial class NetClient
         q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
         var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         var worldDist = hit.Count == 0 ? 300f : from.DistanceTo(hit["position"].AsVector3());
-        if (VehicleAlong(from, dir, MathF.Min(300f, worldDist), out var car, out var vh))
+        if (VehicleAlong(from, dir, MathF.Min(300f, worldDist), out var car, out var vh, MySeat()?.Car))
         {
             // the predicted shot stops on a car: the tracer ends on its hit box, the hole rides the car's node
             var vat = ToWorld(car, G(vh.Local));

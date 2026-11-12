@@ -71,6 +71,14 @@ public class VehiclesFile : IVersioned
                 if (seat.Role is not ("driver" or "gunner" or "passenger")) throw new DataFileException($"vehicles.json: {v.Id}: seat role {seat.Role} is not driver, gunner or passenger");
                 if (seat.Role == "driver" && v.Seats.Count(x => x.Role == "driver") != 1) throw new DataFileException($"vehicles.json: {v.Id}: one driver seat");
                 if (seat.Offset.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: seat offset is [x, y, z]");
+                if (seat.Armed && seat.Role != "passenger") throw new DataFileException($"vehicles.json: {v.Id}: only a passenger seat can be armed (a driver drives, a gunner has the vehicle's gun)");
+                if (seat.Standing && !seat.Exposed) throw new DataFileException($"vehicles.json: {v.Id}: a standing seat is an exposed seat");
+                if (seat.Aim is { } aim)
+                {
+                    if (!seat.Armed) throw new DataFileException($"vehicles.json: {v.Id}: a seat's aim is for an armed seat");
+                    if (aim.ArcDeg is <= 0 or > 180 || aim.MinPitchDeg < -89 || aim.MaxPitchDeg > 89 || aim.MinPitchDeg >= aim.MaxPitchDeg || aim.SpreadFullSpeed <= 0)
+                        throw new DataFileException($"vehicles.json: {v.Id}: a seat's aim needs arc_deg 0..180, min_pitch_deg below max_pitch_deg (within -89..89) and a positive spread_full_speed");
+                }
             }
             if (v.ExposedGunner && !v.Seats.Any(x => x.Role == "gunner")) throw new DataFileException($"vehicles.json: {v.Id}: exposed_gunner needs a gunner seat");
             if (v.Gun is { } g)
@@ -111,6 +119,8 @@ public class VehiclesFile : IVersioned
                 if (dg.Pivot.Length != 3 || dg.Eye.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: door_gun pivot and eye are [x, y, z]");
                 if (dg.YawArcDeg is <= 0 or > 180 || dg.MinPitchDeg < -89 || dg.MaxPitchDeg > 89 || dg.MinPitchDeg >= dg.MaxPitchDeg || dg.MuzzleLength <= 0 || dg.RecoilM < 0)
                     throw new DataFileException($"vehicles.json: {v.Id}: door_gun needs yaw_arc_deg 0..180, min_pitch_deg below max_pitch_deg (within -89..89), a positive muzzle_length and recoil_m not negative");
+                if (dg.RingRadius < 0 || dg.GuardArcDeg is < 0 or > 180 || dg.GuardBlendDeg < 0 || dg.GuardArcDeg > 0 && (dg.GuardMinPitchDeg < dg.MinPitchDeg || dg.GuardMinPitchDeg >= dg.MaxPitchDeg))
+                    throw new DataFileException($"vehicles.json: {v.Id}: door_gun ring_radius and guard_blend_deg not negative, guard_arc_deg 0..180, guard_min_pitch_deg from min_pitch_deg up to below max_pitch_deg");
             }
             if (v.Drive is { } dr)
             {
@@ -151,6 +161,44 @@ public class VehicleSeatDef
     /// <summary>"driver" (seat 0 only, drives), "gunner" (fires the vehicle's gun) or "passenger".</summary>
     public string Role { get; set; } = "passenger";
     public float[] Offset { get; set; } = { 0, 0, 0 };
+    /// <summary>
+    /// An armed seat (ADR 0008): its rider keeps their own loadout and fights with it from the seat, in first person, aiming with the view inside
+    /// <see cref="Aim"/>. A passenger seat only; false keeps the rider's hands empty, as on the bus.
+    /// </summary>
+    public bool Armed { get; set; }
+    /// <summary>
+    /// The hull does not cover this seat's rider (ADR 0009): a shot that reaches their body hits them and not the hull (<see cref="GunnerCover"/>).
+    /// False keeps the rider behind the hull, as in every closed vehicle. (The flak truck and the utility helicopter say it for their gunner with the
+    /// vehicle's <see cref="VehicleDef.ExposedGunner"/>.)
+    /// </summary>
+    public bool Exposed { get; set; }
+    /// <summary>The rider of an exposed seat stands (the gunner in a ring) instead of sitting: that is how they are drawn, and how tall they are to a bullet.</summary>
+    public bool Standing { get; set; }
+    /// <summary>How far round and up and down an armed seat's rider can aim. Null: all the way round.</summary>
+    public VehicleSeatAimDef? Aim { get; set; }
+
+    /// <summary>The stance an exposed rider has to a bullet and to the eye: seated riders have the crouch's height.</summary>
+    public Stance RiderStance => Standing ? Stance.Stand : Stance.Crouch;
+}
+
+/// <summary>
+/// The arc an armed seat's rider aims in (vehicles.json seat "aim"), in the vehicle's own frame so it turns and tilts with it: what the seat, the
+/// rider beside it and the rest of the vehicle leave free. The view is held inside it, and so are the shots (<see cref="SeatAimRules"/>).
+/// </summary>
+public class VehicleSeatAimDef
+{
+    /// <summary>The middle of the arc as a yaw in the vehicle's frame, degrees (0 is the nose, -90 out of the right side, 90 out of the left).</summary>
+    public float YawDeg { get; set; }
+    /// <summary>How far the aim swings either side of that, degrees (180: all the way round).</summary>
+    public float ArcDeg { get; set; } = 180;
+    /// <summary>Lowest and highest aim, degrees.</summary>
+    public float MinPitchDeg { get; set; } = -60;
+    public float MaxPitchDeg { get; set; } = 80;
+    /// <summary>
+    /// The vehicle's speed (m/s) at which the rider's shots carry the weapon's whole movement spread, as their own sprint does on foot; below it in
+    /// proportion, none at a standstill. Higher: steadier at speed.
+    /// </summary>
+    public float SpreadFullSpeed { get; set; } = 16;
 }
 
 /// <summary>A vehicle-mounted gun (vehicles.json "gun"), fired from a gunner seat. Hitscan with its own magazine and reserve.</summary>
@@ -190,6 +238,20 @@ public class VehicleDoorGunDef
     public float[] Eye { get; set; } = { 0, 0.22f, 0.62f };
     /// <summary>Visual only: how far the barrel slides back on a round, metres.</summary>
     public float RecoilM { get; set; } = 0.05f;
+    /// <summary>
+    /// A ring mount (the amphibious transport's ring gun): the gun's pitch axis rides this far out from the yaw axis at <see cref="Pivot"/>, metres,
+    /// on the side the gun points, so the gun swings round a gunner who stands at the centre. 0: a pintle, the two axes meet (the door gun).
+    /// </summary>
+    public float RingRadius { get; set; }
+    /// <summary>
+    /// A guard for what the gun must not be depressed into (the riders in front of a ring gun): within guard_arc_deg either side of
+    /// <see cref="GuardYawDeg"/> (a yaw in the vehicle's frame, 0 is the nose) the gun goes no lower than guard_min_pitch_deg, and over the next
+    /// guard_blend_deg it comes down to <see cref="MinPitchDeg"/>. guard_arc_deg 0: no guard.
+    /// </summary>
+    public float GuardYawDeg { get; set; }
+    public float GuardArcDeg { get; set; }
+    public float GuardBlendDeg { get; set; } = 20;
+    public float GuardMinPitchDeg { get; set; }
 }
 
 /// <summary>
@@ -676,6 +738,11 @@ public class VehicleDef
     /// False keeps every rider behind the hull, as the jeep's roof gunner is.
     /// </summary>
     public bool ExposedGunner { get; set; }
+    /// <summary>
+    /// Whether the hull leaves the rider of <paramref name="seat"/> uncovered: the seat says so itself (<see cref="VehicleSeatDef.Exposed"/>, the
+    /// amphibious transport's three), or it is the gunner seat of a vehicle with <see cref="ExposedGunner"/> (the flak truck, the utility helicopter).
+    /// </summary>
+    public bool SeatExposed(int seat) => seat >= 0 && seat < Seats.Count && (Seats[seat].Exposed || ExposedGunner && Seats[seat].Role == "gunner");
     /// <summary>An anti-aircraft turret worked from the gunner seat (the flak truck). Null: none. Excludes <see cref="Gun"/>.</summary>
     public VehicleFlakDef? Flak { get; set; }
     /// <summary>

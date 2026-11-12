@@ -168,10 +168,23 @@ public static class HitMath
     public static Dictionary<ushort, PelletTotal> ResolvePellets(WeaponDef w, Vector3 origin, IReadOnlyList<Vector3> dirs, float maxDistance,
         IReadOnlyList<float> walls, IReadOnlyList<HitTarget> targets, ushort shooter, IReadOnlyList<HitTarget?>? exposed = null, IReadOnlyList<float>? wallsPastHull = null)
     {
+        if (exposed == null) return ResolvePelletsPastHulls(w, origin, dirs, maxDistance, walls, targets, shooter, null, null);
+        var riders = new ExposedRiders?[exposed.Count];
+        for (var i = 0; i < riders.Length; i++) riders[i] = exposed[i];
+        return ResolvePelletsPastHulls(w, origin, dirs, maxDistance, walls, targets, shooter, riders, wallsPastHull);
+    }
+
+    /// <summary>
+    /// <see cref="ResolvePellets"/> for vehicles with several riders in the open: <paramref name="exposed"/>[i] are the exposed riders of the vehicle
+    /// pellet i stopped on (null for none), any of whom it may still reach.
+    /// </summary>
+    public static Dictionary<ushort, PelletTotal> ResolvePelletsPastHulls(WeaponDef w, Vector3 origin, IReadOnlyList<Vector3> dirs, float maxDistance,
+        IReadOnlyList<float> walls, IReadOnlyList<HitTarget> targets, ushort shooter, IReadOnlyList<ExposedRiders?>? exposed, IReadOnlyList<float>? wallsPastHull)
+    {
         var totals = new Dictionary<ushort, PelletTotal>();
         for (var i = 0; i < dirs.Count; i++)
         {
-            // a pellet that stopped on a vehicle with an exposed gunner may still reach him (GunnerCover)
+            // a pellet that stopped on a vehicle with riders in the open may still reach one of them (GunnerCover)
             var found = exposed?[i] is { } g ? GunnerCover.Raycast(origin, dirs[i], maxDistance, walls[i], targets, shooter, g, wallsPastHull![i]) : Raycast(origin, dirs[i], maxDistance, walls[i], targets, shooter);
             if (found is not { } hit) continue;
             var prev = totals.GetValueOrDefault(hit.Id);

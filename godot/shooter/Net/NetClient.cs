@@ -579,7 +579,8 @@ public partial class NetClient : Node
         var slot = Ammo?.Slot ?? _wantSlot;
         var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
         _viewmodel.Show(id);
-        _viewmodel.Visible = !Dead && !_driving && !_controlling && _gunship == null && _myState != EntityState.InVehicle && _me is not { ZoomFov: > 0 };
+        var seated = (_driving || _myState == EntityState.InVehicle) && !InArmedSeat; // an armed seat's rider holds their weapon (ADR 0008)
+        _viewmodel.Visible = !Dead && !seated && !_controlling && _gunship == null && _me is not { ZoomFov: > 0 };
     }
 
     /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
@@ -728,7 +729,7 @@ public partial class NetClient : Node
         // iron sights: any non-scoped, non-melee weapon while zoom is held
         var kind = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Kind : WeaponKind.Melee;
         if (_viewmodel != null)
-            _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead
+            _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && (!_driving && _myState != EntityState.InVehicle || InArmedSeat)
                 && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
         _me.IronSightZoom = _viewmodel is { Aiming: true };
     }

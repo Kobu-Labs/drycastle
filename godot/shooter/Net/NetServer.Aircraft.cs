@@ -88,15 +88,20 @@ public partial class NetServer
         return r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3());
     }
 
-    /// <summary>The live vehicles as the gunship routing sees them: the index is the position in <see cref="_cars"/>.</summary>
-    List<GunshipVehicle> GunshipVehicles()
+    /// <summary>
+    /// The live vehicles as the gunship routing sees them: the index is the position in <see cref="_cars"/>. With <paramref name="targets"/> (the
+    /// bodies a round can hit), a vehicle whose seats are in the open (an amphibious transport, ADR 0009) carries its riders, so a round reaches
+    /// them through its hit volume. A flak truck's or a helicopter's gunner stays behind the volume for these rounds, as before.
+    /// </summary>
+    List<GunshipVehicle> GunshipVehicles(IReadOnlyList<HitTarget>? targets = null)
     {
         var list = new List<GunshipVehicle>(_cars.Count);
         for (var i = 0; i < _cars.Count; i++)
         {
             var c = _cars[i];
             if (c.Destroyed) continue; // no collision: a destroyed vehicle is shot through
-            list.Add(new GunshipVehicle(i, N(c.GlobalPosition), c.State.Yaw, c.HalfWidth, c.HalfLength, c.Def.Height));
+            var riders = targets != null && c.Seat.Occupied ? RiderRules.Exposed(c.Def, c.Seat, targets, seatsOnly: true) : null;
+            list.Add(new GunshipVehicle(i, N(c.GlobalPosition), c.State.Yaw, c.HalfWidth, c.HalfLength, c.Def.Height, riders));
         }
         return list;
     }
@@ -133,7 +138,7 @@ public partial class NetServer
 
         var wall = WorldWall(new Vector3(shot.Origin.X, shot.Origin.Y, shot.Origin.Z), new Vector3(shot.Direction.X, shot.Direction.Y, shot.Direction.Z), def.RangeM);
         var targets = LiveTargets();
-        var route = GunshipRouting.Route(def, shot.Origin, shot.Direction, wall, targets, owner, GunshipVehicles(), Vehicles?.BulletDamageMultiplier ?? 0f);
+        var route = GunshipRouting.Route(def, shot.Origin, shot.Direction, wall, targets, owner, GunshipVehicles(targets), Vehicles?.BulletDamageMultiplier ?? 0f);
         var end = shot.Origin + shot.Direction * route.Distance;
         var isShell = def.Kind == GunshipWeaponKind.Shell;
         // a cannon sky shot (no hit) is drawn only to GunshipFxLimits.MaxSkyTracerM; a shell's streak runs to where it bursts, so it is not cut short

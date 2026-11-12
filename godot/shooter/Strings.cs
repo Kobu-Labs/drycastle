@@ -31,6 +31,8 @@ public static class Strings
         ("hud.flight.spool", "Rotor starting     {0}  Exit"), ("hud.flight.takeoff", "{0}  Take off     {1}  Exit"),
         ("hud.flight.fly", "{0}  Climb     {1}  Descend     {2}  Exit"), ("hud.flight.edge", "Edge of the map: turn back"),
         ("hud.doorgun.ammo", "MG  {0} / {1}"), ("hud.doorgun.reload", "MG  RELOADING"), ("hud.doorgun.prompt", "{0}  Fire     {1}  Reload     {2}  Exit"),
+        ("hud.seat.armed", "Armed passenger"), ("hud.transport.enter", "{0}  Board transport"), ("hud.transport.drive", "{0}  Exit     {1}  Handbrake"), ("hud.transport.afloat", "{0}  Exit"),
+        ("hud.armedseat.prompt", "{0}  Fire     {1}  Reload     Mouse wheel  Weapon     {2}  Exit"),
         ("score.title", "Scoreboard"), ("score.ending", "Round over: {0} wins"), ("score.ending.tie", "Round over: {0} win"),
         ("score.col.player", "Player"), ("score.col.kills", "K"), ("score.col.deaths", "D"), ("score.col.ping", "Ping"),
         ("score.you", "{0} (you)"), ("score.hint.hold", "Hold Tab to show this"), ("score.hint.next", "A new round starts soon"),

@@ -77,7 +77,16 @@
       },
       "model": "suchohrad-generated-models/amphibious_transport.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
-      "seats": [{ "role": "driver", "offset": [-0.45, 0.64, -0.37] }, { "role": "passenger", "offset": [0.45, 0.64, -0.37] }, { "role": "passenger", "offset": [0, 0.685, 1.0] }],
+      "seats": [
+        { "role": "driver", "offset": [-0.45, 0.64, -0.37], "exposed": true },
+        { "role": "passenger", "offset": [0.45, 0.64, -0.37], "exposed": true, "armed": true, "aim": { "yaw_deg": -45, "arc_deg": 105, "min_pitch_deg": -40, "max_pitch_deg": 70, "spread_full_speed": 16 } },
+        { "role": "gunner", "offset": [0, 0.685, 1.0], "exposed": true, "standing": true }
+      ],
+      "gun": { "damage": 14, "fire_interval": 0.1, "range": 220, "spread_degrees": 1.2, "magazine": 100, "reserve": 400, "reload_time": 3 },
+      "door_gun": {
+        "pivot": [0, 2.1, 1.0], "ring_radius": 0.45, "outward_yaw_deg": 0, "yaw_arc_deg": 180, "min_pitch_deg": -35, "max_pitch_deg": 55, "muzzle_length": 0.96, "eye": [0, 0.22, 0.62], "recoil_m": 0.05,
+        "guard_yaw_deg": 0, "guard_arc_deg": 50, "guard_blend_deg": 20, "guard_min_pitch_deg": -4
+      },
       "lights": { "head": [[-0.98, 1.0, -1.81], [0.98, 1.0, -1.81]], "tail": [[-0.55, 0.98, 2.08], [0.55, 0.98, 2.08]], "beam_range": 35, "beam_angle": 26 }
     },
     {

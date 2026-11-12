@@ -235,6 +235,16 @@ public partial class Player : CharacterBody3D
         FovBoost = GameSettings.Current.ReduceMotion ? 0f : cam.FovBoostDeg * Mathf.Clamp(speedFraction, 0f, 1f) * Mathf.Clamp(speedFraction, 0f, 1f);
     }
 
+    /// <summary>
+    /// First person from a vehicle seat whose rider sits (or stands) in the open: the body is on the seat and the eye is the seated figure's,
+    /// <paramref name="eyeHeight"/> above it. The stance shape puts the camera back when the body is its own again (<see cref="SetState"/>, <see cref="EndChase"/>).
+    /// </summary>
+    public void SeatView(Vector3 feet, float eyeHeight)
+    {
+        GlobalPosition = feet;
+        _camera.Position = new Vector3(0, eyeHeight, 0);
+    }
+
     /// <summary>Turret camera (a gunship's owner): the camera sits at the turret and looks along the given world yaw and pitch. The body does not move; <see cref="EndChase"/> ends it.</summary>
     public void Turret(Vector3 at, float yaw, float pitch)
     {

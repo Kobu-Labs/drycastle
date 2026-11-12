@@ -54,7 +54,7 @@ public partial class NetServer
     void FireDoorGun(Client c, ServerCar car, VehicleDoorGunDef def, VehicleGunDef gun, DoorGunAim aim)
     {
         var (yaw, pitch, roll) = AttitudeOf(car);
-        var muzzle = DoorGunRules.Muzzle(def, DoorGunRules.Pivot(def, N(car.GlobalPosition), yaw, pitch, roll), aim);
+        var muzzle = DoorGunRules.Muzzle(def, DoorGunRules.GunPivot(def, N(car.GlobalPosition), yaw, pitch, roll, aim), aim);
         var d = HitMath.SpreadDirection(aim.ViewYaw, aim.ViewPitch, gun.SpreadDegrees, _rng);
         var from = new Vector3(muzzle.X, muzzle.Y, muzzle.Z);
         var dir = new Vector3(d.X, d.Y, d.Z);

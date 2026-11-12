@@ -22,13 +22,14 @@ public partial class NetClient
         if (_me != null)
         {
             var feet = _me.GlobalPosition;
-            var inWater = Water.DepthAt(new NVec3(feet.X, feet.Y, feet.Z)) > 0f;
+            var inWater = !_driving && Water.DepthAt(new NVec3(feet.X, feet.Y, feet.Z)) > 0f; // a rider is in the vehicle, not in the water: its own splash is the vehicle's
             if (UnderwaterFx.WaterCrossing(_meInWater, inWater) != UnderwaterFx.Crossing.None) SplashAt(feet);
             _meInWater = inWater;
         }
         foreach (var (id, r) in _remotes)
         {
             if (r.Node == null || !r.Node.Visible) { _remoteInWater.Remove(id); continue; }
+            if (r.State == EntityState.InVehicle) { _remoteInWater.Remove(id); r.View?.SetSwim(false); continue; } // a rider neither splashes nor swims, however low the hull sits
             var feet = r.Node.GlobalPosition;
             var depth = Water.DepthAt(new NVec3(feet.X, feet.Y, feet.Z));
             var inWater = depth > 0f;

@@ -219,7 +219,7 @@ public partial class NetClient
         else if (flown is { } fr) _hud?.SetVehicleReadout(FlightReadout(fr));
         else _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
         string? prompt = null;
-        if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         if (hasCockpit && prompt != null && _gunship == null && !_controlling) prompt = WithViewHint(prompt);
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
         _hud?.SetPrompt(TurretPrompt() ?? prompt ?? CratePrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
@@ -260,14 +260,15 @@ public partial class NetClient
     /// by that vehicle, and one that goes in and finds no way out is stopped on the far side of the hit box, not where it met it.
     /// <paramref name="dir"/> is a unit vector.
     /// </summary>
-    bool VehicleAlong(Vector3 from, Vector3 dir, float maxDistance, out CarView car, out VehicleBoxHit hit)
+    /// <param name="skip">A vehicle the ray passes through: the one the local player fires from, in an armed seat (the server leaves that hull out too).</param>
+    bool VehicleAlong(Vector3 from, Vector3 dir, float maxDistance, out CarView car, out VehicleBoxHit hit, CarView? skip = null)
     {
         car = null!; hit = default;
         if (Vehicles == null) return false;
         var best = float.MaxValue;
         foreach (var v in _cars.Values)
         {
-            if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count) continue;
+            if (v.Destroyed || v == skip || v.Kind >= Vehicles.Vehicles.Count) continue;
             var def = Vehicles.Vehicles[v.Kind];
             if (VehicleBox.Ray(NV(from), NV(dir), maxDistance, v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, def.Height) is not { } h || h.Distance >= best) continue;
             if (def.GlassRects.Count > 0 || def.OpenSideRects.Count > 0)

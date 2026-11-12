@@ -45,6 +45,7 @@ public partial class Hud
         _seatsDef = s.Def; _seatsOccupants = s.Occupants; _seatsMine = s.Mine;
         var role = s.Mine < s.Def.Seats.Count ? s.Def.Seats[s.Mine].Role : "passenger";
         if (role == "driver" && s.Def.Flight != null) role = "pilot"; // the driver seat of a helicopter is the pilot's
+        if (s.Mine < s.Def.Seats.Count && s.Def.Seats[s.Mine].Armed) role = "armed"; // a passenger who fights from the seat (ADR 0008)
         Set(_seatsTitle, Strings.F("hud.seats.title", s.Mine + 1, Strings.T("hud.seat." + role)));
         // nothing to switch to in a one-seat vehicle: the hint is left blank (the line keeps its place, so the panel does not jump between vehicles)
         Set(_seatsHint, s.Def.Seats.Count > 1 ? Strings.F("hud.seats.hint", InputBindings.Name("slot_1"), InputBindings.Name($"slot_{s.Def.Seats.Count}")) : "");

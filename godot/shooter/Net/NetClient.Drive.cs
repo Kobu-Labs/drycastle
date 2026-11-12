@@ -152,6 +152,22 @@ public partial class NetClient
         _me!.DriveChase(p, rot.Y, rot.X + view.Pose.BodyPitch, rot.Z + view.Pose.BodyRoll, MathF.Abs(view.Shown.Speed) / def.TopSpeed, def.Drive!.Camera, dt);
     }
 
+    string _drivePrompt = "";
+    double _drivePromptAt = -10;
+    int _drivePromptKind = -1;
+
+    /// <summary>
+    /// The prompt line of a rider of a driven vehicle who has neither a gun nor their weapons: the driver's keys as they are bound (the handbrake
+    /// only on its wheels: afloat there is none), or just the way out. Rebuilt when the situation changes, and once a second in case a key was rebound.
+    /// </summary>
+    string DrivePrompt(CarView v, int seat)
+    {
+        var kind = seat == 0 && DriveOf(v) is { Afloat: false } ? 0 : 1;
+        if (kind == _drivePromptKind && Now - _drivePromptAt < 1.0) return _drivePrompt;
+        _drivePromptKind = kind; _drivePromptAt = Now;
+        return _drivePrompt = kind == 0 ? Strings.F("hud.transport.drive", InputBindings.Name("interact"), InputBindings.Name("jump")) : Strings.F("hud.transport.afloat", InputBindings.Name("interact"));
+    }
+
     /// <summary>The drive state behind the HUD and the effects of <paramref name="v"/> as it was drawn this frame, or null before the first.</summary>
     DriveState? DriveOf(CarView v) => _drives.TryGetValue(v.Id, out var d) && d.Drawn ? d.Shown : null;
 }
