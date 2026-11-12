@@ -324,6 +324,19 @@ speed (both off with reduce motion).
 turning it up does). `dotnet test ShooterCore.Tests --filter The_feel_in_numbers --logger "console;verbosity=detailed"` prints the resulting
 times and distances without the game; `FlightTests` holds the limits.
 
+**Door gun.** The second seat is the door gunner's, behind a pintle-mounted machine gun in the right door (`door_gun` in `vehicles.json`: pivot,
+rest direction, arc; `DoorGunRules`). The gunner's view is what the gun is asked to point at, and it stays world-stable while the helicopter
+turns under it; the gun points there as far as its arc allows (70 degrees either side of straight out, 55 down, 12 up), and the view is held to
+the arc as well. The arc is in the airframe's frame, so it banks with it, and it clears the hull, the skids, the tail and the full sweep of the
+blades (`DoorGunTests` checks every aim). The rounds are the jeep's roof gun's (`gun`: the same damage, interval, spread and range, a 100-round
+belt), hitscan from the muzzle, and its kills are ordinary kills (kill-feed weapon "Mounted MG", special weapon 250). The aim reaches every
+client as a turret record (entity type 4, as the flak's, here the mount's yaw and the gun's pitch against the airframe), so the gun follows the
+aim on everyone's model; the tracer leaves the drawn muzzle, the barrel recoils and the muzzle flashes. The gunner's ammo is event 160.
+
+*Who can be shot in their seat.* The door gunner (`exposed_gunner`): they sit in the open door, so a shot that reaches their body hits them
+and not the hull (`GunnerCover`), and killing them silences the gun. The pilot is behind the nose and the glazing and is covered by the hull,
+as the driver of every other vehicle is: to stop the pilot, destroy the helicopter.
+
 **Decisions on the edges.**
 
 - *Nobody in the pilot seat, in the air.* The stabiliser flies: it levels, flares to a stop and holds the hover. With riders aboard it holds

@@ -85,6 +85,14 @@ public class VehiclesFile : IVersioned
             if (v.CanFloat && (v.WaterTopSpeed <= 0 || v.WaterAcceleration <= 0 || v.LandDecel <= 0 || v.PlaningSpeed < 0))
                 throw new DataFileException($"vehicles.json: {v.Id}: water_top_speed, water_acceleration and land_decel must be positive, planing_speed not negative");
             if (v.Medium == VehicleMedium.Boat && v.Gun != null) throw new DataFileException($"vehicles.json: {v.Id}: a boat carries no gun");
+            if (v.DoorGun is { } dg)
+            {
+                if (v.Gun == null) throw new DataFileException($"vehicles.json: {v.Id}: a door_gun fires by the gun rules: it needs a gun block");
+                if (v.Flak != null) throw new DataFileException($"vehicles.json: {v.Id}: a vehicle has a door gun or a flak turret, not both");
+                if (dg.Pivot.Length != 3 || dg.Eye.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: door_gun pivot and eye are [x, y, z]");
+                if (dg.YawArcDeg is <= 0 or > 180 || dg.MinPitchDeg < -89 || dg.MaxPitchDeg > 89 || dg.MinPitchDeg >= dg.MaxPitchDeg || dg.MuzzleLength <= 0 || dg.RecoilM < 0)
+                    throw new DataFileException($"vehicles.json: {v.Id}: door_gun needs yaw_arc_deg 0..180, min_pitch_deg below max_pitch_deg (within -89..89), a positive muzzle_length and recoil_m not negative");
+            }
             if ((v.Medium == VehicleMedium.Air) != (v.Flight != null)) throw new DataFileException($"vehicles.json: {v.Id}: medium air and a flight block go together");
             if (v.Flight is { } fl)
             {
@@ -132,6 +140,30 @@ public class VehicleGunDef
     /// <summary>Rounds carried outside the magazine; a reload moves them in.</summary>
     public int Reserve { get; set; } = 240;
     public float ReloadTime { get; set; } = 2.5f;
+}
+
+/// <summary>
+/// A pintle mount for the vehicle's <see cref="VehicleGunDef"/> (vehicles.json "door_gun"): where it pivots, which way it points at rest and
+/// the arc it swings in, all in the vehicle's own frame, so the arc tilts with the airframe. The arc is what keeps the rounds off the
+/// vehicle's own hull, tail and rotor (<see cref="DoorGunRules"/>).
+/// </summary>
+public class VehicleDoorGunDef
+{
+    /// <summary>The gun's pivot in the vehicle's frame, [x, y, z] (x right, y up, z back): the mount's yaw axis and the gun's pitch axis meet here.</summary>
+    public float[] Pivot { get; set; } = { 1.3f, 1.5f, 0.15f };
+    /// <summary>Which way the gun points at rest, as a yaw in the vehicle's frame, degrees (0 is the nose, -90 out of the right side, 90 out of the left).</summary>
+    public float OutwardYawDeg { get; set; } = -90;
+    /// <summary>How far it swings either side of that, degrees.</summary>
+    public float YawArcDeg { get; set; } = 70;
+    /// <summary>Lowest and highest elevation, degrees. The maximum keeps the rounds under the rotor.</summary>
+    public float MinPitchDeg { get; set; } = -55;
+    public float MaxPitchDeg { get; set; } = 12;
+    /// <summary>Metres from the pivot along the barrel to the muzzle, where the rounds and the tracers leave.</summary>
+    public float MuzzleLength { get; set; } = 0.88f;
+    /// <summary>The gunner's eye in the gun's own frame, [x, y, z] (x right of the gun, y up, z back along it): behind and above the receiver.</summary>
+    public float[] Eye { get; set; } = { 0, 0.22f, 0.62f };
+    /// <summary>Visual only: how far the barrel slides back on a round, metres.</summary>
+    public float RecoilM { get; set; } = 0.05f;
 }
 
 /// <summary>
@@ -396,6 +428,11 @@ public class VehicleDef
     public bool ExposedGunner { get; set; }
     /// <summary>An anti-aircraft turret worked from the gunner seat (the flak truck). Null: none. Excludes <see cref="Gun"/>.</summary>
     public VehicleFlakDef? Flak { get; set; }
+    /// <summary>
+    /// Where the <see cref="Gun"/> is mounted and how far it swings (the utility helicopter's door gun). Null: the gun fires along the gunner's
+    /// view from above the seat, as the jeep's does. With it, the gun is on a pintle and the aim is held inside its arc (<see cref="DoorGunRules"/>).
+    /// </summary>
+    public VehicleDoorGunDef? DoorGun { get; set; }
     /// <summary>Mass (kg) for run-over damage. Unset: the v1 run-over numbers (see <see cref="VehiclesFile.RunOverScale"/>).</summary>
     public float? RunOverMass { get; set; }
     /// <summary>

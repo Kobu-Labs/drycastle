@@ -751,7 +751,7 @@ public partial class NetClient : Node
                 HudAmmo();
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
-                OnShot(sh);
+                if (!OnDoorGunShot(sh)) OnShot(sh); // a door gun's round leaves its muzzle on the model
                 break;
             case EventKind.PelletFan when WeaponCodec.DecodePelletFan(payload) is { } pf:
                 OnPelletFan(pf);

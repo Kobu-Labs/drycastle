@@ -112,7 +112,8 @@ public static class FlakRules
 }
 
 /// <summary>
-/// How a flak turret travels in a snapshot entity record (type <see cref="EntityType.Turret"/>), one per flak vehicle: the record's yaw and pitch are the
+/// How a vehicle gun's aim travels in a snapshot entity record (type <see cref="EntityType.Turret"/>), one per flak vehicle and one per vehicle with a door
+/// gun (there the yaw and pitch are the mount's and the gun's against the vehicle, <see cref="DoorGunRules"/>). For a flak: the record's yaw and pitch are the
 /// turret's world aim (so everyone animates the turret and the barrels), the position is fixed at the origin (so it is never re-sent), and the gunner's
 /// player id (0 = nobody) is split over the health and weapon bytes. The record id is the vehicle's index in the id range <see cref="FirstId"/>.
 /// </summary>

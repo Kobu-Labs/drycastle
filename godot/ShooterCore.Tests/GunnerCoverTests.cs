@@ -31,7 +31,9 @@ public class GunnerCoverTests
     {
         Assert.True(Flak.ExposedGunner);
         Assert.Equal(1200f, Flak.Hp);
-        foreach (var v in Shipped.Vehicles.Vehicles.Where(v => v.Id != "flak")) Assert.False(v.ExposedGunner, v.Id);
+        // the other open seat is the utility helicopter's door gunner, in the open door; its pilot is behind the hull like every driver
+        Assert.True(Shipped.Vehicles.Vehicles.Single(v => v.Id == "utility_helicopter").ExposedGunner);
+        foreach (var v in Shipped.Vehicles.Vehicles.Where(v => v.Id is not ("flak" or "utility_helicopter"))) Assert.False(v.ExposedGunner, v.Id);
     }
 
     [Fact]

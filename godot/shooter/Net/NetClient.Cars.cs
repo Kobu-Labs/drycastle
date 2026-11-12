@@ -18,6 +18,8 @@ public partial class NetClient
         public ushort Id;
         /// <summary>A flak truck's moving nodes (null for every other type, or a model without them).</summary>
         public FlakNodes? Flak;
+        /// <summary>A door gun's moving nodes (the utility helicopter; null for every other type, or a model without them).</summary>
+        public DoorGunNodes? DoorGun;
         public readonly Interpolator Buf = new();
         public ushort Driver;
         public int Kind;
@@ -50,6 +52,7 @@ public partial class NetClient
         {
             v = new CarView { Id = id, Node = CarFx.Make(Owned, Vehicles!.Vehicles[Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1)], VehicleRecord.Colour(rec)), Kind = Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1), Pos = rec.Position, Yaw = rec.YawRad };
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flak != null) v.Flak = FlakNodes.Find(v.Node);
+            if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].DoorGun is { } doorGun) v.DoorGun = DoorGunNodes.Find(v.Node, doorGun);
             _cars[id] = v;
         }
         v.Lamps ??= ShotFx.Enabled ? CarLights.Attach(v.Node, Vehicles!.Vehicles[v.Kind]) : null;
@@ -136,6 +139,8 @@ public partial class NetClient
         var beams = PickBeams();
         var flakGunner = false;
         FlightState? flown = null; // the helicopter the local player flies, for the pilot's readout and prompt
+        var doorGunner = false;    // the local player is at a door gun: its camera and ammo readout are on
+        var chased = false;        // the local player drives or flies: the chase camera is on this frame
         var dt = (float)GetProcessDeltaTime();
         foreach (var v in _cars.Values)
         {
@@ -149,12 +154,13 @@ public partial class NetClient
             v.Node.Rotation = rot;
             if (v.Destroyed) continue;
             var flakMine = v.Flak != null && RenderFlak(v, s, rt, dt);
+            if (v.DoorGun != null && RenderDoorGun(v, rot, rt, dt)) { flakMine = true; doorGunner = true; } // the gun camera, as at the flak
             if (flakMine) flakGunner = true;
             v.Smoke?.Near(Sfx.ListenerDistance(p) < 90f); // far vehicles do not smoke: particle budget
             if (!flies) SfxCar(v, p); // a helicopter has no car engine
             if (v.Driver == _myId && _driving && _me != null)
             {
-                _carYaw = rot.Y;
+                _carYaw = rot.Y; chased = true;
                 if (flies) { ChaseFlight(v, p, rot, dt); flown = FlightOf(v); } else _me.Chase(p, s.Yaw);
                 kmh = v.Kmh;
                 ShowSelfInCar(v);
@@ -162,14 +168,14 @@ public partial class NetClient
             else if (!flakMine && _driving && _me != null && _seats is { Mine: > 0 } st && st.CarId == v.Id) { RideSeat(v, st.Mine); kmh = v.Kmh; } // another seat: first person from it, the speed shown as the driver's is
         }
         if (!_driving) HideSelfInCar();
-        if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; _me?.EndChase(_me.Yaw); } // the flak gunner's camera ends where the look pointed
+        if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) _me?.EndChase(_me.Yaw); } // the gun camera ends where the look pointed (a switch to the driver's seat has started the chase camera already)
         if (!_driving && _gunship == null) _me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
         _hud?.SetSeats(SeatPanel());
-        if (flakGunner) _hud?.SetVehicleReadout(FlakReadout());
+        if (flakGunner) _hud?.SetVehicleReadout(doorGunner ? DoorGunReadout() : FlakReadout());
         else if (flown is { } fr) _hud?.SetVehicleReadout(FlightReadout(fr));
         else _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
         string? prompt = null;
-        if (_driving) prompt = flown is { } fp ? FlightPrompt(fp) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
         _hud?.SetPrompt(TurretPrompt() ?? prompt ?? CratePrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
     }

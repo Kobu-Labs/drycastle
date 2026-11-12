@@ -76,10 +76,12 @@
       "lights": { "head": [[-0.875, 0.7, -6.045], [0.875, 0.7, -6.045]], "tail": [[-1.04, 1.17, 6.045], [1.04, 1.17, 6.045]], "beam_range": 45, "beam_angle": 26 }
     },
     {
-      "id": "utility_helicopter", "medium": "air", "top_speed": 40, "acceleration": 11, "mass": 4000, "hp": 800, "run_over": false, "hood": [0, 2.6, 3.3], "spawn_count": 1, "half_width": 1.3, "half_length": 4.0, "height": 2.95,
+      "id": "utility_helicopter", "medium": "air", "top_speed": 40, "acceleration": 11, "mass": 4000, "hp": 800, "run_over": false, "exposed_gunner": true, "hood": [0, 2.6, 3.3], "spawn_count": 1, "half_width": 1.3, "half_length": 4.0, "height": 2.95,
       "model": "suchohrad-generated-models/utility_helicopter.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
-      "seats": [{ "role": "driver", "offset": [0.55, 0.72, -1.9] }],
+      "seats": [{ "role": "driver", "offset": [0.55, 0.72, -1.9] }, { "role": "gunner", "offset": [0.4, 0.72, 0.15] }],
+      "gun": { "damage": 14, "fire_interval": 0.1, "range": 220, "spread_degrees": 1.2, "magazine": 100, "reserve": 400, "reload_time": 3 },
+      "door_gun": { "pivot": [1.3, 1.5, 0.15], "outward_yaw_deg": -90, "yaw_arc_deg": 70, "min_pitch_deg": -55, "max_pitch_deg": 12, "muzzle_length": 0.88, "eye": [0, 0.22, 0.62], "recoil_m": 0.05 },
       "flight": {
         "strafe_acceleration": 9, "max_pitch_deg": 22, "max_pitch_back_deg": 14, "max_roll_deg": 26, "attitude_response": 5.5,
         "input_rise": 5, "input_fall": 8, "drag_low": 0.12, "off_axis_drag": 3,
