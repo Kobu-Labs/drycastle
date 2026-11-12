@@ -8,6 +8,8 @@ namespace Suchohrad.Shooter;
 /// that is not whole; this keeps them (<see cref="GlassReplica"/>) and shows them (<see cref="GlassFx"/>): a crack by HP fraction, the
 /// shattered look at zero, and the fragments flying out at the moment a pane shatters in view. A building's pane is placed from the map's
 /// windows.json, a vehicle's from vehicles.json "glass" under the vehicle's node. A vehicle that is not drawn yet gets its panes when it is.
+/// A vehicle model that has the pane as its own node (<see cref="PaneNodeName"/>: the generated bus, flak truck and helicopter) has that node
+/// hidden while the pane is shattered, so the original glass does not show through the opening; it is shown again when the pane is whole.
 /// </summary>
 public partial class NetClient
 {
@@ -58,6 +60,7 @@ public partial class NetClient
         if (!GlassPlace(s.Key, out var parent, out var rect, out var hole)) return;
         if (!_glassOverlays.TryGetValue(s.Key, out var overlay) || !GodotObject.IsInstanceValid(overlay))
             _glassOverlays[s.Key] = overlay = GlassFx.MakeOverlay(parent, rect, s.Key, hole);
+        SetPaneGeometry(s.Key, !s.Shattered);
         GlassFx.SetOverlay(overlay, GlassRules.CrackStage(s.Fraction, GlassData.CrackStages), GlassRules.MaxCrackStage(GlassData.CrackStages), s.Shattered);
         if (animate && parent.IsVisibleInTree()) GlassFx.Shatter(Owned, parent.GlobalTransform, rect, GlassData, s.Key);
     }
@@ -80,8 +83,19 @@ public partial class NetClient
         return true;
     }
 
+    /// <summary>The name of the node of a vehicle model that holds the glass of pane <paramref name="index"/> (the pane's place in vehicles.json "glass").</summary>
+    public static string PaneNodeName(int index) => $"glass_{index}";
+
+    /// <summary>Shows or hides the model's own glass of a vehicle's pane. A model without a node for it (the Kenney cars) and a pane of the map are left as they are.</summary>
+    void SetPaneGeometry(GlassPaneKey key, bool visible)
+    {
+        if (key.Owner == GlassPaneKey.Map || !_cars.TryGetValue(key.Owner, out var v) || !GodotObject.IsInstanceValid(v.Node)) return;
+        if (v.Node.FindChild(PaneNodeName(key.Index), true, false) is Node3D glass) glass.Visible = visible;
+    }
+
     void DropGlassOverlay(GlassPaneKey key)
     {
+        SetPaneGeometry(key, true);
         if (_glassOverlays.Remove(key, out var overlay) && GodotObject.IsInstanceValid(overlay)) overlay.QueueFree();
     }
 

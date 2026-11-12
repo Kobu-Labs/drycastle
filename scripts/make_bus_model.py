@@ -31,6 +31,8 @@ Node tree (every moving part is its own node, its origin is its pivot):
         wheel_rl, wheel_rr         rear wheels (twin tyres)
         door_front_1, _2           front door leaves (1 is the forward one), origin at the leaf's outer edge on the sill
         door_mid_1, _2             middle door leaves
+        glass_0 .. glass_17        the breakable glass panes, one node each, numbered as the `glass` list of vehicles.json (the
+                                   script rewrites that list, outline polygons included); a door leaf's pane is under the leaf
         seat_driver                empty: driver seat (feet)
         seat_passenger_1 .. _3     empties: the three passenger seats of vehicles.json (feet)
         light_head_l/r, light_tail_l/r, smoke_engine   empties: lamp positions and the smoke point (the engine is at the rear)
@@ -123,6 +125,18 @@ def slab(mat, a, b, c, d, t=0.02):
     n = unit(cross(sub(b, a), sub(d, a)))
     q = [a, b, c, d]
     return loft(mat, [[add(p, mul(n, -t / 2)) for p in q], [add(p, mul(n, t / 2)) for p in q]])
+
+
+GLASS = kit.GlassSet("bus")
+GX = W2 - 0.012                    # x of the outer face of the side glazing
+
+
+def side_pane(parent, pane_id, side, profile):
+    """A breakable pane of a side wall: its own node glass_N, outline from the (z, y) profile. side is 1 for the right, -1 for the left."""
+    tris = pane(profile)
+    if side < 0:
+        tris = mirror(tris)
+    GLASS.pane(parent, pane_id, [tris], [(side * GX, y, z) for z, y in profile])
 
 
 def tube(mat, pts, r, n=6):
@@ -221,9 +235,16 @@ def leaf(s0, s1):
     t = wall("Black", rect(s0, s0 + f, DOOR_SILL, DOOR_TOP), x0, x1) + wall("Black", rect(s1 - f, s1, DOOR_SILL, DOOR_TOP), x0, x1)
     for y0, y1 in ((DOOR_SILL, DOOR_SILL + 0.10), (1.02, 1.08), (DOOR_TOP - f, DOOR_TOP)):
         t += wall("Black", rect(s0 + f, s1 - f, y0, y1), x0, x1)
-    t += wall("Glass", rect(s0 + f, s1 - f, DOOR_SILL + 0.10, 1.02), W2 - 0.04, W2 - 0.018)
-    t += wall("Glass", rect(s0 + f, s1 - f, 1.08, DOOR_TOP - f), W2 - 0.04, W2 - 0.018)
     return t
+
+
+def leaf_glass(s0, s1):
+    """The two panes of a door leaf, above and below the handrail bar: one breakable pane (slabs of one node)."""
+    f = 0.045
+    slabs = [wall("Glass", rect(s0 + f, s1 - f, DOOR_SILL + 0.10, 1.02), W2 - 0.04, W2 - 0.018),
+             wall("Glass", rect(s0 + f, s1 - f, 1.08, DOOR_TOP - f), W2 - 0.04, W2 - 0.018)]
+    outline = [(W2 - 0.018, y, zs(s)) for s, y in ((s0 + f, DOOR_SILL + 0.10), (s1 - f, DOOR_SILL + 0.10), (s1 - f, DOOR_TOP - f), (s0 + f, DOOR_TOP - f))]
+    return slabs, outline
 
 
 def build():
@@ -235,11 +256,11 @@ def build():
     left = wall("Red", [(ZF, SKIRT)] + arch(AXLE_F) + arch(AXLE_R) + [(ZR, SKIRT), (ZR, SILL), (zs(3.73), SILL), (ZF, sweep(0.525))])
     s_flat = 0.525 + (1.05 - 0.75) * (3.73 - 0.525) / 0.65      # where the sweep reaches the driver's window sill (1.05)
     left += wall("Black", [(ZF, sweep(0.525)), (zs(s_flat), 1.05), (ZF, 1.05)])
-    left += pane([(ZF, 1.05), (zs(1.85), 1.05), (zs(1.85), WTOP), (ZF, WTOP)])
-    left += pane([(zs(1.85), 1.05), (zs(s_flat), 1.05), (zs(3.73), SILL), (zs(3.73), WTOP), (zs(1.85), WTOP)])
+    side_pane(hull, "left_1", -1, [(ZF, 1.05), (zs(1.85), 1.05), (zs(1.85), WTOP), (ZF, WTOP)])
+    side_pane(hull, "left_2", -1, [(zs(1.85), 1.05), (zs(s_flat), 1.05), (zs(3.73), SILL), (zs(3.73), WTOP), (zs(1.85), WTOP)])
     left += pillar(1.85, 1.05)
-    for s0, s1 in zip(BAYS, BAYS[1:]):
-        left += pane(rect(s0, s1, SILL, WTOP))
+    for k, (s0, s1) in enumerate(zip(BAYS, BAYS[1:])):
+        side_pane(hull, f"left_{k + 3}", -1, rect(s0, s1, SILL, WTOP))
         left += pillar(s0, SILL)
         if s0 > 5.0:      # opening vents at the top of the rear bays
             left += wall("Black", rect(s0 + 0.04, s1 - 0.04, 2.20, 2.23), W2 - 0.045, W2 - 0.006)
@@ -256,12 +277,12 @@ def build():
     right += door(*DOOR_F) + door(*DOOR_M)
     right += wall("Red", [(zs(1.85), SKIRT)] + arch(AXLE_F) + [(zs(DOOR_M[0]), SKIRT), (zs(DOOR_M[0]), SILL), (zs(3.73), SILL), (zs(1.85), sweep(1.85))])
     right += wall("Red", [(zs(DOOR_M[1]), SKIRT)] + arch(AXLE_R) + [(ZR, SKIRT), (ZR, SILL), (zs(DOOR_M[1]), SILL)])
-    right += pane([(zs(1.85), sweep(1.85)), (zs(3.73), SILL), (zs(3.73), WTOP), (zs(1.85), WTOP)])
+    side_pane(hull, "right_2", 1, [(zs(1.85), sweep(1.85)), (zs(3.73), SILL), (zs(3.73), WTOP), (zs(1.85), WTOP)])
     right += wall("Black", rect(1.85, 1.93, DOOR_SILL, WTOP), XI - 0.004, W2 + 0.004)       # door posts
     right += wall("Black", rect(5.28, DOOR_M[0], SILL, WTOP), XI - 0.004, W2 + 0.004)
     right += wall("Black", rect(DOOR_M[1], 6.84, SILL, WTOP), XI - 0.004, W2 + 0.004)
-    for s0, s1 in ((3.73, 5.28), (6.84, 8.40), (8.40, 10.10)):
-        right += pane(rect(s0, s1, SILL, WTOP))
+    for pid, (s0, s1) in (("right_3", (3.73, 5.28)), ("right_5", (6.84, 8.40)), ("right_6", (8.40, 10.10))):
+        side_pane(hull, pid, 1, rect(s0, s1, SILL, WTOP))
         right += wall("Black", rect(s0 + 0.04, s1 - 0.04, 2.20, 2.23), W2 - 0.045, W2 - 0.006)
     right += pillar(3.73, SILL) + pillar(8.40, SILL)
     right += wall("Black", rect(10.10, 11.575, SILL, WTOP))
@@ -292,8 +313,9 @@ def build():
     b0, b1 = front_outline(1.05), front_outline(2.62)
 
     def at(o, y): return (o[0], y, o[1])
-    for i in (1, 2, 3):                                    # windscreen: the front pane and two wrapped corner panes
-        hull.add(slab("GlassClear", at(b0[i], 1.05), at(b0[i + 1], 1.05), at(b1[i + 1], 2.62), at(b1[i], 2.62)))
+    for i, pid in ((2, "windscreen"), (1, "windscreen_left"), (3, "windscreen_right")):   # windscreen: the front pane and two wrapped corner panes
+        quad = (at(b0[i], 1.05), at(b0[i + 1], 1.05), at(b1[i + 1], 2.62), at(b1[i], 2.62))
+        GLASS.pane(hull, pid, [slab("GlassClear", *quad)], quad)
     for i in (1, 2, 3, 4):                                 # A pillars
         hull.add(cyl("Black", at(b0[i], 1.05), at(b1[i], 2.62), 0.035 if i in (1, 4) else 0.028, 4, smooth=False))
     stub = [(ZF, 1.05), (b0[4][1], 1.05), (b1[4][1], 2.62), (ZF, 2.62)]
@@ -327,7 +349,8 @@ def build():
     hull.add(extrude("Red", ro, 'y', SKIRT, 1.75))
     corner = [(XI - 0.215, ZR), (W2, ZR), (W2, LEN2 - 0.10), (W2 - 0.10, LEN2), (XI - 0.215, LEN2)]
     hull.add(both(extrude("Red", corner, 'y', 1.75, WTOP)))
-    hull.add(slab("Glass", (-1.0, 1.75, LEN2 - 0.02), (1.0, 1.75, LEN2 - 0.02), (1.0, WTOP, LEN2 - 0.02), (-1.0, WTOP, LEN2 - 0.02), 0.024))
+    rear = ((-1.0, 1.75, LEN2 - 0.02), (1.0, 1.75, LEN2 - 0.02), (1.0, WTOP, LEN2 - 0.02), (-1.0, WTOP, LEN2 - 0.02))
+    GLASS.pane(hull, "rear", [slab("Glass", *rear, 0.024)], [(x, y, z + 0.012) for x, y, z in rear])
     hull.add(extrude("Red", ro, 'y', WTOP, CANT))
     hull.add(box("Trim", -1.0, 1.0, 1.75, 1.762, ZR, LEN2 - 0.04))  # parcel shelf under the rear window
     hull.add(box("Trim", -XI, XI, 1.28, 1.75, ZR - 0.012, ZR))       # lining behind the rear bench
@@ -364,8 +387,11 @@ def build():
     # ================================================================ doors (leaves are nodes)
     for name, (s0, s1) in (("door_front", DOOR_F), ("door_mid", DOOR_M)):
         sm = (s0 + s1) / 2
-        hull.child(name + "_1", (W2 - 0.03, DOOR_SILL, zs(s0))).add(leaf(s0, sm - 0.004))
-        hull.child(name + "_2", (W2 - 0.03, DOOR_SILL, zs(s1))).add(leaf(sm + 0.004, s1))
+        for k, (leaf_s0, leaf_s1, pivot) in enumerate(((s0, sm - 0.004, s0), (sm + 0.004, s1, s1)), 1):
+            node = hull.child(f"{name}_{k}", (W2 - 0.03, DOOR_SILL, zs(pivot)))
+            node.add(leaf(leaf_s0, leaf_s1))
+            slabs, outline = leaf_glass(leaf_s0, leaf_s1)
+            GLASS.pane(node, f"{name}_{k}", slabs, outline)
 
     # ================================================================ interior
     # ---- wall lining under the windows, dashboard back
@@ -529,6 +555,10 @@ def main():
         print(f"{n.name:18s} pivot=({n.origin[0]:.3f}, {n.origin[1]:.3f}, {n.origin[2]:.3f}) tris={len(n.tris)}")
     print(f"triangles: {total}")
     print("bounds: x %.2f..%.2f  y %.2f..%.2f  z %.2f..%.2f" % (lo[0], hi[0], lo[1], hi[1], lo[2], hi[2]))
+    GLASS.report()
+    if len(sys.argv) <= 1:
+        GLASS.write_vehicles_json(kit.vehicles_json_path())
+        print("wrote the glass list of vehicles.json")
     print(f"wrote {out}")
 
 
