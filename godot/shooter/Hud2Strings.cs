@@ -1,4 +1,4 @@
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Strings for the HUD leftovers and minimap settings (ticket #143). Kept in their own file so parallel work on

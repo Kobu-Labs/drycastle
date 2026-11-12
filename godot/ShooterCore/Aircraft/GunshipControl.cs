@@ -1,7 +1,7 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>One round from a gunship turret, resolved by the server (hitscan for a cannon, the rocket sim for a rocket).</summary>
 public readonly record struct GunshipShot(int WeaponIndex, GunshipWeaponKind Kind, Vector3 Origin, Vector3 Direction, float Damage, float RangeM);

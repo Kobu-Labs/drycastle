@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Stationary target dummies (#148) on the server: planning (ground-checked against the map colliders), their snapshot

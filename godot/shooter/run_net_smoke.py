@@ -9,7 +9,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ap = argparse.ArgumentParser()
-ap.add_argument("--map", default=os.environ.get("SUCHOHRAD_MAP", ""))
+ap.add_argument("--map", default=os.environ.get("DRYCASTLE_MAP", ""))
 ap.add_argument("--port", type=int, default=27931)
 ap.add_argument("--seconds", type=float, default=6)
 a = ap.parse_args()

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Rocket and explosion visuals. The rocket is a stubby body with a glowing nose, a flame at the tail, a small light

@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>A looping 3D voice (rocket flight, car engine) borrowed from <see cref="Sfx"/>; give it back with <see cref="Release"/>.</summary>
 public sealed class LoopVoice

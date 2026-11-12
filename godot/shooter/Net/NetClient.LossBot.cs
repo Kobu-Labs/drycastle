@@ -1,9 +1,9 @@
 using System.Text.Json;
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Loss and latency test bot (issue #93). Round-relative timeline (see <see cref="LossTimeline"/>): warm-up, a measured window with scripted walking

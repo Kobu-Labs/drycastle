@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Distance culling for client-only effects (tracers, sparks, splashes; #169). An effect is built only when the listener

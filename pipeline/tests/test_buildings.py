@@ -6,7 +6,7 @@ import pytest
 from shapely.affinity import rotate
 from shapely.geometry import Polygon, box
 
-from suchohrad_pipeline.buildings import (
+from drycastle_pipeline.buildings import (
     BuildingRules,
     RulesError,
     build_buildings,

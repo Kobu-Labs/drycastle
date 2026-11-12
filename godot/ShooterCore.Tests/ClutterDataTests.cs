@@ -1,7 +1,7 @@
-using Suchohrad.MapLoader;
+using Drycastle.MapLoader;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 public class ClutterDataTests
 {

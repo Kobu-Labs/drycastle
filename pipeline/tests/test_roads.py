@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from suchohrad_pipeline.roads import (
+from drycastle_pipeline.roads import (
     build_graph,
     is_unpaved,
     resample,
@@ -11,7 +11,7 @@ from suchohrad_pipeline.roads import (
     road_mesh,
     road_width,
 )
-from suchohrad_pipeline.rules import load_section
+from drycastle_pipeline.rules import load_section
 from tests.synthetic import line_feature, make_terrain
 
 CFG = load_section("roads")

@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Settings: Graphics / Audio / Controls / Gameplay / Accessibility, one config file. Every change previews live on the

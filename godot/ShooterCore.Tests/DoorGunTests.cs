@@ -1,9 +1,9 @@
 using System.Numerics;
 using System.Text.Json;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
 /// The utility helicopter's door gun: the aim held inside its arc in the airframe's own frame, the arc clear of the helicopter's own hull,
@@ -35,7 +35,7 @@ public class DoorGunTests
         Assert.Null(v.Flak);
         Assert.True(v.ExposedGunner, "the door gunner sits in the open door");
         var jeep = Shipped.Vehicles.Single(x => x.Id == "jeep").Gun!;
-        Assert.Equal(jeep.Damage, v.Gun!.Damage);                 // the jeep's round
+        Assert.True(v.Gun!.Damage > jeep.Damage);                 // a belt-fed door gun hits harder than the jeep's round (30 vs 14)
         Assert.Equal(jeep.FireInterval, v.Gun.FireInterval);
         Assert.True(v.Gun.Magazine >= jeep.Magazine);
         // the gunner sits on the gun's side, inside the hull, behind the pivot

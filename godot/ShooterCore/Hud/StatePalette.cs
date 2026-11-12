@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// The HUD's state colours as plain sRGB triples (0..1), so the colour-blind set can be unit tested without Godot.

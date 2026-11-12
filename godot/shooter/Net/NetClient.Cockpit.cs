@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The cockpit view (prototype, ticket #219): the driver of a vehicle that has a cockpit rig (<see cref="CockpitRig"/>: the bus, the flak

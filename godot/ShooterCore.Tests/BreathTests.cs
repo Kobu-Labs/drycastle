@@ -1,7 +1,7 @@
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Sniper breath hold (#113): the budget meter, forced exhale, sway phases, the deterministic aim error and Steady Lung.</summary>
 public class BreathTests

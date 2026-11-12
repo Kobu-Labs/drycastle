@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
 /// Ticket #159: the gunship FX is coalesced per server tick. These tests cover the codecs (round trips and malformed payloads), the
@@ -218,7 +218,7 @@ public class GunshipFxTests
             foreach (var m in batch.Flush()) bytes += Wire.Encode(m).Length + PerPacketBytes;
         }
 
-        Assert.InRange(rounds, 24, 26); // 25 mm at 0.04 s: about 25 rounds in the second
+        Assert.InRange(rounds, 6, 8); // 25 mm at 0.15 s: about 7 rounds in the second
         Assert.True(bytes < ByteBudgetPerSecond, $"{bytes} bytes in one second for {rounds} rounds, budget {ByteBudgetPerSecond}");
     }
 

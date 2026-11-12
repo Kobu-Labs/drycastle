@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Killstreaks on the server (ticket #118): the streak counter and loadout streaks per life, activation on the Killstreak

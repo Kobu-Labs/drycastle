@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using Godot;
 
-namespace Suchohrad.MapLoader;
+namespace Drycastle.MapLoader;
 
 /// <summary>
 /// Meadow clutter: tufts, flowers, ferns, pebbles, leaves and sticks on fields and in forests, generated around the player. meadow.bin
@@ -10,7 +10,7 @@ namespace Suchohrad.MapLoader;
 /// into 24 m tiles; each tile and layer within the layer's reach (plus a margin) is one MultiMesh per kind, built nearest first within a time
 /// budget per call, freed when it falls behind, and pooled. The focus is the current camera, or whatever the caller passes to
 /// <see cref="SetClutterFocus"/> each frame. A map without meadow.bin, a headless server (<see cref="CollisionOnly"/>) and
-/// <c>SUCHOHRAD_CLUTTER=0</c> do nothing.
+/// <c>DRYCASTLE_CLUTTER=0</c> do nothing.
 /// </summary>
 public sealed partial class MapLoader
 {

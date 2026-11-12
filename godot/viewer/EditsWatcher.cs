@@ -18,7 +18,7 @@ using Godot;
 /// MapLoader.ApplyRegions. Parcel and region work of one file change run one after the other in one run and are
 /// applied together, or not at all when either subprocess fails.
 /// A file that cannot be parsed (half-written) is ignored until it changes again; a failed run only
-/// prints the error. Also writes editor-state.json (camera, selection) at most once a second.
+/// prints the error. Also writes editor-state.json (camera, selection, sketch) at most once a second.
 /// The state at start is assumed to be what the map was built with, so nothing runs at startup.
 /// A re-exported map (its buildings) is reloaded too, see EditsWatcher.Map.cs.
 /// </summary>
@@ -33,12 +33,18 @@ public partial class EditsWatcher : Node
     public string Area { get; init; } = "slice";
     public string PipelineDir { get; init; } = "";
     public string StatePath { get; init; } = "";
-    public Suchohrad.MapLoader.MapLoader Map { get; init; } = null!;
+    public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
     /// <summary>Camera in Godot axes: position and the (unit) forward vector.</summary>
     public Func<(Vector3 pos, Vector3 forward)>? CameraProvider { get; init; }
 
     /// <summary>Selected parcel ids for editor-state.json (the editor mode); null writes an empty selection.</summary>
     public Func<IReadOnlyCollection<string>>? SelectionProvider { get; init; }
+
+    /// <summary>The editor's sketch as the JSON value of `sketch` in editor-state.json (EditorMode.SketchJson); null writes an empty sketch.</summary>
+    public Func<string>? SketchProvider { get; init; }
+
+    /// <summary>Write editor-state.json on the next frame instead of waiting for the once-a-second tick (the sketch changed).</summary>
+    public void StateSoon() => _stateT = StateSeconds;
 
     /// <summary>Raised on the main thread when a parcel-run starts: the parcel ids.</summary>
     public event Action<IReadOnlyList<string>>? Launched;
@@ -73,7 +79,7 @@ public partial class EditsWatcher : Node
         string Text, Dictionary<string, string> Parcels, Dictionary<string, string> Groups,
         Dictionary<string, List<string>> Members, Dictionary<string, string> NoObjects,
         Dictionary<string, string> Regions, Dictionary<string, (double X0, double Y0, double X1, double Y1)> RegionBoxes,
-        string CablesText, List<Suchohrad.MapLoader.CableSpec> Cables);
+        string CablesText, List<Drycastle.MapLoader.CableSpec> Cables);
 
     sealed class Run
     {
@@ -98,7 +104,7 @@ public partial class EditsWatcher : Node
 
     public override void _Ready()
     {
-        _tmpDir = Path.Combine(Path.GetTempPath(), $"suchohrad-editor-{System.Environment.ProcessId}");
+        _tmpDir = Path.Combine(Path.GetTempPath(), $"drycastle-editor-{System.Environment.ProcessId}");
         Directory.CreateDirectory(_tmpDir);
         _seen = Stat();
         // baseline: the map is assumed to match the file as it is now
@@ -229,13 +235,13 @@ public partial class EditsWatcher : Node
                     regions[kv.Name] = Canon(kv.Value);
                     if (RegionBox(kv.Value) is { } box) boxes[kv.Name] = box;
                 }
-            var cables = new List<Suchohrad.MapLoader.CableSpec>();
+            var cables = new List<Drycastle.MapLoader.CableSpec>();
             if (doc.RootElement.TryGetProperty("cables", out var cb) && cb.ValueKind == JsonValueKind.Object)
                 foreach (var kv in cb.EnumerateObject().OrderBy(kv => kv.Name, StringComparer.Ordinal))
                     if (kv.Value.ValueKind == JsonValueKind.Object
                         && kv.Value.TryGetProperty("from", out var cf) && cf.ValueKind == JsonValueKind.String
                         && kv.Value.TryGetProperty("to", out var ct) && ct.ValueKind == JsonValueKind.String)
-                        cables.Add(new Suchohrad.MapLoader.CableSpec(kv.Name, cf.GetString()!, ct.GetString()!));
+                        cables.Add(new Drycastle.MapLoader.CableSpec(kv.Name, cf.GetString()!, ct.GetString()!));
             snap = new Snapshot(text, parcels, groups, members, noObjects, regions, boxes, CablesText(cables), cables);
             error = "";
             return true;
@@ -243,7 +249,7 @@ public partial class EditsWatcher : Node
         catch (JsonException e) { error = e.Message; return false; }
     }
 
-    static string CablesText(IEnumerable<Suchohrad.MapLoader.CableSpec> cables)
+    static string CablesText(IEnumerable<Drycastle.MapLoader.CableSpec> cables)
         => string.Join(";", cables.OrderBy(c => c.Id, StringComparer.Ordinal).Select(c => $"{c.Id}:{c.From}>{c.To}"));
 
     /// <summary>
@@ -383,7 +389,7 @@ public partial class EditsWatcher : Node
         var t0 = Stopwatch.StartNew();
         var known = changed.ToList();
         if (known.Count == 0) { _seen = _parsedStat; _dirty = false; ApplyCables(snap); _applied = snap; return true; }
-        List<Suchohrad.MapLoader.PlacedObject> objects;
+        List<Drycastle.MapLoader.PlacedObject> objects;
         // on failure _applied stays as it was and the caller falls through to the parcel-run path
         try { objects = ReadObjects(snap.Text, known, origin); }
         catch (Exception e) { Fail($"reading the placed objects failed: {e.Message}"); return false; }
@@ -400,9 +406,9 @@ public partial class EditsWatcher : Node
     }
 
     /// <summary>The objects listed under the given parcels as map-local PlacedObjects (S-JTSK minus the map origin).</summary>
-    List<Suchohrad.MapLoader.PlacedObject> ReadObjects(string text, IReadOnlyCollection<string> parcels, (double X, double Y) origin)
+    List<Drycastle.MapLoader.PlacedObject> ReadObjects(string text, IReadOnlyCollection<string> parcels, (double X, double Y) origin)
     {
-        var list = new List<Suchohrad.MapLoader.PlacedObject>();
+        var list = new List<Drycastle.MapLoader.PlacedObject>();
         using var doc = JsonDocument.Parse(text);
         if (!doc.RootElement.TryGetProperty("parcels", out var all) || all.ValueKind != JsonValueKind.Object) return list;
         foreach (var pid in parcels)
@@ -414,7 +420,7 @@ public partial class EditsWatcher : Node
                 var pos = o.GetProperty("position");
                 var x = (float)Math.Round(pos[0].GetDouble() - origin.X, 3);
                 var y = (float)Math.Round(pos[1].GetDouble() - origin.Y, 3);
-                list.Add(new Suchohrad.MapLoader.PlacedObject
+                list.Add(new Drycastle.MapLoader.PlacedObject
                 {
                     Id = o.GetProperty("id").GetString()!,
                     Asset = o.GetProperty("asset").GetString() ?? "",
@@ -462,7 +468,7 @@ public partial class EditsWatcher : Node
 
     ProcessStartInfo UvStart(params string[] args)
     {
-        var uv = System.Environment.GetEnvironmentVariable("SUCHOHRAD_UV");
+        var uv = System.Environment.GetEnvironmentVariable("DRYCASTLE_UV");
         var psi = new ProcessStartInfo(string.IsNullOrEmpty(uv) ? "uv" : uv)
         {
             WorkingDirectory = PipelineDir,
@@ -471,7 +477,7 @@ public partial class EditsWatcher : Node
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var a in new[] { "run", "python", "-m", "suchohrad_pipeline" }.Concat(args))
+        foreach (var a in new[] { "run", "python", "-m", "drycastle_pipeline" }.Concat(args))
             psi.ArgumentList.Add(a);
         return psi;
     }
@@ -496,7 +502,7 @@ public partial class EditsWatcher : Node
         }
         catch (Exception e)
         {
-            return (-1, $"could not run uv ({e.Message}); is uv installed and on PATH? (SUCHOHRAD_UV overrides)");
+            return (-1, $"could not run uv ({e.Message}); is uv installed and on PATH? (DRYCASTLE_UV overrides)");
         }
     }
 
@@ -563,8 +569,8 @@ public partial class EditsWatcher : Node
                 Fail($"{failedTool} failed for {string.Join(", ", run.Ids.Concat(run.RegionIds))} (exit {code}): {err.Trim()}");
                 return;
             }
-            Suchohrad.MapLoader.FragmentResult result = new(Array.Empty<string>(), 0, 0);
-            Suchohrad.MapLoader.RegionResult? regions = null;
+            Drycastle.MapLoader.FragmentResult result = new(Array.Empty<string>(), 0, 0);
+            Drycastle.MapLoader.RegionResult? regions = null;
             try
             {
                 // applied together or not at all: parse the region result first (it changes nothing),
@@ -621,7 +627,7 @@ public partial class EditsWatcher : Node
             var yaw = Mathf.RadToDeg(Mathf.Atan2(-fwd.Z, fwd.X)); // counter-clockwise from east, like rotation_deg
             var json = "{\"camera\":{" +
                        $"\"x\":{F(pos.X)},\"y\":{F(-pos.Z)},\"yaw_deg\":{F(yaw)},\"z\":{F(pos.Y)}" +
-                       "},\"format_version\":1,\"selected\":[" + selected + "]}\n";
+                       "},\"format_version\":1,\"selected\":[" + selected + "],\"sketch\":" + (SketchProvider?.Invoke() ?? EditorMode.EmptySketchJson) + "}\n";
             if (json == _lastState) return;
             _lastState = json;
             var dir = Path.GetDirectoryName(StatePath);

@@ -23,7 +23,7 @@ PIPELINE = REPO / "pipeline"
 
 def uv(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["uv", "run", "python", "-m", "suchohrad_pipeline", *args],
+        ["uv", "run", "python", "-m", "drycastle_pipeline", *args],
         cwd=PIPELINE, capture_output=True, text=True,
     )
 
@@ -83,7 +83,7 @@ def main() -> int:
     ap.add_argument("--godot", default="godot")
     ap.add_argument("--seed", default="1")
     args = ap.parse_args()
-    scratch = Path(args.dir or tempfile.mkdtemp(prefix="suchohrad-edit-smoke-")).resolve()
+    scratch = Path(args.dir or tempfile.mkdtemp(prefix="drycastle-edit-smoke-")).resolve()
     scratch.mkdir(parents=True, exist_ok=True)
     print(f"edit smoke: scratch directory {scratch}")
 

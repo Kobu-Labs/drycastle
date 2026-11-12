@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The MOAB's on-screen part (ticket #129): a top-centre banner that counts the countdown down, a full-screen flash at

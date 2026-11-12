@@ -8,7 +8,7 @@ variant, collects the JSON/binary output the processes write and computes the me
   python3 godot/netspike/run_spike.py --quick        # N=8, 15 s
   python3 godot/netspike/run_spike.py --ns 16 --seconds 20 --variants builtin,custom --skip-probe
 
-Map folder: --map DIR or SUCHOHRAD_MAP. Output: out/netspike/<timestamp>/ (gitignored).
+Map folder: --map DIR or DRYCASTLE_MAP. Output: out/netspike/<timestamp>/ (gitignored).
 """
 import argparse
 import bisect
@@ -253,7 +253,7 @@ def main():
     ap.add_argument("--warmup", type=int, default=4)
     ap.add_argument("--variants", default=",".join(VARIANTS))
     ap.add_argument("--skip-probe", action="store_true")
-    ap.add_argument("--map", default=os.environ.get("SUCHOHRAD_MAP", ""))
+    ap.add_argument("--map", default=os.environ.get("DRYCASTLE_MAP", ""))
     ap.add_argument("--out", default="")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--stagger", type=float, default=0.05, help="seconds between client launches")
@@ -262,7 +262,7 @@ def main():
         args.ns, args.seconds, args.warmup = "8", 15, 3
         args.variants = "builtin,custom,builtin-interest,custom-interest"
     if not args.map:
-        sys.exit("no map: set SUCHOHRAD_MAP or pass --map DIR (a folder produced by `make export`)")
+        sys.exit("no map: set DRYCASTLE_MAP or pass --map DIR (a folder produced by `make export`)")
     args.map = str(Path(args.map).resolve())
 
     outroot = Path(args.out) if args.out else REPO / "out" / "netspike" / time.strftime("%Y%m%d-%H%M%S")

@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Client day/night. Owns the sun and moon lights, the world environment (sky, ambient, fog, exposure) and the
@@ -29,6 +29,12 @@ public partial class DayNightCycle : Node3D
     /// <summary>Local clock used when no server clock is attached (offline view).</summary>
     public DayClock LocalClock { get; set; } = new();
     public float MinAmbient { get; set; } = 0.35f;
+
+    /// <summary>How much of the day's ambient light is left in a bunker room (0.2 turns 0.35 into about 0.07).</summary>
+    public const float IndoorAmbient = 0.2f;
+
+    /// <summary>0 outdoors, 1 inside a bunker room: set each frame by <see cref="BunkerLights"/>; turns the ambient light down.</summary>
+    public float Indoor { get; set; }
 
     readonly DirectionalLight3D _sun = new() { ShadowEnabled = true };
     readonly DirectionalLight3D _moon = new() { ShadowEnabled = false };
@@ -105,7 +111,7 @@ public partial class DayNightCycle : Node3D
         _moon.LightEnergy = l.MoonEnergy;
 
         _env.AmbientLightColor = Col(l.AmbientColour);
-        _env.AmbientLightEnergy = l.AmbientEnergy;
+        _env.AmbientLightEnergy = l.AmbientEnergy * Mathf.Lerp(1f, IndoorAmbient, Indoor);
         _env.TonemapExposure = l.Exposure * brightness;
         _env.FogDensity = l.FogDensity;
         _env.FogLightColor = Col(l.SkyHorizon);

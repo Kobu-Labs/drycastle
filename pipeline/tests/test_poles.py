@@ -5,11 +5,11 @@ import json
 import numpy as np
 import pytest
 
-from suchohrad_pipeline import poleparts as pp
-from suchohrad_pipeline.assets import load_manifest
-from suchohrad_pipeline.buildings import hex_to_rgb
-from suchohrad_pipeline.connectors import CONNECTORS, build_connector, mount_of
-from suchohrad_pipeline.poles import (
+from drycastle_pipeline import poleparts as pp
+from drycastle_pipeline.assets import load_manifest
+from drycastle_pipeline.buildings import hex_to_rgb
+from drycastle_pipeline.connectors import CONNECTORS, build_connector, mount_of
+from drycastle_pipeline.poles import (
     ARCHETYPES,
     VARIANTS,
     PoleSpec,
@@ -18,8 +18,8 @@ from suchohrad_pipeline.poles import (
     random_spec,
     span_mesh,
 )
-from suchohrad_pipeline.poles_preview import connector_entries, manifest_entries
-from suchohrad_pipeline.primitives import PRIMITIVES, build_primitive
+from drycastle_pipeline.poles_preview import connector_entries, manifest_entries
+from drycastle_pipeline.primitives import PRIMITIVES, build_primitive
 
 
 def signed_volume(mesh) -> float:
@@ -155,7 +155,7 @@ def test_pole_primitive_matches_its_record(name) -> None:
 
 
 def test_manifest_pole_entries_are_in_sync() -> None:
-    """``python -m suchohrad_pipeline.poles_preview --sync-manifest`` after changing the poles."""
+    """``python -m drycastle_pipeline.poles_preview --sync-manifest`` after changing the poles."""
     shipped = [a for a in load_manifest()["assets"] if a["id"].startswith("prim:pole_")]
     assert shipped == manifest_entries()
     assert all(a["category"] == "pole" for a in shipped)
@@ -198,7 +198,7 @@ def test_connectors_cover_walls_and_roofs_with_wires_and_bundles() -> None:
 
 
 def test_manifest_connector_entries_are_in_sync() -> None:
-    """``python -m suchohrad_pipeline.poles_preview --sync-manifest`` after changing the connectors."""
+    """``python -m drycastle_pipeline.poles_preview --sync-manifest`` after changing the connectors."""
     shipped = [a for a in load_manifest()["assets"] if a["id"].startswith("prim:connector_")]
     assert shipped == connector_entries()
     assert all(a["category"] == "connector" and a["seats"] for a in shipped)

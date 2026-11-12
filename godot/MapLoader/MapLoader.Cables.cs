@@ -1,9 +1,9 @@
 using System.Text.Json;
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Num = System.Numerics;
 
-namespace Suchohrad.MapLoader;
+namespace Drycastle.MapLoader;
 
 /// <summary>A cable between two placed utility poles (objects.json "cables", or the editor's edits file): the ids of the cable and of its two poles.</summary>
 public sealed record CableSpec(string Id, string From, string To);

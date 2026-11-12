@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Corpses on the server (ticket #130): a killed player leaves a corpse carrying the weapon in their primary position and its

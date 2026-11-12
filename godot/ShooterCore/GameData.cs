@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>All data files, loaded from one directory. Levels are checked against the weapons and perks, so it loads last.</summary>
 public class GameData

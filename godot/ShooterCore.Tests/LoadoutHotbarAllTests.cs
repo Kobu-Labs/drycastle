@@ -1,7 +1,7 @@
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Balance and integration pass (#133): the smoke-arena hotbar holds every weapon, a player's hotbar stays three slots.</summary>
 public class LoadoutHotbarAllTests

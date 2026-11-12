@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The UAV on the server (issue #121). <see cref="UavStreak"/> decides when pulses go out; this file supplies the living
@@ -17,5 +17,5 @@ public partial class NetServer
     /// <summary>Living players with their UAV visibility (the perk's <c>uav_visibility</c>; 0 hides them).</summary>
     IReadOnlyList<UavContact> UavContacts() =>
         _byId.Values.Where(o => _match.Get(o.Id)?.Life == PlayerLife.Alive)
-            .Select(o => new UavContact(o.Id, o.Body.GlobalPosition.X, o.Body.GlobalPosition.Z, o.Perks.UavVisibility)).Concat(TargetUavContacts()).ToList();
+            .Select(o => new UavContact(o.Id, o.Body.GlobalPosition.X, o.Body.GlobalPosition.Z, o.Perks.UavVisibility, _match.Get(o.Id)?.Team ?? Teams.None)).Concat(TargetUavContacts()).ToList();
 }

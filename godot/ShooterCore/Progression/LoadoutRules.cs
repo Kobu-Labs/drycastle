@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Server-side rules for a player's loadouts (ADR 0003: the server validates every submitted loadout against the data

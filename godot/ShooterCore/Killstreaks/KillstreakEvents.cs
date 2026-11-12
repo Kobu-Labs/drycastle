@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>What the owner learns when a streak is earned (<see cref="EventKind.StreakEarned"/>).</summary>
 public sealed record StreakEarnedInfo(string StreakId, int Kills);

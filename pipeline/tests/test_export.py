@@ -8,9 +8,9 @@ import pytest
 import trimesh
 from shapely.geometry import box
 
-from suchohrad_pipeline.buildings import derive_building, load_building_rules
-from suchohrad_pipeline.export import run_export, to_gltf_axes
-from suchohrad_pipeline.rules import DEFAULT_RULES
+from drycastle_pipeline.buildings import derive_building, load_building_rules
+from drycastle_pipeline.export import run_export, to_gltf_axes
+from drycastle_pipeline.rules import DEFAULT_RULES
 
 RULES = load_building_rules()
 
@@ -121,7 +121,7 @@ def test_export_is_byte_deterministic(workspace, tmp_path) -> None:
 
 
 def test_village_area_manifest_and_lighter_props(tmp_path) -> None:
-    from suchohrad_pipeline.props import run_props
+    from drycastle_pipeline.props import run_props
     from tests.synthetic import make_workspace
 
     ws = make_workspace(tmp_path)
@@ -148,7 +148,7 @@ def test_village_area_manifest_and_lighter_props(tmp_path) -> None:
 
 
 def test_export_writes_prim_glbs_and_manifest_entries(workspace) -> None:
-    from suchohrad_pipeline.primitives import PRIMITIVES
+    from drycastle_pipeline.primitives import PRIMITIVES
 
     export(workspace)
     out = workspace["out"]
@@ -192,8 +192,8 @@ def test_export_copies_objects_json_when_present(workspace) -> None:
 def test_export_run_honours_out_and_work(workspace, tmp_path, monkeypatch) -> None:
     from dataclasses import replace
 
-    from suchohrad_pipeline import export as export_mod
-    from suchohrad_pipeline.config import area_paths
+    from drycastle_pipeline import export as export_mod
+    from drycastle_pipeline.config import area_paths
 
     paths = replace(area_paths("slice"), raw=workspace["raw"])
     monkeypatch.setattr(export_mod, "area_paths", lambda area: paths)

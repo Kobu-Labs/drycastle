@@ -1,7 +1,7 @@
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>The camouflage customiser's logic (ticket #141): parameter list, randomize, presets, share codes, per-slot wire.</summary>
 public class CamoEditorTests

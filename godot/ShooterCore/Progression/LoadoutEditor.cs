@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>The six pickers of one loadout, in the order the editor shows them.</summary>
 public enum LoadoutPicker { Primary, Secondary, Perk, Streak1, Streak2, Streak3 }

@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>Feeds the in-match <see cref="Hud"/> from client state: events push changes, the per-frame hook only forwards health.</summary>
 public partial class NetClient
@@ -25,7 +25,7 @@ public partial class NetClient
     void HudWelcome()
     {
         if (!ShotFx.Enabled || _hud != null) return; // headless runs have no HUD
-        _hud = new Hud { MyId = _myId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => _me is { ZoomFov: > 0 }, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Spread = CrosshairSpread, StanceOf = () => _me?.State.Stance ?? Stance.Stand };
+        _hud = new Hud { MyId = _myId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => _me is { ZoomFov: > 0 }, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Spread = CrosshairSpread };
         AddChild(_hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
         _hud.SetSandbox(SandboxGranted, SandboxHeldStreak, SandboxTakesDamage); // the SANDBOX badge (#156)
         WireLoadoutHud(_hud);
@@ -33,7 +33,7 @@ public partial class NetClient
     }
 
     /// <summary>The loaded map (set by the host): the minimap's texture source.</summary>
-    public Suchohrad.MapLoader.MapLoader? Map;
+    public Drycastle.MapLoader.MapLoader? Map;
     readonly List<Vector2> _carDots = new();
 
     static string WeaponName(string id)
@@ -68,6 +68,8 @@ public partial class NetClient
         }
     }
 
+    readonly List<Vector2> _friendDots = new();
+
     void UpdateHud()
     {
         _hud?.SetControlMode(_gunship != null || _controlling); // one mode switch: a turret or the missile owns the screen (ticket #152)
@@ -83,6 +85,12 @@ public partial class NetClient
             foreach (var c in _cars.Values)
                 if (!c.Destroyed) _carDots.Add(new Vector2(c.Node.GlobalPosition.X, c.Node.GlobalPosition.Z));
             _hud.Minimap.SetVehicleDots(_carDots);
+            _friendDots.Clear();
+            if (Match.IsTeamMode)
+                foreach (var (id, r) in _remotes)
+                    if (r.State != EntityState.Dead && Match.AreFriends(_myId, id) && GodotObject.IsInstanceValid(r.Node))
+                        _friendDots.Add(new Vector2(r.Node.GlobalPosition.X, r.Node.GlobalPosition.Z));
+            _hud.Minimap.SetFriendDots(_friendDots);
         }
     }
 }

@@ -1,7 +1,7 @@
 # Glossary
 
 **Base map**:
-The versioned, shared data artifact of the real village of Suchohrad (terrain, roads, parcels, default buildings, landmarks, navigation data). Every mod consumes a specific version of it; it is not a game itself.
+The versioned, shared data artifact of the real village of Drycastle (terrain, roads, parcels, default buildings, landmarks, navigation data). Every mod consumes a specific version of it; it is not a game itself.
 _Avoid_: world, level, scene
 
 **Mod**:
@@ -71,6 +71,14 @@ _Avoid_: ragdoll, body, drop
 **Sandbox mode**:
 A dev-only player state, asked for by the client (`--sandbox`) and granted by a server started with `--allow-sandbox`: godmode, unlimited ammo, every killstreak on demand. Its kills, XP and stats count for nothing.
 _Avoid_: godmode (that is one part of it), debug mode
+
+**Admin**:
+A player whose player token is listed on the server (`--admin-token`). Admins may use chat commands; nobody else may. It is a server setting, not a player state: it is never granted by the client, and a guest (no token) is never an admin.
+_Avoid_: operator, moderator, op
+
+**Chat command**:
+A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
+_Avoid_: console command, cheat
 
 **Care package**:
 The killstreak that gives its user a random Perk; better perks are rarer.
@@ -203,6 +211,10 @@ _Avoid_: build number, version (alone)
 A hand-drawn shape of any form, independent of parcel boundaries, painted in one colour over the ground inside it. It changes only colour: parcels, roads, buildings and everything standing on the ground are unaffected.
 _Avoid_: zone, area (an "area" is the slice or the village)
 
+**Sketch**:
+The temporary marks a developer draws on the ground in the map editor to point at places in a prompt: points (A, B, ...) and lines (L1, L2, ...; a closed line means the ground inside it). A sketch is never map content and is not a hand edit; it lives in the editor's state file only.
+_Avoid_: annotation, drawing, region (a region is saved and paints the ground)
+
 **Building detail**:
 A hand-written description of one real building's geometry beyond its OSM footprint (`pipeline/config/buildings/<OSM id>.yaml`): wall openings, roof overhang, read from reference photos. The shell stays the rule-generated one; the detail adds to it and never changes the footprint.
 
@@ -216,10 +228,41 @@ The glass of a window opening, exported as its own node `window_<building>_<id>`
 A flat piece of breakable glass with hit points that the server owns: a window pane of a building (`windows.json`, unless its `breakable` is false) or a pane of a vehicle type (the `glass` list in `vehicles.json`). It is a rectangle, or, for the generated vehicles (bus, flak truck, helicopter), a convex outline polygon inside its bounding rectangle, and there it is also its own node `glass_N` in the model. Bullets and blasts take its hit points; below full it shows a crack (see Crack stage), at zero it is shattered. It has no collider of its own.
 _Avoid_: window (for a vehicle's), glass (alone), windowpane
 
+**Open side**:
+A place where the body of a vehicle type has no wall and no glass (the `open_sides` list in `vehicles.json`): the two sides of the utility helicopter's cabin. A bullet gets into and out of the vehicle through it as through a glass pane; it has no hit points and nothing is drawn for it.
+_Avoid_: opening (that is a hole in a building's wall), door (the helicopter's cockpit doors are solid with a glass pane)
+
 **Crack stage**:
 How far the crack of a standing glass pane has spread, from the fraction of its hit points left: 0 at full hit points, 1 as soon as it is damaged, one more at each fraction of `crack_stages` in `glass.json`.
 _Avoid_: damage stage (that is a vehicle's smoke), crack level
 
 **Shattered**:
-The state of a glass pane with no hit points left: its fragments fly out once, and it then shows an opening (the model's own glass node of the pane is hidden). A shot through a shattered pane of a vehicle can hit the riders behind it. It stays shattered until its vehicle returns repaired or a new round starts.
+The state of a glass pane with no hit points left: its fragments fly out once, and it then shows an opening (the model's own glass node of the pane is hidden). A bullet goes through a vehicle's pane whether it is shattered or not. It stays shattered until its vehicle returns repaired or a new round starts.
 _Avoid_: broken, destroyed (that is a vehicle or an aircraft)
+
+**Bunker**:
+One of the village's three concrete WW2 fortifications: a building of the base map, and the only kind of building a player can go inside. It has a ground floor and three floors under it.
+_Avoid_: pillbox, fortification
+
+**Flood wall**:
+The concrete wall between the river and the village, built from placed pieces (`prim:floodwall_*`): a ledge on the village side that players walk on, an upper wall with a railing behind it, access points and road gates. Its village side is the piece's `-y`.
+_Avoid_: levee, dike, river wall
+
+**Ladder**:
+How a player moves between the floors of a bunker: they get on with the interact key, climb with forward and back, and step off at either end. They cannot fire on it.
+_Avoid_: stairs, climbing (that is the verb)
+
+**Shelter**:
+What a bunker's room gives the players in it: a blast outside the room does not hurt them, and a blast inside it hurts nobody outside. The MOAB is not stopped.
+_Avoid_: blast cover, shot-only cover (that stops shots, not blasts), protection (that is spawn protection)
+
+**Match mode**:
+How a round is scored and won, set by `mode` in `match.json`: free-for-all (`ffa`, the default: every player alone) or team deathmatch (`tdm`).
+_Avoid_: game mode, playlist
+
+**Team**:
+One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team.
+_Avoid_: squad, clan, faction
+
+**Friend / enemy colours**:
+The blue (friend) and orange (enemy) the HUD uses, seen from the local player's team, for names in the kill feed and scoreboard and for the minimap dots. A team tag ("A"/"B") always accompanies the colour, and both colours have a colour-blind set (`TeamPalette`).

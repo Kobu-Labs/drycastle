@@ -18,7 +18,7 @@ Consequence: the index is only stable between a server and a client that read th
 
 **3. A pane has no collider; shattering changes what a shot can reach only in vehicles.** A bullet that hit no player and stopped on a wall or a hull damages the pane it crossed there (a building's pane sits up to `building_reach` behind the wall, a vehicle's up to `vehicle_reach` inside the hit box). The wall and the hull take the shot as before, and the vehicle still takes its bullet damage. A blast damages every pane in its radius.
 
-- Buildings have no interior. The wall behind a pane stays solid for bullets, players and cars whether the pane stands or not.
+- Buildings have no interior. The wall behind a pane stays solid for bullets, players and cars whether the pane stands or not. (Bunkers have an interior since ADR 0009; they have no panes.)
 - Vehicles: every rider used to be behind the hull (only the flak gunner is in the open). A shot whose ray crosses a **shattered** pane can now hit a rider behind it, through the same rule as the exposed gunner (`GunnerCover`). `shattered_exposes_riders` in `glass.json` turns this off.
 
 Why: it is the smallest rule that makes breaking glass matter, and it reuses a mechanism that is already tested. An intact pane giving no extra protection keeps vehicle balance as it was.

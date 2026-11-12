@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Shotgun pellet fan (server side). One trigger pull draws a seeded fan of pellets; each pellet is traced against the
@@ -24,15 +24,15 @@ public partial class NetServer
         var walls = new List<float>(dirs.Length);
         var cars = new List<ServerCar?>(dirs.Length);
         var dirsG = new List<Vector3>(dirs.Length);
-        var crossedBy = new List<List<GlassCross>>(dirs.Length);
+        var crossedBy = new List<List<GlassCross>?>(dirs.Length); // the panes each pellet went through (null: none)
         var exposed = new List<HitTarget?>(dirs.Length); // a pellet that stopped on a vehicle with its gunner in the open may reach him (GunnerCover)
         var pastHull = new List<float>(dirs.Length);
         foreach (var d in dirs)
         {
             var g = new Vector3(d.X, d.Y, d.Z);
-            var crossed = new List<GlassCross>();
+            List<GlassCross>? crossed = null;
+            walls.Add(BulletHit(eye, g, range, out var car, ref crossed));
             crossedBy.Add(crossed);
-            walls.Add(BulletHit(eye, g, range, out var car, crossed));
             cars.Add(car);
             dirsG.Add(g);
             var (gunner, past) = ExposedGunnerBehind(car, eye, g, range, targets);

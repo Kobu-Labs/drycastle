@@ -1,7 +1,7 @@
 using System.Numerics;
 using System.Text.Json;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Water constants from the "swimming and submerging" ticket (starting values, to be playtested).</summary>
 public static class WaterConsts

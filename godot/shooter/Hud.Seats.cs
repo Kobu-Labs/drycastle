@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The seat panel (vehicle seat switch): a small top-down schematic of the vehicle the player sits in, bottom right above the vehicle readout, with the

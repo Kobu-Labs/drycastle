@@ -250,7 +250,7 @@ def md_table(results):
 def main():
     global GODOT
     ap = argparse.ArgumentParser()
-    ap.add_argument("--map", default=os.environ.get("SUCHOHRAD_MAP", ""))
+    ap.add_argument("--map", default=os.environ.get("DRYCASTLE_MAP", ""))
     ap.add_argument("--bots", type=int, default=16)
     ap.add_argument("--shooters", type=int, default=4)
     ap.add_argument("--measure", type=float, default=30)

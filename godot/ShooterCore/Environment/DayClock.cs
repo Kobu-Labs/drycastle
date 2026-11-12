@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// The server's time of day. A 24 hour day takes <see cref="DayLengthSeconds"/> of real time, starting at
@@ -25,6 +25,21 @@ public sealed class DayClock
     }
 
     public double HourAtTick(long tick, int tickRate) => HourAt(tick / (double)tickRate);
+
+    /// <summary>
+    /// A clock that shows <paramref name="hour"/> at <paramref name="elapsedSeconds"/> and runs on from there (an admin set the
+    /// time). The start is whole minutes, so the hour is right to within one game minute.
+    /// </summary>
+    public DayClock WithHour(double elapsedSeconds, double hour)
+    {
+        var passed = Frozen || DayLengthSeconds <= 0 ? 0 : elapsedSeconds * 24.0 / DayLengthSeconds;
+        var start = ((hour - passed) % 24.0 + 24.0) % 24.0;
+        return new DayClock { StartMinute = (int)Math.Round(start * 60) % 1440, DayLengthSeconds = DayLengthSeconds, Frozen = Frozen };
+    }
+
+    /// <summary>The same day with the clock stopped or running again, keeping the hour it shows at <paramref name="elapsedSeconds"/>.</summary>
+    public DayClock WithFrozen(double elapsedSeconds, bool frozen) =>
+        frozen == Frozen ? this : new DayClock { StartMinute = StartMinute, DayLengthSeconds = DayLengthSeconds, Frozen = frozen }.WithHour(elapsedSeconds, HourAt(elapsedSeconds));
 
     /// <summary>Lighting, sky and fog for the given hour (see <see cref="DayCurve"/> for the numbers).</summary>
     public DayLighting Sample(double hour, float minAmbient) => DayCurve.Sample(hour, minAmbient);

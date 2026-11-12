@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// A vehicle's solid box for on-foot movement (#217): a static body with the vehicle's hit volume on <see cref="CollisionLayers.VehicleSolid"/>.

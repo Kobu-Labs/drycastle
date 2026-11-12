@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The loadout screen, laid out as a "Create a class" menu (ticket #147; docs/standards/ui-ux.md). A strip of five class tabs

@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// A place on a placed utility pole or house connector where a wire sits, in map space (Godot axes, Y up). Kind is "line" (crossarm and

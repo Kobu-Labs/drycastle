@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
 /// Ticket #160: the gunship aim is world space and ground-stabilised. The aim point stays on its ground point while the platform

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Godot;
 
-namespace Suchohrad.MapLoader;
+namespace Drycastle.MapLoader;
 
 /// <summary>
 /// Textured map nodes (map 0.7.0+). A node named &lt;node&gt;_tex_&lt;texture id&gt; holds the triangles of

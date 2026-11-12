@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterServer.Persistence.InMemory;
+namespace Drycastle.ShooterServer.Persistence.InMemory;
 
 /// <summary>
 /// Test and dev store with the same semantics as the SQLite store (five loadouts and a stats row per new player,

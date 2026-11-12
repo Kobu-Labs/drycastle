@@ -8,8 +8,8 @@ import time
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from suchohrad_pipeline.edits import dump_text, load_edits, validate
-from suchohrad_pipeline.mcp_server import (
+from drycastle_pipeline.edits import dump_text, load_edits, validate
+from drycastle_pipeline.mcp_server import (
     ParcelEditTools,
     Settings,
     build_server,
@@ -108,6 +108,78 @@ def test_find_parcels_selected(env):
         tools.find_parcels(selected=True)
     with pytest.raises(ToolError, match="not both"):
         tools.find_parcels(selected=True, near={"parcel": "P-0001"})
+
+
+def test_get_sketch(env):
+    tools, settings, _ = env
+    with pytest.raises(ToolError, match="no editor state file"):
+        tools.get_sketch()
+    state = {"format_version": 1, "selected": [], "camera": {"x": 1, "y": 2, "z": 3, "yaw_deg": 4}}
+    settings.state_path.write_text(json.dumps(state))
+    with pytest.raises(ToolError, match="older than the Sketch tool"):
+        tools.get_sketch()
+    empty = {"lines": [], "next_line": 0, "next_point": 0, "points": []}
+    settings.state_path.write_text(json.dumps({**state, "sketch": empty}))
+    with pytest.raises(ToolError, match="nothing is sketched"):
+        tools.get_sketch()
+
+    def absolute(pts):
+        return [[OX + x, OY + y] for x, y in pts]
+
+    # as the viewer writes it: A on P-0001, B off the map, L1 across P-0001 and P-0002, the area L2 on their border
+    sketch = {
+        "lines": [
+            {"closed": False, "id": "L1", "points": absolute([(50, 60), (120, 60)])},
+            {"closed": True, "id": "L2", "points": absolute([(90, 50), (100, 50), (100, 60), (90, 60)])},
+        ],
+        "next_line": 2,
+        "next_point": 2,
+        "points": [{"id": "A", "x": OX + 50, "y": OY + 50}, {"id": "B", "x": OX + 300, "y": OY + 300}],
+    }
+    settings.state_path.write_text(json.dumps({**state, "sketch": sketch}))
+    out = tools.get_sketch()
+    assert out["count"] == 4 and "warnings" not in out
+    a, b = out["points"]
+    assert a == {"id": "A", "position": [OX + 50, OY + 50], "parcel": "P-0001", "kind": "building_plot"}
+    assert b["parcel"] is None and b["kind"] is None
+    l1, l2 = out["lines"]
+    assert l1["closed"] is False and l1["length_m"] == 70.0 and "area_m2" not in l1
+    assert l1["points"] == absolute([(50, 60), (120, 60)])
+    assert l1["bbox"] == [OX + 50, OY + 60, OX + 120, OY + 60]
+    assert l1["parcels"] == [
+        {"id": "P-0001", "kind": "building_plot", "length_m": 45.0},
+        {"id": "P-0002", "kind": "garden", "length_m": 25.0},
+    ]
+    assert l2["closed"] is True and l2["area_m2"] == 100.0 and l2["length_m"] == 40.0
+    assert l2["centroid"] == [OX + 95, OY + 55]
+    assert l2["parcels"] == [
+        {"id": "P-0001", "kind": "building_plot", "area_m2": 50.0, "share_of_parcel": 0.015},
+        {"id": "P-0002", "kind": "garden", "area_m2": 50.0, "share_of_parcel": 0.019},
+    ]
+    # one mark by name
+    one = tools.get_sketch("L2")
+    assert one["count"] == 1 and one["points"] == [] and one["lines"][0]["id"] == "L2"
+    with pytest.raises(ToolError, match="has no 'L9'; it has A, B, L1, L2"):
+        tools.get_sketch("L9")
+    # a mark off the map alone: answered, with a warning about the area
+    assert "another area" in tools.get_sketch("B")["warnings"][0]
+    # a self-crossing area is returned without parcels, and said so
+    bow = {"closed": True, "id": "L1", "points": absolute([(50, 50), (60, 60), (60, 50), (50, 60)])}
+    settings.state_path.write_text(json.dumps({**state, "sketch": {**sketch, "lines": [bow]}}))
+    crossed = tools.get_sketch("L1")
+    assert crossed["lines"][0]["parcels"] == [] and "crosses itself" in crossed["warnings"][0]
+    # stale and broken files
+    old = time.time() - 3600
+    import os
+
+    os.utime(settings.state_path, (old, old))
+    assert "this sketch could be outdated" in tools.get_sketch("A")["warnings"][0]
+    settings.state_path.write_text(json.dumps({**state, "sketch": {"points": [{"id": "A"}]}}))
+    with pytest.raises(ToolError, match="unreadable"):
+        tools.get_sketch()
+    # the selection still reads a state file that carries a sketch
+    settings.state_path.write_text(json.dumps({**state, "selected": ["P-0001"], "sketch": sketch}))
+    assert [p["id"] for p in tools.find_parcels(selected=True)["parcels"]] == ["P-0001"]
 
 
 def test_get_parcel_front_edge_and_buildings(tools):
@@ -642,7 +714,7 @@ def test_through_mcp_session(env):
                 "list_assets", "find_parcels", "get_parcel", "set_fence", "reset_fence", "set_trees",
                 "reset_trees", "place_object", "remove_object", "move_object", "create_group", "merge_groups",
                 "dissolve_group", "create_region", "set_region_colour", "set_region_water", "move_region_point",
-                "delete_region", "list_regions", "connect_poles", "disconnect_poles", "list_cables",
+                "delete_region", "list_regions", "connect_poles", "disconnect_poles", "list_cables", "get_sketch",
             }
             tool = next(t for t in (await client.list_tools()).tools if t.name == "place_object")
             assert {"parcel", "asset", "anchor", "offset_m", "position"} <= set(tool.input_schema["properties"])
@@ -664,7 +736,7 @@ def test_through_mcp_session(env):
 
 
 def test_validation_doc_includes_regions(env):
-    from suchohrad_pipeline.mcp_server import _edits_doc
+    from drycastle_pipeline.mcp_server import _edits_doc
 
     tools, settings, _ = env
     tools.create_region("#111111", polygon=SQUARE)

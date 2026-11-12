@@ -10,7 +10,7 @@ using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 /// Undo reloads the file from disk, writes the before-values back (absent deletes), validates and saves; the watcher
 /// (or the instant objects path) applies the effect. Only the keys this operation touched are overwritten; everything
 /// else in the file, including other keys of the same parcel changed by another writer, stays as it is. Redo mirrors that with the after-entries. A new edit clears the redo stack. The
-/// stacks live in memory only and hold at most <see cref="UndoCap"/> operations.
+/// stacks live in memory only and hold at most <see cref="UndoCap"/> operations. Sketch changes are steps on the same stacks.
 /// </summary>
 public partial class EditorMode
 {
@@ -22,7 +22,8 @@ public partial class EditorMode
     /// "trees" or "objects/&lt;object id&gt;", so undo leaves the parcel's other keys (and other writers' edits) alone.
     /// </summary>
     public sealed record EntryChange(string Kind, string Id, Obj? Before, Obj? After, string? Key = null);
-    public sealed record UndoRecord(string Description, List<EntryChange> Changes);
+    /// <summary>A step that changed the sketch (EditorMode.Sketch.cs) carries its two states and no file changes: nothing is written.</summary>
+    public sealed record UndoRecord(string Description, List<EntryChange> Changes, SketchDoc? SketchBefore = null, SketchDoc? SketchAfter = null);
 
     readonly List<UndoRecord> _undo = new(), _redo = new();
 
@@ -125,6 +126,16 @@ public partial class EditorMode
         var word = undo ? "undo" : "redo";
         if (from.Count == 0) { Say($"nothing to {word}"); return false; }
         var rec = from[^1];
+        if (rec.SketchBefore != null && rec.SketchAfter != null)
+        {
+            from.RemoveAt(from.Count - 1);
+            to.Add(rec);
+            if (to.Count > UndoCap) to.RemoveAt(0);
+            _skDraft.Clear();
+            ApplySketch(undo ? rec.SketchBefore : rec.SketchAfter);
+            Say($"{word}: {rec.Description}");
+            return true;
+        }
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {

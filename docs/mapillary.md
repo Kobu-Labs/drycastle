@@ -1,7 +1,7 @@
 # Mapillary reference imagery
 
 Street-level photos of the village, used as a visual reference when recreating buildings by hand.
-Not an input of the generated map (see `pipeline/src/suchohrad_pipeline/mapillary.py`).
+Not an input of the generated map (see `pipeline/src/drycastle_pipeline/mapillary.py`).
 
 ## Setup (once)
 
@@ -14,9 +14,9 @@ Not an input of the generated map (see `pipeline/src/suchohrad_pipeline/mapillar
 
 ```
 cd pipeline
-uv run python -m suchohrad_pipeline.mapillary --area village             # image index only
-uv run python -m suchohrad_pipeline.mapillary --area village --download  # + 2048 px photos
-uv run python -m suchohrad_pipeline.mapillary --near 16.8601,48.4044 --radius 40 --download
+uv run python -m drycastle_pipeline.mapillary --area village             # image index only
+uv run python -m drycastle_pipeline.mapillary --area village --download  # + 2048 px photos
+uv run python -m drycastle_pipeline.mapillary --near 16.8601,48.4044 --radius 40 --download
 ```
 
 Output goes to `data/<area>/mapillary/` (`images.json`, `photos/<id>.jpg`; gitignored). The index

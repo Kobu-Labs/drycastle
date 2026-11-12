@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Client side of glass panes (ADR 0007, docs/glass.md). The server sends a pane's hit points when they change and, on join, every pane

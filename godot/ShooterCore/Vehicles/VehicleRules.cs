@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Run-over damage (ticket #77): above the minimum speed, a hit player takes damage per m/s over it, capped.</summary>
 public static class RunOver

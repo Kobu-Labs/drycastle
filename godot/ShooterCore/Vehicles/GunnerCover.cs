@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Who a ray reaches on a vehicle whose gunner sits in the open (vehicles.json <c>exposed_gunner</c>, the flak truck's turret). The hull's

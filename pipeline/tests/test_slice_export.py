@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 import trimesh
 
-from suchohrad_pipeline.export import run_export
-from suchohrad_pipeline.props import run_props
-from suchohrad_pipeline.rules import DEFAULT_RULES
+from drycastle_pipeline.export import run_export
+from drycastle_pipeline.props import run_props
+from drycastle_pipeline.rules import DEFAULT_RULES
 from tests.synthetic import make_workspace
 
 
@@ -107,8 +107,8 @@ def test_export_is_byte_deterministic_across_runs(ws, tmp_path) -> None:
 
 
 def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
-    from suchohrad_pipeline.propmeshes import fence_mesh, fence_meshes, trees_mesh
-    from suchohrad_pipeline.rules import load_section
+    from drycastle_pipeline.propmeshes import fence_mesh, fence_meshes, trees_mesh
+    from drycastle_pipeline.rules import load_section
 
     manifest = export(ws)
     assert manifest["props_layout"] == "per_parcel"

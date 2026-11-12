@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// A drawn padlock or star for menu rows and tabs (ticket #147). Drawn rather than taken from a font, so it renders the same

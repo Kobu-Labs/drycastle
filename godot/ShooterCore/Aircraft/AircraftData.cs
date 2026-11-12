@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>A flying kind: how it circles the map. Read from killstreaks.json "aircraft" (at most two kinds, see <see cref="AircraftState"/>).</summary>
 public sealed class AircraftKindDef

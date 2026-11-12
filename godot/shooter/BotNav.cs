@@ -3,9 +3,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The walkable map the bots find their routes on (#214): a navigation mesh baked from the server's own colliders, one

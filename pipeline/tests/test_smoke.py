@@ -1,7 +1,7 @@
 import pytest
 
-from suchohrad_pipeline import cli
-from suchohrad_pipeline.stages import STAGES
+from drycastle_pipeline import cli
+from drycastle_pipeline.stages import STAGES
 
 EXPECTED_ORDER = ["fetch", "normalise", "parcels", "rules", "terrain", "roads", "props", "detail", "export"]
 

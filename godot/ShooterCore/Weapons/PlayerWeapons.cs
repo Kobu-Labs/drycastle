@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Weapon related input of one tick. <see cref="Slot"/> is the wanted hotbar slot 1..4 (0 = no preference).</summary>
 public readonly record struct WeaponInput(bool Fire, bool Reload, int Slot, bool Next);

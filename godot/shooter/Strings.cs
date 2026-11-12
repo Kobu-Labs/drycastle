@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// English strings behind translation keys (standard: English only for now, but screens use keys). Registered once
@@ -35,6 +35,7 @@ public static class Strings
         ("score.col.player", "Player"), ("score.col.kills", "K"), ("score.col.deaths", "D"), ("score.col.ping", "Ping"),
         ("score.you", "{0} (you)"), ("score.hint.hold", "Hold Tab to show this"), ("score.hint.next", "A new round starts soon"),
         ("score.ping", "{0} ms"),
+        ("hud.score.team", "Team {0}   You {1} : {2} Enemy"), ("score.team.tag", "[{0}] {1}"), ("score.ending.team", "Round over: team {0} wins"),
         ("weapon.pistol", "M1911"), ("weapon.ak47", "AK-47"), ("weapon.bazooka", "Bazooka"), ("weapon.knife", "Knife"), ("weapon.sniper", "Sniper"), ("weapon.glock17", "Glock 17"), ("weapon.deagle", "Desert Eagle"), ("weapon.m82", "Barrett M82"), ("weapon.awm", "AWM"), ("weapon.svd", "Dragunov SVD"),
         ("hud.breath.ready", "Breath: hold {0}"), ("hud.breath.held", "Breath held"), ("hud.breath.exhaled", "Breath out, steadying"), ("hud.breath.empty", "Breath empty, refilling"),
         ("weapon.fall", "Fall"), ("weapon.drown", "Drowned"), ("weapon.void", "Void"), ("weapon.debug", "Debug"), ("weapon.vehicle", "Car"), ("weapon.vehicle_gun", "Mounted MG"), ("weapon.moab", "MOAB"), ("moab.inbound", "MOAB inbound {0}"), ("moab.blast", "MOAB by {0}"), ("moab.cancelled", "MOAB cancelled"), ("weapon.turret", "Turret"), ("feed.roadkill", "Roadkill"), ("weapon.unknown", "?"),
@@ -50,7 +51,7 @@ public static class Strings
         ("heli.weapon", "Attack Helicopter"), ("heli.clock", "TIME {0}"), ("heli.kills", "KILLS {0}"),
         ("ac130.title", "AC-130"), ("ac130.kill", "AC-130"), ("ac130.timer", "TIME {0} s"), ("ac130.hint", "{0}  Fire     {1}  Zoom     1 2 3  Weapon"),
         ("helper.weapon", "Helicopter"), ("helper.warning", "HELICOPTER TARGETING YOU"),
-        ("app.title", "SUCHOHRAD"), ("app.subtitle", "Shooter"),
+        ("app.title", "DRYCASTLE"), ("app.subtitle", "Shooter"),
         ("menu.play", "Play"), ("menu.settings", "Settings"), ("menu.quit", "Quit"),
         ("menu.hint", "Up/Down or Tab to move   Enter to select   Esc to go back"),
         ("dialog.cancel", "Cancel"), ("dialog.back", "Back"),
@@ -197,6 +198,7 @@ public static class Strings
         foreach (var (k, v) in Table) tr.AddMessage(k, v);
         foreach (var (k, v) in Hud2Strings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in SandboxStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in ChatStrings.Table) tr.AddMessage(k, v);
         TranslationServer.AddTranslation(tr);
         TranslationServer.SetLocale("en");
     }

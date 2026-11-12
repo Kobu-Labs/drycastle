@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Ticket #126: the attack helicopter killstreak through the real <see cref="KillstreakService"/> and a fake world.</summary>
 public class AttackHelicopterTests

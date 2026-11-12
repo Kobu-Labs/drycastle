@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The shooter's one Theme and its tokens (docs/standards/ui-ux.md section 4), same pattern as the viewer's
@@ -43,6 +43,9 @@ public static class ShooterTheme
     public static Color Danger => From(StatePalette.Danger(ColorBlind));
     /// <summary>The UI scale for a screen of this size (height over 1080 p times the UI scale setting): overlays that size their own text use it, as the HUD does.</summary>
     public static float ScreenScale(Vector2 screen) => HudLogic.ScreenScale(screen.Y, GameSettings.Current.UiScale);
+    /// <summary>Team deathmatch friend / enemy colours (blue / orange; <see cref="TeamPalette"/>), also under the colour-blind setting.</summary>
+    public static Color Friend => From(TeamPalette.Friend(ColorBlind));
+    public static Color Enemy => From(TeamPalette.Enemy(ColorBlind));
     static Color From(StatePalette.Rgb c) => new(c.R, c.G, c.B);
     public static readonly Color Outline = new(0f, 0f, 0f, 0.85f);
     public static readonly Color Scrim = new(0f, 0f, 0f, 0.60f);
@@ -102,6 +105,30 @@ public static class ShooterTheme
         var prot = new StyleBoxFlat { DrawCenter = false, BorderColor = new Color(Accent, 0.45f) };
         prot.SetBorderWidthAll(Space);
         PanelVariation(t, "HudProtection", prot);
+
+        // the chat (admin commands, #chat): bare text with an outline, no panels; the completion rows are small buttons, the one Tab takes next is marked
+        t.SetTypeVariation("HudChatLog", "RichTextLabel");
+        t.SetColor("default_color", "HudChatLog", Text);
+        t.SetColor("font_outline_color", "HudChatLog", Outline);
+        t.SetConstant("outline_size", "HudChatLog", 4);
+        t.SetFontSize("normal_font_size", "HudChatLog", FontBody);
+        t.SetFontSize("bold_font_size", "HudChatLog", FontBody);
+        t.SetStylebox("normal", "HudChatLog", new StyleBoxEmpty());
+        t.SetStylebox("focus", "HudChatLog", new StyleBoxEmpty());
+        // no background or border on the chat: text with an outline over the game; only the candidate Tab takes next is filled
+        var clear = Box(Colors.Transparent, Space / 2, null, 0);
+        VariationButton(t, "ChatSuggest", clear, Box(Hover, Space / 2, null, 0), Box(Active, Space / 2, null, 0));
+        VariationButton(t, "ChatSuggestNext", Box(Active, Space / 2, null, 0), Box(Hover, Space / 2, null, 0), Box(Active, Space / 2, null, 0));
+        foreach (var n in new[] { "ChatSuggest", "ChatSuggestNext" })
+        {
+            t.SetColor("font_outline_color", n, Outline);
+            t.SetConstant("outline_size", n, 4);
+            t.SetStylebox("focus", n, new StyleBoxEmpty());
+        }
+        t.SetTypeVariation("ChatInput", "LineEdit");
+        foreach (var st in new[] { "normal", "focus", "read_only" }) t.SetStylebox(st, "ChatInput", Box(Colors.Transparent, Space / 2, null, 0));
+        t.SetColor("font_outline_color", "ChatInput", Outline);
+        t.SetConstant("outline_size", "ChatInput", 4);
 
         t.SetStylebox("background", "ProgressBar", Box(new Color(0, 0, 0, 0.55f), 0, Line));
         Bar(t, "HealthBar", Good);

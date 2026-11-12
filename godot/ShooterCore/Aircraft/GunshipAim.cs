@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Turret aim, world space and ground-stabilised (#160). The aim is a world point: the ground point the turret's look meets

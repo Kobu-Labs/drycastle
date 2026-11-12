@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from suchohrad_pipeline import meadow
+from drycastle_pipeline import meadow
 
 
 def _raster() -> meadow.Meadow:

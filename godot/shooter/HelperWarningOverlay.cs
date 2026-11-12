@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The helicopter helper's targeting warning (killstreak "helicopter_helper"): for the one second before its burst, a red dot

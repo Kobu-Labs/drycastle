@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Poses the arms of a character on its weapon, over whatever clip plays (the rig has no rifle clips). The right hand goes to a fixed point

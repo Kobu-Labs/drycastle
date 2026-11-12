@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Tunables of the helicopter helper (killstreaks.json, the "helper" block of "helicopter_helper"). The helper circles the

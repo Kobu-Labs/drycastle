@@ -1,6 +1,6 @@
 # Engine comparison for the shooter PoC (issue #2)
 
-Research date: 2026-11-10. Question: compare Godot 4, Unity, Unreal 5 and Bevy for the Suchohrad project (Linux+Windows clients, headless Linux dedicated server, built-in multiplayer for a 16-64 player shooter, importing a procedurally generated glTF map, low-poly open-world performance, licence/cost, vehicle physics, learning curve for a senior backend dev with no engine experience).
+Research date: 2026-11-10. Question: compare Godot 4, Unity, Unreal 5 and Bevy for the Drycastle project (Linux+Windows clients, headless Linux dedicated server, built-in multiplayer for a 16-64 player shooter, importing a procedurally generated glTF map, low-poly open-world performance, licence/cost, vehicle physics, learning curve for a senior backend dev with no engine experience).
 
 Confidence legend: **[P]** = read directly on the owning project's official docs/repo this session. **[S]** = secondary (forum/blog/search summary) - treat as a lead, not a fact. **[?]** = not verified; open question.
 

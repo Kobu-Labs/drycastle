@@ -1,8 +1,8 @@
-# Slovak open data for Suchohrad: availability, formats, licences
+# Slovak open data for Drycastle: availability, formats, licences
 
 Resolves #3 (part of #1). Researched 2026-11-10 from primary sources (skgeodesy.sk / geoportal, INSPIRE services of GKU Bratislava and UGKK SR). Live endpoints were probed; results marked "verified live".
 
-Village: Suchohrad (okres Malacky), cadastral zoning (katastralne uzemie) code **859524** (verified live from the INSPIRE cadastral WFS). Extent in WGS84 roughly lon 16.850-16.914, lat 48.373-48.435.
+Village: Drycastle (okres Malacky), cadastral zoning (katastralne uzemie) code **859524** (verified live from the INSPIRE cadastral WFS). Extent in WGS84 roughly lon 16.850-16.914, lat 48.373-48.435.
 
 ## Summary
 
@@ -21,7 +21,7 @@ Village: Suchohrad (okres Malacky), cadastral zoning (katastralne uzemie) code *
   - OGC API Features: `https://inspirews.skgeodesy.sk/geoserver/cp/ogc/features/v1`
   - E register (original-parcel/land-consolidation register, different thing): `.../geoserver/cp_uo/ows`
   - ATOM bulk ZIP: service feed `https://inspirews.skgeodesy.sk/atom/f48baf46-4fdc-4f89-a57c-1f9f0faaa5d3_dlsFeed.atom`; per-region dataset feeds listed on the download-services page (Bratislava region feed `79547966-9ec7-4558-8a68-d9053178e54f`). The page lists the same ID for Zilina and Kosice (likely page error).
-- Verified live: feature types `cp:CP.CadastralParcel` and `cp:CP.CadastralZoning`. Filter `cql_filter=nationalCadastralReference LIKE '859524%'` returned **2153 parcels** for Suchohrad KU. Parcel feature has `nationalCadastralReference` (e.g. `859524_2819.C`), `label` (parcel number), `areaValue` (m2), `referencePoint`, polygon geometry (WGS84 by default via GeoJSON). Data version stamp seen: 2026-10-05.
+- Verified live: feature types `cp:CP.CadastralParcel` and `cp:CP.CadastralZoning`. Filter `cql_filter=nationalCadastralReference LIKE '859524%'` returned **2153 parcels** for Drycastle KU. Parcel feature has `nationalCadastralReference` (e.g. `859524_2819.C`), `label` (parcel number), `areaValue` (m2), `referencePoint`, polygon geometry (WGS84 by default via GeoJSON). Data version stamp seen: 2026-10-05.
 - Attributes are INSPIRE-minimal: geometry, parcel number, area. No landuse type, owner, or building link in this service (owner data is not open). The vector cadastral map is separate from the attribute register. Parcel numbers are directly usable as stable "addressable parcel" keys, but see uncertainties on stability when parcels are split/merged.
 - Licence: capabilities document states `AccessConstraints: CC BY 4.0`, `Fees: no conditions apply`; ATOM feed `<rights>` = https://creativecommons.org/licenses/by/4.0/deed.sk. Author: UGKK SR. Attribution string: "UGKK SR".
 - Also exists: the public Katastralny portal (kataster.skgeodesy.sk) with WMS/WMTS display layers; no licence text found there on the pages read. Display-only, not needed given WFS.
@@ -30,7 +30,7 @@ Village: Suchohrad (okres Malacky), cadastral zoning (katastralne uzemie) code *
 
 - "DMR 3.5" as named in the issue is **not offered at useful resolution**: the ZBGIS download page (https://www.skgeodesy.sk/geoportal-en/zbgis/download) lists DMR 3.5 only at 10/25/50/100 m (TIFF, S-JTSK); the file sizes shown duplicate the Geographical Names ones, probably a page copy error. It is a legacy product.
 - **DMR 5.0 (airborne laser scanning, 1 m)** is the current product: https://www.skgeodesy.sk/geoportal-en/zbgis/als/provision-als-products. Free, CC BY 4.0, author UGKK SR, credit "UGKK SR", plus the ALS product terms. 1st cycle: DTM 5.0 / DSM 1.0, 1 m, whole Slovakia. 2nd cycle (DTM 6.0 / DSM 2.0, 0.5 m) is available by lot only; page lists LOT04-LOT32 and does not say whether Malacky is covered.
-- Access: whole-SK ZIP rasters (TIFF); MAPKA clip up to 400 km2 (more than enough for Suchohrad, KU is about 4 x 7 km); classified point clouds as LAZ only by offline order form.
+- Access: whole-SK ZIP rasters (TIFF); MAPKA clip up to 400 km2 (more than enough for Drycastle, KU is about 4 x 7 km); classified point clouds as LAZ only by offline order form.
 - Verified live: INSPIRE WCS `https://inspirews.skgeodesy.sk/geoserver/el/ows?service=WCS` serves coverage `el__EL.GridCoverage`, "DTM 5.0", 1 m x 1 m, from ALS 2017-2022, CRS EPSG:3046 (ETRS89-TM34). So a village-sized GeoTIFF can be pulled with a WCS GetCoverage subset, scriptable in the pipeline. (A GetCoverage was not run; capability only.)
 - Vertical datum: Bpv (S-JTSK03) or ETRS89 ellipsoidal heights depending on product; confirm before mixing with other sources.
 
@@ -54,7 +54,7 @@ Village: Suchohrad (okres Malacky), cadastral zoning (katastralne uzemie) code *
 
 ## Size for the village
 
-- Parcels: 2153 polygons for KU Suchohrad (about a few MB GeoJSON). Whole village area about 4 km x 7 km; DMR 5.0 at 1 m is about 28M cells, a few tens of MB as compressed GeoTIFF (estimate). Orthophoto at native resolution depends on GSD (not confirmed; likely 20 cm in 3rd cycle; unverified) so on the order of 0.5-2 GB uncompressed for the whole KU (estimate); buildings are a subset of a 0.4-0.6 GB national file.
+- Parcels: 2153 polygons for KU Drycastle (about a few MB GeoJSON). Whole village area about 4 km x 7 km; DMR 5.0 at 1 m is about 28M cells, a few tens of MB as compressed GeoTIFF (estimate). Orthophoto at native resolution depends on GSD (not confirmed; likely 20 cm in 3rd cycle; unverified) so on the order of 0.5-2 GB uncompressed for the whole KU (estimate); buildings are a subset of a 0.4-0.6 GB national file.
 
 ## Uncertainties and follow-ups
 

@@ -1,7 +1,7 @@
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Ticket #147: the picker's compare panel (five bars, each a share of the best weapon in its slot, recoil inverted).</summary>
 public class LoadoutCompareTests

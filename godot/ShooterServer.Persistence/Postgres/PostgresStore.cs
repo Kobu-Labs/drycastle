@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace Suchohrad.ShooterServer.Persistence.Postgres;
+namespace Drycastle.ShooterServer.Persistence.Postgres;
 
 /// <summary>PostgreSQL-backed <see cref="IProgressionStore"/>, the same contract as the SQLite store. Open with an Npgsql connection string.</summary>
 public sealed class PostgresProgressionStore : IProgressionStore

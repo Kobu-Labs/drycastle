@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Where a MOAB is in its life, as seen by the server and (through <see cref="MoabEvents"/>) by every client.</summary>
 public enum MoabPhase : byte

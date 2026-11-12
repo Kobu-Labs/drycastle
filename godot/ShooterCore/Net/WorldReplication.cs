@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Wire side of the world entity channel. Lifecycle goes over the reliable channel as event envelopes

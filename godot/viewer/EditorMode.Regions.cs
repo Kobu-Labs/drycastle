@@ -924,7 +924,7 @@ public partial class EditorMode
         var pb = new VBoxContainer();
         _palette.AddChild(pb);
         pb.AddChild(new Label { Text = "Commands", ThemeTypeVariation = "Header" });
-        _palEdit = new LineEdit { PlaceholderText = "Type a command, a region ID (R-0001) or a parcel ID (P-0412)", ClearButtonEnabled = true };
+        _palEdit = new LineEdit { PlaceholderText = "Type a command, a region ID (R-0001), a sketch mark (L1) or a parcel ID (P-0412)", ClearButtonEnabled = true };
         _palEdit.TextChanged += _ => { _palIndex = 0; PaletteRebuild(); };
         _palEdit.TextSubmitted += _ => PaletteRun(_palIndex);
         _palEdit.GuiInput += e =>
@@ -965,6 +965,9 @@ public partial class EditorMode
     {
         foreach (var (tool, _, name, key) in Tools) { var t = tool; yield return ($"Tool: {name}  ({OS.GetKeycodeString(key)})", () => SelectTool(t)); }
         yield return ("Region: new  (N)", () => { SelectTool(EditorTool.Region); StartRegion(); });
+        yield return ("Sketch: mark points  (P)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Point); });
+        yield return ("Sketch: draw a line  (L)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Line); });
+        if (_sketch.Count > 0) yield return ("Sketch: clear", () => { SelectTool(EditorTool.Sketch); RequestClearSketch(); });
         yield return ("Poles: plan a line  (P)", () => { SelectTool(EditorTool.Poles); StartPlanning(); });
         yield return ("Poles: connect  (C)", () => { SelectTool(EditorTool.Poles); StartConnecting(); });
         yield return ("Edit: undo  (Ctrl+Z)", () => Undo());
@@ -973,6 +976,8 @@ public partial class EditorMode
         yield return ("Walk: drop to the ground here  (F3)", WalkFromHere);
         yield return ("Help: controls  (F1)", ToggleCheatSheet);
         foreach (var r in Regions()) { var id = r.Id; yield return ($"{r.Id}  region  {r.Colour}  {r.Points.Count} corners", () => { SelectTool(EditorTool.Region); SelectRegion(id); }); }
+        foreach (var p in _sketch.Points) { var id = p.Id; yield return ($"{p.Id}  sketch point", () => { SelectTool(EditorTool.Sketch); SelectSketchItem(id); }); }
+        foreach (var l in _sketch.Lines) { var id = l.Id; yield return ($"{l.Id}  sketch {(l.Closed ? "closed line" : "line")}  {l.Points.Count} corners", () => { SelectTool(EditorTool.Sketch); SelectSketchItem(id); }); }
         if (filter.Length >= 2)
             foreach (var p in Map.Parcels.Values.OrderBy(p => p.Id, StringComparer.Ordinal)) { var id = p.Id; yield return ($"{p.Id}  parcel  {p.Kind}", () => { SelectTool(EditorTool.Select); Click(id, false); }); }
     }

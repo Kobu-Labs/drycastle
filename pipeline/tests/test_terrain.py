@@ -7,9 +7,9 @@ from pyproj import Transformer
 from rasterio.transform import from_origin
 from shapely.geometry import box
 
-from suchohrad_pipeline.buildings import derive_building, load_building_rules
-from suchohrad_pipeline.frame import Frame
-from suchohrad_pipeline.terrain import (
+from drycastle_pipeline.buildings import derive_building, load_building_rules
+from drycastle_pipeline.frame import Frame
+from drycastle_pipeline.terrain import (
     build_terrain,
     cells_per_chunk,
     flatten_buildings,
@@ -136,3 +136,28 @@ def test_chunk_border_vertices_are_shared() -> None:
     edge_a = {tuple(v) for v in a.tris.reshape(-1, 3) if abs(v[0] - 250) < 1e-9}
     edge_b = {tuple(v) for v in b.tris.reshape(-1, 3) if abs(v[0] - 250) < 1e-9}
     assert edge_a and edge_a == edge_b
+
+
+def test_cut_holes_removes_the_hole_and_keeps_the_rest_on_the_same_plane() -> None:
+    from shapely.geometry import Polygon
+
+    from drycastle_pipeline.meshes import Mesh
+    from drycastle_pipeline.terrain import cut_holes
+
+    # one 4 m cell of two triangles on the plane z = 0.5 x + 1, facing up
+    z = lambda x, y: 0.5 * x + 1.0
+    sq = [(0, 0), (4, 0), (4, 4), (0, 4)]
+    tris = np.array([[(*sq[a], z(*sq[a])) for a in t] for t in ((0, 1, 2), (0, 2, 3))], float)
+    mesh = Mesh(tris, np.array([[10, 20, 30], [40, 50, 60]], np.uint8))
+    hole = Polygon([(1.5, 1.5), (2.5, 1.5), (2.5, 2.5), (1.5, 2.5)])
+    out = cut_holes(mesh, [hole])
+    area = 0.0
+    for t in out.tris:
+        assert (np.cross(t[1] - t[0], t[2] - t[0])[2] > 0)  # still faces up
+        assert t[:, 2] == pytest.approx(z(t[:, 0], t[:, 1]))  # same plane
+        area += Polygon(t[:, :2]).area
+        assert not Polygon(t[:, :2]).intersection(hole).area > 1e-9  # nothing inside the hole
+    assert area == pytest.approx(16 - 1)
+    assert cut_holes(mesh, []) is mesh
+    far = Polygon([(10, 10), (11, 10), (11, 11), (10, 11)])
+    assert cut_holes(mesh, [far]).face_count == 2

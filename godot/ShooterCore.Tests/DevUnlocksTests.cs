@@ -1,7 +1,7 @@
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Dev mode "everything unlocked" (issue #149): the gate override, the reported rows and the showcase kits.</summary>
 public class DevUnlocksTests

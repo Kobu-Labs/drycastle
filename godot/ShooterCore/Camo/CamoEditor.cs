@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Which panel of the customiser a parameter sits in.</summary>
 public enum CamoGroup { Character, Suit, Foliage, FacePaint }

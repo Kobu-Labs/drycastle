@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>The id index behind the data file Find methods (T3-019): same answers as the LINQ scans it replaces.</summary>
 public class DataIndexTests

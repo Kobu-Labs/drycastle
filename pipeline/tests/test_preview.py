@@ -1,9 +1,9 @@
 from shapely.geometry import box
 
-from suchohrad_pipeline.buildings import derive_building, load_building_rules
-from suchohrad_pipeline.preview import densest_cluster, run_preview
-from suchohrad_pipeline.props import run_props
-from suchohrad_pipeline.rules import DEFAULT_RULES
+from drycastle_pipeline.buildings import derive_building, load_building_rules
+from drycastle_pipeline.preview import densest_cluster, run_preview
+from drycastle_pipeline.props import run_props
+from drycastle_pipeline.rules import DEFAULT_RULES
 from tests.synthetic import make_workspace
 
 

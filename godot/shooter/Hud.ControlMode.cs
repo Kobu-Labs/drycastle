@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The control-mode switch (ticket #152): while the owner flies a streak's point of view (a gunship turret, the attack

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>Indeterminate activity indicator: a faint ring with a bright arc turning on it. Reduce-motion draws the arc still.</summary>
 public partial class Spinner : Control

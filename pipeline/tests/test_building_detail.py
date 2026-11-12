@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 from shapely.geometry import Polygon
 
-from suchohrad_pipeline.building_detail import DetailError, build_detail, parse_detail
-from suchohrad_pipeline.meshes import building_mesh
+from drycastle_pipeline.building_detail import DetailError, build_detail, parse_detail
+from drycastle_pipeline.meshes import building_mesh
 
 
 def house(roof="gabled"):

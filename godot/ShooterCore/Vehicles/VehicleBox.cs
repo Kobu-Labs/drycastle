@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// A ray hit on a vehicle's hit box, in the vehicle's own frame: the node frame of the vehicle (origin on the ground under its centre,
@@ -58,6 +58,25 @@ public static class VehicleBox
         var local = lo + ld * tEnter;
         var ln = enterAxis switch { 0 => new Vector3(enterSign, 0, 0), 1 => new Vector3(0, enterSign, 0), _ => new Vector3(0, 0, enterSign) };
         return new VehicleBoxHit(tEnter, local, ln);
+    }
+
+    /// <summary>
+    /// Metres along a ray that crosses the box to where it leaves it. The ray is in the box's own frame (<see cref="GlassRules.ToVehicle"/>)
+    /// and <paramref name="dir"/> is a unit vector. For a ray that misses the box the number means nothing.
+    /// </summary>
+    public static float ExitDistance(Vector3 origin, Vector3 dir, float halfWidth, float halfLength, float height)
+    {
+        var min = new Vector3(-halfWidth, 0, -halfLength);
+        var max = new Vector3(halfWidth, height, halfLength);
+        var tExit = float.PositiveInfinity;
+        for (var axis = 0; axis < 3; axis++)
+        {
+            var d = Get(dir, axis);
+            if (MathF.Abs(d) < 1e-7f) continue;
+            var p = Get(origin, axis);
+            tExit = MathF.Min(tExit, MathF.Max((Get(min, axis) - p) / d, (Get(max, axis) - p) / d));
+        }
+        return tExit;
     }
 
     static float Get(Vector3 v, int axis) => axis switch { 0 => v.X, 1 => v.Y, _ => v.Z };

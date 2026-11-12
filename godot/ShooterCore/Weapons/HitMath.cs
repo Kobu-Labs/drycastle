@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>A player as a hit target: feet position, stance (sets the capsule height) and the yaw they face.</summary>
 public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw);

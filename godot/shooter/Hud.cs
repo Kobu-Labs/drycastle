@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// In-match HUD (issue #88). Every element is built once in <see cref="_Ready"/>; the setters change text, fill,
@@ -12,14 +12,12 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class Hud : CanvasLayer
 {
-    const int Slots = 3, FeedRows = HudLogic.FeedMax, BoardRows = 16, Indicators = 4;
+    const int Slots = 4, FeedRows = HudLogic.FeedMax, BoardRows = 16, Indicators = 4;
     const float CrossThick = 3, CrossLen = 12, CrossMinGap = 8;
 
     public GameSettings Settings { get; private set; } = new();
     /// <summary>Id of the local player (scoreboard highlight, score line).</summary>
     public ushort MyId { get; set; }
-    /// <summary>Held-Tab input; the screenshot mode overrides it.</summary>
-    public bool? ForceScoreboard { get; set; }
     /// <summary>Display name of a weapons.json index in a kill message (the killer's weapon, not the viewer's hotbar); null when unknown.</summary>
     public Func<byte, string?>? KillWeaponName { get; set; }
     /// <summary>Crosshair spread in degrees (set by the owner on shots and weapon changes; the crosshair reads it each frame).</summary>
@@ -30,12 +28,7 @@ public partial class Hud : CanvasLayer
     public Func<float>? Aim { get; set; }
     /// <summary>Sniper breath meter: whether it shows, the breath left (0..1) and the phase. Read each frame; the owner sets it.</summary>
     public Func<(bool Show, float Meter, BreathState.BreathPhase Phase)>? Breath { get; set; }
-    /// <summary>The local player's stance for the stance badge (read each frame; the badge only redraws on change).</summary>
-    public Func<Stance>? StanceOf { get; set; }
     float _crossAlpha = 1;
-    Label? _stanceText;
-    StanceIcon? _stanceIcon;
-    Stance? _stanceShown;
     Control _scope = null!;
     Control _breath = null!;
     BreathBar _breathBar = null!;
@@ -53,7 +46,6 @@ public partial class Hud : CanvasLayer
     readonly double[] _indAt = new double[Indicators];
     int _indNext;
     // health
-    Label _hpNum = null!, _hpLow = null!;
     ProgressBar _hpBar = null!;
     int _hp = -1;
     // breath: shown only while the head is under water (fades in and out)
@@ -62,15 +54,8 @@ public partial class Hud : CanvasLayer
     ProgressBar _airBar = null!;
     float _airShown = -1, _breathTarget;
     // ammo
-    Label _wName = null!, _mag = null!, _reserve = null!, _reloadText = null!, _speed = null!, _prompt = null!;
+    Label _wName = null!, _mag = null!, _reserve = null!, _speed = null!, _prompt = null!;
     RadialProgress _radial = null!;
-    ProgressBar _reloadBar = null!;
-    double _reloadUntil, _reloadLen;
-    // hotbar
-    readonly Control[] _cell = new Control[Slots];
-    readonly PanelContainer[] _slot = new PanelContainer[Slots];
-    readonly Label[] _slotNum = new Label[Slots], _slotName = new Label[Slots], _slotAmmo = new Label[Slots];
-    int _selected = -1;
     // top centre
     Label _timer = null!, _scoreLine = null!;
     float _timeLeft; double _timeAt; bool _timeRunning; int _timeShown = -1;
@@ -89,8 +74,6 @@ public partial class Hud : CanvasLayer
     Control _protChip = null!, _protOutline = null!;
     Label _protText = null!;
     double _protUntil; int _protShown = -1;
-    Label _hint = null!;
-    Input.MouseModeEnum? _hintMode;
     // scoreboard
     Control _board = null!;
     Label _boardTitle = null!, _boardFoot = null!;
@@ -121,14 +104,11 @@ public partial class Hud : CanvasLayer
         BuildBreath();
         BuildHealth();
         BuildAir();
-        BuildStance();
         BuildAmmo();
-        BuildProgress(); // level, XP bar and perk above the ammo block (ticket #143)
         BuildSeats(); // the vehicle seat schematic above the vehicle readout
-        BuildHotbar();
         BuildTop();
         BuildFeed();
-        BuildHints();
+        BuildProtectionChip();
         BuildRespawn();
         BuildBoard();
         BuildXpPanel();
@@ -136,12 +116,12 @@ public partial class Hud : CanvasLayer
         BuildStreaks();
         BuildUav();
         BuildSandbox();
+        BuildChat();
         ApplyMinimapSettings();
         Relayout();
         GetViewport().SizeChanged += Relayout;
         SetHealth(100);
         SetMatch(MatchPhase.Waiting, 0, null);
-        RefreshHint();
     }
 
     /// <summary>The live settings changed (settings screen preview/apply): rescale, crosshair visibility and FOV, key hints.</summary>
@@ -151,7 +131,6 @@ public partial class Hud : CanvasLayer
         Relayout();
         ApplyMinimapSettings();
         _gap = -1;
-        _hintMode = null;
         _seatsDef = null; // the seat hint names the (maybe rebound) keys: rebuilt on the next frame
         foreach (var tri in _indTri) tri.Color = ShooterTheme.Danger; // read at build time otherwise; the palette may have switched
         if (_crossRoot != null) _crossRoot.Visible = Settings.ShowCrosshair;
@@ -242,52 +221,17 @@ public partial class Hud : CanvasLayer
         }
     }
 
-    /// <summary>Stance badge above the health panel: a silhouette icon and its word, so the state never rests on colour.</summary>
-    void BuildStance()
-    {
-        var p = Place(P("HudPanel"), 0, 1, ShooterTheme.Margin, -ShooterTheme.Margin - 120, 200, 40);
-        _root.AddChild(p);
-        var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        row.AddThemeConstantOverride("separation", ShooterTheme.Space);
-        p.AddChild(row);
-        _stanceIcon = new StanceIcon { CustomMinimumSize = new Vector2(48, 32), MouseFilter = Control.MouseFilterEnum.Ignore };
-        _stanceText = L("", "HudSmall");
-        row.AddChild(_stanceIcon); row.AddChild(_stanceText);
-    }
-
-    void UpdateStance()
-    {
-        if (StanceOf == null || _stanceIcon == null || _stanceText == null) return;
-        var st = StanceOf();
-        if (st == _stanceShown) return;
-        _stanceShown = st;
-        _stanceIcon.Stance = st;
-        _stanceIcon.QueueRedraw();
-        Set(_stanceText, Strings.T(HudLogic.StanceKey(st)));
-    }
-
+    /// <summary>Health: one bar, no panel, no text. It turns the danger colour when low.</summary>
     void BuildHealth()
     {
-        var p = Place(P("HudPanel"), 0, 1, ShooterTheme.Margin, -ShooterTheme.Margin, 320, 112);
-        _root.AddChild(p);
-        var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        v.AddThemeConstantOverride("separation", 0);
-        p.AddChild(v);
-        var top = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        v.AddChild(top);
-        top.AddChild(L(Strings.T("hud.health"), "HudSmall", minW: 96));
-        _hpLow = L(Strings.T("hud.low"), "HudDanger"); _hpLow.Modulate = new Color(1, 1, 1, 0);
-        top.AddChild(_hpLow);
-        _hpNum = L("100", "HudDisplay", HorizontalAlignment.Left, 120);
-        v.AddChild(_hpNum);
-        _hpBar = new ProgressBar { MaxValue = 100, Value = 100, ShowPercentage = false, CustomMinimumSize = new Vector2(0, 16), ThemeTypeVariation = "HealthBar", MouseFilter = Control.MouseFilterEnum.Ignore };
-        v.AddChild(_hpBar);
+        _hpBar = Place(new ProgressBar { MaxValue = 100, Value = 100, ShowPercentage = false, ThemeTypeVariation = "HealthBar", MouseFilter = Control.MouseFilterEnum.Ignore }, 0, 1, ShooterTheme.Margin, -ShooterTheme.Margin, 320, 16);
+        _root.AddChild(_hpBar);
     }
 
     /// <summary>Breath meter above the health panel: "AIR" and seconds left, a bar, and "LOW" in the last seconds. Fixed size; invisible when dry.</summary>
     void BuildAir()
     {
-        _air = Place(P("HudPanel"), 0, 1, ShooterTheme.Margin, -ShooterTheme.Margin - 112 - ShooterTheme.Space, 320, 64);
+        _air = Place(P("HudPanel"), 0, 1, ShooterTheme.Margin, -ShooterTheme.Margin - 16 - ShooterTheme.Space, 320, 64);
         _root.AddChild(_air);
         _air.Modulate = new Color(1, 1, 1, 0);
         var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -308,12 +252,12 @@ public partial class Hud : CanvasLayer
     public void SetBreath(float airLeft, bool underwater)
     {
         _breathTarget = underwater ? 1f : 0f;
-        var secs = MathF.Round(Math.Clamp(airLeft, 0f, Suchohrad.ShooterCore.Breath.Capacity), 1);
+        var secs = MathF.Round(Math.Clamp(airLeft, 0f, Drycastle.ShooterCore.Breath.Capacity), 1);
         if (secs == _airShown) return;
         _airShown = secs;
         var low = HudLogic.BreathLow(secs);
         Set(_airNum, HudLogic.BreathText(secs));
-        _airBar.Value = secs / Suchohrad.ShooterCore.Breath.Capacity * 100;
+        _airBar.Value = secs / Drycastle.ShooterCore.Breath.Capacity * 100;
         _airBar.Modulate = low ? ShooterTheme.Danger : ShooterTheme.Accent; // "LOW" text carries it too, not colour alone
         Fade(_airLow, low ? 1 : 0);
     }
@@ -329,7 +273,7 @@ public partial class Hud : CanvasLayer
 
     void BuildAmmo()
     {
-        _speed = Place(L("", "HudBig", HorizontalAlignment.Right), 1, 1, -ShooterTheme.Margin, -ShooterTheme.Margin - 136, 320, 40);
+        _speed = Place(L("", "HudBig", HorizontalAlignment.Right), 1, 1, -ShooterTheme.Margin, -ShooterTheme.Margin - 104, 320, 40);
         _speed.Visible = false; // vehicle speed readout hook: SetVehicleSpeed
         _root.AddChild(_speed);
         _prompt = Place(L("", "HudHead", HorizontalAlignment.Center), 0.5f, 0.7f, -200, 0, 400, 32); // context prompt (enter / exit a vehicle)
@@ -344,73 +288,27 @@ public partial class Hud : CanvasLayer
         _radial.OffsetBottom = -ShooterTheme.Space * 4;
         _radial.OffsetTop = _radial.OffsetBottom - RadialProgress.Height;
         _root.AddChild(_radial);
-        var p = Place(P("HudPanel"), 1, 1, -ShooterTheme.Margin, -ShooterTheme.Margin, 320, 112);
-        _root.AddChild(p);
-        var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        // weapon name and ammo only: no panel, no border
+        var v = Place(new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore }, 1, 1, -ShooterTheme.Margin, -ShooterTheme.Margin, 320, 88);
         v.AddThemeConstantOverride("separation", 0);
-        p.AddChild(v);
+        _root.AddChild(v);
         _wName = L("", "HudHead", HorizontalAlignment.Right); v.AddChild(_wName);
         var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End, MouseFilter = Control.MouseFilterEnum.Ignore };
         v.AddChild(row);
         _mag = L("", "HudDisplay", HorizontalAlignment.Right, 96);
         _reserve = L("", "HudHead", HorizontalAlignment.Left, 88); _reserve.ThemeTypeVariation = "HudDim";
         row.AddChild(_mag); row.AddChild(_reserve);
-        var rl = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        v.AddChild(rl);
-        _reloadText = L(Strings.T("hud.reloading"), "HudSmall", minW: 128);
-        _reloadBar = new ProgressBar { MaxValue = 1, ShowPercentage = false, CustomMinimumSize = new Vector2(0, 16), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter, ThemeTypeVariation = "ReloadBar", MouseFilter = Control.MouseFilterEnum.Ignore };
-        rl.AddChild(_reloadText); rl.AddChild(_reloadBar);
-        Fade(_reloadText, 0); Fade(_reloadBar, 0);
-    }
-
-    void BuildHotbar()
-    {
-        var bar = Place(new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore }, 0.5f, 1, 0, -ShooterTheme.Margin, Slots * 120 + (Slots - 1) * ShooterTheme.Space, 88);
-        bar.AddThemeConstantOverride("separation", ShooterTheme.Space);
-        _root.AddChild(bar);
-        for (var i = 0; i < Slots; i++)
-        {
-            // fixed cell: the selected slot is taller and framed inside it, so selecting never moves a neighbour
-            var cell = new Control { CustomMinimumSize = new Vector2(120, 88), MouseFilter = Control.MouseFilterEnum.Ignore };
-            bar.AddChild(cell); _cell[i] = cell;
-            var slot = P("HudSlot");
-            cell.AddChild(slot); _slot[i] = slot;
-            var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-            v.AddThemeConstantOverride("separation", 0);
-            slot.AddChild(v);
-            var top = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-            v.AddChild(top);
-            _slotNum[i] = L((i + 1).ToString(), "HudAccent", minW: 24);
-            _slotAmmo[i] = L("", "HudSmall", HorizontalAlignment.Right); _slotAmmo[i].SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            top.AddChild(_slotNum[i]); top.AddChild(_slotAmmo[i]);
-            _slotName[i] = L("", "HudSmall"); _slotName[i].ClipText = true;
-            v.AddChild(_slotName[i]);
-        }
-        PlaceSlots(0);
-    }
-
-    /// <summary>Unselected: 112 x 72 low in the cell; selected: full 120 x 88 cell with the strong frame.</summary>
-    void PlaceSlots(int selected)
-    {
-        for (var i = 0; i < Slots; i++)
-        {
-            var sel = i == selected;
-            var s = _slot[i];
-            s.ThemeTypeVariation = sel ? "HudSlotSelected" : "HudSlot";
-            s.OffsetLeft = sel ? 0 : 4; s.OffsetRight = sel ? 120 : 116;
-            s.OffsetTop = sel ? 0 : 16; s.OffsetBottom = 88;
-        }
     }
 
     void BuildTop()
     {
-        var p = Place(P("HudPanel"), 0.5f, 0, 0, ShooterTheme.Margin, 480, 104);
+        var p = Place(P("HudPanel"), 0.5f, 0, 0, ShooterTheme.Margin, 224, 64);
         _root.AddChild(p);
         var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         v.AddThemeConstantOverride("separation", 0);
         p.AddChild(v);
-        _timer = L("", "HudDisplay", HorizontalAlignment.Center); v.AddChild(_timer);
-        _scoreLine = L("", null, HorizontalAlignment.Center); _scoreLine.ClipText = true; v.AddChild(_scoreLine);
+        _timer = L("", "HudHead", HorizontalAlignment.Center); v.AddChild(_timer);
+        _scoreLine = L("", "HudSmall", HorizontalAlignment.Center); _scoreLine.ClipText = true; v.AddChild(_scoreLine);
     }
 
     void BuildFeed()
@@ -437,12 +335,10 @@ public partial class Hud : CanvasLayer
         }
     }
 
-    void BuildHints()
+    void BuildProtectionChip()
     {
-        _hint = Place(L("", "HudSmall"), 0, 0, ShooterTheme.Margin, ShooterTheme.Margin, 640, 24);
-        _root.AddChild(_hint);
-        // spawn protection chip above the hotbar (reserved space, faded in and out)
-        var chip = Place(P("HudPanel"), 0.5f, 1, 0, -ShooterTheme.Margin - 88 - ShooterTheme.Space, 320, 48);
+        // spawn protection chip, bottom centre (reserved space, faded in and out)
+        var chip = Place(P("HudPanel"), 0.5f, 1, 0, -ShooterTheme.Margin, 320, 48);
         var h = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center, MouseFilter = Control.MouseFilterEnum.Ignore };
         h.AddThemeConstantOverride("separation", ShooterTheme.Space);
         chip.AddChild(h);
@@ -511,37 +407,52 @@ public partial class Hud : CanvasLayer
         hp = Math.Clamp(hp, 0, 100);
         if (hp == _hp) return;
         _hp = hp;
-        var low = hp <= HudLogic.LowHealth;
-        Set(_hpNum, hp.ToString());
-        _hpNum.ThemeTypeVariation = low ? "HudDisplayDanger" : "HudDisplay";
         _hpBar.Value = hp;
-        _hpBar.ThemeTypeVariation = low ? "HealthBarLow" : "HealthBar";
-        Fade(_hpLow, low ? 1 : 0); // "LOW" text next to the colour change
+        _hpBar.ThemeTypeVariation = hp <= HudLogic.LowHealth ? "HealthBarLow" : "HealthBar";
     }
 
-    /// <summary>Hotbar names in slot order (display names, already translated).</summary>
+    /// <summary>Display names in slot order (the selected one is named beside the ammo).</summary>
     public void SetWeapons(IReadOnlyList<string> names)
     {
-        _weapons.Count = Math.Min(Slots, names.Count);
-        for (var i = 0; i < Slots; i++) { _weapons.Names[i] = i < names.Count ? names[i] : ""; Set(_slotName[i], _weapons.Names[i]); _cell[i].Modulate = new Color(1, 1, 1, i < names.Count ? 1 : 0.35f); }
+        for (var i = 0; i < Slots; i++) _weaponNames[i] = i < names.Count ? names[i] : "";
+        Set(_wName, _weaponNames[_slotShown]);
     }
 
-    /// <summary>Selected slot (1-based), its mag/reserve (mag &lt; 0: no ammo, melee), per-slot mags, and reload seconds left.</summary>
+    readonly string[] _weaponNames = { "", "", "", "" };
+    int _slotShown;
+
+    /// <summary>Selected slot (1-based) and its mag/reserve (mag &lt; 0: no ammo, melee). The per-slot list and reload fields are kept for the callers.</summary>
     public void SetAmmo(int slot, int mag, int reserve, IReadOnlyList<(int Mag, int Reserve, bool Melee)> all, float reloadLeft, float reloadTotal)
     {
-        var sel = Math.Clamp(slot, 1, Slots) - 1;
-        if (sel != _selected) { _selected = sel; PlaceSlots(sel); }
-        Set(_wName, _weapons.Names[sel]);
+        _slotShown = Math.Clamp(slot, 1, Slots) - 1;
+        Set(_wName, _weaponNames[_slotShown]);
         Set(_mag, mag < 0 ? Strings.T("hud.ammo.none") : mag.ToString());
         Set(_reserve, mag < 0 ? "" : Strings.F("hud.ammo.reserve", reserve));
         _mag.ThemeTypeVariation = mag == 0 && reserve == 0 && mag >= 0 ? "HudDisplayDanger" : "HudDisplay";
-        for (var i = 0; i < Slots && i < all.Count; i++)
-            Set(_slotAmmo[i], all[i].Melee ? "" : all[i].Mag.ToString());
-        if (reloadLeft > 0) { _reloadLen = Math.Max(0.01, reloadTotal); _reloadUntil = Now + reloadLeft; }
-        else { _reloadUntil = 0; Fade(_reloadText, 0); Fade(_reloadBar, 0); }
     }
 
     /// <summary>Phase, seconds left (null: unchanged clock) and the winner/ending state.</summary>
+    /// <summary>Team deathmatch: the client's match state, read for teams and team scores. Call before <see cref="SetMatch"/>; null or free-for-all hides every team cue.</summary>
+    public void SetTeams(ClientMatchState? match) { _team = match; _boardDirty = true; _feedShown = (-1, -1); Minimap.TeamColours = TeamMode; }
+    ClientMatchState? _team;
+    bool TeamMode => _team is { IsTeamMode: true };
+    byte TeamOf(ushort id) => _team?.TeamOf(id) ?? Teams.None;
+    byte MyTeam => TeamOf(MyId);
+
+    /// <summary>Friend or enemy colour of <paramref name="team"/> as seen by the local player (the HUD text colour when neutral).</summary>
+    Color? RelationColor(byte team) => HudLogic.RelationOf(MyTeam, team) switch
+    {
+        HudLogic.Relation.Friend => ShooterTheme.Friend,
+        HudLogic.Relation.Enemy => ShooterTheme.Enemy,
+        _ => null,
+    };
+
+    /// <summary>A name with its team tag in team deathmatch (so the team is readable without colour), plain otherwise.</summary>
+    string Tagged(string name, byte team) => TeamMode && team != Teams.None ? Strings.F("score.team.tag", Teams.Tag(team), name) : name;
+
+    /// <summary>The label's text colour for a team relation; null restores the theme colour.</summary>
+    static void Tint(Label l, Color? c) { if (c is { } col) l.AddThemeColorOverride("font_color", col); else l.RemoveThemeColorOverride("font_color"); }
+
     public void SetMatch(MatchPhase phase, float timeRemaining, IReadOnlyList<ScoreRow>? rows, IReadOnlyList<ushort>? winners = null, Func<ushort, string>? nameOf = null)
     {
         _phase = phase;
@@ -554,10 +465,17 @@ public partial class Hud : CanvasLayer
         {
             MatchPhase.Waiting => Strings.T("hud.phase.waiting"),
             MatchPhase.Ending => Strings.T("hud.phase.ending"),
+            _ when TeamMode => TeamScoreText(),
             _ => line.IAmLeader ? Strings.F("hud.score.leading", line.MyKills) : Strings.F("hud.score.behind", line.MyKills, line.LeaderName, line.LeaderKills),
         });
         UpdateTimer();
         RefreshXpPanel();
+    }
+
+    string TeamScoreText()
+    {
+        var (mine, theirs, team) = HudLogic.TeamScores(MyTeam, _team!.ScoreA, _team.ScoreB);
+        return Strings.F("hud.score.team", Teams.Tag(team), mine, theirs);
     }
 
     void UpdateTimer()
@@ -689,19 +607,12 @@ public partial class Hud : CanvasLayer
         {
             if (now >= _protUntil) SetProtection(0); else UpdateProtection();
         }
-        if (_reloadUntil > 0)
-        {
-            if (now >= _reloadUntil) { _reloadUntil = 0; Fade(_reloadText, 0); Fade(_reloadBar, 0); }
-            else { _reloadBar.Value = 1 - (_reloadUntil - now) / _reloadLen; Fade(_reloadText, 1); Fade(_reloadBar, 1); }
-        }
         if (_hitUntil > 0) UpdateHit(now);
         for (var i = 0; i < Indicators; i++) UpdateIndicator(i, now);
         UpdateFeed(now);
         UpdateCrosshair();
         UpdateBreath();
-        UpdateStance();
-        RefreshHint();
-        var want = ForceScoreboard ?? (Input.IsActionPressed("scoreboard") || _phase == MatchPhase.Ending);
+        var want = (Input.IsActionPressed("scoreboard") && !ChatOpen) || _phase == MatchPhase.Ending; // Tab completes in the chat box
         if (want != _boardShown || (want && _boardDirty)) UpdateBoard(want);
     }
 
@@ -736,9 +647,11 @@ public partial class Hud : CanvasLayer
             var suicide = k.Killer == k.Victim;
             _feed[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
             // your own rows say so in words as well as colour (as the scoreboard does)
-            Set(_feedKiller[i], WithYou(suicide ? victim : killer, k.Killer == MyId));
+            var killerTeam = TeamOf(k.Killer); var victimTeam = TeamOf(k.Victim);
+            Set(_feedKiller[i], Tagged(WithYou(suicide ? victim : killer, k.Killer == MyId), killerTeam));
             Set(_feedWeapon[i], $"[{(k.Cause == KillCause.Roadkill ? Strings.T("feed.roadkill") : WeaponName(k.Weapon))}]");
-            Set(_feedVictim[i], suicide ? "" : WithYou(victim, k.Victim == MyId));
+            Set(_feedVictim[i], suicide ? "" : Tagged(WithYou(victim, k.Victim == MyId), victimTeam));
+            Tint(_feedKiller[i], RelationColor(killerTeam)); Tint(_feedVictim[i], RelationColor(victimTeam));
             _feed[i].Visible = true;
         }
     }
@@ -857,14 +770,6 @@ public partial class Hud : CanvasLayer
         }
     }
 
-    void RefreshHint()
-    {
-        var mode = MouseModeOverride ?? Input.MouseMode;
-        if (_hintMode == mode) return;
-        _hintMode = mode;
-        Set(_hint, mode == Input.MouseModeEnum.Captured ? Strings.F("hud.hint.captured", InputBindings.Name("scoreboard"), InputBindings.Name("slot_1"), InputBindings.Name("slot_4")) : Strings.T("hud.hint.released"));
-    }
-
     void UpdateBoard(bool show)
     {
         _boardShown = show; _boardDirty = false;
@@ -874,11 +779,12 @@ public partial class Hud : CanvasLayer
         if (ending)
         {
             var names = string.Join(", ", _winners.Select(_nameOf));
-            Set(_boardTitle, names == "" ? Strings.T("hud.phase.ending") : Strings.F(_winners.Count > 1 ? "score.ending.tie" : "score.ending", names));
+            if (TeamMode && _winners.Count > 0) Set(_boardTitle, Strings.F("score.ending.team", Teams.Tag(TeamOf(_winners[0]))));
+            else Set(_boardTitle, names == "" ? Strings.T("hud.phase.ending") : Strings.F(_winners.Count > 1 ? "score.ending.tie" : "score.ending", names));
         }
         else Set(_boardTitle, Strings.T("score.title"));
         Set(_boardFoot, Strings.T(ending ? "score.hint.next" : "score.hint.hold"));
-        var sorted = HudLogic.Sort(_rows);
+        var sorted = TeamMode ? HudLogic.SortTeams(_rows, _team!.ScoreA, _team.ScoreB) : HudLogic.Sort(_rows);
         // keep the local row visible even when the room exceeds the pre-built rows
         if (sorted.Count > BoardRows)
         {
@@ -892,41 +798,15 @@ public partial class Hud : CanvasLayer
             var mine = r.Id == MyId;
             _row[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
             var c = _cells[i];
-            Set(c[0], mine ? Strings.F("score.you", r.Name) : r.Name);
+            Set(c[0], Tagged(mine ? Strings.F("score.you", r.Name) : r.Name, r.Team));
+            Tint(c[0], RelationColor(r.Team));
             Set(c[1], r.Kills.ToString()); Set(c[2], r.Deaths.ToString()); Set(c[3], Strings.F("score.ping", r.Ping));
             _row[i].Visible = true;
         }
     }
 }
 
-/// <summary>Small shield icon for spawn protection, drawn once (the HUD's one icon set so far).</summary>
-/// <summary>Stance silhouette: standing (tall), crouched (lower) and prone (flat), drawn in the HUD text colour.</summary>
-public partial class StanceIcon : Control
-{
-    public Stance Stance { get; set; }
-
-    public override void _Draw()
-    {
-        var w = Size.X; var h = Size.Y;
-        var head = h * 0.14f;
-        switch (Stance)
-        {
-            case Stance.Prone:
-                DrawCircle(new Vector2(w * 0.86f, h * 0.55f), head, ShooterTheme.Text);
-                DrawRect(new Rect2(w * 0.08f, h * 0.66f, w * 0.80f, h * 0.20f), ShooterTheme.Text);
-                break;
-            case Stance.Crouch:
-                DrawCircle(new Vector2(w * 0.5f, h * 0.30f), head, ShooterTheme.Text);
-                DrawRect(new Rect2(w * 0.34f, h * 0.46f, w * 0.32f, h * 0.54f), ShooterTheme.Text);
-                break;
-            default:
-                DrawCircle(new Vector2(w * 0.5f, h * 0.14f), head, ShooterTheme.Text);
-                DrawRect(new Rect2(w * 0.36f, h * 0.30f, w * 0.28f, h * 0.70f), ShooterTheme.Text);
-                break;
-        }
-    }
-}
-
+/// <summary>Small shield icon for spawn protection, drawn once.</summary>
 public partial class ShieldIcon : Control
 {
     public override void _Draw()

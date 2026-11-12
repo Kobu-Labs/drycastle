@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Bazooka smoke scripts (headless, on the weapons smoke's flat arena). Alice fires: a rocket into the wall with bob 3 m

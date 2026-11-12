@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Score line data for the top-centre readout: own kills against the leader.</summary>
 public readonly record struct ScoreLine(int MyKills, string LeaderName, int LeaderKills, bool IAmLeader);
@@ -44,6 +44,31 @@ public static class HudLogic
         l.Sort((a, b) => a.Kills != b.Kills ? b.Kills.CompareTo(a.Kills) : a.Deaths != b.Deaths ? a.Deaths.CompareTo(b.Deaths) : a.Id.CompareTo(b.Id));
         return l;
     }
+
+    /// <summary>
+    /// Team deathmatch score line data: (own team's score, other team's score, own team). A player without a team sees team A first.
+    /// </summary>
+    public static (int Mine, int Theirs, byte MyTeam) TeamScores(byte myTeam, int scoreA, int scoreB) =>
+        myTeam == Teams.B ? (scoreB, scoreA, Teams.B) : (scoreA, scoreB, Teams.A);
+
+    /// <summary>Scoreboard order in team deathmatch: the leading team first (ties: team A), then <see cref="Sort"/> inside each team.</summary>
+    public static List<ScoreRow> SortTeams(IReadOnlyList<ScoreRow> rows, int scoreA, int scoreB)
+    {
+        var l = new List<ScoreRow>(rows);
+        int Rank(byte t) => t == Teams.None ? 2 : (t == Teams.A) == (scoreA >= scoreB) ? 0 : 1;
+        l.Sort((a, b) => Rank(a.Team) != Rank(b.Team) ? Rank(a.Team).CompareTo(Rank(b.Team))
+            : a.Kills != b.Kills ? b.Kills.CompareTo(a.Kills) : a.Deaths != b.Deaths ? a.Deaths.CompareTo(b.Deaths) : a.Id.CompareTo(b.Id));
+        return l;
+    }
+
+    /// <summary>
+    /// Whether a name in the kill feed or scoreboard is a friend, an enemy or neutral (free-for-all, no team) to the local player.
+    /// The local player counts as a friend. Never the only signal: the HUD adds the team tag.
+    /// </summary>
+    public enum Relation { Neutral, Friend, Enemy }
+
+    public static Relation RelationOf(byte myTeam, byte theirTeam) =>
+        myTeam == Teams.None || theirTeam == Teams.None ? Relation.Neutral : myTeam == theirTeam ? Relation.Friend : Relation.Enemy;
 
     /// <summary>"m:ss", rounded up so the display reaches 0:00 only when time is really out.</summary>
     public static string TimeText(float seconds)

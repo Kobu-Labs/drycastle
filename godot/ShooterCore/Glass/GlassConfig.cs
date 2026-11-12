@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// glass.json: the tuning of glass panes (ADR 0007). Optional: a data directory without the file gets these defaults.

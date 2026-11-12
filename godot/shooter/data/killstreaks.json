@@ -41,7 +41,7 @@
   "ac130": {
     "pitch_min_deg": -75, "pitch_max_deg": -5, "zoom_levels": [1, 2.5, 4],
     "weapons": [
-      { "id": "gun25", "name": "25 mm", "kind": "cannon", "weapon_id": "m249", "damage": 50, "range_m": 3000, "interval_s": 0.04, "spread_deg": 0.6, "tracer_speed_mps": 1500, "tracer_length_m": 14,
+      { "id": "gun25", "name": "25 mm", "kind": "cannon", "weapon_id": "m249", "damage": 50, "range_m": 3000, "interval_s": 0.15, "spread_deg": 0.6, "tracer_speed_mps": 1500, "tracer_length_m": 14,
         "splash": { "radius": 3, "full_damage_radius": 1, "edge_damage": 2, "self_damage_multiplier": 0, "knockback_speed": 3 } },
       { "id": "gun40", "name": "40 mm", "kind": "cannon", "weapon_id": "m82", "damage": 80, "range_m": 3000, "interval_s": 0.2, "spread_deg": 0.4, "tracer_speed_mps": 1500, "tracer_length_m": 14,
         "splash": { "radius": 6, "full_damage_radius": 2, "edge_damage": 12, "self_damage_multiplier": 0, "knockback_speed": 5 } },

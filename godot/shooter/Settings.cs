@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// All persisted settings in one config file (user://shooter_settings.cfg; sections graphics, audio, controls,
@@ -213,6 +213,7 @@ public static class InputBindings
         ("vehicle_view", Binding.Key((int)Key.V)),
         ("killstreak", Binding.Key((int)Key.Q)),
         ("sandbox_panel", Binding.Key((int)Key.F4)),
+        ("chat", Binding.Key((int)Key.T)),
     };
 
     public static BindingMap NewMap() => new(Defaults);

@@ -1,7 +1,7 @@
 using System.Numerics;
 using System.Text.Json;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Physics layers of the world. Solid world (players, vehicles and bullets stop on it) is layer 1; vehicles are layer 2 (as
@@ -305,7 +305,8 @@ public static class SolidShapeKeys
 
 /// <summary>
 /// Collision solids of placed objects (objects.json), built from the asset's category and size (metres at scale 1, origin
-/// at the base centre). Parts are in the object's local frame (X and Y zero, yaw zero); the node carries position and yaw.
+/// at the base centre), or from the boxes the asset lists itself (<see cref="ParseSolids"/>), which win. Parts are in the
+/// object's local frame (yaw zero; X and Y zero for the category rule); the node carries position and yaw.
 /// </summary>
 public static class ObjectColliders
 {
@@ -341,4 +342,39 @@ public static class ObjectColliders
                 return [new(PartRole.Trunk, PartShape.Box, 0, 0, 0, sy, hx, hz, 0)];
         }
     }
+
+    /// <summary>
+    /// The solid boxes an asset lists itself: the "solids" of its manifest entry, each {"min": [x, y, z], "max": [x, y, z],
+    /// "surface": "wall"} in the asset's own frame (pipeline axes, z up, metres at scale 1). An asset that has them collides
+    /// with these and not with the box of its category: a flood wall piece is a ledge to walk on beside a wall, a gate is
+    /// two piers with a way through. Empty when the entry has none; an entry that is not a proper box is skipped.
+    /// </summary>
+    public static List<AssetSolid> ParseSolids(JsonElement asset)
+    {
+        var solids = new List<AssetSolid>();
+        if (!asset.TryGetProperty("solids", out var arr) || arr.ValueKind != JsonValueKind.Array) return solids;
+        foreach (var s in arr.EnumerateArray())
+        {
+            if (s.ValueKind != JsonValueKind.Object || !Corner(s, "min", out var lo) || !Corner(s, "max", out var hi)) continue;
+            if (hi.X <= lo.X || hi.Y <= lo.Y || hi.Z <= lo.Z) continue;
+            var surface = s.TryGetProperty("surface", out var su) && su.ValueKind == JsonValueKind.String ? su.GetString()! : "wall";
+            solids.Add(new AssetSolid(
+                new SolidPart(PartRole.Trunk, PartShape.Box, (lo.X + hi.X) / 2, (lo.Y + hi.Y) / 2, lo.Z, hi.Z, (hi.X - lo.X) / 2, (hi.Y - lo.Y) / 2, 0),
+                surface));
+        }
+        return solids;
+    }
+
+    static bool Corner(JsonElement solid, string name, out Vector3 corner)
+    {
+        corner = default;
+        if (!solid.TryGetProperty(name, out var p) || p.ValueKind != JsonValueKind.Array || p.GetArrayLength() != 3) return false;
+        foreach (var v in p.EnumerateArray())
+            if (v.ValueKind != JsonValueKind.Number) return false;
+        corner = new Vector3(p[0].GetSingle(), p[1].GetSingle(), p[2].GetSingle());
+        return true;
+    }
 }
+
+/// <summary>A solid box of an asset (<see cref="ObjectColliders.ParseSolids"/>) and the surface group of a hit on it ("wall", "metal").</summary>
+public readonly record struct AssetSolid(SolidPart Part, string Surface);

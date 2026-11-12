@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
 
-namespace Suchohrad.ShooterServer.Persistence;
+namespace Drycastle.ShooterServer.Persistence;
 
 /// <summary>
 /// Logs at most one line per interval and counts the lines it skipped (T2-14). A database outage fails many writes at once;

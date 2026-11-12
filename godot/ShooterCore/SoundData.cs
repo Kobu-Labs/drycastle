@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>sounds.json: the event-to-sound table. Ranges come from the sound plan (#78); files are relative to the asset library.</summary>
 public class SoundsFile : IVersioned

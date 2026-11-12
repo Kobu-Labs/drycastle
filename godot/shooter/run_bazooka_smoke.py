@@ -11,7 +11,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ap = argparse.ArgumentParser()
-ap.add_argument("--map", default=os.environ.get("SUCHOHRAD_MAP", ""))
+ap.add_argument("--map", default=os.environ.get("DRYCASTLE_MAP", ""))
 ap.add_argument("--port", type=int, default=27934)
 a = ap.parse_args()
 godot = os.environ.get("GODOT", str(Path.home() / ".local/bin/godot"))

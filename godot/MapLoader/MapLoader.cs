@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Godot;
 
-namespace Suchohrad.MapLoader;
+namespace Drycastle.MapLoader;
 
 /// <summary>
-/// Shared runtime loader for the Suchohrad base map. Loads a map folder (manifest.json,
+/// Shared runtime loader for the Drycastle base map. Loads a map folder (manifest.json,
 /// parcels.json, spawns.json, roads.json, chunks/*.glb) with Godot's runtime glTF importer,
 /// turns collision meshes into static trimesh colliders and supports parcel replacement.
 /// Node names in a chunk: parcel_&lt;ID&gt;_visual / _collision (buildings), parcel_&lt;ID&gt;_props /
@@ -13,6 +13,9 @@ namespace Suchohrad.MapLoader;
 /// props / props_collision (items without a parcel, e.g. OSM trees).
 /// Independent of any mod. Axes: map x east, y north; Godot x east, y up, z = -north.
 /// </summary>
+/// <summary>A hand-drawn ground colour region, for the minimap: ring in ground (x, z) metres.</summary>
+public sealed record RegionPaint(string Id, Color Colour, Vector2[] Ring);
+
 public sealed partial class MapLoader
 {
     readonly Dictionary<string, ParcelInfo> _parcels = new();
@@ -36,6 +39,8 @@ public sealed partial class MapLoader
     public string WaterJson { get; private set; } = "";
     /// <summary>Contents of windows.json, the glass panes of the detailed buildings (empty when the map has none); parsed by the shooter (ShooterCore.MapGlass).</summary>
     public string WindowsJson { get; private set; } = "";
+    /// <summary>Contents of bunkers.json, the rooms of the enterable bunkers (empty when the map has none); parsed by the shooter (ShooterCore.Shelters).</summary>
+    public string BunkersJson { get; private set; } = "";
     /// <summary>Origin of the local frame in S-JTSK (EPSG:5514) metres (east, north), from parcels.json (map 0.4.0+); null for older maps.</summary>
     public (double X, double Y)? OriginEpsg5514 { get; private set; }
     /// <summary>Rule values (fence and tree defaults) from the manifest (map 0.4.0+); null for older maps.</summary>
@@ -93,12 +98,16 @@ public sealed partial class MapLoader
         if (File.Exists(lamps)) ReadLamps(lamps); // map 0.5.0+
         var roads = Path.Combine(mapDir, "roads.json");
         if (File.Exists(roads)) RoadsJson = File.ReadAllText(roads); // no consumer in v1
+        var regionsFile = Path.Combine(mapDir, "regions.json");
+        ReadRegionPaint(File.Exists(regionsFile) ? regionsFile : null);
         var water = Path.Combine(mapDir, "water.json");
         WaterJson = File.Exists(water) ? File.ReadAllText(water) : "";
         var trees = Path.Combine(mapDir, "trees.json");
         TreesJson = File.Exists(trees) ? File.ReadAllText(trees) : ""; // map 0.6.0+
         var windows = Path.Combine(mapDir, "windows.json");
         WindowsJson = File.Exists(windows) ? File.ReadAllText(windows) : ""; // only maps with hand-described building detail have it
+        var bunkers = Path.Combine(mapDir, "bunkers.json");
+        BunkersJson = File.Exists(bunkers) ? File.ReadAllText(bunkers) : ""; // only maps with an enterable bunker have it
         yield return 0.03f;
 
         var tPhase = Time.GetTicksMsec();
@@ -195,6 +204,24 @@ public sealed partial class MapLoader
             return false;
         });
         if (dropped > 0) GD.Print($"map: dropped {dropped} spawn points within 2 m of the terrain rim");
+    }
+
+    /// <summary>Ground paint regions (regions.json) for the minimap, in ID order (the higher ID paints last): ring in ground (x, z) metres and colour.</summary>
+    public IReadOnlyList<RegionPaint> RegionPaints => _regionPaints;
+    readonly List<RegionPaint> _regionPaints = new();
+
+    void ReadRegionPaint(string? path)
+    {
+        _regionPaints.Clear();
+        if (path == null) return;
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        foreach (var r in doc.RootElement.GetProperty("regions").EnumerateArray())
+        {
+            var c = r.GetProperty("colour");
+            var ring = r.GetProperty("ring").EnumerateArray().Select(p => new Vector2(p[0].GetSingle(), -p[1].GetSingle())).ToArray();
+            if (ring.Length < 3) continue;
+            _regionPaints.Add(new RegionPaint(r.GetProperty("id").GetString() ?? "", new Color(c[0].GetInt32() / 255f, c[1].GetInt32() / 255f, c[2].GetInt32() / 255f), ring));
+        }
     }
 
     void ReadParcels(string path)

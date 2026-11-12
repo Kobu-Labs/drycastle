@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace Suchohrad.ShooterServer.Persistence.Postgres;
+namespace Drycastle.ShooterServer.Persistence.Postgres;
 
 /// <summary>
 /// The PostgreSQL database behind the store: a write connection and a read connection, each on its own thread (same model as

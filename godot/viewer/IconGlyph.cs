@@ -88,6 +88,10 @@ public partial class IconGlyph : Control
                 DrawCircle(P(12, 12), 3f * u, col);
                 break;
             }
+            case "sketch":
+                Poly(false, (4, 19), (10, 10), (15, 15), (20, 6));
+                foreach (var (cx, cy) in new[] { (4f, 19f), (20f, 6f), (6f, 6f) }) DrawCircle(P(cx, cy), 2.2f * u, col);
+                break;
             case "undo":
             case "redo":
             {

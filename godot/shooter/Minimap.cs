@@ -1,9 +1,9 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Vector2 = Godot.Vector2;
 using NVector2 = System.Numerics.Vector2;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Top-down minimap (ticket #119, quality and orientation in #150). Two layers:
@@ -28,7 +28,7 @@ public sealed partial class Minimap : Control
     public float ZoomMetres { get; set; } = 90f;
 
     ImageTexture? _base;
-    Suchohrad.MapLoader.MapLoader? _map;
+    Drycastle.MapLoader.MapLoader? _map;
     int _side;               // texture side in texels (0 = not built)
     float _sideMetres;       // the map's extent covered by the texture, metres
     Vector2 _origin;         // ground (x, z) of texel (0, 0)
@@ -38,6 +38,9 @@ public sealed partial class Minimap : Control
     float _shownYaw;         // eased towards _yaw
     bool _hasPlayer;
     readonly List<NVector2> _vehicles = new();
+    readonly List<NVector2> _friends = new();
+    /// <summary>Team deathmatch: pings use the enemy colour (orange) and friends are drawn, as outlined circles in the friend colour.</summary>
+    public bool TeamColours { get; set; }
     readonly MinimapPings _pings = new();
     readonly List<RoadDraw> _roads = new();
     static readonly Vector2[] Arrow = { new(0, -ArrowHalf), new(ArrowHalf * 0.8f, ArrowHalf), new(0, ArrowHalf * 0.4f), new(-ArrowHalf * 0.8f, ArrowHalf) };
@@ -64,7 +67,7 @@ public sealed partial class Minimap : Control
     /// Stores the map and prepares the roads. The terrain texture is built on the first frame, once the on-screen size is known.
     /// Returns false when the map has no parcels or roads (the minimap then shows the player only).
     /// </summary>
-    public bool Build(Suchohrad.MapLoader.MapLoader? map)
+    public bool Build(Drycastle.MapLoader.MapLoader? map)
     {
         _base = null;
         _side = 0;
@@ -108,6 +111,13 @@ public sealed partial class Minimap : Control
         for (var i = 0; i < groundXZ.Count; i++) _vehicles.Add(new NVector2(groundXZ[i].X, groundXZ[i].Y));
     }
 
+    /// <summary>Teammates' positions (ground x, z), drawn in team deathmatch only. Copied, so the caller may reuse its list.</summary>
+    public void SetFriendDots(IReadOnlyList<Vector2> groundXZ)
+    {
+        _friends.Clear();
+        for (var i = 0; i < groundXZ.Count; i++) _friends.Add(new NVector2(groundXZ[i].X, groundXZ[i].Y));
+    }
+
     /// <summary>
     /// Shows enemy pings (circles) until <paramref name="expiry"/> on the Time.GetTicksMsec()/1000 clock. A new call replaces
     /// the previous set. This is the UAV streak's layer.
@@ -137,7 +147,7 @@ public sealed partial class Minimap : Control
     }
 
     /// <summary>The last terrain texture, kept for its map and side: a second join on the same map does not rasterise again (#170, T2-19).</summary>
-    static Suchohrad.MapLoader.MapLoader? _cachedMap;
+    static Drycastle.MapLoader.MapLoader? _cachedMap;
     static int _cachedSide;
     static ImageTexture? _cachedTex;
     readonly List<float> _crossings = new();
@@ -163,6 +173,24 @@ public sealed partial class Minimap : Control
             var u1 = Math.Clamp((int)Math.Ceiling((b.End.X - _origin.X) / _metresPerTexel), 0, side - 1);
             var v0 = Math.Clamp((int)Math.Floor((b.Position.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
             var v1 = Math.Clamp((int)Math.Ceiling((b.End.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
+            for (var v = v0; v <= v1; v++)
+            {
+                ScanlineFill.Crossings(rings, _origin.Y + (v + 0.5f) * _metresPerTexel, _crossings);
+                ScanlineFill.Spans(_crossings, _origin.X, _metresPerTexel, u0, u1, _spans);
+                foreach (var (from, to) in _spans)
+                    for (var u = from; u <= to; u++) Buffer.BlockCopy(colour, 0, px, (v * side + u) * 4, 4);
+            }
+        }
+        foreach (var region in _map.RegionPaints)
+        {
+            var colour = Rgba(region.Colour);
+            var rings = new List<NVector2[]> { region.Ring.Select(v => new NVector2(v.X, v.Y)).ToArray() };
+            var box = new Rect2(region.Ring[0], Vector2.Zero);
+            foreach (var v in region.Ring) box = box.Expand(v);
+            var u0 = Math.Clamp((int)Math.Floor((box.Position.X - _origin.X) / _metresPerTexel), 0, side - 1);
+            var u1 = Math.Clamp((int)Math.Ceiling((box.End.X - _origin.X) / _metresPerTexel), 0, side - 1);
+            var v0 = Math.Clamp((int)Math.Floor((box.Position.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
+            var v1 = Math.Clamp((int)Math.Ceiling((box.End.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
             for (var v = v0; v <= v1; v++)
             {
                 ScanlineFill.Crossings(rings, _origin.Y + (v + 0.5f) * _metresPerTexel, _crossings);
@@ -212,12 +240,20 @@ public sealed partial class Minimap : Control
                 var p = centre + Screen(_vehicles[i], theta, pxPerMetre, inner);
                 DrawRect(new Rect2(p - new Vector2(4, 4), new Vector2(8, 8)), ShooterTheme.Warn);
             }
+            if (TeamColours)
+                for (var i = 0; i < _friends.Count; i++) // a ring, not a disc: the shape differs from the filled enemy pings (never colour only)
+                {
+                    var p = centre + Screen(_friends[i], theta, pxPerMetre, inner);
+                    DrawCircle(p, 7f, ShooterTheme.Outline);
+                    DrawCircle(p, 5f, ShooterTheme.Friend);
+                    DrawCircle(p, 2.5f, ShooterTheme.Outline);
+                }
             var pings = _pings.Positions(now);
             for (var i = 0; i < pings.Count; i++)
             {
                 var p = centre + Screen(pings[i], theta, pxPerMetre, inner);
                 DrawCircle(p, 6f, ShooterTheme.Outline);
-                DrawCircle(p, 4f, ShooterTheme.Danger);
+                DrawCircle(p, 4f, TeamColours ? ShooterTheme.Enemy : ShooterTheme.Danger);
             }
             DrawNorth(centre, theta, half);
         }

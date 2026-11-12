@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>A vehicle's hit volume as the gunship routing sees it: its index in the server's car list, its footprint and its height.</summary>
 public readonly record struct GunshipVehicle(int Index, Vector3 Feet, float Yaw, float HalfWidth, float HalfLength, float Height);

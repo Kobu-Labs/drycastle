@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The cockpit rig of a vehicle's cockpit view (prototype, ticket #219): a rough interior built for the screen, not the model's own. It is

@@ -1,11 +1,11 @@
 using Microsoft.Data.Sqlite;
-using Suchohrad.ShooterCore;
-using Suchohrad.ShooterServer.Persistence;
-using Suchohrad.ShooterServer.Persistence.InMemory;
-using Suchohrad.ShooterServer.Persistence.Sqlite;
+using Drycastle.ShooterCore;
+using Drycastle.ShooterServer.Persistence;
+using Drycastle.ShooterServer.Persistence.InMemory;
+using Drycastle.ShooterServer.Persistence.Sqlite;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Ticket #145: loadout autosave timing, names (validation, copy, reset, storage), and the loadout wire codecs.</summary>
 public class LoadoutEditorV2Tests

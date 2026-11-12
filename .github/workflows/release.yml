@@ -53,14 +53,14 @@ jobs:
         run: |
           python3 scripts/make_manifest.py --repo "$GITHUB_REPOSITORY" --tag "${{ steps.v.outputs.tag }}" --channel "${{ steps.v.outputs.channel }}" \
             --commit "$GITHUB_SHA" --protocol "${{ steps.v.outputs.protocol }}" \
-            --windows-zip out/shooter/suchohrad-game-windows.zip --linux-zip out/shooter/suchohrad-game-linux.zip \
+            --windows-zip out/shooter/drycastle-game-windows.zip --linux-zip out/shooter/drycastle-game-linux.zip \
             --map-tag "${{ steps.v.outputs.map }}" --map-json "$RUNNER_TEMP/map/map.json" --out out/shooter/manifest.json
       - uses: actions/upload-artifact@v4
         with:
           name: release-assets
           path: |
-            out/shooter/suchohrad-game-windows.zip
-            out/shooter/suchohrad-game-linux.zip
+            out/shooter/drycastle-game-windows.zip
+            out/shooter/drycastle-game-linux.zip
             out/shooter/manifest.json
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
@@ -88,14 +88,14 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod +x out/shooter/linux-server/suchohrad-server.x86_64   # artifacts drop the execute bit
+          chmod +x out/shooter/linux-server/drycastle-server.x86_64   # artifacts drop the execute bit
       - name: Back up the database first
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$DEPLOY_HOST" bash -s -- "$GITHUB_SHA" <<'REMOTE'
           set -euo pipefail
-          sha="$1"; dir=/opt/suchohrad
+          sha="$1"; dir=/opt/drycastle
           if [ -d "$dir/deploy" ] && [ -n "$(cd "$dir/deploy" && docker compose ps -q db)" ]; then
             mkdir -p "$dir/backups"
             (cd "$dir/deploy" && docker compose exec -T db pg_dump -U shooter shooter) > "$dir/backups/pre-deploy-${sha:0:8}.sql"
@@ -126,7 +126,7 @@ jobs:
       - name: Fetch the newest launcher build (attached so players find it on the release page)
         run: |
           ltag=$(gh release list --limit 100 --json tagName --jq '[.[].tagName | select(startswith("launcher-v"))] | first // empty')
-          if [ -n "$ltag" ]; then gh release download "$ltag" --pattern 'suchohrad-launcher-*.zip' --dir release-assets
+          if [ -n "$ltag" ]; then gh release download "$ltag" --pattern 'drycastle-launcher-*.zip' --dir release-assets
           else echo "::warning::no launcher-v* release found; publishing without launcher zips"; fi
       - name: Publish release
         run: |

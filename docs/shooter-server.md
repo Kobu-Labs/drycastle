@@ -14,7 +14,7 @@ make map AREA=<area>        # see docs/pipeline.md; produces out/map
 ```
 
 Exports bundle the full village map (`out/village/map`, see `docs/release.md`) as `map/` next to the binary. Server and clients pick the folder with
-`--map DIR`, else `SUCHOHRAD_MAP`, else `map/` next to an exported binary (`../../out/map` when run from source). Server and clients must use the same map build.
+`--map DIR`, else `DRYCASTLE_MAP`, else `map/` next to an exported binary (`../../out/map` when run from source). Server and clients must use the same map build.
 
 ## 2. Export
 
@@ -28,23 +28,23 @@ make shooter-export         # all three presets into out/shooter/
 
 | Preset | Output |
 |---|---|
-| Windows Client | `out/shooter/windows/suchohrad-shooter.exe` (+ `.pck`, .NET data folder) |
-| Linux Client | `out/shooter/linux-client/suchohrad-shooter.x86_64` |
-| Linux Server | `out/shooter/linux-server/suchohrad-server.x86_64` (dedicated server export, no rendering resources) |
+| Windows Client | `out/shooter/windows/drycastle-shooter.exe` (+ `.pck`, .NET data folder) |
+| Linux Client | `out/shooter/linux-client/drycastle-shooter.x86_64` |
+| Linux Server | `out/shooter/linux-server/drycastle-server.x86_64` (dedicated server export, no rendering resources) |
 
 Presets live in `godot/shooter/export_presets.cfg`. What is packaged where:
 
 - `data/*.json` (match, weapons, vehicles, sounds) is included in the `.pck` and read via `res://data/`.
 - Sounds and models are NOT in the pck: the game reads them from the asset library on disk. `make shooter-export`
   copies `assets/` to an `assets/` folder next to each binary. The game looks for it next to the
-  binary in an export (`SUCHOHRAD_ASSETS=/path/to/assets` overrides; from source it uses the repo's `assets/`). The server needs it too: it validates that every sound file in `sounds.json` exists.
+  binary in an export (`DRYCASTLE_ASSETS=/path/to/assets` overrides; from source it uses the repo's `assets/`). The server needs it too: it validates that every sound file in `sounds.json` exists.
 - The map folder is external (see above).
 
 ## 3. Start the headless server
 
 ```
-export SUCHOHRAD_ASSETS=$PWD/assets
-./suchohrad-server.x86_64 --headless -- --role server --port 27015 --map /srv/suchohrad/map
+export DRYCASTLE_ASSETS=$PWD/assets
+./drycastle-server.x86_64 --headless -- --role server --port 27015 --map /srv/drycastle/map
 ```
 
 During development, `make shooter-server MAP=out/map` does the same from source.
@@ -55,15 +55,15 @@ Flags (after `--`):
 |---|---|
 | `--role server` | run as the dedicated server (default role is client) |
 | `--port N` | UDP listen port, default 27015 |
-| `--map DIR` | map folder (else `SUCHOHRAD_MAP`) |
-| `--db TARGET` | progression database: a SQLite file path (default `./shooter.db`, relative to the working directory), or a PostgreSQL URL `postgres://user:pass@host:5432/db` or Npgsql connection string. Env `SUCHOHRAD_DB` is used when the flag is absent (keeps the password off the command line). Created and migrated at start (Postgres: retries for about a minute while the database comes up); the server refuses to start if it cannot be opened |
+| `--map DIR` | map folder (else `DRYCASTLE_MAP`) |
+| `--db TARGET` | progression database: a SQLite file path (default `./shooter.db`, relative to the working directory), or a PostgreSQL URL `postgres://user:pass@host:5432/db` or Npgsql connection string. Env `DRYCASTLE_DB` is used when the flag is absent (keeps the password off the command line). Created and migrated at start (Postgres: retries for about a minute while the database comes up); the server refuses to start if it cannot be opened |
 | `--time HH:MM` | start time of day for the day/night clock; overrides `start_time` in `environment.json` (default `08:00`) |
 | `--day-length MIN` | real minutes for one 24-hour day; overrides `day_length_minutes` in `environment.json` (default `24`) |
 | `--freeze-time` | hold the clock at its start time (or at `--time`), so the sky does not move |
 | `--match-set k=v,k=v` | override match options, see below |
 | `--targets N` | plant N stationary target dummies ("Target 01" ...) around the spawn area, 0-64; default 0 from `match.json`. The dummies are not players: they are outside the roster, the player cap, the score goal and the round end, and they respawn 3 s after a kill on the same spot. Planned at start on the ground under the map colliders (rays from above, steep faces rejected; a roof counts as ground where a ray meets one first); no cover or wall spots yet. Wire: entity type 3 in snapshots, event kind 140 (`TargetRoster`) on join. Code: `godot/shooter/Net/NetServer.Targets.cs`. `make shooter-server` passes `TARGETS` (default 24; `make shooter-server TARGETS=0` for none) |
 | `--debug-cmds` | honour the client debug kill command and give every player the full weapon list on the hotbar (dev aid); leave off on a public server |
-| `--unlock-all` | dev mode: every item unlocked, see the next section. Also on when `SUCHOHRAD_UNLOCK_ALL` is `1` or `true`. Leave off on a public server |
+| `--unlock-all` | dev mode: every item unlocked, see the next section. Also on when `DRYCASTLE_UNLOCK_ALL` is `1` or `true`. Leave off on a public server |
 | `--allow-sandbox` | grant sandbox mode to clients that ask for it (#156): godmode, unlimited ammo, the whole hotbar, every killstreak on demand (no kill requirement, no cap). A sandbox player's kills and XP are not scored, nothing is written to the database, the round never ends on their kills and they rank last with a `[SANDBOX]` tag. The panel's "Take damage" checkbox turns the godmode off for that player (off by default): they are hurt, die and respawn like anyone, the rest of sandbox mode stays, their death writes no stat and grants no XP, and the HUD badge reads "SANDBOX - TAKING DAMAGE". A server without the flag refuses the request with a notice. `make shooter-server` passes it (`SANDBOX=1` is the default; `SANDBOX=0` for none). Leave off on a public server |
 | `--bots N` | N bots (0-64) play while at least one human is in the match (#214); an empty server runs none. A bot is a player without a connection: the server feeds it the input its brain chooses (`BotBrain` in `ShooterCore/Bots`, bridge in `NetServer.Bots.cs`), so movement, weapons, damage, corpses and the kill feed are the player's, and clients need no change. Bots count as players for `min_players`, the score and the round end; they earn no XP and have no stats, and killing one grants no XP and writes no kill stat (the streak counter does advance). They use no vehicles or killstreaks and ignore target dummies. Each bot walks to the nearest other player on a navigation mesh the server bakes from the map colliders (`BotNav.cs`; tree trunks are left out, a bot steers round them). The first start with bots on a map version bakes it (seconds to half a minute) and keeps the tiles in `--nav-cache DIR` (default `navcache` in the Godot user data folder); later starts load them. Every ten seconds the log has the routes answered and their cost, and one status word per bot (walking, advancing, fighting, blocked, ...). They need no peer slot, so they do not count against the 32 player limit. `make shooter-server BOTS=8` |
 | `--cluster-spawns` | keep one dense cluster of spawn points (the loss test's cluster). Dev aid for trying bots on the full map, where spawns are otherwise spread over the whole village. `make shooter-server BOTS=8 CLUSTER=1` |
@@ -85,14 +85,14 @@ The client shows "Dev: all unlocked" in the top-right corner of the loadout scre
 
 Release default: **off**. A server started from an export without the flag or the variable behaves as before.
 The Makefile dev targets turn it on: `shooter-server` passes `--unlock-all`, and the `shooter-*-smoke` targets export
-`SUCHOHRAD_UNLOCK_ALL`. Set `UNLOCK_ALL=0` on the command line to turn it off (`make shooter-server UNLOCK_ALL=0`).
+`DRYCASTLE_UNLOCK_ALL`. Set `UNLOCK_ALL=0` on the command line to turn it off (`make shooter-server UNLOCK_ALL=0`).
 `make shooter-client` has no server flag; the indicator comes from the server it joins. `make shooter-export-check` does not
 set it, and nothing in the export does.
 
 The clock flags are read in `Shooter.ServerClock` (`godot/shooter/Shooter.cs`) and resolved by `EnvironmentConfig.ToClock`
 (`godot/ShooterCore/Environment/EnvironmentConfig.cs`). The clock is owned by the server and sent to each client in the
 welcome message (protocol 3 and later), so clients never need the flags.
-Example: `./suchohrad-server.x86_64 --headless -- --role server --port 27015 --map /srv/suchohrad/map --db /srv/suchohrad/shooter.db --time 22:00 --freeze-time`.
+Example: `./drycastle-server.x86_64 --headless -- --role server --port 27015 --map /srv/drycastle/map --db /srv/drycastle/shooter.db --time 22:00 --freeze-time`.
 
 ### Match options (`--match-set`)
 
@@ -166,14 +166,14 @@ sudo firewall-cmd --add-port=27015/udp --permanent && sudo firewall-cmd --reload
 sudo ufw allow 27015/udp                                                           # Ubuntu / ufw
 ```
 
-Windows: `New-NetFirewallRule -DisplayName "Suchohrad server" -Direction Inbound -Protocol UDP -LocalPort 27015 -Action Allow`.
+Windows: `New-NetFirewallRule -DisplayName "Drycastle server" -Direction Inbound -Protocol UDP -LocalPort 27015 -Action Allow`.
 
 ## 5. Join
 
 - Connect screen: start the client, Play, enter address, port (27015) and name, Connect.
-- Straight in: `suchohrad-shooter --connect host:port --name NAME` (port optional, default 27015).
+- Straight in: `drycastle-shooter --connect host:port --name NAME` (port optional, default 27015).
 
-The client needs the same `--map`/`SUCHOHRAD_MAP` and `SUCHOHRAD_ASSETS` as described above.
+The client needs the same `--map`/`DRYCASTLE_MAP` and `DRYCASTLE_ASSETS` as described above.
 
 ## Known gaps
 

@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>An RGB colour, one byte per channel.</summary>
 public readonly record struct Rgb(byte R, byte G, byte B);

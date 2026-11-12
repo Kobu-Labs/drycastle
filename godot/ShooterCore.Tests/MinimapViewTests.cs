@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Ticket #150: the minimap follows the player's view (vehicle, turret, missile, on foot), eased on the shorter arc.</summary>
 public class MinimapViewTests

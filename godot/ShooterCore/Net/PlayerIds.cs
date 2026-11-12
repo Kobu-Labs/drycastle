@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Player ids on the wire (#197). 0 means "no hello yet", cars start at <see cref="VehicleRecord.FirstId"/>, rockets at 0x8000

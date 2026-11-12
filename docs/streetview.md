@@ -1,7 +1,7 @@
 # Google Street View reference imagery
 
 Photos of the village buildings to look at while modelling them by hand. Not an input of the
-generated map (`pipeline/src/suchohrad_pipeline/streetview.py`). Mapillary has poor coverage here
+generated map (`pipeline/src/drycastle_pipeline/streetview.py`). Mapillary has poor coverage here
 (see `docs/mapillary.md`).
 
 ## Terms
@@ -21,9 +21,9 @@ generated from them automatically. They are for human eyes only.
 
 ```
 cd pipeline
-uv run python -m suchohrad_pipeline.streetview --area village                 # coverage report, free
-uv run python -m suchohrad_pipeline.streetview --area village --building w378920327 --download
-uv run python -m suchohrad_pipeline.streetview --area village --download --max-images 200
+uv run python -m drycastle_pipeline.streetview --area village                 # coverage report, free
+uv run python -m drycastle_pipeline.streetview --area village --building w378920327 --download
+uv run python -m drycastle_pipeline.streetview --area village --download --max-images 200
 ```
 
 For each building it probes 8 points around it (free metadata calls), keeps panoramas that look at

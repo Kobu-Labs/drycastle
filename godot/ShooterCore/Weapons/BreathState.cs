@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Sniper breath hold (shooter v2 #113), shared by server and client. While scoped, holding the breath key (the sprint

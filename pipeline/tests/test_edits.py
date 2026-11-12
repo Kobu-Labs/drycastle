@@ -3,7 +3,7 @@ import json
 import pytest
 from shapely.geometry import LineString, Point, shape
 
-from suchohrad_pipeline.edits import (
+from drycastle_pipeline.edits import (
     Edits,
     EditsError,
     dump_edits,
@@ -13,8 +13,8 @@ from suchohrad_pipeline.edits import (
     resolve_fence,
     validate,
 )
-from suchohrad_pipeline.props import make_fences, make_trees, run_props
-from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.props import make_fences, make_trees, run_props
+from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace
 
 FENCE, TREE = load_section("props")["fences"], load_section("props")["trees"]
@@ -231,7 +231,7 @@ def test_load_reports_bad_json(tmp_path) -> None:
 
 
 def test_shipped_edits_file_is_canonical_and_valid() -> None:
-    from suchohrad_pipeline.edits import DEFAULT_EDITS
+    from drycastle_pipeline.edits import DEFAULT_EDITS
 
     text = DEFAULT_EDITS.read_text()
     assert text == dump_text(load_edits(DEFAULT_EDITS))
@@ -632,8 +632,8 @@ def test_parcel_geometry_fixture_is_as_described(ws) -> None:
 
 
 def test_custom_sections_carry_their_own_fence_style(ws) -> None:
-    from suchohrad_pipeline.propmeshes import fence_mesh
-    from suchohrad_pipeline.rules import load_section as load
+    from drycastle_pipeline.propmeshes import fence_mesh
+    from drycastle_pipeline.rules import load_section as load
 
     cfg = {**FENCE, "probability": 0.0}
     got = fences(ws, {"P-0001": resolve_fence({"type": "brick_wall"})}, cfg=cfg)
@@ -691,7 +691,7 @@ def test_cables_key_is_written_only_when_there_are_cables(tmp_path) -> None:
 
 
 def test_plan_keeps_cables_between_placed_poles_only() -> None:
-    from suchohrad_pipeline.props import plan_edits
+    from drycastle_pipeline.props import plan_edits
 
     square = {"type": "Polygon", "coordinates": [[[0, 0], [50, 0], [50, 50], [0, 50], [0, 0]]]}
     parcels = [{"id": "P-0001", "polygon": square}]

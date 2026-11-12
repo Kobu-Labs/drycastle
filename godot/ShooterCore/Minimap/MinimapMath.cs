@@ -1,7 +1,7 @@
 using System.Numerics;
 using System.Text.Json;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>One road edge of roads.json: its polyline in local metres (x east, y north), width in metres, OSM class.</summary>
 public sealed record RoadLine(Vector2[] Points, float WidthM, string Highway);

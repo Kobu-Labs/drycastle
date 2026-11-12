@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>ADR 0005: the flak truck's turret rules (aim limits, the proximity fuse, the airburst damage), its records, and ending a streak whose aircraft is shot down.</summary>
 public class FlakTests

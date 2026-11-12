@@ -96,7 +96,7 @@ def main() -> int:
     ap.add_argument("--godot", default="godot")
     ap.add_argument("--seed", default="1")
     args = ap.parse_args()
-    scratch = Path(args.dir or tempfile.mkdtemp(prefix="suchohrad-editor-smoke-")).resolve()
+    scratch = Path(args.dir or tempfile.mkdtemp(prefix="drycastle-editor-smoke-")).resolve()
     scratch.mkdir(parents=True, exist_ok=True)
     print(f"editor smoke: scratch directory {scratch}")
 
@@ -153,7 +153,7 @@ def main() -> int:
     print(f"editor smoke: group {a_id}+{b_id} ({n_shared} shared edges), existing group {c_id}+{d_id}")
     (scratch / "plan.json").write_text(json.dumps(plan, indent=1))
 
-    r = uv("-m", "suchohrad_pipeline", "export", "--area", "slice", "--out", str(scratch / "map"), "--work", str(work))
+    r = uv("-m", "drycastle_pipeline", "export", "--area", "slice", "--out", str(scratch / "map"), "--work", str(work))
     print(r.stdout.strip())
     if r.returncode != 0:
         print(r.stderr)
@@ -172,7 +172,7 @@ def main() -> int:
     check = (
         "import sys, json\n"
         "from pathlib import Path\n"
-        "from suchohrad_pipeline.edits import load_edits, dump_text\n"
+        "from drycastle_pipeline.edits import load_edits, dump_text\n"
         "bad = 0\n"
         "for f in sys.argv[1:]:\n"
         "    t = Path(f).read_text(encoding='utf-8')\n"

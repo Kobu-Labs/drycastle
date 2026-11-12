@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The AC-130 on the client (killstreak "ac130"). The owner's StreakUsed starts the AC-130 view (its turret def, its weapon

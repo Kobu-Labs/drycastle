@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>Server side of vehicles (#91, #92: car, motorcycle, bicycle share it): spawning, enter/exit, driving from the driver's inputs, run-over, abandon return, resets.</summary>
 public partial class NetServer
@@ -294,8 +294,8 @@ public partial class NetServer
         var yaw = Quant.Yaw(i.Yaw); var pitch = Quant.Pitch(i.Pitch);
         var d = HitMath.SpreadDirection(yaw, RecoilState.ClampPitch(pitch), def.SpreadDegrees, _rng);
         var dir = new Vector3(d.X, d.Y, d.Z);
-        var crossed = new List<GlassCross>();
-        var wall = BulletHit(eye, dir, def.Range, out var shotCar, crossed);
+        List<GlassCross>? crossed = null;
+        var wall = BulletHit(eye, dir, def.Range, out var shotCar, ref crossed, solid: car); // the gunner's own car stops the round as before: its glass is not shot out from the roof
         var targets = LiveTargets().Where(t => car.Seat.SeatOf(t.Id) < 0).ToList();
         var hit = HitMath.Raycast(N(eye), d, def.Range, wall, targets, c.Id);
         var end = eye + dir * (hit?.Distance ?? Math.Min(wall, def.Range));
@@ -441,6 +441,7 @@ public partial class NetServer
         foreach (var t in LiveTargets())
         {
             if (car.Seat.SeatOf(t.Id) >= 0) continue;
+            if (!BlastReaches(N(at), t)) continue; // a bunker room's walls are between them
             var dist = HitMath.DistanceToBody(N(at), t);
             var dmg = VehicleDamage.BlastDamage(e, dist);
             if (dmg <= 0) continue;

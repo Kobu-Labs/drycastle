@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Ticket #125: the aircraft world entity (circle, heading, bank, lifetime), the gunship turret aim, and its control.</summary>
 public class AircraftTests
@@ -232,15 +232,15 @@ public class AircraftTests
     [Fact]
     public void A_short_interval_fires_every_round_due_within_one_input_up_to_the_cap()
     {
-        // the AC-130's 25 mm: 0.04 s between rounds, so an input 0.25 s after the last one has six rounds due (1.04 .. 1.24)
+        // the AC-130's 25 mm: 0.15 s between rounds, so an input 0.8 s after the last one has five rounds due (1.15 .. 1.75)
         var shots = new List<GunshipShot>();
         var control = new GunshipControl(Shipping.Ac130!, new Aircraft(Shipping.AircraftKinds[1], 1, Vector3.Zero, 0, true, 3), shots.Add, _ => { }, new Random(1));
         var fire25 = Input(control, 0, -0.5f, MoveButtons.Fire) with { Slot = 1 }; // key 1: the AC-130's 25 mm
         control.OnInput(fire25, 1.0);
         Assert.Single(shots);
-        control.OnInput(fire25, 1.25);
-        Assert.Equal(7, shots.Count);
-        Assert.True(GunshipControl.MaxRoundsPerInput >= 6);
+        control.OnInput(fire25, 1.8);
+        Assert.Equal(6, shots.Count);
+        Assert.True(GunshipControl.MaxRoundsPerInput >= 5);
     }
 
     [Fact]

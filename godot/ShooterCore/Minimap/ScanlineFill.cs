@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Scanline point-in-polygon for the minimap terrain texture (#170, T2-19). Instead of testing every texel of a parcel's

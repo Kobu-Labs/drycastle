@@ -9,7 +9,7 @@ Status: `make shooter-package` builds the Windows zip (79 MB) and the Linux serv
 
 | Piece | Who runs it | Where |
 |---|---|---|
-| Windows client zip (`suchohrad-windows.zip`) | players | built by `make shooter-package` |
+| Windows client zip (`drycastle-windows.zip`) | players | built by `make shooter-package` |
 | Linux dedicated server | you | a host with a public **UDP** port (default 27015) |
 
 The transport is ENet, which is UDP. Railway and similar HTTP/TCP-only hosts cannot expose it; use a VPS (Hetzner,
@@ -30,7 +30,7 @@ The server address is not baked into the client: players type it on the connect 
 Merging a PR into the **`release`** branch (open it as `main` -> `release`) runs `.github/workflows/release.yml`:
 
 1. **build**: tests, Windows and Linux game zips, the server export with the map named in `map-version.txt`.
-2. **deploy** (environment `production`): backs up the database on the VPS (`/opt/suchohrad/backups/pre-deploy-<sha>.sql`, last 10 kept), then runs `deploy/deploy.sh`
+2. **deploy** (environment `production`): backs up the database on the VPS (`/opt/drycastle/backups/pre-deploy-<sha>.sql`, last 10 kept), then runs `deploy/deploy.sh`
    (rsync plus `docker compose up --wait`; the job fails if the server does not become healthy, and then nothing is published).
 3. **publish**: creates release `v0.<run>` with the game zips and `manifest.json`; the launcher picks it up as the stable channel.
 
@@ -38,9 +38,9 @@ Clients only learn about the new version after the server is live. Nothing else 
 
 **One-time setup** (secrets live in the GitHub environment `production`, never in the repo; use a dedicated deploy key, not your personal one):
 ```bash
-ssh-keygen -t ed25519 -N "" -C github-deploy -f ~/.ssh/suchohrad-deploy
-ssh-copy-id -f -i ~/.ssh/suchohrad-deploy.pub -o IdentityFile=~/.ssh/suchohrad-vps -o IdentitiesOnly=yes root@159.195.244.164   # installs the new key on the VPS, logging in with the old one
-gh secret set DEPLOY_SSH_KEY --env production < ~/.ssh/suchohrad-deploy
+ssh-keygen -t ed25519 -N "" -C github-deploy -f ~/.ssh/drycastle-deploy
+ssh-copy-id -f -i ~/.ssh/drycastle-deploy.pub -o IdentityFile=~/.ssh/drycastle-vps -o IdentitiesOnly=yes root@159.195.244.164   # installs the new key on the VPS, logging in with the old one
+gh secret set DEPLOY_SSH_KEY --env production < ~/.ssh/drycastle-deploy
 gh secret set DEPLOY_HOST --env production --body root@159.195.244.164
 ssh-keygen -F 159.195.244.164 | grep -v '^#' | gh secret set DEPLOY_KNOWN_HOSTS --env production   # pinned host key (from your known_hosts)
 git push origin main:release       # first run creates the branch (and deploys); afterwards use PRs main -> release
@@ -53,9 +53,9 @@ Rollback: re-run the workflow on an older commit of `release`, or restore a back
 1. Make sure `main` is green: `make shooter-test` (and `make test` for the pipeline if the map changed).
 2. Build the full map if it changed: `make map AREA=village`. Every export bundles `out/village/map` as `map/` next to the binary (override with `SHOOTER_PKG_MAP=<dir>`), and `make shooter-export` stops if it is missing. The server and the clients must run the **same map build**, which the bundling guarantees as long as you deploy the server from the same export.
 3. Build the client package: `make shooter-package`.
-   Output: `out/shooter/suchohrad-windows.zip`, containing the exe, `.pck`, .NET data, `assets/`, `map/`, `README.txt`
+   Output: `out/shooter/drycastle-windows.zip`, containing the exe, `.pck`, .NET data, `assets/`, `map/`, `README.txt`
    (from `docs/player-readme.txt`). `make shooter-export` also produces the Linux client and server in `out/shooter/`.
-4. Check it on a clean machine or folder: unzip, double-click `suchohrad-shooter.exe`, connect to the server.
+4. Check it on a clean machine or folder: unzip, double-click `drycastle-shooter.exe`, connect to the server.
 5. Publish the zip (GitHub Release on Kobu-Labs/drycastle, tagged `vX.Y.Z`, is the default) and send the link.
    Tell players about the SmartScreen prompt: "More info", then "Run anyway" (the exe is unsigned).
 
@@ -68,13 +68,14 @@ One-time on the VPS: install Docker with the compose plugin and `rsync` (Debian 
 in the host and provider firewalls (and SSH). Nothing else is exposed (Postgres is not published).
 
 1. `make shooter-export` (bundles the server binary, `assets/` and the village `map/`).
-2. `SSH_OPTS="-i ~/.ssh/suchohrad-vps -o IdentitiesOnly=yes" deploy/deploy.sh user@host` (SSH_OPTS only if you use a dedicated key) copies the export and `deploy/` to `/opt/suchohrad` on the VPS (its `rsync --delete` only touches
+2. `SSH_OPTS="-i ~/.ssh/drycastle-vps -o IdentitiesOnly=yes" deploy/deploy.sh user@host` (SSH_OPTS only if you use a dedicated key) copies the export and `deploy/` to `/opt/drycastle` on the VPS (its `rsync --delete` only touches
    that export copy), creates `deploy/.env` with a random database password on the first run, and runs `docker compose up -d --build`.
-3. Check: `ssh user@host 'cd /opt/suchohrad/deploy && docker compose logs server'` should show
+3. Check: `ssh user@host 'cd /opt/drycastle/deploy && docker compose logs server'` should show
    `server: progression db postgres shooter@db:5432/shooter` and the map line.
 
 The server flags are the compose `command:` (see `docs/shooter-server.md`). The production server runs with `--allow-sandbox` on purpose (sandbox players are not scored and nothing of theirs is saved); keep `--unlock-all` and `--debug-cmds` off.
-The database URL comes from `SUCHOHRAD_DB`, so the password is never on a command line. `GAME_PORT` in `.env` changes the host port.
+Admins (chat commands) come from `ADMIN_TOKEN` in the VPS's `deploy/.env`: comma-separated `player_token`s, passed to the server as `--admin-token`. The file is never overwritten by a deploy; edit it and run `docker compose up -d` in `deploy/`. Never use `--admin-all` here.
+The database URL comes from `DRYCASTLE_DB`, so the password is never on a command line. `GAME_PORT` in `.env` changes the host port.
 
 - **Backups:** `docker compose exec -T db pg_dump -U shooter shooter > shooter-$(date +%F).sql` (cron it). Deleting the `pgdata` volume
   (`docker compose down -v`) wipes all progression.
@@ -84,7 +85,7 @@ The database URL comes from `SUCHOHRAD_DB`, so the password is never on a comman
 
 ### Current production server
 
-netcup VPS 500 G12.5 (Vienna, Debian 13, 2 vCores, 4 GB), `root@159.195.244.164`, key `~/.ssh/suchohrad-vps`, stack in `/opt/suchohrad/deploy`.
+netcup VPS 500 G12.5 (Vienna, Debian 13, 2 vCores, 4 GB), `root@159.195.244.164`, key `~/.ssh/drycastle-vps`, stack in `/opt/drycastle/deploy`.
 Players connect to `159.195.244.164`, port 27015. Check it from anywhere with the headless bot:
 `godot --headless --path godot/shooter -- --connect 159.195.244.164 --name probe --map out/village/map --headless-bot --bot-seconds 8`
 (it ends with `SHOOTER_NET_CLIENT_FAIL` when alone on the server; "welcome" and "snapshots N" in its output are the success signs).

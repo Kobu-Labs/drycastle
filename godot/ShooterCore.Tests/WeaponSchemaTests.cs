@@ -1,7 +1,7 @@
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>weapons.json schema v2: categories, category_defaults merge, recoil, shotgun/sniper fields, unlocks, validation.</summary>
 public class WeaponSchemaTests

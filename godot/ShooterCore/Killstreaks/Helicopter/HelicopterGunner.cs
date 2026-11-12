@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>An enemy the helicopter may shoot: its id, the point it aims at (chest height) and its stance (for exposure).</summary>
 public readonly record struct HelperCandidate(ushort Id, Vector3 Aim, Stance Stance);

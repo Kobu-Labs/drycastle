@@ -1,7 +1,7 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
 /// The input a gunner's client sends at zero lag (#161): the look (yaw, pitch) and the aim, which is the ground point that look meets

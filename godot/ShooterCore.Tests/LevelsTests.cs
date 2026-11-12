@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Shooter v2 levels and unlocks (#116): levels.json curve, XP awards, the unlock table and the roadkill cause.</summary>
 public class LevelsTests

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.MapLoader;
+namespace Drycastle.MapLoader;
 
 /// <summary>A parcel of the base map (from parcels.json).</summary>
 public sealed class ParcelInfo

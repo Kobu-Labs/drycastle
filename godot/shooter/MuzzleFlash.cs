@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Muzzle flash that lives under a weapon model's Muzzle marker (hidden by default). <see cref="Flash"/> shows it for

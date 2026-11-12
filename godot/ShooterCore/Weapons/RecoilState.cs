@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Aim offset a shot is fired with, in radians: pitch positive up, yaw positive left (the <see cref="HitMath.Forward"/> convention).</summary>
 public readonly record struct RecoilKick(float PitchRad, float YawRad);

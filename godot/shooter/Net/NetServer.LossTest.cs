@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>Round-relative schedule shared by the loss-test server and bots (issue #93): warm-up, measured window, quiet phase, final report.</summary>
 public static class LossTimeline

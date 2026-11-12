@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Held weapon visuals. Models come from the Quaternius Ultimate Gun Pack: pistol = Pistol_1, ak47 = AssaultRifle_1,

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The attack missile's point-of-view overlay: the infrared grade (the thermal shader, white hot, with auto exposure so day

@@ -5,9 +5,9 @@ Details for `godot/viewer/`. Setup and the make targets are in the [README](../R
 ## Viewer
 
 `godot/viewer` loads the whole map at startup with the shared `godot/MapLoader` library
-(namespace `Suchohrad.MapLoader`) and lets you walk around in first person.
+(namespace `Drycastle.MapLoader`) and lets you walk around in first person.
 
-Map folder: `--map <dir>` after Godot's own args, else the env var `SUCHOHRAD_MAP`, else
+Map folder: `--map <dir>` after Godot's own args, else the env var `DRYCASTLE_MAP`, else
 `../../out/map` relative to `godot/viewer`. With make: `make viewer MAP=/path/to/out/map`.
 
 - Controls: WASD, mouse look, Space jump, Shift sprint, Escape frees or recaptures the mouse,
@@ -39,14 +39,14 @@ under it when `z` is null), `rotation_deg` counter-clockwise seen from above, un
 `colour` (material override). Unknown or missing assets give a warning and a magenta placeholder box.
 Objects have no collision in v1.
 
-Regions (`regions` in `edits.json`, schema in `pipeline/src/suchohrad_pipeline/edits.py`) are baked into the
+Regions (`regions` in `edits.json`, schema in `pipeline/src/drycastle_pipeline/edits.py`) are baked into the
 chunk files as `region_<ID>` nodes (flat colour, no collision) and rebuilt for hot reload by
 `region-run --region ID --glb PATH`, whose JSON summary has `replaces` (the baked `region_<ID>` nodes to hide)
 and a GLB with one `region_<ID>` node per region in the chunk frame. `EditsFile` keeps `regions` as read and writes
 them canonically (the key is omitted while empty); `ObjectEdits.ValidateDocument` mirrors the schema. The editor UI
 for drawing regions is a separate piece of work.
 
-Assets directory: `--assets DIR`, else env `SUCHOHRAD_ASSETS`, else `<repo>/assets`.
+Assets directory: `--assets DIR`, else env `DRYCASTLE_ASSETS`, else `<repo>/assets`.
 
 Loader API additions: `ApplyFragment(path)` takes a `parcel-run --out ... --glb ...` fragment, hides the baked
 `parcel_<ID>_props` visual and collider of every parcel in `replaces`, drops that parcel's previous dynamic
@@ -58,11 +58,11 @@ Hot reload: `make viewer` with `--watch` (`godot --path godot/viewer -- --watch`
 viewing and headless servers are unaffected):
 
 - `--edits PATH` the edits file (default `pipeline/config/edits.json`), `--area slice|village` (default: from
-  the map version), `--state PATH` (default `out/editor-state.json`), env `SUCHOHRAD_UV` (the `uv` executable).
+  the map version), `--state PATH` (default `out/editor-state.json`), env `DRYCASTLE_UV` (the `uv` executable).
 - The file is polled twice a second. The state at startup is assumed to be what the map was built with.
   A change is diffed per parcel and per group (a group change affects all its members and the other way
   round), and only those parcels are regenerated with
-  `uv run python -m suchohrad_pipeline parcel-run --area A --parcel ... --edits <snapshot> --glb ... --out ...`
+  `uv run python -m drycastle_pipeline parcel-run --area A --parcel ... --edits <snapshot> --glb ... --out ...`
   in the `pipeline` directory (0.3 to 0.9 s) in a subprocess; edits that arrive during a run are coalesced into
   the next one. The viewer prints `edits applied: <ids> in <ms> ms`. A half-written or invalid file is ignored
   until it changes again, a failed `parcel-run` only prints its error. Writers must replace the file atomically
@@ -79,8 +79,10 @@ viewing and headless servers are unaffected):
   or a new chunk is not swapped in; the viewer says to restart.
 - `editor-state.json` (written at most once a second while watching, an ignored build output):
   `{"camera": {"x": east, "y": north, "z": elevation, "yaw_deg": view direction counter-clockwise from east},
-  "format_version": 1, "selected": []}`; x and y are in the map frame (local metres). `selected` is the list of
-  selected parcel IDs while the editor mode is on (empty otherwise).
+  "format_version": 1, "selected": [], "sketch": {...}}`; x and y are in the map frame (local metres). `selected` is the list of
+  selected parcel IDs while the editor mode is on (empty otherwise). `sketch` holds the marks of the Sketch tool in
+  absolute S-JTSK metres: `{"lines": [{"closed": false, "id": "L1", "points": [[x, y], ...]}], "next_line": 1,
+  "next_point": 1, "points": [{"id": "A", "x": .., "y": ..}]}` (see "Sketch tool"); a sketch change is written within a frame.
 - `make viewer-edit-smoke` exports a fresh slice map and a work-directory copy into a scratch directory
   (`SMOKE_DIR=...`, default a temp dir), starts the viewer headless with `--watch`, writes edits files during the
   run and checks objects, swapped props, colliders, replacement without leaks and survival of a broken file.
@@ -98,7 +100,7 @@ Maps with `files.clutter` in `manifest.json` (and `files.clutter_meshes`) draw s
 mesh node per kind (Y-up, on y = 0, unit scale, `COLOR_0` colours). `MapLoader.Clutter.cs` builds one `MultiMeshInstance3D` per 48 m cell and kind (`clutter_<kind>`,
 child of the chunk root): no shadows, no collision, the shared flat material, a visibility range of 70 m (pebble, leaf, stick 40 m, flower 55 m, rock 80 m; all in
 `ClutterSettings`) plus half a cell and an 8 m fade. Cells, not chunks, because a visibility range is measured to the node as a whole.
-A headless load (`CollisionOnly`, the dedicated server) and a map without the files build nothing and print nothing. `SUCHOHRAD_CLUTTER=0` (or `off`) turns it off; a number scales the
+A headless load (`CollisionOnly`, the dedicated server) and a map without the files build nothing and print nothing. `DRYCASTLE_CLUTTER=0` (or `off`) turns it off; a number scales the
 distances (`0.5` = half); `MapLoader.ClutterScale` is the same setting in code (set before `Load`). Old loaders ignore the files.
 
 **Tint (map 0.10.0).** An instance entry may carry a sixth number, a tint byte (128 = the mesh's own colours, lower = fresher, higher = drier); the meadow's generated instances of a
@@ -114,12 +116,12 @@ visibility range of its farthest kind). The village: 89k stored instances in abo
 ### Meadow clutter (generated near the player)
 
 Fields, meadows and forests are about 400 ha, too much to store clutter instances for. Maps with `files.meadow` (`meadow.bin`, map 0.9.0) carry a density raster instead
-(layers tuft, flower, fern, pebble, litter; one byte per 2 m cell per layer plus a zone byte per cell, format 3 in `pipeline/src/suchohrad_pipeline/meadow.py`; the zone byte's high nibble picks the species
+(layers tuft, flower, fern, pebble, litter; one byte per 2 m cell per layer plus a zone byte per cell, format 3 in `pipeline/src/drycastle_pipeline/meadow.py`; the zone byte's high nibble picks the species
 mix, which says per layer which kinds a cell makes and in what shares, its low nibble is a dryness that biases the tint). `MapLoader.Meadow.cs` turns the cells
 near the focus into instances with `MeadowGen` (a hash of the cell and layer, the same on every client, nothing is sent; `MeadowData.cs`, pure, mirrors `meadow.generate`
 and a test pins both). The ground is cut into 24 m tiles, each tile and layer is one `MultiMeshInstance3D` per kind (pooled), built nearest first at most 6 tiles or 2 ms per
 frame, freed 30 m behind its range. A tile and layer with a kind of at least `MeadowSettings.MultiMeshMin` (48) instances draws it as a MultiMesh, and its smaller groups (a stray species of the patch mix) as one merged mesh
-(`meadow_merged`, tint baked into the vertex colours), so a layer with seven flower species is about one or two nodes per tile, not seven (`MapLoader.MeadowNodes` counts them). Ranges and `SUCHOHRAD_CLUTTER` are those of the stored clutter; live instances per layer are capped (`MeadowSettings.CapOf`).
+(`meadow_merged`, tint baked into the vertex colours), so a layer with seven flower species is about one or two nodes per tile, not seven (`MapLoader.MeadowNodes` counts them). Ranges and `DRYCASTLE_CLUTTER` are those of the stored clutter; live instances per layer are capped (`MeadowSettings.CapOf`).
 Instances within a tree's trunk reach (from `trees.json`) are dropped; the height comes from `GroundHeight` (the terrain collision mesh, decimated). The focus is the current camera
 unless `MapLoader.SetClutterFocus(position)` is called each frame. A map without `meadow.bin` and the headless server do nothing.
 
@@ -165,7 +167,7 @@ Merge groups (button, or `G` when the marked parcels touch any group) puts all p
 Group operations rewrite `edits.json` atomically (temp file, then rename). The file is reloaded from disk
 right before every save, so a change by another writer (e.g. the MCP server) is kept, and everything not
 related to groups (fences, trees, objects, unknown parcels) is written back unchanged. The text is exactly what
-`suchohrad_pipeline.edits.dump_edits` writes (sorted keys, indent 1, Python float formatting, trailing
+`drycastle_pipeline.edits.dump_edits` writes (sorted keys, indent 1, Python float formatting, trailing
 newline), so both writers give byte-identical files; `pipeline/tests/fixtures/edits_roundtrip.json` is the fixture
 for that. A parcel is in at most one group; `G` refuses (status line) when a selected parcel is already in one.
 The watcher then regenerates the affected parcels (the fence runs along a group's outer edge) by itself.
@@ -282,7 +284,7 @@ GPU): `godot --path godot/viewer -- --map DIR --edits FILE --state FILE --editor
 
 ### MCP server for parcel edits
 
-`pipeline/src/suchohrad_pipeline/mcp_server.py` is a stdio MCP server (`make mcp`, normally started by Claude Code via
+`pipeline/src/drycastle_pipeline/mcp_server.py` is a stdio MCP server (`make mcp`, normally started by Claude Code via
 `uv run`) that edits `pipeline/config/edits.json` in plain language: "park a car in front of the house on the selected
 parcel". It uses the pipeline's own validator, reads the viewer's `editor-state.json` for the selection, and the
 viewer's `--watch` applies the change. Registration, tool reference and workflow: [mcp.md](mcp.md).
@@ -326,6 +328,25 @@ renders (the name is the tooltip), and adds the cables.
   since the last export, like any placed object, appears only after the next `make props export`.
 
 There is no headless smoke for this tool yet.
+
+### Sketch tool
+
+Rail icon 9. Temporary marks on the ground that a prompt can name ("plant trees inside L1", "a lamp at A"), read by the
+MCP server's `get_sketch`. One sketch holds any number of **points** (`A`, `B`, ... `Z`, `AA`, ...) and **lines** (`L1`,
+`L2`, ...); every mark shows its name as a tag in the 3D view, in every tool. The marks are not map content: nothing is
+written to `edits.json`. They live in `editor-state.json` (`sketch`), so they survive a viewer restart, until cleared.
+
+- `P` / `L` (or the two buttons) choose what a click makes. **Point**: each LMB (or `C`, the spot under the cursor, the
+  screen centre when the cursor is over the panel) marks a point. **Line**: LMB or `C` adds corners (0.5 m grid, Ctrl
+  free); Enter, or a click on the last corner again, finishes it; Shift+Enter, or a click on the first corner, closes
+  it (3+ corners, refused with the reason when the outline would cross itself). A closed line means the ground inside.
+  Enter with one corner makes a point. Backspace or Ctrl+Z takes the last corner back; a ghost shows the next mark.
+- Click a mark's handle or its row in the panel, or step with `[` `]`, to select it; `Del` deletes it. "Clear the
+  sketch" removes all marks (asks first) and the names start again at `A` and `L1`.
+- Every sketch change (a new mark, a delete, a clear) is one step on the editor's undo stack, in order with the saves:
+  Ctrl+Z / Ctrl+Y. Esc steps back one level: the line being drawn, the selection, the tool.
+- Checked by the build and by the `get_sketch` tests on the state file format only; there is no headless smoke for the
+  tool yet.
 
 ### Regions tool
 

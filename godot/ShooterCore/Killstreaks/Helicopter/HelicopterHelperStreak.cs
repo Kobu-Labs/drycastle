@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>What the helicopter helper needs from the server: spawning the helicopter, who it may shoot, the line of sight, and the
 /// warning and burst it sends. The server implements it; the tests fake it.</summary>

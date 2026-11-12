@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Suchohrad.LauncherCore;
+namespace Drycastle.LauncherCore;
 
 /// <summary>One downloadable archive of a release (game zip or map zip).</summary>
 public sealed record FileRef(

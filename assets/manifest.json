@@ -91,7 +91,7 @@
       "downloaded": "2026-11-11"
     },
     {
-      "name": "suchohrad-generated-sounds",
+      "name": "drycastle-generated-sounds",
       "title": "Generated placeholder sounds (script, no third-party material)",
       "url": "https://github.com/Kobu-Labs/drycastle",
       "download_url": null,
@@ -99,7 +99,7 @@
       "downloaded": "2026-11-11"
     },
     {
-      "name": "suchohrad-generated-models",
+      "name": "drycastle-generated-models",
       "title": "Generated models (the project's own scripts, no third-party material)",
       "url": "https://github.com/Kobu-Labs/drycastle",
       "download_url": null,
@@ -107,7 +107,7 @@
       "downloaded": "2026-11-11"
     },
     {
-      "name": "suchohrad-generated-textures",
+      "name": "drycastle-generated-textures",
       "title": "Generated tileable textures (the project's own script, no third-party material)",
       "url": "https://github.com/Kobu-Labs/drycastle",
       "download_url": null,
@@ -855,7 +855,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/suchohrad_pipeline/primitives.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/primitives.py)",
       "pack": null
     },
     {
@@ -874,7 +874,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/suchohrad_pipeline/primitives.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/primitives.py)",
       "pack": null
     },
     {
@@ -894,7 +894,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/suchohrad_pipeline/primitives.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/primitives.py)",
       "pack": null
     },
     {
@@ -913,7 +913,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/suchohrad_pipeline/primitives.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/primitives.py)",
       "pack": null
     },
     {
@@ -932,7 +932,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/suchohrad_pipeline/primitives.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/primitives.py)",
       "pack": null
     },
     {
@@ -1412,10 +1412,10 @@
       "used_for": "held model of weapon id svd (godot/shooter WeaponFx.cs)"
     },
     {
-      "id": "pack:suchohrad-generated-models/flak",
+      "id": "pack:drycastle-generated-models/flak",
       "category": "other",
       "name": "Flak (6x6 truck with a twin 35 mm anti-aircraft turret)",
-      "file": "suchohrad-generated-models/flak.glb",
+      "file": "drycastle-generated-models/flak.glb",
       "size_m": [
         2.92,
         3.17,
@@ -1429,14 +1429,14 @@
       ],
       "licence": "CC0",
       "source": "scripts/make_flak_model.py (original geometry written as code; python3 -I scripts/make_flak_model.py rebuilds the file)",
-      "pack": "suchohrad-generated-models",
+      "pack": "drycastle-generated-models",
       "used_for": "godot/shooter vehicle id flak (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground, metres), separate nodes for turret, gun_cradle, barrels, wheels, outriggers; each breakable glass pane is its own node glass_N (N = its place in the glass list of vehicles.json, which the script rewrites with the pane outlines)"
     },
     {
-      "id": "pack:suchohrad-generated-models/bus",
+      "id": "pack:drycastle-generated-models/bus",
       "category": "other",
       "name": "Bus (12 m low-entry regional bus, two doors on the right)",
-      "file": "suchohrad-generated-models/bus.glb",
+      "file": "drycastle-generated-models/bus.glb",
       "size_m": [
         3.2,
         3.32,
@@ -1450,14 +1450,14 @@
       ],
       "licence": "CC0",
       "source": "scripts/make_bus_model.py (original geometry written as code; python3 -I scripts/make_bus_model.py rebuilds the file)",
-      "pack": "suchohrad-generated-models",
+      "pack": "drycastle-generated-models",
       "used_for": "godot/shooter vehicle id bus (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground at the centre, metres), separate nodes for the four wheels and the four door leaves, modelled interior; each breakable glass pane (18) is its own node glass_N (N = its place in the glass list of vehicles.json, which the script rewrites with the pane outlines; a door leaf's pane is under the leaf)"
     },
     {
-      "id": "pack:suchohrad-generated-models/utility_helicopter",
+      "id": "pack:drycastle-generated-models/utility_helicopter",
       "category": "other",
       "name": "Utility helicopter (open cabin, skids, door gun on the right)",
-      "file": "suchohrad-generated-models/utility_helicopter.glb",
+      "file": "drycastle-generated-models/utility_helicopter.glb",
       "size_m": [
         3.65,
         4.33,
@@ -1471,7 +1471,7 @@
       ],
       "licence": "CC0",
       "source": "scripts/make_utility_helicopter_model.py (original geometry written as code; python3 -I scripts/make_utility_helicopter_model.py rebuilds the file)",
-      "pack": "suchohrad-generated-models",
+      "pack": "drycastle-generated-models",
       "used_for": "godot/shooter vehicle id utility_helicopter (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground under the rotor mast, metres), separate nodes for rotor_main, rotor_tail, gun_mount, gun, barrel; each breakable glass pane (two windscreen halves, two cockpit doors) is its own node glass_N (N = its place in the glass list of vehicles.json, which the script rewrites with the pane outlines)"
     },
     {
@@ -1493,7 +1493,7 @@
         "street-lamp"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -1578,7 +1578,7 @@
         "street-lamp"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -1645,7 +1645,7 @@
         "street-lamp"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -1720,7 +1720,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -1789,7 +1789,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -1850,7 +1850,7 @@
         "street-lamp"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -1980,7 +1980,7 @@
         "street-lamp"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -2082,7 +2082,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -2205,7 +2205,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -2328,7 +2328,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -2434,7 +2434,7 @@
         "street-lamp"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -2536,7 +2536,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -2605,7 +2605,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -2674,7 +2674,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -2725,7 +2725,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/drycastle_pipeline/poles.py)",
       "pack": null,
       "seats": [
         {
@@ -2784,7 +2784,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/drycastle_pipeline/connectors.py)",
       "pack": null,
       "seats": [
         {
@@ -2824,7 +2824,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/drycastle_pipeline/connectors.py)",
       "pack": null,
       "seats": [
         {
@@ -2882,7 +2882,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/drycastle_pipeline/connectors.py)",
       "pack": null,
       "seats": [
         {
@@ -2913,7 +2913,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/drycastle_pipeline/connectors.py)",
       "pack": null,
       "seats": [
         {
@@ -2953,7 +2953,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/drycastle_pipeline/connectors.py)",
       "pack": null,
       "seats": [
         {
@@ -3011,7 +3011,7 @@
         "primitive"
       ],
       "licence": "CC0",
-      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/drycastle_pipeline/connectors.py)",
       "pack": null,
       "seats": [
         {
@@ -3024,13 +3024,541 @@
           ]
         }
       ]
+    },
+    {
+      "id": "prim:floodwall_straight_4",
+      "category": "wall",
+      "name": "Flood wall: 4 m of wall with the walkway and the railing",
+      "file": null,
+      "size_m": [
+        4.0,
+        2.274,
+        2.66
+      ],
+      "tags": [
+        "flood-wall",
+        "straight_4",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated flood wall, pipeline/src/drycastle_pipeline/floodwall.py)",
+      "pack": null,
+      "length_m": 4.0,
+      "solids": [
+        {
+          "min": [
+            -2.0,
+            -1.15,
+            -1.0
+          ],
+          "max": [
+            2.0,
+            0.15,
+            0.9
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -1.33,
+            -1.0
+          ],
+          "max": [
+            2.0,
+            -1.15,
+            0.62
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -0.15,
+            0.9
+          ],
+          "max": [
+            2.0,
+            0.15,
+            1.8
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -0.03,
+            2.22
+          ],
+          "max": [
+            2.0,
+            0.03,
+            2.28
+          ],
+          "surface": "metal"
+        }
+      ]
+    },
+    {
+      "id": "prim:floodwall_straight_2",
+      "category": "wall",
+      "name": "Flood wall: 2 m of wall with the walkway and the railing",
+      "file": null,
+      "size_m": [
+        2.0,
+        2.274,
+        2.66
+      ],
+      "tags": [
+        "flood-wall",
+        "straight_2",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated flood wall, pipeline/src/drycastle_pipeline/floodwall.py)",
+      "pack": null,
+      "length_m": 2.0,
+      "solids": [
+        {
+          "min": [
+            -1.0,
+            -1.15,
+            -1.0
+          ],
+          "max": [
+            1.0,
+            0.15,
+            0.9
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -1.0,
+            -1.33,
+            -1.0
+          ],
+          "max": [
+            1.0,
+            -1.15,
+            0.62
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -1.0,
+            -0.15,
+            0.9
+          ],
+          "max": [
+            1.0,
+            0.15,
+            1.8
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -1.0,
+            -0.03,
+            2.22
+          ],
+          "max": [
+            1.0,
+            0.03,
+            2.28
+          ],
+          "surface": "metal"
+        }
+      ]
+    },
+    {
+      "id": "prim:floodwall_joint",
+      "category": "wall",
+      "name": "Flood wall: pier for a joint or a bend between two pieces",
+      "file": null,
+      "size_m": [
+        1.881,
+        1.95,
+        2.66
+      ],
+      "tags": [
+        "flood-wall",
+        "joint",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated flood wall, pipeline/src/drycastle_pipeline/floodwall.py)",
+      "pack": null,
+      "length_m": 0.0,
+      "solids": [
+        {
+          "min": [
+            -0.3,
+            -0.4,
+            -1.0
+          ],
+          "max": [
+            0.3,
+            0.25,
+            1.95
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -0.3,
+            -1.11,
+            -1.0
+          ],
+          "max": [
+            0.3,
+            -0.4,
+            0.9
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -0.3,
+            -1.29,
+            -1.0
+          ],
+          "max": [
+            0.3,
+            -1.11,
+            0.62
+          ],
+          "surface": "wall"
+        }
+      ]
+    },
+    {
+      "id": "prim:floodwall_access",
+      "category": "wall",
+      "name": "Flood wall: 4 m with a pedestrian opening, ladders, a landing and the flood plaque",
+      "file": null,
+      "size_m": [
+        4.0,
+        2.274,
+        3.356
+      ],
+      "tags": [
+        "flood-wall",
+        "access",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated flood wall, pipeline/src/drycastle_pipeline/floodwall.py)",
+      "pack": null,
+      "length_m": 4.0,
+      "solids": [
+        {
+          "min": [
+            -2.0,
+            -1.15,
+            -1.0
+          ],
+          "max": [
+            2.0,
+            0.15,
+            0.9
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -1.33,
+            -1.0
+          ],
+          "max": [
+            2.0,
+            -1.15,
+            0.62
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -0.15,
+            0.9
+          ],
+          "max": [
+            -1.4,
+            0.15,
+            1.8
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -0.03,
+            2.22
+          ],
+          "max": [
+            -1.45,
+            0.03,
+            2.28
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            -1.4,
+            -0.4,
+            -1.0
+          ],
+          "max": [
+            -0.6,
+            0.25,
+            1.95
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            1.4,
+            -0.15,
+            0.9
+          ],
+          "max": [
+            2.0,
+            0.15,
+            1.8
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            1.45,
+            -0.03,
+            2.22
+          ],
+          "max": [
+            2.0,
+            0.03,
+            2.28
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            0.6,
+            -0.4,
+            -1.0
+          ],
+          "max": [
+            1.4,
+            0.25,
+            1.95
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -1.0,
+            0.15,
+            -1.0
+          ],
+          "max": [
+            1.0,
+            1.15,
+            0.9
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -0.99,
+            0.31,
+            1.203
+          ],
+          "max": [
+            -0.93,
+            1.1,
+            1.263
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            -0.99,
+            0.31,
+            1.537
+          ],
+          "max": [
+            -0.93,
+            1.1,
+            1.597
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            -0.99,
+            0.31,
+            1.87
+          ],
+          "max": [
+            -0.93,
+            1.1,
+            1.93
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            0.93,
+            0.31,
+            1.203
+          ],
+          "max": [
+            0.99,
+            1.1,
+            1.263
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            0.93,
+            0.31,
+            1.537
+          ],
+          "max": [
+            0.99,
+            1.1,
+            1.597
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            0.93,
+            0.31,
+            1.87
+          ],
+          "max": [
+            0.99,
+            1.1,
+            1.93
+          ],
+          "surface": "metal"
+        }
+      ]
+    },
+    {
+      "id": "prim:floodwall_gate",
+      "category": "wall",
+      "name": "Flood wall: road gate, two piers and a sill, 4 m clear",
+      "file": null,
+      "size_m": [
+        6.0,
+        1.95,
+        2.76
+      ],
+      "tags": [
+        "flood-wall",
+        "gate",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated flood wall, pipeline/src/drycastle_pipeline/floodwall.py)",
+      "pack": null,
+      "length_m": 6.0,
+      "solids": [
+        {
+          "min": [
+            -3.0,
+            -1.38,
+            -1.0
+          ],
+          "max": [
+            -2.0,
+            0.2,
+            1.95
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            2.0,
+            -1.38,
+            -1.0
+          ],
+          "max": [
+            3.0,
+            0.2,
+            1.95
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -0.75,
+            -0.4
+          ],
+          "max": [
+            2.0,
+            0.45,
+            0.05
+          ],
+          "surface": "wall"
+        }
+      ]
+    },
+    {
+      "id": "prim:floodwall_gate_pier",
+      "category": "wall",
+      "name": "Flood wall: gate pier, ends a wall",
+      "file": null,
+      "size_m": [
+        1.0,
+        1.95,
+        2.76
+      ],
+      "tags": [
+        "flood-wall",
+        "gate_pier",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated flood wall, pipeline/src/drycastle_pipeline/floodwall.py)",
+      "pack": null,
+      "length_m": 1.0,
+      "solids": [
+        {
+          "min": [
+            -0.5,
+            -1.38,
+            -1.0
+          ],
+          "max": [
+            0.5,
+            0.2,
+            1.95
+          ],
+          "surface": "wall"
+        }
+      ]
     }
   ],
   "textures": [
     {
       "id": "brick_red",
       "name": "Brick red",
-      "file": "suchohrad-generated-textures/brick_red.png",
+      "file": "drycastle-generated-textures/brick_red.png",
       "size_px": [
         256,
         256
@@ -3044,12 +3572,12 @@
       "mean_colour": "#a15b47",
       "licence": "CC0",
       "source": "scripts/make_textures.py",
-      "pack": "suchohrad-generated-textures"
+      "pack": "drycastle-generated-textures"
     },
     {
       "id": "brick_white",
       "name": "Brick white",
-      "file": "suchohrad-generated-textures/brick_white.png",
+      "file": "drycastle-generated-textures/brick_white.png",
       "size_px": [
         256,
         256
@@ -3063,12 +3591,12 @@
       "mean_colour": "#dfdbd0",
       "licence": "CC0",
       "source": "scripts/make_textures.py",
-      "pack": "suchohrad-generated-textures"
+      "pack": "drycastle-generated-textures"
     },
     {
       "id": "stone",
       "name": "Stone",
-      "file": "suchohrad-generated-textures/stone.png",
+      "file": "drycastle-generated-textures/stone.png",
       "size_px": [
         256,
         256
@@ -3082,12 +3610,12 @@
       "mean_colour": "#8b857a",
       "licence": "CC0",
       "source": "scripts/make_textures.py",
-      "pack": "suchohrad-generated-textures"
+      "pack": "drycastle-generated-textures"
     },
     {
       "id": "concrete",
       "name": "Concrete",
-      "file": "suchohrad-generated-textures/concrete.png",
+      "file": "drycastle-generated-textures/concrete.png",
       "size_px": [
         256,
         256
@@ -3101,12 +3629,12 @@
       "mean_colour": "#ebebeb",
       "licence": "CC0",
       "source": "scripts/make_textures.py",
-      "pack": "suchohrad-generated-textures"
+      "pack": "drycastle-generated-textures"
     },
     {
       "id": "picket",
       "name": "Picket",
-      "file": "suchohrad-generated-textures/picket.png",
+      "file": "drycastle-generated-textures/picket.png",
       "size_px": [
         256,
         256
@@ -3120,12 +3648,12 @@
       "mean_colour": "#eeeeee",
       "licence": "CC0",
       "source": "scripts/make_textures.py",
-      "pack": "suchohrad-generated-textures"
+      "pack": "drycastle-generated-textures"
     },
     {
       "id": "wire",
       "name": "Wire",
-      "file": "suchohrad-generated-textures/wire.png",
+      "file": "drycastle-generated-textures/wire.png",
       "size_px": [
         256,
         256
@@ -3139,12 +3667,12 @@
       "mean_colour": "#d6d6d6",
       "licence": "CC0",
       "source": "scripts/make_textures.py",
-      "pack": "suchohrad-generated-textures"
+      "pack": "drycastle-generated-textures"
     },
     {
       "id": "dirt",
       "name": "Dirt",
-      "file": "suchohrad-generated-textures/dirt.png",
+      "file": "drycastle-generated-textures/dirt.png",
       "size_px": [
         256,
         256
@@ -3158,12 +3686,12 @@
       "mean_colour": "#816547",
       "licence": "CC0",
       "source": "scripts/make_textures.py",
-      "pack": "suchohrad-generated-textures"
+      "pack": "drycastle-generated-textures"
     },
     {
       "id": "gravel",
       "name": "Gravel",
-      "file": "suchohrad-generated-textures/gravel.png",
+      "file": "drycastle-generated-textures/gravel.png",
       "size_px": [
         256,
         256
@@ -3177,12 +3705,12 @@
       "mean_colour": "#88847a",
       "licence": "CC0",
       "source": "scripts/make_textures.py",
-      "pack": "suchohrad-generated-textures"
+      "pack": "drycastle-generated-textures"
     },
     {
       "id": "leaf_litter",
       "name": "Leaf litter",
-      "file": "suchohrad-generated-textures/leaf_litter.png",
+      "file": "drycastle-generated-textures/leaf_litter.png",
       "size_px": [
         256,
         256
@@ -3196,12 +3724,12 @@
       "mean_colour": "#674f32",
       "licence": "CC0",
       "source": "scripts/make_textures.py",
-      "pack": "suchohrad-generated-textures"
+      "pack": "drycastle-generated-textures"
     },
     {
       "id": "soil_rows",
       "name": "Soil rows",
-      "file": "suchohrad-generated-textures/soil_rows.png",
+      "file": "drycastle-generated-textures/soil_rows.png",
       "size_px": [
         256,
         256
@@ -3215,7 +3743,7 @@
       "mean_colour": "#674c33",
       "licence": "CC0",
       "source": "scripts/make_textures.py",
-      "pack": "suchohrad-generated-textures"
+      "pack": "drycastle-generated-textures"
     }
   ],
   "sounds": [
@@ -3556,73 +4084,73 @@
       "note": "OGG renamed from '4. Stage Select.ogg', copied unchanged"
     },
     {
-      "id": "sfx:suchohrad-generated-sounds/launch_bazooka",
+      "id": "sfx:drycastle-generated-sounds/launch_bazooka",
       "name": "Bazooka launch whoosh",
-      "file": "suchohrad-generated-sounds/launch_bazooka.ogg",
+      "file": "drycastle-generated-sounds/launch_bazooka.ogg",
       "used_for": "launch.bazooka",
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle",
-      "pack": "suchohrad-generated-sounds",
+      "pack": "drycastle-generated-sounds",
       "downloaded": "2026-11-11",
       "generated": true,
       "note": "PLACEHOLDER generated by a deterministic script kept outside the repo (noise, sine harmonics, decaying clicks); replace with a recording"
     },
     {
-      "id": "sfx:suchohrad-generated-sounds/rocket_flight",
+      "id": "sfx:drycastle-generated-sounds/rocket_flight",
       "name": "Rocket flight loop",
-      "file": "suchohrad-generated-sounds/rocket_flight.ogg",
+      "file": "drycastle-generated-sounds/rocket_flight.ogg",
       "used_for": "rocket.flight",
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle",
-      "pack": "suchohrad-generated-sounds",
+      "pack": "drycastle-generated-sounds",
       "downloaded": "2026-11-11",
       "generated": true,
       "note": "PLACEHOLDER generated by a deterministic script kept outside the repo (noise, sine harmonics, decaying clicks); replace with a recording"
     },
     {
-      "id": "sfx:suchohrad-generated-sounds/vehicle_engine",
+      "id": "sfx:drycastle-generated-sounds/vehicle_engine",
       "name": "Vehicle engine loop",
-      "file": "suchohrad-generated-sounds/vehicle_engine.ogg",
+      "file": "drycastle-generated-sounds/vehicle_engine.ogg",
       "used_for": "vehicle.engine",
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle",
-      "pack": "suchohrad-generated-sounds",
+      "pack": "drycastle-generated-sounds",
       "downloaded": "2026-11-11",
       "generated": true,
       "note": "PLACEHOLDER generated by a deterministic script kept outside the repo (noise, sine harmonics, decaying clicks); replace with a recording"
     },
     {
-      "id": "sfx:suchohrad-generated-sounds/reload_pistol",
+      "id": "sfx:drycastle-generated-sounds/reload_pistol",
       "name": "Pistol reload",
-      "file": "suchohrad-generated-sounds/reload_pistol.ogg",
+      "file": "drycastle-generated-sounds/reload_pistol.ogg",
       "used_for": "reload.pistol",
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle",
-      "pack": "suchohrad-generated-sounds",
+      "pack": "drycastle-generated-sounds",
       "downloaded": "2026-11-11",
       "generated": true,
       "note": "PLACEHOLDER generated by a deterministic script kept outside the repo (noise, sine harmonics, decaying clicks); replace with a recording"
     },
     {
-      "id": "sfx:suchohrad-generated-sounds/reload_ak47",
+      "id": "sfx:drycastle-generated-sounds/reload_ak47",
       "name": "AK-47 reload",
-      "file": "suchohrad-generated-sounds/reload_ak47.ogg",
+      "file": "drycastle-generated-sounds/reload_ak47.ogg",
       "used_for": "reload.ak47",
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle",
-      "pack": "suchohrad-generated-sounds",
+      "pack": "drycastle-generated-sounds",
       "downloaded": "2026-11-11",
       "generated": true,
       "note": "PLACEHOLDER generated by a deterministic script kept outside the repo (noise, sine harmonics, decaying clicks); replace with a recording"
     },
     {
-      "id": "sfx:suchohrad-generated-sounds/reload_bazooka",
+      "id": "sfx:drycastle-generated-sounds/reload_bazooka",
       "name": "Bazooka reload",
-      "file": "suchohrad-generated-sounds/reload_bazooka.ogg",
+      "file": "drycastle-generated-sounds/reload_bazooka.ogg",
       "used_for": "reload.bazooka",
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle",
-      "pack": "suchohrad-generated-sounds",
+      "pack": "drycastle-generated-sounds",
       "downloaded": "2026-11-11",
       "generated": true,
       "note": "PLACEHOLDER generated by a deterministic script kept outside the repo (noise, sine harmonics, decaying clicks); replace with a recording"

@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The sandbox panel (F4, #156): the eight killstreaks as icon buttons (pick one to hold it), "Use now" for the held one,

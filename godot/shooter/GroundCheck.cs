@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Headless ground-collision audit (scene res://ground_check.tscn): loads a map, raycasts down on a grid over the parcel
@@ -10,7 +10,7 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class GroundCheck : Node3D
 {
-    readonly Suchohrad.MapLoader.MapLoader _map = new();
+    readonly Drycastle.MapLoader.MapLoader _map = new();
     Player _p = null!;
     int _frame, _line, _lineStart;
     readonly List<(Vector3 from, float yaw)> _lines = new();
@@ -189,7 +189,7 @@ public partial class GroundCheck : Node3D
         }
         if (_cars.Count > 0 && !_walkReady)
         {
-            foreach (var (c, _) in _cars) c.Step(c.Def, 0, 0, false, 1f / 30, Suchohrad.ShooterCore.Water.Empty);
+            foreach (var (c, _) in _cars) c.Step(c.Def, 0, 0, false, 1f / 30, Drycastle.ShooterCore.Water.Empty);
             if (_frame - _carStart == 150) { ReportCars(); if (!_noWalk) SetupWalk(); else Finish(); }
             return;
         }

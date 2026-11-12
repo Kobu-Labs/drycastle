@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>The helicopter helper: the gunner's pick, warning and burst timing, the data, and the streak through the real service.</summary>
 public class HelicopterHelperTests

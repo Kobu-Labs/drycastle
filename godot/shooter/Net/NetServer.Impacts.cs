@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Impact particles on the server (EventKind.ImpactFx, tickets #152 and #154). The server decides the surface of a hit (body,
@@ -13,7 +13,7 @@ namespace Suchohrad.Shooter;
 public partial class NetServer
 {
     /// <summary>The map this server runs on (the parcels, the ground height and roads.json); null in tests.</summary>
-    public Suchohrad.MapLoader.MapLoader? Map;
+    public Drycastle.MapLoader.MapLoader? Map;
 
     /// <summary>Minimum gap between the ground puffs of plain bullets, server seconds (keeps the impact traffic low).</summary>
     const double BulletPuffGap = 0.2;

@@ -27,7 +27,7 @@ public partial class Viewer
         return false;
     }
 
-    static float Ground(Suchohrad.MapLoader.MapLoader map, Vector3 p) => map.GroundHeightOrMean(p.X, p.Z);
+    static float Ground(Drycastle.MapLoader.MapLoader map, Vector3 p) => map.GroundHeightOrMean(p.X, p.Z);
 
     async Task RunEditorSmoke()
     {

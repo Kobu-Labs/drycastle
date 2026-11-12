@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// A circular progress ring with a label under it (ticket #151): the care package's open hold, and reusable for any hold

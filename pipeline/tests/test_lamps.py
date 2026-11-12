@@ -8,13 +8,13 @@ import yaml
 from shapely.geometry import Point, shape
 from shapely.ops import unary_union
 
-from suchohrad_pipeline.buildings import footprint_polygon
-from suchohrad_pipeline.export import run_export
-from suchohrad_pipeline.lamps import make_lamps
-from suchohrad_pipeline.normalise import parse_osm
-from suchohrad_pipeline.props import run_props
-from suchohrad_pipeline.roads import edge_lines
-from suchohrad_pipeline.rules import load_section
+from drycastle_pipeline.buildings import footprint_polygon
+from drycastle_pipeline.export import run_export
+from drycastle_pipeline.lamps import make_lamps
+from drycastle_pipeline.normalise import parse_osm
+from drycastle_pipeline.props import run_props
+from drycastle_pipeline.roads import edge_lines
+from drycastle_pipeline.rules import load_section
 from tests.synthetic import make_terrain, make_workspace
 
 LAMPS = load_section("lamps")

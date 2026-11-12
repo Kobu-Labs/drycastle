@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// <c>--model-shots DIR</c>: renders the vehicles (car, each motorcycle and bicycle colour), the remote character in each animation (with each weapon in hand) and the first-person

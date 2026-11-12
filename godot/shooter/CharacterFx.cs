@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// A remote player's body: one of the animated character models listed in camo.json <c>bodies</c> (one shared 23-bone rig with Idle, Walk,

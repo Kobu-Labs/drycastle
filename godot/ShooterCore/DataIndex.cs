@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Id lookups for the parsed data files (T3-019). The first lookup builds a dictionary once, so per-frame callers (the gunner HUD)

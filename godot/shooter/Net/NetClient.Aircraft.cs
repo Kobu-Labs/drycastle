@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Aircraft on the client (ticket #125): each aircraft world entity is drawn interpolated like the other entities, with its
@@ -157,7 +157,7 @@ public partial class NetClient
         _enemyMarkers.Clear();
         foreach (var (id, r) in _remotes)
         {
-            if (id == _myId || r.State == EntityState.Dead || !GodotObject.IsInstanceValid(r.Node)) continue;
+            if (id == _myId || Match.AreFriends(_myId, id) || r.State == EntityState.Dead || !GodotObject.IsInstanceValid(r.Node)) continue;
             _enemyMarkers.Add(r.Node.GlobalPosition + Vector3.Up * 1.0f);
         }
         return _enemyMarkers;

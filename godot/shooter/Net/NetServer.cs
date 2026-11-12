@@ -1,9 +1,9 @@
 using Godot;
-using Suchohrad.ShooterCore;
-using Suchohrad.ShooterServer.Persistence;
+using Drycastle.ShooterCore;
+using Drycastle.ShooterServer.Persistence;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Authoritative 30 Hz server over raw ENet (see ADR 0002): ch0 reliable messages, ch1 unreliable-sequenced input and snapshots.
@@ -68,6 +68,8 @@ public partial class NetServer : Node
         public string Token = "";
         public int PacketsThisTick;
         public double SaveTokens = 10;
+        /// <summary>What this player may send to the chat: a short burst, then about a line a second.</summary>
+        public readonly ChatRateLimiter Chat = new();
         public long BytesOut;
     }
 
@@ -89,7 +91,7 @@ public partial class NetServer : Node
     public bool WeaponsSmoke;
     public float KillY = float.NegativeInfinity;
     /// <summary>The map's water (water.json); players swim, drown and lose the weapon lock under it.</summary>
-    public Suchohrad.ShooterCore.Water Water = Suchohrad.ShooterCore.Water.Empty;
+    public Drycastle.ShooterCore.Water Water = Drycastle.ShooterCore.Water.Empty;
     public int Port = 27015;
     /// <summary>Network impairment for the loss and latency test (--net-sim); null = none.</summary>
     public NetSim? Sim;
@@ -358,6 +360,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SeatSwitch } sw && c.Joined) OnSeatSwitch(c, sw.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) OnChatSend(c, cs.Payload);
             else if (c.Joined) OnProfileMessage(c, m);
         }
         else if (c.Joined && d[0] == Wire.TInput)
@@ -401,7 +404,7 @@ public partial class NetServer : Node
         ApplyLoadout(c);
         c.Recoil = new RecoilState(c.Id);
         c.Breath = new BreathState(c.Id);
-        c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water };
+        c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = MapLadders };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
         c.Joined = true;
@@ -411,6 +414,7 @@ public partial class NetServer : Node
         c.Enc = new SnapshotEncoder(_sentStates);
         SendProfile(c);
         SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
+        SendChatStatus(c); // admin or not, and the vehicles /spawn takes
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick,
             (ushort)(Clock.StartMinute), (uint)Math.Round(Clock.DayLengthSeconds * 1000), Clock.Frozen));
         foreach (var o in _byId.Values)
@@ -572,8 +576,8 @@ public partial class NetServer : Node
 
     MatchStateMsg BuildMatchState()
     {
-        var rows = _match.Ranking().Select(p => new ScoreRow(p.Id, p.Sandbox ? p.Name + " [SANDBOX]" : p.Name, p.Kills, p.Deaths, Ping(p.Id))).ToList();
-        return new MatchStateMsg(_match.Phase, _match.TimeRemaining, _match.Winners, rows);
+        var rows = _match.Ranking().Select(p => new ScoreRow(p.Id, p.Sandbox ? p.Name + " [SANDBOX]" : p.Name, p.Kills, p.Deaths, Ping(p.Id), p.Team)).ToList();
+        return new MatchStateMsg(_match.Phase, _match.TimeRemaining, _match.Winners, rows, _match.Mode, _match.TeamScore(Teams.A), _match.TeamScore(Teams.B));
     }
 
     ushort Ping(ushort id) =>
@@ -625,7 +629,7 @@ public partial class NetServer : Node
             // breath hold: sprint is cancelled while aiming, so the sprint bit with aim held is the breath key
             c.Breath.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Aim) != 0 && c.W.Current.ZoomFov > 0,
                 (i.Buttons & (ushort)MoveButtons.Sprint) != 0, c.W.Current, c.Perks.HoldBreathTime);
-            var wi = new WeaponInput((i.Buttons & (ushort)MoveButtons.Fire) != 0 && !c.Body.HeadUnder, (i.Buttons & (ushort)MoveButtons.Reload) != 0, i.Slot, (i.Buttons & (ushort)MoveButtons.Switch) != 0);
+            var wi = new WeaponInput((i.Buttons & (ushort)MoveButtons.Fire) != 0 && !c.Body.HeadUnder && !c.Body.State.OnLadder, (i.Buttons & (ushort)MoveButtons.Reload) != 0, i.Slot, (i.Buttons & (ushort)MoveButtons.Switch) != 0);
             if (c.W.Update(_elapsed, wi) is { } shot)
             {
                 if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++; // spawn protection ends on a real shot, not on Fire held with an empty magazine
@@ -709,8 +713,8 @@ public partial class NetServer : Node
             var d = HitMath.SpreadDirection(yaw + kick.YawRad + sway.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad + sway.PitchRad), HitMath.ShotSpread(shot.SpreadDegrees, w, c.Body.State, aiming), _rng);
             var dir = new Vector3(d.X, d.Y, d.Z);
             var range = w.Range > 0 ? w.Range : MaxShotRange;
-            var crossed = new List<GlassCross>();
-            var wall = BulletHit(eye, dir, range, out var shotCar, crossed);
+            List<GlassCross>? crossed = null;
+            var wall = BulletHit(eye, dir, range, out var shotCar, ref crossed);
             var (exposedGunner, pastHull) = ExposedGunnerBehind(shotCar, eye, dir, range, targets);
             var hit = GunnerCover.Raycast(N(eye), d, range, wall, targets, c.Id, exposedGunner, pastHull); // a flak gunner in the open is hit through his hull
             if (hit == null && HitMath.Raycast(N(eye), d, range, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
@@ -806,7 +810,7 @@ public partial class NetServer : Node
 
     /// <summary>
     /// Explosion: the direct-hit victim takes the full damage (and no splash on top); everyone else alive within the splash
-    /// radius takes the linear falloff damage, the owner scaled by the self multiplier. Splash ignores walls. Affected players get knockback.
+    /// radius takes the linear falloff damage, the owner scaled by the self multiplier. Splash ignores walls, except a bunker room's (<see cref="BlastReaches"/>). Affected players get knockback.
     /// </summary>
     void Explode(Rocket r, WeaponDef weapon, Vector3 pos, ushort? direct, ServerCar? directCar = null)
     {
@@ -819,6 +823,7 @@ public partial class NetServer : Node
         foreach (var t in LiveTargets())
         {
             var isDirect = direct == t.Id;
+            if (!isDirect && !BlastReaches(N(pos), t)) continue; // a bunker room's walls are between them
             var dist = HitMath.DistanceToBody(N(pos), t);
             var self = t.Id == r.Owner;
             var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, self);

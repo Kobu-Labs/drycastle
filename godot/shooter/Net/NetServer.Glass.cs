@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Server side of glass panes (ADR 0007, docs/glass.md). The server owns every pane's hit points (<see cref="GlassPanes"/>): the windows
@@ -67,19 +67,20 @@ public partial class NetServer
     /// <summary>A pane a bullet went through: the vehicle, the pane and the metres along the ray.</summary>
     readonly record struct GlassCross(ServerCar Car, int Pane, float Dist);
 
-    /// <summary>Panes one bullet may pass (an entry and an exit pane per vehicle).</summary>
+    /// <summary>Vehicles one bullet may pass through (by a pane or an open side in, and one out).</summary>
     const int MaxGlassPasses = 6;
-    /// <summary>How far a bullet that came in through a pane and found no pane to leave by goes on inside the hull before the hull stops it.</summary>
-    const float InsideRun = 1.5f;
 
     /// <summary>
-    /// As <see cref="WorldHit"/> for a bullet, pellet or gun round: a vehicle's glass does not stop it. A ray that reaches a vehicle through
-    /// one of its panes (whole or shattered) goes on inside, so a rider is open to it, and leaves through the next pane it crosses on
-    /// that vehicle, then on to whatever is beyond (another window, a player, a wall). With no pane to leave by, the hull stops it
-    /// <see cref="InsideRun"/> metres in. Every pane passed is added to <paramref name="crossed"/> for <see cref="DamageCrossed"/>. Returns the
-    /// distance of the stop, and the vehicle it stopped on (null: the world or nothing).
+    /// As <see cref="WorldHit"/> for a bullet, pellet or gun round: a vehicle's glass and its open sides do not stop it. A ray that reaches a
+    /// vehicle through one of its panes (whole or shattered) or open sides (vehicles.json open_sides: the helicopter's cabin) goes on inside,
+    /// so a rider is open to it, and leaves through the next pane or open side it crosses on that vehicle, then on to whatever is beyond
+    /// (another window, a player, a wall). With no way out, the hull stops it on its far side (where the ray leaves the hit box), so every rider on the way is open to it; a ray that comes in by neither
+    /// is stopped where it met the hull (<see cref="GlassRules.Through"/>). Every pane passed is added to <paramref name="crossed"/> (made
+    /// when the first pane is passed, so a shot that meets no glass allocates nothing) for <see cref="DamageCrossed"/>.
+    /// <paramref name="ignore"/> is a vehicle the ray does not meet at all (the door gunner's own), <paramref name="solid"/> one whose glass
+    /// stops it as its hull does (the roof gunner's own). Returns the distance of the stop, and the vehicle it stopped on (null: the world or nothing).
     /// </summary>
-    float BulletHit(Vector3 from, Vector3 dir, float max, out ServerCar? car, List<GlassCross> crossed, ServerCar? ignore = null)
+    float BulletHit(Vector3 from, Vector3 dir, float max, out ServerCar? car, ref List<GlassCross>? crossed, ServerCar? ignore = null, ServerCar? solid = null)
     {
         var off = 0f;
         var exclude = ignore == null ? null : new Godot.Collections.Array<Rid>(PlayerRids()) { ignore.GetRid() };
@@ -93,27 +94,27 @@ public partial class NetServer
             if (r.Count == 0) { car = null; return float.PositiveInfinity; }
             car = r["collider"].As<GodotObject>() as ServerCar;
             var wall = from.DistanceTo(r["position"].AsVector3());
-            if (car == null || car.Destroyed || car.Def.Glass.Count == 0 || pass >= MaxGlassPasses) return wall;
-            var rects = car.Def.GlassRects;
+            if (car == null || car == solid || car.Destroyed || pass >= MaxGlassPasses) return wall;
+            var panes = car.Def.GlassRects; var open = car.Def.OpenSideRects;
+            if (panes.Count == 0 && open.Count == 0) return wall;
             var feet = N(car.GlobalPosition); var yaw = car.State.Yaw;
             var lo = GlassRules.ToVehicle(n, feet, yaw); var ld = GlassRules.DirToVehicle(nd, yaw);
-            var entry = GlassRules.FirstCrossed(rects, lo, ld, wall - 0.1f, wall + GlassData.VehicleReach);
-            if (entry < 0) return wall;
-            var entryT = rects[entry].Cross(lo, ld)!.Value;
-            crossed.Add(new GlassCross(car, entry, entryT));
-            var exit = -1; var exitT = float.PositiveInfinity;
-            for (var i = 0; i < rects.Count; i++)
-                if (i != entry && rects[i].CrossFromInside(lo, ld) is { } t && t > entryT + 0.05f && t < exitT) { exit = i; exitT = t; }
-            if (exit < 0) return entryT + InsideRun; // no way out: the hull takes the round
-            crossed.Add(new GlassCross(car, exit, exitT));
-            off = exitT + 0.02f;
+            var way = GlassRules.Through(panes, open, lo, ld, wall, GlassData.VehicleReach);
+            if (!way.Enters || way.EntryT > max) return wall; // the body where the ray met it, or the round's range ends before the pane
+            if (way.EntryPane >= 0) (crossed ??= new()).Add(new GlassCross(car, way.EntryPane, way.EntryT));
+            // no way out, or the round's range ends inside: the hull takes the round on its far side
+            if (!way.Leaves || way.ExitT + 0.02f >= max)
+                return MathF.Min(MathF.Max(VehicleBox.ExitDistance(lo, ld, car.HalfWidth, car.HalfLength, car.Def.Height), way.EntryT), max);
+            if (way.ExitPane >= 0) (crossed ??= new()).Add(new GlassCross(car, way.ExitPane, way.ExitT));
+            off = way.ExitT + 0.02f;
             exclude = new Godot.Collections.Array<Rid>(exclude ?? PlayerRids()) { car.GetRid() };
         }
     }
 
     /// <summary>The panes a bullet went through that lie nearer than <paramref name="before"/> (where it hit a player, else infinity) take <paramref name="damage"/> of their distance each.</summary>
-    void DamageCrossed(List<GlassCross> crossed, float before, Func<float, float> damage)
+    void DamageCrossed(List<GlassCross>? crossed, float before, Func<float, float> damage)
     {
+        if (crossed == null) return;
         foreach (var x in crossed)
         {
             if (x.Dist >= before || x.Car.Destroyed) continue;

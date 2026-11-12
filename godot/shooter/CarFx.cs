@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>Client visual of a vehicle: the Kenney Car Kit sedan with its body material tinted by the colour index, or a bike model (vehicles.json) with its paint material swapped for one of the model's own colours.</summary>
 public static class CarFx

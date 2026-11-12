@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// UAV remaining-time indicator (issue #121): a small panel right of the minimap, shown only while the owner's UAV is up.

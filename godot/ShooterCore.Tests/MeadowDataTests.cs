@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Suchohrad.MapLoader;
+using Drycastle.MapLoader;
 using Xunit;
 
 namespace ShooterCore.Tests;

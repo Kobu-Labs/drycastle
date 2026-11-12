@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Wire state of an aircraft, carried in <see cref="WorldState.State"/>: bit 7 is the kind index (into

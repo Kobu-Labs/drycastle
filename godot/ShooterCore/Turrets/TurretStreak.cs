@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// The turret killstreak (killstreaks.json id "turret", 6 kills). Using it spawns a placing ghost that follows the owner's

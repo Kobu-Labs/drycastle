@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Vehicle headlights (ticket: vehicle headlights). One bit per vehicle, replicated in the record (see <see cref="VehicleRecord.Lights"/>).

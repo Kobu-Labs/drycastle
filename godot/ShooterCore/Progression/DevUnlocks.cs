@@ -1,7 +1,7 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
-/// Dev mode "everything unlocked" (issue #149, <c>--unlock-all</c> or <c>SUCHOHRAD_UNLOCK_ALL=1</c>). Off by default, so an
+/// Dev mode "everything unlocked" (issue #149, <c>--unlock-all</c> or <c>DRYCASTLE_UNLOCK_ALL=1</c>). Off by default, so an
 /// exported release server gates every item as before. When on, every weapon (not the special ones), perk and killstreak
 /// counts as unlocked for loadout validation and for the profile the server reports, the starter loadouts are the showcase
 /// kits of <see cref="DevKit"/>, and the profile carries <see cref="Marker"/> so the client can say so on screen. XP and
@@ -10,7 +10,7 @@ namespace Suchohrad.ShooterCore;
 /// </summary>
 public static class DevUnlocks
 {
-    public const string EnvVar = "SUCHOHRAD_UNLOCK_ALL";
+    public const string EnvVar = "DRYCASTLE_UNLOCK_ALL";
     public const string MarkerKind = "dev", MarkerId = "unlock_all";
 
     /// <summary>A row that is only ever sent to clients (never stored, never a data-file item). Loadout rules ignore its kind.</summary>

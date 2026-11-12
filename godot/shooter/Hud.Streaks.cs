@@ -1,93 +1,123 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
-/// Killstreak tracker in the HUD (ticket #119): one row per loadout streak slot with its name, kills still to go or its
-/// state (ready with the activation key, active, used), and a progress bar. Rows have fixed sizes, so values never move
-/// the layout. <see cref="RefreshStreaks"/> runs on the tracker's events, not per frame, and writes only what changed.
+/// Killstreak row in the HUD: "kills this life, skull | streak icon > streak icon > streak icon". Each icon carries the kills
+/// it needs in its bottom right corner; an achieved streak turns green and grows to 110 % (shape and colour). No panel, no
+/// bars, no words. Cells have fixed sizes, so values never move the layout. <see cref="RefreshStreaks"/> runs on the
+/// tracker's events, not per frame, and writes only what changed.
 /// </summary>
 public partial class Hud
 {
-    readonly Label[] _streakName = new Label[KillstreakService.Slots], _streakState = new Label[KillstreakService.Slots];
-    readonly ProgressBar[] _streakBar = new ProgressBar[KillstreakService.Slots];
-    readonly string[] _streakVariation = new string[KillstreakService.Slots];
+    const float StreakCell = 56, AchievedScale = 1.1f;
 
-    /// <summary>The streak tracker's panel; <see cref="ApplyMinimapSettings"/> moves it under the minimap.</summary>
+    readonly Control[] _streakCell = new Control[KillstreakService.Slots], _streakChevron = new Control[KillstreakService.Slots];
+    readonly TextureRect[] _streakIcon = new TextureRect[KillstreakService.Slots];
+    readonly Label[] _streakNeed = new Label[KillstreakService.Slots];
+    readonly string[] _streakShownId = new string[KillstreakService.Slots];
+    readonly int[] _streakShownState = new int[KillstreakService.Slots];
+    Label _streakKills = null!;
+
+    /// <summary>The streak row; <see cref="ApplyMinimapSettings"/> moves it under the minimap.</summary>
     Control _streakPanel = null!;
 
     void BuildStreaks()
     {
-        var p = _streakPanel = Place(P("HudPanel"), 0, 0, ShooterTheme.Margin, ShooterTheme.Margin + 32 + 224 + ShooterTheme.Space, 304, 232);
-        _root.AddChild(p);
-        var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        v.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
-        p.AddChild(v);
-        v.AddChild(L(Strings.T("hud.streak.title"), "HudSmall"));
+        var row = _streakPanel = Place(new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore }, 0, 0, ShooterTheme.Margin, ShooterTheme.Margin + 32 + 224 + ShooterTheme.Space, 320, StreakCell + 8);
+        ((HBoxContainer)row).AddThemeConstantOverride("separation", ShooterTheme.Space);
+        ((HBoxContainer)row).Alignment = BoxContainer.AlignmentMode.Begin;
+        _root.AddChild(row);
+        _streakKills = L("0", "HudDisplay", HorizontalAlignment.Right, 40);
+        _streakKills.VerticalAlignment = VerticalAlignment.Center;
+        row.AddChild(_streakKills);
+        row.AddChild(new StreakGlyph(StreakGlyph.Shape.Skull) { CustomMinimumSize = new Vector2(32, StreakCell), MouseFilter = Control.MouseFilterEnum.Ignore });
+        row.AddChild(new ColorRect { Color = ShooterTheme.Line, CustomMinimumSize = new Vector2(2, StreakCell - 8), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter, MouseFilter = Control.MouseFilterEnum.Ignore });
         for (var i = 0; i < KillstreakService.Slots; i++)
         {
-            _streakName[i] = L("", "HudHead"); _streakName[i].ClipText = true;
-            v.AddChild(_streakName[i]);
-            var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-            row.AddThemeConstantOverride("separation", ShooterTheme.Space);
-            v.AddChild(row);
-            _streakBar[i] = new ProgressBar { MaxValue = 1, ShowPercentage = false, CustomMinimumSize = new Vector2(96, 14), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter, ThemeTypeVariation = "ReloadBar", MouseFilter = Control.MouseFilterEnum.Ignore };
-            _streakState[i] = L("", "HudSmall", minW: 150); _streakState[i].ClipText = true;
-            row.AddChild(_streakBar[i]); row.AddChild(_streakState[i]);
+            if (i > 0)
+            {
+                _streakChevron[i] = new StreakGlyph(StreakGlyph.Shape.Chevron) { CustomMinimumSize = new Vector2(16, StreakCell), MouseFilter = Control.MouseFilterEnum.Ignore };
+                row.AddChild(_streakChevron[i]);
+            }
+            var cell = _streakCell[i] = new Control { CustomMinimumSize = new Vector2(StreakCell, StreakCell), PivotOffset = new Vector2(StreakCell, StreakCell) / 2, MouseFilter = Control.MouseFilterEnum.Ignore };
+            row.AddChild(cell);
+            var icon = _streakIcon[i] = new TextureRect { ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, MouseFilter = Control.MouseFilterEnum.Ignore };
+            icon.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            cell.AddChild(icon);
+            var need = _streakNeed[i] = L("", "HudSmall", HorizontalAlignment.Right);
+            need.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            need.VerticalAlignment = VerticalAlignment.Bottom;
+            cell.AddChild(need);
+            _streakShownState[i] = -1;
         }
         RefreshStreaks(null, false);
     }
 
     /// <summary>
-    /// Shows the tracker's three slots. <paramref name="alive"/> false drops the key hint from a ready streak (the server
-    /// refuses use while dead). A null tracker (no killstreak data) shows empty slots.
+    /// Shows the kills this life and the tracker's three slots. A null tracker (no killstreak data) shows 0 and no icons.
+    /// <paramref name="alive"/> is unused by the row (the key hint is gone) and kept for the callers.
     /// </summary>
     public void RefreshStreaks(KillstreakTracker? tracker, bool alive)
     {
+        Set(_streakKills, (tracker?.Kills ?? 0).ToString());
         for (var i = 0; i < KillstreakService.Slots; i++)
         {
             var view = tracker?.Slot(i) ?? new StreakSlotView("", "", StreakSlotState.Empty, 0, 0);
             var empty = view.State == StreakSlotState.Empty;
-            Set(_streakName[i], empty ? Strings.T("hud.streak.none") : StreakName(view));
-            var bar = 0f;
-            string text, variation;
-            switch (view.State)
+            // reserved space: an empty slot fades out rather than collapsing, so nothing shifts
+            Fade(_streakCell[i], empty ? 0 : 1);
+            if (_streakChevron[i] != null) Fade(_streakChevron[i], empty ? 0 : 1);
+            if (empty) { _streakShownState[i] = (int)StreakSlotState.Empty; continue; }
+            if (_streakShownId[i] != view.Id)
             {
-                case StreakSlotState.Progress:
-                    bar = view.KillsRequired > 0 ? (float)view.KillsDone / view.KillsRequired : 0f;
-                    text = Strings.F("hud.streak.need", view.KillsRequired - view.KillsDone);
-                    variation = "HudDim";
-                    break;
-                case StreakSlotState.Ready:
-                    bar = 1f;
-                    text = alive ? Strings.F("hud.streak.ready", InputBindings.Name("killstreak")) : Strings.T("hud.streak.ready.dead");
-                    variation = "HudAccent";
-                    break;
-                case StreakSlotState.Active:
-                    bar = 1f;
-                    text = Strings.T("hud.streak.active");
-                    variation = "HudAccent";
-                    break;
-                case StreakSlotState.Spent:
-                    text = Strings.T("hud.streak.spent");
-                    variation = "HudDim";
-                    break;
-                default:
-                    text = "";
-                    variation = "HudDim";
-                    break;
+                _streakShownId[i] = view.Id;
+                _streakIcon[i].Texture = ResourceLoader.Load<Texture2D>(StreakIconPath(view.Id));
             }
-            if (!Mathf.IsEqualApprox(_streakBar[i].Value, bar)) _streakBar[i].Value = bar;
-            Set(_streakState[i], text);
-            if (_streakVariation[i] != variation) { _streakVariation[i] = variation; _streakState[i].ThemeTypeVariation = variation; }
+            Set(_streakNeed[i], view.KillsRequired.ToString());
+            if (_streakShownState[i] == (int)view.State) continue;
+            _streakShownState[i] = (int)view.State;
+            var achieved = view.State is StreakSlotState.Ready or StreakSlotState.Active;
+            var spent = view.State == StreakSlotState.Spent;
+            _streakCell[i].Scale = achieved ? new Vector2(AchievedScale, AchievedScale) : Vector2.One;
+            var tint = achieved ? ShooterTheme.Good : Colors.White;
+            _streakIcon[i].Modulate = new Color(tint.R, tint.G, tint.B, spent ? 0.4f : 1f);
+            _streakNeed[i].Modulate = achieved ? ShooterTheme.Good : Colors.White;
         }
     }
 
-    static string StreakName(StreakSlotView view)
+    static string StreakIconPath(string id)
     {
-        var key = "streak." + view.Id;
-        var t = Strings.T(key);
-        return t == key ? view.Name : t;
+        var path = $"{IconRegistry.Root}streaks/{id}.png";
+        return ResourceLoader.Exists(path) ? path : IconRegistry.Placeholder;
+    }
+
+    /// <summary>The row's two small drawn glyphs: a skull (kills) and a chevron between streak icons. Drawn in the HUD text colour.</summary>
+    sealed partial class StreakGlyph : Control
+    {
+        public enum Shape { Skull, Chevron }
+        readonly Shape _shape;
+        public StreakGlyph(Shape shape) => _shape = shape;
+
+        public override void _Draw()
+        {
+            var w = Size.X; var h = Size.Y;
+            var c = new Vector2(w / 2, h / 2);
+            if (_shape == Shape.Chevron)
+            {
+                DrawPolyline(new[] { c + new Vector2(-3, -9), c + new Vector2(3, 0), c + new Vector2(-3, 9) }, ShooterTheme.Dim, 3f, true);
+                return;
+            }
+            var r = Math.Min(w, h) * 0.34f;
+            DrawCircle(c + new Vector2(0, -r * 0.25f), r, ShooterTheme.Text);
+            DrawRect(new Rect2(c + new Vector2(-r * 0.55f, r * 0.45f), new Vector2(r * 1.1f, r * 0.8f)), ShooterTheme.Text);
+            var eye = new Color(0, 0, 0, 0.85f);
+            DrawCircle(c + new Vector2(-r * 0.4f, -r * 0.2f), r * 0.24f, eye);
+            DrawCircle(c + new Vector2(r * 0.4f, -r * 0.2f), r * 0.24f, eye);
+            DrawRect(new Rect2(c + new Vector2(-r * 0.12f, r * 0.9f), new Vector2(r * 0.24f, r * 0.35f)), eye);
+        }
+
+        public override void _Notification(int what) { if (what == NotificationResized) QueueRedraw(); }
     }
 }

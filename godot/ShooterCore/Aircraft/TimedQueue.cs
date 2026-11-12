@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// A queue of things due at a time (seconds on the server's clock): <see cref="TakeDue"/> hands back the ones whose time has come, in

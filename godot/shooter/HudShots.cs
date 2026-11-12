@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// <c>--hud-shots DIR</c>: renders the HUD over a tiny placeholder scene with fake data in an off-screen SubViewport at
@@ -26,7 +26,7 @@ public static class HudShots
             var hud = new Hud { MyId = 1, MouseModeOverride = Input.MouseModeEnum.Captured, Spread = () => 2.5f };
             vp.AddChild(hud);
             await Frames(host, 3);
-            foreach (var state in new[] { "play", "protected", "scoreboard", "respawn", "roundend" })
+            foreach (var state in new[] { "play", "protected", "respawn", "roundend" })
             {
                 Fake(hud, state);
                 await Frames(host, 4);
@@ -80,7 +80,6 @@ public static class HudShots
         hud.AddKill(new KillMsg(2, 1, 2), "Alexandra", "Kuba");
         hud.AddKill(new KillMsg(1, 2, 1), "Kuba", "Alexandra");
         hud.AddKill(new KillMsg(5, 5, 255), "Dagmar", "Dagmar");
-        hud.ForceScoreboard = state is "scoreboard" ? true : null;
         hud.SetDead(state == "respawn", "Alexandra", 2.4f);
         hud.SetProtection(state == "protected" ? 2.4f : 0);
         if (state is "play" or "protected")

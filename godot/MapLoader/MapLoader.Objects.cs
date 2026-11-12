@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Godot;
 
-namespace Suchohrad.MapLoader;
+namespace Drycastle.MapLoader;
 
 /// <summary>A placed object (objects.json entry or parcel-run fragment object). Map metres, x east, y north.</summary>
 public sealed class PlacedObject
@@ -32,7 +32,8 @@ public sealed record FragmentResult(IReadOnlyList<string> Replaced, int Objects,
 // Placed objects, the dynamic per-parcel props swap (parcel-run fragments) and their bookkeeping.
 public sealed partial class MapLoader
 {
-    sealed record AssetEntry(string File, Vector3 Size, string Category, string Name, List<(string kind, int tier, Vector3 local)> Seats, List<Vector3> Lights);
+    sealed record AssetEntry(string File, Vector3 Size, string Category, string Name, List<(string kind, int tier, Vector3 local)> Seats, List<Vector3> Lights,
+        List<Drycastle.ShooterCore.AssetSolid> Solids);
 
     string _mapDir = "";
     Node3D? _objectsRoot;
@@ -49,7 +50,7 @@ public sealed partial class MapLoader
 
     /// <summary>
     /// Directory holding assets/manifest.json and the packs. Set before <see cref="Load"/>; default:
-    /// env SUCHOHRAD_ASSETS, else an "assets" folder found by walking up from the map folder.
+    /// env DRYCASTLE_ASSETS, else an "assets" folder found by walking up from the map folder.
     /// </summary>
     public string? AssetsDir
     {
@@ -93,7 +94,7 @@ public sealed partial class MapLoader
 
     string? DefaultAssetsDir()
     {
-        var env = System.Environment.GetEnvironmentVariable("SUCHOHRAD_ASSETS");
+        var env = System.Environment.GetEnvironmentVariable("DRYCASTLE_ASSETS");
         if (!string.IsNullOrEmpty(env)) return env;
         for (var d = new DirectoryInfo(Path.GetFullPath(_mapDir == "" ? "." : _mapDir)); d != null; d = d.Parent)
         {
@@ -296,7 +297,8 @@ public sealed partial class MapLoader
             var id = a.GetProperty("id").GetString()!;
             var cat = a.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString()! : "other";
             var name = a.TryGetProperty("name", out var nm) && nm.ValueKind == JsonValueKind.String ? nm.GetString()! : id;
-            _assetManifest[id] = new AssetEntry(file, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name, ParseSeats(a), ParseLights(a));
+            _assetManifest[id] = new AssetEntry(file, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name, ParseSeats(a), ParseLights(a),
+                Drycastle.ShooterCore.ObjectColliders.ParseSolids(a));
         }
     }
 

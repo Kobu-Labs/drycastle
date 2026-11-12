@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Bots on the server (#214): players without a connection. A bot is a <see cref="Client"/> with no peer and a
@@ -28,7 +28,7 @@ public partial class NetServer
     public int Bots;
 
     /// <summary>Most bots a server takes (they need no peer slot, so this is apart from <see cref="MaxPeers"/>).</summary>
-    public const int MaxBots = 64;
+    public const int MaxBots = ChatCommands.MaxBots;
 
     static readonly string[] BotNames =
     {
@@ -59,10 +59,16 @@ public partial class NetServer
     int _navTurn, _navRoutes;
     double _navMs, _navMaxMs, _navReportAt;
 
-    /// <summary>At start, once the colliders are in: the mesh the bots walk on. Only when bots are wanted, and not in the smoke arenas (far from the map).</summary>
+    bool _navTried;
+
+    /// <summary>
+    /// Once the colliders are in (at start, or when an admin first asks for bots): the mesh the bots walk on. Only when bots are
+    /// wanted, and not in the smoke arenas (far from the map). Tried once; it blocks for the bake, so a live call warns first.
+    /// </summary>
     void BuildBotNav()
     {
-        if (Bots <= 0 || ArenaMode || MapDir == "") return;
+        if (_navTried || Bots <= 0 || ArenaMode || MapDir == "") return;
+        _navTried = true;
         try
         {
             _nav = BotNav.Build(World, MapDir, NavCacheDir, Math.Max(1, System.Environment.ProcessorCount / 2));

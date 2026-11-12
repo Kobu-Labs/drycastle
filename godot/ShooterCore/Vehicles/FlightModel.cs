@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Everything <see cref="FlightModel"/> carries from tick to tick for one flying vehicle. The server owns the true one; the pilot's client

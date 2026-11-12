@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Why a turret cannot be placed where the owner aims. <see cref="Valid"/> is the only one that lets it go down.</summary>
 public enum PlacementCheck : byte

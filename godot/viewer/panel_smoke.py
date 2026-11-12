@@ -54,8 +54,8 @@ def perimeter_len(p: dict) -> float:
 def python_facts() -> dict:
     code = (
         "import json\n"
-        "from suchohrad_pipeline import edits\n"
-        "from suchohrad_pipeline.rules import DEFAULT_RULES, load_section\n"
+        "from drycastle_pipeline import edits\n"
+        "from drycastle_pipeline.rules import DEFAULT_RULES, load_section\n"
         "props = load_section('props', DEFAULT_RULES, 'slice')\n"
         "print(json.dumps({'types': edits.FENCE_TYPES, 'modes': list(edits.FENCE_MODES), 'default_type': edits.DEFAULT_FENCE_TYPE,\n"
         " 'density': props['trees']['density_per_1000m2']}))\n"
@@ -71,7 +71,7 @@ def fence_sections(parcel_id: str, work: Path, scratch: Path) -> list[dict]:
     probe_edits = scratch / "probe_edits.json"
     probe_edits.write_text(text({parcel_id: {"fence": CUSTOM_C}}, {}))
     out = scratch / "probe_fragment.json"
-    r = es.uv("-m", "suchohrad_pipeline", "parcel-run", "--area", "slice", "--parcel", parcel_id,
+    r = es.uv("-m", "drycastle_pipeline", "parcel-run", "--area", "slice", "--parcel", parcel_id,
               "--edits", str(probe_edits), "--work", str(work), "--out", str(out))
     if r.returncode != 0:
         return []
@@ -97,7 +97,7 @@ def main() -> int:
     ap.add_argument("--shots", help="also write two panel screenshots into this directory (needs a display)")
     ap.add_argument("--skip-smoke", action="store_true", help="only the screenshots")
     args = ap.parse_args()
-    scratch = Path(args.dir or tempfile.mkdtemp(prefix="suchohrad-panel-smoke-")).resolve()
+    scratch = Path(args.dir or tempfile.mkdtemp(prefix="drycastle-panel-smoke-")).resolve()
     scratch.mkdir(parents=True, exist_ok=True)
     print(f"panel smoke: scratch directory {scratch}")
 
@@ -199,7 +199,7 @@ def main() -> int:
     }
     (scratch / "plan.json").write_text(json.dumps(plan, indent=1))
 
-    r = es.uv("-m", "suchohrad_pipeline", "export", "--area", "slice", "--out", str(scratch / "map"), "--work", str(work))
+    r = es.uv("-m", "drycastle_pipeline", "export", "--area", "slice", "--out", str(scratch / "map"), "--work", str(work))
     print(r.stdout.strip())
     if r.returncode != 0:
         print(r.stderr)
@@ -233,7 +233,7 @@ def verify_steps(steps: Path, origin, by_id, c_id, probe1, a, b, shared_edges, o
     check = (
         "import sys, json\n"
         "from pathlib import Path\n"
-        "from suchohrad_pipeline import edits\n"
+        "from drycastle_pipeline import edits\n"
         "bad = 0\n"
         "for f in sys.argv[1:]:\n"
         "    t = Path(f).read_text(encoding='utf-8')\n"

@@ -1,8 +1,8 @@
 using Npgsql;
-using Suchohrad.ShooterServer.Persistence;
-using Suchohrad.ShooterServer.Persistence.Postgres;
+using Drycastle.ShooterServer.Persistence;
+using Drycastle.ShooterServer.Persistence.Postgres;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
 /// PostgreSQL test backend. Runs only when SHOOTER_TEST_PG holds an Npgsql connection string (or postgres:// URL) of a throwaway

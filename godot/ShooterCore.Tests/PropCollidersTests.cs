@@ -1,8 +1,9 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using System.Text.Json;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Shooter v2 (#158): tree trunk and crown solids from trees.json, the ray and surface lookups, object solids.</summary>
 public class PropCollidersTests
@@ -193,6 +194,39 @@ public class PropCollidersTests
         Assert.Equal(9.2f, pole[0].Z1);
         Assert.Equal(ObjectColliders.PoleHalf, pole[0].HalfU);
         Assert.Equal(ObjectColliders.PoleHalf, pole[0].HalfV);
+    }
+
+    [Fact]
+    public void AnAssetCanListItsOwnSolidBoxes()
+    {
+        // a flood wall piece: a ledge to walk on, the wall behind it and a rail above; z is up in the manifest
+        using var doc = JsonDocument.Parse("""
+            {"id": "prim:floodwall_straight_4", "solids": [
+              {"min": [-2, -1.15, -1], "max": [2, 0.15, 0.9], "surface": "wall"},
+              {"min": [-2, -0.15, 0.9], "max": [2, 0.15, 1.8]},
+              {"min": [-2, -0.03, 2.22], "max": [2, 0.03, 2.28], "surface": "metal"},
+              {"min": [0, 0, 0], "max": [1, 1, 0]},
+              {"min": [0, 0], "max": [1, 1, 1]},
+              "nonsense"]}
+            """);
+        var solids = ObjectColliders.ParseSolids(doc.RootElement);
+        Assert.Equal(3, solids.Count); // the flat box, the short corner and the string are skipped
+        Assert.Equal(["wall", "wall", "metal"], solids.Select(s => s.Surface));
+        var ledge = solids[0].Part;
+        Assert.Equal(CollisionLayers.World, ledge.Layer);
+        Assert.Equal(PartShape.Box, ledge.Shape);
+        Assert.Equal(0f, ledge.X, 5);
+        Assert.Equal(-0.5f, ledge.Y, 5);
+        Assert.Equal(-1f, ledge.Z0, 5);
+        Assert.Equal(0.9f, ledge.Z1, 5);
+        Assert.Equal(2f, ledge.HalfU, 5);
+        Assert.Equal(0.65f, ledge.HalfV, 5);
+        // on the ledge in front of the wall there is nothing in the way; the wall behind it is solid up to its top
+        Assert.DoesNotContain(solids, s => s.Part.Contains(new Vector3(0, -0.6f, 1.4f)));
+        Assert.Contains(solids, s => s.Part.Contains(new Vector3(0, 0, 1.4f)));
+        Assert.DoesNotContain(solids, s => s.Part.Contains(new Vector3(0, 0, 2.0f))); // between the wall top and the rail
+        using var none = JsonDocument.Parse("""{"id": "prim:wall"}""");
+        Assert.Empty(ObjectColliders.ParseSolids(none.RootElement));
     }
 
     [Fact]

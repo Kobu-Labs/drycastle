@@ -1,11 +1,11 @@
-namespace Suchohrad.Launcher;
+namespace Drycastle.Launcher;
 
 /// <summary>All launcher text by key (English only for now; keys keep the door open for translation).</summary>
 public static class S
 {
     static readonly Dictionary<string, string> En = new()
     {
-        ["title"] = "SUCHOHRAD",
+        ["title"] = "DRYCASTLE",
         ["checking"] = "Checking for updates...",
         ["uptodate"] = "Up to date",
         ["update_available"] = "Update available: {0}",

@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
-    <RootNamespace>Suchohrad.Shooter</RootNamespace>
+    <RootNamespace>Drycastle.Shooter</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Culture data is not shipped (the server image has no ICU; #177). Set here, not only as a container env var. -->

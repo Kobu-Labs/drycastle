@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Where a door gun points: its mount's yaw and its pitch against the vehicle (radians, inside the arc), and that direction in the world.</summary>
 public readonly record struct DoorGunAim(float Yaw, float Pitch, Vector3 Direction)

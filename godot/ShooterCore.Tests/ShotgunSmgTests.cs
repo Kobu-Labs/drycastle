@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Shotgun pellet fan (seeded directions, per-pellet falloff, summed damage), shell-by-shell reload, and the shipped SMG/shotgun entries.</summary>
 public class ShotgunSmgTests

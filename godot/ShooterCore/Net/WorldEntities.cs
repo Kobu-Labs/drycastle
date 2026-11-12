@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// A world entity type (turret, missile, aircraft, corpse, care package, ...) registered under its wire id.

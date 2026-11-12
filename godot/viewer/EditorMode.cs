@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Godot;
-using Suchohrad.MapLoader;
+using Drycastle.MapLoader;
 
 /// <summary>
 /// Editor mode shell: a free-fly camera, parcel hover and selection, outlines (selection, hovered parcel,
@@ -17,7 +17,7 @@ public partial class EditorMode : Node
     const float StatusHeight = 58f;
     const float TopDownHeight = 120f;
 
-    public Suchohrad.MapLoader.MapLoader Map { get; init; } = null!;
+    public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
     public Player Player { get; init; } = null!;
     public EditsWatcher? Watcher { get; init; }
     public string EditsPath { get; init; } = "";
@@ -86,6 +86,8 @@ public partial class EditorMode : Node
         AddChild(OutlineRoot);
         BuildUi();
         BuildRegionWorld();
+        BuildSketchWorld();
+        LoadSketchState();
         GetTree().AutoAcceptQuit = false; // window close asks first when fence or tree edits are unapplied (_Notification)
         if (Watcher != null)
         {
@@ -146,6 +148,7 @@ public partial class EditorMode : Node
             Input.MouseMode = Input.MouseModeEnum.Captured;
             CancelDrag();
             CancelRegionGesture();
+            CancelSketchGesture();
             DisarmPlacement(false);
             StopConnecting(false);
             StopPlanning(false);
@@ -522,6 +525,9 @@ public partial class EditorMode : Node
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Tool == EditorTool.Region:
                 RegionLeftPress(mb.Position, mb.CtrlPressed);
                 break;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Tool == EditorTool.Sketch:
+                SketchLeftPress(mb.Position, mb.CtrlPressed);
+                break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } when !_looking && Modal:
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && GateArmed:
@@ -544,6 +550,7 @@ public partial class EditorMode : Node
             case InputEventKey { Pressed: true, Echo: false } k:
                 if (HandleRegionKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Modal) break;
+                if (HandleSketchKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandlePolesKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleObjectKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (!k.CtrlPressed && !k.AltPressed && HandleToolKey(k.Keycode)) { GetViewport().SetInputAsHandled(); break; }
@@ -604,6 +611,7 @@ public partial class EditorMode : Node
         UpdateObjectTools();
         UpdatePolesTool();
         UpdateRegionTool();
+        UpdateSketchTool();
         _pollT += delta;
         if (_pollT > 0.5)
         {
@@ -656,7 +664,7 @@ public partial class EditorMode : Node
         var mouse = GetViewport().GetMousePosition();
         string? id = null;
         _hoverPoint = null;
-        if (!_looking && !OverUi(mouse) && Tool != EditorTool.Region)
+        if (!_looking && !OverUi(mouse) && Tool is not (EditorTool.Region or EditorTool.Sketch))
         {
             var p = PickScreen(mouse, out var point);
             if (p != null || point != default) _hoverPoint = point;
@@ -841,6 +849,7 @@ public partial class EditorMode : Node
         RefreshObjectsPanel();
         RefreshPolesPanel();
         RefreshRegionsPanel();
+        RefreshSketchPanel();
     }
 }
 

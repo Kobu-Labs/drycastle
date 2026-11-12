@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// The AC-130 killstreak (ticket #128): a gunship circles the owner at altitude for its streak duration, and the owner
