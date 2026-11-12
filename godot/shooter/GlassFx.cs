@@ -13,15 +13,29 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public static class GlassFx
 {
-    public const string CrackShaderPath = "res://shaders/glass_crack.gdshader";
-    public const string ShardShaderPath = "res://shaders/glass_shards.gdshader";
+    public const string CrackMaterialPath = "res://materials/glass_crack.tres";
+    public const string ShardMaterialPath = "res://materials/glass_shards.tres";
     /// <summary>How far in front of the pane the overlay sits, metres (clear of the pane's own surface, no z-fighting).</summary>
     const float Lift = 0.015f;
     /// <summary>Most points of an outline the crack shader takes (glass_crack.gdshader, `outline[12]`; vehicles.json allows no more).</summary>
     const int MaxOutline = 12;
 
-    static Shader? _crack, _shards;
+    static ShaderMaterial? _crack, _shards;
     static int _active;
+
+    /// <summary>
+    /// Loads the two glass materials (materials/glass_*.tres). Called from the loading steps: a material the engine sees at load time can have
+    /// its shader pipeline compiled ahead, one first created at the moment of the first hit stalls that frame. Each pane works on its own copy
+    /// (<see cref="Crack"/>, <see cref="Shards"/>), which shares the shader and so the compiled pipeline.
+    /// </summary>
+    public static void Load()
+    {
+        _crack ??= GD.Load<ShaderMaterial>(CrackMaterialPath);
+        _shards ??= GD.Load<ShaderMaterial>(ShardMaterialPath);
+    }
+
+    static ShaderMaterial Crack() { Load(); return (ShaderMaterial)_crack!.Duplicate(); }
+    static ShaderMaterial Shards() { Load(); return (ShaderMaterial)_shards!.Duplicate(); }
 
     static Vector3 G(NVec3 v) => new(v.X, v.Y, v.Z);
 
@@ -45,7 +59,7 @@ public static class GlassFx
     /// <summary>The overlay of one pane under <paramref name="parent"/> (the vehicle's node, or a world node for a building's pane). <paramref name="holeDarkness"/> is how opaque the opening of the shattered pane is.</summary>
     public static MeshInstance3D MakeOverlay(Node3D parent, GlassPaneRect rect, GlassPaneKey key, float holeDarkness)
     {
-        var mat = new ShaderMaterial { Shader = _crack ??= GD.Load<Shader>(CrackShaderPath) };
+        var mat = Crack();
         mat.SetShaderParameter("pane_size", new Vector2(rect.Width, rect.Height));
         mat.SetShaderParameter("seed", Seed(key));
         mat.SetShaderParameter("hole_darkness", holeDarkness);
@@ -101,7 +115,7 @@ public static class GlassFx
         var mesh = new ArrayMesh();
         mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
 
-        var mat = new ShaderMaterial { Shader = _shards ??= GD.Load<Shader>(ShardShaderPath) };
+        var mat = Shards();
         mat.SetShaderParameter("pane_size", new Vector2(rect.Width, rect.Height));
         mat.SetShaderParameter("seed", Seed(key));
         mat.SetShaderParameter("speed", cfg.ShardSpeed);
