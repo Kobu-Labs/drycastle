@@ -44,7 +44,7 @@ public partial class NetClient
     void TickBreath(MoveInput mi)
     {
         if (_me == null || CurrentWeapon is not { } w) return;
-        var scoped = mi.Has(MoveButtons.Aim) && w.ZoomFov > 0;
+        var scoped = mi.Has(MoveButtons.Aim) && w.ZoomFov > 0 && !_driving && !_controlling;
         _breath.Tick(Now, scoped, mi.Has(MoveButtons.Sprint), w, Perks.HoldBreathTime);
         var v = BreathState.VisualSway(Now, _breath.SwayDegrees(w));
         _me.ViewSway = GameSettings.Current.ReduceMotion ? Vector2.Zero : new Vector2(v.X, v.Y);
