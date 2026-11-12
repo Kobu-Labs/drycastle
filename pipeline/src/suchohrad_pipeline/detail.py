@@ -665,7 +665,9 @@ def _garden_clutter(ctx: ParcelContext, cfg: dict, layers: dict[str, BaseGeometr
 
     def tuft_lawn(xs, ys):
         near = np.minimum(d_edge(xs, ys), d_wall(xs, ys))
-        return float(t["lawn"]) + (float(t["edge"]) - float(t["lawn"])) * np.clip(1 - near / edge_m, 0, 1)
+        base = float(t["lawn"]) + (float(t["edge"]) - float(t["lawn"])) * np.clip(1 - near / edge_m, 0, 1)
+        # grass grows in clumps with gaps between them, not evenly
+        return base * meadow_mod.clump(xs / CELL_M, ys / CELL_M, float(t["clump"]), float(t["clump_m"]) / CELL_M, 1500)
 
     g = _gen(pid, "tuft")
     pts = scatter(g, open_ground, float(t["spacing_m"]), _region_density([(grass, tuft_lawn), (dirt, 0.04), (open_ground, lambda xs, ys: tuft_lawn(xs, ys) * 0.5)]))

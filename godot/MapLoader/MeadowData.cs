@@ -8,14 +8,28 @@ namespace Suchohrad.MapLoader;
 /// <summary>One generated piece of meadow clutter. Map metres, x east, y north (no height: the loader reads the ground); Rot is counter-clockwise seen from above.</summary>
 public readonly record struct MeadowInstance(string Kind, float X, float Y, float Rot, float Scale, byte Tint = ClutterTint.Neutral);
 
-/// <summary>A layer of the raster: which clutter kind it makes (and which other kind for <see cref="AltShare"/> of the instances), at most <see cref="MaxPerCell"/> per cell.</summary>
-/// <remarks><paramref name="Tint"/>: the layer's instances carry a tint byte (see <see cref="MeadowGen.Tint"/>).</remarks>
-public sealed record MeadowLayer(string Name, string Kind, string AltKind, float AltShare, float MaxPerCell, float ScaleMin, float ScaleMax, bool Tint = false);
+/// <summary>One kind of a mix and its share (the shares of a mix add up to 1).</summary>
+public readonly record struct MixEntry(string Kind, float Share);
 
-/// <summary>meadow.bin (manifest <c>files.meadow</c>): the density raster of the clutter the game generates near the player on fields and in forests.</summary>
+/// <summary>
+/// A layer of the raster: at most <see cref="MaxPerCell"/> instances per cell, scaled in ScaleMin..ScaleMax. <see cref="Mixes"/>[m] is what the layer
+/// makes in a cell of mix m (the high nibble of the cell's zone byte); an id past the list uses mix 0.
+/// </summary>
+public sealed record MeadowLayer(string Name, float MaxPerCell, float ScaleMin, float ScaleMax, IReadOnlyList<IReadOnlyList<MixEntry>> Mixes)
+{
+    /// <summary>Every kind the layer can make.</summary>
+    public IEnumerable<string> Kinds => Mixes.SelectMany(m => m.Select(e => e.Kind)).Distinct();
+
+    public IReadOnlyList<MixEntry> Mix(int id) => Mixes[id < Mixes.Count ? id : 0];
+}
+
+/// <summary>
+/// meadow.bin (manifest <c>files.meadow</c>, format 3): the density raster of the clutter the game generates near the player on fields and in forests: a
+/// density plane per layer and a zone plane (high nibble: the species mix of the patch, low nibble: dryness, 8 = neutral).
+/// </summary>
 public sealed class MeadowFile
 {
-    public const int SupportedFormat = 2;
+    public const int SupportedFormat = 3;
     static readonly byte[] Magic = "MEAD"u8.ToArray();
 
     public float CellM { get; private init; }
@@ -26,6 +40,8 @@ public sealed class MeadowFile
     /// <summary>A generated instance within this many metres times the tree's scale of a trunk is dropped.</summary>
     public float TrunkReachM { get; private init; }
     public IReadOnlyList<MeadowLayer> Layers { get; private init; } = Array.Empty<MeadowLayer>();
+    /// <summary>The kinds whose instances carry a tint byte.</summary>
+    public IReadOnlySet<string> TintKinds { get; private init; } = new HashSet<string>();
     public int ChunkCount => _entries.Count;
 
     byte[] _data = Array.Empty<byte>();
@@ -48,17 +64,38 @@ public sealed class MeadowFile
             var chunkM = r.ReadSingle();
             var jitter = r.ReadSingle();
             var reach = r.ReadSingle();
-            var count = r.ReadByte();
+            var kindCount = r.ReadByte();
             string Str() { var n = r.ReadByte(); return System.Text.Encoding.UTF8.GetString(r.ReadBytes(n)); }
+            var kinds = new List<string>(); var tint = new HashSet<string>();
+            for (var i = 0; i < kindCount; i++)
+            {
+                kinds.Add(Str());
+                if ((r.ReadByte() & 1) != 0) tint.Add(kinds[^1]);
+            }
+            var count = r.ReadByte();
             var layers = new List<MeadowLayer>();
             for (var i = 0; i < count; i++)
             {
-                var name = Str(); var kind = Str(); var alt = Str();
-                var share = r.ReadSingle(); var max = r.ReadSingle(); var lo = r.ReadSingle(); var hi = r.ReadSingle();
-                layers.Add(new MeadowLayer(name, kind, alt, share, max, lo, hi, (r.ReadByte() & 1) != 0));
+                var name = Str(); var max = r.ReadSingle(); var lo = r.ReadSingle(); var hi = r.ReadSingle();
+                var mixCount = r.ReadByte();
+                var mixes = new List<IReadOnlyList<MixEntry>>();
+                for (var m = 0; m < mixCount; m++)
+                {
+                    var entries = new List<MixEntry>();
+                    for (var e = r.ReadByte(); e > 0; e--)
+                    {
+                        var idx = r.ReadByte();
+                        if (idx >= kinds.Count) throw new FormatException($"meadow.bin: kind index {idx}");
+                        entries.Add(new MixEntry(kinds[idx], r.ReadSingle()));
+                    }
+                    if (entries.Count == 0) throw new FormatException("meadow.bin: empty mix");
+                    mixes.Add(entries);
+                }
+                if (mixes.Count == 0) throw new FormatException("meadow.bin: layer without mixes");
+                layers.Add(new MeadowLayer(name, max, lo, hi, mixes));
             }
             if (cellMm == 0 || cells == 0 || count == 0) throw new FormatException("meadow.bin: empty header");
-            var file = new MeadowFile { CellM = cellMm / 1000f, ChunkM = chunkM, CellsPerChunk = cells, JitterM = jitter, TrunkReachM = reach, Layers = layers };
+            var file = new MeadowFile { CellM = cellMm / 1000f, ChunkM = chunkM, CellsPerChunk = cells, JitterM = jitter, TrunkReachM = reach, Layers = layers, TintKinds = tint };
             var chunks = r.ReadUInt32();
             var dir = new List<(int, int, int, int)>();
             for (var i = 0; i < chunks; i++) dir.Add((r.ReadInt32(), r.ReadInt32(), (int)r.ReadUInt32(), (int)r.ReadUInt32()));
@@ -74,7 +111,7 @@ public sealed class MeadowFile
         catch (EndOfStreamException) { throw new FormatException("meadow.bin: truncated"); }
     }
 
-    /// <summary>Layer-major bytes of one chunk ("layers" x cells x cells, y from the south, x from the west), or null when the chunk has none.</summary>
+    /// <summary>Layer-major bytes of one chunk (the layers and then the zone plane, each cells x cells, y from the south, x from the west), or null when the chunk has none.</summary>
     byte[]? Chunk(int cx, int cy)
     {
         if (_decoded.TryGetValue((cx, cy), out var cached)) return cached;
@@ -85,7 +122,7 @@ public sealed class MeadowFile
             using var ms = new MemoryStream();
             z.CopyTo(ms);
             result = ms.ToArray();
-            if (result.Length != Layers.Count * CellsPerChunk * CellsPerChunk) throw new FormatException($"meadow.bin: chunk {cx},{cy} has {result.Length} bytes");
+            if (result.Length != (Layers.Count + 1) * CellsPerChunk * CellsPerChunk) throw new FormatException($"meadow.bin: chunk {cx},{cy} has {result.Length} bytes");
         }
         _decoded[(cx, cy)] = result;
         return result;
@@ -99,6 +136,9 @@ public sealed class MeadowFile
         var chunk = Chunk(cx, cy);
         return chunk == null ? (byte)0 : chunk[(layer * n + (gy - cy * n)) * n + (gx - cx * n)];
     }
+
+    /// <summary>The zone byte of a global cell: the high nibble is the species mix, the low nibble the dryness (8 = neutral); 0 where the chunk has none.</summary>
+    public byte Zone(int gx, int gy) => Density(Layers.Count, gx, gy);
 
     internal static int FloorDiv(int a, int b) => (int)Math.Floor(a / (double)b);
 }
@@ -144,6 +184,8 @@ public static class MeadowGen
     }
 
     /// <summary>The tint byte of an instance: the tone noise at the cell centre, a per-instance jitter hash (salt 0x10000 + layer * 256 + j) and a bias in tint units.</summary>
+    public const double DryStep = 10.0;
+
     public static byte Tint(int gx, int gy, int li, int j, double bias = 0)
     {
         var noise = ValueNoise(gx + 0.5, gy + 0.5, ToneLattice, ToneSalt);
@@ -158,6 +200,9 @@ public static class MeadowGen
         var v = f.Density(li, gx, gy);
         if (v == 0) return;
         var layer = f.Layers[li];
+        var zone = f.Zone(gx, gy);
+        var mix = layer.Mix(zone >> 4);
+        var bias = ((zone & 15) - 8) * DryStep;
         var e = v / 255.0 * layer.MaxPerCell;
         var whole = Math.Floor(e);
         var count = (int)whole + (Hash01(gx, gy, li * 256) < e - whole ? 1 : 0);
@@ -169,8 +214,15 @@ public static class MeadowGen
             var y = (gy + 0.5) * f.CellM + (Hash01(gx, gy, salt + 2) * 2 - 1) * f.JitterM;
             var rot = Hash01(gx, gy, salt + 3) * (2 * Math.PI);
             var scale = layer.ScaleMin + Hash01(gx, gy, salt + 4) * (layer.ScaleMax - layer.ScaleMin);
-            var kind = layer.AltKind.Length > 0 && Hash01(gx, gy, salt + 5) < layer.AltShare ? layer.AltKind : layer.Kind;
-            output.Add(new MeadowInstance(kind, (float)x, (float)y, (float)rot, (float)scale, layer.Tint ? Tint(gx, gy, li, j) : ClutterTint.Neutral));
+            var pick = Hash01(gx, gy, salt + 5);
+            var kind = mix[^1].Kind;
+            var acc = 0.0;
+            foreach (var entry in mix)
+            {
+                acc += entry.Share;
+                if (pick < acc) { kind = entry.Kind; break; }
+            }
+            output.Add(new MeadowInstance(kind, (float)x, (float)y, (float)rot, (float)scale, f.TintKinds.Contains(kind) ? Tint(gx, gy, li, j, bias) : ClutterTint.Neutral));
         }
     }
 
@@ -215,8 +267,8 @@ public static class MeadowSettings
     /// <summary>The distance a layer reaches (its kinds' clutter range times the setting).</summary>
     public static float RangeOf(MeadowLayer layer, float scale)
     {
-        var r = ClutterSettings.RangeOf(layer.Kind);
-        if (layer.AltKind.Length > 0) r = Math.Max(r, ClutterSettings.RangeOf(layer.AltKind));
+        var r = 0f;
+        foreach (var kind in layer.Kinds) r = Math.Max(r, ClutterSettings.RangeOf(kind));
         return r * scale;
     }
 

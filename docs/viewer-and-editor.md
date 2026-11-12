@@ -109,7 +109,8 @@ as olive; real straw is its own kind. The pipeline lays the tint out as a smooth
 ### Meadow clutter (generated near the player)
 
 Fields, meadows and forests are about 400 ha, too much to store clutter instances for. Maps with `files.meadow` (`meadow.bin`, map 0.9.0) carry a density raster instead
-(layers tuft, flower, fern, pebble, litter; one byte per 2 m cell per layer, format in `pipeline/src/suchohrad_pipeline/meadow.py`). `MapLoader.Meadow.cs` turns the cells
+(layers tuft, flower, fern, pebble, litter; one byte per 2 m cell per layer plus a zone byte per cell, format 3 in `pipeline/src/suchohrad_pipeline/meadow.py`; the zone byte's high nibble picks the species
+mix, which says per layer which kinds a cell makes and in what shares, its low nibble is a dryness that biases the tint). `MapLoader.Meadow.cs` turns the cells
 near the focus into instances with `MeadowGen` (a hash of the cell and layer, the same on every client, nothing is sent; `MeadowData.cs`, pure, mirrors `meadow.generate`
 and a test pins both). The ground is cut into 24 m tiles, each tile and layer is one `MultiMeshInstance3D` per kind (pooled), built nearest first at most 6 tiles or 2 ms per
 frame, freed 30 m behind its range. Ranges and `SUCHOHRAD_CLUTTER` are those of the stored clutter; live instances per layer are capped (`MeadowSettings.CapOf`).
