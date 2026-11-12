@@ -78,6 +78,12 @@ public partial class Player : CharacterBody3D
     /// <summary>Scope: the vertical FOV wanted while zooming (0 = not scoped). The camera eases toward it and mouse sensitivity scales with the FOV.</summary>
     public float ZoomFov { get; set; }
 
+    /// <summary>Iron-sight aim-in (#237): the camera eases to <see cref="IronSightFovScale"/> of the normal FOV. Scopes (<see cref="ZoomFov"/>) take precedence.</summary>
+    public bool IronSightZoom { get; set; }
+
+    /// <summary>FOV factor while aiming down iron sights: a small zoom (0.85 = 15% narrower).</summary>
+    public const float IronSightFovScale = 0.85f;
+
     float _fovNow;
 
     void ApplyFov() { _fovNow = GameSettings.Current.Fov; _camera.Fov = _fovNow; }
@@ -86,7 +92,7 @@ public partial class Player : CharacterBody3D
     {
         if (!_camera.IsInsideTree()) return;
         if (!_chase) _camera.Rotation = new Vector3(RecoilState.ClampPitch(_pitch + AimKick.X + ViewSway.X), _yaw + AimKick.Y + ViewSway.Y, 0);
-        var target = ZoomFov > 0 ? ZoomFov : GameSettings.Current.Fov + FovBoost;
+        var target = ZoomFov > 0 ? ZoomFov : (GameSettings.Current.Fov + FovBoost) * (IronSightZoom ? IronSightFovScale : 1f);
         if (Mathf.IsEqualApprox(_fovNow, target)) return;
         _fovNow = Mathf.Lerp(_fovNow, target, 1f - Mathf.Exp(-18f * (float)delta));
         _camera.Fov = _fovNow;

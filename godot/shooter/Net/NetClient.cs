@@ -712,6 +712,7 @@ public partial class NetClient : Node
         if (_viewmodel != null)
             _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && !_driving && _myState != EntityState.InVehicle
                 && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
+        _me.IronSightZoom = _viewmodel is { Aiming: true };
     }
 
     /// <summary>At a turret the slot sent is the key held (1-5, 0 none), not the body's hotbar weapon: the turret reads it as its weapon number (the AC-130's 1-3).</summary>
