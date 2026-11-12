@@ -179,7 +179,9 @@ public partial class NetClient
             var rot = new Vector3(0, s.Yaw, 0);
             var flies = FlightDef(v) != null;
             var p0 = p; var rot0 = rot;
+            var drive = flies ? null : DriveDef(v);
             if (flies) PoseFlight(v, rt, dt, ref p, ref rot); // a helicopter pitches and rolls; the one this player flies is drawn from its prediction
+            if (drive != null) PoseDrive(v, drive, rt, dt, ref p, ref rot); // an amphibious transport lies on the slope and bobs; the one this player drives is drawn from its prediction
             if (flies && _pilot != null && _pilot.CarId == v.Id) CarryRiders(p0, rot0, p, rot); // the pilot's helicopter is drawn ahead of the snapshots: its riders go with it
             v.Node.GlobalPosition = p;
             v.Node.Rotation = rot;
@@ -197,13 +199,16 @@ public partial class NetClient
                 if (CockpitFrame(v, p, rot, dt)) cockpit = true; // the view from the seat, in the place of the chase camera
                 else
                 {
-                    if (flies) ChaseFlight(v, p, rot, dt); else _me.Chase(p, s.Yaw, Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null, dt);
+                    if (flies) ChaseFlight(v, p, rot, dt);
+                    else if (drive != null) ChaseDrive(v, drive, p, rot, dt);
+                    else _me.Chase(p, s.Yaw, Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null, dt);
                     ShowSelfInCar(v);
                 }
                 if (flies) { flown = FlightOf(v); chased = true; }
-                kmh = v.Kmh;
+                else if (drive != null && !cockpit) chased = true;
+                kmh = DriveOf(v) is { } ds ? MathF.Abs(ds.Speed) * 3.6f : v.Kmh; // the driver of a predicted vehicle reads its speed now, not a tenth of a second ago
             }
-            else if (!flakMine && _driving && _me != null && _seats is { Mine: > 0 } st && st.CarId == v.Id) { RideSeat(v, st.Mine); kmh = v.Kmh; } // another seat: first person from it, the speed shown as the driver's is
+            else if (!flakMine && _driving && _me != null && _seats is { Mine: > 0 } st && st.CarId == v.Id) { RideSeat(v, st.Mine); kmh = DriveOf(v) is { } rs ? MathF.Abs(rs.Speed) * 3.6f : v.Kmh; } // another seat: first person from it, the speed shown as the driver's is
         }
         if (!_driving) HideSelfInCar();
         if (!cockpit) EndCockpit();

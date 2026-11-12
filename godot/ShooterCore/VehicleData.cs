@@ -112,6 +112,11 @@ public class VehiclesFile : IVersioned
                 if (dg.YawArcDeg is <= 0 or > 180 || dg.MinPitchDeg < -89 || dg.MaxPitchDeg > 89 || dg.MinPitchDeg >= dg.MaxPitchDeg || dg.MuzzleLength <= 0 || dg.RecoilM < 0)
                     throw new DataFileException($"vehicles.json: {v.Id}: door_gun needs yaw_arc_deg 0..180, min_pitch_deg below max_pitch_deg (within -89..89), a positive muzzle_length and recoil_m not negative");
             }
+            if (v.Drive is { } dr)
+            {
+                if (v.Medium != VehicleMedium.Amphibious) throw new DataFileException($"vehicles.json: {v.Id}: a drive block is for an amphibious vehicle");
+                if (dr.Validate(v) is { } why) throw new DataFileException($"vehicles.json: {v.Id}: drive: {why}");
+            }
             if ((v.Medium == VehicleMedium.Air) != (v.Flight != null)) throw new DataFileException($"vehicles.json: {v.Id}: medium air and a flight block go together");
             if (v.Flight is { } fl)
             {
@@ -401,6 +406,179 @@ public class VehicleGlassDef
 }
 
 /// <summary>
+/// The handling of a vehicle its driver's client predicts (vehicles.json "drive", ADR 0007: the amphibious transport): every number
+/// <see cref="DriveModel"/> reads beyond the type's <see cref="VehicleDef.TopSpeed"/>, <see cref="VehicleDef.Acceleration"/>,
+/// <see cref="VehicleDef.Brake"/>, <see cref="VehicleDef.TurnRadius"/>, <see cref="VehicleDef.HighSpeedRadiusFactor"/>,
+/// <see cref="VehicleDef.WaterTopSpeed"/> and <see cref="VehicleDef.WaterAcceleration"/>. Rates are per second, angles degrees. The summaries say
+/// what turning a number up does.
+/// </summary>
+public class VehicleDriveDef
+{
+    // ---- the keyboard ramp
+    /// <summary>A held throttle key reaches full in 1 / throttle_rise seconds, a released one is gone in 1 / throttle_fall. Higher: taps bite harder.</summary>
+    public float ThrottleRise { get; set; } = 4;
+    public float ThrottleFall { get; set; } = 7;
+    /// <summary>The same for the steering keys at a standstill: full lock in 1 / steer_rise seconds, centred again in 1 / steer_fall.</summary>
+    public float SteerRise { get; set; } = 4.5f;
+    public float SteerFall { get; set; } = 8;
+    /// <summary>How much of steer_rise is left at top speed (0 to 1). Lower: the wheel winds on more slowly when fast, so the steering is calmer there.</summary>
+    public float SteerCalm { get; set; } = 0.45f;
+
+    // ---- where the wheels are (the model's)
+    /// <summary>Distance between the axles and between the wheels of an axle, metres: where the ground is sampled, so the body lies on the slope under it.</summary>
+    public float Wheelbase { get; set; } = 2.72f;
+    public float Track { get; set; } = 1.96f;
+
+    public DriveLandDef Land { get; set; } = new();
+    public DriveWaterDef Water { get; set; } = new();
+    public DriveBodyDef Body { get; set; } = new();
+    public DriveCameraDef Camera { get; set; } = new();
+
+    /// <summary>Null when the numbers make a drivable vehicle, else what is wrong.</summary>
+    public string? Validate(VehicleDef v)
+    {
+        if (ThrottleRise <= 0 || ThrottleFall <= 0 || SteerRise <= 0 || SteerFall <= 0 || Wheelbase <= 0 || Track <= 0) return "the ramp rates, wheelbase and track must be positive";
+        if (SteerCalm is <= 0 or > 1) return "steer_calm is above 0 and at most 1";
+        var l = Land;
+        if (l.LaunchBoost < 1 || l.LaunchSpeed <= 0 || l.PowerCurve <= 0 || l.CoastDecel < 0 || l.CoastDrag < 0 || l.Grip <= 0 || l.YawResponse <= 0 || l.HandbrakeDecel <= 0
+            || l.HandbrakeSteer <= 0 || l.StepHeight <= 0 || l.SnapDown <= 0)
+            return "land: launch_boost at least 1; launch_speed, power_curve, grip, yaw_response, handbrake_decel, handbrake_steer, step_height and snap_down positive; coast_decel and coast_drag not negative";
+        if (l.BrakeBite is < 0 or > 1 || l.HandbrakeGrip is <= 0 or > 1 || l.ReverseTopFraction is <= 0 or > 1) return "land: brake_bite 0..1, handbrake_grip and reverse_top_fraction above 0 and at most 1";
+        if (l.MaxClimbDeg is <= 0 or >= 80) return "land: max_climb_deg is 1..79";
+        var w = Water;
+        if (w.Draft < 0 || w.FloatDepth <= 0 || w.ReverseThrust is <= 0 or > 1 || w.CoastDrag < 0 || w.TurnRadius <= 0 || w.PropSteer < 0 || w.YawResponse <= 0 || w.SideDrag <= 0
+            || w.SternSwing < 0 || w.BuoyancyResponse <= 0 || w.BuoyancyDamping <= 0 || w.ClimbOutRate <= 0)
+            return "water: float_depth, turn_radius, yaw_response, side_drag, buoyancy_response, buoyancy_damping and climb_out_rate positive; reverse_thrust above 0 and at most 1; draft, coast_drag, prop_steer and stern_swing not negative";
+        if (w.CoastDrag * v.WaterTopSpeed >= v.WaterAcceleration) return "water: coast_drag times water_top_speed must stay below water_acceleration (the drag alone would hold it below its top speed)";
+        // the buoyancy spring is stepped once a tick: past this it would ring instead of settling
+        if (w.BuoyancyResponse >= 0.5f * Wire.TickRate) return $"water: buoyancy_response must stay below {0.5f * Wire.TickRate} at {Wire.TickRate} ticks a second";
+        return Body.Validate() ?? Camera.Validate();
+    }
+}
+
+/// <summary>The drive on its wheels (vehicles.json "drive.land").</summary>
+public class DriveLandDef
+{
+    /// <summary>Extra pull from a standstill: the acceleration is multiplied by this at 0 m/s, fading to 1 at launch_speed (m/s). Higher: a harder launch, the same top end.</summary>
+    public float LaunchBoost { get; set; } = 1.7f;
+    public float LaunchSpeed { get; set; } = 9;
+    /// <summary>How the pull fades towards top speed: acceleration times 1 - (speed / top)^power_curve. Higher: it pulls hard for longer and tops out abruptly; 1: it eases off all the way.</summary>
+    public float PowerCurve { get; set; } = 2.5f;
+    /// <summary>Hands off, it slows by coast_decel (m/s²) plus coast_drag (per second) times its speed. Higher: it stops sooner when you lift; lower: it rolls on, heavier.</summary>
+    public float CoastDecel { get; set; } = 1.3f;
+    public float CoastDrag { get; set; } = 0.07f;
+    /// <summary>The share of the brake that bites the moment the key goes against the travel (0 to 1); the rest comes in with the throttle ramp. Higher: a tap brakes harder.</summary>
+    public float BrakeBite { get; set; } = 0.55f;
+    /// <summary>Reverse top speed as a fraction of the forward one.</summary>
+    public float ReverseTopFraction { get; set; } = 0.3f;
+    /// <summary>Sideways acceleration the tyres hold, m/s². It caps the yaw rate at speed (grip / speed), so the circle at top speed is top_speed² / grip. Higher: tighter at speed.</summary>
+    public float Grip { get; set; } = 8.5f;
+    /// <summary>How fast the yaw rate follows the wheel, per second. Higher: it turns in at once; lower: it is lazier, heavier.</summary>
+    public float YawResponse { get; set; } = 9;
+    /// <summary>Handbrake (Jump): its deceleration (m/s²), the share of the grip the tyres keep sideways while it is on (lower: the tail slides wider), and how much sharper it steers.</summary>
+    public float HandbrakeDecel { get; set; } = 9;
+    public float HandbrakeGrip { get; set; } = 0.3f;
+    public float HandbrakeSteer { get; set; } = 1.3f;
+    /// <summary>A ledge up to this high (m) is driven over as a kerb; a higher one within one tick's travel is a wall. Slopes up to max_climb_deg are climbed.</summary>
+    public float StepHeight { get; set; } = 0.4f;
+    public float MaxClimbDeg { get; set; } = 48;
+    /// <summary>A drop up to this deep (m) keeps the wheels on the ground; a deeper one and it is in the air until it lands.</summary>
+    public float SnapDown { get; set; } = 0.3f;
+}
+
+/// <summary>The drive afloat (vehicles.json "drive.water").</summary>
+public class DriveWaterDef
+{
+    /// <summary>How deep it sits: the origin (the wheels' underside) rides this far under the surface, metres. The model's waterline.</summary>
+    public float Draft { get; set; } = 0.56f;
+    /// <summary>It floats where the water over the ground is at least this deep (m); in less it stands on its wheels. (Half of it, to go aground again.)</summary>
+    public float FloatDepth { get; set; } = 0.12f;
+    /// <summary>Thrust astern as a share of the thrust ahead: there are no brakes afloat, this is how it stops. Higher: it stops shorter and backs faster.</summary>
+    public float ReverseThrust { get; set; } = 0.6f;
+    /// <summary>A little drag in proportion to the speed, per second, on top of the hull's own (which grows with the square). Higher: it carries less way when you lift off.</summary>
+    public float CoastDrag { get; set; } = 0.12f;
+    /// <summary>The circle it turns at speed, metres (yaw rate = speed / turn_radius).</summary>
+    public float TurnRadius { get; set; } = 16;
+    /// <summary>Yaw rate the propeller's wash gives at full throttle whatever the speed, rad/s: it turns from a standstill under power. Astern it turns the other way.</summary>
+    public float PropSteer { get; set; } = 0.15f;
+    /// <summary>How fast the yaw rate follows the helm, per second. Lower: lazier, more boat.</summary>
+    public float YawResponse { get; set; } = 1.6f;
+    /// <summary>How fast the water takes the sideways speed away, per second. Lower: it slides wider out of a turn.</summary>
+    public float SideDrag { get; set; } = 1.5f;
+    /// <summary>How far ahead of the centre it pivots, metres: turning, the stern swings out round that point. 0: it turns about its middle.</summary>
+    public float SternSwing { get; set; } = 1.2f;
+    /// <summary>The hull's rise and fall to its waterline: how fast (rad/s) and how damped (1: no overshoot; lower: it plunges in, comes up and settles).</summary>
+    public float BuoyancyResponse { get; set; } = 5;
+    public float BuoyancyDamping { get; set; } = 0.4f;
+    /// <summary>Climbing out, the wheels lift it onto the bank at this rate, m/s (the heave). Higher: it pops out; lower: it hauls itself out.</summary>
+    public float ClimbOutRate { get; set; } = 1.4f;
+}
+
+/// <summary>
+/// How the body moves over its wheels and on the water (vehicles.json "drive.body"). Drawn by every client from the vehicle's motion
+/// (<see cref="DriveBody"/>); nothing here changes where the vehicle goes or who is hit.
+/// </summary>
+public class DriveBodyDef
+{
+    /// <summary>Degrees the tail squats per m/s² of acceleration, the nose dives per m/s² of braking, and the body leans out of a turn per m/s² sideways.</summary>
+    public float SquatDeg { get; set; } = 0.55f;
+    public float DiveDeg { get; set; } = 0.6f;
+    public float LeanDeg { get; set; } = 0.55f;
+    /// <summary>The most it pitches and rolls on its springs, degrees.</summary>
+    public float MaxPitchDeg { get; set; } = 5;
+    public float MaxRollDeg { get; set; } = 6;
+    /// <summary>The suspension: how fast it answers (rad/s) and how damped (1: no overshoot; lower: it rocks once before it settles, which reads as weight).</summary>
+    public float Response { get; set; } = 7;
+    public float Damping { get; set; } = 0.45f;
+    /// <summary>How fast the drawn body takes up the slope of the ground under the wheels, per second. Lower: smoother over rough ground.</summary>
+    public float TerrainResponse { get; set; } = 12;
+    /// <summary>Afloat: degrees the bow lifts at full throttle and top water speed, and degrees it heels out of a turn per m/s² sideways.</summary>
+    public float BowRiseDeg { get; set; } = 5;
+    public float WaterLeanDeg { get; set; } = 1.2f;
+    /// <summary>Afloat: how fast the hull answers (rad/s) and how damped. Slow and loose, so it wallows.</summary>
+    public float WaterResponse { get; set; } = 2.5f;
+    public float WaterDamping { get; set; } = 0.35f;
+    /// <summary>The bob at rest: metres up and down, degrees of pitch and roll, and its period in seconds.</summary>
+    public float BobHeight { get; set; } = 0.03f;
+    public float BobPitchDeg { get; set; } = 1.0f;
+    public float BobRollDeg { get; set; } = 1.5f;
+    public float BobPeriod { get; set; } = 2.6f;
+    /// <summary>How many times larger the bob is just after it has gone in or been driven hard, and the seconds it takes to settle back.</summary>
+    public float BobDisturbed { get; set; } = 3;
+    public float SettleTime { get; set; } = 3;
+    /// <summary>The front wheels' largest steering angle as drawn, degrees.</summary>
+    public float WheelLockDeg { get; set; } = 30;
+    /// <summary>The propeller's speed at full throttle, turns a second.</summary>
+    public float PropellerRps { get; set; } = 9;
+
+    public string? Validate()
+    {
+        if (Response <= 0 || Damping <= 0 || TerrainResponse <= 0 || WaterResponse <= 0 || WaterDamping <= 0 || BobPeriod <= 0 || SettleTime <= 0) return "body: responses, dampings, bob_period and settle_time must be positive";
+        if (SquatDeg < 0 || DiveDeg < 0 || LeanDeg < 0 || BowRiseDeg < 0 || WaterLeanDeg < 0 || BobHeight < 0 || BobPitchDeg < 0 || BobRollDeg < 0 || BobDisturbed < 1 || PropellerRps < 0)
+            return "body: gains and bob sizes must not be negative, bob_disturbed at least 1";
+        if (MaxPitchDeg is < 0 or > 30 || MaxRollDeg is < 0 or > 30 || WheelLockDeg is < 0 or > 60) return "body: max_pitch_deg and max_roll_deg are 0..30, wheel_lock_deg 0..60";
+        return null;
+    }
+}
+
+/// <summary>
+/// The driver's chase camera of a predicted vehicle (vehicles.json "drive.camera"): the helicopter's spring camera (<see cref="FlightCameraDef"/>),
+/// and it swings round with the vehicle, since the keys steer and the mouse only looks.
+/// </summary>
+public class DriveCameraDef : FlightCameraDef
+{
+    public DriveCameraDef() { Distance = 7.5f; Height = 2.2f; Follow = 10; MaxLag = 1.6f; Tilt = 0.35f; FovBoostDeg = 7; }
+
+    /// <summary>The share of the vehicle's turning the view takes (0 to 1). 1: the camera stays behind it; 0: the view keeps its compass heading, as on the other cars.</summary>
+    public float TurnFollow { get; set; } = 1;
+    /// <summary>How fast the view catches up with a turn, per second. Lower: the vehicle swings in the frame first, then the camera comes round.</summary>
+    public float TurnResponse { get; set; } = 5;
+
+    public new string? Validate() =>
+        base.Validate() ?? (TurnFollow is < 0 or > 1 || TurnResponse <= 0 ? "camera: turn_follow 0..1, turn_response positive" : null);
+}
+
+/// <summary>
 /// vehicles.json "lights" per type: lamp positions [x, y, z] in the vehicle frame (forward -Z, origin on the ground, as the hood).
 /// A boat's bow light is just another "head" point. Client and server only read it; the rules are in <see cref="Headlights"/>.
 /// </summary>
@@ -529,6 +707,11 @@ public class VehicleDef
     public bool CanFloat => Medium is VehicleMedium.Amphibious or VehicleMedium.Boat;
     /// <summary>The flight handling of a type with medium "air" (vehicles.json "flight"); null for everything that drives or floats.</summary>
     public VehicleFlightDef? Flight { get; set; }
+    /// <summary>
+    /// The handling of a type its driver's client predicts (vehicles.json "drive", the amphibious transport, ADR 0007): it is stepped by
+    /// <see cref="DriveModel"/> and never by <see cref="CarModel"/>. Null for every other type.
+    /// </summary>
+    public VehicleDriveDef? Drive { get; set; }
     /// <summary>A single fixed body colour [r, g, b] (sRGB) for a type with one look (olive drab). Replaces the colour variants: such a type has one variant.</summary>
     public float[]? Tint { get; set; }
     /// <summary>Model file relative to assets/ (empty: the code-built car with the Kenney sedan). Scale, yaw and offset fit the raw node to the game (forward -Z, origin at the ground centre).</summary>

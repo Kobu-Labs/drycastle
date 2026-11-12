@@ -16,7 +16,9 @@ public partial class NetServer
 
     /// <summary>The attitude a door gun's arc turns with: the helicopter's; a land vehicle's yaw alone.</summary>
     static (float Yaw, float Pitch, float Roll) AttitudeOf(ServerCar car) =>
-        car.Flies ? (car.Flight.Yaw, car.Flight.Pitch, car.Flight.Roll) : (car.State.Yaw, 0f, 0f);
+        car.Flies ? (car.Flight.Yaw, car.Flight.Pitch, car.Flight.Roll)
+        : car.Drives ? (car.Drive.Yaw, car.Drive.Pitch, car.Drive.Roll) // a driven vehicle lies on the slope it stands on
+        : (car.State.Yaw, 0f, 0f);
 
     /// <summary>The door gun's record for the snapshot: the mount's yaw and the gun's pitch against the vehicle, and the gunner's id. With nobody at it, the gun stays where it was left.</summary>
     EntityRecord DoorGunRecordOf(ServerCar car)

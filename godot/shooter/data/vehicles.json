@@ -54,8 +54,27 @@
       "lights": { "head": [[-0.4, 0.55, -0.95], [0.4, 0.55, -0.95]], "tail": [[-0.4, 0.6, 0.95], [0.4, 0.6, 0.95]], "beam_range": 25, "beam_angle": 30 }
     },
     {
-      "id": "amphibious", "medium": "amphibious", "top_speed": 22, "acceleration": 4.0, "brake": 8, "turn_radius": 4.2, "max_lateral_accel": 7.5, "mass": 2500, "run_over_mass": 1800, "hp": 420, "hood": [0, 1.16, 1.88], "spawn_count": 2, "half_width": 1.15, "half_length": 2.3, "height": 1.2,
-      "water_top_speed": 7, "water_acceleration": 1.5,
+      "id": "amphibious", "medium": "amphibious", "top_speed": 22, "acceleration": 5.2, "brake": 9.5, "turn_radius": 4.2, "high_speed_radius_factor": 4, "max_lateral_accel": 8.5, "mass": 2500, "run_over_mass": 1800, "hp": 420, "hood": [0, 1.16, 1.88], "spawn_count": 2, "half_width": 1.15, "half_length": 2.3, "height": 1.2,
+      "water_top_speed": 7, "water_acceleration": 2.6,
+      "drive": {
+        "throttle_rise": 4, "throttle_fall": 7, "steer_rise": 4.5, "steer_fall": 8, "steer_calm": 0.45, "wheelbase": 2.72, "track": 1.96,
+        "land": {
+          "launch_boost": 1.7, "launch_speed": 9, "power_curve": 2.5, "coast_decel": 1.3, "coast_drag": 0.07, "brake_bite": 0.55, "reverse_top_fraction": 0.3,
+          "grip": 8.5, "yaw_response": 9, "handbrake_decel": 9, "handbrake_grip": 0.3, "handbrake_steer": 1.3,
+          "step_height": 0.4, "max_climb_deg": 48, "snap_down": 0.3
+        },
+        "water": {
+          "draft": 0.56, "float_depth": 0.12, "reverse_thrust": 0.6, "coast_drag": 0.12, "turn_radius": 16, "prop_steer": 0.15, "yaw_response": 1.6, "side_drag": 1.5, "stern_swing": 1.2,
+          "buoyancy_response": 5, "buoyancy_damping": 0.4, "climb_out_rate": 1.4
+        },
+        "body": {
+          "squat_deg": 0.55, "dive_deg": 0.6, "lean_deg": 0.55, "max_pitch_deg": 5, "max_roll_deg": 6, "response": 7, "damping": 0.45, "terrain_response": 12,
+          "bow_rise_deg": 5, "water_lean_deg": 1.2, "water_response": 2.5, "water_damping": 0.35,
+          "bob_height": 0.03, "bob_pitch_deg": 1.0, "bob_roll_deg": 1.5, "bob_period": 2.6, "bob_disturbed": 3, "settle_time": 3,
+          "wheel_lock_deg": 30, "propeller_rps": 9
+        },
+        "camera": { "distance": 7.5, "height": 2.2, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 7, "turn_follow": 1, "turn_response": 5 }
+      },
       "model": "suchohrad-generated-models/amphibious_transport.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
       "seats": [{ "role": "driver", "offset": [-0.45, 0.64, -0.37] }, { "role": "passenger", "offset": [0.45, 0.64, -0.37] }, { "role": "passenger", "offset": [0, 0.685, 1.0] }],

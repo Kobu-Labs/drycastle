@@ -86,6 +86,19 @@ public partial class ServerCar : CharacterBody3D
     public Water FlightWater = Water.Empty;
     public FlightBounds FlightBounds = FlightBounds.None;
 
+    /// <summary>A type its driver's client predicts (vehicles.json drive, the amphibious transport, ADR 0007): stepped by <see cref="StepDrive"/>, never by <see cref="Step"/>.</summary>
+    public bool Drives => Def.Drive != null;
+    /// <summary>The drive state of such a type: the server's is the true one, the driver's client predicts its own.</summary>
+    public DriveState Drive;
+    /// <summary>Its view of the solid world; null for every other type.</summary>
+    public DriveProbe? DriveWorld;
+    /// <summary>Server tick of the last step a driver's input made (the inputs step it one for one); the vehicle step fills in when they stop arriving.</summary>
+    public uint DriveTick;
+    /// <summary>The hardest impact of the drive steps since the vehicle step last read it, m/s.</summary>
+    public float DriveImpact;
+    /// <summary>Where it stood when the last vehicle step ended: the run-over test sweeps from here, since a driver's inputs move it before the next one.</summary>
+    public Vector3 TickEndPos;
+
     public override void _Ready()
     {
         CollisionLayer = 2; CollisionMask = 1;
@@ -97,6 +110,7 @@ public partial class ServerCar : CharacterBody3D
         SetPhysicsProcess(false); // stepped by the server
         if (Flies) { Probe = FlightProbe.Make(Def, FlightWater, FlightBounds); AddChild(Probe); }
         _solid = VehicleCollider.Make(this, Def);
+        if (Drives) { DriveWorld = DriveProbe.Make(Def, FlightWater); AddChild(DriveWorld); }
         Reset();
         PlaceSolid();
     }
@@ -139,6 +153,7 @@ public partial class ServerCar : CharacterBody3D
         CollisionLayer = 0;
         Velocity = Vector3.Zero; State.Speed = 0;
         Flight.Velocity = System.Numerics.Vector3.Zero;
+        Drive.Speed = 0; Drive.Slip = 0; Drive.VerticalSpeed = 0; Drive.YawRate = 0;
     }
 
     /// <summary>Back to the origin. <paramref name="repair"/> restores the HP too: not on an abandon return (a smoking vehicle stays damaged).</summary>
@@ -157,6 +172,8 @@ public partial class ServerCar : CharacterBody3D
         Rotation = new Vector3(0, OriginYaw, 0);
         Velocity = Vector3.Zero;
         if (Flies) ResetFlight();
+        if (Drives) ResetDrive();
+        TickEndPos = GlobalPosition;
         Abandon.Reset();
         HitCooldown.Clear();
         Lights = false;
@@ -188,6 +205,40 @@ public partial class ServerCar : CharacterBody3D
         State.Yaw = Flight.Yaw;
         State.Speed = Flight.Velocity.Length();
         Velocity = new Vector3(Flight.Velocity.X, Flight.Velocity.Y, Flight.Velocity.Z);
+    }
+
+    /// <summary>A driven type back at its origin, at rest: standing on the ground under its wheels (lying on its slope), or afloat at its waterline.</summary>
+    void ResetDrive()
+    {
+        Drive = new DriveState { Position = new System.Numerics.Vector3(OriginPos.X, OriginPos.Y, OriginPos.Z), Yaw = FlightMath.Wrap(OriginYaw) };
+        DriveModel.Settle(ref Drive, Def, DriveWorld!);
+        DriveImpact = 0;
+        OriginPos = new Vector3(Drive.Position.X, Drive.Position.Y, Drive.Position.Z); // where it stands is its origin: the abandon timer measures from here
+        FollowDrive();
+    }
+
+    /// <summary>The node, the planar state the other rules read (yaw, speed, afloat) and the physics velocity follow the drive state. The hit box stays upright.</summary>
+    void FollowDrive()
+    {
+        GlobalPosition = new Vector3(Drive.Position.X, Drive.Position.Y, Drive.Position.Z);
+        Rotation = new Vector3(0, Drive.Yaw, 0);
+        State.Yaw = Drive.Yaw;
+        State.Speed = Drive.Speed;
+        State.YawRate = Drive.YawRate;
+        Afloat = Drive.Afloat;
+        var v = Drive.Velocity;
+        Velocity = new Vector3(v.X, v.Y, v.Z);
+    }
+
+    /// <summary>
+    /// One drive step (<see cref="DriveModel"/>): from the driver's input, or hands off when nobody drives. The node follows the state; the hit box
+    /// stays upright (it turns with the yaw only), as the clients' bullet-hole box does.
+    /// </summary>
+    public void StepDrive(in DriveInput input, float dt)
+    {
+        DriveModel.Step(ref Drive, Def, input, dt, DriveWorld!);
+        DriveImpact = MathF.Max(DriveImpact, Drive.Impact);
+        FollowDrive();
     }
 
     /// <summary>Over a water body (amphibious or boat): the origin rides its surface and gravity does not apply.</summary>
