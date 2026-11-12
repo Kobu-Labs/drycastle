@@ -7,7 +7,8 @@ formatting is fixed, so git diffs stay small. Version 1::
     {"version": 1,
      "parcels": {"P-0412": {"fence": {...}, "trees": {...}, "objects": [...]}},
      "groups":  {"G-0001": {"parcels": ["P-0412", "P-0413"], "fence": {...}}},
-     "regions": {"R-0001": {"colour": "#8a7a5c", "polygon": [[x, y], ...]}}}
+     "regions": {"R-0001": {"colour": "#8a7a5c", "polygon": [[x, y], ...]}},
+     "cables":  {"C-0001": {"from": "o-0012", "to": "o-0015"}}}
 
 ``fence`` (all keys optional)
     mode              auto | none | custom. Default auto, or custom when type, height_m,
@@ -69,6 +70,13 @@ formatting is fixed, so git diffs stay small. Version 1::
                         to water.json (swimming, drowning, the shooter's water surface) with its bed
                         at the lowest terrain inside the polygon. Without it the region is ground paint.
 
+``cables`` (the wires strung between two placed utility poles; drawn by the game, see docs/utility-poles.md)
+    from, to            ids of two different placed objects (utility poles, ``prim:pole_*``). The
+                        direction has no meaning. A pair of poles is joined by at most one cable. A
+                        cable whose pole no longer exists, or is not a pole, is skipped with a
+                        warning by the props stage. The ``cables`` key is only written when there
+                        are cables.
+
 Unknown keys are validation errors. Entries that refer to parcels that no longer exist are not
 errors: the props stage warns about them and skips them (see props.plan_edits).
 """
@@ -106,7 +114,7 @@ FENCE_TYPES: dict[str, dict[str, float | str]] = {
 # Columns a fence can be given instead of its type's own (fencestyles.COLUMN_STYLES).
 COLUMN_TYPES = ("none", "wood_post", "metal_post", "brick_red", "brick_white", "stone", "concrete")
 
-TOP_KEYS = ("version", "parcels", "groups", "regions")
+TOP_KEYS = ("version", "parcels", "groups", "regions", "cables")
 PARCEL_KEYS = ("fence", "trees", "objects")
 FENCE_KEYS = ("mode", "type", "column", "height_m", "thickness_m", "colour", "gaps")
 CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "gaps")
@@ -115,10 +123,13 @@ TREE_KEYS = ("density_per_1000m2", "count", "seed_offset")
 OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour")
 GROUP_KEYS = ("parcels", "fence")
 REGION_KEYS = ("colour", "polygon", "water_y")
+CABLE_KEYS = ("from", "to")
+POLE_ASSET_PREFIX = "prim:pole_"  # the assets a cable can hang from
 
 _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")
 _REGION_ID = re.compile(r"R-\d{4,}")
+_CABLE_ID = re.compile(r"C-\d{4,}")
 _COLOUR = re.compile(r"#[0-9a-fA-F]{6}")
 _ASSET = re.compile(r"pack:[^/\s]+/\S+|prim:[A-Za-z0-9_.-]+")
 
@@ -133,11 +144,12 @@ class EditsError(ValueError):
 
 @dataclass
 class Edits:
-    """A validated edits document. ``parcels``, ``groups`` and ``regions`` are JSON-native, as written."""
+    """A validated edits document. ``parcels``, ``groups``, ``regions`` and ``cables`` are JSON-native, as written."""
 
     parcels: dict[str, dict] = field(default_factory=dict)
     groups: dict[str, dict] = field(default_factory=dict)
     regions: dict[str, dict] = field(default_factory=dict)
+    cables: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -377,6 +389,41 @@ def _check_regions(regions: dict, errors: list[str]) -> None:
         _check_region(entry, path, errors)
 
 
+def cable_pair(entry: dict) -> tuple[str, str]:
+    """The two pole ids of a cable, in a fixed order (a cable has no direction)."""
+    a, b = str(entry["from"]), str(entry["to"])
+    return (a, b) if a <= b else (b, a)
+
+
+def _check_cables(cables: dict, errors: list[str]) -> None:
+    seen: dict[tuple[str, str], str] = {}
+    for cid, entry in cables.items():
+        path = f"cables.{cid}"
+        if not _CABLE_ID.fullmatch(cid):
+            errors.append(f"{path}: cable IDs look like C-0001")
+        if not _is_dict(entry, path, errors):
+            continue
+        _unknown_keys(entry, CABLE_KEYS, path, errors)
+        ok = True
+        for key in CABLE_KEYS:
+            if key not in entry:
+                errors.append(f"{path}.{key}: required")
+                ok = False
+            elif not (isinstance(entry[key], str) and entry[key]):
+                errors.append(f"{path}.{key}: must be the id of a placed object")
+                ok = False
+        if not ok:
+            continue
+        if entry["from"] == entry["to"]:
+            errors.append(f"{path}: from and to must be two different poles")
+            continue
+        pair = cable_pair(entry)
+        if pair in seen:
+            errors.append(f"{path}: {pair[0]} and {pair[1]} are already joined by {seen[pair]}")
+        else:
+            seen[pair] = cid
+
+
 def validate(doc: object) -> list[str]:
     """Every problem in an edits document as ``path: message``; an empty list means valid."""
     if not isinstance(doc, dict):
@@ -395,6 +442,9 @@ def validate(doc: object) -> list[str]:
     regions = doc.get("regions", {})
     if _is_dict(regions, "regions", errors):
         _check_regions(regions, errors)
+    cables = doc.get("cables", {})
+    if _is_dict(cables, "cables", errors):
+        _check_cables(cables, errors)
     return errors
 
 
@@ -408,6 +458,7 @@ def parse(doc: object) -> Edits:
         parcels=copy.deepcopy(doc.get("parcels", {})),
         groups=copy.deepcopy(doc.get("groups", {})),
         regions=copy.deepcopy(doc.get("regions", {})),
+        cables=copy.deepcopy(doc.get("cables", {})),
     )
 
 
@@ -430,6 +481,8 @@ def dump_text(edits: Edits) -> str:
     doc: dict = {"version": EDITS_VERSION, "parcels": edits.parcels, "groups": edits.groups}
     if edits.regions:  # omitted when empty, so files without regions keep their bytes
         doc["regions"] = edits.regions
+    if edits.cables:  # likewise
+        doc["cables"] = edits.cables
     errors = validate(doc)
     if errors:
         raise EditsError(errors)

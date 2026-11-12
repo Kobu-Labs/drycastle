@@ -161,7 +161,7 @@ public static class ObjectEdits
     {
         var errs = new List<string>();
         if (!(root.GetValueOrDefault("version") is EditsFile.Num v && v.Text == "1")) errs.Add("version: must be 1");
-        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "groups" or "regions")) errs.Add($"{k}: unknown key");
+        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "groups" or "regions" or "cables")) errs.Add($"{k}: unknown key");
         var seen = new Dictionary<string, string>();
         foreach (var (pid, entry) in Parcels(root))
         {
@@ -200,6 +200,40 @@ public static class ObjectEdits
                     if (!RegionRx.IsMatch(rid)) errs.Add($"{path}: region IDs look like R-0001");
                     errs.AddRange(CheckRegion(entry, path));
                 }
+        }
+        if (root.GetValueOrDefault("cables") is { } cables)
+        {
+            if (cables is not Obj co) errs.Add("cables: must be an object");
+            else errs.AddRange(CheckCables(co));
+        }
+        return errs;
+    }
+
+    static readonly Regex CableRx = new("^C-\\d{4,}$", RegexOptions.Compiled);
+
+    /// <summary>Mirror of edits.py `_check_cables`: two different object ids per cable, and no pair of poles joined twice.</summary>
+    static List<string> CheckCables(Obj cables)
+    {
+        var errs = new List<string>();
+        var seen = new Dictionary<(string, string), string>();
+        foreach (var (cid, entry) in cables)
+        {
+            var path = $"cables.{cid}";
+            if (!CableRx.IsMatch(cid)) errs.Add($"{path}: cable IDs look like C-0001");
+            if (entry is not Obj c) { errs.Add($"{path}: must be an object"); continue; }
+            foreach (var k in c.Keys) if (k is not ("from" or "to")) errs.Add($"{path}.{k}: unknown key");
+            var ok = true;
+            foreach (var key in new[] { "from", "to" })
+            {
+                if (!c.TryGetValue(key, out var v)) { errs.Add($"{path}.{key}: required"); ok = false; }
+                else if (!(v is string s && s != "")) { errs.Add($"{path}.{key}: must be the id of a placed object"); ok = false; }
+            }
+            if (!ok) continue;
+            var a = (string)c["from"]!; var b = (string)c["to"]!;
+            if (a == b) { errs.Add($"{path}: from and to must be two different poles"); continue; }
+            var pair = string.CompareOrdinal(a, b) <= 0 ? (a, b) : (b, a);
+            if (seen.TryGetValue(pair, out var other)) errs.Add($"{path}: {pair.Item1} and {pair.Item2} are already joined by {other}");
+            else seen[pair] = cid;
         }
         return errs;
     }

@@ -57,19 +57,48 @@ The spec's own `seed` only drives the small things (weathering, how the jumpers 
 ## Placing them
 
 `VARIANTS` names 15 poles (`pole_lamp_1` ... `pole_megaphone_2`), each an archetype and a seed. They are
-primitives: `prim:pole_lamp_1` etc. can be placed like any object (editor, `place_object`), the export writes
-`prims/pole_*.glb`. Their category is `pole`: in the shooter only the column is solid (a 0.4 m box as high as
-the pole), not the box around the lamp arm. `rotation_deg` turns the line direction; 0 = wires east-west,
-lamp to the south.
+primitives: `prim:pole_lamp_1` etc. are placed like any object, the export writes `prims/pole_*.glb`. Their
+category is `pole`: in the shooter only the column is solid (a 0.4 m box as high as the pole), not the box
+around the lamp arm. `rotation_deg` turns the line direction; 0 = wires east-west, lamp to the south.
+
+In the editor the **Poles tool** (rail icon, key 7) has the poles as renders and the cables; see
+`docs/viewer-and-editor.md`. Through MCP: `place_object` with a pole asset, then `connect_poles`.
 
 After changing the variants or any part, run `make poles-manifest` (a test compares the manifest with the
 generator) and `make poles-preview` to look at the result.
 
+## Cables
+
+A cable joins two placed poles: `cables` in `edits.json`, `{"C-0001": {"from": "o-0012", "to": "o-0015"}}`
+(schema in `edits.py`; a pair of poles has at most one cable, the direction means nothing). The props stage
+copies the cables whose two ends are placed poles into `objects.json` (`cables`, a list of `id`, `from`, `to`);
+the others are skipped with a warning. Nothing of a cable is baked into the map: the game strings the wires
+when it loads the objects, from the poles as they stand and the wire seats of their assets (`seats` in
+`assets/manifest.json`, written by `make poles-manifest`). So the viewer, the editor and the shooter show the
+same wires, and moving or turning a pole in the editor moves them at once. Wires have no collision.
+
+The rule (`godot/ShooterCore/Environment/CableWires.cs`, tested in `CableWiresTests`):
+
+- **Poles are not turned.** Each keeps the rotation it was given.
+- On each pole the crossarm that stands most squarely across the span is used (a junction pole's branch arm
+  for the branch line); the pin on top of a column counts to the first crossarm.
+- Its seats are ordered left to right as seen along the span, and the n-th seat of one pole is joined to the
+  n-th of the other. So the wires keep their spacing and never cross, whichever way a pole faces. A pole
+  turned so that its arm runs along the line still gets its wires, bunched together.
+- When one pole has more seats, the other decides how many wires there are; the seats used on the longer arm
+  are spread evenly over it.
+- If both poles have a side bracket, one thicker, lower service cable joins them; hooks likewise get a
+  bundled cable.
+- Each wire hangs about 2.5 % of its length (3.5 % for the service cable), a little different per wire, the
+  same every time for the same cable id.
+
+`poles.span_mesh` is the older Python version of this, used only by `make poles-preview` (`row.png`).
+
 ## Not done yet
 
-- Wires between placed poles. `Pole.placed(x, y, z, rotation_deg)` gives the wire seats in map coordinates
-  (`wire_points()`), and `span_mesh(a, b)` strings the wires; nothing in the map stages calls them yet, since
-  the pole positions are not in the map. `out/poles/row.png` shows what it gives.
 - Light. A pole with a lamp knows where its light is (`Pole.lights`), but it is not in `lamps.json`, so it
   does not glow at night.
+- Poles are the 15 fixed variants; a pole of any seed and archetype (a mesh per placed pole) is not possible
+  through placed objects.
 - The editor's object list shows `pole` after its own categories (it appends categories it does not know).
+- No headless smoke test drives the Poles tool.

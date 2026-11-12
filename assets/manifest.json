@@ -1494,7 +1494,63 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.193,
+            -0.583,
+            8.924
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.193,
+            -0.323,
+            8.923
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.193,
+            0.357,
+            8.922
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.193,
+            0.617,
+            8.922
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": -1,
+          "pos": [
+            0.065,
+            0.018,
+            9.225
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.354,
+            0.012,
+            6.178
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_lamp_2",
@@ -1516,7 +1572,45 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.119,
+            -0.448,
+            9.459
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.119,
+            -0.013,
+            9.46
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.119,
+            0.422,
+            9.461
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            -0.317,
+            -0.009,
+            6.5
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_lamp_3",
@@ -1538,7 +1632,54 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.285,
+            -0.616,
+            9.289
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.285,
+            -0.29,
+            9.293
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.285,
+            0.037,
+            9.298
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.285,
+            0.364,
+            9.302
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.103,
+            0.229,
+            6.043
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_plain_1",
@@ -1559,7 +1700,54 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.076,
+            -0.513,
+            9.011
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.076,
+            -0.106,
+            9.006
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.076,
+            0.301,
+            9.002
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.076,
+            0.707,
+            8.997
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": -1,
+          "pos": [
+            -0.211,
+            0.1,
+            9.242
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_plain_2",
@@ -1580,7 +1768,45 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.031,
+            -0.455,
+            8.014
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.031,
+            0.725,
+            7.994
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": -1,
+          "pos": [
+            -0.101,
+            0.142,
+            8.373
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            -0.374,
+            0.093,
+            5.495
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_twin_lamp_1",
@@ -1602,7 +1828,108 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            1.041,
+            9.155
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            0.722,
+            9.158
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            0.404,
+            9.161
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            0.086,
+            9.164
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            -0.233,
+            9.167
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            -0.551,
+            9.17
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            -0.869,
+            9.173
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            0.236,
+            -0.336,
+            8.487
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            0.236,
+            0.079,
+            8.483
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            0.236,
+            0.494,
+            8.479
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            -0.411,
+            0.059,
+            6.313
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_twin_lamp_2",
@@ -1624,7 +1951,81 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.07,
+            -0.799,
+            9.709
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.07,
+            -0.447,
+            9.706
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.07,
+            -0.095,
+            9.703
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.07,
+            0.257,
+            9.7
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.07,
+            0.609,
+            9.697
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.07,
+            0.961,
+            9.694
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            -0.52,
+            0.055,
+            6.543
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.367,
+            0.041,
+            4.966
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_junction_1",
@@ -1645,7 +2046,108 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.551,
+            -0.525,
+            9.725
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.551,
+            -0.313,
+            9.725
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.55,
+            -0.101,
+            9.725
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.55,
+            0.111,
+            9.725
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.55,
+            0.323,
+            9.725
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.55,
+            0.535,
+            9.725
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            0.032,
+            -0.121,
+            8.951
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            0.941,
+            -0.121,
+            8.911
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.014,
+            0.003,
+            7.136
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.241,
+            -0.32,
+            5.427
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.242,
+            -0.313,
+            5.445
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_junction_2",
@@ -1666,7 +2168,108 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.055,
+            -0.46,
+            8.905
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.055,
+            -0.083,
+            8.892
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.055,
+            0.294,
+            8.88
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.055,
+            0.671,
+            8.867
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.055,
+            1.049,
+            8.855
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            -0.295,
+            0.865,
+            8.286
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            -0.295,
+            0.045,
+            8.313
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 2,
+          "pos": [
+            0.359,
+            0.382,
+            7.514
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 2,
+          "pos": [
+            0.019,
+            0.382,
+            7.507
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 2,
+          "pos": [
+            -0.321,
+            0.382,
+            7.501
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            -0.137,
+            -0.075,
+            6.805
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_junction_3",
@@ -1687,7 +2290,90 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.134,
+            -1.055,
+            8.619
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.134,
+            -0.725,
+            8.628
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.134,
+            -0.395,
+            8.636
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.135,
+            -0.066,
+            8.645
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.135,
+            0.264,
+            8.654
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.135,
+            0.594,
+            8.663
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            0.281,
+            0.008,
+            8.057
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            -0.439,
+            0.008,
+            8.058
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.01,
+            0.2,
+            7.501
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_twin_riser_1",
@@ -1709,7 +2395,81 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.154,
+            -0.744,
+            9.004
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.154,
+            -0.484,
+            9.001
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.154,
+            0.726,
+            8.985
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.154,
+            0.986,
+            8.981
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": -1,
+          "pos": [
+            0.035,
+            0.217,
+            9.553
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": -1,
+          "pos": [
+            0.035,
+            0.041,
+            9.555
+          ]
+        },
+        {
+          "kind": "bundle",
+          "tier": -1,
+          "pos": [
+            -0.03,
+            -0.274,
+            8.125
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.333,
+            0.072,
+            5.321
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_field_1",
@@ -1730,7 +2490,54 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.916,
+            -1.126,
+            7.013
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.917,
+            -0.762,
+            7.028
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.918,
+            -0.397,
+            7.043
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.92,
+            -0.032,
+            7.059
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.921,
+            0.332,
+            7.074
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_field_2",
@@ -1751,7 +2558,54 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            1.515,
+            -1.028,
+            7.656
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            1.517,
+            -0.628,
+            7.674
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            1.519,
+            -0.229,
+            7.693
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            1.521,
+            0.171,
+            7.711
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            1.522,
+            0.57,
+            7.729
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_megaphone_1",
@@ -1772,7 +2626,36 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.132,
+            0.324,
+            8.504
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.132,
+            -0.346,
+            8.503
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.028,
+            0.295,
+            6.75
+          ]
+        }
+      ]
     },
     {
       "id": "prim:pole_megaphone_2",
@@ -1793,7 +2676,45 @@
       ],
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
-      "pack": null
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.189,
+            0.315,
+            9.072
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.189,
+            -0.245,
+            9.074
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            -0.129,
+            0.315,
+            7.178
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.017,
+            -0.258,
+            7.371
+          ]
+        }
+      ]
     }
   ],
   "textures": [

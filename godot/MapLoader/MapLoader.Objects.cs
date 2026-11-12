@@ -32,7 +32,7 @@ public sealed record FragmentResult(IReadOnlyList<string> Replaced, int Objects,
 // Placed objects, the dynamic per-parcel props swap (parcel-run fragments) and their bookkeeping.
 public sealed partial class MapLoader
 {
-    sealed record AssetEntry(string File, Vector3 Size, string Category, string Name);
+    sealed record AssetEntry(string File, Vector3 Size, string Category, string Name, List<(string kind, int tier, Vector3 local)> Seats);
 
     string _mapDir = "";
     Node3D? _objectsRoot;
@@ -140,8 +140,12 @@ public sealed partial class MapLoader
     IEnumerable<float> LoadObjectSteps(string path)
     {
         List<PlacedObject> list;
+        List<CableSpec> cables;
         using (var doc = JsonDocument.Parse(File.ReadAllText(path)))
+        {
             list = ParseObjects(doc.RootElement.GetProperty("objects"));
+            cables = ParseCables(doc.RootElement);
+        }
         var n = 0;
         foreach (var o in list)
         {
@@ -150,6 +154,7 @@ public sealed partial class MapLoader
             AddObject(o);
             yield return (float)++n / list.Count;
         }
+        SetCables(cables); // after the poles they hang from
     }
 
     Node3D ObjectsContainer()
@@ -191,6 +196,7 @@ public sealed partial class MapLoader
         node.Scale = Vector3.One * (o.Scale > 0 ? o.Scale : 1f);
         _objectNodes[o.Id] = node;
         _objectGroup[o.Id] = group;
+        _objectAssets[o.Id] = o.Asset;
     }
 
     /// <summary>
@@ -230,6 +236,7 @@ public sealed partial class MapLoader
         foreach (var id in parcels) RemoveGroupObjects(id);
         var n = 0;
         foreach (var o in objects) { AddObject(o); n++; }
+        if (_cables.Count > 0) RebuildCables(); // poles may have moved, come or gone
         return n;
     }
 
@@ -245,6 +252,7 @@ public sealed partial class MapLoader
         if (!_objectNodes.Remove(id, out var node)) return false;
         var group = _objectGroup[id];
         _objectGroup.Remove(id);
+        _objectAssets.Remove(id);
         node.GetParent()?.RemoveChild(node);
         node.QueueFree();
         DropEmptyGroup(group);
@@ -287,7 +295,7 @@ public sealed partial class MapLoader
             var id = a.GetProperty("id").GetString()!;
             var cat = a.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString()! : "other";
             var name = a.TryGetProperty("name", out var nm) && nm.ValueKind == JsonValueKind.String ? nm.GetString()! : id;
-            _assetManifest[id] = new AssetEntry(file, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name);
+            _assetManifest[id] = new AssetEntry(file, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name, ParseSeats(a));
         }
     }
 
@@ -403,6 +411,7 @@ public sealed partial class MapLoader
             scene.Free();
         }
         foreach (var o in objects) AddObject(o);
+        if (_cables.Count > 0) RebuildCables();
         return new FragmentResult(replaces, objects.Count, propsNodes);
     }
 
@@ -436,5 +445,6 @@ public sealed partial class MapLoader
         RemoveGroupObjects(id);
         if (_bakedObjects.TryGetValue(id, out var baked))
             foreach (var o in baked) AddObject(o);
+        if (_cables.Count > 0) RebuildCables();
     }
 }

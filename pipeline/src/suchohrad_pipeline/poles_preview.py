@@ -164,6 +164,7 @@ def manifest_entries() -> list[dict]:
             "licence": "CC0",
             "source": SOURCE,
             "pack": None,
+            "seats": pole.seats(),
         })
     return out
 

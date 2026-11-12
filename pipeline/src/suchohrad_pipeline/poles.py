@@ -219,6 +219,12 @@ class Pole:
                 if a.kind == kind and (tier is None or a.tier == tier or (tier == 0 and a.tier == -1
                                                                              and kind == "line"))]
 
+    def seats(self) -> list[dict]:
+        """The wire seats as plain data (``kind``, ``tier``, ``pos`` [x, y, z] in the pole's frame): what
+        the asset manifest carries, so the game can string cables between placed poles."""
+        return [{"kind": a.kind, "tier": a.tier, "pos": [round(float(v), 3) for v in a.pos]}
+                for a in self.anchors]
+
     @property
     def size_m(self) -> tuple[float, float, float]:
         """``[x, y, z]`` in glTF axes (y up): the box centred on the foot that holds the pole."""

@@ -147,6 +147,7 @@ public partial class EditorMode : Node
             CancelDrag();
             CancelRegionGesture();
             DisarmPlacement(false);
+            StopConnecting(false);
             if (GateArmed) CancelGate();
             HoverId = null;
             _hoverLabel.Visible = false;
@@ -530,6 +531,10 @@ public partial class EditorMode : Node
                 if (RayToGround(FlyCam.ProjectRayOrigin(mb.Position), FlyCam.ProjectRayNormal(mb.Position), out var pp)) PlaceAt(pp, mb.CtrlPressed);
                 else Say("click on the ground", true);
                 break;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Tool == EditorTool.Poles:
+                GetViewport().GuiReleaseFocus();
+                PolesLeftPress(mb.Position, mb.ShiftPressed);
+                break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking:
                 GetViewport().GuiReleaseFocus();
                 LeftPress(mb.Position, mb.ShiftPressed);
@@ -537,6 +542,7 @@ public partial class EditorMode : Node
             case InputEventKey { Pressed: true, Echo: false } k:
                 if (HandleRegionKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Modal) break;
+                if (HandlePolesKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleObjectKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (!k.CtrlPressed && !k.AltPressed && HandleToolKey(k.Keycode)) { GetViewport().SetInputAsHandled(); break; }
                 switch (k.Keycode)
@@ -553,7 +559,9 @@ public partial class EditorMode : Node
                     case Key.Escape:
                         if (_cheat.Visible) _cheat.Visible = false;
                         else if (PlacementAsset != null) DisarmPlacement();
+                        else if (Connecting) StopConnecting();
                         else if (GateArmed) CancelGate();
+                        else if (SelectedCableId != null) SelectCable(null);
                         else if (SelectedObjectId != null) SelectObject(null);
                         else if (Selection.Count > 0) GuardUnsaved(() => Click(null, false));
                         else if (Tool != EditorTool.None) SelectTool(EditorTool.None);
@@ -571,6 +579,7 @@ public partial class EditorMode : Node
             _looking = false;
             Input.MouseMode = Input.MouseModeEnum.Visible;
             if (!_rmbMoved && PlacementAsset != null) DisarmPlacement(); // a right click (no look drag) leaves placement mode
+            else if (!_rmbMoved && Connecting) StopConnecting(); // and connect mode
         }
         if (Active && Dragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
             EndDrag();
@@ -589,6 +598,7 @@ public partial class EditorMode : Node
         UpdateHover();
         UpdateGateDrag();
         UpdateObjectTools();
+        UpdatePolesTool();
         UpdateRegionTool();
         _pollT += delta;
         if (_pollT > 0.5)
@@ -825,6 +835,7 @@ public partial class EditorMode : Node
         _btnDissolve.Disabled = gids.Count != 1;
         RefreshEditPanel();
         RefreshObjectsPanel();
+        RefreshPolesPanel();
         RefreshRegionsPanel();
     }
 }

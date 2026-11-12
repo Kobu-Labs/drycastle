@@ -27,6 +27,7 @@ from suchohrad_pipeline.buildings import footprint_polygon
 from suchohrad_pipeline.config import DEFAULT_AREA, area_paths
 from suchohrad_pipeline.edits import (
     DEFAULT_EDITS,
+    POLE_ASSET_PREFIX,
     Edits,
     EditsError,
     FenceSpec,
@@ -518,6 +519,7 @@ class EditPlan:
     groups: dict[str, list[str]] = field(default_factory=dict)  # valid member parcels only
     tree_overrides: dict[str, dict] = field(default_factory=dict)
     objects: list[dict] = field(default_factory=list)  # objects.json entries, sorted by id
+    cables: list[dict] = field(default_factory=list)  # {"id", "from", "to"} between placed poles, sorted by id
     object_owner: dict[str, str] = field(default_factory=dict)  # object id -> parcel listing it
     warnings: list[str] = field(default_factory=list)
     water_regions: list[tuple[Polygon, float]] = field(default_factory=list)  # (outline in local metres, water_y)
@@ -536,7 +538,8 @@ def plan_edits(
 
     Entries for parcels that no longer exist (parcel entries, group members, objects) are skipped
     with a warning. An object outside every parcel, or outside the parcel it is listed under, is
-    still placed, with a warning; its ``parcel`` is the parcel containing it, or null.
+    still placed, with a warning; its ``parcel`` is the parcel containing it, or null. A cable is
+    kept when both its ends are placed utility poles, else skipped with a warning.
     """
     plan = EditPlan()
     polys = {p["id"]: shape(p["polygon"]) for p in parcels}
@@ -593,6 +596,18 @@ def plan_edits(
                 }
             )
     plan.objects.sort(key=lambda o: o["id"])
+    assets = {o["id"]: o["asset"] for o in plan.objects}
+    for cid in sorted(edits.cables):
+        cable = edits.cables[cid]
+        bad = [
+            f"{end} is not placed" if end not in assets else f"{end} is not a utility pole"
+            for end in (cable["from"], cable["to"])
+            if not assets.get(end, "").startswith(POLE_ASSET_PREFIX)
+        ]
+        if bad:
+            plan.warnings.append(f"cables.{cid}: {'; '.join(bad)}; cable skipped")
+        else:
+            plan.cables.append({"id": cid, "from": cable["from"], "to": cable["to"]})
     plan.water_regions = [
         (Polygon([_local_xy(x, y, origin) for x, y in region_ring(r["polygon"])]), float(r["water_y"]))
         for _, r in sorted(edits.regions.items())
@@ -671,6 +686,8 @@ def run_props(
         float(parcels_doc["chunk_size_m"]),
     )
     objects_doc = {"format_version": OBJECTS_FORMAT_VERSION, "objects": plan.objects}
+    if plan.cables:  # the wires between placed utility poles; the game strings them (docs/utility-poles.md)
+        objects_doc["cables"] = plan.cables
     (work_dir / "objects.json").write_text(json.dumps(objects_doc, indent=1, sort_keys=True) + "\n")
     props = {"version": PROPS_FORMAT_VERSION, "fences": fences, "trees": trees}
     spawn_doc = {

@@ -654,3 +654,62 @@ def test_roundtrip_fixture_is_canonical():
 
     text = (Path(__file__).parent / "fixtures" / "edits_roundtrip.json").read_text(encoding="utf-8")
     assert dump_text(parse(json.loads(text))) == text
+
+
+# --- cables ---
+
+
+def _cable_doc(cables: dict) -> dict:
+    return {"version": 1, "parcels": {}, "groups": {}, "cables": cables}
+
+
+def test_cables_are_validated() -> None:
+    assert validate(_cable_doc({"C-0001": {"from": "o-0001", "to": "o-0002"}})) == []
+    assert validate(_cable_doc({"X1": {"from": "a", "to": "b"}})) == ["cables.X1: cable IDs look like C-0001"]
+    assert validate(_cable_doc({"C-0001": {"from": "a"}})) == ["cables.C-0001.to: required"]
+    assert validate(_cable_doc({"C-0001": {"from": "a", "to": 3}})) == [
+        "cables.C-0001.to: must be the id of a placed object"
+    ]
+    assert validate(_cable_doc({"C-0001": {"from": "a", "to": "a"}})) == [
+        "cables.C-0001: from and to must be two different poles"
+    ]
+    assert validate(_cable_doc({"C-0001": {"from": "a", "to": "b", "sag": 1}})) == ["cables.C-0001.sag: unknown key"]
+    both = {"C-0001": {"from": "a", "to": "b"}, "C-0002": {"from": "b", "to": "a"}}
+    assert validate(_cable_doc(both)) == ["cables.C-0002: a and b are already joined by C-0001"]
+
+
+def test_cables_key_is_written_only_when_there_are_cables(tmp_path) -> None:
+    assert '"cables"' not in dump_text(Edits())
+    edits = Edits(cables={"C-0002": {"to": "o-0002", "from": "o-0001"}})
+    text = dump_text(edits)
+    assert text == (
+        '{\n "cables": {\n  "C-0002": {\n   "from": "o-0001",\n   "to": "o-0002"\n  }\n },\n'
+        ' "groups": {},\n "parcels": {},\n "version": 1\n}\n'
+    )
+    dump_edits(edits, tmp_path / "e.json")
+    assert load_edits(tmp_path / "e.json") == edits
+
+
+def test_plan_keeps_cables_between_placed_poles_only() -> None:
+    from suchohrad_pipeline.props import plan_edits
+
+    square = {"type": "Polygon", "coordinates": [[[0, 0], [50, 0], [50, 50], [0, 50], [0, 0]]]}
+    parcels = [{"id": "P-0001", "polygon": square}]
+
+    def obj(oid: str, asset: str, x: float) -> dict:
+        return {"id": oid, "asset": asset, "position": [x, 10.0]}
+
+    edits = Edits(
+        parcels={"P-0001": {"objects": [
+            obj("o-0001", "prim:pole_lamp_1", 5), obj("o-0002", "prim:pole_plain_1", 30), obj("o-0003", "prim:slab", 40),
+        ]}},
+        cables={
+            "C-0002": {"from": "o-0002", "to": "o-0001"},
+            "C-0003": {"from": "o-0001", "to": "o-0003"},
+            "C-0004": {"from": "o-0002", "to": "o-0009"},
+        },
+    )
+    plan = plan_edits(edits, parcels, [0.0, 0.0], 100.0)
+    assert plan.cables == [{"id": "C-0002", "from": "o-0002", "to": "o-0001"}]
+    assert "cables.C-0003: o-0003 is not a utility pole; cable skipped" in plan.warnings
+    assert "cables.C-0004: o-0009 is not placed; cable skipped" in plan.warnings

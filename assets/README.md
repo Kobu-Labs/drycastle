@@ -152,8 +152,10 @@ through `suchohrad_pipeline.textures`.
 `pipeline/src/suchohrad_pipeline/poles.py`: street lamp poles, plain ones, twin columns, junction poles with
 boxes and hanging cables, a leaning field pole, poles with public address horns. Original geometry, CC0, flat
 colour. Their origin is the foot of the column (not the middle of the plan), the wires run along the object's
-x axis and the lamp reaches to its -y; `size_m` is the box centred on the foot that holds the pole. The
-manifest entries are written by `make poles-manifest`. See `docs/utility-poles.md`.
+x axis and the lamp reaches to its -y; `size_m` is the box centred on the foot that holds the pole. Each entry
+also has `seats`: where wires sit on the pole (`kind` line / service / bundle, `tier` the crossarm's index or
+-1, `pos` `[x, y, z]` in the pole's frame, z up), which the game uses to string cables between placed poles.
+The manifest entries are written by `make poles-manifest`. See `docs/utility-poles.md`.
 
 ## Style: flat colour, and what the packs really contain
 

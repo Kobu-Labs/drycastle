@@ -99,6 +99,7 @@ public partial class EditorMode
         if (Map.OriginEpsg5514 == null) { Say("this map has no origin_epsg5514 (export it again, map 0.4.0+)", true); return false; }
         if (GateArmed) CancelGate();
         DisarmPlacement(false);
+        StopConnecting(false);
         PlacementAsset = asset;
         _ghostTint = null;
         _ghost = new Node3D { Name = "Ghost", Visible = false };
@@ -503,7 +504,12 @@ public partial class EditorMode
     {
         if (SelectedObjectId == null) { Say("no object selected", true); return false; }
         var id = SelectedObjectId;
-        var ok = Mutate(root => ObjectEdits.Remove(root, id) ? (true, $"deleted {id}") : (false, $"object {id} no longer exists"), $"delete {id}");
+        var ok = Mutate(root =>
+        {
+            if (!ObjectEdits.Remove(root, id)) return (false, $"object {id} no longer exists");
+            var gone = EditsFile.RemoveCablesOf(root, id); // a pole takes its cables with it
+            return (true, $"deleted {id}" + (gone.Count > 0 ? $" and its cable{(gone.Count == 1 ? "" : "s")} {string.Join(", ", gone)}" : ""));
+        }, $"delete {id}");
         if (ok) { SelectedObjectId = null; _panelDirty = true; }
         return ok;
     }
@@ -719,6 +725,7 @@ public partial class EditorMode
                     b.Icon = tex;
                     if (IconOnlyCategories.Contains(a.Category)) b.Text = "";
                 }
+            foreach (var (a, b) in _poleButtons) if (a.Id == id) { b.Icon = tex; b.Text = ""; }
             foreach (var (_, t) in _palTabs) if (t.sample == id) { t.btn.Icon = tex; t.btn.Text = ""; }
         };
         // the visible category first, then the rest
@@ -798,7 +805,7 @@ public partial class EditorMode
         _objCount.Text = parcels.Count == 0
             ? $"{ObjectEdits.All(Disk()).Count()} placed objects in the file"
             : $"{ObjectEdits.All(Disk()).Count(t => parcels.Contains(t.pid))} placed objects on {(parcels.Count == 1 ? parcels[0] : "the selection")}, {ObjectEdits.All(Disk()).Count()} in the file";
-        _hintLabel.Text = Tool == EditorTool.Region ? RegionHintText() : Tool == EditorTool.Group && PlacementAsset == null
+        _hintLabel.Text = Tool == EditorTool.Region ? RegionHintText() : Tool == EditorTool.Poles && PlacementAsset == null ? PolesHintText() : Tool == EditorTool.Group && PlacementAsset == null
             ? "marking parcels: click a parcel to mark or unmark it, Enter groups the marked ones, Esc clears the marks"
             : PlacementAsset != null
             ? "placing: LMB place, R / Shift+R rotate, Ctrl free position, Esc or RMB stop, Ctrl+Z undo"

@@ -5,7 +5,7 @@ using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 
 /// <summary>
 /// Session undo/redo of every save the editor made since it opened (objects, group operations, Apply of fence and
-/// trees). Each save records the before and after content of what it touched: `groups.&lt;ID&gt;` and `regions.&lt;ID&gt;`
+/// trees). Each save records the before and after content of what it touched: `groups.&lt;ID&gt;`, `regions.&lt;ID&gt;` and `cables.&lt;ID&gt;`
 /// as whole entries, a parcel at key level (`parcels.&lt;ID&gt;.fence`, `.trees` and each object by id), with "absent" as a value.
 /// Undo reloads the file from disk, writes the before-values back (absent deletes), validates and saves; the watcher
 /// (or the instant objects path) applies the effect. Only the keys this operation touched are overwritten; everything
@@ -16,9 +16,9 @@ public partial class EditorMode
 {
     public const int UndoCap = 200;
 
-    /// <summary>One touched entry: kind is "parcels", "groups" or "regions"; Before/After null means absent.</summary>
+    /// <summary>One touched entry: kind is "parcels", "groups", "regions" or "cables"; Before/After null means absent.</summary>
     /// <summary>
-    /// Key is null for the whole entry (groups, regions). For a parcel it names the part that changed: "fence",
+    /// Key is null for the whole entry (groups, regions, cables). For a parcel it names the part that changed: "fence",
     /// "trees" or "objects/&lt;object id&gt;", so undo leaves the parcel's other keys (and other writers' edits) alone.
     /// </summary>
     public sealed record EntryChange(string Kind, string Id, Obj? Before, Obj? After, string? Key = null);
@@ -37,7 +37,7 @@ public partial class EditorMode
     static List<EntryChange> DiffEntries(Obj before, Obj after)
     {
         var list = new List<EntryChange>();
-        foreach (var kind in new[] { "parcels", "groups", "regions" })
+        foreach (var kind in new[] { "parcels", "groups", "regions", "cables" })
         {
             var a = before.GetValueOrDefault(kind) as Obj ?? EditsFile.NewObject(); var b = after.GetValueOrDefault(kind) as Obj ?? EditsFile.NewObject();
             foreach (var id in a.Keys.Union(b.Keys).OrderBy(x => x, StringComparer.Ordinal))

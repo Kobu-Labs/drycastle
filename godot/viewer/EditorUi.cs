@@ -9,7 +9,7 @@ using Godot;
 /// only the page of the active tool. Clicking the active tool again hides the sidebar. Built from the shared theme
 /// (EditorTheme); no per-control colours or font sizes.
 /// </summary>
-public enum EditorTool { None, Select, Group, Fence, Trees, Objects, Region, View }
+public enum EditorTool { None, Select, Group, Fence, Trees, Objects, Region, Poles, View }
 
 public partial class EditorMode
 {
@@ -32,7 +32,8 @@ public partial class EditorMode
         (EditorTool.Trees, "trees", "Trees", Key.Key4),
         (EditorTool.Objects, "objects", "Objects", Key.Key5),
         (EditorTool.Region, "region", "Region", Key.Key6),
-        (EditorTool.View, "view", "View", Key.Key7),
+        (EditorTool.Poles, "poles", "Poles", Key.Key7),
+        (EditorTool.View, "view", "View", Key.Key8),
     };
 
     const string CfgPath = "user://editor_ui.cfg";
@@ -187,6 +188,7 @@ public partial class EditorMode
         BuildTreesSection(Page(EditorTool.Trees));
         BuildObjectsSection(Page(EditorTool.Objects));
         BuildRegionPage(Page(EditorTool.Region));
+        BuildPolesPage(Page(EditorTool.Poles));
         BuildViewPage(Page(EditorTool.View));
     }
 
@@ -251,21 +253,23 @@ public partial class EditorMode
         sbox.AddChild(_hintLabel);
     }
 
-    const string DefaultHint = "WASD fly, RMB look, LMB select, Shift+LMB add, 1-7 tools, G group, T top-down, Enter apply, Ctrl+Z undo, Ctrl+P commands, Esc back, F1 controls, F2 walk";
+    const string DefaultHint = "WASD fly, RMB look, LMB select, Shift+LMB add, 1-8 tools, G group, T top-down, Enter apply, Ctrl+Z undo, Ctrl+P commands, Esc back, F1 controls, F2 walk";
 
     const string CheatText =
         "Fly\tWASD, Space up, Shift down, Alt x3, hold RMB to look, wheel changes speed\n" +
         "Select\tLMB select, Shift+LMB add or remove, Esc clear\n" +
         "Walk\tF2 walk from where you were, F3 drop to the ground below the camera and walk\n" +
-        "Tools\t1 Select, 2 Group, 3 Fence, 4 Trees, 5 Objects, 6 Region, 7 View (press again to hide)\n" +
+        "Tools\t1 Select, 2 Group, 3 Fence, 4 Trees, 5 Objects, 6 Region, 7 Poles, 8 View (press again to hide)\n" +
         "Group\tG group the selection (marked groups merge)\n" +
         "Edit\tEnter apply, Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo\n" +
         "Objects\tLMB place, R / Shift+R rotate, Ctrl free position, Ctrl+D duplicate, Del delete, arrows nudge\n" +
         "Region\tN new region, LMB or C adds a corner, Enter closes, then choose the colour and Enter creates\n" +
         "Region edit\tdrag a corner, [ ] pick one, arrows move it, Backspace last corner, Del delete (asks), Ctrl+Z undo\n" +
+        "Poles\tchoose a pole and LMB places it, C connects: LMB on a pole, then on the next ones, Esc stops\n" +
+        "Poles edit\tdrag a pole or its ring, R / Shift+R turn, LMB on a cable selects it, Del removes the cable or the pole with its cables\n" +
         "Commands\tCtrl+P: tools, undo, region and parcel IDs\n" +
         "View\tT top-down, F1 this sheet, F2 walk mode\n" +
-        "Esc\tgoes one level back: drawing, colour, region selection, placement, gate, object, selection, sidebar";
+        "Esc\tgoes one level back: drawing, colour, region selection, placement, connecting, gate, cable, object, selection, sidebar";
 
     void BuildCheatSheet(Control root)
     {
@@ -298,6 +302,8 @@ public partial class EditorMode
     {
         if (Tool == EditorTool.Region && tool != EditorTool.Region) CancelRegionGesture();
         if (tool == EditorTool.Region) { DisarmPlacement(false); if (GateArmed) CancelGate(); }
+        if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { StopConnecting(false); SelectCable(null); }
+        if (tool == EditorTool.Poles && GateArmed) CancelGate();
         Tool = tool;
         _panel.Visible = tool != EditorTool.None;
         foreach (var (t, p) in _pages) p.Visible = t == tool;

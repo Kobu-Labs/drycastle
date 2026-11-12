@@ -157,7 +157,8 @@ real meshes, UVs and textures into `out/textures/fences.png`, so the look can be
 file): per-parcel fence mode (`auto`, `none`, `custom` with a type, column, height, colour and gaps),
 property groups (`G-NNNN`: one fence around the members' combined outer edge), tree density or
 count with a seed offset, and placed objects (`pack:` or `prim:` assets, absolute S-JTSK metres).
-Objects go to `work/objects.json`. `regions` (`R-NNNN`: `colour` `#rrggbb`, `polygon` one ring of at
+Objects go to `work/objects.json`, and with them the `cables` (`C-NNNN`: `from` and `to`, the ids of two
+placed utility poles) whose poles are both placed; the game strings the wires (`docs/utility-poles.md`). `regions` (`R-NNNN`: `colour` `#rrggbb`, `polygon` one ring of at
 least 3 `[x, y]` absolute S-JTSK points, no self-intersection) are shapes painted over the ground;
 they are not read by the props stage, only by the export and `region-run` (below). The format and validator are documented in
 `pipeline/src/suchohrad_pipeline/edits.py`. Entries for parcels that no longer exist are skipped

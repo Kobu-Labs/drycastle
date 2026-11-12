@@ -85,8 +85,8 @@ public static class EditsFile
                 var first = true;
                 foreach (var kv in o)
                 {
-                    // like dump_text: the regions key is only written when there are regions
-                    if (depth == 0 && kv.Key == "regions" && kv.Value is SortedDictionary<string, object?> { Count: 0 }) continue;
+                    // like dump_text: the regions and cables keys are only written when there are any
+                    if (depth == 0 && kv.Key is "regions" or "cables" && kv.Value is SortedDictionary<string, object?> { Count: 0 }) continue;
                     if (!first) sb.Append(",\n");
                     first = false;
                     Indent(sb, depth + 1);
@@ -303,4 +303,75 @@ public static class EditsFile
 
     public static (bool ok, string message) Dissolve(SortedDictionary<string, object?> root, string groupId)
         => Groups(root).Remove(groupId) ? (true, $"dissolved {groupId}") : (false, $"group {groupId} no longer exists");
+
+    // ---- cables (wires between two placed utility poles; same rules as the MCP server's connect_poles) ----
+
+    /// <summary>The asset ids a cable can hang from start with this (edits.py POLE_ASSET_PREFIX).</summary>
+    public const string PoleAssetPrefix = "prim:pole_";
+
+    /// <summary>Every cable of the document as (id, from, to), by id; entries that are not well formed are left out.</summary>
+    public static List<(string id, string from, string to)> Cables(SortedDictionary<string, object?> root)
+    {
+        var list = new List<(string, string, string)>();
+        if (root.GetValueOrDefault("cables") is SortedDictionary<string, object?> map)
+            foreach (var (id, entry) in map)
+                if (entry is SortedDictionary<string, object?> c && c.GetValueOrDefault("from") is string f && c.GetValueOrDefault("to") is string t)
+                    list.Add((id, f, t));
+        return list;
+    }
+
+    /// <summary>Next free cable id: one above the highest C-NNNN in use.</summary>
+    public static string NextCableId(SortedDictionary<string, object?> root)
+    {
+        var max = 0;
+        foreach (var (id, _, _) in Cables(root))
+            if (id.StartsWith("C-") && int.TryParse(id[2..], out var n)) max = Math.Max(max, n);
+        return $"C-{max + 1:0000}";
+    }
+
+    /// <summary>The asset of each placed object of the document, by object id.</summary>
+    public static Dictionary<string, string> ObjectAssets(SortedDictionary<string, object?> root)
+    {
+        var assets = new Dictionary<string, string>();
+        foreach (var (_, entry) in (SortedDictionary<string, object?>)root["parcels"]!)
+            if (entry is SortedDictionary<string, object?> e && e.GetValueOrDefault("objects") is List<object?> objs)
+                foreach (var o in objs)
+                    if (o is SortedDictionary<string, object?> ob && ob.GetValueOrDefault("id") is string id && ob.GetValueOrDefault("asset") is string asset)
+                        assets[id] = asset;
+        return assets;
+    }
+
+    /// <summary>String a cable between two placed utility poles. Fails when either is no placed pole, both are the same, or they are joined already.</summary>
+    public static (bool ok, string message, string? id) Connect(SortedDictionary<string, object?> root, string from, string to)
+    {
+        if (from == to) return (false, "a cable joins two different poles", null);
+        var assets = ObjectAssets(root);
+        foreach (var end in new[] { from, to })
+        {
+            if (!assets.TryGetValue(end, out var asset)) return (false, $"object {end} no longer exists", null);
+            if (!asset.StartsWith(PoleAssetPrefix, StringComparison.Ordinal)) return (false, $"{end} is not a utility pole", null);
+        }
+        var joined = Cables(root).FirstOrDefault(c => (c.from == from && c.to == to) || (c.from == to && c.to == from));
+        if (joined.id != null) return (false, $"{from} and {to} are already joined by {joined.id}", null);
+        if (root.GetValueOrDefault("cables") is not SortedDictionary<string, object?> map) root["cables"] = map = NewObject();
+        var id = NextCableId(root);
+        var cable = NewObject();
+        cable["from"] = from;
+        cable["to"] = to;
+        map[id] = cable;
+        return (true, $"strung {id} from {from} to {to}", id);
+    }
+
+    public static (bool ok, string message) Disconnect(SortedDictionary<string, object?> root, string cableId)
+        => root.GetValueOrDefault("cables") is SortedDictionary<string, object?> map && map.Remove(cableId)
+            ? (true, $"removed {cableId}") : (false, $"cable {cableId} no longer exists");
+
+    /// <summary>Drop every cable that hangs from an object (it is being deleted); returns their ids.</summary>
+    public static List<string> RemoveCablesOf(SortedDictionary<string, object?> root, string objectId)
+    {
+        var gone = Cables(root).Where(c => c.from == objectId || c.to == objectId).Select(c => c.id).ToList();
+        if (gone.Count > 0 && root.GetValueOrDefault("cables") is SortedDictionary<string, object?> map)
+            foreach (var id in gone) map.Remove(id);
+        return gone;
+    }
 }

@@ -158,3 +158,7 @@ def test_manifest_pole_entries_are_in_sync() -> None:
     shipped = [a for a in load_manifest()["assets"] if a["id"].startswith("prim:pole_")]
     assert shipped == manifest_entries()
     assert all(a["category"] == "pole" for a in shipped)
+    for a in shipped:  # the game strings cables from these: every pole has somewhere for a line wire to sit
+        line = [s for s in a["seats"] if s["kind"] == "line"]
+        assert line and all(len(s["pos"]) == 3 and s["pos"][2] > 5 for s in line), a["id"]
+        assert {s["kind"] for s in a["seats"]} <= {"line", "service", "bundle"}

@@ -255,9 +255,34 @@ GPU): `godot --path godot/viewer -- --map DIR --edits FILE --state FILE --editor
 parcel". It uses the pipeline's own validator, reads the viewer's `editor-state.json` for the selection, and the
 viewer's `--watch` applies the change. Registration, tool reference and workflow: [mcp.md](mcp.md).
 
+### Poles tool
+
+Rail icon 7 (View moved to 8): utility poles and the cables between them (`docs/utility-poles.md`). Poles are ordinary
+placed objects (`prim:pole_*`), so everything under Objects and undo applies to them; the page shows the poles alone as
+renders (the name is the tooltip), and adds the cables.
+
+* **Placing**: choose a pole, click on the ground; it stays armed, `R` / `Shift+R` turn the ghost. A pole's wires run
+  along its own x axis (the knob of the rotation ring) and its lamp reaches to the right of that.
+* **Connecting**: `C` (or the button) turns connect mode on. The first click picks the pole to start from (the selected
+  pole when there is one); each further click on another pole strings a cable from the last pole and carries on from
+  the clicked one, so a street is a row of clicks. A line from the start pole follows the cursor (cyan over a pole a
+  click would join). Esc or a right click stops. A click on a pair that is already joined only moves the start on.
+* **Cables**: a cable is `cables.<C-NNNN>` in `edits.json` with `from` and `to`, the ids of its two poles. A click on a
+  cable selects it (yellow), `Del` removes it; the selected pole lists its cables with a Remove button each. Deleting a
+  pole removes its cables in the same save. Each of these is one save and one undo step.
+* **Nothing is turned for you**: a pole keeps the rotation you gave it. The wires are matched left to right across each
+  span (`ShooterCore/Environment/CableWires.cs`), so they keep their spacing and never cross, whichever way a pole
+  faces; turn the pole so that its crossarm stands across the line.
+* **Instant**: cables need no pipeline run. `MapLoader` strings them between the poles as they stand (`SetCables`,
+  `RebuildCables`), the watcher hands it the file's cables on every change, and the cables of a pole follow it while it
+  is dragged. At start the cables of the edits file are shown even when the map was exported before them; a pole placed
+  since the last export, like any placed object, appears only after the next `make props export`.
+
+There is no headless smoke for this tool yet.
+
 ### Regions tool
 
-Rail icon 6 (View moved to 7). `N` starts a shape, LMB or `C` adds corners (0.5 m grid, Ctrl free), Enter closes it, the colour is chosen
+Rail icon 6. `N` starts a shape, LMB or `C` adds corners (0.5 m grid, Ctrl free), Enter closes it, the colour is chosen
 (picker or `#rrggbb`) and Enter creates the region: one save, one undo step. Select a region by clicking it or its row in the panel;
 drag corners, `[` `]` plus arrows, recolour, `Del` (asks first). Invalid shapes are refused before commit with the reason in the panel
 (a red preview outline while drawing or dragging). `Ctrl+P` opens a command palette. Esc steps back one level. Details and the

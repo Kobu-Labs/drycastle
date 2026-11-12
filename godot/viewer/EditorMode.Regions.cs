@@ -965,6 +965,7 @@ public partial class EditorMode
     {
         foreach (var (tool, _, name, key) in Tools) { var t = tool; yield return ($"Tool: {name}  ({OS.GetKeycodeString(key)})", () => SelectTool(t)); }
         yield return ("Region: new  (N)", () => { SelectTool(EditorTool.Region); StartRegion(); });
+        yield return ("Poles: connect  (C)", () => { SelectTool(EditorTool.Poles); StartConnecting(); });
         yield return ("Edit: undo  (Ctrl+Z)", () => Undo());
         yield return ("Edit: redo  (Ctrl+Y)", () => Redo());
         yield return ("View: top-down  (T)", ToggleTopDown);

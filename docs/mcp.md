@@ -114,7 +114,10 @@ All inputs and outputs are JSON. Write tools return `summary`, `warnings` and th
 | `set_trees` | `parcel`, `density_per_1000m2?` or `count?`, `seed_offset?` | exactly one of density / count (a `seed_offset` alone works only on top of an existing one) |
 | `reset_trees` | `parcel` | removes the trees entry |
 | `place_object` | `parcel`, `asset`, `anchor?`, `offset_m?` `{along,inward}`, `position?` `[x,y]`, `rotation_deg?`, `scale?`, `colour?` | anchors `front back left right centre near_building` (default `centre`); an anchor point that falls outside the parcel is moved to the nearest interior point (warning); exact `position` outside the parcel is applied with a warning; returns id, final position, rotation |
-| `remove_object` | `id` | |
+| `remove_object` | `id` | the cables of a removed utility pole go with it (`cables_removed`) |
+| `connect_poles` | `poles` (2+ pole object ids, in the order the line runs) | strings a cable from each pole to the next (`C-NNNN`); poles are objects placed from the `prim:pole_*` assets; a pair already joined is left alone (warning); the poles keep their rotation, the wires are matched left to right |
+| `disconnect_poles` | `cable?` (id) or `poles?` (the two pole ids) | removes one cable |
+| `list_cables` | `pole?` | cables (id, from, to, `length_m`) and the placed poles (id, asset, position, `rotation_deg`, number of cables) |
 | `move_object` | `id`, `parcel?`, `anchor?`, `offset_m?`, `position?`, `rotation_deg?`, `scale?`, `colour?` | a new anchor re-faces the road unless `rotation_deg` is given; a new `parcel` re-lists the object |
 | `create_group` | `parcels` (2+), `fence?` | new `G-NNNN`; a parcel can be in one group only; warns when the parcels do not touch |
 | `merge_groups` | `ids` (2+ groups, or 1 with `parcels`), `parcels?` (loose parcels, in no other group), `fence?` | merges the groups and parcels into a new `G-NNNN` and removes the old groups; parcel-level fence edits stay on the parcels; the fence is `fence` if given, else the shared one of the old groups, else the first group's (with a warning) |
