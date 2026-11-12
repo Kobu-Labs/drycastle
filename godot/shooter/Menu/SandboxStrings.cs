@@ -9,7 +9,9 @@ public static class SandboxStrings
     {
         ("bind.sandbox_panel", "Sandbox panel"),
         ("sandbox.tag", "[SANDBOX]"),
-        ("sandbox.badge", "SANDBOX"),
+        ("sandbox.badge", "SANDBOX"), ("sandbox.badge.damage", "SANDBOX - TAKING DAMAGE"),
+        ("sandbox.panel.damage", "Take damage"),
+        ("sandbox.panel.damage.hint", "Off: nothing hurts you. On: you can be hurt and killed and respawn as usual. Ammo stays unlimited, and nothing is scored or saved."),
         ("sandbox.held", "Held: {0}"), ("sandbox.held.none", "Nothing held"),
         ("sandbox.notice.off", "Sandbox mode is off on this server."),
         ("sandbox.panel.title", "Sandbox"),

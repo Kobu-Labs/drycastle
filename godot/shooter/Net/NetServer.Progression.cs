@@ -73,13 +73,14 @@ public partial class NetServer
     /// <summary>Kill and roadkill counters. Suicides and kills by no player are not counted.</summary>
     void RecordKill(PlayerKilled k)
     {
-        if (k.Killer == k.Victim || IsBot(k.Victim) || Progression == null || !_byId.TryGetValue(k.Killer, out var c) || !c.Profile!.Persist || c.Sandbox) return;
+        if (k.Killer == k.Victim || !Scores(k.Victim) || Progression == null || !_byId.TryGetValue(k.Killer, out var c) || !c.Profile!.Persist || c.Sandbox) return;
         _ = Progression.Stats.RecordKillAsync(c.Profile.DbId, WeaponKey(k.Weapon), k.Cause == KillCause.Roadkill);
     }
 
     void RecordDeath(ushort victim)
     {
-        if (Progression != null && _byId.TryGetValue(victim, out var c) && c.Profile!.Persist) _ = Progression.Stats.RecordDeathAsync(c.Profile.DbId);
+        // a sandbox player who switched damage on can die; like the rest of sandbox mode it writes nothing
+        if (Progression != null && _byId.TryGetValue(victim, out var c) && c.Profile!.Persist && !c.Sandbox) _ = Progression.Stats.RecordDeathAsync(c.Profile.DbId);
     }
 
     /// <summary>The stats key of a weapon byte: its weapons.json id, or a name for the special causes (vehicle, debug, void, fall).</summary>

@@ -59,6 +59,13 @@ public partial class NetServer
     void OnSandboxAction(Client c, byte[] payload)
     {
         if (!c.Sandbox || SandboxEvents.DecodeAction(payload) is not { } a) return;
+        if (a.Action == SandboxAction.TakeDamage)
+        {
+            // a switch, not an act on the body: it works while dead too, so a player who keeps dying can turn it off
+            _match.SetVulnerable(c.Id, a.Arg != 0);
+            GD.Print($"server: {c.Name} #{c.Id} sandbox damage {(a.Arg != 0 ? "on" : "off")}");
+            return;
+        }
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive })
         {
             SandboxNote(c, "Sandbox actions work while alive.");

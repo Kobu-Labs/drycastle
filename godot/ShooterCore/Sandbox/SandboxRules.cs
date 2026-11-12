@@ -35,6 +35,8 @@ public enum SandboxAction : byte
     TargetRespawn = 4,
     /// <summary>Use the held streak now.</summary>
     Activate = 5,
+    /// <summary>Take damage. Argument: 1 on (hurt and killed like anyone), 0 off (godmode, the default). This player only.</summary>
+    TakeDamage = 6,
 }
 
 /// <summary>Payloads of the sandbox events (kinds 150-155).</summary>

@@ -561,7 +561,7 @@ public partial class NetServer : Node
                 LossKill(k.Killer, k.Victim);
                 RecordKill(k);
                 var fromStreak = StreakKill(k);
-                if (Scores(k.Killer) && !IsBot(k.Victim)) AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause, fromStreak), _elapsed)); // a bot's death grants no XP (#214)
+                if (Scores(k.Killer) && Scores(k.Victim)) AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause, fromStreak), _elapsed)); // the death of a bot (#214) or of a sandbox player grants no XP
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon, k.Cause)));
                 break;
             case TargetKilled tk: OnTargetKilled(tk); break;
@@ -752,7 +752,7 @@ public partial class NetServer : Node
         if (_streaks.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
-        if (r == DamageResult.Damaged && Scores(attackerId) && !IsBot(victim)) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
+        if (r == DamageResult.Damaged && Scores(attackerId) && Scores(victim)) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
         BotHit(victim, attackerId);
         _hitsLanded++;
         LossHit(attackerId, victim, r == DamageResult.Killed);
