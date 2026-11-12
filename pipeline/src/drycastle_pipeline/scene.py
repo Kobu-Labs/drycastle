@@ -22,6 +22,7 @@ from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits
 from drycastle_pipeline.landmarks import build_landmark
 from drycastle_pipeline.meshes import Mesh, building_mesh, collision_mesh
 from drycastle_pipeline.propmeshes import fence_mesh, fence_meshes, parcel_props_meshes, trees_mesh
+from drycastle_pipeline.ground import ground_types, ground_units, type_colours
 from drycastle_pipeline.regions import node_name, plan_regions, region_meshes
 from drycastle_pipeline.roads import road_mesh
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
@@ -33,7 +34,7 @@ GREY = (128, 128, 128)
 
 
 class ParcelColours:
-    """Flat terrain colour by the parcel kind under a point; a shade is picked per parcel."""
+    """Flat terrain colour by the kind of the parcel or ground area under a point; a shade is picked per unit."""
 
     def __init__(self, parcels: list[dict], palette: dict[str, list[str]]):
         from shapely.geometry import shape
@@ -181,7 +182,7 @@ def build_scene(
                 scene.nodes.setdefault(key, {})[name] = mesh
 
     tcfg = load_section("terrain", rules_path)
-    colours = ParcelColours(parcels_doc["parcels"], tcfg["colours"])
+    colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(ground_types(rules_path, area))})
     dec = int(tcfg["collision_decimate"])
     grey = np.array(GREY, np.uint8)
     # the hatch of each bunker is a hole in the ground (#224): the terrain, seen and collided with, has it cut out
@@ -209,7 +210,7 @@ def build_scene(
     if scene.graph:
         put("roads", _by_chunk(road_mesh(scene.graph, t, load_section("roads", rules_path)), chunk_m))
 
-    rplan = plan_regions(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), t)
+    rplan = plan_regions(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), t, ground=False)
     scene.warnings += rplan.warnings
     scene.regions = rplan.regions
     if rplan.regions:

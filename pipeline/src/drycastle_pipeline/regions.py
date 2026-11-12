@@ -23,6 +23,9 @@ export and by ``region-run``, with the same code, so a hot-reloaded region equal
   also writes it to ``water.json`` (see :func:`water.build_water`). The flat mesh sits
   ``WATER_VISUAL_DROP_M`` under the surface, so the shooter's own water surface, drawn at
   ``water_y``, always wins and nothing z-fights.
+* **Hand-drawn ground.** A region with ``ground`` (a ground type) is not paint in the baked map: the parcels
+  stage turns its polygon into ground of that type (``ground.py``), and the export and the detail stage leave it
+  out. ``region-run`` still paints it, so the editor shows the shape at once.
 * Entries that fail the drape (no terrain, polygon outside the terrain coverage) are warned about
   and skipped; a schema error fails the file as for every other edit kind (see ``edits.py``).
 """
@@ -72,11 +75,13 @@ def _polygons(geom: BaseGeometry) -> list[Polygon]:
     return [p for g in getattr(geom, "geoms", []) for p in _polygons(g)]
 
 
-def plan_regions(edits: Edits, origin: list[float] | None, terrain: Terrain | None) -> RegionPlan:
+def plan_regions(edits: Edits, origin: list[float] | None, terrain: Terrain | None, ground: bool = True) -> RegionPlan:
     """Resolve the regions of the edits: local frame, clipped to the terrain coverage.
 
     A region without terrain under it (none at all, or outside the coverage) is skipped with a
-    warning. Parts outside the coverage are cut off silently, like road ribbons.
+    warning. Parts outside the coverage are cut off silently, like road ribbons. ``ground`` False leaves
+    out the regions that are hand-drawn ground areas (``ground`` key): the baked map has them as ground
+    (:mod:`drycastle_pipeline.ground`), only the editor's hot reload paints them, as a preview.
     """
     plan = RegionPlan()
     if not edits.regions:
@@ -85,6 +90,8 @@ def plan_regions(edits: Edits, origin: list[float] | None, terrain: Terrain | No
         raise ValueError("parcels.json has no origin_epsg5514; run the parcels stage again")
     for rid in sorted(edits.regions):
         entry = edits.regions[rid]
+        if not ground and "ground" in entry:
+            continue
         if terrain is None:
             plan.warnings.append(f"regions.{rid}: no terrain; region skipped")
             continue

@@ -122,8 +122,8 @@ def test_field_and_forest_keep_off_blocked_ground(cfg) -> None:
 
 
 def test_area_type_and_caps_and_patch_nodes(cfg) -> None:
-    assert [area_type({"kind": k}) for k in ("garden", "building_plot", "other", "forest", "road", "water")] == [
-        "garden", "garden", "field", "forest", "road", None]
+    assert [area_type({"kind": k}) for k in ("garden", "building_plot", "field", "forest", "village", "dike", "water")] == [
+        "garden", "garden", "field", "forest", "village", "dike", None]
     chunks = {(0, 0): {"pebble": [[float(i), 1.0, 0.0, 0.0, 1.0] for i in range(50)]}}
     cap_clutter(chunks, {"pebble": 10})
     again = {(0, 0): {"pebble": [[float(i), 1.0, 0.0, 0.0, 1.0] for i in range(50)]}}

@@ -88,8 +88,10 @@ def wet_area(outline, terrain, water_y: float, step: float = WET_STEP_M):
     return unary_union(parts) if parts else outline.__class__()
 
 
-def build_water(parcels: list[dict], terrain, regions: dict | None = None) -> tuple[dict, list[str]]:
-    """The ``water.json`` document for the parcels of kind ``water``, and the ids skipped for lack of terrain.
+def build_water(
+    parcels: list[dict], terrain, regions: dict | None = None, kinds: frozenset[str] | set[str] = frozenset({"water"})
+) -> tuple[dict, list[str]]:
+    """The ``water.json`` document for the ground areas (and parcels) of a water kind (``kinds``), and the ids skipped for lack of terrain.
 
     ``regions`` (``plan_regions(...).regions``) adds one body per region that has a ``water_y``: its polygon, that
     surface and the lowest terrain inside as the bed. A region whose terrain is nowhere below its surface holds no
@@ -97,7 +99,7 @@ def build_water(parcels: list[dict], terrain, regions: dict | None = None) -> tu
     """
     bodies, skipped = [], []
     for p in sorted(parcels, key=lambda p: p["id"]):
-        if p["kind"] != "water":
+        if p["kind"] not in kinds:
             continue
         heights = water_heights(shape(p["polygon"]), terrain)
         if heights is None:

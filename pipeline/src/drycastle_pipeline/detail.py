@@ -48,11 +48,12 @@ from drycastle_pipeline.buildings import footprint_polygon, hex_to_rgb
 from drycastle_pipeline.config import DEFAULT_AREA, area_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
 from drycastle_pipeline import meadow as meadow_mod
+from drycastle_pipeline.ground import ground_types, ground_units, type_colours, water_kinds
 from drycastle_pipeline.meshes import Mesh
 from drycastle_pipeline.props import chunk_of, seeded
 from drycastle_pipeline.regions import drape, plan_regions
 from drycastle_pipeline.roads import edge_lines
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
 from drycastle_pipeline.terrain import Terrain, load_terrain
 from drycastle_pipeline.detail_meshes import KINDS, TINTABLE
 from drycastle_pipeline.textures import TexturedMesh, tex_node_name, texture
@@ -309,13 +310,14 @@ def _mix(a: list[int], b: list[int], w: float) -> list[int]:
     return [round(x * (1 - w) + y * w) for x, y in zip(a, b, strict=True)]
 
 
-def palette(ctx: ParcelContext, fixed: list[str], shades: list[float], mix_by_kind: dict, default_mix: float = 1.0
+def palette(ctx: ParcelContext, fixed: list[str], shades: list[float], mix_by_kind: dict | float, default_mix: float = 1.0
             ) -> tuple[list[list[int]], float]:
     """Colours of a flat layer and how much they follow the parcel's terrain colour.
 
     Each colour is the fixed one at ``mix`` 0 and the terrain colour times its shade at 1, so a lawn on a
-    green garden is a few shades of that garden's green, and on a tan plot it is still green-ish."""
-    w = float(mix_by_kind.get(ctx.kind, default_mix))
+    green garden is a few shades of that garden's green, and on a tan plot it is still green-ish. ``mix_by_kind`` is
+    one mix for all, or one per parcel kind (the others get ``default_mix``)."""
+    w = float(mix_by_kind.get(ctx.kind, default_mix) if isinstance(mix_by_kind, dict) else mix_by_kind)
     out = []
     for i, hx in enumerate(fixed):
         c = hex_to_rgb(hx)
@@ -905,11 +907,11 @@ def forest_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
     return res
 
 
-def road_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
-    """Road land (``road`` parcels): grass over all the parcel beside the carriageway (the cadastral road parcel is
-    often offset from the OSM carriageway, and a grey leftover strip would read as a second road), with gravel and dirt verge
-    blobs, tufts along the asphalt edge and pebbles on the gravel."""
-    pid, rc = ctx.id, cfg["road"]
+def village_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
+    """Village ground (``village`` ground areas: street sides, greens): grass over all of it beside the carriageway (OSM
+    roads are the only paved ground), with gravel and dirt verge blobs, tufts along the asphalt edge and pebbles on the
+    gravel."""
+    pid, rc = ctx.id, cfg["village"]
     res = DetailResult(pid)
     if ctx.road is None or ctx.road.is_empty:
         return res
@@ -938,7 +940,12 @@ def dike_recipe(ctx: ParcelContext, cfg: dict) -> DetailResult:
     return dike_detail(ctx, cfg)
 
 
-RECIPES = {"garden": garden_detail, "field": field_detail, "forest": forest_detail, "road": road_detail, "dike": dike_recipe}
+RECIPES = {"garden": garden_detail, "field": field_detail, "forest": forest_detail, "village": village_detail, "dike": dike_recipe}
+
+
+@functools.cache
+def _shipped_types() -> dict[str, dict]:
+    return ground_types()
 
 
 @functools.cache
@@ -948,15 +955,15 @@ def dike_parcels() -> frozenset[str]:
 
 
 def area_type(parcel: dict) -> str | None:
-    """The kind of ground of a parcel, which picks its recipe (:data:`RECIPES`); None: no detail (water).
+    """The recipe (:data:`RECIPES`) of a parcel or ground area, by its kind; None: no detail (water).
 
-    The only place that reads the parcel kind. A real area-type layer (gardens, fields, paths, ... drawn or
-    derived per area instead of per parcel) replaces this function."""
+    The only place that reads the kind: a parcel is a yard, a ground area has the ``recipe`` of its type
+    (``ground.types`` in ``rules.yaml``)."""
     if parcel.get("id") in dike_parcels():
         return "dike"
-    return {"garden": "garden", "building_plot": "garden", "other": "field", "forest": "forest", "road": "road", "water": None}.get(
-        parcel["kind"], "field"
-    )
+    if parcel["kind"] in ("garden", "building_plot"):
+        return "garden"
+    return _shipped_types().get(parcel["kind"], {}).get("recipe")
 
 
 # --- the village ----------------------------------------------------------------------------
@@ -996,12 +1003,14 @@ class Village:
         self.terrain, _ = load_terrain(work_dir)
         parcels_doc = json.loads((work_dir / "parcels.json").read_text())
         self.chunk_m = float(parcels_doc["chunk_size_m"])
-        self.parcels = parcels_doc["parcels"]
+        self.parcels = ground_units(parcels_doc)  # parcels and ground areas: every unit gets its recipe
         buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
         props = json.loads((work_dir / "props.json").read_text())
         graph = json.loads((work_dir / "roads.json").read_text())
         objects = json.loads((work_dir / "objects.json").read_text())["objects"] if (work_dir / "objects.json").is_file() else []
-        colours = ParcelColours(self.parcels, load_section("terrain", rules_path)["colours"])
+        self.types = ground_types(rules_path, area)
+        colours = ParcelColours(self.parcels, {**load_section("terrain", rules_path)["colours"], **type_colours(self.types)})
+        self._type_cfg: dict[str, dict] = {}
         self.colour = {p["id"]: colours._pick(p) for p in self.parcels}
         self.buildings = [footprint_polygon(b["footprint"]) for b in buildings]
         self.b_tree = shapely.STRtree(self.buildings)
@@ -1023,14 +1032,25 @@ class Village:
             r = 0.5 * math.hypot(sx, sz) * float(o.get("scale", 1.0)) + float(self.cfg["object_clearance_m"])
             self.object_polys.append(Point(o["position"][0], o["position"][1]).buffer(r, 8))
         self.o_tree = shapely.STRtree(self.object_polys)
-        plan = plan_regions(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), self.terrain)
+        plan = plan_regions(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), self.terrain, ground=False)
         self.warnings = list(plan.warnings)
         self.regions = unary_union([r.polygon for r in plan.regions.values()]) if plan.regions else Polygon()
         shapely.prepare(self.regions)
-        self.water_polys = [shape(p["polygon"]) for p in self.parcels if p["kind"] == "water"]
+        wet = water_kinds(self.types)
+        self.water_polys = [shape(p["polygon"]) for p in self.parcels if p["kind"] in wet]
         self.w_tree = shapely.STRtree(self.water_polys)
         self.verge_polys = make_verge(graph, self.cfg["verge"])
         self.v_tree = {k: shapely.STRtree(v) for k, v in self.verge_polys.items()}
+
+    def cfg_for(self, parcel: dict, recipe: str) -> dict:
+        """The detail rules for a unit: for a ground area whose type has ``detail`` settings, those laid over the
+        section of its recipe."""
+        spec = self.types.get(parcel["kind"], {})
+        if not spec.get("detail") or spec.get("recipe") != recipe:
+            return self.cfg
+        if parcel["kind"] not in self._type_cfg:
+            self._type_cfg[parcel["kind"]] = {**self.cfg, recipe: _merge(self.cfg[recipe], spec["detail"])}
+        return self._type_cfg[parcel["kind"]]
 
     @staticmethod
     def _near(tree: shapely.STRtree, items: list, geom: BaseGeometry) -> list:
@@ -1050,7 +1070,7 @@ class Village:
         A parcel that is a dike, or has a dike part, also gets ``dike`` contexts for it (the rest keeps its own recipe)."""
         poly = shape(parcel["polygon"]).intersection(self.terrain.coverage)
         parts = sorted(_polys(poly), key=lambda p: -p.area)
-        whole = parcel["id"] in dike_parcels()
+        whole = parcel["id"] in dike_parcels() or parcel["kind"] == "dike"
         clip = self.dike_clip(parcel["id"])
         k = 0
         for part in parts:
@@ -1161,12 +1181,13 @@ def build_village_detail(
             continue
         for ctx in v.contexts(parcel):
             kind = "dike" if ctx.dike else atype
-            res = RECIPES[kind](ctx, v.cfg)
+            cfg = v.cfg_for(parcel, kind)
+            res = RECIPES[kind](ctx, cfg)
             if kind in meadow_mod.MEADOW_TYPES:
                 # the game generates the dense kinds from the raster; the recipe's own instances stay only for the rest
                 res.clutter = [c for c in res.clutter if c["kind"] in stored]
-                band = float(v.cfg[kind].get("edge_band_m", 0.0))
-                meadow_cells += meadow_mod.add_parcel(meadow, ctx, res, kind, free_area(ctx, v.cfg, trunks=False), mcfg, band)
+                band = float(cfg[kind].get("edge_band_m", 0.0))
+                meadow_cells += meadow_mod.add_parcel(meadow, ctx, res, kind, free_area(ctx, cfg, trunks=False), mcfg, band)
             flat, tex = patch_meshes(res, v.terrain, lift, by_type.setdefault(kind, {}))
             rows.append(patch_rows(flat, tex, textures))
             for c in res.clutter:
@@ -1285,7 +1306,7 @@ def run_parcel(
         raise ValueError(f"parcel {parcel_id} ({parcel['kind']}) has no ground detail")
     ctx = next(v.contexts(parcel))
     atype = "dike" if ctx.dike else atype
-    res = RECIPES[atype](ctx, v.cfg)
+    res = RECIPES[atype](ctx, v.cfg_for(parcel, atype))
     if with_meadow and atype in meadow_mod.MEADOW_TYPES:
         mcfg = v.cfg["meadow"]
         m = meadow_mod.new_meadow(mcfg, v.chunk_m)

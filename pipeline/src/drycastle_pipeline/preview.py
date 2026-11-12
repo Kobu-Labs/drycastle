@@ -25,6 +25,7 @@ from drycastle_pipeline.config import DEFAULT_AREA, REPO_ROOT, area_paths
 from drycastle_pipeline.meshes import Mesh
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.rules import DEFAULT_RULES
+from drycastle_pipeline.ground import ground_units
 from drycastle_pipeline.scene import MapScene, build_scene
 from drycastle_pipeline.textures import flat_mesh, split_tex_node
 
@@ -32,11 +33,11 @@ DEFAULT_PREVIEW_DIR = REPO_ROOT / "out" / "preview"
 KIND_COLOURS = {
     "building_plot": "#e9d9a6",
     "garden": "#b9d9a0",
-    "road": "#9a9a9a",
+    "village": "#cfe0b8",
+    "dike": "#a9c98a",
     "field": "#d8e2a0",
     "forest": "#5f9a60",
     "water": "#7fb2dc",
-    "other": "#e2dfd8",
 }
 BAR_CANDIDATES_M = (5, 10, 20, 25, 50, 100, 200)
 
@@ -52,7 +53,7 @@ def _polygon_path(geom) -> MplPath:
 
 
 def _load(work_dir: Path):
-    parcels = json.loads((work_dir / "parcels.json").read_text())["parcels"]
+    parcels = ground_units(json.loads((work_dir / "parcels.json").read_text()))
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     return parcels, buildings
 

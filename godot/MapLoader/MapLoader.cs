@@ -43,6 +43,8 @@ public sealed partial class MapLoader
     public string BunkersJson { get; private set; } = "";
     /// <summary>Origin of the local frame in S-JTSK (EPSG:5514) metres (east, north), from parcels.json (map 0.4.0+); null for older maps.</summary>
     public (double X, double Y)? OriginEpsg5514 { get; private set; }
+    /// <summary>The ground types a region can be given (name, "#rrggbb" of its terrain colour), from parcels.json `ground_types`; empty for older maps.</summary>
+    public IReadOnlyList<(string Name, string Colour)> GroundTypes { get; private set; } = Array.Empty<(string, string)>();
     /// <summary>Rule values (fence and tree defaults) from the manifest (map 0.4.0+); null for older maps.</summary>
     public EditDefaults? EditDefaults { get; private set; }
     public LoadStats Stats { get; } = new();
@@ -229,6 +231,14 @@ public sealed partial class MapLoader
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
         if (doc.RootElement.TryGetProperty("origin_epsg5514", out var o) && o.ValueKind == JsonValueKind.Array && o.GetArrayLength() == 2)
             OriginEpsg5514 = (o[0].GetDouble(), o[1].GetDouble());
+        if (doc.RootElement.TryGetProperty("ground_types", out var gt) && gt.ValueKind == JsonValueKind.Array)
+        {
+            var types = new List<(string, string)>();
+            foreach (var t in gt.EnumerateArray())
+                if (t.TryGetProperty("name", out var n) && t.TryGetProperty("colour", out var c) && n.GetString() is { } name && c.GetString() is { } colour)
+                    types.Add((name, colour));
+            GroundTypes = types;
+        }
         foreach (var p in doc.RootElement.GetProperty("parcels").EnumerateArray())
         {
             var id = p.GetProperty("id").GetString()!;

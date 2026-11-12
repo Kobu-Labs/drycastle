@@ -369,3 +369,9 @@ drag corners, `[` `]` plus arrows, recolour, `Del` (asks first). Invalid shapes 
 (a red preview outline while drawing or dragging). `Ctrl+P` opens a command palette. Esc steps back one level. Details and the
 keyboard walkthrough: `docs/regions-ui-notes.md`. `make viewer-region-editor-smoke` drives all of it headless and compares every saved
 `edits.json` with the Python writer's text.
+
+A selected region has a **Ground** dropdown: "Paint only" (the region only colours the ground) or one of the map's ground
+types (`ground_types` in the exported `parcels.json`: field, meadow, orchard, forest, ...). With a type the region is a
+hand-drawn ground area (`ground` in `edits.json`, see docs/pipeline.md "Parcels and ground areas"): its colour becomes the
+type's terrain colour and the editor keeps showing it as paint, and the real ground of that type (terrain colour, grass,
+trees) appears after the next full map build (`make map`). One save, one undo step; disabled for a water region.

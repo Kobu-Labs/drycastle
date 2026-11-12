@@ -1,7 +1,9 @@
-"""Parcels stage: registry matching, parcel kind rules, building assignment, ``parcels.json``."""
+"""Parcels stage: registry matching, building assignment, the parcels that stay parcels (properties) and the ground
+areas around them (:mod:`drycastle_pipeline.ground`), ``parcels.json``."""
 
 import json
 import math
+import sys
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -13,6 +15,9 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
 from drycastle_pipeline.config import DEFAULT_AREA, area_paths
+from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits
+from drycastle_pipeline.ground import ID_PREFIX as GROUND_PREFIX
+from drycastle_pipeline.ground import build_ground, dike_ground, drawn_ground, kept_parcels
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.registry import (
     DEFAULT_REGISTRY,
@@ -21,18 +26,10 @@ from drycastle_pipeline.registry import (
     match_parcels,
     save_registry,
 )
-from drycastle_pipeline.parcel_fit import fit_roads
 from drycastle_pipeline.rules import DEFAULT_RULES, ParcelRules, load_rules, load_section
 
-KINDS = ("building_plot", "road", "forest", "field", "water", "garden", "other")
-PARCELS_FORMAT_VERSION = 1
-
-
-@dataclass
-class Landuse:
-    cls: str  # "landuse" or "natural"
-    value: str
-    geom: BaseGeometry
+KINDS = ("building_plot", "garden")  # a parcel holds a building, or is the rest of a property that does
+PARCELS_FORMAT_VERSION = 2  # 2: only properties are parcels; the other land is in "ground" (ground.py)
 
 
 @dataclass
@@ -68,55 +65,6 @@ def assign_buildings(
     return result
 
 
-def classify_parcels(
-    parcels: list[BaseGeometry],
-    has_building: list[bool],
-    highways: list[BaseGeometry],
-    landuse: list[Landuse],
-    buildings: list[BaseGeometry],
-    rules: ParcelRules,
-) -> list[str]:
-    """Parcel kind per rules, in the order documented in ``rules.yaml``."""
-    roads = unary_union([h.buffer(rules.road_buffer_width_m / 2) for h in highways])
-    cover: dict[str, BaseGeometry] = {}
-    for lu in landuse:
-        kind = (rules.natural_kinds if lu.cls == "natural" else rules.landuse_kinds).get(lu.value)
-        if kind:
-            cover.setdefault(kind, []).append(lu.geom)
-    cover = {k: unary_union(v) for k, v in cover.items()}
-    builtup = unary_union(
-        [lu.geom for lu in landuse if lu.cls == "landuse" and lu.value in rules.builtup_landuse]
-    )
-    building_tree = STRtree(buildings)
-
-    def ratio(parcel: BaseGeometry, other: BaseGeometry) -> float:
-        if other.is_empty or parcel.area <= 0:
-            return 0.0
-        return parcel.intersection(other).area / parcel.area
-
-    kinds = []
-    for parcel, built in zip(parcels, has_building, strict=True):
-        if built:
-            kinds.append("building_plot")
-        elif ratio(parcel, roads) >= rules.road_min_covered_ratio:
-            kinds.append("road")
-        else:
-            best = max(
-                sorted(cover),
-                key=lambda k: ratio(parcel, cover[k]),
-                default=None,
-            )
-            if best is not None and ratio(parcel, cover[best]) >= rules.min_cover_ratio:
-                kinds.append(best)
-                continue
-            small = parcel.area <= rules.garden_max_area_m2
-            in_builtup = ratio(parcel, builtup) >= rules.min_cover_ratio or len(
-                building_tree.query_nearest(parcel, max_distance=rules.builtup_distance_m)
-            )
-            kinds.append("garden" if small and in_builtup else "other")
-    return kinds
-
-
 def chunk_index(x: float, y: float, size: float) -> list[int]:
     return [math.floor(x / size), math.floor(y / size)]
 
@@ -129,11 +77,16 @@ class ParcelsResult:
     buildings_assigned: int
     unassigned: list[str]
     parcel_count: int
+    dropped: int = 0  # cadastral parcels that are not a property: their land is ground
+    ground: Counter = field(default_factory=Counter)  # ground areas by type
 
     def report(self) -> list[str]:
         m = self.match
         lines = [f"parcels: {self.parcel_count}"]
         lines += [f"  kind {k}: {self.kinds.get(k, 0)}" for k in KINDS]
+        lines.append(f"cadastral parcels that are not a property (their land is ground): {self.dropped}")
+        lines.append(f"ground areas: {sum(self.ground.values())}")
+        lines += [f"  type {k}: {n}" for k, n in sorted(self.ground.items())]
         lines.append(
             f"buildings: {self.buildings_total}, assigned: {self.buildings_assigned}, "
             f"unassigned: {len(self.unassigned)}"
@@ -155,12 +108,26 @@ def _read(path: Path) -> list[dict]:
     return json.loads(path.read_text())["features"]
 
 
+def _record(pid: str, geom: BaseGeometry, kind: str, chunk_m: float) -> dict:
+    anchor = geom.representative_point()
+    return {
+        "id": pid,
+        "polygon": geom.__geo_interface__,
+        "area": round(geom.area, 2),
+        "kind": kind,
+        "anchor": [round(anchor.x, 3), round(anchor.y, 3)],
+        "chunk": chunk_index(anchor.x, anchor.y, chunk_m),
+    }
+
+
 def build_parcels(
     work_dir: Path = DEFAULT_WORK_DIR,
     registry_path: Path = DEFAULT_REGISTRY,
     rules: ParcelRules | None = None,
     rules_path: Path = DEFAULT_RULES,
+    edits_path: Path = DEFAULT_EDITS,
 ) -> ParcelsResult:
+    """``edits_path`` is read for the property groups: they decide which parcels without a building stay parcels."""
     rules = rules or load_rules(rules_path)
     norm = work_dir / "normalised"
     frame = json.loads((work_dir / "frame.json").read_text())
@@ -174,17 +141,9 @@ def build_parcels(
     buildings = {
         f["properties"]["osm_id"]: shape(f["geometry"]) for f in _read(norm / "buildings.geojson")
     }
-    highways = [
-        shape(f["geometry"])
-        for f in _read(norm / "highways.geojson")
-        if f["properties"]["highway"] in rules.road_highways
-    ]
-    landuse = [
-        Landuse(f["properties"]["class"], f["properties"]["value"], shape(f["geometry"]))
-        for f in _read(norm / "landuse.geojson")
-    ]
 
-    # Registry works in absolute EPSG:5514 metres, independent of the slice centre.
+    # Registry works in absolute EPSG:5514 metres, independent of the slice centre. Every cadastral parcel keeps its
+    # entry and ID there, also the ones whose land becomes ground below.
     absolute = {r: translate(g, ox, oy) for r, g in zip(refs, parcels, strict=True)}
     ring = frame.get("fetched_bounds_epsg5514")
     bounds = Polygon(ring) if ring else None
@@ -192,53 +151,58 @@ def build_parcels(
     save_registry(match.registry, registry_path)
 
     assignment = assign_buildings(parcels, buildings, rules.max_assign_distance_m)
-    kinds = classify_parcels(
-        parcels,
-        [i in assignment.by_parcel for i in range(len(parcels))],
-        highways,
-        landuse,
-        list(buildings.values()),
-        rules,
-    )
-
-    # Road parcels fitted to their OSM road (parcel_fit in rules.yaml); the registry above keeps the cadastre's outlines.
-    ways = {f["properties"]["osm_id"]: shape(f["geometry"]) for f in _read(norm / "highways.geojson")}
-    fitted = fit_roads({match.ids[r]: g for r, g in zip(refs, parcels, strict=True)}, ways, load_section("parcel_fit", rules_path))
-    parcels = [fitted[match.ids[r]] for r in refs]
+    ids = [match.ids[r] for r in refs]
+    built = {ids[i] for i in assignment.by_parcel}
+    edits = load_edits(edits_path)
+    groups = {gid: g.get("parcels", []) for gid, g in edits.groups.items()}
+    kept = kept_parcels(built, groups)
 
     out = []
-    for i, (ref, geom, kind) in enumerate(zip(refs, parcels, kinds, strict=True)):
-        anchor = geom.representative_point()
-        out.append(
-            {
-                "id": match.ids[ref],
-                "cadastral_ref": ref,
-                "polygon": geom.__geo_interface__,
-                "area": round(geom.area, 2),
-                "kind": kind,
-                "anchor": [round(anchor.x, 3), round(anchor.y, 3)],
-                "buildings": assignment.by_parcel.get(i, []),
-                "chunk": chunk_index(anchor.x, anchor.y, rules.chunk_size_m),
-            }
-        )
+    for i, (ref, geom) in enumerate(zip(refs, parcels, strict=True)):
+        if ids[i] not in kept:
+            continue
+        rec = _record(ids[i], geom, "building_plot" if ids[i] in built else "garden", rules.chunk_size_m)
+        out.append({**rec, "cadastral_ref": ref, "buildings": assignment.by_parcel.get(i, [])})
     out.sort(key=lambda p: p["id"])
+
+    # the land of all the other cadastral parcels, by ground type
+    gcfg = load_section("ground", rules_path)
+    dropped = {pid: g for pid, g in zip(ids, parcels, strict=True) if pid not in kept}
+    free = unary_union([g if g.is_valid else g.buffer(0) for g in dropped.values()]) if dropped else Polygon()
+    ways = {f["properties"]["osm_id"]: shape(f["geometry"]) for f in _read(norm / "highways.geojson")}
+    landuse = [
+        (f["properties"]["class"], f["properties"]["value"], shape(f["geometry"])) for f in _read(norm / "landuse.geojson")
+    ]
+    dike = dike_ground(dropped, ways, load_section("detail", rules_path)["dike"])
+    drawn, warnings = drawn_ground(edits.regions, (ox, oy), gcfg["types"])
+    for warning in warnings:
+        print(f"parcels: warning: {warning}", file=sys.stderr)
+    kept_union = unary_union([g for pid, g in zip(ids, parcels, strict=True) if pid in kept]) if drawn else None
+    ground = [
+        {**_record(f"{GROUND_PREFIX}{n:04d}", geom, kind, rules.chunk_size_m), "buildings": []}
+        for n, (kind, geom) in enumerate(build_ground(free, landuse, dike, gcfg, drawn, kept_union), 1)
+    ]
+
     doc = {
         "version": PARCELS_FORMAT_VERSION,
         "crs": frame["crs"],
         "origin_epsg5514": frame["origin_epsg5514"],
         "chunk_size_m": rules.chunk_size_m,
         "parcels": out,
+        "ground": ground,
         "unassigned_buildings": assignment.unassigned,
     }
     (work_dir / "parcels.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 
     return ParcelsResult(
         match=match,
-        kinds=Counter(kinds),
+        kinds=Counter(p["kind"] for p in out),
         buildings_total=len(buildings),
         buildings_assigned=len(buildings) - len(assignment.unassigned),
         unassigned=assignment.unassigned,
-        parcel_count=len(parcels),
+        parcel_count=len(out),
+        dropped=len(dropped),
+        ground=Counter(g["kind"] for g in ground),
     )
 
 
@@ -255,7 +219,7 @@ def run(
             print(line)
     else:
         print(
-            f"parcels: {result.parcel_count} parcels, {result.buildings_assigned}/"
+            f"parcels: {result.parcel_count} parcels, {sum(result.ground.values())} ground areas, {result.buildings_assigned}/"
             f"{result.buildings_total} buildings assigned "
             f"({len(result.match.new)} new, {len(result.match.retired)} retired IDs); "
             "see --report"

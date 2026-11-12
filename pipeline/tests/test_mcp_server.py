@@ -71,7 +71,7 @@ def test_find_parcels_near_and_kind(tools):
     around = tools.find_parcels(near={"parcel": "P-0001", "radius_m": 5})
     ids = {p["id"] for p in around["parcels"]}
     assert {"P-0001", "P-0002", "P-0003", "P-0006"} <= ids and "P-0004" not in ids
-    assert [p["id"] for p in tools.find_parcels(kind="forest")["parcels"]] == ["P-0005"]
+    assert [p["id"] for p in tools.find_parcels(kind="garden")["parcels"]] == ["P-0002"]
     assert tools.find_parcels(limit=2)["total_matching"] == 6
     with pytest.raises(ToolError, match="unknown parcel"):
         tools.find_parcels(near={"parcel": "P-9999"})
@@ -545,7 +545,7 @@ def test_through_mcp_session(env):
             assert names == {
                 "list_assets", "find_parcels", "get_parcel", "set_fence", "reset_fence",
                 "place_object", "remove_object", "move_object", "create_group", "merge_groups",
-                "dissolve_group", "create_region", "set_region_colour", "set_region_water", "move_region_point",
+                "dissolve_group", "create_region", "set_region_colour", "set_region_water", "set_region_ground", "list_ground_types", "move_region_point",
                 "delete_region", "list_regions", "connect_poles", "disconnect_poles", "list_cables", "get_sketch", "create_sketch", "sketch_add_point", "sketch_add_line", "sketch_add_road", "sketch_remove",
             }
             tool = next(t for t in (await client.list_tools()).tools if t.name == "place_object")
@@ -652,3 +652,28 @@ def test_disconnect_poles_and_removing_a_pole_takes_its_cables(tools, env):
     assert load_edits(settings.edits_path).cables == {}
     assert '"cables"' not in settings.edits_path.read_text()  # the key goes when the last cable does
     canonical(settings)
+
+
+def test_region_ground_types(env):
+    tools, settings, _ = env
+    types = {t["type"]: t for t in tools.list_ground_types()["types"]}
+    assert {"field", "forest", "meadow", "village", "water"} <= set(types)
+    assert types["water"]["water"] and types["forest"]["trees_per_1000m2"] > 0 and types["meadow"]["recipe"] == "field"
+    out = tools.create_region(polygon=SQUARE, ground="meadow")  # no colour: the type's first shade tints the preview
+    assert (out["ground"], out["colour"]) == ("meadow", types["meadow"]["colours"][0].lower())
+    assert load_edits(settings.edits_path).regions["R-0001"]["ground"] == "meadow"
+    assert tools.list_regions()["regions"][0]["ground"] == "meadow"
+    tools.set_region_ground("R-0001", "orchard")
+    assert load_edits(settings.edits_path).regions["R-0001"]["ground"] == "orchard"
+    tools.set_region_ground("R-0001", None)
+    assert "ground" not in load_edits(settings.edits_path).regions["R-0001"]
+    canonical(settings)
+    with pytest.raises(ToolError, match="unknown ground type"):
+        tools.set_region_ground("R-0001", "swamp")
+    with pytest.raises(ToolError, match="colour is required"):
+        tools.create_region(polygon=SQUARE)
+    with pytest.raises(ToolError, match="not both"):
+        tools.create_region(polygon=SQUARE, ground="meadow", water_y=100.0)
+    tools.set_region_water("R-0001", 100.0)
+    with pytest.raises(ToolError, match="body of water"):
+        tools.set_region_ground("R-0001", "meadow")

@@ -62,6 +62,12 @@ formatting is fixed, so git diffs stay small. Version 1::
                         colour then tints the surface in the editor view; the body is also written
                         to water.json (swimming, drowning, the shooter's water surface) with its bed
                         at the lowest terrain inside the polygon. Without it the region is ground paint.
+    ground              optional ground type (a name of ``ground.types`` in rules.yaml, e.g. "meadow"): the
+                        region is a hand-drawn ground area. The parcels stage makes its polygon (outside the
+                        parcels) ground of that type, before the rule types and with the higher ID winning, so
+                        it gets the type's terrain colour, detail and trees on the next full run; it is then
+                        not painted as a region (the colour only tints the editor's preview until that run).
+                        A type the rules do not know is skipped with a warning. Not together with ``water_y``.
 
 ``cables`` (the wires strung between two placed utility poles, or from a pole to a house connector;
 drawn by the game, see docs/utility-poles.md)
@@ -116,7 +122,7 @@ CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "gap
 GAP_KEYS = ("at", "width_m")
 OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour")
 GROUP_KEYS = ("parcels", "fence")
-REGION_KEYS = ("colour", "polygon", "water_y")
+REGION_KEYS = ("colour", "polygon", "water_y", "ground")
 CABLE_KEYS = ("from", "to")
 POLE_ASSET_PREFIX = "prim:pole_"
 CONNECTOR_ASSET_PREFIX = "prim:connector_"
@@ -125,6 +131,7 @@ WIRE_ASSET_PREFIXES = (POLE_ASSET_PREFIX, CONNECTOR_ASSET_PREFIX)  # the assets 
 _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")
 _REGION_ID = re.compile(r"R-\d{4,}")
+_GROUND_TYPE = re.compile(r"[a-z][a-z0-9_]*")
 _CABLE_ID = re.compile(r"C-\d{4,}")
 _COLOUR = re.compile(r"#[0-9a-fA-F]{6}")
 _ASSET = re.compile(r"pack:[^/\s]+/\S+|prim:[A-Za-z0-9_.-]+")
@@ -340,6 +347,11 @@ def _check_region(entry: object, path: str, errors: list[str]) -> None:
         _check_colour(entry["colour"], f"{path}.colour", errors)
     if "water_y" in entry and not (_is_num(entry["water_y"]) and math.isfinite(entry["water_y"])):
         errors.append(f"{path}.water_y: must be a number (metres, terrain datum)")
+    if "ground" in entry:
+        if not (isinstance(entry["ground"], str) and _GROUND_TYPE.fullmatch(entry["ground"])):
+            errors.append(f"{path}.ground: must be a ground type name (lower case letters, digits, _)")
+        if "water_y" in entry:
+            errors.append(f"{path}.ground: not together with water_y (a water region is its own body of water)")
     if "polygon" not in entry:
         errors.append(f"{path}.polygon: required")
         return

@@ -49,6 +49,7 @@ from drycastle_pipeline import sketchfile
 from drycastle_pipeline.assets import DEFAULT_MANIFEST, load_manifest, validate_asset_ref
 from drycastle_pipeline.buildings import footprint_polygon
 from drycastle_pipeline.config import DEFAULT_AREA, REPO_ROOT, area_paths
+from drycastle_pipeline.ground import ground_types
 from drycastle_pipeline.edits import (
     COLUMN_TYPES,
     CONNECTOR_ASSET_PREFIX,
@@ -215,7 +216,6 @@ class MapData:
         self._btree = shapely.STRtree([self.bpolys[b] for b in self._bids])
         graph = json.loads((self.work_dir / "roads.json").read_text())
         parts = [ln.buffer(e["width"] / 2) for e, ln in edge_lines(graph)]
-        parts += [self.polys[p] for p in self._pids if self.parcels[p]["kind"] == "road"]
         self.road_zone = unary_union(parts) if parts else None
         if self.road_zone is not None:
             shapely.prepare(self.road_zone)
@@ -1751,6 +1751,7 @@ class ParcelEditTools:
             "id": rid,
             "colour": entry["colour"],
             **({"water_y": entry["water_y"]} if "water_y" in entry else {}),
+            **({"ground": entry["ground"]} if "ground" in entry else {}),
             "area_m2": round(poly.area, 1),
             "points": len(entry["polygon"]),
             "bbox": [_r3(v) for v in poly.bounds],
@@ -1772,17 +1773,74 @@ class ParcelEditTools:
                 out.append(f"overlaps region {oid}; where they overlap {winner} wins (higher ID)")
         return out
 
+    def _ground_types(self) -> dict[str, dict]:
+        return ground_types(self.settings.rules_path, self.settings.area)
+
+    def _ground_type(self, name: object) -> str:
+        types = self._ground_types()
+        if not isinstance(name, str) or name not in types:
+            raise ToolError(f"unknown ground type {name!r}; choose one of {', '.join(types)} (see list_ground_types)")
+        return name
+
+    def list_ground_types(self) -> dict:
+        """The ground types of the rules (see the registered tool description)."""
+        rows = []
+        for name, spec in self._ground_types().items():
+            trees = spec.get("trees") or {}
+            rows.append({
+                "type": name,
+                "colours": spec.get("colours", []),
+                "recipe": spec.get("recipe"),
+                "trees_per_1000m2": float(trees.get("per_1000m2", 0.0)),
+                "water": bool(spec.get("water")),
+                "from": "rule: " + spec["rule"] if spec.get("rule") else ("osm: " + json.dumps(spec["osm"], sort_keys=True) if spec.get("osm") else "hand-drawn or default only"),
+            })
+        return {"summary": f"{len(rows)} ground types", "types": rows}
+
+    def set_region_ground(self, id: str, ground: str | None) -> dict:
+        """Make a region a hand-drawn ground area of a type, or None to make it ground paint again."""
+        rid = self._region_id(id)
+        name = None if ground is None else self._ground_type(ground)
+
+        def change(edits: Edits) -> object:
+            entry = self._region_entry(edits, rid)
+            if name is not None and "water_y" in entry:
+                raise ToolError(f"{rid} is a body of water (water_y {entry['water_y']}); set_region_water null first. Nothing was changed.")
+            old = entry.get("ground")
+            if name is None:
+                entry.pop("ground", None)
+            else:
+                entry["ground"] = name
+            return old
+
+        old = self._write(change)
+        return {
+            "summary": f"{rid} ground {old} -> {name}; the map shows it after the next full run (make map)",
+            "id": rid,
+            "ground": name,
+            "warnings": [],
+        }
+
     def create_region(
         self,
-        colour: str,
+        colour: str | None = None,
         polygon: list[list[float]] | None = None,
         parcel: str | None = None,
         points: list | None = None,
         water_y: float | None = None,
+        ground: str | None = None,
     ) -> dict:
         """Create a region (see the registered tool description)."""
         level = None if water_y is None else _check_num("water_y", water_y)
+        kind = None if ground is None else self._ground_type(ground)
+        if kind is not None and level is not None:
+            raise ToolError("give ground or water_y, not both: a water region is its own body of water")
+        if colour is None:
+            if kind is None:
+                raise ToolError('colour is required ("#rrggbb"); only a region with a ground type may leave it out')
+            colour = (self._ground_types()[kind].get("colours") or ["#808080"])[0]
         col = self._region_colour(colour)
+        extra = {**({} if level is None else {"water_y": level}), **({} if kind is None else {"ground": kind})}
         if (polygon is None) == (points is None):
             raise ToolError(
                 "give exactly one of polygon (absolute [x, y] points) or parcel + points "
@@ -1817,11 +1875,11 @@ class ParcelEditTools:
 
         def change(edits: Edits) -> dict:
             rid = _next_id("R", list(edits.regions))
-            edits.regions[rid] = {"colour": col, "polygon": pts, **({} if level is None else {"water_y": level})}
+            edits.regions[rid] = {"colour": col, "polygon": pts, **extra}
             return {"id": rid, "warnings": self._overlap_warnings(edits, rid)}
 
         out = self._write(change)
-        row = self._region_row(out["id"], {"colour": col, "polygon": pts, **({} if level is None else {"water_y": level})})
+        row = self._region_row(out["id"], {"colour": col, "polygon": pts, **extra})
         return {
             "summary": f"created {out['id']} ({col}, {row['points']} points, {row['area_m2']} m2)"
             + (f", {len(out['warnings'])} warning(s)" if out["warnings"] else ""),
@@ -2188,16 +2246,36 @@ def build_server(settings: Settings) -> Any:
         "Needs 3+ points; edges may not cross or touch each other. Invalid shapes are refused "
         "and nothing is written. Where regions overlap the higher ID wins (reported in "
         "`warnings`). Optional `water_y` makes it a body of water with a flat surface at that height "
-        "(metres, terrain datum): see set_region_water. Returns the id, area, bbox and the final "
-        "absolute polygon."))
+        "(metres, terrain datum): see set_region_water. Optional `ground` (a type of "
+        "list_ground_types, e.g. \"meadow\") makes it a hand-drawn ground area instead of paint: see "
+        "set_region_ground; `colour` may then be left out (the type's colour is used for the preview). "
+        "Returns the id, area, bbox and the final absolute polygon."))
     def create_region(
-        colour: str,
+        colour: str | None = None,
         polygon: list[list[float]] | None = None,
         parcel: str | None = None,
         points: list[list[float]] | None = None,
         water_y: float | None = None,
+        ground: str | None = None,
     ) -> dict:
-        return tools.create_region(colour, polygon, parcel, points, water_y)
+        return tools.create_region(colour, polygon, parcel, points, water_y, ground)
+
+    @server.tool(description=(
+        "Make a region a hand-drawn ground area: its shape (outside the parcels) becomes ground of the type "
+        "`ground` (see list_ground_types: field, meadow, orchard, forest, village, ...), with that type's "
+        "terrain colour, grass and clutter, and trees, overriding what the rules put there. Unlike paint this "
+        "is not hot-reloaded: the viewer shows the region in its colour as a preview, the real ground appears "
+        "after the next full pipeline run (make map). `ground` null turns it back into ground paint. Not for "
+        "water regions (water_y)."))
+    def set_region_ground(id: str, ground: str | None) -> dict:
+        return tools.set_region_ground(id, ground)
+
+    @server.tool(description=(
+        "List the ground types (rules.yaml ground.types): name, terrain colours, detail recipe, trees per "
+        "1000 m2, whether it is water, and where it comes from on its own (OSM, a rule, or only hand-drawn). "
+        "Use a name as `ground` in create_region or set_region_ground."))
+    def list_ground_types() -> dict:
+        return tools.list_ground_types()
 
     @server.tool(description=(
         "Make a region a real body of water: a flat surface at `water_y` (metres on the terrain's "
@@ -2225,7 +2303,7 @@ def build_server(settings: Settings) -> Any:
         return tools.delete_region(id)
 
     @server.tool(description=(
-        "List regions: id, colour, area_m2, point count, bbox [minx, miny, maxx, maxy] and "
+        "List regions: id, colour, ground type (if it is a hand-drawn ground area), area_m2, point count, bbox [minx, miny, maxx, maxy] and "
         "centroid (absolute S-JTSK). Optional filter `near` = {\"x\", \"y\", radius_m?} or "
         "{\"parcel\", radius_m?} (default radius 100 m; adds distance_m, nearest first); `limit`."))
     def list_regions(near: dict | None = None, limit: int = 50) -> dict:

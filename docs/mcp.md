@@ -86,7 +86,7 @@ Example prompts:
 - Coordinates in and out are **absolute S-JTSK (EPSG:5514) metres**, x east, y north, the frame of `edits.json`.
   The viewer's `editor-state.json` camera is in the local map frame; the server reads `selected` from it. The sketch is in `sketch.json`, already absolute.
 - **Front edge**: the side of the parcel boundary nearest a road (consecutive edges turning less than 8 degrees
-  count as one side; the distance is measured to the road carriageways and road parcels). When standing on its
+  count as one side; the distance is measured to the road carriageways). When standing on its
   midpoint and looking into the parcel, `along` grows to the **right** and `inward` grows away from the road.
   `left` and `right` anchors are as seen in that view. `get_parcel` returns the front edge's midpoint, outward
   normal and axes, so Claude can also compute exact positions itself.
@@ -133,9 +133,11 @@ All inputs and outputs are JSON. Write tools return `summary`, `warnings` and th
 | `create_group` | `parcels` (2+), `fence?` | new `G-NNNN`; a parcel can be in one group only; warns when the parcels do not touch |
 | `merge_groups` | `ids` (2+ groups, or 1 with `parcels`), `parcels?` (loose parcels, in no other group), `fence?` | merges the groups and parcels into a new `G-NNNN` and removes the old groups; parcel-level fence edits stay on the parcels; the fence is `fence` if given, else the shared one of the old groups, else the first group's (with a warning) |
 | `dissolve_group` | `id` | removes the group; members and their own fence edits stay |
-| `create_region` | `colour`, and either `polygon` `[[x,y],..]` or `parcel` + `points` `[[along,inward],..]` | new `R-NNNN`; see Regions |
+| `create_region` | `colour` (optional with `ground`), and either `polygon` `[[x,y],..]` or `parcel` + `points` `[[along,inward],..]`; `water_y?`, `ground?` | new `R-NNNN`; see Regions |
 | `set_region_colour` | `id`, `colour` | |
 | `set_region_water` | `id`, `water_y` (null = ground paint again) | makes the region a body of water: flat surface at `water_y` (metres, terrain datum), also in `water.json`; no tree trunks inside it |
+| `set_region_ground` | `id`, `ground` (a type of `list_ground_types`; null = ground paint again) | makes the region a hand-drawn ground area of that type (terrain colour, detail and trees of the type, overriding the rules there); shown as a coloured preview until the next full run (`make map`); not for water regions |
+| `list_ground_types` | | the ground types of `rules.yaml` (`ground.types`): colours, recipe, trees, water, source |
 | `move_region_point` | `id`, `index`, `position?` `[x,y]` or `offset?` `{dx,dy}` | exactly one of position / offset |
 | `delete_region` | `id` | |
 | `list_regions` | `near?` `{x,y,radius_m?}` or `{parcel,radius_m?}`, `limit?` | id, colour, `area_m2`, `points`, `bbox`, `centroid`; `distance_m` when `near` |

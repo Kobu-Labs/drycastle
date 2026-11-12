@@ -9,7 +9,7 @@ target parcels' share of the full props stage (``props.json`` / ``objects.json``
   already fenced (``done`` in :func:`props.make_fences`). So the run processes the targets plus,
   transitively, every lower-ID parcel whose boundary is within :data:`NEIGHBOUR_M` of one of them,
   and every member of a group a processed parcel belongs to (the perimeter needs all members). Only
-  buildings, road edges and road parcels near that set are given to ``make_fences``.
+  buildings and road edges near that set are given to ``make_fences``.
 * **Trees** of a parcel depend only on its own seed and the buildings, roads and placed objects
   around it (the whole parcel: a tree rejected or accepted anywhere shifts the seeded stream). The
   per-chunk cap (:func:`props.cap_trees`) also depends on the rule trees of every
@@ -37,6 +37,7 @@ from drycastle_pipeline.props import (
     make_fences,
     make_trees,
     plan_edits,
+    props_rules,
     unknown_asset_warnings,
     water_zone,
 )
@@ -48,7 +49,6 @@ FRAGMENT_FORMAT_VERSION = 1
 # Parcels whose boundaries are closer than this can influence each other's fence de-duplication
 # (``done`` is buffered by 0.3 m); the margin is generous.
 NEIGHBOUR_M = 0.5
-_ROAD_UNION_M = 1.0  # road parcels within this of a parcel matter for its gate gap (buffer 0.5)
 _MARGIN_M = 1.0
 
 
@@ -179,12 +179,8 @@ def compute_fragment(
             float(fcfg["fences"]["building_clearance_m"]),
         )
         + _MARGIN_M,
-        float(fcfg["fences"]["road_clearance_m"]) + _MARGIN_M,
+        max(float(fcfg["fences"]["road_clearance_m"]), float(fcfg["fences"]["gate_road_within_m"])) + _MARGIN_M,
     )
-    road_ids: set[str] = set()
-    for g in closure_polys:
-        road_ids |= {order[i] for i in _near(tree, g, _ROAD_UNION_M)}
-    road_polys = [polys[pid] for pid in sorted(road_ids) if by_id[pid]["kind"] == "road"]
     in_closure = set(closure)
     groups = {gid: pids for gid, pids in plan.groups.items() if in_closure.intersection(pids)}
     fences = make_fences(
@@ -195,7 +191,6 @@ def compute_fragment(
         fcfg["fences"],
         specs=plan.specs,
         groups=groups,
-        road_polys=road_polys,
     )
     fences = [s for s in fences if s["parcel"] in target_set]
 
@@ -284,7 +279,7 @@ def run_parcel_run(
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     graph = json.loads((work_dir / "roads.json").read_text())
-    fcfg = load_section("props", rules_path, area)
+    fcfg = props_rules(rules_path, area)
     plan = plan_edits(
         load_edits(edits_path),
         parcels_doc["parcels"],

@@ -6,11 +6,11 @@ import yaml
 from shapely.geometry import LineString, Point, box, shape
 
 from drycastle_pipeline.propmeshes import fence_mesh, tree_mesh
-from drycastle_pipeline.props import make_fences, make_spawns, make_trees, run_props, seeded
+from drycastle_pipeline.props import make_fences, make_spawns, make_trees, props_rules, run_props, seeded
 from drycastle_pipeline.rules import load_section
 from tests.synthetic import make_terrain, make_workspace
 
-FENCE, TREE = load_section("props")["fences"], load_section("props")["trees"]
+FENCE, TREE = load_section("props")["fences"], props_rules()["trees"]
 SPAWN, ROADS = load_section("spawns"), load_section("roads")
 
 
@@ -108,7 +108,7 @@ def test_trees_deterministic_and_respect_rules(ws) -> None:
     bpoly = building_poly(ws)
     road = LineString([[20, 106], [200, 106]])
     rule = [t for t in a if t["src"] == "rule"]
-    assert {t["parcel"] for t in rule} <= {"P-0001", "P-0002", "P-0005", "P-0006"}  # not field
+    assert {t["parcel"] for t in rule} <= {"P-0001", "P-0002", "P-0004", "P-0005", "P-0006"}  # not the village ground
     for t in rule:
         pt = Point(t["x"], t["y"])
         assert polys[t["parcel"]].contains(pt)

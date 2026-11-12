@@ -6,7 +6,9 @@ using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 
 /// <summary>
 /// The Region tool: hand-drawn colour shapes (GLOSSARY "Region"), stored in edits.json `regions` as
-/// {R-NNNN: {colour "#rrggbb", polygon [[x, y], ...]}} in absolute S-JTSK metres.
+/// {R-NNNN: {colour "#rrggbb", polygon [[x, y], ...]}} in absolute S-JTSK metres. A region may also carry `ground`
+/// (a ground type of the map, e.g. "meadow"): it is then a hand-drawn ground area, which the pipeline turns into real
+/// ground of that type on the next full map build; until then the editor shows it as paint in the type's colour.
 ///
 /// States (the hint bar names each): Idle, Drawing (corners placed, nothing saved), Colouring (shape closed, choose the colour,
 /// still nothing saved), Selected, Dragging (a corner follows the cursor; the file changes on release). Every completed gesture
@@ -18,8 +20,11 @@ public partial class EditorMode
 {
     public enum RegionState { Idle, Drawing, Colouring, Selected, Dragging }
 
-    public sealed record RegionInfo(string Id, string Colour, List<(double x, double y)> Points)
+    public sealed record RegionInfo(string Id, string Colour, List<(double x, double y)> Points, string? Ground = null, bool Water = false)
     {
+        /// <summary>What the region is, in words (never colour alone): paint, water, or ground of a type.</summary>
+        public string KindText => Ground != null ? "ground: " + Ground : Water ? "water" : "paint";
+
         public double AreaM2
         {
             get
@@ -97,7 +102,7 @@ public partial class EditorMode
         if (RegionsOf(disk) is { } ro)
             foreach (var (id, e) in ro)
                 if (e is Obj r && r.GetValueOrDefault("colour") is string c && ParsePolygon(r.GetValueOrDefault("polygon")) is { } ring)
-                    list.Add(new RegionInfo(id, c, ring));
+                    list.Add(new RegionInfo(id, c, ring, r.GetValueOrDefault("ground") as string, r.ContainsKey("water_y")));
         return list;
     }
     Obj? _regionsFor;
@@ -295,6 +300,33 @@ public partial class EditorMode
             if (RegionsOf(root)?.GetValueOrDefault(id) is not Obj e) return (false, $"region {id} no longer exists");
             e["colour"] = c;
             return (true, $"recoloured {id} to {c}");
+        });
+    }
+
+    /// <summary>
+    /// Make a region a hand-drawn ground area of a type of the map (null: plain paint again): one save. The colour becomes
+    /// the type's terrain colour, so the preview looks like the ground it will be. Refused for a water region and for a
+    /// type the map does not have.
+    /// </summary>
+    public bool SetRegionGround(string id, string? ground)
+    {
+        if (Region(id) is not { } r) { Say($"region {id} does not exist", true); return false; }
+        if (r.Ground == ground) return true;
+        string? colour = null;
+        if (ground != null)
+        {
+            if (r.Water) { Say($"{id} is a body of water and cannot also be ground", true); return false; }
+            var match = Map.GroundTypes.Where(t => t.Name == ground).ToList();
+            if (match.Count == 0) { Say($"this map has no ground type {ground}", true); return false; }
+            colour = ParseColour(match[0].Colour);
+        }
+        return Mutate(root =>
+        {
+            if (RegionsOf(root)?.GetValueOrDefault(id) is not Obj e) return (false, $"region {id} no longer exists");
+            if (ground == null) { e.Remove("ground"); return (true, $"{id} is paint again"); }
+            e["ground"] = ground;
+            if (colour != null) e["colour"] = colour;
+            return (true, $"{id} is {ground} ground: the map shows it after the next full build (make map)");
         });
     }
 
@@ -668,7 +700,9 @@ public partial class EditorMode
     Label _rgState = null!, _rgValid = null!, _rgNoOrigin = null!, _rgEmpty = null!, _rgListHead = null!, _rgColourLabel = null!;
     ColorPickerButton _rgPicker = null!;
     LineEdit _rgHex = null!;
-    HBoxContainer _rgColourRow = null!;
+    HBoxContainer _rgColourRow = null!, _rgGroundRow = null!;
+    OptionButton _rgGround = null!;
+    Label _rgGroundNote = null!;
     VBoxContainer _rgList = null!;
     bool _rgSync;
     readonly Dictionary<string, Button> _rgRows = new();
@@ -687,7 +721,7 @@ public partial class EditorMode
     void BuildRegionPage(VBoxContainer page)
     {
         page.AddChild(new Label { Text = "Regions", ThemeTypeVariation = "Header" });
-        page.AddChild(Note("A hand-drawn colour shape on the ground, independent of parcel boundaries. Only its colour changes."));
+        page.AddChild(Note("A hand-drawn shape on the ground, independent of parcel boundaries. As paint only its colour changes; with a ground type it becomes real ground of that type."));
         _rgNoOrigin = Note("This map has no origin_epsg5514, so regions cannot be placed. Export it again (map 0.4.0+).", "Danger");
         page.AddChild(_rgNoOrigin);
         _rgNew = FocusBtn("New region  (N)", StartRegion, "PrimaryButton");
@@ -716,6 +750,21 @@ public partial class EditorMode
         _rgHex.GuiInput += e => { if (e is InputEventKey { Pressed: true, Keycode: Key.Escape }) { _rgHex.ReleaseFocus(); _rgHex.AcceptEvent(); RegionChanged(); } };
         _rgColourRow.AddChild(_rgHex);
         page.AddChild(_rgColourRow);
+
+        _rgGroundRow = new HBoxContainer();
+        _rgGroundRow.AddChild(new Label { Text = "Ground" });
+        _rgGround = new OptionButton { FocusMode = Control.FocusModeEnum.All, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _rgGround.AddItem("Paint only");
+        foreach (var t in Map.GroundTypes) _rgGround.AddIconItem(Swatch(t.Colour), t.Name);
+        _rgGround.ItemSelected += i =>
+        {
+            if (!_rgSync && SelectedRegionId != null) SetRegionGround(SelectedRegionId, i <= 0 ? null : Map.GroundTypes[(int)i - 1].Name);
+            _rgGround.ReleaseFocus();
+        };
+        _rgGroundRow.AddChild(_rgGround);
+        page.AddChild(_rgGroundRow);
+        _rgGroundNote = Note("");
+        page.AddChild(_rgGroundNote);
 
         _rgClose = FocusBtn("Close the shape  (Enter)", () => CloseRegion(), "PrimaryButton");
         _rgCreate = FocusBtn("Create the region  (Enter)", () => CommitRegion(), "PrimaryButton");
@@ -809,7 +858,7 @@ public partial class EditorMode
             RegionState.Dragging => $"Moving corner {_dragCorner + 1} of {sel?.Id}",
             RegionState.Colouring => $"Shape closed: {_draft.Count} corners. Choose its colour.",
             RegionState.Drawing => _draft.Count == 0 ? "Click the ground to place the first corner" : $"Drawing: {_draft.Count} corner{(_draft.Count == 1 ? "" : "s")}",
-            RegionState.Selected => $"{sel!.Id}: {sel.Points.Count} corners, {sel.AreaM2:F0} m2",
+            RegionState.Selected => $"{sel!.Id} ({sel.KindText}): {sel.Points.Count} corners, {sel.AreaM2:F0} m2",
             _ => "Nothing selected",
         };
         string text, variation;
@@ -833,6 +882,24 @@ public partial class EditorMode
         if (!_rgPicker.GetPopup().Visible) _rgPicker.Color = Color.FromHtml(shown);
         if (!_rgHex.HasFocus()) _rgHex.Text = shown;
         _rgSync = false;
+        _rgGroundRow.Visible = mode == RegionState.Selected;
+        _rgGroundNote.Visible = mode == RegionState.Selected;
+        if (sel != null)
+        {
+            var at = sel.Ground == null ? 0 : Map.GroundTypes.ToList().FindIndex(t => t.Name == sel.Ground) + 1;
+            _rgSync = true;
+            if (!_rgGround.GetPopup().Visible) _rgGround.Selected = at;
+            _rgSync = false;
+            _rgGround.Disabled = sel.Water || Map.GroundTypes.Count == 0;
+            _rgGround.TooltipText = sel.Water ? "A body of water cannot also be ground"
+                : Map.GroundTypes.Count == 0 ? "This map lists no ground types: build it again (make map)"
+                : "Paint only changes the colour. A ground type makes this shape real ground of that type: its colour, grass and trees";
+            (_rgGroundNote.Text, _rgGroundNote.ThemeTypeVariation) =
+                sel.Ground != null && at == 0 ? ($"Ground type {sel.Ground} is not in this map; the map build will skip it.", "Warn")
+                : sel.Ground != null ? ($"Shown as paint for now. The {sel.Ground} ground (grass, trees) appears after the next full map build (make map).", "Dim")
+                : sel.Water ? ("A body of water (set through the prompt).", "Dim")
+                : ("Paint: only the colour changes.", "Dim");
+        }
         _rgClose.Visible = mode == RegionState.Drawing && _draft.Count > 0;
         _rgClose.Disabled = RegionDraftProblem() != null;
         _rgCreate.Visible = colouring;
@@ -844,7 +911,7 @@ public partial class EditorMode
 
         _rgListHead.Text = $"All regions ({regions.Count})";
         _rgEmpty.Visible = regions.Count == 0;
-        var sig = string.Join("|", regions.Select(r => $"{r.Id}{r.Colour}{r.Points.Count}")) + "#" + SelectedRegionId;
+        var sig = string.Join("|", regions.Select(r => $"{r.Id}{r.Colour}{r.KindText}{r.Points.Count}")) + "#" + SelectedRegionId;
         if (sig != _listSignature)
         {
             _listSignature = sig;
@@ -855,8 +922,8 @@ public partial class EditorMode
                 var id = r.Id;
                 var b = new Button
                 {
-                    Text = $"{r.Id}   {r.Colour}   {r.Points.Count} corners", Icon = Swatch(r.Colour), Alignment = HorizontalAlignment.Left,
-                    ToggleMode = true, FocusMode = Control.FocusModeEnum.All, TooltipText = $"Select {r.Id} ({r.AreaM2:F0} m2)",
+                    Text = $"{r.Id}   {r.KindText}   {r.Points.Count} corners", Icon = Swatch(r.Colour), Alignment = HorizontalAlignment.Left,
+                    ToggleMode = true, FocusMode = Control.FocusModeEnum.All, TooltipText = $"Select {r.Id} ({r.KindText}, {r.Colour}, {r.AreaM2:F0} m2)",
                 };
                 b.SetPressedNoSignal(r.Id == SelectedRegionId);
                 b.Pressed += () => { SelectRegion(id); b.ReleaseFocus(); };
@@ -975,7 +1042,7 @@ public partial class EditorMode
         yield return ("View: top-down  (T)", ToggleTopDown);
         yield return ("Walk: drop to the ground here  (F3)", WalkFromHere);
         yield return ("Help: controls  (F1)", ToggleCheatSheet);
-        foreach (var r in Regions()) { var id = r.Id; yield return ($"{r.Id}  region  {r.Colour}  {r.Points.Count} corners", () => { SelectTool(EditorTool.Region); SelectRegion(id); }); }
+        foreach (var r in Regions()) { var id = r.Id; yield return ($"{r.Id}  region  {r.KindText}  {r.Colour}  {r.Points.Count} corners", () => { SelectTool(EditorTool.Region); SelectRegion(id); }); }
         foreach (var p in _sketch.Points) { var id = p.Id; yield return ($"{p.Id}  sketch point", () => { SelectTool(EditorTool.Sketch); SelectSketchItem(id); }); }
         foreach (var l in _sketch.Lines) { var id = l.Id; yield return ($"{l.Id}  sketch {(l.Closed ? "closed line" : "line")}  {l.Points.Count} corners", () => { SelectTool(EditorTool.Sketch); SelectSketchItem(id); }); }
         if (filter.Length >= 2)

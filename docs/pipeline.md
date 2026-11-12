@@ -68,14 +68,32 @@ per chunk, 29 MB of glb in all (fences without collision and the tree cap took t
 full run after the fetch takes about half a minute; the fetch takes about two minutes. Nothing was
 measured in Godot yet; terrain (4 m grid, 7.7k triangles per chunk) is now the biggest visual part.
 
-## Road parcel fit
+## Parcels and ground areas
 
-The cadastre's road parcels are often offset from the carriageway and ragged along its edges. `parcel_fit` in
-`rules.yaml` (`parcel_fit.py`, applied by the parcels stage after the IDs are matched) turns the listed parcels into a strip of
-constant width along named OSM ways: `half_width_m` each side of the way's centre line, flat ends. The ground a parcel
-gives up goes to its neighbours (each part to the neighbour whose shared boundary is nearest), the ground it takes comes
-out of them, so the tiling stays whole with no overlaps. IDs, cadastral references and the registry keep the cadastre's
-outlines. Today: P-1019 and P-1060 along `w4987914` and `w1198894774`, 6 m wide.
+Only a property is a parcel: a cadastral parcel that holds a building (kind `building_plot`), or one that is in a property
+group (`config/edits.json`) with a parcel that does (kind `garden`). The land of every other cadastral parcel (fields,
+forest, water, the land the roads lie on, gardens of no property) is not kept as parcels. The parcels stage (`ground.py`,
+`ground` in `rules.yaml`) cuts it into **ground areas** by type instead, written to `parcels.json` under `ground` in the
+shape of a parcel (`id` `A-0001`..., `kind` = the type, polygon, area, anchor, chunk):
+
+* a region of `edits.json` with a `ground` type is a **hand-drawn ground area**: its polygon outside the parcels is
+  ground of that type, whatever the rules say (where two overlap the higher ID wins). Draw the region in the editor,
+  then give it a type with the MCP tool `set_region_ground` (or `create_region` with `ground`). The editor paints it as
+  a preview at once; the real ground (terrain colour, detail, trees) comes with the next full run (`make map`), and the
+  baked map does not paint it as a region;
+* then the types are tried in the order of `ground.types`, each takes what the ones above left of its source: `dike`
+  (the parcels and clips of `detail.dike`), `water` and `forest` (the OSM natural/landuse polygons, with their own
+  outlines), `allotments`, `orchard`, `meadow`, `village` (OSM `landuse=residential`: street sides, greens);
+* what no type claims is the default, `field`.
+
+A type is the whole description of a kind of ground, one entry of `ground.types`: its source (`osm` or `rule`), terrain
+`colours`, detail `recipe` (field, forest, village, dike) with optional `detail` settings laid over that recipe's
+section for this type only (a meadow is the field recipe without furrows and headlands), `trees` (`per_1000m2`,
+`forest`), `water` and `spawns`. A new type is one new entry; the map area can override a type
+(`areas.village.ground.types`). There is no road ground: a road is the OSM ribbon on top of whatever lies under it.
+Ground areas have no fence and no edits of their own, and their IDs are only stable while the inputs are.
+Edits of a parcel that is no longer kept are skipped with a warning by the props stage; putting the parcel in a group
+with a building plot (by hand in `edits.json`, it is not shown in the editor) brings it back.
 
 ## Normalise and the parcel registry
 
@@ -85,10 +103,11 @@ Axes stay those of EPSG:5514. It writes `data/work/normalised/{buildings,highway
 (local metres, gitignored) and `data/work/frame.json`.
 
 `make parcels` gives every cadastral parcel an own stable ID (`P-0001`, 4 digits, growing when
-needed) and writes `data/work/parcels.json` (ID, cadastral reference, polygon, area, kind,
-anchor point, building ids, 250 m chunk index) and prints a report (counts by kind, buildings
-assigned or unassigned, new and retired IDs). Kind and building-assignment rules, with their
-order and thresholds, are documented in `pipeline/config/rules.yaml`.
+needed) and writes `data/work/parcels.json`: the parcels that are properties (ID, cadastral reference, polygon, area,
+kind, anchor point, building ids, 250 m chunk index) and the ground areas (see "Parcels and ground areas"). It prints
+a report (parcels by kind, ground areas by type, buildings assigned or unassigned, new and retired IDs). The
+building-assignment and ground rules are documented in `pipeline/config/rules.yaml`. Every cadastral parcel keeps its
+registry entry and ID, also the ones whose land is ground.
 
 The committed registry `registry/parcels.registry.json` is the source of truth for IDs. Per
 parcel it holds `id`, `cadastral_ref`, `previous_refs`, `status` (`active` or `retired`) and a
@@ -256,7 +275,7 @@ objects (a circle of half the footprint diagonal plus 0.3 m), hand-drawn regions
   parcels, sparse tufts, pebbles, rocks and flowers that thicken towards the edge and on the tones.
 * **forest**: leaf litter under some trees, dark and light forest-floor tones, a few bare spots; leaves, sticks, rocks,
   pebbles, tufts and ferns in groups round the trunks.
-* **road** (road parcels): grass on all the parcel beside the OSM carriageway (the cadastral road parcel is often offset from it; no grey leftovers), tufts along the asphalt edge,
+* **village** (village ground: street sides, greens): grass on all of it beside the OSM carriageway, tufts along the asphalt edge,
   pebbles on the gravel.
 * **dike** (`dike.py`, `detail.dike` in `rules.yaml`; the parcels P-0073, P-0821 and P-0805 are the earth dike north of the village, whatever
   their kind, and `clips` names parcels of which only a part is: the ground of P-1057 and of P-1021 within 12 m of the dike's road, of P-1059 within 12 m of its track, and of P-0847 and

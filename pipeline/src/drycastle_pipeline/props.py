@@ -36,6 +36,7 @@ from drycastle_pipeline.edits import (
     region_ring,
     resolve_fence,
 )
+from drycastle_pipeline.ground import forest_kinds, ground_types, ground_units, spawn_kinds, tree_density
 from drycastle_pipeline.lamps import make_lamps, read_osm_lamps, write_lamps
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.roads import edge_lines
@@ -107,7 +108,6 @@ def make_fences(
     cfg: dict,
     specs: dict[str, FenceSpec] | None = None,
     groups: dict[str, list[str]] | None = None,
-    road_polys: list[BaseGeometry] | None = None,
 ) -> list[dict]:
     """Fence sections along parcel boundaries: dicts with parcel, a, b (x, y) and za, zb (z).
 
@@ -117,8 +117,8 @@ def make_fences(
     settings and the seeded roll keyed by the group ID. Custom sections carry their own
     ``type``, ``height_m``, ``thickness_m`` and ``colour`` (and ``column`` when the edit names one).
 
-    ``road_polys`` replaces the road parcels taken from ``parcels`` for the gate-gap logic (the
-    per-parcel run passes only the road parcels near its targets).
+    The gate gap of a rule fence is on the boundary that faces a road: within ``gate_road_within_m`` of a
+    carriageway of ``graph``.
     """
     specs = specs or {}
     polys = {p["id"]: shape(p["polygon"]) for p in parcels}
@@ -142,12 +142,7 @@ def make_fences(
     if zone is not None:
         avoid.append(zone)
     avoid_geom = unary_union(avoid) if avoid else None
-    road_parcels = (
-        road_polys
-        if road_polys is not None
-        else [polys[p["id"]] for p in parcels if p["kind"] == "road"]
-    )
-    road_union = unary_union(road_parcels).buffer(0.5) if road_parcels else None
+    road_union = road_zone(graph, float(cfg["gate_road_within_m"]))
     gate = float(cfg["gate_gap_m"])
     done = None  # union of boundaries already fenced (buffered a little)
     sections: list[dict] = []
@@ -400,6 +395,7 @@ def make_trees(
             )
 
     density = cfg["density_per_1000m2"]
+    forest = set(cfg.get("forest_kinds", ("forest",)))
     spacing = float(cfg["min_spacing_m"])
     shore_pts = (
         shore_candidates(water, cfg["shore"]) if water is not None and cfg.get("shore", {}).get("rows") else None
@@ -459,7 +455,7 @@ def make_trees(
                     continue
                 placed.append((x, y))
         for x, y in placed:
-            trees.append(tree(x, y, rng, p["id"], p["kind"] == "forest", "rule"))
+            trees.append(tree(x, y, rng, p["id"], p["kind"] in forest, "rule"))
     return trees
 
 
@@ -724,6 +720,16 @@ def unknown_asset_warnings(objects: list[dict]) -> list[str]:
     return out
 
 
+def props_rules(rules_path: Path = DEFAULT_RULES, area: str | None = None) -> dict:
+    """The ``props`` section with the trees of the ground types (``ground.types.<type>.trees``) laid over the tree
+    rules: their densities in ``density_per_1000m2``, and ``forest_kinds`` (the types with forest trees)."""
+    cfg = load_section("props", rules_path, area)
+    types = ground_types(rules_path, area)
+    cfg["trees"]["density_per_1000m2"] = {**cfg["trees"]["density_per_1000m2"], **tree_density(types)}
+    cfg["trees"]["forest_kinds"] = sorted(forest_kinds(types))
+    return cfg
+
+
 def run_props(
     work_dir: Path = DEFAULT_WORK_DIR,
     rules_path: Path = DEFAULT_RULES,
@@ -733,10 +739,13 @@ def run_props(
     terrain, _ = load_terrain(work_dir)
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     parcels = parcels_doc["parcels"]
+    ground = ground_units(parcels_doc)  # trees and spawns are by the kind of ground: parcels and ground areas
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     graph = json.loads((work_dir / "roads.json").read_text())
     osm_trees = json.loads((work_dir / "normalised" / "trees.geojson").read_text())["features"]
-    fcfg = load_section("props", rules_path, area)
+    fcfg = props_rules(rules_path, area)
+    scfg = load_section("spawns", rules_path, area)
+    scfg["ground_kinds"] = sorted(set(scfg["ground_kinds"]) | spawn_kinds(ground_types(rules_path, area)))
     chunk_m = float(parcels_doc["chunk_size_m"])
     plan = plan_edits(load_edits(edits_path), parcels, parcels_doc.get("origin_epsg5514"), chunk_m)
     for warning in plan.warnings + unknown_asset_warnings(plan.objects):
@@ -750,7 +759,7 @@ def run_props(
         print("props: EXPERIMENT: every tree comes from the orthophoto detector (DRYCASTLE_TREE_SOURCE=ortho)",
               file=sys.stderr)
     trees = make_trees(
-        parcels,
+        ground,
         buildings,
         graph,
         osm_trees,
@@ -762,12 +771,12 @@ def run_props(
     )
     trees = cap_trees(trees, chunk_m, int(fcfg["trees"]["max_per_chunk"]))
     spawns = make_spawns(
-        parcels,
+        ground,
         buildings,
         graph,
         trees,
         terrain,
-        load_section("spawns", rules_path, area),
+        scfg,
         load_section("roads", rules_path),
         float(parcels_doc["chunk_size_m"]),
     )

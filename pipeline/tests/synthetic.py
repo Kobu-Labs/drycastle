@@ -54,13 +54,14 @@ def make_workspace(tmp: Path) -> dict[str, Path]:
     raw.mkdir()
     rules = load_building_rules()
     b1 = derive_building("w1", "P-0001", box(60, 55, 75, 70), {"roof:shape": "gabled"}, rules)
+    # one list of ground units with the kinds of both parcels and ground areas (ground.py): the stages read the kind only
     parcels = [
         parcel("P-0001", "building_plot", box(40, 40, 95, 100), ["w1"]),
         parcel("P-0002", "garden", box(95, 40, 140, 100)),
-        parcel("P-0003", "road", box(20, 100, 200, 112)),
+        parcel("P-0003", "village", box(20, 100, 200, 112)),
         parcel("P-0004", "field", box(40, 115, 200, 190)),
         parcel("P-0005", "forest", box(145, 40, 200, 100)),
-        parcel("P-0006", "other", box(20, 20, 38, 98)),
+        parcel("P-0006", "field", box(20, 20, 38, 98)),
     ]
     (work / "parcels.json").write_text(
         json.dumps(

@@ -206,12 +206,12 @@ def test_glb_nodes_match_the_export_per_parcel_nodes(tmp_path):
 def test_glb_of_a_parcel_without_props_still_names_it_in_replaces(ws, tmp_path):
     import trimesh
 
-    # P-0004 is a field: the rules plant no trees on it, and its fence is switched off
-    edits_path = write(tmp_path, "e.json", {**NO_EDITS, "parcels": {"P-0004": {"fence": {"mode": "none"}}}})
+    # P-0003 is village ground: the rules plant no trees on it, and its fence is switched off
+    edits_path = write(tmp_path, "e.json", {**NO_EDITS, "parcels": {"P-0003": {"fence": {"mode": "none"}}}})
     rules_path = write(tmp_path, "r.yaml", RULES_NOCAP)
     glb = tmp_path / "out" / "x.glb"
-    frag = parcel_run.run_parcel_run(ws, "slice", ["P-0004"], [], edits_path, rules_path, glb_path=glb)
-    assert frag["replaces"] == ["P-0004"] and frag["fences"] == [] and frag["trees"] == []
+    frag = parcel_run.run_parcel_run(ws, "slice", ["P-0003"], [], edits_path, rules_path, glb_path=glb)
+    assert frag["replaces"] == ["P-0003"] and frag["fences"] == [] and frag["trees"] == []
     assert not trimesh.load(glb, force="scene").graph.nodes_geometry
 
 

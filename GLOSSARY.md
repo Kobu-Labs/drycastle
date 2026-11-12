@@ -9,14 +9,18 @@ A separate game built on the base map, with its own gameplay, database, and mult
 _Avoid_: game mode, plugin
 
 **Parcel**:
-A land unit of the base map with a stable ID of our own (not the cadastral number), covering every cadastral parcel including roads and fields. Its boundary is fixed (the stage's `parcel_fit` rule may reshape listed road parcels to their OSM road); its contents (building, props, events) can be replaced by a mod.
+A property of the base map with a stable ID of our own (not the cadastral number): a cadastral parcel that holds a building, or one in a property group with a parcel that does. Its boundary is the cadastre's and fixed; its contents (building, props, events) can be replaced by a mod. Land that is no property is ground areas, not parcels.
 _Avoid_: plot, lot, tile
 
 **Map pipeline**:
 The scripted, re-runnable process that generates the base map from source data with no manual map building.
 
 **Parcel kind**:
-The category of a parcel (building plot, garden, road, field, forest, water, other), assigned by rules.
+The category of a parcel: building plot (it holds a building) or garden (the rest of a property).
+
+**Ground area**:
+A piece of the land outside the parcels with a ground type (field, forest, water, village, dike), cut from OSM land use and rules instead of cadastral outlines, or drawn by hand (a region with a ground type). The type picks its colour, vegetation and detail recipe. It has no fence and no stable ID.
+_Avoid_: area (that is the map area: slice or village), zone, road parcel
 
 **Replacement scene**:
 What a mod supplies to replace a parcel's base contents.
