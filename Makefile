@@ -182,13 +182,18 @@ TARGETS ?= 24
 SANDBOX ?= 1
 SANDBOX_ARG = $(if $(filter 1 true,$(SANDBOX)),--allow-sandbox,)
 
+# ADMIN (chat commands /bots /spawn /time): the dev server makes every player an admin so no token is needed. ADMIN=0 turns it off
+# (then pass --admin-token). Release servers never pass --admin-all (docs/shooter-v2.md).
+ADMIN ?= 1
+ADMIN_ARG = $(if $(filter 1 true,$(ADMIN)),--admin-all,)
+
 # BOTS=N adds N bots while a player is in the match (#214); CLUSTER=1 keeps one dense cluster of spawns so they are met (they do not walk yet).
 BOTS ?= 0
 BOTS_ARG = $(if $(filter-out 0,$(BOTS)),--bots $(BOTS),) $(if $(filter 1 true,$(CLUSTER)),--cluster-spawns,)
 
 shooter-server:
 	dotnet build godot/shooter/shooter.csproj
-	godot --headless --path godot/shooter -- --role server --targets $(TARGETS) $(if $(SMOKE),--smoke,) $(UNLOCK_ARG) $(SANDBOX_ARG) $(BOTS_ARG) $(SHOOTER_MAP)
+	godot --headless --path godot/shooter -- --role server --targets $(TARGETS) $(if $(SMOKE),--smoke,) $(UNLOCK_ARG) $(SANDBOX_ARG) $(ADMIN_ARG) $(BOTS_ARG) $(SHOOTER_MAP)
 
 shooter-client:
 	dotnet build godot/shooter/shooter.csproj

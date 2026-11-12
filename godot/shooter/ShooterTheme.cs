@@ -103,7 +103,7 @@ public static class ShooterTheme
         prot.SetBorderWidthAll(Space);
         PanelVariation(t, "HudProtection", prot);
 
-        // the chat (admin commands, #chat): the log is rich text on a HudPanel; the completion rows are small buttons, the one Tab takes next is marked
+        // the chat (admin commands, #chat): bare text with an outline, no panels; the completion rows are small buttons, the one Tab takes next is marked
         t.SetTypeVariation("HudChatLog", "RichTextLabel");
         t.SetColor("default_color", "HudChatLog", Text);
         t.SetColor("font_outline_color", "HudChatLog", Outline);
@@ -112,8 +112,20 @@ public static class ShooterTheme
         t.SetFontSize("bold_font_size", "HudChatLog", FontBody);
         t.SetStylebox("normal", "HudChatLog", new StyleBoxEmpty());
         t.SetStylebox("focus", "HudChatLog", new StyleBoxEmpty());
-        VariationButton(t, "ChatSuggest", Box(Raised, Space / 2, null, 0), Box(Hover, Space / 2, Accent), Box(Active, Space / 2, Accent, BorderStrong));
-        VariationButton(t, "ChatSuggestNext", Box(Active, Space / 2, Accent, BorderStrong), Box(Hover, Space / 2, Accent, BorderStrong), Box(Active, Space / 2, Accent, BorderStrong));
+        // no background or border on the chat: text with an outline over the game; only the candidate Tab takes next is filled
+        var clear = Box(Colors.Transparent, Space / 2, null, 0);
+        VariationButton(t, "ChatSuggest", clear, Box(Hover, Space / 2, null, 0), Box(Active, Space / 2, null, 0));
+        VariationButton(t, "ChatSuggestNext", Box(Active, Space / 2, null, 0), Box(Hover, Space / 2, null, 0), Box(Active, Space / 2, null, 0));
+        foreach (var n in new[] { "ChatSuggest", "ChatSuggestNext" })
+        {
+            t.SetColor("font_outline_color", n, Outline);
+            t.SetConstant("outline_size", n, 4);
+            t.SetStylebox("focus", n, new StyleBoxEmpty());
+        }
+        t.SetTypeVariation("ChatInput", "LineEdit");
+        foreach (var st in new[] { "normal", "focus", "read_only" }) t.SetStylebox(st, "ChatInput", Box(Colors.Transparent, Space / 2, null, 0));
+        t.SetColor("font_outline_color", "ChatInput", Outline);
+        t.SetConstant("outline_size", "ChatInput", 4);
 
         t.SetStylebox("background", "ProgressBar", Box(new Color(0, 0, 0, 0.55f), 0, Line));
         Bar(t, "HealthBar", Good);

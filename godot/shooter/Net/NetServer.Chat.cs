@@ -15,7 +15,10 @@ public partial class NetServer
     /// <summary>Player tokens (lower case compare) of the admins, from --admin-token. A guest (no token) is never an admin.</summary>
     public HashSet<string> AdminTokens = new(StringComparer.OrdinalIgnoreCase);
 
-    bool IsAdmin(Client c) => !c.IsBot && c.Token.Length > 0 && AdminTokens.Contains(c.Token);
+    /// <summary>--admin-all (dev servers only): every human is an admin, so nobody has to look up a token. Release servers never pass it.</summary>
+    public bool AdminAll;
+
+    bool IsAdmin(Client c) => !c.IsBot && (AdminAll || (c.Token.Length > 0 && AdminTokens.Contains(c.Token)));
 
     ChatContext ChatCtx(Client c) => new(IsAdmin(c), Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>());
 

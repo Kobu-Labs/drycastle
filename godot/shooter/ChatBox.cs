@@ -26,7 +26,7 @@ public sealed partial class ChatBox : Control
     RichTextLabel _log = null!;
     LineEdit _input = null!;
     readonly Button[] _rows = new Button[HintRows];
-    Label _usage = null!, _argHelp = null!, _error = null!, _keys = null!;
+    Label _usage = null!, _argHelp = null!, _error = null!;
     ChatHint _hint = ChatHint.None;
     int _lines;
     bool _open;
@@ -53,7 +53,7 @@ public sealed partial class ChatBox : Control
         stack.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
         AddChild(stack);
 
-        _hintPanel = NewPanel("HudPanel");
+        _hintPanel = NewPanel("HudBare");
         var hint = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         hint.AddThemeConstantOverride("separation", 2);
         _hintPanel.AddChild(hint);
@@ -69,7 +69,7 @@ public sealed partial class ChatBox : Control
         hint.AddChild(_usage); hint.AddChild(_argHelp); hint.AddChild(_error);
         stack.AddChild(_hintPanel);
 
-        _logPanel = NewPanel("HudPanel");
+        _logPanel = NewPanel("HudBare");
         _log = new RichTextLabel
         {
             ThemeTypeVariation = "HudChatLog", BbcodeEnabled = false, ScrollFollowing = true, FocusMode = FocusModeEnum.None,
@@ -78,20 +78,18 @@ public sealed partial class ChatBox : Control
         _logPanel.AddChild(_log);
         stack.AddChild(_logPanel);
 
-        _inputPanel = NewPanel("HudPanel");
+        _inputPanel = NewPanel("HudBare");
         var inRow = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        _input = new LineEdit { PlaceholderText = Strings.T("chat.placeholder"), MaxLength = ChatEvents.MaxChars, CaretBlink = true, ContextMenuEnabled = false, KeepEditingOnTextSubmit = true };
+        _input = new LineEdit { ThemeTypeVariation = "ChatInput", MaxLength = ChatEvents.MaxChars, CaretBlink = true, ContextMenuEnabled = false, KeepEditingOnTextSubmit = true };
         _input.TextChanged += OnTyped;
         _input.TextSubmitted += OnSubmitted;
         _input.GuiInput += OnInputKey;
         _input.FocusExited += () => Callable.From(OnFocusLost).CallDeferred(); // a click away closes: the keys must never go on to the match behind an open box
-        _keys = NewLabel("HudSmall");
-        inRow.AddChild(_input); inRow.AddChild(_keys);
+        inRow.AddChild(_input);
         _inputPanel.AddChild(inRow);
         stack.AddChild(_inputPanel);
 
         _hintPanel.Visible = _inputPanel.Visible = _logPanel.Visible = false;
-        _keys.Text = Strings.T("chat.keys");
         SetProcess(false);
     }
 

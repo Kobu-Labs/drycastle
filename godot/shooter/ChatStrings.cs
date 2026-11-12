@@ -6,7 +6,5 @@ public static class ChatStrings
     public static readonly (string Key, string Text)[] Table =
     {
         ("bind.chat", "Chat (type / for commands)"),
-        ("chat.placeholder", "Message, or / for commands"),
-        ("chat.keys", "Enter send   Tab complete   Up/Down history   Esc close"),
     };
 }

@@ -15,6 +15,7 @@ namespace Drycastle.Shooter;
 ///   --unlock-all              server: dev mode, every weapon, perk, killstreak and level-gated item unlocked (also DRYCASTLE_UNLOCK_ALL=1); nothing is saved (issue #149)
 ///   --targets N               server: plant N stationary target dummies around the spawn area (0-64; default from match.json, 0; make shooter-server uses 24)
 ///   --allow-sandbox           server: grant sandbox mode (godmode, unlimited ammo, every killstreak on demand, no XP or score) to clients that ask (#156); dev only, make SANDBOX=1
+///   --admin-all               server: every player is an admin (dev servers only; make shooter-server passes it, release servers never do)
 ///   --admin-token T[,T...]    server: player tokens (the player_token in the client's settings file) whose owners may use chat commands: /bots, /spawn, /time
 ///   --bots N                  server: N bots (0-64) play while at least one human is in the match (#214); they walk to the nearest player and shoot what they see, earn and grant no XP
 ///   --nav-cache DIR           server: where the bots' baked navigation tiles are kept (default navcache in the Godot user data folder); baked once per map version
@@ -391,12 +392,14 @@ public partial class Shooter : Node3D
             LossOut = cfg.Str("loss-out"),
             UnlockAll = DevUnlocks.Enabled(cfg.Flag("unlock-all"), System.Environment.GetEnvironmentVariable(DevUnlocks.EnvVar)),
             AllowSandbox = cfg.Flag("allow-sandbox"),
+            AdminAll = cfg.Flag("admin-all"),
             AdminTokens = new HashSet<string>(cfg.Str("admin-token").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.OrdinalIgnoreCase),
             Bots = int.TryParse(cfg.Str("bots", "0"), out var bots) ? Math.Clamp(bots, 0, NetServer.MaxBots) : 0,
             ClusterSpawns = cfg.Flag("cluster-spawns"),
             MapDir = Path.GetFullPath(GamePaths.Map(cfg.Str("map", ""))),
             NavCacheDir = cfg.Str("nav-cache", Path.Combine(OS.GetUserDataDir(), "navcache")),
         };
+        if (server.AdminAll) GD.Print("server: every player is an admin (--admin-all, dev only)");
         if (server.AdminTokens.Count > 0) GD.Print($"server: {server.AdminTokens.Count} admin token(s) (--admin-token): those players can use chat commands");
         if (server.AllowSandbox) GD.Print("server: sandbox mode allowed (--allow-sandbox, #156)");
         if (server.Bots > 0) GD.Print($"server: {server.Bots} bots join while a player is in the match (--bots, #214)");

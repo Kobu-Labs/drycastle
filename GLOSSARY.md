@@ -72,6 +72,14 @@ _Avoid_: ragdoll, body, drop
 A dev-only player state, asked for by the client (`--sandbox`) and granted by a server started with `--allow-sandbox`: godmode, unlimited ammo, every killstreak on demand. Its kills, XP and stats count for nothing.
 _Avoid_: godmode (that is one part of it), debug mode
 
+**Admin**:
+A player whose player token is listed on the server (`--admin-token`). Admins may use chat commands; nobody else may. It is a server setting, not a player state: it is never granted by the client, and a guest (no token) is never an admin.
+_Avoid_: operator, moderator, op
+
+**Chat command**:
+A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
+_Avoid_: console command, cheat
+
 **Care package**:
 The killstreak that gives its user a random Perk; better perks are rarer.
 _Avoid_: supply drop, crate

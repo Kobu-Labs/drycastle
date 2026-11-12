@@ -414,10 +414,22 @@ Server and persistence:
 - Guest profiles earn XP in memory only (ADR 0003).
 - Persistence writes are fire-and-forget on a background thread; a failed write is only logged.
 
+## 8b. Chat and admin commands
+
+T (rebindable) or "/" opens the chat box (bottom left, bare outlined text with no panel or instruction line; it is hidden until there is a message; the mouse is free and the match reads no keys while it is open). Enter sends, Esc or a click away
+closes, Up and Down walk through what was sent this session, Tab completes a command or its argument and cycles through the candidates (Shift+Tab back), and the candidates and the command's
+usage are listed above the input. A command that cannot be valid is shown with the reason and not sent. A line is limited to 200 characters and a player to a burst of 5 then about 1 a second.
+
+Commands are for admins. The dev server (`make shooter-server`) passes `--admin-all`, so every player is one (`ADMIN=0` turns it off); never pass it on a release server. Otherwise start the server with `--admin-token TOKEN[,TOKEN...]`, where a token is the `player_token` in the `[connect]` section of the client's settings file (Godot user data
+folder, `shooter_settings.cfg`). They run on the server, so they work live: `/bots N` (0 to 64) changes the roster on the next tick (the first time bots are wanted after a start with none, the navigation is
+baked once, and the server pauses for that, the admin is told); `/spawn vehicle` puts a vehicle in front of the admin (up to 32 a run, shared with the sandbox's 8; spawned vehicles are not removed);
+`/time HH:MM|dawn|morning|noon|dusk|night|midnight|freeze|resume` sets the day clock and sends it to every client at once (event 183). `/help [command]` lists them for anyone.
+The grammar, completion and history are pure code in `ShooterCore/Chat` (`ChatCommands`, `ChatCompleter`, `ChatHistory`) with tests in `ChatTests`; `NetServer.Chat.cs` runs the commands, `ChatBox.cs` draws the window.
+
 ## 9. Wire protocol
 
-Protocol version: **21** (`Wire.ProtocolVersion`, whose summary lists every bump). The hello carries it; a mismatch is refused with a message naming both
-versions. Version 21 (the utility helicopter, ADR 0006): snapshot entity type 5 (Flight: a flying vehicle's velocity, pitch, roll, rotor speed and
+Protocol version: **23** (`Wire.ProtocolVersion`, whose summary lists every bump). The hello carries it; a mismatch is refused with a message naming both
+versions. Version 23 (chat and admin commands): event kinds 180 (a line or command from a player), 181 (a chat log line), 182 (admin flag and spawnable vehicles for a joiner) and 183 (the day clock changed live). Version 21 (the utility helicopter, ADR 0006): snapshot entity type 5 (Flight: a flying vehicle's velocity, pitch, roll, rotor speed and
 flags, `FlightRecord`, ids from 0x6000), and the pilot's inputs step the helicopter one for one, so the snapshot's input acknowledgement is the
 helicopter's too. Versions 17 to 20: delta snapshots against the acknowledged tick (17), the flak truck's turret record and aircraft hit points
 (19), seat switching (20). Version 16 (gunship rocket flight): a gunship rocket flies at its own `projectile_speed_mps` and lives out its range, and
