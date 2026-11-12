@@ -227,3 +227,7 @@ _Avoid_: damage stage (that is a vehicle's smoke), crack level
 **Shattered**:
 The state of a glass pane with no hit points left: its fragments fly out once, and it then shows an opening (the model's own glass node of the pane is hidden). A shot through a shattered pane of a vehicle can hit the riders behind it. It stays shattered until its vehicle returns repaired or a new round starts.
 _Avoid_: broken, destroyed (that is a vehicle or an aircraft)
+
+**Flood wall**:
+The concrete wall between the river and the village, built from placed pieces (`prim:floodwall_*`): a ledge on the village side that players walk on, an upper wall with a railing behind it, access points and road gates. Its village side is the piece's `-y`.
+_Avoid_: levee, dike, river wall

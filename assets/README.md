@@ -5,7 +5,7 @@ pavement, pots, walls). Placed objects reference an asset by id (see `pipeline/s
 
 - `pack:<pack>/<model>`: a glTF/GLB in `assets/<pack>/`, for example `pack:kenney-car-kit/sedan`.
 - `prim:<name>`: a pipeline primitive with no file (`wall`, `slab`, `pot`, `radio_tower`, `bunker`, the
-  utility poles `pole_*` and the house connectors `connector_*`), built by `pipeline/src/suchohrad_pipeline/primitives.py`.
+  utility poles `pole_*`, the house connectors `connector_*` and the flood wall pieces `floodwall_*`), built by `pipeline/src/suchohrad_pipeline/primitives.py`.
 
 `manifest.json` (format_version 1) is the index: per asset `id`, `category`
 (car, slab, pot, flower, bush, tree, wall, fence, pole, connector, other), `name`, `file` (relative to this
@@ -163,6 +163,18 @@ The manifest entries are written by `make poles-manifest`. See `docs/utility-pol
 and a hook for a bundled cable for walls, three masts for roofs. Where the cable from a pole ends on a house;
 their origin is the point of the wall or roof they are fixed to, `+x` towards the incoming wires, and they
 carry `seats` like the poles. Placed by the editor's Poles tool with a `z`; no collision in the shooter.
+
+## Flood wall (generated, 2026-11-12)
+
+`prim:floodwall_*` (category `wall`) are the six pieces of the wall between the river and the village, built by
+`pipeline/src/suchohrad_pipeline/floodwall.py` after photos of the real one: two straight runs (4 m, 2 m), a
+joint pier for bends, an access point with a ladder and the flood plaque, a road gate and a gate pier. Original
+geometry, CC0, flat colour. Their origin is on the ground under the centre line of the upper wall (the ledge is
+to the object's `-y`), and they go a metre into the ground; `size_m` is the box centred on the origin that
+holds the piece. Each entry also has `length_m` (the step along the wall to the next piece) and `solids`: the
+boxes of the piece that are solid, in its frame (z up), which the game collides with instead of one box around
+the piece, so the ledge can be walked on. The manifest entries are written by `make floodwall-manifest`. See
+`docs/flood-wall.md`.
 
 ## Style: flat colour, and what the packs really contain
 

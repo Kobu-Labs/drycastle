@@ -68,6 +68,17 @@ public sealed partial class MapLoader
         if (_assetManifest == null) ReadAssetManifest();
         var category = _assetManifest!.TryGetValue(asset, out var entry) ? entry.Category : "";
         var size = entry?.Size ?? GVector3.One;
+        if (entry is { Solids.Count: > 0 })
+        {
+            // the asset says itself what is solid (a flood wall piece): one body per surface, with a box for each
+            foreach (var group in entry.Solids.GroupBy(s => s.Surface))
+            {
+                var body = NewSolidBody("Solid", CollisionLayers.World, group.Key);
+                foreach (var solid in group) body.AddChild(SolidShape(solid.Part));
+                node.AddChild(body);
+            }
+            return;
+        }
         foreach (var part in ObjectColliders.ForCategory(category, size.X, size.Y, size.Z))
         {
             var body = NewSolidBody("Solid", part.Layer, part.Group);

@@ -10,7 +10,8 @@ The utility poles (``pole_*``, built by ``poles.py``) are the exception to "cent
 the foot of the column, wherever the lamp arm or a cabinet reaches, and the column goes half a metre
 into the ground. Their ``size_m`` is the box centred on the origin that holds them (``centred`` is
 False). The same goes for the house connectors (``connector_*``, ``connectors.py``): their origin is
-on the wall or roof they sit on.
+on the wall or roof they sit on. The flood wall pieces (``floodwall_*``, ``floodwall.py``) have their
+origin on the ground under the centre line of the upper wall and go a metre into the ground.
 """
 
 import math
@@ -21,6 +22,8 @@ import numpy as np
 
 from suchohrad_pipeline.buildings import hex_to_rgb
 from suchohrad_pipeline.connectors import CONNECTORS, build_connector
+from suchohrad_pipeline.floodwall import PIECES as FLOODWALL_PIECES
+from suchohrad_pipeline.floodwall import build_piece
 from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.poles import VARIANTS as POLE_VARIANTS
 from suchohrad_pipeline.poles import build_variant
@@ -281,5 +284,13 @@ PRIMITIVES.update({name: _connector_primitive(name) for name in CONNECTORS})
 
 
 def build_primitive(name: str, params: dict | None = None) -> Mesh:
+def _floodwall_primitive(name: str) -> Primitive:
+    piece = build_piece(name)
+    return Primitive(lambda params=None: build_piece(name).mesh, {}, piece.size_m, piece.colour, centred=False)
+
+
+PRIMITIVES.update({name: _floodwall_primitive(name) for name in FLOODWALL_PIECES})
+
+
     """Mesh of ``prim:<name>`` with optional parameter overrides; KeyError for an unknown name."""
     return PRIMITIVES[name].builder(params)

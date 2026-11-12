@@ -196,18 +196,23 @@ def connector_entries() -> list[dict]:
 _GENERATED = ("prim:pole_", "prim:connector_")
 
 
-def sync_manifest(path: Path = DEFAULT_MANIFEST) -> int:
-    """Replace the ``prim:pole_*`` and ``prim:connector_*`` entries of the asset manifest with the
-    current ones (kept where the old ones were, or at the end); returns how many were written."""
+def replace_entries(path: Path, prefixes: tuple[str, ...], entries: list[dict]) -> int:
+    """Replace the asset manifest entries whose id starts with one of ``prefixes`` with ``entries``
+    (kept where the old ones were, or at the end); returns how many were written."""
     doc = json.loads(path.read_text(encoding="utf-8"))
     assets = doc["assets"]
-    old = [i for i, a in enumerate(assets) if a["id"].startswith(_GENERATED)]
+    old = [i for i, a in enumerate(assets) if a["id"].startswith(prefixes)]
     at = old[0] if old else len(assets)
-    kept = [a for a in assets if not a["id"].startswith(_GENERATED)]
-    entries = manifest_entries() + connector_entries()
+    kept = [a for a in assets if not a["id"].startswith(prefixes)]
     doc["assets"] = kept[:at] + entries + kept[at:]
     path.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
     return len(entries)
+
+
+def sync_manifest(path: Path = DEFAULT_MANIFEST) -> int:
+    """Replace the ``prim:pole_*`` and ``prim:connector_*`` entries of the asset manifest with the
+    current ones; returns how many were written."""
+    return replace_entries(path, _GENERATED, manifest_entries() + connector_entries())
 
 
 def write_glbs(out_dir: Path) -> None:

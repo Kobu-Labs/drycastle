@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props detail export parcel-run region-run preview poles-preview poles-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props detail export parcel-run region-run preview poles-preview poles-manifest floodwall-preview floodwall-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -65,6 +65,15 @@ poles-preview:
 # Rewrites the prim:pole_* and prim:connector_* entries of assets/manifest.json after the poles or connectors changed.
 poles-manifest:
 	cd pipeline && uv run python -m suchohrad_pipeline.poles_preview --sync-manifest
+
+# Pictures of the flood wall kit in out/floodwall (the pieces from both sides, a laid run, the access point); GLB=1 also
+# writes each piece as a GLB. No map data needed. See docs/flood-wall.md.
+floodwall-preview:
+	cd pipeline && uv run python -m suchohrad_pipeline.floodwall_preview $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb,)
+
+# Rewrites the prim:floodwall_* entries of assets/manifest.json after the kit changed.
+floodwall-manifest:
+	cd pipeline && uv run python -m suchohrad_pipeline.floodwall_preview --sync-manifest
 
 map:
 	cd pipeline && uv run python -m suchohrad_pipeline run-all --area $(AREA)

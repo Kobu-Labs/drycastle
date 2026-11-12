@@ -3024,6 +3024,534 @@
           ]
         }
       ]
+    },
+    {
+      "id": "prim:floodwall_straight_4",
+      "category": "wall",
+      "name": "Flood wall: 4 m of wall with the walkway and the railing",
+      "file": null,
+      "size_m": [
+        4.0,
+        2.274,
+        2.66
+      ],
+      "tags": [
+        "flood-wall",
+        "straight_4",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated flood wall, pipeline/src/suchohrad_pipeline/floodwall.py)",
+      "pack": null,
+      "length_m": 4.0,
+      "solids": [
+        {
+          "min": [
+            -2.0,
+            -1.15,
+            -1.0
+          ],
+          "max": [
+            2.0,
+            0.15,
+            0.9
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -1.33,
+            -1.0
+          ],
+          "max": [
+            2.0,
+            -1.15,
+            0.62
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -0.15,
+            0.9
+          ],
+          "max": [
+            2.0,
+            0.15,
+            1.8
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -0.03,
+            2.22
+          ],
+          "max": [
+            2.0,
+            0.03,
+            2.28
+          ],
+          "surface": "metal"
+        }
+      ]
+    },
+    {
+      "id": "prim:floodwall_straight_2",
+      "category": "wall",
+      "name": "Flood wall: 2 m of wall with the walkway and the railing",
+      "file": null,
+      "size_m": [
+        2.0,
+        2.274,
+        2.66
+      ],
+      "tags": [
+        "flood-wall",
+        "straight_2",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated flood wall, pipeline/src/suchohrad_pipeline/floodwall.py)",
+      "pack": null,
+      "length_m": 2.0,
+      "solids": [
+        {
+          "min": [
+            -1.0,
+            -1.15,
+            -1.0
+          ],
+          "max": [
+            1.0,
+            0.15,
+            0.9
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -1.0,
+            -1.33,
+            -1.0
+          ],
+          "max": [
+            1.0,
+            -1.15,
+            0.62
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -1.0,
+            -0.15,
+            0.9
+          ],
+          "max": [
+            1.0,
+            0.15,
+            1.8
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -1.0,
+            -0.03,
+            2.22
+          ],
+          "max": [
+            1.0,
+            0.03,
+            2.28
+          ],
+          "surface": "metal"
+        }
+      ]
+    },
+    {
+      "id": "prim:floodwall_joint",
+      "category": "wall",
+      "name": "Flood wall: pier for a joint or a bend between two pieces",
+      "file": null,
+      "size_m": [
+        1.881,
+        1.95,
+        2.66
+      ],
+      "tags": [
+        "flood-wall",
+        "joint",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated flood wall, pipeline/src/suchohrad_pipeline/floodwall.py)",
+      "pack": null,
+      "length_m": 0.0,
+      "solids": [
+        {
+          "min": [
+            -0.3,
+            -0.4,
+            -1.0
+          ],
+          "max": [
+            0.3,
+            0.25,
+            1.95
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -0.3,
+            -1.11,
+            -1.0
+          ],
+          "max": [
+            0.3,
+            -0.4,
+            0.9
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -0.3,
+            -1.29,
+            -1.0
+          ],
+          "max": [
+            0.3,
+            -1.11,
+            0.62
+          ],
+          "surface": "wall"
+        }
+      ]
+    },
+    {
+      "id": "prim:floodwall_access",
+      "category": "wall",
+      "name": "Flood wall: 4 m with a pedestrian opening, ladders, a landing and the flood plaque",
+      "file": null,
+      "size_m": [
+        4.0,
+        2.274,
+        3.356
+      ],
+      "tags": [
+        "flood-wall",
+        "access",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated flood wall, pipeline/src/suchohrad_pipeline/floodwall.py)",
+      "pack": null,
+      "length_m": 4.0,
+      "solids": [
+        {
+          "min": [
+            -2.0,
+            -1.15,
+            -1.0
+          ],
+          "max": [
+            2.0,
+            0.15,
+            0.9
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -1.33,
+            -1.0
+          ],
+          "max": [
+            2.0,
+            -1.15,
+            0.62
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -0.15,
+            0.9
+          ],
+          "max": [
+            -1.4,
+            0.15,
+            1.8
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -0.03,
+            2.22
+          ],
+          "max": [
+            -1.45,
+            0.03,
+            2.28
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            -1.4,
+            -0.4,
+            -1.0
+          ],
+          "max": [
+            -0.6,
+            0.25,
+            1.95
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            1.4,
+            -0.15,
+            0.9
+          ],
+          "max": [
+            2.0,
+            0.15,
+            1.8
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            1.45,
+            -0.03,
+            2.22
+          ],
+          "max": [
+            2.0,
+            0.03,
+            2.28
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            0.6,
+            -0.4,
+            -1.0
+          ],
+          "max": [
+            1.4,
+            0.25,
+            1.95
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -1.0,
+            0.15,
+            -1.0
+          ],
+          "max": [
+            1.0,
+            1.15,
+            0.9
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -0.99,
+            0.31,
+            1.203
+          ],
+          "max": [
+            -0.93,
+            1.1,
+            1.263
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            -0.99,
+            0.31,
+            1.537
+          ],
+          "max": [
+            -0.93,
+            1.1,
+            1.597
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            -0.99,
+            0.31,
+            1.87
+          ],
+          "max": [
+            -0.93,
+            1.1,
+            1.93
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            0.93,
+            0.31,
+            1.203
+          ],
+          "max": [
+            0.99,
+            1.1,
+            1.263
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            0.93,
+            0.31,
+            1.537
+          ],
+          "max": [
+            0.99,
+            1.1,
+            1.597
+          ],
+          "surface": "metal"
+        },
+        {
+          "min": [
+            0.93,
+            0.31,
+            1.87
+          ],
+          "max": [
+            0.99,
+            1.1,
+            1.93
+          ],
+          "surface": "metal"
+        }
+      ]
+    },
+    {
+      "id": "prim:floodwall_gate",
+      "category": "wall",
+      "name": "Flood wall: road gate, two piers and a sill, 4 m clear",
+      "file": null,
+      "size_m": [
+        6.0,
+        1.95,
+        2.76
+      ],
+      "tags": [
+        "flood-wall",
+        "gate",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated flood wall, pipeline/src/suchohrad_pipeline/floodwall.py)",
+      "pack": null,
+      "length_m": 6.0,
+      "solids": [
+        {
+          "min": [
+            -3.0,
+            -1.38,
+            -1.0
+          ],
+          "max": [
+            -2.0,
+            0.2,
+            1.95
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            2.0,
+            -1.38,
+            -1.0
+          ],
+          "max": [
+            3.0,
+            0.2,
+            1.95
+          ],
+          "surface": "wall"
+        },
+        {
+          "min": [
+            -2.0,
+            -0.75,
+            -0.4
+          ],
+          "max": [
+            2.0,
+            0.45,
+            0.05
+          ],
+          "surface": "wall"
+        }
+      ]
+    },
+    {
+      "id": "prim:floodwall_gate_pier",
+      "category": "wall",
+      "name": "Flood wall: gate pier, ends a wall",
+      "file": null,
+      "size_m": [
+        1.0,
+        1.95,
+        2.76
+      ],
+      "tags": [
+        "flood-wall",
+        "gate_pier",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated flood wall, pipeline/src/suchohrad_pipeline/floodwall.py)",
+      "pack": null,
+      "length_m": 1.0,
+      "solids": [
+        {
+          "min": [
+            -0.5,
+            -1.38,
+            -1.0
+          ],
+          "max": [
+            0.5,
+            0.2,
+            1.95
+          ],
+          "surface": "wall"
+        }
+      ]
     }
   ],
   "textures": [

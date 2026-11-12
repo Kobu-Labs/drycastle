@@ -1820,7 +1820,9 @@ def build_server(settings: Settings) -> Any:
                  f"category (car, slab, pot, flower, bush, tree, wall, fence, pole, connector, other), name, size_m "
                  f"and tags; primitives (prim:wall, prim:slab, prim:pot, prim:radio_tower, prim:bunker and the "
                  f"utility poles prim:pole_*, category pole: origin at the foot, the wires run along the object's "
-                 f"x axis, the lamp reaches to its -y) are included. "
+                 f"x axis, the lamp reaches to its -y; and the flood wall pieces prim:floodwall_*, category wall: "
+                 f"origin on the wall line, the wall runs along the object's x axis, the ledge is to its -y, "
+                 f"see docs/flood-wall.md) are included. "
                  f"Optional filter `category`. {_ASSET_NOTE}")
     def list_assets(category: str | None = None) -> dict:
         return tools.list_assets(category)
