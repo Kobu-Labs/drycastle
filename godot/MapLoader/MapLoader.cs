@@ -244,19 +244,30 @@ public sealed partial class MapLoader
             var id = p.GetProperty("id").GetString()!;
             var a = p.GetProperty("anchor");
             var ch = p.GetProperty("chunk");
+            // a Polygon (rings: outer, then holes) or a MultiPolygon (one such list per part, e.g. a parcel cut down to
+            // several buildings); the rings of all parts go in one list, which the even-odd point test handles
             var rings = new List<Vector2[]>();
+            var area = 0f;
             if (p.TryGetProperty("polygon", out var poly) && poly.TryGetProperty("coordinates", out var coords))
-                foreach (var r in coords.EnumerateArray())
-                    rings.Add(r.EnumerateArray()
-                        .Select(c => new Vector2(c[0].GetSingle(), -c[1].GetSingle())).ToArray());
+            {
+                var multi = poly.TryGetProperty("type", out var ty) && ty.GetString() == "MultiPolygon";
+                foreach (var part in multi ? coords.EnumerateArray().ToList() : new List<System.Text.Json.JsonElement> { coords })
+                {
+                    var i = 0;
+                    foreach (var r in part.EnumerateArray())
+                    {
+                        var ring = r.EnumerateArray().Select(c => new Vector2(c[0].GetSingle(), -c[1].GetSingle())).ToArray();
+                        rings.Add(ring);
+                        area += (i++ == 0 ? 1 : -1) * ParcelInfo.RingArea(ring);
+                    }
+                }
+            }
             var bounds = new Rect2();
             if (rings.Count > 0)
             {
                 bounds = new Rect2(rings[0][0], Vector2.Zero);
                 foreach (var ring in rings) foreach (var v in ring) bounds = bounds.Expand(v);
             }
-            var area = 0f;
-            for (var i = 0; i < rings.Count; i++) area += (i == 0 ? 1 : -1) * ParcelInfo.RingArea(rings[i]);
             _parcels[id] = new ParcelInfo
             {
                 Id = id,

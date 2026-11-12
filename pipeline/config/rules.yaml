@@ -29,6 +29,7 @@ ground:
   carve:
     P-0073: {margin_m: 2.0}   # the dike strip north of the village: a hut stands on it
     P-0754: {margin_m: 2.0}   # a 13 ha field with one building
+    P-0089: {margin_m: 2.0}   # the streets and squares of the village core: only a parcel because buildings stand on it
   # What no type below claims.
   default: field
   # A type is the whole description of a kind of ground. Types are tried top to bottom; each takes what the ones above
