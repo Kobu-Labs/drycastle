@@ -207,6 +207,10 @@ _Avoid_: object, prop, actor
 **Protocol version**:
 The number in the hello and welcome messages. A client and a server must match, or the server refuses the client with both numbers in the message.
 _Avoid_: build number, version (alone)
+**Map outline**:
+The ground the village map covers: a square around the centre by default, or any polygon (`village.polygon`) of absolute S-JTSK points. Only what touches it is in the map; the terrain stops at it.
+_Avoid_: border, boundary, area (an "area" is the slice or the village)
+
 **Region**:
 A hand-drawn shape of any form, independent of parcel boundaries, painted in one colour over the ground inside it. It changes only colour: parcels, roads, buildings and everything standing on the ground are unaffected.
 _Avoid_: zone, area (an "area" is the slice or the village)

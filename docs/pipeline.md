@@ -39,9 +39,22 @@ The pipeline runs over two areas around the same centre, chosen with `AREA=villa
 
 Add the `village:` section to `pipeline/config/slice.local.yaml` (see `slice.example.yaml`).
 Both areas share the one committed registry `registry/parcels.registry.json`. Fetching the
-village is polite: Overpass in one request, cadastral WFS paged (`startIndex`, 5000 per page, sorted)
+village is polite: Overpass in one request (an area over about 1.5 km a side in pieces of that size, each cached in
+`osm_tiles/` so a failed run resumes, merged into `osm.json` without duplicates), cadastral WFS paged (`startIndex`, 5000 per page, sorted)
 when a page is full, the DMR raster in WCS tiles of at most 1000 m per side (cached per tile in
 `dmr_tiles/`) that are mosaicked into `dmr5.tif`. All are cached; `--force` refetches.
+
+**Map outline (village only).** `village.polygon` in `slice.local.yaml` replaces the square with any
+simple polygon, given as absolute S-JTSK `[x, y]` metres (mapy.com or GPS points convert with pyproj
+`EPSG:4326 -> EPSG:5514`, lon first; local game coordinates are these minus `origin_epsg5514` in
+`frame.json`). Upstream services only take boxes, so the pipeline fetches the polygon's bounding box
+(grown by `margin_m`) and then clips to the polygon: `normalise` drops every parcel, building, road,
+tree, lamp and landuse that does not touch it (whole objects are kept, not cut), `fetched_bounds_epsg5514`
+becomes the polygon (so the registry only retires entries inside it) and the terrain coverage becomes the
+polygon, which every later stage already clips to. The terrain mesh reaches 1.5 cells past the outline so the
+edge is not eaten. The centre `osm_way` still sets the local origin, so the frame and all edits stay put.
+Changing the polygon needs `make fetch` again (the box changes) and then the stages after it. Not done:
+nothing stops a player at the edge (the flight limit is still the parcels' bounding rectangle).
 
 `rules.yaml` has an `areas.<name>` overlay that is merged over a section only for that area. The
 village profile uses fewer fences without collision boxes, lower tree densities (the per-chunk tree cap

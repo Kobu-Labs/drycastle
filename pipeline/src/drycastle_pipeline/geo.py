@@ -1,4 +1,4 @@
-"""Bounding-box maths for the slice."""
+"""Bounding-box maths for the slice and the village."""
 
 import functools
 from dataclasses import dataclass
@@ -29,7 +29,7 @@ def _to_wgs84():
 
 @dataclass(frozen=True)
 class Bbox:
-    """Square box around the slice centre, in both WGS84 and EPSG:3046 (easting/northing)."""
+    """Box around the area (a square, or the bounds of a polygon), in WGS84 and EPSG:3046."""
 
     west: float
     south: float
@@ -89,4 +89,38 @@ def compute_bbox(lon: float, lat: float, radius_m: float, margin_m: float = 0.0)
         min_n=min_n,
         max_e=max_e,
         max_n=max_n,
+    )
+
+
+@functools.cache
+def _sjtsk_to(crs: str):
+    from pyproj import Transformer
+
+    return Transformer.from_crs("EPSG:5514", crs, always_xy=True)
+
+
+def bbox_of_polygon(ring: list[tuple[float, float]] | tuple, margin_m: float = 0.0) -> Bbox:
+    """Box around a polygon given in absolute EPSG:5514 metres, grown by ``margin_m``.
+
+    The box is axis-aligned in S-JTSK. WGS84 and EPSG:3046 are rotated against it (Krovak
+    convergence), so its densified edges are transformed and the extremes taken.
+    """
+    if margin_m < 0:
+        raise ValueError("margin_m must be >= 0")
+    minx, miny, maxx, maxy = Polygon(ring).bounds
+    minx, miny, maxx, maxy = minx - margin_m, miny - margin_m, maxx + margin_m, maxy + margin_m
+    steps = 32
+    ts = [i / steps for i in range(steps + 1)]
+    edge = (
+        [(minx + t * (maxx - minx), miny) for t in ts]
+        + [(maxx, miny + t * (maxy - miny)) for t in ts]
+        + [(maxx - t * (maxx - minx), maxy) for t in ts]
+        + [(minx, maxy - t * (maxy - miny)) for t in ts]
+    )
+    xs, ys = [p[0] for p in edge], [p[1] for p in edge]
+    lons, lats = _sjtsk_to(WGS84).transform(xs, ys)
+    es, ns = _sjtsk_to(METRIC_CRS).transform(xs, ys)
+    return Bbox(
+        west=min(lons), south=min(lats), east=max(lons), north=max(lats),
+        min_e=min(es), min_n=min(ns), max_e=max(es), max_n=max(ns),
     )

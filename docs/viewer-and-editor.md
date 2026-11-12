@@ -134,6 +134,7 @@ unless `MapLoader.SetClutterFocus(position)` is called each frame. A map without
 
 The first visible part of the world map editor: `--editor` starts the viewer in editor mode (it implies
 `--watch`); F2 toggles between walk mode (unchanged) and editor mode. Needs `uv` for the hot reload.
+The View page has an **Aerial photo** layer (O) to edit by eye; it is a download for reference only, see `docs/ortho.md`.
 
 ```sh
 # slice, against the default edits file (pipeline/config/edits.json)

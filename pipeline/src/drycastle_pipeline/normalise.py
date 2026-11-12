@@ -145,6 +145,15 @@ def _dump(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=1, sort_keys=True) + "\n")
 
 
+def area_polygon(raw_dir: Path) -> Polygon | None:
+    """The outline everything is clipped to (absolute EPSG:5514), or None for a square area."""
+    path = raw_dir / "area.json"
+    if not path.is_file():
+        return None
+    ring = json.loads(path.read_text()).get("polygon_epsg5514")
+    return Polygon(ring) if ring else None
+
+
 def fetched_bounds(raw_dir: Path, area: str, config_path: Path | None = None) -> list | None:
     """Fetched box as an absolute EPSG:5514 ring, from ``area.json`` (written by fetch).
 
@@ -152,6 +161,9 @@ def fetched_bounds(raw_dir: Path, area: str, config_path: Path | None = None) ->
     Returns None when neither is available.
     """
     path = raw_dir / "area.json"
+    polygon = area_polygon(raw_dir)
+    if polygon is not None:
+        return [[round(x, 2), round(y, 2)] for x, y in polygon.exterior.coords]
     if path.is_file():
         west, south, east, north = json.loads(path.read_text())["bbox_wgs84"]
     else:
@@ -164,6 +176,19 @@ def fetched_bounds(raw_dir: Path, area: str, config_path: Path | None = None) ->
         west, south, east, north = box.west, box.south, box.east, box.north
     ring = box_to_sjtsk(west, south, east, north).exterior.coords
     return [[round(x, 2), round(y, 2)] for x, y in ring]
+
+
+def _inside_test(outline: Polygon | None, frame: Frame):
+    """Predicate on local geometries: True when they touch the outline (always, with none)."""
+    if outline is None:
+        return lambda geom: True
+    import shapely
+
+    local = shapely.transform(
+        outline, lambda c: c - [frame.origin_x, frame.origin_y]
+    )
+    shapely.prepare(local)
+    return local.intersects
 
 
 def run_normalise(
@@ -183,26 +208,23 @@ def run_normalise(
         _dump(out_dir / f"{name}.geojson", _collection(features))
         counts[name] = len(features)
 
-    write(
-        "buildings",
-        [
-            _feature(frame.to_local(f.geom), {"osm_id": f.osm_id, "tags": f.tags})
-            for f in osm["buildings"]
-        ],
-    )
-    write(
-        "highways",
-        [_feature(frame.to_local(f.geom), _highway_props(f)) for f in osm["highways"]],
-    )
-    write("trees", [_feature(frame.to_local(f.geom), {"osm_id": f.osm_id}) for f in osm["trees"]])
-    write(
-        "street_lamps",
-        [_feature(frame.to_local(f.geom), {"osm_id": f.osm_id}) for f in osm["street_lamps"]],
-    )
-    write(
-        "landuse",
-        [_feature(frame.to_local(f.geom), _landuse_props(f)) for f in osm["landuse"]],
-    )
+    outline = area_polygon(raw_dir)
+    inside = _inside_test(outline, frame)
+
+    def local(features, props) -> list[dict]:
+        """OSM features in local metres that touch the outline, as GeoJSON features."""
+        out = []
+        for f in features:
+            geom = frame.to_local(f.geom)
+            if inside(geom):
+                out.append(_feature(geom, props(f)))
+        return out
+
+    write("buildings", local(osm["buildings"], lambda f: {"osm_id": f.osm_id, "tags": f.tags}))
+    write("highways", local(osm["highways"], _highway_props))
+    write("trees", local(osm["trees"], lambda f: {"osm_id": f.osm_id}))
+    write("street_lamps", local(osm["street_lamps"], lambda f: {"osm_id": f.osm_id}))
+    write("landuse", local(osm["landuse"], _landuse_props))
 
     parcels = json.loads((raw_dir / "parcels.geojson").read_text())["features"]
     parcel_features = []
@@ -212,6 +234,8 @@ def run_normalise(
         if not ref or not feat.get("geometry"):
             continue
         geom = frame.to_local(shape(feat["geometry"]))
+        if not inside(geom):
+            continue
         parcel_features.append(
             _feature(
                 geom,
@@ -233,6 +257,10 @@ def run_normalise(
             "lat": frame.lat,
             "origin_epsg5514": [frame.origin_x, frame.origin_y],
             "fetched_bounds_epsg5514": fetched_bounds(raw_dir, area),
+            # null for a square area; else the map outline in absolute EPSG:5514 (terrain clips to it)
+            "area_polygon_epsg5514": (
+                [[round(x, 2), round(y, 2)] for x, y in outline.exterior.coords] if outline else None
+            ),
         },
     )
     return counts

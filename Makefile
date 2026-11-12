@@ -3,7 +3,7 @@ AREA ?= village
 # MAP: the map folder the viewer, editor and shooter targets load; follows AREA (override with MAP=<dir>).
 MAP ?= $(if $(filter slice,$(AREA)),out/map,out/village/map)
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props detail export parcel-run region-run preview poles-preview poles-manifest floodwall-preview floodwall-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props detail export parcel-run region-run preview ortho poles-preview poles-manifest floodwall-preview floodwall-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -58,6 +58,13 @@ EXAG ?= 3
 
 preview:
 	cd pipeline && uv run python -m drycastle_pipeline preview --area $(AREA) --exaggeration $(EXAG)
+
+# Aerial photo of the area for the editor's "Aerial photo" layer, in data/AREA/ortho (reference only, never exported or
+# shipped: its licence forbids redistributing and altering it). Needs `make fetch` first. ORTHO_LEVEL=12 is 0.3 m per pixel.
+ORTHO_LEVEL ?= 11
+
+ortho:
+	cd pipeline && uv run python -m drycastle_pipeline.ortho --area $(AREA) --level $(ORTHO_LEVEL)
 
 # Pictures of the generated utility poles in out/poles (variants, random seeds, a wired row, the parts kit); GLB=1 also
 # writes each placeable pole as a GLB. No map data needed. See docs/utility-poles.md.

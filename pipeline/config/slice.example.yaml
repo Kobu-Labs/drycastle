@@ -10,3 +10,11 @@ margin_m: 25          # extra metres fetched around the slice (default 25)
 village:
   radius_m: 700       # half-side in metres (default 700)
   margin_m: 25        # extra metres fetched around it (default: margin_m above)
+  # Optional: any simple polygon instead of the square (radius_m is then ignored). Absolute
+  # S-JTSK (EPSG:5514) metres [x, y], at least 3 points, no need to repeat the first. Only what
+  # touches it is kept; margin_m is fetched around it but dropped. The centre (osm_way) stays
+  # the origin of the local frame, so coordinates do not move when the outline changes.
+  # polygon:
+  #   - [-589500.0, -1250500.0]
+  #   - [-588000.0, -1250500.0]
+  #   - [-588000.0, -1249000.0]

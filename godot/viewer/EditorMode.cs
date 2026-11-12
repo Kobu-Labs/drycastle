@@ -117,6 +117,7 @@ public partial class EditorMode : Node
         _looking = false;
         if (on)
         {
+            RestoreOrtho();
             _savedPlayer = (Player.GlobalPosition, Player.RotationDegrees, 0f, Player.InputEnabled);
             Player.InputEnabled = false;
             Player.Visible = false;
@@ -560,6 +561,7 @@ public partial class EditorMode : Node
                     case Key.F3: GuardUnsaved(WalkFromHere); break;
                     case Key.G: GroupSelected(); break;
                     case Key.T: ToggleTopDown(); break;
+                    case Key.O: ToggleOrtho(); break;
                     case Key.Enter or Key.KpEnter:
                         if (GetViewport().GuiGetFocusOwner() is (LineEdit or TextEdit)) break;
                         if (Tool == EditorTool.Group) { if (!_btnGroup.Disabled) GroupSelected(); }

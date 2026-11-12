@@ -13,6 +13,7 @@ objects outside coverage.
 import functools
 import json
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -243,6 +244,34 @@ def sample_dmr(
     return z, inside & ~badpix
 
 
+def clip_to_outline(
+    coverage: Polygon, sampler, outline: list, origin: tuple[float, float], step_m: float
+) -> tuple[Polygon, Callable]:
+    """Limit the terrain to the map outline (absolute EPSG:5514 ring).
+
+    The coverage polygon, which everything standing on the ground is clipped to, becomes the
+    exact outline. The mesh itself reaches 1.5 cells past it, so that every cell touching the
+    outline has all four corners and the edge is not eaten away; the part past the outline
+    carries nothing.
+    """
+    import shapely
+
+    local = Polygon([(x - origin[0], y - origin[1]) for x, y in outline]).buffer(0)
+    clipped = local.intersection(coverage)
+    if clipped.is_empty:
+        raise ValueError("the map outline lies outside the DMR raster")
+    if clipped.geom_type != "Polygon":  # outline wraps a gap of the raster: keep the largest part
+        clipped = max(clipped.geoms, key=lambda g: g.area)
+    reach = local.buffer(step_m * 1.5)
+    shapely.prepare(reach)
+
+    def clipped_sampler(x, y):
+        z, inside = sampler(x, y)
+        return z, inside & shapely.contains_xy(reach, x, y)
+
+    return clipped, clipped_sampler
+
+
 def grid_from_samples(chunk_m: float, step_m: float, coverage: Polygon, sampler) -> Terrain:
     """Grid spanning the chunks touched by ``coverage``; ``sampler(x, y) -> (z, inside)``."""
     n = cells_per_chunk(chunk_m, step_m)
@@ -372,9 +401,12 @@ def build_terrain(
 
     with rasterio.open(tif) as src:
         coverage = dmr_coverage(src, origin)
-    t = grid_from_samples(
-        chunk_m, float(cfg["grid_step_m"]), coverage, lambda x, y: sample_dmr(tif, origin, x, y)
-    )
+    step = float(cfg["grid_step_m"])
+    sampler = lambda x, y: sample_dmr(tif, origin, x, y)
+    outline = frame.get("area_polygon_epsg5514")
+    if outline:
+        coverage, sampler = clip_to_outline(coverage, sampler, outline, origin, step)
+    t = grid_from_samples(chunk_m, step, coverage, sampler)
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     elevations = flatten_buildings(
         t, buildings, float(cfg["flatten_margin_m"]), float(cfg["flatten_blend_m"])

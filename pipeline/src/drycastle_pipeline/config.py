@@ -28,6 +28,9 @@ class SliceConfig:
     osm_way: int
     radius_m: float = DEFAULT_RADIUS_M
     margin_m: float = DEFAULT_MARGIN_M
+    # Optional map outline: absolute EPSG:5514 (S-JTSK) metres, an open ring (at least 3 points).
+    # When set it replaces the square: ``radius_m`` is ignored, ``margin_m`` is fetched around it.
+    polygon: tuple[tuple[float, float], ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -87,7 +90,31 @@ def load_slice_config(path: Path = DEFAULT_CONFIG, area: str = DEFAULT_AREA) -> 
         raise ConfigError(f"{path.name}: village radius_m and margin_m must be numbers") from exc
     if v_radius <= 0 or v_margin < 0:
         raise ConfigError(f"{path.name}: village radius_m must be > 0, margin_m >= 0")
-    return SliceConfig(osm_way=way, radius_m=v_radius, margin_m=v_margin)
+    polygon = parse_polygon(village.get("polygon"), path.name)
+    return SliceConfig(osm_way=way, radius_m=v_radius, margin_m=v_margin, polygon=polygon)
+
+
+def parse_polygon(raw: object, source: str = "config") -> tuple[tuple[float, float], ...] | None:
+    """A ``polygon`` value (list of [x, y] S-JTSK metres) as an open tuple ring, or None."""
+    if raw is None:
+        return None
+    try:
+        points = list(raw)  # type: ignore[call-overload]
+        if any(len(p) != 2 for p in points):
+            raise ValueError
+        ring = [(float(p[0]), float(p[1])) for p in points]
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(f"{source}: village polygon must be a list of [x, y] numbers") from exc
+    if len(ring) > 1 and ring[0] == ring[-1]:
+        ring.pop()  # a ring repeating its first point is accepted
+    if len(ring) < 3:
+        raise ConfigError(f"{source}: village polygon needs at least 3 points")
+    from shapely.geometry import Polygon
+
+    shape = Polygon(ring)
+    if not shape.is_valid or shape.area <= 0:
+        raise ConfigError(f"{source}: village polygon is not a valid simple polygon (self-crossing?)")
+    return tuple(ring)
 
 
 def load_dotenv(path: Path | None = None) -> None:

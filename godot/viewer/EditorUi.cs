@@ -222,6 +222,8 @@ public partial class EditorMode
         page.AddChild(Btn("Walk from where I was  (F2)", () => SetActive(false)));
         page.AddChild(new Label { Text = "Dropping puts you on the ground below the camera, facing the way you look.", ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
         page.AddChild(new Label { Text = "WASD fly, Space up, Shift down, hold the right mouse button to look.", ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
+
+        BuildOrthoSection(page);
     }
 
     static Button Btn(string text, Action onPress)
@@ -275,7 +277,7 @@ public partial class EditorMode
         "Sketch edit\tLMB on a mark or [ ] selects it, Del deletes it, Backspace last corner, Ctrl+Z undo; marks are temporary and named in prompts\n" +
         "Sketches\tpick, New, Rename, Delete in the Sketch panel: marks go into the active sketch, prompts can name a whole sketch (\"sketch ROAD\")\n" +
         "Commands\tCtrl+P: tools, undo, region, sketch and parcel IDs\n" +
-        "View\tT top-down, F1 this sheet, F2 walk mode\n" +
+        "View\tT top-down, O aerial photo (reference), F1 this sheet, F2 walk mode\n" +
         "Esc\tgoes one level back: drawing, colour, region or sketch selection, placement, planning, connecting, gate, cable, object, selection, sidebar";
 
     void BuildCheatSheet(Control root)
@@ -354,6 +356,8 @@ public partial class EditorMode
             if (cfg.Load(CfgPath) != Error.Ok) return;
             if (Enum.TryParse<EditorTool>((string)cfg.GetValue("ui", "tool", "None"), true, out var t)) Tool = t;
             SetSpeed((float)(double)cfg.GetValue("ui", "speed", (double)Speed));
+            SetOrthoOpacity((float)(double)cfg.GetValue("ui", "ortho_opacity", (double)_orthoOpacity), save: false);
+            _orthoRestore = (bool)cfg.GetValue("ui", "ortho_on", false); // applied when the editor first opens, the map is not up yet
             if (ParseColour((string)cfg.GetValue("ui", "region_colour", _newColour)) is { } rc) _newColour = rc;
             var rsel = (string)cfg.GetValue("ui", "region", "");
             if (rsel != "") _restoreRegion = rsel;
@@ -369,6 +373,8 @@ public partial class EditorMode
             var cfg = new ConfigFile();
             cfg.SetValue("ui", "tool", Tool.ToString());
             cfg.SetValue("ui", "speed", (double)Speed);
+            cfg.SetValue("ui", "ortho_on", _orthoOn || _orthoRestore);
+            cfg.SetValue("ui", "ortho_opacity", (double)_orthoOpacity);
             cfg.SetValue("ui", "region_colour", _newColour);
             cfg.SetValue("ui", "region", SelectedRegionId ?? "");
             cfg.SetValue("ui", "sketch_mode", _skMode.ToString());
