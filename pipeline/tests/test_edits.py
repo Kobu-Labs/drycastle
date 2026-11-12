@@ -31,7 +31,6 @@ FULL = {
                 "colour": "#223344",
                 "gaps": [{"at": [ORIGIN[0] + 40, ORIGIN[1] + 70], "width_m": 3.0}],
             },
-            "trees": {"count": 4, "seed_offset": 2},
             "objects": [
                 {
                     "id": "car-1",
@@ -43,7 +42,7 @@ FULL = {
                 },
             ],
         },
-        "P-0002": {"fence": {"mode": "none"}, "trees": {"density_per_1000m2": 2.5}},
+        "P-0002": {"fence": {"mode": "none"}},
         "P-0003": {"objects": [{"id": "bench", "asset": "prim:box", "position": [1, 2], "z": 3}]},
     },
     "groups": {
@@ -98,15 +97,7 @@ def test_validator_accepts_full_document() -> None:
             "parcels.P-0412.fence.gaps.0.width_m: must be",
         ),
         (with_parcel({"fence": {"gaps": [{"width_m": 2}]}}), "gaps.0.at: required"),
-        (with_parcel({"trees": {}}), "parcels.P-0412.trees: give exactly one"),
-        (
-            with_parcel({"trees": {"density_per_1000m2": 1, "count": 2}}),
-            "parcels.P-0412.trees: give exactly one",
-        ),
-        (with_parcel({"trees": {"density_per_1000m2": -1}}), "density_per_1000m2: must be"),
-        (with_parcel({"trees": {"count": 2.5}}), "parcels.P-0412.trees.count: must be an integer"),
-        (with_parcel({"trees": {"count": 1, "seed_offset": "a"}}), "seed_offset: must be"),
-        (with_parcel({"trees": {"count": 1, "rate": 2}}), "parcels.P-0412.trees.rate: unknown"),
+        (with_parcel({"trees": {"count": 1}}), "parcels.P-0412.trees: per-parcel tree settings were removed"),
         (with_parcel({"objects": {}}), "parcels.P-0412.objects: must be a list"),
         (
             with_parcel({"objects": [{"id": "a", "asset": "prim:box", "position": [1]}]}),
@@ -390,7 +381,7 @@ def test_group_auto_uses_one_seeded_roll_for_all_members(ws) -> None:
     assert all(off_shared_edge(s) for s in got)
 
 
-def trees_for(ws, overrides=None, objects=None):
+def trees_for(ws, objects=None):
     osm: list[dict] = []
     return make_trees(
         ws["parcels"],
@@ -399,33 +390,12 @@ def trees_for(ws, overrides=None, objects=None):
         osm,
         ws["terrain"],
         TREE,
-        overrides=overrides,
         objects=objects,
     )
 
 
 def parcel_trees(trees, pid):
     return [t for t in trees if t["src"] == "rule" and t["parcel"] == pid]
-
-
-def test_seed_offset_rerolls_only_that_parcel(ws) -> None:
-    base = trees_for(ws)
-    zero = trees_for(ws, {"P-0002": {"density_per_1000m2": TREE["density_per_1000m2"]["garden"]}})
-    # offset 0 with the rule density is the same layout as the default
-    assert parcel_trees(zero, "P-0002") == parcel_trees(base, "P-0002")
-    rerolled = trees_for(
-        ws,
-        {"P-0002": {"density_per_1000m2": TREE["density_per_1000m2"]["garden"], "seed_offset": 3}},
-    )
-    assert parcel_trees(rerolled, "P-0002") != parcel_trees(base, "P-0002")
-    assert parcel_trees(rerolled, "P-0002")
-    assert parcel_trees(rerolled, "P-0001") == parcel_trees(base, "P-0001")
-
-
-def test_tree_count_override_is_exact(ws) -> None:
-    got = trees_for(ws, {"P-0002": {"count": 7}})
-    assert len(parcel_trees(got, "P-0002")) == 7
-    assert parcel_trees(trees_for(ws, {"P-0002": {"count": 0}}), "P-0002") == []
 
 
 def test_trees_keep_clear_of_placed_objects(ws) -> None:
@@ -579,19 +549,19 @@ def test_stale_entries_warn_and_are_skipped(ws, tmp_path, capsys) -> None:
     assert not [s for s in props["fences"] if s["parcel"] == "P-0001"]  # mode none applied
 
 
-def test_run_props_applies_group_and_trees_end_to_end(ws, tmp_path) -> None:
+def test_run_props_applies_groups_end_to_end(ws, tmp_path) -> None:
     edits = write_edits(
         tmp_path,
         {
             "version": 1,
-            "parcels": {"P-0002": {"trees": {"count": 5, "seed_offset": 1}}},
+            "parcels": {},
             "groups": {"G-0001": {"parcels": ["P-0001", "P-0002"], "fence": {"mode": "custom"}}},
         },
     )
     run_props(ws["work"], DEFAULT_RULES, edits_path=edits)
     props = json.loads((ws["work"] / "props.json").read_text())
     assert all(off_shared_edge(s) for s in props["fences"])
-    assert len([t for t in props["trees"] if t["parcel"] == "P-0002" and t["src"] == "rule"]) == 5
+    assert any(t["src"] == "rule" for t in props["trees"])  # the rules still plant the trees
 
 
 def test_empty_edits_leave_props_unchanged(ws, tmp_path) -> None:

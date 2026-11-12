@@ -214,7 +214,6 @@ def compute_fragment(
             [],
             terrain,
             tcfg,
-            overrides=plan.tree_overrides,
             objects=objects_xy,
             only=ids,
             include_osm=False,

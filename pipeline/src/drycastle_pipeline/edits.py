@@ -5,7 +5,7 @@ developer's deliberate choices, so it survives every pipeline re-run. Keys are s
 formatting is fixed, so git diffs stay small. Version 1::
 
     {"version": 1,
-     "parcels": {"P-0412": {"fence": {...}, "trees": {...}, "objects": [...]}},
+     "parcels": {"P-0412": {"fence": {...}, "objects": [...]}},
      "groups":  {"G-0001": {"parcels": ["P-0412", "P-0413"], "fence": {...}}},
      "regions": {"R-0001": {"colour": "#8a7a5c", "polygon": [[x, y], ...]}},
      "cables":  {"C-0001": {"from": "o-0012", "to": "o-0015"}}}
@@ -30,13 +30,6 @@ formatting is fixed, so git diffs stay small. Version 1::
     gaps              list of {"at": [x, y], "width_m": n} (custom only). A gap is cut out of
                       the boundary, centred on the nearest boundary point to ``at``. ``at`` is
                       absolute EPSG:5514 (S-JTSK) metres, the same frame as objects.
-
-``trees`` (both keys are optional, but exactly one of density or count must be given)
-    density_per_1000m2  number >= 0: trees per 1000 m2 of the parcel (replaces the rules'
-                        density for this parcel).
-    count               int >= 0: exact number of trees.
-    seed_offset         int, default 0: mixed into the seed so that the layout rerolls. 0 keeps
-                        the default layout.
 
 ``objects`` (list; placed objects, emitted to objects.json, not instanced in props.json)
     id                  str, unique within the whole file.
@@ -117,11 +110,10 @@ FENCE_TYPES: dict[str, dict[str, float | str]] = {
 COLUMN_TYPES = ("none", "wood_post", "metal_post", "brick_red", "brick_white", "stone", "concrete")
 
 TOP_KEYS = ("version", "parcels", "groups", "regions", "cables")
-PARCEL_KEYS = ("fence", "trees", "objects")
+PARCEL_KEYS = ("fence", "objects")
 FENCE_KEYS = ("mode", "type", "column", "height_m", "thickness_m", "colour", "gaps")
 CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "gaps")
 GAP_KEYS = ("at", "width_m")
-TREE_KEYS = ("density_per_1000m2", "count", "seed_offset")
 OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour")
 GROUP_KEYS = ("parcels", "fence")
 REGION_KEYS = ("colour", "polygon", "water_y")
@@ -248,21 +240,6 @@ def _check_fence(v: object, path: str, errors: list[str]) -> None:
                 _check_positive(gap["width_m"], f"{gpath}.width_m", errors)
 
 
-def _check_trees(v: object, path: str, errors: list[str]) -> None:
-    if not _is_dict(v, path, errors):
-        return
-    _unknown_keys(v, TREE_KEYS, path, errors)
-    has_density, has_count = "density_per_1000m2" in v, "count" in v
-    if has_density == has_count:
-        errors.append(f"{path}: give exactly one of density_per_1000m2 or count")
-    if has_density and not (_is_num(v["density_per_1000m2"]) and v["density_per_1000m2"] >= 0):
-        errors.append(f"{path}.density_per_1000m2: must be a number >= 0")
-    if has_count and not (_is_int(v["count"]) and v["count"] >= 0):
-        errors.append(f"{path}.count: must be an integer >= 0")
-    if "seed_offset" in v and not _is_int(v["seed_offset"]):
-        errors.append(f"{path}.seed_offset: must be an integer")
-
-
 def _check_objects(v: object, path: str, errors: list[str], seen: dict[str, str]) -> None:
     if not isinstance(v, list):
         errors.append(f"{path}: must be a list")
@@ -307,11 +284,11 @@ def _check_parcels(parcels: dict, errors: list[str]) -> None:
             errors.append(f"{path}: parcel IDs look like P-0412")
         if not _is_dict(entry, path, errors):
             continue
-        _unknown_keys(entry, PARCEL_KEYS, path, errors)
+        if "trees" in entry:  # removed: trees are planted by the rules or read from the orthophoto, not set per parcel
+            errors.append(f"{path}.trees: per-parcel tree settings were removed; delete this entry")
+        _unknown_keys({k: v for k, v in entry.items() if k != "trees"}, PARCEL_KEYS, path, errors)
         if "fence" in entry:
             _check_fence(entry["fence"], f"{path}.fence", errors)
-        if "trees" in entry:
-            _check_trees(entry["trees"], f"{path}.trees", errors)
         if "objects" in entry:
             _check_objects(entry["objects"], f"{path}.objects", errors, seen)
 

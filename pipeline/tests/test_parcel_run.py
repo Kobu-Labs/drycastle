@@ -24,10 +24,8 @@ EDITS = {
                 "type": "wire",
                 "gaps": [{"at": [OX + 40, OY + 70], "width_m": 3.0}],
             },
-            "trees": {"count": 12, "seed_offset": 2},
             "objects": [{"id": "car-1", "asset": "prim:box", "position": [OX + 50, OY + 50]}],
         },
-        "P-0002": {"trees": {"density_per_1000m2": 6}},
         "P-0006": {"fence": {"mode": "none"}},
     },
     # P-0001 and P-0002 share a boundary: the group fence runs on the outer edge only.
@@ -208,11 +206,12 @@ def test_glb_nodes_match_the_export_per_parcel_nodes(tmp_path):
 def test_glb_of_a_parcel_without_props_still_names_it_in_replaces(ws, tmp_path):
     import trimesh
 
-    edits_path = write(tmp_path, "e.json", {**NO_EDITS, "parcels": {"P-0001": {"fence": {"mode": "none"}, "trees": {"count": 0}}}})
+    # P-0004 is a field: the rules plant no trees on it, and its fence is switched off
+    edits_path = write(tmp_path, "e.json", {**NO_EDITS, "parcels": {"P-0004": {"fence": {"mode": "none"}}}})
     rules_path = write(tmp_path, "r.yaml", RULES_NOCAP)
     glb = tmp_path / "out" / "x.glb"
-    frag = parcel_run.run_parcel_run(ws, "slice", ["P-0001"], [], edits_path, rules_path, glb_path=glb)
-    assert frag["replaces"] == ["P-0001"] and frag["fences"] == [] and frag["trees"] == []
+    frag = parcel_run.run_parcel_run(ws, "slice", ["P-0004"], [], edits_path, rules_path, glb_path=glb)
+    assert frag["replaces"] == ["P-0004"] and frag["fences"] == [] and frag["trees"] == []
     assert not trimesh.load(glb, force="scene").graph.nodes_geometry
 
 

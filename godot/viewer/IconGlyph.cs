@@ -72,10 +72,6 @@ public partial class IconGlyph : Control
                 Poly(false, (5, 7.5f), (2.5f, 10), (0.5f, 10.5f));
                 Poly(false, (19, 7.5f), (21.5f, 10), (23.5f, 10.5f));
                 break;
-            case "trees":
-                DrawCircle(P(12, 9), 6.5f * u, col);
-                Line(12, 15, 12, 21);
-                break;
             case "objects":
                 Rect(4, 10, 10, 10); Rect(9, 5, 10, 10);
                 Line(4, 10, 9, 5); Line(14, 10, 19, 5); Line(14, 20, 19, 15);

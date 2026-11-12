@@ -8,7 +8,7 @@ using Godot;
 
 /// <summary>
 /// `--panel-smoke --panel-smoke-plan plan.json` (run by panel_smoke.py, `make viewer-panel-smoke`): drives the
-/// Fence and Trees panel of the editor mode through its controller API (no synthetic mouse) in a headless
+/// Fence panel of the editor mode through its controller API (no synthetic mouse) in a headless
 /// viewer: pending state, Apply, groups, gates, reroll, the watcher round trip. The file after every Apply is
 /// copied to the plan's steps folder; the driver validates them with the Python validator afterwards.
 /// </summary>
@@ -114,8 +114,6 @@ public partial class Viewer
             $"header shows the target '{ed.PanelHeaderText}', nothing pending");
         Check(!ed.FenceFieldsEnabled && ed.CurrentFence.EffectiveMode == "auto" && ed.PanelFenceInfo.StartsWith("auto"),
             "fence mode auto: custom-only fields disabled, effective rules shown");
-        Check(Math.Abs(ed.RulesDensity - plan.GetProperty("rules_density").GetDouble()) < 1e-9 && ed.PanelTreesNote == "",
-            $"trees: rules density for the kind shown ({ed.RulesDensity})");
         Check(!ed.SetFenceHeight(3.0) && ed.PendingCount == 0, "a custom-only field is refused while the mode is auto, nothing pending");
 
         // ---- 1. mode / type / height / colour on one parcel ----
@@ -194,25 +192,8 @@ public partial class Viewer
         Check(!ProbeHits(p1) && !ProbeHits(p2) && dynColliders == 0 && shapes.All(s => s.Disabled),
             $"fence none removed the colliders (dynamic={dynColliders}, baked disabled={shapes.Count})");
 
-        // ---- 4. trees: density, reroll ----
-        Check(ed.SetTreesKind("density") && ed.SetTreesValue(20) && ed.Reroll() && ed.CurrentTrees.Seed == 1, "density 20 per 1000 m2, reroll -> seed offset 1");
-        await ApplyAndWait("t4a");
-        FileIs("t4a", "density + seed");
-        var node = _map.DynamicProps.GetValueOrDefault(C);
-        var hash1 = node == null ? 0UL : MeshHash(node);
-        var hasTrees = node != null && HasMesh(node);
-        Check(hasTrees, "the regenerated parcel has tree meshes");
-        Check(ed.Reroll() && ed.CurrentTrees.Seed == 2, "Reroll again increments the seed offset");
-        await ApplyAndWait("t4b");
-        FileIs("t4b", "density + seed 2");
-        var hash2 = _map.DynamicProps.TryGetValue(C, out var node2) ? MeshHash(node2) : 0UL;
-        Check(hash1 != 0 && hash2 != 0 && hash1 != hash2, $"reroll changed the regenerated trees (mesh hash {hash1:x} -> {hash2:x})");
-        Check(ed.SetTreesKind("count") && Math.Abs(ed.CurrentTrees.CountValue - 20 * plan.GetProperty("c_area").GetDouble() / 1000.0) <= 1 && ed.SetTreesValue(-5) && ed.CurrentTrees.CountValue == 0,
-            "density -> count converts by the area; negative values are clamped to 0");
-        ed.Revert();
-
         // ---- 5. reset removes the entries, the file is back to its original bytes ----
-        Check(ed.ResetTrees() && ed.ResetFence(), "Reset to rules (trees) and Reset (fence)");
+        Check(ed.ResetFence(), "Reset (fence)");
         await ApplyAndWait("t5");
         FileIs("seed", "reset");
         Check(File.ReadAllText(editsPath) == seedText, "reset: edits.json is byte for byte the original again (the parcel entry is gone)");
@@ -245,32 +226,24 @@ public partial class Viewer
 
         // ---- 7. multi-parcel apply ----
         await Sel(C, F);
-        Check(ed.PanelHeaderText == "2 parcels" && ed.PanelTreesNote.Contains("applies to 2 parcels") && ed.Target is { IsGroup: false },
-            $"multi selection: header '{ed.PanelHeaderText}', note '{ed.PanelTreesNote}'");
+        Check(ed.PanelHeaderText == "2 parcels" && ed.Target is { IsGroup: false }, $"multi selection: header '{ed.PanelHeaderText}'");
         Check(!ed.GateButtonEnabled, "no gates for several loose parcels");
-        Check(ed.SetFenceMode("none") && ed.SetTreesKind("count") && ed.SetTreesValue(2), "fence none and 2 trees for both");
+        Check(ed.SetFenceMode("none"), "fence none for both");
         await ApplyAndWait("t7");
         FileIs("t7", "multi-parcel apply");
         await Sel(F);
-        Check(ed.CurrentTrees.Kind == "count" && ed.CurrentTrees.CountValue == 2 && ed.CurrentFence.EffectiveMode == "none", "each parcel now shows the shared settings");
+        Check(ed.CurrentFence.EffectiveMode == "none", "each parcel now shows the shared setting");
         await Sel(C, F);
-        ed.ResetTrees(); ed.ResetFence();
+        ed.ResetFence();
         await ApplyAndWait("t7r");
         FileIs("seed", "multi reset");
-
-        // ---- reroll from the rules ----
-        await Sel(F);
-        Check(ed.Reroll() && ed.CurrentTrees.Kind == "density" && Math.Abs(ed.CurrentTrees.DensityValue - ed.RulesDensity) < 1e-9 && ed.CurrentTrees.Seed == 1,
-            "Reroll from the rules switches to the rules' density with seed offset 1");
-        ed.Revert();
 
         // ---- 8. property group ----
         await Sel(A, B);
         Check(ed.Target is { IsGroup: true } && ed.PanelHeaderText == $"{gid} (2 parcels)" && !ed.ScopeRowShown,
             $"group selection: header '{ed.PanelHeaderText}'");
-        Check(ed.SetFenceMode("custom") && ed.SetFenceType("wire") && ed.SetFenceColour("#AABBCC") && ed.SetTreesKind("count") && ed.SetTreesValue(4),
-            "custom wire fence, colour #AABBCC, 4 trees per parcel");
-        Check(ed.PanelTreesNote.Contains("applies to 2 parcels"), $"trees note: '{ed.PanelTreesNote}'");
+        Check(ed.SetFenceMode("custom") && ed.SetFenceType("wire") && ed.SetFenceColour("#AABBCC"),
+            "custom wire fence, colour #AABBCC");
         Check(ed.ArmGate() && ed.GateBegin(Ground("group_gate_pt", plan.GetProperty("group_gate_n")[0].GetDouble(), plan.GetProperty("group_gate_n")[1].GetDouble())), "gate on the group's outer perimeter");
         var gp = Ground("group_gate_pt");
         var gt = plan.GetProperty("group_gate_t");
@@ -298,7 +271,7 @@ public partial class Viewer
         await ApplyAndWait("t8c");
         ed.SetGroupScope(true);
         await Sel(A, B);
-        ed.ResetFence(); ed.ResetTrees();
+        ed.ResetFence();
         await ApplyAndWait("t8d");
         FileIs("seed", "group reset");
 

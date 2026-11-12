@@ -6,7 +6,7 @@ using Godot;
 using Drycastle.MapLoader;
 
 /// <summary>
-/// The Fence and Trees sections of the editor panel (Editor 6): the target (a parcel, several parcels or a
+/// The Fence section of the editor panel (Editor 6): the target (a parcel, several parcels or a
 /// property group), the pending state per target, the gate tool and Apply. Every control calls one of the
 /// public methods below, so the headless smoke drives the same code without mouse events.
 /// </summary>
@@ -72,10 +72,6 @@ public partial class EditorMode
         => _target == null ? new FenceDraft()
             : _pending.GetValueOrDefault(_target.Key)?.Fence ?? EditModel.FenceFromDisk(Disk(), _target);
 
-    public TreesDraft CurrentTrees
-        => _target == null ? new TreesDraft()
-            : _pending.GetValueOrDefault(_target.Key)?.Trees ?? EditModel.TreesFromDisk(Disk(), _target);
-
     FenceDraft? InheritedGroupFence()
         => _target == null || _target.IsGroup ? null : EditModel.GroupFenceOf(Disk(), _target.Parcels[0]);
 
@@ -87,17 +83,6 @@ public partial class EditorMode
         var p = PendingFor();
         var d = p.Fence ??= EditModel.FenceFromDisk(Disk(), _target);
         if (needCustom && d.EffectiveMode != "custom") { d.SetMode("custom"); Say("fence set to custom so your change shows"); }
-        change(d);
-        AfterEdit();
-        return true;
-    }
-
-    bool EditTrees(Action<TreesDraft> change)
-    {
-        if (_target == null) { Say("select a parcel first", true); return false; }
-        var p = PendingFor();
-        var d = p.Trees ?? EditModel.TreesFromDisk(Disk(), _target);
-        p.Trees = d;
         change(d);
         AfterEdit();
         return true;
@@ -154,52 +139,6 @@ public partial class EditorMode
         _selectedGate = index >= 0 && index < CurrentFence.Gaps.Count ? index : -1;
         _panelDirty = true;
     }
-
-    // ---- trees edits ----
-
-    string? FirstKind => _target == null ? null : Map.Parcels.GetValueOrDefault(_target.Parcels[0])?.Kind;
-
-    /// <summary>Trees per 1000 m2 the rules give the first targeted parcel.</summary>
-    public double RulesDensity
-        => FirstKind is { } k && Map.EditDefaults is { } ed ? ed.TreeDensity.GetValueOrDefault(k, 0.0) : 0.0;
-
-    double FirstArea => _target == null ? 0 : Map.Parcels.GetValueOrDefault(_target.Parcels[0])?.AreaM2 ?? 0;
-
-    /// <summary>Choose rules, density or count; rules also forgets the seed offset (the entry goes away).</summary>
-    public bool SetTreesKind(string kind)
-    {
-        if (kind is not (TreesDraft.Rules or TreesDraft.Density or TreesDraft.Count)) { Say($"unknown trees mode {kind}", true); return false; }
-        if (_target != null && CurrentTrees.Kind == kind) return true;
-        return EditTrees(t =>
-        {
-            if (kind == t.Kind) return;
-            var density = t.Kind == TreesDraft.Rules ? RulesDensity : t.Kind == TreesDraft.Density ? t.DensityValue : t.CountValue * 1000.0 / Math.Max(1.0, FirstArea);
-            if (kind == TreesDraft.Rules) { t.Seed = 0; t.Kind = kind; return; }
-            if (kind == TreesDraft.Density) t.DensityValue = Math.Round(density, 2);
-            else t.CountValue = (int)Math.Round(density * FirstArea / 1000.0);
-            t.Kind = kind;
-        });
-    }
-
-    public bool SetTreesValue(double v)
-        => EditTrees(t =>
-        {
-            if (t.Kind == TreesDraft.Density) t.DensityValue = Math.Max(0, v);
-            else if (t.Kind == TreesDraft.Count) t.CountValue = (int)Math.Max(0, Math.Round(v));
-        });
-
-    public bool SetSeedOffset(int seed) => EditTrees(t => { if (t.Kind != TreesDraft.Rules) t.Seed = seed; });
-
-    /// <summary>Increment the seed offset. From the rules it first switches to the rules' density (a seed alone is not expressible).</summary>
-    public bool Reroll()
-        => EditTrees(t =>
-        {
-            if (t.Kind == TreesDraft.Rules) { t.Kind = TreesDraft.Density; t.DensityValue = RulesDensity; }
-            t.Seed++;
-        });
-
-    /// <summary>Remove the trees entry: the rules decide again.</summary>
-    public bool ResetTrees() => SetTreesKind(TreesDraft.Rules);
 
     public void SetGroupScope(bool group)
     {
@@ -420,13 +359,12 @@ public partial class EditorMode
     // ---- UI ----
 
     OptionButton _modeOpt = null!, _typeOpt = null!, _scopeOpt = null!;
-    Label _hdrLabel = null!, _dirtyLabel = null!, _footLabel = null!, _fenceInfo = null!, _gateHint = null!, _treesNote = null!, _statsLabel = null!, _mixedLabel = null!;
+    Label _hdrLabel = null!, _dirtyLabel = null!, _footLabel = null!, _fenceInfo = null!, _gateHint = null!, _mixedLabel = null!;
     Button _heightReset = null!, _thickReset = null!, _colourReset = null!;
-    SpinBox _heightSpin = null!, _thickSpin = null!, _densitySpin = null!, _countSpin = null!, _seedSpin = null!;
+    SpinBox _heightSpin = null!, _thickSpin = null!;
     ColorPickerButton _colourBtn = null!;
     VBoxContainer _gapsBox = null!;
-    Button _btnAddGate = null!, _btnApply = null!, _btnRevert = null!, _btnRevertAll = null!, _btnReroll = null!, _btnResetTrees = null!;
-    CheckBox _radioRules = null!, _radioDensity = null!, _radioCount = null!;
+    Button _btnAddGate = null!, _btnApply = null!, _btnRevert = null!, _btnRevertAll = null!;
     HBoxContainer _scopeRow = null!;
     string _gapRowsKey = "";
 
@@ -447,22 +385,6 @@ public partial class EditorMode
         field.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         r.AddChild(field);
         return r;
-    }
-
-    /// <summary>The count/density line under the trees note, for a mode and its value (a density, or a tree count in count mode).</summary>
-    void ShowTreeStats(bool has, string kind, double value)
-    {
-        var area = Math.Max(1.0, FirstArea);
-        var density = kind == TreesDraft.Count ? value * 1000.0 / area : value;
-        var count = kind == TreesDraft.Count ? value : density * area / 1000.0;
-        _statsLabel.Text = !has ? "" : $"{(kind == TreesDraft.Count ? count.ToString("0") : "about " + count.ToString("0.#"))} trees, {density:0.##} per 1000 m2 ({area:0} m2)";
-    }
-
-    /// <summary>Live preview while a value is typed, before Enter or focus loss commits it.</summary>
-    void PreviewTreeText(string kind, string text)
-    {
-        if (_target == null || !double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) || v < 0) return;
-        ShowTreeStats(true, kind, kind == TreesDraft.Count ? Math.Round(v) : v);
     }
 
     static SpinBox Spin(double min, double max, double step, string suffix = "")
@@ -562,44 +484,10 @@ public partial class EditorMode
         body.AddChild(_gateHint);
     }
 
-    void BuildTreesSection(VBoxContainer body)
-    {
-        _treesNote = Note();
-        body.AddChild(_treesNote);
-        _statsLabel = Note();
-        body.AddChild(_statsLabel);
-        var group = new ButtonGroup();
-        CheckBox Radio(string text, string kind)
-        {
-            var c = new CheckBox { Text = text, ButtonGroup = group, FocusMode = Control.FocusModeEnum.None };
-            c.Toggled += on => { if (on && !_syncing) SetTreesKind(kind); };
-            return c;
-        }
-        _radioRules = Radio("rules (default)", TreesDraft.Rules);
-        _radioDensity = Radio("density", TreesDraft.Density);
-        _densitySpin = Spin(0, 500, 0.1, " / 1000 m2");
-        _densitySpin.GetLineEdit().TextChanged += t => { if (!_syncing) PreviewTreeText(TreesDraft.Density, t); };
-        _densitySpin.ValueChanged += v => { if (_syncing) return; if (CurrentTrees.Kind != TreesDraft.Density) SetTreesKind(TreesDraft.Density); SetTreesValue(v); };
-        _radioCount = Radio("count", TreesDraft.Count);
-        _countSpin = Spin(0, 5000, 1, " trees");
-        _countSpin.GetLineEdit().TextChanged += t => { if (!_syncing) PreviewTreeText(TreesDraft.Count, t); };
-        _countSpin.ValueChanged += v => { if (_syncing) return; if (CurrentTrees.Kind != TreesDraft.Count) SetTreesKind(TreesDraft.Count); SetTreesValue(v); };
-        body.AddChild(_radioRules);
-        var d = new HBoxContainer(); d.AddChild(_radioDensity); d.AddChild(_densitySpin); body.AddChild(d);
-        var c2 = new HBoxContainer(); c2.AddChild(_radioCount); c2.AddChild(_countSpin); body.AddChild(c2);
-        _seedSpin = Spin(-100000, 100000, 1);
-        _seedSpin.ValueChanged += v => { if (!_syncing) SetSeedOffset((int)v); };
-        _btnReroll = Btn("Reroll", () => Reroll());
-        var sr = Row("seed offset", _seedSpin, 100); sr.AddChild(_btnReroll); body.AddChild(sr);
-        _btnResetTrees = Btn("Reset to rules", () => ResetTrees());
-        body.AddChild(_btnResetTrees);
-    }
-
     // texts for the smoke
     public string PanelHeaderText => _hdrLabel.Text;
     public bool PanelDirtyShown => _dirtyLabel.Visible;
     public string PanelFooterText => _footLabel.Text;
-    public string PanelTreesNote => _treesNote.Text;
     public string PanelFenceInfo => _fenceInfo.Text;
     public bool ScopeRowShown => _scopeRow.Visible;
     public bool GateButtonEnabled => !_btnAddGate.Disabled;
@@ -661,27 +549,6 @@ public partial class EditorMode
         _btnAddGate.Disabled = !has || !CanGate;
         _btnAddGate.Text = GateArmed ? "Click the fence... (Esc cancels)" : "Add gate";
         _gateHint.Text = !has ? "" : !CanGate ? "gates: select one parcel or one property group" : Map.OriginEpsg5514 == null ? "gates need a map exported with origin_epsg5514 (0.4.0+)" : "";
-
-        // ---- trees ----
-        var tr = CurrentTrees;
-        _treesNote.Text = !has ? "" : t!.IsGroup ? $"applies to {t.Parcels.Count} parcels (per parcel, the whole group)" : t.Parcels.Count > 1 ? $"applies to {t.Parcels.Count} parcels" : "";
-        var shown = tr.Kind == TreesDraft.Count ? tr.CountValue : tr.Kind == TreesDraft.Density ? tr.DensityValue : RulesDensity;
-        ShowTreeStats(has, tr.Kind, shown);
-        _radioRules.SetPressedNoSignal(tr.Kind == TreesDraft.Rules);
-        _radioDensity.SetPressedNoSignal(tr.Kind == TreesDraft.Density);
-        _radioCount.SetPressedNoSignal(tr.Kind == TreesDraft.Count);
-        foreach (var r in new[] { _radioRules, _radioDensity, _radioCount }) r.Disabled = !has;
-        _densitySpin.SetValueNoSignal(tr.Kind == TreesDraft.Density ? tr.DensityValue : RulesDensity);
-        _densitySpin.Editable = has;
-        _densitySpin.Modulate = tr.Kind == TreesDraft.Density ? Colors.White : Grey;
-        _countSpin.SetValueNoSignal(tr.Kind == TreesDraft.Count ? tr.CountValue : Math.Round(RulesDensity * FirstArea / 1000.0));
-        _countSpin.Editable = has;
-        _countSpin.Modulate = tr.Kind == TreesDraft.Count ? Colors.White : Grey;
-        _seedSpin.SetValueNoSignal(tr.Seed);
-        _seedSpin.Editable = has;
-        _seedSpin.Modulate = tr.Kind == TreesDraft.Rules ? Grey : Colors.White;
-        _btnReroll.Disabled = !has;
-        _btnResetTrees.Disabled = !has || tr.Kind == TreesDraft.Rules;
     }
 
     static void SyncOptional(Button reset, SpinBox spin, double? value, double effective, bool enabled)

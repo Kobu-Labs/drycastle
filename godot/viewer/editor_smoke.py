@@ -124,7 +124,7 @@ def main() -> int:
     edits = scratch / "edits.json"
     seed = {
         "version": 1,
-        "parcels": {"P-9999": {"fence": {"mode": "none"}}, c_id: {"trees": {"count": 3}}},
+        "parcels": {"P-9999": {"fence": {"mode": "none"}}, c_id: {"fence": {"mode": "auto"}}},
         "groups": {"G-0002": {"parcels": sorted([c_id, d_id]), "fence": {"mode": "none"}}},
     }
     edits.write_text(json.dumps(seed, sort_keys=True, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")

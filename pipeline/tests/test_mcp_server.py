@@ -276,7 +276,7 @@ def test_get_parcel_front_edge_and_buildings(tools):
     assert p["effective_fence"]["mode"] == "auto"
     assert p["rule_defaults"]["trees"]["density_per_1000m2"] == 0.8
     assert p["rule_defaults"]["fence"]["kind_gets_fence"] is True
-    assert p["edits"] == {"fence": None, "trees": None, "objects": [], "group_fence": None}
+    assert p["edits"] == {"fence": None, "objects": [], "group_fence": None}
     with pytest.raises(ToolError, match="unknown parcel"):
         tools.get_parcel("P-0777")
 
@@ -291,7 +291,7 @@ def test_get_parcel_shows_edits_and_group(tools):
     assert tools.find_parcels(near={"parcel": "P-0001", "radius_m": 1})["parcels"][0]["has_edits"]
 
 
-# --- fence and trees ----------------------------------------------------------------------
+# --- fence --------------------------------------------------------------------------------
 
 
 def test_set_fence_semantics(env):
@@ -351,248 +351,6 @@ def test_group_fence_and_member_override_warning(tools, env):
         tools.set_fence(gid, gaps=[{"at": "front", "width_m": 3}])
 
 
-def test_set_trees(env):
-    tools, settings, _ = env
-    assert tools.set_trees("P-0001", density_per_1000m2=3)["trees"] == {"density_per_1000m2": 3}
-    assert tools.set_trees("P-0001", count=5, seed_offset=2)["trees"] == {"count": 5, "seed_offset": 2}
-    assert tools.set_trees("P-0001", seed_offset=3)["trees"] == {"count": 5, "seed_offset": 3}
-    assert tools.set_trees("P-0001", density_per_1000m2=0)["trees"] == {
-        "density_per_1000m2": 0, "seed_offset": 3,
-    }
-    canonical(settings)
-    with pytest.raises(ToolError, match="exactly one"):
-        tools.set_trees("P-0001", density_per_1000m2=1, count=2)
-    with pytest.raises(ToolError, match="count must be"):
-        tools.set_trees("P-0001", count=-1)
-    with pytest.raises(ToolError, match=">= 0"):
-        tools.set_trees("P-0001", density_per_1000m2=-1)
-    with pytest.raises(ToolError, match="nothing to set"):
-        tools.set_trees("P-0001")
-    with pytest.raises(ToolError, match="seed_offset alone"):
-        tools.set_trees("P-0002", seed_offset=1)
-    assert tools.reset_trees("P-0001")["changed"] is True
-    assert load_edits(settings.edits_path).parcels == {}
-
-
-# --- objects ------------------------------------------------------------------------------
-
-
-def test_place_object_anchors(tools, env):
-    settings = env[1]
-    got = {}
-    for anchor in ("front", "back", "left", "right", "centre", "near_building"):
-        out = tools.place_object("P-0001", CAR, anchor=anchor)
-        got[anchor] = local(out["position"])
-        assert out["rotation_deg"] == 180.0  # car front toward the road (north)
-    assert got["front"] == (67.5, 98.5)
-    assert got["back"] == (67.5, 41.5)
-    # standing on the road edge looking south into the plot: left is east, right is west
-    assert got["left"][0] > 90 and got["right"][0] < 45
-    assert got["left"][1] == got["right"][1] == 70.0
-    # between house (top y=70) and road edge: 2 m beyond the footprint
-    assert got["near_building"] == (67.5, 72.0)
-    assert got["centre"][1] == pytest.approx(70.0, abs=0.01)
-    ids = [o["id"] for o in load_edits(settings.edits_path).parcels["P-0001"]["objects"]]
-    assert ids == [f"o-000{i}" for i in range(1, 7)]
-    canonical(settings)
-
-
-def test_place_object_offsets_rotation_and_fields(tools, env):
-    out = tools.place_object(
-        "P-0001", "prim:slab", anchor="front", offset_m={"along": 5, "inward": 3},
-        rotation_deg=-90, scale=2, colour="#aa0000",
-    )
-    assert local(out["position"]) == (62.5, 95.5)  # along > 0 = to the right = west
-    assert out["rotation_deg"] == 270.0 and out["scale"] == 2.0
-    assert out["entry"] == {
-        "id": "o-0001", "asset": "prim:slab", "position": out["position"],
-        "rotation_deg": 270.0, "scale": 2.0, "colour": "#aa0000",
-    }
-    assert "warnings" in out and not any("outside" in w for w in out["warnings"])
-    canonical(env[1])
-
-
-def test_place_object_facing_follows_the_road_side(tools):
-    # P-0002 (garden) also has the road to its north; P-0004 (field) has it to its south
-    assert tools.place_object("P-0002", "prim:slab")["rotation_deg"] == 180.0
-    out = tools.place_object("P-0004", "prim:slab", anchor="front")
-    assert out["rotation_deg"] == 0.0 and local(out["position"])[1] == pytest.approx(116.5)
-
-
-def test_place_object_exact_position_and_warnings(tools):
-    out = tools.place_object("P-0001", CAR, position=[OX + 50, OY + 50])
-    assert out["position"] == [OX + 50, OY + 50] and out["warnings"] == []
-    # overlap with the placed object
-    out = tools.place_object("P-0001", CAR, position=[OX + 51, OY + 50.5])
-    assert any("overlaps placed object o-0001" in w for w in out["warnings"])
-    # inside the house
-    out = tools.place_object("P-0001", CAR, position=[OX + 67, OY + 62])
-    assert any("overlaps building w1" in w for w in out["warnings"])
-    # outside the parcel: applied with a warning
-    out = tools.place_object("P-0001", CAR, position=[OX + 150, OY + 150])
-    assert any("outside P-0001" in w for w in out["warnings"])
-    assert load_edits(tools.settings.edits_path).parcels["P-0001"]["objects"][-1]["position"] == [
-        OX + 150, OY + 150,
-    ]
-    # inside another parcel is said so
-    out = tools.place_object("P-0001", CAR, position=[OX + 120, OY + 60])
-    assert any("inside P-0002" in w for w in out["warnings"])
-    # small pack model at scale 1
-    out = tools.place_object("P-0001", "pack:kenney-city-kit-suburban/tree-large", position=[OX + 80, OY + 50])
-    assert any("small at scale 1" in w for w in out["warnings"])
-    canonical(tools.settings)
-
-
-def test_place_object_anchor_outside_is_moved_inside(tools):
-    out = tools.place_object("P-0001", CAR, anchor="front", offset_m={"inward": -30})
-    x, y = local(out["position"])
-    assert 40 <= x <= 95 and 40 <= y <= 100
-    assert any("moved" in w and "nearest interior point" in w for w in out["warnings"])
-
-
-def test_place_object_errors(env):
-    tools, settings, _ = env
-    for kwargs, msg in [
-        ({"parcel": "P-0001", "asset": "pack:nope/car"}, "unknown pack model"),
-        ({"parcel": "P-0001", "asset": "car"}, 'must start with "pack:"'),
-        ({"parcel": "P-0001", "asset": "prim:teapot"}, "unknown primitive"),
-        ({"parcel": "P-9999", "asset": CAR}, "unknown parcel"),
-        ({"parcel": "P-0001", "asset": CAR, "anchor": "above"}, "anchor must be one of"),
-        ({"parcel": "P-0001", "asset": CAR, "scale": 0}, "scale must be > 0"),
-        ({"parcel": "P-0001", "asset": CAR, "rotation_deg": "x"}, "rotation_deg must be a number"),
-        ({"parcel": "P-0001", "asset": CAR, "colour": "blue"}, "#rrggbb"),
-        ({"parcel": "P-0001", "asset": CAR, "position": [1]}, "position must be"),
-        ({"parcel": "P-0001", "asset": CAR, "position": [OX, OY], "anchor": "front"}, "not both"),
-        ({"parcel": "P-0001", "asset": CAR, "offset_m": {"sideways": 1}}, "offset_m must be"),
-    ]:
-        with pytest.raises(ToolError, match=msg):
-            tools.place_object(**kwargs)
-    assert not settings.edits_path.exists()
-
-
-def test_remove_and_move_object(tools, env):
-    settings = env[1]
-    a = tools.place_object("P-0001", CAR, anchor="front")["id"]
-    b = tools.place_object("P-0001", CAR, anchor="back")["id"]
-    out = tools.move_object(a, anchor="left", offset_m={"inward": 1})
-    assert out["entry"]["rotation_deg"] == 180.0 and out["parcel"] == "P-0001"
-    assert local(out["entry"]["position"])[0] > 90
-    out = tools.move_object(a, rotation_deg=45, scale=1.5)
-    assert out["entry"]["rotation_deg"] == 45.0 and out["entry"]["scale"] == 1.5
-    assert out["entry"]["position"] == tools.get_parcel("P-0001")["edits"]["objects"][0]["position"]
-    out = tools.move_object(a, parcel="P-0002", anchor="centre")  # re-listed under another parcel
-    assert out["parcel"] == "P-0002"
-    parcels = load_edits(settings.edits_path).parcels
-    assert [o["id"] for o in parcels["P-0001"]["objects"]] == [b]
-    assert [o["id"] for o in parcels["P-0002"]["objects"]] == [a]
-    canonical(settings)
-    with pytest.raises(ToolError, match="nothing to change"):
-        tools.move_object(a)
-    with pytest.raises(ToolError, match="no placed object"):
-        tools.move_object("o-0099", rotation_deg=1)
-    tools.remove_object(a)
-    tools.remove_object(b)
-    assert load_edits(settings.edits_path).parcels == {}  # entries dropped when empty
-    with pytest.raises(ToolError, match="no placed object 'o-0001'"):
-        tools.remove_object("o-0001")
-    # ids keep growing past the highest existing one
-    assert tools.place_object("P-0001", CAR)["id"] == "o-0001"
-
-
-def test_object_ids_continue_after_foreign_ids(tools, env):
-    settings = env[1]
-    settings.edits_path.write_text(
-        json.dumps({"version": 1, "parcels": {"P-0003": {"objects": [
-            {"id": "o-0007", "asset": "prim:box", "position": [1, 2]},
-            {"id": "bench", "asset": "prim:box", "position": [1, 2]},
-        ]}}, "groups": {}})
-    )
-    assert tools.place_object("P-0001", CAR)["id"] == "o-0008"
-
-
-# --- groups -------------------------------------------------------------------------------
-
-
-def test_groups(tools, env):
-    settings = env[1]
-    out = tools.create_group(["P-0002", "P-0001"], fence={"mode": "custom", "height_m": 1.5})
-    assert out["id"] == "G-0001"
-    assert out["entry"] == {"fence": {"height_m": 1.5, "mode": "custom"}, "parcels": ["P-0001", "P-0002"]}
-    assert out["warnings"] == []
-    assert tools.create_group(["P-0004", "P-0005"])["id"] == "G-0002"
-    assert "not all touching" in tools.create_group(["P-0003", "P-0006"])["warnings"][0]
-    canonical(settings)
-    with pytest.raises(ToolError, match="already in a group: P-0001 \\(G-0001\\)"):
-        tools.create_group(["P-0001", "P-0003"])
-    with pytest.raises(ToolError, match="2 or more"):
-        tools.create_group(["P-0001"])
-    with pytest.raises(ToolError, match="2 or more different"):
-        tools.create_group(["P-0003", "P-0003"])
-    with pytest.raises(ToolError, match="unknown parcel"):
-        tools.create_group(["P-0001", "P-9000"])
-    with pytest.raises(ToolError, match="cannot be combined"):
-        tools.create_group(["P-0003", "P-0006"], fence={"mode": "auto", "height_m": 1})
-    out = tools.dissolve_group("G-0001")
-    assert out["summary"].startswith("dissolved G-0001")
-    assert "G-0001" not in load_edits(settings.edits_path).groups
-    assert tools.create_group(["P-0001", "P-0002"])["id"] == "G-0004"  # max + 1, ids never reused
-    with pytest.raises(ToolError, match="does not exist"):
-        tools.dissolve_group("G-0001")
-    with pytest.raises(ToolError, match="not a group ID"):
-        tools.dissolve_group("P-0001")
-
-
-def test_merge_groups(tools, env):
-    settings = env[1]
-    a = tools.create_group(["P-0001", "P-0002"], fence={"mode": "custom", "type": "wire"})["id"]
-    b = tools.create_group(["P-0004", "P-0005"])["id"]
-    c = tools.create_group(["P-0003", "P-0006"], fence={"mode": "custom", "height_m": 2.0})["id"]
-    tools.set_fence("P-0001", mode="custom", colour="#112233")  # parcel override stays put
-    out = tools.merge_groups([a, b])
-    assert out["id"] == "G-0004"
-    assert out["entry"] == {"fence": {"mode": "custom", "type": "wire"},
-                            "parcels": ["P-0001", "P-0002", "P-0004", "P-0005"]}
-    edits = load_edits(settings.edits_path)
-    assert sorted(edits.groups) == [c, "G-0004"]
-    assert edits.parcels["P-0001"]["fence"]["colour"] == "#112233"
-    canonical(settings)
-    out = tools.merge_groups(["G-0004", c], fence={"mode": "none"})
-    last = out["id"]
-    assert out["entry"]["fence"] == {"mode": "none"}
-    assert load_edits(settings.edits_path).groups[out["id"]]["parcels"] == [
-        "P-0001", "P-0002", "P-0003", "P-0004", "P-0005", "P-0006"]
-    with pytest.raises(ToolError, match="2 or more"):
-        tools.merge_groups([last])
-    with pytest.raises(ToolError, match="2 or more different"):
-        tools.merge_groups([last, last])
-    with pytest.raises(ToolError, match="no such group: G-0099"):
-        tools.merge_groups([last, "G-0099"])
-    with pytest.raises(ToolError, match="not a group ID"):
-        tools.merge_groups([last, "P-0001"])
-
-
-def test_merge_group_with_loose_parcels(tools, env):
-    a = tools.create_group(["P-0001", "P-0002"], fence={"mode": "custom", "type": "wire"})["id"]
-    other = tools.create_group(["P-0004", "P-0005"])["id"]
-    out = tools.merge_groups([a], parcels=["P-0003"])
-    assert out["entry"]["parcels"] == ["P-0001", "P-0002", "P-0003"]
-    assert out["entry"]["fence"] == {"mode": "custom", "type": "wire"}
-    assert a not in load_edits(env[1].edits_path).groups
-    with pytest.raises(ToolError, match="already in another group: P-0004"):
-        tools.merge_groups([out["id"]], parcels=["P-0004"])
-    with pytest.raises(ToolError, match="2 or more"):
-        tools.merge_groups([out["id"]])
-    assert other in load_edits(env[1].edits_path).groups
-
-
-def test_merge_groups_fence_conflict_warns(tools):
-    a = tools.create_group(["P-0001", "P-0002"], fence={"mode": "custom", "type": "wire"})["id"]
-    b = tools.create_group(["P-0004", "P-0005"], fence={"mode": "custom", "height_m": 2.0})["id"]
-    out = tools.merge_groups([a, b])
-    assert out["entry"]["fence"] == {"mode": "custom", "type": "wire"}
-    assert "different fences" in out["warnings"][0]
-
-
 # --- file handling ------------------------------------------------------------------------
 
 
@@ -601,23 +359,23 @@ def test_invalid_existing_file_is_not_overwritten(env):
     settings.edits_path.write_text('{"version": 1, "parcels": {"P-0001": {"fence": {"mode": "x"}}}}')
     before = settings.edits_path.read_text()
     with pytest.raises(ToolError, match="currently invalid"):
-        tools.set_trees("P-0002", count=1)
+        tools.set_fence("P-0002", mode="none")
     settings.edits_path.write_text("not json")
     with pytest.raises(ToolError, match="not valid JSON"):
-        tools.set_trees("P-0002", count=1)
+        tools.set_fence("P-0002", mode="none")
     assert settings.edits_path.read_text() == "not json" and before
 
 
 def test_other_content_is_preserved_and_reloaded(tools, env):
     settings = env[1]
-    tools.set_trees("P-0001", count=2)
+    tools.set_fence("P-0001", mode="none")
     # another writer changes the file between two calls: it must be kept
     doc = json.loads(settings.edits_path.read_text())
     doc["parcels"]["P-0099"] = {"fence": {"mode": "none"}}  # unknown parcel: allowed, kept
     settings.edits_path.write_text(json.dumps(doc))
     tools.set_fence("P-0002", mode="none")
     parcels = load_edits(settings.edits_path).parcels
-    assert parcels["P-0099"] == {"fence": {"mode": "none"}} and parcels["P-0001"]["trees"] == {"count": 2}
+    assert parcels["P-0099"] == {"fence": {"mode": "none"}} and parcels["P-0001"] == {"fence": {"mode": "none"}}
 
 
 def test_concurrent_writers_do_not_lose_updates(tools, env):
@@ -785,8 +543,8 @@ def test_through_mcp_session(env):
         async with Client(server) as client:
             names = {t.name for t in (await client.list_tools()).tools}
             assert names == {
-                "list_assets", "find_parcels", "get_parcel", "set_fence", "reset_fence", "set_trees",
-                "reset_trees", "place_object", "remove_object", "move_object", "create_group", "merge_groups",
+                "list_assets", "find_parcels", "get_parcel", "set_fence", "reset_fence",
+                "place_object", "remove_object", "move_object", "create_group", "merge_groups",
                 "dissolve_group", "create_region", "set_region_colour", "set_region_water", "move_region_point",
                 "delete_region", "list_regions", "connect_poles", "disconnect_poles", "list_cables", "get_sketch", "create_sketch", "sketch_add_point", "sketch_add_line", "sketch_add_road", "sketch_remove",
             }

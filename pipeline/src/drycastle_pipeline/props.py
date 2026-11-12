@@ -1,7 +1,7 @@
 """Props stage: fences, trees and spawn candidates -> ``data/work/props.json`` and ``spawns.json``.
 
 Hand edits (``config/edits.json``, see ``edits.py``) are applied here too: fence modes and groups,
-tree density or count overrides, and placed objects, which are written to ``objects.json``.
+and placed objects, which are written to ``objects.json``.
 
 Everything random is drawn from ``random.Random`` seeded with sha256 of ``<parcel id>:<purpose>``
 (never Python's ``hash()``), so identical input gives identical output. Only places inside the
@@ -259,7 +259,7 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
       that). Seeded per 25 m cell; never on a building, road, placed object or water.
 
     The photo does not resolve single crowns in a forest, so the canopy trunks are random within the detected extent.
-    OSM trees, the rule-based densities, the shore rows and the hand-set trees of edits.json are all left out.
+    OSM trees, the rule-based densities and the shore rows are all left out.
     """
     from PIL import Image
 
@@ -341,7 +341,6 @@ def make_trees(
     osm_trees: list[dict],
     terrain: Terrain,
     cfg: dict,
-    overrides: dict[str, dict] | None = None,
     objects: list[tuple[float, float]] | None = None,
     only: set[str] | None = None,
     include_osm: bool = True,
@@ -356,8 +355,7 @@ def make_trees(
     ``only`` limits the rule-based trees to those parcel IDs (each parcel's trees depend only on
     its own seed and the context geometry); ``include_osm=False`` leaves the OSM trees out.
 
-    ``overrides`` maps a parcel ID to its edited trees (``density_per_1000m2`` or ``count``, and
-    ``seed_offset``). ``objects`` are placed object positions (local metres) that trees keep
+    ``objects`` are placed object positions (local metres) that trees keep
     ``object_clearance_m`` away from. ``water`` (local metres) is where the water regions lie: rule-based trees get
     no trunk in it (their crowns may overhang it from the bank), and ``cfg["shore"]`` adds rows of trees along
     its edge (see :func:`shore_candidates`).
@@ -412,29 +410,18 @@ def make_trees(
     for p in sorted(parcels, key=lambda p: p["id"]):
         if only is not None and p["id"] not in only:
             continue
-        ov = (overrides or {}).get(p["id"])
-        seed_key = f"{p['id']}:trees"
-        fixed: int | None = None
-        if ov is None:
-            rate = float(density.get(p["kind"], 0.0))
-        else:
-            rate = float(ov.get("density_per_1000m2", 0.0))
-            fixed = ov.get("count")
-            if int(ov.get("seed_offset", 0)):
-                seed_key += f":{int(ov['seed_offset'])}"
+        rate = float(density.get(p["kind"], 0.0))
         shore_here = shore_pts is not None
-        if fixed is None and rate <= 0 and not shore_here:
+        if rate <= 0 and not shore_here:
             continue
         poly = shape(p["polygon"])
         inner = poly.buffer(-float(cfg["parcel_edge_clearance_m"]))
         if inner.is_empty:
             continue
         shapely.prepare(inner)
-        rng = seeded(seed_key)
-        if fixed is None and rate <= 0:
+        rng = seeded(f"{p['id']}:trees")
+        if rate <= 0:
             count = 0
-        elif fixed is not None:
-            count = int(fixed)
         else:
             expected = rate * poly.area / 1000.0
             count = int(expected) + (rng.random() < expected % 1)
@@ -614,7 +601,6 @@ class EditPlan:
 
     specs: dict[str, FenceSpec] = field(default_factory=dict)  # gaps in local metres
     groups: dict[str, list[str]] = field(default_factory=dict)  # valid member parcels only
-    tree_overrides: dict[str, dict] = field(default_factory=dict)
     objects: list[dict] = field(default_factory=list)  # objects.json entries, sorted by id
     cables: list[dict] = field(default_factory=list)  # {"id", "from", "to"} between placed poles and connectors, by id
     object_owner: dict[str, str] = field(default_factory=dict)  # object id -> parcel listing it
@@ -662,8 +648,6 @@ def plan_edits(
             spec = resolve_fence(entry.get("fence"), group_fence)
             gaps = tuple((*_local_xy(x, y, origin), w) for x, y, w in spec.gaps)
             plan.specs[pid] = replace(spec, gaps=gaps)
-        if "trees" in entry:
-            plan.tree_overrides[pid] = entry["trees"]
     for pid in sorted(edits.parcels):
         if pid not in polys:
             continue
@@ -765,9 +749,6 @@ def run_props(
         tree_cfg = {**tree_cfg, "source": "ortho", "ortho_dir": str(work_dir.parent / "ortho")}
         print("props: EXPERIMENT: every tree comes from the orthophoto detector (DRYCASTLE_TREE_SOURCE=ortho)",
               file=sys.stderr)
-        if plan.tree_overrides:
-            print(f"props: warning: {len(plan.tree_overrides)} hand-set tree overrides of edits.json are ignored",
-                  file=sys.stderr)
     trees = make_trees(
         parcels,
         buildings,
@@ -775,7 +756,6 @@ def run_props(
         osm_trees,
         terrain,
         tree_cfg,
-        overrides=plan.tree_overrides,
         objects=[(o["position"][0], o["position"][1]) for o in plan.objects],
         water=water_zone(plan, terrain),
         origin=tuple(parcels_doc["origin_epsg5514"]) if parcels_doc.get("origin_epsg5514") else None,

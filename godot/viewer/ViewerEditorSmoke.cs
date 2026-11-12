@@ -215,7 +215,7 @@ public partial class Viewer
 
         // ---- another writer changes the file; our next save keeps its change ----
         var ext = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(editsPath))!;
-        ext["parcels"]!["P-8888"] = System.Text.Json.Nodes.JsonNode.Parse("{\"trees\": {\"count\": 2}}");
+        ext["parcels"]!["P-8888"] = System.Text.Json.Nodes.JsonNode.Parse("{\"fence\": {\"mode\": \"none\"}}");
         File.WriteAllText(editsPath + ".ext", ext.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         File.Move(editsPath + ".ext", editsPath, true);
         ed.Click(A, false);
@@ -295,7 +295,6 @@ public partial class Viewer
             ed.SetSectionOpen(title, false);
         if (_opts.GetValueOrDefault("shot-tool") is { } stool) ed.SetTool(stool);
         if (_opts.GetValueOrDefault("shot-gate") is { } sg && int.TryParse(sg, out var gi)) ed.SelectGate(gi);
-        if (_flags.Contains("shot-reroll")) ed.Reroll(); // leaves a pending change: shows the unsaved marker
         foreach (var cat in (_opts.GetValueOrDefault("shot-open") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)) ed.SetPaletteGroupOpen(cat, true);
         if (_opts.GetValueOrDefault("shot-filter") is { } sf) ed.SetPaletteFilter(sf);
         if (_opts.GetValueOrDefault("shot-object") is { } so) Check(ed.SelectObject(so), $"shot object {so} selected");

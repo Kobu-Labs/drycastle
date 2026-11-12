@@ -124,9 +124,9 @@ viewer-regions-smoke:
 viewer-editor-smoke:
 	python3 godot/viewer/editor_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
 
-# Fence and Trees panel end to end (headless): drives the panel API on a scratch export (Apply, pending state, gates,
-# groups, reroll, watcher round trip) and checks the saved files with the Python validator. SHOTS=dir adds two
-# windowed screenshots of the panel (needs a display). Needs uv, dotnet and godot.
+# Fence panel end to end (headless): drives the panel API on a scratch export (Apply, pending state, gates,
+# groups, watcher round trip) and checks the saved files with the Python validator. SHOTS=dir adds a
+# windowed screenshot of the panel (needs a display). Needs uv, dotnet and godot.
 viewer-panel-smoke:
 	python3 godot/viewer/panel_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),) $(if $(SHOTS),--shots $(SHOTS),)
 

@@ -62,16 +62,7 @@
      "rotation_deg": -0.0,
      "scale": 1e-07
     }
-   ],
-   "trees": {
-    "density_per_1000m2": 1e-05,
-    "seed_offset": -3
-   }
-  },
-  "P-0005": {
-   "trees": {
-    "count": 0
-   }
+   ]
   },
   "P-0100": {
    "objects": []

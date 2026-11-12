@@ -9,7 +9,7 @@ using Godot;
 /// only the page of the active tool. Clicking the active tool again hides the sidebar. Built from the shared theme
 /// (EditorTheme); no per-control colours or font sizes.
 /// </summary>
-public enum EditorTool { None, Select, Group, Fence, Trees, Objects, Region, Poles, View, Sketch }
+public enum EditorTool { None, Select, Group, Fence, Objects, Region, Poles, View, Sketch }
 
 public partial class EditorMode
 {
@@ -29,7 +29,6 @@ public partial class EditorMode
         (EditorTool.Select, "select", "Select", Key.Key1),
         (EditorTool.Group, "group", "Group", Key.Key2),
         (EditorTool.Fence, "fence", "Fence", Key.Key3),
-        (EditorTool.Trees, "trees", "Trees", Key.Key4),
         (EditorTool.Objects, "objects", "Objects", Key.Key5),
         (EditorTool.Region, "region", "Region", Key.Key6),
         (EditorTool.Poles, "poles", "Poles", Key.Key7),
@@ -187,7 +186,6 @@ public partial class EditorMode
         grp.AddChild(new Label { Text = "Clear the marks with Esc.", ThemeTypeVariation = "Dim" });
 
         BuildFenceSection(Page(EditorTool.Fence));
-        BuildTreesSection(Page(EditorTool.Trees));
         BuildObjectsSection(Page(EditorTool.Objects));
         BuildRegionPage(Page(EditorTool.Region));
         BuildPolesPage(Page(EditorTool.Poles));
@@ -264,7 +262,7 @@ public partial class EditorMode
         "Fly\tWASD, Space up, Shift down, Alt x3, hold RMB to look, wheel changes speed\n" +
         "Select\tLMB select, Shift+LMB add or remove, Esc clear\n" +
         "Walk\tF2 walk from where you were, F3 drop to the ground below the camera and walk\n" +
-        "Tools\t1 Select, 2 Group, 3 Fence, 4 Trees, 5 Objects, 6 Region, 7 Poles, 8 View, 9 Sketch (press again to hide)\n" +
+        "Tools\t1 Select, 2 Group, 3 Fence, 5 Objects, 6 Region, 7 Poles, 8 View, 9 Sketch (press again to hide)\n" +
         "Group\tG group the selection (marked groups merge)\n" +
         "Edit\tEnter apply, Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo\n" +
         "Objects\tLMB place, R / Shift+R rotate, Ctrl free position, Ctrl+D duplicate, Del delete, arrows nudge\n" +
@@ -318,7 +316,7 @@ public partial class EditorMode
         _panel.Visible = tool != EditorTool.None;
         foreach (var (t, p) in _pages) p.Visible = t == tool;
         foreach (var (t, b) in _railButtons) b.SetPressedNoSignal(t == tool);
-        var edit = tool is EditorTool.Fence or EditorTool.Trees;
+        var edit = tool is EditorTool.Fence;
         _editHead.Visible = _editFoot.Visible = edit;
         _panelTitle.Text = Tools.FirstOrDefault(x => x.tool == tool).name ?? "";
         _scroll.ScrollVertical = 0;

@@ -57,12 +57,11 @@ def test_trees_come_only_from_the_detector(tmp_path: Path) -> None:
     terrain = make_terrain()
 
     def make():
-        return make_trees(parcels, buildings, graph, osm, terrain, cfg_for(tmp_path / "ortho"),
-                          overrides={"P-0001": {"count": 50}}, origin=(0.0, 0.0))
+        return make_trees(parcels, buildings, graph, osm, terrain, cfg_for(tmp_path / "ortho"), origin=(0.0, 0.0))
 
     trees = make()
     assert trees == make()  # deterministic
-    assert {t["src"] for t in trees} == {"ortho", "ortho-canopy"}  # no rule-based, no OSM, no hand-set trees
+    assert {t["src"] for t in trees} == {"ortho", "ortho-canopy"}  # no rule-based, no OSM trees
     assert all(t["parcel"] is None for t in trees)
 
     alone = [t for t in trees if t["src"] == "ortho"]

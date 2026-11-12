@@ -1043,7 +1043,6 @@ class ParcelEditTools:
             "neighbours": neighbours,
             "edits": {
                 "fence": entry.get("fence"),
-                "trees": entry.get("trees"),
                 "objects": entry.get("objects", []),
                 "group_fence": group_fence,
             },
@@ -1198,75 +1197,6 @@ class ParcelEditTools:
         return {
             "summary": f"fence of {tid} reset to the rules" if changed else f"{tid} had no fence edit",
             "target": tid,
-            "changed": changed,
-        }
-
-    # trees ---------------------------------------------------------------------------------
-    def set_trees(
-        self,
-        parcel: str,
-        density_per_1000m2: float | None = None,
-        count: int | None = None,
-        seed_offset: int | None = None,
-    ) -> dict:
-        """Set generated trees of a parcel (see the registered tool description)."""
-        pid = self.map.need(parcel)
-        if density_per_1000m2 is not None and count is not None:
-            raise ToolError("give exactly one of density_per_1000m2 or count, not both")
-        if density_per_1000m2 is not None:
-            _check_num("density_per_1000m2", density_per_1000m2, minimum=0)
-        if count is not None and (isinstance(count, bool) or not isinstance(count, int) or count < 0):
-            raise ToolError(f"count must be an integer >= 0 (got {count!r})")
-        if seed_offset is not None and (isinstance(seed_offset, bool) or not isinstance(seed_offset, int)):
-            raise ToolError(f"seed_offset must be an integer (got {seed_offset!r})")
-        if density_per_1000m2 is None and count is None and seed_offset is None:
-            raise ToolError("nothing to set: give density_per_1000m2 or count (and/or seed_offset)")
-
-        def change(edits: Edits) -> dict:
-            holder = edits.parcels.setdefault(pid, {})
-            trees = dict(holder.get("trees", {}))
-            if density_per_1000m2 is not None:
-                trees.pop("count", None)
-                trees["density_per_1000m2"] = density_per_1000m2
-            if count is not None:
-                trees.pop("density_per_1000m2", None)
-                trees["count"] = count
-            if seed_offset is not None:
-                trees["seed_offset"] = seed_offset
-            if "density_per_1000m2" not in trees and "count" not in trees:
-                tcfg = load_section("props", self.settings.rules_path, self.settings.area)["trees"]
-                rate = tcfg["density_per_1000m2"].get(self.map.parcels[pid]["kind"], 0.0)
-                raise ToolError(
-                    "a seed_offset alone cannot be stored: edits.json needs a density or a count "
-                    f"with it. The rules' density for this parcel's kind is {rate} per 1000 m2; "
-                    "pass density_per_1000m2 (e.g. that value) together with seed_offset."
-                )
-            holder["trees"] = trees
-            return trees
-
-        trees = self._write(change)
-        return {
-            "summary": f"trees of {pid} set: {json.dumps(trees, sort_keys=True)}",
-            "parcel": pid,
-            "trees": trees,
-            "warnings": [],
-        }
-
-    def reset_trees(self, parcel: str) -> dict:
-        """Remove the trees entry of a parcel so the rules' tree density applies again."""
-        pid = self.map.need(parcel)
-
-        def change(edits: Edits) -> bool:
-            holder = edits.parcels.get(pid)
-            if not holder or "trees" not in holder:
-                return False
-            del holder["trees"]
-            return True
-
-        changed = self._write(change)
-        return {
-            "summary": f"trees of {pid} reset to the rules" if changed else f"{pid} had no trees edit",
-            "parcel": pid,
             "changed": changed,
         }
 
@@ -2031,11 +1961,11 @@ def build_server(settings: Settings) -> Any:
     server = MCPServer(
         "drycastle-parcel-edits",
         instructions=(
-            "Edit parcels of the Drycastle map: fences, trees, placed objects, property "
+            "Edit parcels of the Drycastle map: fences, placed objects (trees are placed as objects), property "
             "groups and ground-colour regions, all stored in edits.json (a viewer in --editor --watch "
             "mode shows changes within about a second). Coordinates are absolute S-JTSK metres (x east, y north). "
             "Typical flow: find_parcels (selected=true for what the user selected) -> get_parcel "
-            "-> set_fence / set_trees / place_object; create_region for ground colour. When the "
+            "-> set_fence / place_object; create_region for ground colour. When the "
             "user points at something they drew ('this line', 'this area', 'here', 'at A', "
             "'inside L1', 'sketch ROAD'), call get_sketch for its coordinates. To show the user something on the map "
             "(a road, a spot, an outline), draw it with sketch_add_road / sketch_add_point / sketch_add_line under a named sketch."
@@ -2123,7 +2053,7 @@ def build_server(settings: Settings) -> Any:
         "normal and the axes used by place_object: `along` grows to the right when standing on "
         "the front edge looking into the parcel, `inward` grows away from the road), buildings on "
         "it (footprint centroid, bounds), neighbouring parcels, its group, the current edits "
-        "(fence, trees, objects), the effective fence after group inheritance, and the rules' "
+        "(fence, objects), the effective fence after group inheritance, and the rules' "
         "defaults (fence probability, tree density for its kind). Coordinates are S-JTSK metres."))
     def get_parcel(id: str) -> dict:
         return tools.get_parcel(id)
@@ -2155,23 +2085,6 @@ def build_server(settings: Settings) -> Any:
     @server.tool(description="Remove the fence edit of a parcel or group so the rules (or the group's fence) apply again.")
     def reset_fence(target: str) -> dict:
         return tools.reset_fence(target)
-
-    @server.tool(description=(
-        "Set the generated trees of a parcel: exactly one of `density_per_1000m2` (trees per "
-        "1000 m2) or `count` (exact number), and optionally `seed_offset` (an integer that "
-        "rerolls the layout; a seed_offset alone is accepted only when the parcel already has a "
-        "density or count). Generated trees avoid buildings, roads and placed objects."))
-    def set_trees(
-        parcel: str,
-        density_per_1000m2: float | None = None,
-        count: int | None = None,
-        seed_offset: int | None = None,
-    ) -> dict:
-        return tools.set_trees(parcel, density_per_1000m2, count, seed_offset)
-
-    @server.tool(description="Remove the trees edit of a parcel so the rules' density applies again.")
-    def reset_trees(parcel: str) -> dict:
-        return tools.reset_trees(parcel)
 
     @server.tool(description=(
         "Place an asset (see list_assets) on a parcel. Position is either `anchor` = front | back "

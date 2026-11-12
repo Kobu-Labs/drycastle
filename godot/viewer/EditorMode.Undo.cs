@@ -4,9 +4,8 @@ using System.Linq;
 using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 
 /// <summary>
-/// Session undo/redo of every save the editor made since it opened (objects, group operations, Apply of fence and
-/// trees). Each save records the before and after content of what it touched: `groups.&lt;ID&gt;`, `regions.&lt;ID&gt;` and `cables.&lt;ID&gt;`
-/// as whole entries, a parcel at key level (`parcels.&lt;ID&gt;.fence`, `.trees` and each object by id), with "absent" as a value.
+/// Session undo/redo of every save the editor made since it opened (objects, group operations, Apply of fence). Each save records the before and after content of what it touched: `groups.&lt;ID&gt;`, `regions.&lt;ID&gt;` and `cables.&lt;ID&gt;`
+/// as whole entries, a parcel at key level (`parcels.&lt;ID&gt;.fence` and each object by id), with "absent" as a value.
 /// Undo reloads the file from disk, writes the before-values back (absent deletes), validates and saves; the watcher
 /// (or the instant objects path) applies the effect. Only the keys this operation touched are overwritten; everything
 /// else in the file, including other keys of the same parcel changed by another writer, stays as it is. Redo mirrors that with the after-entries. A new edit clears the redo stack. The
@@ -19,7 +18,7 @@ public partial class EditorMode
     /// <summary>One touched entry: kind is "parcels", "groups", "regions" or "cables"; Before/After null means absent.</summary>
     /// <summary>
     /// Key is null for the whole entry (groups, regions, cables). For a parcel it names the part that changed: "fence",
-    /// "trees" or "objects/&lt;object id&gt;", so undo leaves the parcel's other keys (and other writers' edits) alone.
+    /// or "objects/&lt;object id&gt;", so undo leaves the parcel's other keys (and other writers' edits) alone.
     /// </summary>
     public sealed record EntryChange(string Kind, string Id, Obj? Before, Obj? After, string? Key = null);
     /// <summary>A step that changed the sketch (EditorMode.Sketch.cs) carries its two states and no file changes: nothing is written.</summary>
@@ -34,7 +33,7 @@ public partial class EditorMode
 
     static Obj? Entry(Obj root, string kind, string id) => ((Obj)root[kind]!).GetValueOrDefault(id) as Obj;
 
-    /// <summary>The entries (parcels: fence, trees and objects by id) whose content differs between two documents.</summary>
+    /// <summary>The entries (parcels: fence and objects by id) whose content differs between two documents.</summary>
     static List<EntryChange> DiffEntries(Obj before, Obj after)
     {
         var list = new List<EntryChange>();
@@ -68,7 +67,7 @@ public partial class EditorMode
 
     static void DiffParcel(List<EntryChange> list, string id, Obj? x, Obj? y)
     {
-        foreach (var key in new[] { "fence", "trees" })
+        foreach (var key in new[] { "fence" })
             Add(list, "parcels", id, key, x?.GetValueOrDefault(key) as Obj, y?.GetValueOrDefault(key) as Obj);
         var ox = ObjectsById(x); var oy = ObjectsById(y);
         foreach (var oid in ox.Keys.Union(oy.Keys).OrderBy(k => k, StringComparer.Ordinal))

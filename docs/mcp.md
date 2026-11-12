@@ -1,7 +1,7 @@
 # MCP server for parcel edits
 
 A small stdio MCP server (`pipeline/src/drycastle_pipeline/mcp_server.py`) that lets Claude Code edit parcels in
-plain language: fences, trees, placed objects (cars, slabs, pots, bushes, ...), property groups and regions (ground colour shapes). It writes
+plain language: fences, placed objects (trees among them: cars, slabs, pots, bushes, ...), property groups and regions (ground colour shapes). It writes
 `pipeline/config/edits.json`, the same file the viewer's editor panel writes. It never talks to the viewer: a
 viewer started with `--editor --watch` notices the file change within about a second and regenerates just the
 affected parcels.
@@ -74,7 +74,7 @@ Example prompts:
 
 - "Park a car in front of the house on the selected parcel."
 - "Put a brick wall fence around P-0084 with a 4 m gate at the front."
-- "Plant five trees on the selected parcel, a different layout than before." (`count` plus a new `seed_offset`)
+- "Put a large tree at the back of P-0084." (`place_object` with `pack:kenney-city-kit-suburban/tree-large`, anchor `back`)
 - "Group P-0012 and P-0013 as one property and give them a wire fence."
 - "Put a flower pot at each side of the front door of the house on P-0021." (anchors `near_building`, offsets)
 - "Remove the car I just placed."
@@ -124,8 +124,6 @@ All inputs and outputs are JSON. Write tools return `summary`, `warnings` and th
 | `get_parcel` | `id` | kind, area, cadastral ref, polygon bounds and centroid, edges with lengths, front edge, buildings (footprint centroid and bounds), neighbours, group, current edits, effective fence (after group inheritance), rule defaults (fence probability, tree density for its kind) |
 | `set_fence` | `target` (parcel or group), `mode?`, `type?`, `column?`, `height_m?`, `thickness_m?`, `colour?`, `gaps?` | same semantics as the editor panel: `mode` auto / none / custom; the other keys are custom-only (given without a mode they imply custom; with auto / none they are rejected); given keys are merged into the existing entry; `type` is picket / wire / brick_red / brick_white / stone_wall / concrete (textured, each with its own columns); `column` swaps the columns (none / wood_post / metal_post / brick_red / brick_white / stone / concrete); `colour` is a tint (the paint of picket, wire and concrete); `gaps` are `{"at": [x, y] or "front", "width_m"}` gates |
 | `reset_fence` | `target` | removes the fence entry (rules again) |
-| `set_trees` | `parcel`, `density_per_1000m2?` or `count?`, `seed_offset?` | exactly one of density / count (a `seed_offset` alone works only on top of an existing one) |
-| `reset_trees` | `parcel` | removes the trees entry |
 | `place_object` | `parcel`, `asset`, `anchor?`, `offset_m?` `{along,inward}`, `position?` `[x,y]`, `rotation_deg?`, `scale?`, `colour?` | anchors `front back left right centre near_building` (default `centre`); an anchor point that falls outside the parcel is moved to the nearest interior point (warning); exact `position` outside the parcel is applied with a warning; returns id, final position, rotation |
 | `remove_object` | `id` | the cables of a removed utility pole go with it (`cables_removed`) |
 | `connect_poles` | `poles` (2+ pole object ids, in the order the line runs) | strings a cable from each pole to the next (`C-NNNN`); poles are objects placed from the `prim:pole_*` assets; an id may also be a house connector (`prim:connector_*`, fixed to a wall or roof in the editor), so `[pole, connector]` connects a house; a pair already joined is left alone (warning); the poles keep their rotation, the wires are matched left to right |
@@ -198,8 +196,8 @@ absolute S-JTSK metres, so they go straight into `place_object` `position`, `cre
 Errors say what to do: no sketch file, an empty sketch, an
 unknown mark or sketch (the existing names are listed), a bad sketch name. Warnings: a state file older than 10 minutes, a closed line that
 crosses itself (returned without parcels), no mark on any parcel of this map (wrong `--area` or `--state`).
-What is still missing for "plant trees inside L1": trees are set per parcel (`set_trees`), so today that means placed
-tree objects at computed positions; a tree edit bound to a drawn shape is a separate piece of work.
+What is still missing for "plant trees inside L1": trees are no longer set per parcel (the rules or the orthophoto detector plant
+them), so today that means placed tree objects at computed positions; a tree edit bound to a drawn shape is a separate piece of work.
 
 Not yet: moving or editing a mark (remove and draw it again), a screenshot tool (`snapshot(parcel)` can come later, the viewer already has `--screenshot`), and
 drawing free-form fence polylines, and inserting or removing region points (delete and recreate).

@@ -171,9 +171,9 @@ public static class ObjectEdits
             var path = $"parcels.{pid}";
             if (!ParcelRx.IsMatch(pid)) errs.Add($"{path}: parcel IDs look like P-0412");
             if (entry is not Obj e) { errs.Add($"{path}: must be an object"); continue; }
+            if (e.ContainsKey("trees")) errs.Add($"{path}.trees: per-parcel tree settings were removed; delete this entry");
             foreach (var k in e.Keys) if (k is not ("fence" or "trees" or "objects")) errs.Add($"{path}.{k}: unknown key");
             if (e.TryGetValue("fence", out var f)) errs.AddRange(f is Obj fo ? EditModel.CheckFence(fo, $"{path}.fence") : new List<string> { $"{path}.fence: must be an object" });
-            if (e.TryGetValue("trees", out var t)) errs.AddRange(t is Obj to ? EditModel.CheckTrees(to, $"{path}.trees") : new List<string> { $"{path}.trees: must be an object" });
             if (e.TryGetValue("objects", out var ob)) errs.AddRange(CheckObjects(ob, $"{path}.objects", seen));
         }
         var owner = new Dictionary<string, string>();

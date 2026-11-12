@@ -140,8 +140,8 @@ def main() -> int:
     def absolute(pt: tuple[float, float]) -> list[float]:
         return [round(pt[0] + origin[0], 3), round(pt[1] + origin[1], 3)]
 
-    def step(trees: dict, obj_pos: tuple[float, float] | None) -> dict:
-        entry: dict = {"fence": {"mode": "none"}, "trees": trees}
+    def step(obj_pos: tuple[float, float] | None) -> dict:
+        entry: dict = {"fence": {"mode": "none"}}
         if obj_pos:
             entry["objects"] = [{"id": "smoke-sedan", "asset": "pack:kenney-car-kit/sedan",
                                  "position": absolute(obj_pos), "rotation_deg": 30}]
@@ -150,10 +150,10 @@ def main() -> int:
     steps = scratch / "steps"
     steps.mkdir(exist_ok=True)
     files = {
-        "1": json.dumps(step({"count": 5}, p1)),
-        "2": json.dumps(step({"count": 5, "seed_offset": 1}, p2)),
+        "1": json.dumps(step(p1)),
+        "2": json.dumps(step(p2)),
         "broken": '{"version": 1, "parcels": {"' + fid + '": {"fence": ',
-        "3": json.dumps(step({"count": 0}, None)),
+        "3": json.dumps(step(None)),
         "4": json.dumps(empty),
     }
     for name, text in files.items():

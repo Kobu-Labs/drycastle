@@ -2879,10 +2879,7 @@
      ],
      "rotation_deg": 285.0
     }
-   ],
-   "trees": {
-    "count": 20
-   }
+   ]
   },
   "P-0027": {
    "objects": [
@@ -2940,15 +2937,7 @@
      ],
      "rotation_deg": 285.0
     }
-   ],
-   "trees": {
-    "count": 20
-   }
-  },
-  "P-0028": {
-   "trees": {
-    "count": 20
-   }
+   ]
   },
   "P-0029": {
    "objects": [
@@ -3088,10 +3077,7 @@
      "rotation_deg": 197.1,
      "z": 193.713
     }
-   ],
-   "trees": {
-    "count": 20
-   }
+   ]
   },
   "P-0030": {
    "fence": {
@@ -3112,10 +3098,6 @@
   "P-0040": {
    "fence": {
     "mode": "none"
-   },
-   "trees": {
-    "count": 8,
-    "seed_offset": 4
    }
   },
   "P-0041": {
@@ -3209,11 +3191,6 @@
     "mode": "none"
    }
   },
-  "P-0076": {
-   "trees": {
-    "count": 5000
-   }
-  },
   "P-0077": {
    "fence": {
     "mode": "none"
@@ -3222,12 +3199,6 @@
   "P-0081": {
    "fence": {
     "mode": "none"
-   }
-  },
-  "P-0082": {
-   "trees": {
-    "density_per_1000m2": 30.0,
-    "seed_offset": 1
    }
   },
   "P-0083": {
@@ -3532,11 +3503,6 @@
   "P-0094": {
    "fence": {
     "mode": "none"
-   }
-  },
-  "P-0096": {
-   "trees": {
-    "count": 2000
    }
   },
   "P-0098": {
@@ -4002,12 +3968,6 @@
     "mode": "none"
    }
   },
-  "P-0256": {
-   "trees": {
-    "density_per_1000m2": 30.0,
-    "seed_offset": 1
-   }
-  },
   "P-0257": {
    "fence": {
     "mode": "none"
@@ -4389,10 +4349,7 @@
      "rotation_deg": 140.455,
      "scale": 0.5
     }
-   ],
-   "trees": {
-    "density_per_1000m2": 28.0
-   }
+   ]
   },
   "P-0348": {
    "fence": {
@@ -4464,19 +4421,9 @@
     "mode": "none"
    }
   },
-  "P-0376": {
-   "trees": {
-    "count": 2000
-   }
-  },
   "P-0377": {
    "fence": {
     "mode": "none"
-   }
-  },
-  "P-0378": {
-   "trees": {
-    "count": 2000
    }
   },
   "P-0379": {
@@ -4508,10 +4455,7 @@
      ],
      "rotation_deg": 0.0
     }
-   ],
-   "trees": {
-    "count": 8
-   }
+   ]
   },
   "P-0384": {
    "fence": {
@@ -4750,12 +4694,6 @@
     "mode": "none"
    }
   },
-  "P-0482": {
-   "trees": {
-    "density_per_1000m2": 30.0,
-    "seed_offset": 1
-   }
-  },
   "P-0484": {
    "fence": {
     "mode": "none"
@@ -4794,11 +4732,6 @@
   "P-0508": {
    "fence": {
     "mode": "none"
-   }
-  },
-  "P-0509": {
-   "trees": {
-    "count": 22
    }
   },
   "P-0510": {
@@ -7466,11 +7399,6 @@
     "mode": "none"
    }
   },
-  "P-0831": {
-   "trees": {
-    "count": 2000
-   }
-  },
   "P-0832": {
    "fence": {
     "mode": "none"
@@ -7509,12 +7437,6 @@
   "P-0844": {
    "fence": {
     "mode": "none"
-   }
-  },
-  "P-0845": {
-   "trees": {
-    "density_per_1000m2": 30.0,
-    "seed_offset": 1
    }
   },
   "P-0849": {
@@ -7682,12 +7604,6 @@
   "P-0907": {
    "fence": {
     "mode": "none"
-   }
-  },
-  "P-0908": {
-   "trees": {
-    "density_per_1000m2": 30.0,
-    "seed_offset": 1
    }
   },
   "P-0909": {
@@ -8197,10 +8113,7 @@
      "rotation_deg": 186.684,
      "scale": 8.0
     }
-   ],
-   "trees": {
-    "count": 0
-   }
+   ]
   },
   "P-1083": {
    "fence": {

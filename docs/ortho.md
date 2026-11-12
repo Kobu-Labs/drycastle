@@ -65,9 +65,9 @@ minus ground) would find trees far more reliably, but only the ground model is s
 ### Planting from the detector (experiment)
 
 `DRYCASTLE_TREE_SOURCE=ortho make map` (or just `props detail export`) makes the props stage plant **every** tree from
-`trees.json` and `canopy.png` (`props.ortho_trees`); without the variable nothing changes. All rule-based trees, OSM trees,
-shore rows and the hand-set trees of `edits.json` are left out (the stage warns how many hand-set overrides it ignores,
-the file is untouched).
+`trees.json` and `canopy.png` (`props.ortho_trees`); without the variable nothing changes. All rule-based trees, OSM trees
+and shore rows are left out. (Per-parcel tree settings in `edits.json` no longer exist: they were removed, see
+`docs/viewer-and-editor.md`.)
 
 * Each standalone tree is planted where it was found, scale = 2 x crown radius / `canopy_m`, kept within 0.8-3.
 * The canopy is planted so the forest looks closed from above, as in the photo: `props.trees.ortho` in `rules.yaml` gives
