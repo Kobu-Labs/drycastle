@@ -84,7 +84,7 @@ public partial class NetClient
         if (seat < 0 || seat >= seats.Count || seats[seat].Offset.Length != 3) return;
         var o = seats[seat].Offset;
         _me.EndChase(_me.Yaw); // no-op unless a chase or turret camera was on
-        var feet = ToWorld(v, new Vector3(o[0], o[1], o[2]));
+        var feet = SeatAnchor(v).GlobalTransform * new Vector3(o[0], o[1], o[2]); // on the body as it is drawn: the seat leans and bobs with it
         // a seat in the open is drawn and hit seated (or standing in the ring): the eye is that figure's, not a standing body's on the seat
         if (seats[seat].Exposed) _me.SeatView(feet, SeatAimRules.EyeHeight(seats[seat])); else _me.GlobalPosition = feet;
         if (seats[seat].Armed)

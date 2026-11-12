@@ -22,6 +22,8 @@ public partial class NetClient
         public DoorGunNodes? DoorGun;
         /// <summary>A flying vehicle's rotors, their sound and the downwash (null for everything that drives, or a model without rotors).</summary>
         public RotorFx? Rotor;
+        /// <summary>A driven vehicle's moving nodes and water effects (the amphibious transport; null for every other type, or a model without them).</summary>
+        public DriveNodes? Drive;
         public readonly Interpolator Buf = new();
         public ushort Driver;
         public int Kind;
@@ -58,6 +60,7 @@ public partial class NetClient
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flak != null) v.Flak = FlakNodes.Find(v.Node);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].DoorGun is { } doorGun) v.DoorGun = DoorGunNodes.Find(v.Node, doorGun);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flight != null) v.Rotor = RotorFx.Find(v.Node);
+            if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Drive != null) v.Drive = DriveNodes.Find(v.Node);
             _cars[id] = v;
             ShowGlassOf(id); // panes whose state arrived before the vehicle was drawn (ADR 0007)
         }
@@ -103,6 +106,7 @@ public partial class NetClient
         v.Exploded = true;
         v.Snd?.Release(); v.Snd = null;
         v.Rotor?.Stop();
+        v.Drive?.Stop();
         v.ExplodedAt = Now;
         if (v.Smoke != null) { v.Smoke.Stop(); v.Smoke.QueueFree(); v.Smoke = null; } // freed with its particles, not just stopped: nothing of the smoke outlives the vehicle
         v.Destroyed = true; // the wreck is gone until the server returns it: a live record must not bring it back or its smoke
@@ -187,11 +191,14 @@ public partial class NetClient
             v.Node.Rotation = rot;
             if (v.Destroyed) continue;
             var flakMine = v.Flak != null && RenderFlak(v, s, rt, dt);
-            if (v.DoorGun != null && RenderDoorGun(v, rot, rt, dt)) { flakMine = true; doorGunner = true; } // the gun camera, as at the flak
+            // the gun stands on the body: on a driven vehicle that is the slope plus the body's own lean over its wheels
+            var gunRot = drive != null && _drives.TryGetValue(v.Id, out var lean) ? rot + new Vector3(lean.Pose.BodyPitch, 0, lean.Pose.BodyRoll) : rot;
+            if (v.DoorGun != null && RenderDoorGun(v, gunRot, rt, dt)) { flakMine = true; doorGunner = true; } // the gun camera, as at the flak
             if (flakMine) flakGunner = true;
             v.Smoke?.Near(Sfx.ListenerDistance(p) < 90f); // far vehicles do not smoke: particle budget
             if (flies) StepFlightFx(v, FlightDef(v)!, p, rot, dt); // rotors, their sound, the downwash
             else SfxCar(v, p);
+            if (drive != null) StepDriveFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
             if (v.Driver == _myId && _driving && _me != null)
             {
                 _carYaw = rot.Y;
@@ -210,6 +217,7 @@ public partial class NetClient
             }
             else if (!flakMine && _driving && _me != null && _seats is { Mine: > 0 } st && st.CarId == v.Id) { RideSeat(v, st.Mine); kmh = DriveOf(v) is { } rs ? MathF.Abs(rs.Speed) * 3.6f : v.Kmh; } // another seat: first person from it, the speed shown as the driver's is
         }
+        SeatRiders(); // the riders of driven vehicles, on their seats as the vehicles are drawn this frame
         if (!_driving) HideSelfInCar();
         if (!cockpit) EndCockpit();
         if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) _me?.EndChase(_me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
@@ -233,13 +241,14 @@ public partial class NetClient
         if (Vehicles == null) return;
         var seats = Vehicles.Vehicles[car.Kind].Seats;
         var o = seats.Count > 0 && seats[0].Offset.Length == 3 ? seats[0].Offset : new float[3];
-        if (_selfView == null || _selfView.GetParent() != car.Node)
+        var anchor = SeatAnchor(car); // the body of a driven vehicle: the figure leans with it
+        if (_selfView == null || _selfView.GetParent() != anchor)
         {
             _selfView?.QueueFree();
             _selfView = CharacterView.Make();
             if (Appearances.TryGetValue(_myId, out var look)) _selfView.SetCamo(look, CamoData);
             _selfView.SetStance(Stance.Crouch); // seated: there is no sitting animation, the crouch squash is the closest pose
-            car.Node.AddChild(_selfView);
+            anchor.AddChild(_selfView);
         }
         _selfView.Position = new Vector3(o[0], o[1], o[2]);
     }

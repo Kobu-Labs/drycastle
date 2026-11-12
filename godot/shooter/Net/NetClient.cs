@@ -13,7 +13,9 @@ namespace Drycastle.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
+    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
+        /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the driven vehicle and seat this player was last matched to (<see cref="SeatRiders"/>).</summary>
+        public float ShownYaw, ShownPitch; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -535,10 +537,11 @@ public partial class NetClient : Node
             {
                 var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 var dead = r.State == EntityState.Dead;
+                r.ShownYaw = s.Yaw; r.ShownPitch = s.Pitch;
                 TumbleRemote(r, at, s.Yaw, dead && TargetDummies.IsDummyId(id), dt);
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
                 r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && CorpseOf(id)); // riders are drawn in their seat (the server puts the body there), seated rather than standing
-                r.View?.SetStance(r.State == EntityState.InVehicle ? Stance.Crouch : r.Stance);
+                r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
                 AnimateRemote(r, s.Pos);
                 UpdateNameTag(id, r);
             }

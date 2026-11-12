@@ -40,6 +40,14 @@ public sealed partial class ArmsReadyPose : SkeletonModifier3D
     /// <summary>One shot: the weapon kicks back and up and the hands follow, then settles (about 0.1 s).</summary>
     public void Kick() => _recoil = 1f;
 
+    /// <summary>
+    /// How far up (positive) or down the weapon points, radians: a rider aiming from a seat. The weapon and the hands swing about the shoulder
+    /// line, so the barrel points where the rider aims. 0 (everyone on foot): level, as before.
+    /// </summary>
+    public float Pitch { get; set; }
+    /// <summary>The height of the shoulders the aim swings about, metres in the model's own frame.</summary>
+    const float ShoulderHeight = 1.0f;
+
     /// <summary>The left arm reaches for the foregrip too.</summary>
     public bool TwoHanded { get; set; } = true;
 
@@ -76,8 +84,13 @@ public sealed partial class ArmsReadyPose : SkeletonModifier3D
         if (GetSkeleton() is not { } sk || _right == null || _left == null) return;
         _recoil = Mathf.Max(0f, _recoil - (float)delta * 9f);
         // a shot pushes the weapon back along the barrel and lifts the muzzle; the targets move, so the arms recoil with it
-        var barrel = (Barrel + Vector3.Up * (_recoil * 0.12f)).Normalized();
-        var rightTarget = (RightHand - barrel * (_recoil * 0.05f)) * _rigPerMetre;
+        var level = (Barrel + Vector3.Up * (_recoil * 0.12f)).Normalized();
+        var (sp, cp) = Mathf.SinCos(Pitch);
+        // pitched about the shoulder line (the model's x axis): the barrel and the hand that holds it go up together
+        var barrel = new Vector3(level.X, level.Y * cp + level.Z * sp, level.Z * cp - level.Y * sp);
+        var grip = RightHand - new Vector3(0, ShoulderHeight, 0);
+        var hand = new Vector3(grip.X, ShoulderHeight + grip.Y * cp + grip.Z * sp, grip.Z * cp - grip.Y * sp);
+        var rightTarget = (hand - barrel * (_recoil * 0.05f)) * _rigPerMetre;
         Solve(sk, _right, rightTarget, out _);
         if (TwoHanded) Solve(sk, _left, rightTarget + barrel * (Foregrip * _rigPerMetre), out _);
         if (Aim != null)
