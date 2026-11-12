@@ -43,7 +43,7 @@ make roads      # OSM highways -> road graph (data/work/roads.json)
 make props      # fences, trees, spawn candidates (data/work/props.json, spawns.json)
 make export     # chunk glTFs, parcels.json, roads.json, spawns.json, manifest.json -> out/map/
 make preview    # out/preview/topdown.png, iso.png, iso_close.png (matplotlib; EXAG=3 relief factor)
-make map AREA=village   # the same for the whole village (any target takes AREA=slice|village)
+make map AREA=village   # the same for the whole village (any target takes AREA=slice|village; the default is village)
 make viewer         # build and run the Godot viewer (see docs/viewer-and-editor.md)
 make viewer-smoke   # headless smoke test of the viewer and the loader
 make viewer-edit-smoke  # hot reload end to end (scratch export, headless viewer, edits written during the run)

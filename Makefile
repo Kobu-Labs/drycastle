@@ -1,5 +1,5 @@
-# AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
-AREA ?= slice
+# AREA=village (default): the whole village, data/village/..., out/village/map. AREA=slice: the small test area (data/raw, data/work, out/map).
+AREA ?= village
 
 .PHONY: editor setup test fetch normalise parcels rules terrain roads props detail export parcel-run region-run preview poles-preview poles-manifest floodwall-preview floodwall-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 

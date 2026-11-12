@@ -26,8 +26,8 @@ backoff (Overpass falls back to a second public instance).
 
 ## Whole village (areas)
 
-The pipeline runs over two areas around the same centre, chosen with `AREA=slice` (default) or
-`AREA=village` for make, or `--area` on the CLI:
+The pipeline runs over two areas around the same centre, chosen with `AREA=village` (default) or
+`AREA=slice` for make, or `--area` on the CLI:
 
 | | slice | village |
 | --- | --- | --- |
