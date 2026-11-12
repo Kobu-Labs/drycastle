@@ -9,9 +9,10 @@ using Godot;
 
 /// <summary>
 /// The Sketch tool: temporary marks on the ground that a prompt can name ("plant trees inside L1", "a lamp at A").
-/// A sketch holds any number of points (A, B, C, ...) and lines (L1, L2, ...; a closed line joins its last corner to its first and marks the ground inside).
-/// It is never written to edits.json: the marks go to editor-state.json next to the selection (see EditsWatcher), where
-/// the MCP server's get_sketch reads them, and they are restored from that file when the editor starts.
+/// Marks are grouped in named sketches (ROAD, FENCE_PLAN, ...); each sketch holds any number of points (A, B, C, ...) and lines (L1, L2, ...; a closed line
+/// joins its last corner to its first and marks the ground inside). Mark names are unique across all sketches. New marks go to the active sketch.
+/// It is never written to edits.json: the marks live in sketch.json next to editor-state.json, a file the MCP server reads and writes too
+/// (sketch_add_*, get_sketch): the editor reloads it when its version changes, as one undo step, and writes it on every local change.
 ///
 /// States (the hint bar names each): Idle, Drawing (a line's corners are being placed), Selected. Every change of the
 /// sketch (a new mark, a delete, a clear) is one step on the editor's undo stack, in order with the saves.
@@ -22,9 +23,9 @@ public partial class EditorMode
     public enum SketchKind { Point, Line }
     public enum SketchState { Idle, Drawing, Selected }
 
-    public sealed record SketchPoint(string Id, double X, double Y);
+    public sealed record SketchPoint(string Id, double X, double Y, string Sketch = DefaultSketch);
 
-    public sealed record SketchLine(string Id, bool Closed, IReadOnlyList<(double x, double y)> Points)
+    public sealed record SketchLine(string Id, bool Closed, IReadOnlyList<(double x, double y)> Points, string Sketch = DefaultSketch)
     {
         public double LengthM
         {
@@ -50,30 +51,41 @@ public partial class EditorMode
     }
 
     /// <summary>One state of the sketch. Never changed in place: every edit makes a new one, so undo keeps the old.</summary>
-    public sealed record SketchDoc(IReadOnlyList<SketchPoint> Points, IReadOnlyList<SketchLine> Lines, int NextPoint, int NextLine)
+    public sealed record SketchDoc(IReadOnlyList<SketchPoint> Points, IReadOnlyList<SketchLine> Lines, int NextPoint, int NextLine, IReadOnlyList<string> Names)
     {
-        public static readonly SketchDoc Empty = new(Array.Empty<SketchPoint>(), Array.Empty<SketchLine>(), 0, 0);
+        public static readonly SketchDoc Empty = new(Array.Empty<SketchPoint>(), Array.Empty<SketchLine>(), 0, 0, Array.Empty<string>());
         public int Count => Points.Count + Lines.Count;
+        public int CountIn(string sketch) => Points.Count(p => p.Sketch == sketch) + Lines.Count(l => l.Sketch == sketch);
     }
+
+    public const string DefaultSketch = "DEFAULT";
+    /// <summary>A sketch name: 1 to 24 letters, digits, _ or - (the MCP server checks the same).</summary>
+    public static bool ValidSketchName(string n) => n.Length is >= 1 and <= 24 && n.All(c => c is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z') or (>= '0' and <= '9') or '_' or '-');
 
     public const string OutlineSketch = "outline_sketch", OutlineSketchSel = "outline_sketch_sel",
         OutlineSketchDraft = "outline_sketch_draft", OutlineSketchGhost = "outline_sketch_ghost";
-    public static readonly string EmptySketchJson = BuildSketchJson(SketchDoc.Empty);
-
+    
     SketchDoc _sketch = SketchDoc.Empty;
     SketchKind _skMode = SketchKind.Line;
     readonly List<(double x, double y)> _skDraft = new();
     string? _skSelected, _skHover;
     (double x, double y)? _skCursor;
-    string _sketchJson = EmptySketchJson;
+    string _sketchJson = "";
     int _skVersion;
+    string _skActive = DefaultSketch;
+    int _skFileVersion;                  // the version of sketch.json this editor has written or read last
+    long _skFileStamp = -1;              // its modification time then (ticks), -1 when there was no file
+    double _skPollT;
     // every corner that can be clicked to select its mark, and the mark it belongs to
     readonly List<(double x, double y)> _skPickPts = new();
     readonly List<string> _skPickIds = new();
 
     public SketchDoc Sketch => _sketch;
-    /// <summary>The sketch as the `sketch` value of editor-state.json (absolute S-JTSK metres).</summary>
+    /// <summary>The sketch as the text of sketch.json (absolute S-JTSK metres).</summary>
     public string SketchJson => _sketchJson;
+    /// <summary>Where new marks go.</summary>
+    public string ActiveSketch => _skActive;
+    string SketchPath => Watcher == null || Watcher.StatePath == "" ? "" : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(Watcher.StatePath)) ?? ".", "sketch.json");
     public SketchKind SketchMode => _skMode;
     public string? SelectedSketchId => _skSelected;
     public IReadOnlyList<(double x, double y)> SketchDraft => _skDraft;
@@ -91,9 +103,10 @@ public partial class EditorMode
 
     static string Num(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
 
-    public static string BuildSketchJson(SketchDoc d)
+    /// <summary>sketch.json: format_version 1, a version that goes up on every write, the sketch names and the marks (see pipeline/src/drycastle_pipeline/sketchfile.py).</summary>
+    public static string BuildSketchJson(SketchDoc d, int version = 0)
     {
-        var sb = new StringBuilder("{\"lines\":[");
+        var sb = new StringBuilder("{\"format_version\":1,\"lines\":[");
         for (var i = 0; i < d.Lines.Count; i++)
         {
             var l = d.Lines[i];
@@ -104,50 +117,123 @@ public partial class EditorMode
                 if (j > 0) sb.Append(',');
                 sb.Append('[').Append(Num(l.Points[j].x)).Append(',').Append(Num(l.Points[j].y)).Append(']');
             }
-            sb.Append("]}");
+            sb.Append("],\"sketch\":").Append(JsonSerializer.Serialize(l.Sketch)).Append('}');
         }
         sb.Append("],\"next_line\":").Append(d.NextLine).Append(",\"next_point\":").Append(d.NextPoint).Append(",\"points\":[");
         for (var i = 0; i < d.Points.Count; i++)
         {
             var p = d.Points[i];
             if (i > 0) sb.Append(',');
-            sb.Append("{\"id\":").Append(JsonSerializer.Serialize(p.Id)).Append(",\"x\":").Append(Num(p.X)).Append(",\"y\":").Append(Num(p.Y)).Append('}');
+            sb.Append("{\"id\":").Append(JsonSerializer.Serialize(p.Id)).Append(",\"sketch\":").Append(JsonSerializer.Serialize(p.Sketch))
+              .Append(",\"x\":").Append(Num(p.X)).Append(",\"y\":").Append(Num(p.Y)).Append('}');
         }
-        return sb.Append("]}").ToString();
+        sb.Append("],\"sketches\":[").Append(string.Join(",", d.Names.Select(n => JsonSerializer.Serialize(n)))).Append("],\"version\":").Append(version).Append('}');
+        return sb.ToString();
     }
 
-    /// <summary>The sketch stored in a state document (the `sketch` value BuildSketchJson wrote); null when it has none.</summary>
-    public static SketchDoc? ParseSketch(JsonElement state)
+    /// <summary>The sketch of a sketch.json document (or of the `sketch` value an older editor-state.json held: its marks join DEFAULT).</summary>
+    public static SketchDoc ParseSketch(JsonElement s, out int version)
     {
-        if (state.ValueKind != JsonValueKind.Object || !state.TryGetProperty("sketch", out var s) || s.ValueKind != JsonValueKind.Object) return null;
+        version = s.TryGetProperty("version", out var v) && v.TryGetInt32(out var vi) ? vi : 0;
         var points = new List<SketchPoint>();
         var lines = new List<SketchLine>();
+        var names = new List<string>();
+        string SketchOf(JsonElement m) => m.TryGetProperty("sketch", out var n) && n.ValueKind == JsonValueKind.String && n.GetString() is { Length: > 0 } t ? t : DefaultSketch;
+        if (s.TryGetProperty("sketches", out var ns) && ns.ValueKind == JsonValueKind.Array)
+            foreach (var n in ns.EnumerateArray()) if (n.GetString() is { } t && ValidSketchName(t) && !names.Contains(t)) names.Add(t);
         if (s.TryGetProperty("points", out var ps))
             foreach (var p in ps.EnumerateArray())
-                points.Add(new SketchPoint(p.GetProperty("id").GetString()!, p.GetProperty("x").GetDouble(), p.GetProperty("y").GetDouble()));
+                points.Add(new SketchPoint(p.GetProperty("id").GetString()!, p.GetProperty("x").GetDouble(), p.GetProperty("y").GetDouble(), SketchOf(p)));
         if (s.TryGetProperty("lines", out var ls))
             foreach (var l in ls.EnumerateArray())
             {
                 var pts = l.GetProperty("points").EnumerateArray().Select(q => (q[0].GetDouble(), q[1].GetDouble())).ToList();
-                if (pts.Count >= 2) lines.Add(new SketchLine(l.GetProperty("id").GetString()!, l.GetProperty("closed").GetBoolean() && pts.Count >= 3, pts));
+                if (pts.Count >= 2) lines.Add(new SketchLine(l.GetProperty("id").GetString()!, l.GetProperty("closed").GetBoolean() && pts.Count >= 3, pts, SketchOf(l)));
             }
+        foreach (var n in points.Select(p => p.Sketch).Concat(lines.Select(l => l.Sketch))) if (!names.Contains(n)) names.Add(n);
         var np = s.TryGetProperty("next_point", out var a) && a.TryGetInt32(out var ai) ? ai : 0;
         var nl = s.TryGetProperty("next_line", out var b) && b.TryGetInt32(out var bi) ? bi : 0;
-        return new SketchDoc(points, lines, Math.Max(np, points.Count), Math.Max(nl, lines.Count));
+        return new SketchDoc(points, lines, Math.Max(np, points.Count), Math.Max(nl, lines.Count), names);
     }
 
-    /// <summary>Bring back the sketch the last session left in editor-state.json (before the watcher writes that file again).</summary>
+    /// <summary>Bring back the sketch the last session left (sketch.json; before it existed, the sketch in editor-state.json) before anything is written.</summary>
     void LoadSketchState()
     {
         if (Watcher == null || Watcher.StatePath == "" || Map.OriginEpsg5514 == null) return;
         try
         {
-            if (!File.Exists(Watcher.StatePath)) return;
-            using var doc = JsonDocument.Parse(File.ReadAllText(Watcher.StatePath));
-            if (ParseSketch(doc.RootElement) is { Count: > 0 } sketch) ApplySketch(sketch);
+            var path = SketchPath;
+            if (File.Exists(path))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                var sketch = ParseSketch(doc.RootElement, out var version);
+                _skFileVersion = version;
+                _skFileStamp = File.GetLastWriteTimeUtc(path).Ticks;
+                ApplySketch(sketch, write: false);
+            }
+            else if (File.Exists(Watcher.StatePath))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(Watcher.StatePath));
+                if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("sketch", out var old) && old.ValueKind == JsonValueKind.Object
+                    && ParseSketch(old, out _) is { Count: > 0 } sketch) ApplySketch(sketch);
+            }
         }
-        catch (Exception e) { GD.PushWarning($"sketch not restored from {Watcher.StatePath}: {e.Message}"); }
+        catch (Exception e) { GD.PushWarning($"sketch not restored from {SketchPath}: {e.Message}"); }
     }
+
+    /// <summary>Every half second: take over sketch.json when something else (the MCP server) wrote a newer version. One undo step.</summary>
+    void PollSketchFile(double delta)
+    {
+        _skPollT += delta;
+        if (_skPollT < 0.25) return;
+        _skPollT = 0;
+        var path = SketchPath;
+        if (path == "" || Map.OriginEpsg5514 == null) return;
+        try
+        {
+            var stamp = File.Exists(path) ? File.GetLastWriteTimeUtc(path).Ticks : -1;
+            if (stamp == _skFileStamp) return;
+            _skFileStamp = stamp;
+            if (stamp < 0) return;
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var next = ParseSketch(doc.RootElement, out var version);
+            if (version <= _skFileVersion) return;
+            _skFileVersion = version;
+            if (BuildSketchJson(next) == BuildSketchJson(_sketch)) return;
+            if (_skDraft.Count > 0) { _skDraft.Clear(); SketchChanged(); }
+            PushUndo(new UndoRecord("sketch changed by the MCP server", new List<EntryChange>(), _sketch, next));
+            ApplySketch(next, write: false);
+            Say($"sketch updated from sketch.json: {SketchSummary()} (Ctrl+Z undoes it)");
+        }
+        catch (Exception e) { GD.PushWarning($"sketch.json not read: {e.Message}"); }
+    }
+
+    void WriteSketchFile(SketchDoc doc)
+    {
+        var path = SketchPath;
+        if (path == "") return;
+        try
+        {
+            var version = _skFileVersion;
+            try
+            {
+                // never go below what is on disk, so a reader that compares versions sees this write as new
+                if (File.Exists(path)) { using var cur = JsonDocument.Parse(File.ReadAllText(path)); version = Math.Max(version, ParseSketchVersion(cur.RootElement)); }
+            }
+            catch { /* unreadable: overwritten */ }
+            _skFileVersion = version + 1;
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var tmp = path + ".tmp";
+            File.WriteAllText(tmp, BuildSketchJson(doc, _skFileVersion) + "\n");
+            File.Move(tmp, path, true);
+            _skFileStamp = File.GetLastWriteTimeUtc(path).Ticks;
+        }
+        catch (Exception e) { GD.PushWarning($"could not write {path}: {e.Message}"); }
+    }
+
+    static int ParseSketchVersion(JsonElement root) => root.TryGetProperty("version", out var v) && v.TryGetInt32(out var i) ? i : 0;
+
+    string? SketchOfMark(string id) => _sketch.Points.FirstOrDefault(p => p.Id == id)?.Sketch ?? _sketch.Lines.FirstOrDefault(l => l.Id == id)?.Sketch;
 
     bool SketchHas(string id) => _sketch.Points.Any(p => p.Id == id) || _sketch.Lines.Any(l => l.Id == id);
 
@@ -155,31 +241,39 @@ public partial class EditorMode
 
     static string Plural(int n, string word) => $"{n} {word}{(n == 1 ? "" : "s")}";
 
-    /// <summary>"2 points and 1 line", for messages and the confirm.</summary>
-    public string SketchSummary()
+    /// <summary>"2 points and 1 line" (of one sketch, or of all when null), for messages and the confirm.</summary>
+    public string SketchSummary(string? sketch = null)
     {
+        var pts = sketch == null ? _sketch.Points.Count : _sketch.Points.Count(p => p.Sketch == sketch);
+        var lns = sketch == null ? _sketch.Lines.Count : _sketch.Lines.Count(l => l.Sketch == sketch);
         var parts = new List<string>();
-        if (_sketch.Points.Count > 0) parts.Add(Plural(_sketch.Points.Count, "point"));
-        if (_sketch.Lines.Count > 0) parts.Add(Plural(_sketch.Lines.Count, "line"));
+        if (pts > 0) parts.Add(Plural(pts, "point"));
+        if (lns > 0) parts.Add(Plural(lns, "line"));
         return parts.Count == 0 ? "nothing" : string.Join(" and ", parts);
     }
 
     void SketchChanged() { _skVersion++; _panelDirty = true; }
 
     /// <summary>Make <paramref name="doc"/> the sketch: selection, pick list, the state file (written within a frame or two) and the views follow.</summary>
-    void ApplySketch(SketchDoc doc)
+    void ApplySketch(SketchDoc doc, bool write = true)
     {
+        if (doc.Count == 0) doc = doc with { NextPoint = 0, NextLine = 0 }; // nothing left: the names start again at A and L1
         _sketch = doc;
         if (_skSelected != null && !SketchHas(_skSelected)) _skSelected = null;
+        if (!doc.Names.Contains(_skActive)) _skActive = doc.Names.Count > 0 ? doc.Names[0] : DefaultSketch;
         _skPickPts.Clear(); _skPickIds.Clear();
         foreach (var p in doc.Points) { _skPickPts.Add((p.X, p.Y)); _skPickIds.Add(p.Id); }
         foreach (var l in doc.Lines) foreach (var c in l.Points) { _skPickPts.Add(c); _skPickIds.Add(l.Id); }
         _sketchJson = BuildSketchJson(doc);
-        Watcher?.StateSoon();
+        if (write) WriteSketchFile(doc);
         SketchChanged();
     }
 
-    /// <summary>One sketch edit: one undo step (no file is written, so it never fails).</summary>
+    /// <summary>The sketch with its active sketch's name listed (a first mark makes DEFAULT), for an edit that adds a mark to it.</summary>
+    SketchDoc WithActive()
+        => _sketch.Names.Contains(_skActive) ? _sketch : _sketch with { Names = _sketch.Names.Append(_skActive).ToList() };
+
+    /// <summary>One sketch edit: one undo step (sketch.json is written, edits.json never).</summary>
     void CommitSketch(SketchDoc next, string undoText, string message)
     {
         PushUndo(new UndoRecord(undoText, new List<EntryChange>(), _sketch, next));
@@ -213,9 +307,9 @@ public partial class EditorMode
     {
         if (!SketchReady()) return null;
         var id = SketchPointLabel(_sketch.NextPoint);
-        var p = new SketchPoint(id, Math.Round(x, 3), Math.Round(y, 3));
+        var p = new SketchPoint(id, Math.Round(x, 3), Math.Round(y, 3), _skActive);
         _skSelected = null;
-        CommitSketch(_sketch with { Points = _sketch.Points.Append(p).ToList(), NextPoint = _sketch.NextPoint + 1 }, $"sketch point {id}", message ?? $"point {id} marked");
+        CommitSketch(WithActive() with { Points = _sketch.Points.Append(p).ToList(), NextPoint = _sketch.NextPoint + 1 }, $"sketch point {id}", message ?? $"point {id} marked in {_skActive}");
         return id;
     }
 
@@ -258,11 +352,11 @@ public partial class EditorMode
         var pts = _skDraft.ToList();
         if (closed && pts[0] == pts[^1]) pts.RemoveAt(pts.Count - 1);
         var id = $"L{_sketch.NextLine + 1}";
-        var line = new SketchLine(id, closed, pts);
+        var line = new SketchLine(id, closed, pts, _skActive);
         _skDraft.Clear();
         _skSelected = null;
-        CommitSketch(_sketch with { Lines = _sketch.Lines.Append(line).ToList(), NextLine = _sketch.NextLine + 1 }, $"sketch {(closed ? "closed line" : "line")} {id}",
-            closed ? $"closed line {id} drawn: {pts.Count} corners, {line.AreaM2:F0} m2" : $"line {id} drawn: {pts.Count} corners, {line.LengthM:F1} m");
+        CommitSketch(WithActive() with { Lines = _sketch.Lines.Append(line).ToList(), NextLine = _sketch.NextLine + 1 }, $"sketch {(closed ? "closed line" : "line")} {id}",
+            closed ? $"closed line {id} drawn in {_skActive}: {pts.Count} corners, {line.AreaM2:F0} m2" : $"line {id} drawn in {_skActive}: {pts.Count} corners, {line.LengthM:F1} m");
         return id;
     }
 
@@ -300,6 +394,7 @@ public partial class EditorMode
         if (id != null && !SketchHas(id)) { Say($"the sketch has no {id}", true); return false; }
         if (id == _skSelected) return true;
         _skSelected = id;
+        if (id != null) _skActive = SketchOfMark(id) ?? _skActive;
         SketchChanged();
         return true;
     }
@@ -325,19 +420,94 @@ public partial class EditorMode
         return true;
     }
 
-    /// <summary>Remove every mark: asks first and names what goes.</summary>
+    /// <summary>Remove every mark of the active sketch (it stays, empty): asks first and names what goes.</summary>
     public bool RequestClearSketch()
     {
-        if (_sketch.Count == 0 && _skDraft.Count == 0) { Say("the sketch is already empty"); return false; }
-        ShowConfirm("Clear the sketch?", $"{SketchSummary()} {(_sketch.Count == 1 ? "is" : "are")} removed from the ground and the names start again at A and L1. Undo (Ctrl+Z) brings them back.", "Clear", ClearSketch);
+        if (_sketch.CountIn(_skActive) == 0 && _skDraft.Count == 0) { Say($"sketch {_skActive} is already empty"); return false; }
+        var n = _sketch.CountIn(_skActive);
+        ShowConfirm($"Clear sketch {_skActive}?", $"{SketchSummary(_skActive)} {(n == 1 ? "is" : "are")} removed from the ground; the sketch itself stays. Undo (Ctrl+Z) brings {(n == 1 ? "it" : "them")} back.", "Clear", ClearSketch);
         return true;
     }
 
     public void ClearSketch()
     {
         _skDraft.Clear();
-        if (_sketch.Count == 0) { SketchChanged(); return; }
-        CommitSketch(SketchDoc.Empty, "clear the sketch", "sketch cleared (Ctrl+Z brings it back)");
+        var name = _skActive;
+        if (_sketch.CountIn(name) == 0) { SketchChanged(); return; }
+        CommitSketch(_sketch with { Points = _sketch.Points.Where(p => p.Sketch != name).ToList(), Lines = _sketch.Lines.Where(l => l.Sketch != name).ToList() },
+            $"clear sketch {name}", $"sketch {name} cleared (Ctrl+Z brings it back)");
+    }
+
+    // ---- sketches: new, switch, rename, delete ----
+
+    string? SketchNameProblem(string name, string? except = null)
+    {
+        if (!ValidSketchName(name)) return "a sketch name is 1 to 24 letters, digits, _ or -";
+        if (_sketch.Names.Any(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase) && n != except)) return $"there is a sketch {name} already";
+        return null;
+    }
+
+    /// <summary>Make a new, empty sketch and draw into it from now on.</summary>
+    public bool NewSketch(string name)
+    {
+        name = name.Trim();
+        if (SketchNameProblem(name) is { } why) { Say(why, true); return false; }
+        if (_skDraft.Count > 0) { Say("finish the line (Enter) or cancel it (Esc) first", true); return false; }
+        var names = _sketch.Names.Append(name).ToList();
+        _skActive = name; _skSelected = null;
+        CommitSketch(_sketch with { Names = names }, $"new sketch {name}", $"sketch {name} made: the next marks go into it");
+        return true;
+    }
+
+    public bool SetActiveSketch(string name)
+    {
+        if (!_sketch.Names.Contains(name)) { Say($"there is no sketch {name}", true); return false; }
+        if (_skDraft.Count > 0) { Say("finish the line (Enter) or cancel it (Esc) first", true); SketchChanged(); return false; }
+        if (name == _skActive) return true;
+        _skActive = name;
+        if (_skSelected != null && SketchOfMark(_skSelected) != name) _skSelected = null;
+        Say($"drawing into sketch {name}");
+        SketchChanged();
+        return true;
+    }
+
+    public bool RenameSketch(string from, string to)
+    {
+        to = to.Trim();
+        if (!_sketch.Names.Contains(from)) { Say($"there is no sketch {from}", true); return false; }
+        if (to == from) return true;
+        if (SketchNameProblem(to, from) is { } why) { Say(why, true); return false; }
+        var next = _sketch with
+        {
+            Names = _sketch.Names.Select(n => n == from ? to : n).ToList(),
+            Points = _sketch.Points.Select(p => p.Sketch == from ? p with { Sketch = to } : p).ToList(),
+            Lines = _sketch.Lines.Select(l => l.Sketch == from ? l with { Sketch = to } : l).ToList(),
+        };
+        if (_skActive == from) _skActive = to;
+        CommitSketch(next, $"rename sketch {from} to {to}", $"sketch {from} is now {to}");
+        return true;
+    }
+
+    /// <summary>Asks first and names what goes (the sketch with all its marks).</summary>
+    public bool RequestDeleteSketch(string name)
+    {
+        if (!_sketch.Names.Contains(name)) { Say($"there is no sketch {name}", true); return false; }
+        var n = _sketch.CountIn(name);
+        ShowConfirm($"Delete sketch {name}?", $"{name} and its {SketchSummary(name)} are removed from the ground. Undo (Ctrl+Z) brings {(n == 1 ? "it" : "them")} back.", "Delete", () => DeleteSketch(name));
+        return true;
+    }
+
+    public void DeleteSketch(string name)
+    {
+        if (!_sketch.Names.Contains(name)) return;
+        _skDraft.Clear();
+        var next = _sketch with
+        {
+            Names = _sketch.Names.Where(n => n != name).ToList(),
+            Points = _sketch.Points.Where(p => p.Sketch != name).ToList(),
+            Lines = _sketch.Lines.Where(l => l.Sketch != name).ToList(),
+        };
+        CommitSketch(next, $"delete sketch {name}", $"sketch {name} deleted (Ctrl+Z brings it back)");
     }
 
     // ---- keys and mouse ----
@@ -378,6 +548,7 @@ public partial class EditorMode
     /// <summary>Esc goes one level up: drawing, selection, tool.</summary>
     public void SketchEscape()
     {
+        if (_skNaming != SketchNaming.None) { CancelSketchNaming(); return; }
         switch (SketchPhase)
         {
             case SketchState.Drawing: CancelSketchDraft(); break;
@@ -464,6 +635,9 @@ public partial class EditorMode
         SketchWorld(active, hoverDraft);
     }
 
+    /// <summary>A mark's tag in the 3D view: its name, with the sketch in front when there are several ("ROAD · L1").</summary>
+    string MarkTag(string sketch, string id) => _sketch.Names.Count > 1 ? $"{sketch} · {id}" : id;
+
     static (double x, double y) TagAnchor(SketchLine l)
     {
         if (!l.Closed) return ((l.Points[0].x + l.Points[1].x) / 2, (l.Points[0].y + l.Points[1].y) / 2);
@@ -494,14 +668,14 @@ public partial class EditorMode
             foreach (var p in _sketch.Points)
             {
                 _skFixed.Add((GroundPoint((p.X, p.Y)), 1.4f, p.Id == _skSelected || p.Id == _skHover ? HandleHot : HandlePlain));
-                Tag((p.X, p.Y), p.Id);
+                Tag((p.X, p.Y), MarkTag(p.Sketch, p.Id));
             }
             foreach (var l in _sketch.Lines)
             {
                 (l.Id == _skSelected ? sel : plain).AddRange(RingSegs(l.Points, l.Closed));
                 var look = l.Id == _skSelected || l.Id == _skHover ? HandleHot : HandlePlain;
                 foreach (var c in l.Points) _skFixed.Add((GroundPoint(c), 0.7f, look));
-                Tag(TagAnchor(l), l.Id);
+                Tag(TagAnchor(l), MarkTag(l.Sketch, l.Id));
             }
             for (var i = tag; i < _skTags.Count; i++) _skTags[i].Visible = false;
             SetOutline(OutlineSketch, plain, EditorTheme.Sketch, 0.36f, 0.4f);
@@ -565,15 +739,51 @@ public partial class EditorMode
     // ---- sidebar page ----
 
     Button _skBtnPoint = null!, _skBtnLine = null!, _skFinish = null!, _skCloseBtn = null!, _skBack = null!, _skCancel = null!, _skDelete = null!, _skClear = null!;
-    Label _skNoOrigin = null!, _skStateLabel = null!, _skNote = null!, _skListHead = null!, _skEmpty = null!;
+    Label _skNoOrigin = null!, _skStateLabel = null!, _skNote = null!, _skListHead = null!, _skEmpty = null!, _skNameNote = null!;
     VBoxContainer _skList = null!;
-    string _skListSig = "";
+    string _skListSig = "", _skPickSig = "";
+    OptionButton _skPick = null!;
+    Button _skNewSketch = null!, _skRenameSketch = null!, _skDeleteSketch = null!;
+    HBoxContainer _skNameRow = null!;
+    LineEdit _skName = null!;
+    enum SketchNaming { None, New, Rename }
+    SketchNaming _skNaming;
     readonly Dictionary<string, Button> _skRows = new();
 
     void BuildSketchPage(VBoxContainer page)
     {
         page.AddChild(new Label { Text = "Sketch", ThemeTypeVariation = "Header" });
-        page.AddChild(Note("Temporary points and lines on the ground that a prompt can name: \"plant trees inside L1\", \"a lamp at A\". They are not part of the map and are never saved to it."));
+        page.AddChild(Note("Temporary points and lines on the ground that a prompt can name: \"plant trees inside L1\", \"a lamp at A\", \"everything in sketch ROAD\". They are not part of the map and are never saved to it; Claude can draw into them too."));
+
+        var pickRow = new HBoxContainer();
+        pickRow.AddChild(new Label { Text = "Sketch" });
+        _skPick = new OptionButton { FocusMode = Control.FocusModeEnum.All, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, TooltipText = "The sketch new marks go into. Marks of every sketch stay visible." };
+        _skPick.ItemSelected += i => { if (i >= 0 && i < _sketch.Names.Count) SetActiveSketch(_sketch.Names[(int)i]); _skPick.ReleaseFocus(); };
+        pickRow.AddChild(_skPick);
+        page.AddChild(pickRow);
+        var sketchBtns = new HBoxContainer();
+        _skNewSketch = FocusBtn("New", () => StartSketchNaming(SketchNaming.New));
+        _skNewSketch.TooltipText = "Make a new, empty sketch and draw into it";
+        _skRenameSketch = FocusBtn("Rename", () => StartSketchNaming(SketchNaming.Rename));
+        _skRenameSketch.TooltipText = "Rename the active sketch (prompts name sketches, so keep it short: ROAD, FENCE_PLAN)";
+        _skDeleteSketch = FocusBtn("Delete", () => RequestDeleteSketch(_skActive), "DangerButton");
+        _skDeleteSketch.TooltipText = "Delete the active sketch with all its marks (asks first; Ctrl+Z brings it back)";
+        foreach (var b in new[] { _skNewSketch, _skRenameSketch, _skDeleteSketch }) { b.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; sketchBtns.AddChild(b); }
+        page.AddChild(sketchBtns);
+        _skNameRow = new HBoxContainer { Visible = false };
+        _skName = new LineEdit { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, PlaceholderText = "name, e.g. ROAD", MaxLength = 24, ClearButtonEnabled = true, TooltipText = "1 to 24 letters, digits, _ or -. Enter applies, Esc cancels" };
+        _skName.TextChanged += t => RefreshSketchNaming(t);
+        _skName.TextSubmitted += t => ApplySketchNaming(t);
+        _skName.GuiInput += e => { if (e is InputEventKey { Pressed: true, Keycode: Key.Escape }) { CancelSketchNaming(); _skName.AcceptEvent(); } };
+        _skNameRow.AddChild(_skName);
+        var nameOk = FocusBtn("OK", () => ApplySketchNaming(_skName.Text), "PrimaryButton");
+        var nameCancel = FocusBtn("Cancel", CancelSketchNaming);
+        _skNameRow.AddChild(nameOk); _skNameRow.AddChild(nameCancel);
+        page.AddChild(_skNameRow);
+        _skNameNote = Note("", "Dim");
+        _skNameNote.Visible = false;
+        page.AddChild(_skNameNote);
+        page.AddChild(new HSeparator());
         _skNoOrigin = Note("This map has no origin_epsg5514, so nothing can be marked. Export it again (map 0.4.0+).", "Danger");
         page.AddChild(_skNoOrigin);
 
@@ -610,9 +820,47 @@ public partial class EditorMode
         _skList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         page.AddChild(_skList);
         _skClear = FocusBtn("Clear the sketch", () => RequestClearSketch(), "DangerButton");
-        _skClear.TooltipText = "Remove every mark (asks first; Ctrl+Z brings them back)";
+        _skClear.TooltipText = "Remove the marks of the active sketch (asks first; Ctrl+Z brings them back)";
         page.AddChild(_skClear);
         page.AddChild(Note("Marks stay visible in every tool. Esc steps back: cancel the line, deselect, leave the tool."));
+    }
+
+    void StartSketchNaming(SketchNaming kind)
+    {
+        if (_skDraft.Count > 0) { Say("finish the line (Enter) or cancel it (Esc) first", true); return; }
+        if (kind == SketchNaming.Rename && !_sketch.Names.Contains(_skActive)) { Say("this sketch has no marks yet; mark something first", true); return; }
+        _skNaming = kind;
+        _skName.Text = kind == SketchNaming.Rename ? _skActive : "";
+        _skNameRow.Visible = _skNameNote.Visible = true;
+        RefreshSketchNaming(_skName.Text);
+        _skName.GrabFocus();
+        _skName.SelectAll();
+        SketchChanged();
+    }
+
+    void RefreshSketchNaming(string text)
+    {
+        var t = text.Trim();
+        var why = t == "" ? null : SketchNameProblem(t, _skNaming == SketchNaming.Rename ? _skActive : null);
+        _skNameNote.Text = why ?? (_skNaming == SketchNaming.Rename ? $"Enter renames {_skActive}. Esc cancels." : "Enter makes the sketch and draws into it. Esc cancels.");
+        _skNameNote.ThemeTypeVariation = why == null ? "Dim" : "Warn";
+    }
+
+    void ApplySketchNaming(string text)
+    {
+        var kind = _skNaming;
+        if (kind == SketchNaming.None) return;
+        var ok = kind == SketchNaming.New ? NewSketch(text) : RenameSketch(_skActive, text);
+        if (ok) CancelSketchNaming(); else RefreshSketchNaming(text);
+    }
+
+    public void CancelSketchNaming()
+    {
+        if (_skNaming == SketchNaming.None) return;
+        _skNaming = SketchNaming.None;
+        _skName.ReleaseFocus();
+        _skNameRow.Visible = _skNameNote.Visible = false;
+        SketchChanged();
     }
 
     public string SketchHintText() => SketchPhase switch
@@ -620,8 +868,8 @@ public partial class EditorMode
         SketchState.Drawing => $"line, {Plural(_skDraft.Count, "corner")}: LMB or C adds, Enter finishes, Shift+Enter or the first corner closes it, Backspace undoes a corner, Esc cancels",
         SketchState.Selected => $"{_skSelected}: Del deletes, [ ] next mark, click the ground to draw, Ctrl+Z undo, Esc deselects",
         _ => _skMode == SketchKind.Point
-            ? "sketch points: LMB or C marks a point, Ctrl free position, L draws lines, click a mark to select it, Esc leaves the tool"
-            : "sketch lines: LMB or C places the first corner, Ctrl free position, P marks points, click a mark to select it, Esc leaves the tool",
+            ? $"sketch {_skActive}, points: LMB or C marks a point, Ctrl free position, L draws lines, click a mark to select it, Esc leaves the tool"
+            : $"sketch {_skActive}, lines: LMB or C places the first corner, Ctrl free position, P marks points, click a mark to select it, Esc leaves the tool",
     };
 
     static string SketchRowText(SketchLine l)
@@ -666,13 +914,33 @@ public partial class EditorMode
         _skDelete.Visible = phase == SketchState.Selected;
         if (_skSelected != null) _skDelete.Text = $"Delete {_skSelected}  (Del)";
 
+        var named = _sketch.Names.Contains(_skActive);
+        var pickSig = string.Join("|", _sketch.Names.Select(n => $"{n}:{_sketch.CountIn(n)}")) + "#" + _skActive + "#" + hasOrigin;
+        if (pickSig != _skPickSig)
+        {
+            _skPickSig = pickSig;
+            _skPick.Clear();
+            var idx = 0;
+            foreach (var nm in named ? _sketch.Names : _sketch.Names.Append(_skActive).ToList()) // an unused active sketch (DEFAULT) is listed until its first mark
+            {
+                _skPick.AddItem($"{nm}  ({Plural(_sketch.CountIn(nm), "mark")})");
+                if (nm == _skActive) _skPick.Select(idx);
+                idx++;
+            }
+        }
+        _skPick.Disabled = _skNewSketch.Disabled = !hasOrigin;
+        _skRenameSketch.Disabled = _skDeleteSketch.Disabled = !hasOrigin || !named;
+        _skDeleteSketch.Text = named ? $"Delete {_skActive}" : "Delete";
         _skListHead.Text = $"Marks ({_sketch.Count})";
         _skEmpty.Visible = _sketch.Count == 0;
-        _skClear.Visible = _sketch.Count > 0;
-        var sig = _sketchJson + "#" + _skSelected;
+        var inActive = _sketch.CountIn(_skActive);
+        _skClear.Visible = inActive > 0;
+        _skClear.TooltipText = "Remove every mark of the active sketch (asks first; Ctrl+Z brings them back)";
+        _skClear.Text = _sketch.Names.Count > 1 ? $"Clear sketch {_skActive}" : "Clear the sketch";
+        var sig = _sketchJson + "#" + _skSelected + "#" + _skActive;
         if (sig == _skListSig) return;
         _skListSig = sig;
-        foreach (var b in _skRows.Values) { _skList.RemoveChild(b); b.QueueFree(); }
+        foreach (var c in _skList.GetChildren()) { _skList.RemoveChild(c); c.QueueFree(); }
         _skRows.Clear();
         void Row(string id, string text, string tip)
         {
@@ -682,8 +950,12 @@ public partial class EditorMode
             _skList.AddChild(b);
             _skRows[id] = b;
         }
-        foreach (var p in _sketch.Points) Row(p.Id, $"{p.Id}   point", $"Select point {p.Id} (x {p.X:F1}, y {p.Y:F1})");
-        foreach (var l in _sketch.Lines) Row(l.Id, SketchRowText(l), $"Select {(l.Closed ? "closed line" : "line")} {l.Id}");
+        foreach (var name in _sketch.Names)
+        {
+            if (_sketch.Names.Count > 1) _skList.AddChild(new Label { Text = $"{name}{(name == _skActive ? "  (drawing here)" : "")}", ThemeTypeVariation = "Header" });
+            foreach (var p in _sketch.Points.Where(p => p.Sketch == name)) Row(p.Id, $"{p.Id}   point", $"Select point {p.Id} in {name} (x {p.X:F1}, y {p.Y:F1})");
+            foreach (var l in _sketch.Lines.Where(l => l.Sketch == name)) Row(l.Id, SketchRowText(l), $"Select {(l.Closed ? "closed line" : "line")} {l.Id} in {name}");
+        }
     }
 
     // test hooks

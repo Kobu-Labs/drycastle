@@ -967,7 +967,7 @@ public partial class EditorMode
         yield return ("Region: new  (N)", () => { SelectTool(EditorTool.Region); StartRegion(); });
         yield return ("Sketch: mark points  (P)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Point); });
         yield return ("Sketch: draw a line  (L)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Line); });
-        if (_sketch.Count > 0) yield return ("Sketch: clear", () => { SelectTool(EditorTool.Sketch); RequestClearSketch(); });
+        if (_sketch.Count > 0) yield return ("Sketch: clear the active sketch", () => { SelectTool(EditorTool.Sketch); RequestClearSketch(); });
         yield return ("Poles: plan a line  (P)", () => { SelectTool(EditorTool.Poles); StartPlanning(); });
         yield return ("Poles: connect  (C)", () => { SelectTool(EditorTool.Poles); StartConnecting(); });
         yield return ("Edit: undo  (Ctrl+Z)", () => Undo());

@@ -115,7 +115,6 @@ public partial class Viewer : Node3D
                 return (cam.GlobalPosition, -cam.GlobalBasis.Z);
             },
             SelectionProvider = () => _editor?.Selection ?? (IReadOnlyCollection<string>)Array.Empty<string>(),
-            SketchProvider = () => _editor?.SketchJson ?? EditorMode.EmptySketchJson,
         };
         AddChild(_watcher);
     }

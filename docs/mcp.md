@@ -47,7 +47,8 @@ Options (`python -m drycastle_pipeline.mcp_server --help`):
 | --- | --- | --- |
 | `--area slice\|village` | `slice` | which map's work files (`data/work` or `data/village/work`) it reads |
 | `--edits PATH` | `pipeline/config/edits.json` | the file it reads and writes; must be the one the viewer watches |
-| `--state PATH` | `out/editor-state.json` | the viewer's selection, camera and sketch, for "the selected parcel" and "this line" |
+| `--state PATH` | `out/editor-state.json` | the viewer's selection and camera, for "the selected parcel" |
+| `--sketch PATH` | `sketch.json` next to `--state` | the sketches the viewer and this server share, for "this line", "at A", "sketch ROAD" |
 | `--assets PATH` | `assets/manifest.json` | asset manifest |
 | `--work DIR` | from `--area` | work directory override (for experiments) |
 
@@ -63,8 +64,9 @@ It needs the work files `parcels.json` (map 0.4.0+, with `origin_epsg5514`), `bu
    `selected: true`), inspects it (`get_parcel`) and edits it. The viewer shows the result about a second later.
 4. To point at a place instead of a parcel, draw it: Sketch tool (9), `P` marks points (`A`, `B`, ...), `L` draws lines
    (`L1`, `L2`, ...; close a line to mean the ground inside). Then name the marks: "a row of five trees along L1",
-   "paint the ground inside L2 as gravel", "put a lamp at A and at B". Claude reads them with `get_sketch`. The marks
-   are temporary and never part of `edits.json`; see "Sketch".
+   "paint the ground inside L2 as gravel", "put a lamp at A and at B", "everything in sketch ROAD". Marks are grouped in named
+   sketches. Claude reads them with `get_sketch` and draws its own: "highlight this road under sketch ROAD"
+   (`sketch_add_road`). The marks are temporary and never part of `edits.json`; see "Sketch".
 5. `edits.json` is a normal tracked file: review the diff, commit it, or `git checkout` it to undo. Editor panel
    and MCP can be used side by side; both reload the file from disk before every write.
 
@@ -82,8 +84,7 @@ Example prompts:
 ## Conventions
 
 - Coordinates in and out are **absolute S-JTSK (EPSG:5514) metres**, x east, y north, the frame of `edits.json`.
-  The viewer's `editor-state.json` camera is in the local map frame; the server reads `selected` and `sketch` (already
-  absolute) from it.
+  The viewer's `editor-state.json` camera is in the local map frame; the server reads `selected` from it. The sketch is in `sketch.json`, already absolute.
 - **Front edge**: the side of the parcel boundary nearest a road (consecutive edges turning less than 8 degrees
   count as one side; the distance is measured to the road carriageways and road parcels). When standing on its
   midpoint and looking into the parcel, `along` grows to the **right** and `inward` grows away from the road.
@@ -114,7 +115,12 @@ All inputs and outputs are JSON. Write tools return `summary`, `warnings` and th
 | --- | --- | --- |
 | `list_assets` | `category?` | id, category, name, `size_m`, tags; includes the `prim:` primitives |
 | `find_parcels` | `near?` `{x,y,radius_m?}` or `{parcel,radius_m?}`, `kind?`, `selected?`, `limit?` | id, kind, `area_m2`, `anchor`, group, `has_edits`, `distance_m` when `near`; `selected: true` reads `editor-state.json` (error with guidance when missing, empty or from another area; a warning when older than 10 minutes) and also returns the camera |
-| `get_sketch` | `id?` (one mark, e.g. `A` or `L1`) | the marks drawn in the viewer's Sketch tool: `points` (id, `position`, the `parcel` it is on and its `kind`) and `lines` (id, `closed`, `points` in drawing order, `length_m`, `bbox`; a closed line also `area_m2` and `centroid`; `parcels` it runs over with `length_m`, or covers with `area_m2` and `share_of_parcel`, largest first, at most 30 and then `parcels_total`); read-only, see Sketch |
+| `get_sketch` | `id?` (one mark, e.g. `A` or `L1`) | the marks of the viewer's sketches (`id` may also be a sketch name: all its marks; `sketches` lists each name with its counts): `points` (id, `sketch`, `position`, the `parcel` it is on and its `kind`) and `lines` (id, `sketch`, `closed`, `points` in drawing order, `length_m`, `bbox`; a closed line also `area_m2` and `centroid`; `parcels` it runs over with `length_m`, or covers with `area_m2` and `share_of_parcel`, largest first, at most 30 and then `parcels_total`); see Sketch |
+| `create_sketch` | `name` | an empty named sketch (`ROAD`, 1 to 24 letters, digits, `_`, `-`; ignoring case), see Sketch |
+| `sketch_add_point` | `x`, `y`, `sketch?` | marks a point (absolute S-JTSK metres): `{id, sketch, position}`; `sketch` is made when new, optional when there is at most one |
+| `sketch_add_line` | `points` `[[x, y], ...]`, `closed?`, `sketch?` | draws a line: `{id, sketch, closed, corners}`; a closed line needs 3+ corners and must not cross itself |
+| `sketch_add_road` | `road?` (edge id `E-0130`, or OSM way `w84718108` for the whole way) or `near?` (`[x, y]`, or a sketch point id such as `A`: the nearest road within 30 m), `sketch?` | draws the road's centreline as a line: `{sketch, lines, road: {id, osm_id, highway, surface, width, name}, length_m}` |
+| `sketch_remove` | `target` (a mark id, or a sketch name with all its marks) | `{removed}` or `{removed_sketch, removed_marks}`; the viewer's undo brings it back |
 | `get_parcel` | `id` | kind, area, cadastral ref, polygon bounds and centroid, edges with lengths, front edge, buildings (footprint centroid and bounds), neighbours, group, current edits, effective fence (after group inheritance), rule defaults (fence probability, tree density for its kind) |
 | `set_fence` | `target` (parcel or group), `mode?`, `type?`, `column?`, `height_m?`, `thickness_m?`, `colour?`, `gaps?` | same semantics as the editor panel: `mode` auto / none / custom; the other keys are custom-only (given without a mode they imply custom; with auto / none they are rejected); given keys are merged into the existing entry; `type` is picket / wire / brick_red / brick_white / stone_wall / concrete (textured, each with its own columns); `column` swaps the columns (none / wood_post / metal_post / brick_red / brick_white / stone / concrete); `colour` is a tint (the paint of picket, wire and concrete); `gaps` are `{"at": [x, y] or "front", "width_m"}` gates |
 | `reset_fence` | `target` | removes the fence entry (rules again) |
@@ -165,32 +171,42 @@ coordinates on write:
 
 ## Sketch
 
-A sketch is the set of temporary marks the user drew on the ground in the viewer (Sketch tool, rail icon 9; see
+A sketch is a named group (`ROAD`, `FENCE_PLAN`, ...) of the temporary marks drawn on the ground (Sketch tool, rail icon 9; see
 `docs/viewer-and-editor.md`): points named `A`, `B`, ... and lines named `L1`, `L2`, ..., a line being open or closed
-(closed: the last corner joins the first and the mark means the ground inside). The viewer writes it to
-`editor-state.json` next to the selection; `get_sketch` reads it and never writes. Coordinates are absolute S-JTSK
-metres, so they go straight into `place_object` `position`, `create_region` `polygon` or a fence gap `at`:
+(closed: the last corner joins the first and the mark means the ground inside). Several sketches exist at once; mark names are
+unique across all of them, so "at A" needs no sketch name. The viewer and this server share one file, `out/sketch.json`
+(`--sketch`); either side writes it atomically and raises its `version`. The server changes it under a `flock` on
+`sketch.json.lock`; the viewer does not lock, so an edit in the viewer and an MCP edit within the same frame can overwrite one
+another (last writer wins; Ctrl+Z in the viewer undoes what it took over). The viewer takes a changed file over within a
+quarter of a second, as one undo step ("sketch changed by the MCP server"). With the viewer closed, the file simply waits.
+The `sketch_add_*` tools create the sketch they name; `sketch` may be left out while there is at most one. Coordinates are
+absolute S-JTSK metres, so they go straight into `place_object` `position`, `create_region` `polygon` or a fence gap `at`:
 
 ```json
 {"count": 2, "state_age_s": 0.4,
- "points": [{"id": "A", "position": [-596810.0, -1160420.0], "parcel": "P-0021", "kind": "building_plot"}],
- "lines": [{"id": "L1", "closed": true, "points": [[-596812.0, -1160431.5], [-596802.5, -1160431.5], [-596804.0, -1160424.0]],
+ "sketches": [{"name": "ROAD", "points": 1, "lines": 1}],
+ "points": [{"id": "A", "sketch": "ROAD", "position": [-596810.0, -1160420.0], "parcel": "P-0021", "kind": "building_plot"}],
+ "lines": [{"id": "L1", "sketch": "ROAD", "closed": true, "points": [[-596812.0, -1160431.5], [-596802.5, -1160431.5], [-596804.0, -1160424.0]],
             "length_m": 26.0, "area_m2": 36.4, "bbox": [..], "centroid": [..],
             "parcels": [{"id": "P-0021", "kind": "building_plot", "area_m2": 30.1, "share_of_parcel": 0.04}]}]}
 ```
 
-Errors say what to do: no state file, a state file from a viewer older than the Sketch tool, an empty sketch, an
-unknown mark (the existing names are listed). Warnings: a state file older than 10 minutes, a closed line that
+"Highlight this road under sketch ROAD": `sketch_add_road(near="A", sketch="ROAD")` (the road under the sketch point `A`), or
+`road="E-0130"` for a road you already know. A sketch from an older viewer, kept in `editor-state.json`, is read as the sketch
+`DEFAULT` and moved to `sketch.json` the first time the server writes.
+
+Errors say what to do: no sketch file, an empty sketch, an
+unknown mark or sketch (the existing names are listed), a bad sketch name. Warnings: a state file older than 10 minutes, a closed line that
 crosses itself (returned without parcels), no mark on any parcel of this map (wrong `--area` or `--state`).
 What is still missing for "plant trees inside L1": trees are set per parcel (`set_trees`), so today that means placed
 tree objects at computed positions; a tree edit bound to a drawn shape is a separate piece of work.
 
-Not in v1: a screenshot tool (`snapshot(parcel)` can come later, the viewer already has `--screenshot`), and
+Not yet: moving or editing a mark (remove and draw it again), a screenshot tool (`snapshot(parcel)` can come later, the viewer already has `--screenshot`), and
 drawing free-form fence polylines, and inserting or removing region points (delete and recreate).
 
 ## Tests
 
 `cd pipeline && uv run pytest tests/test_mcp_server.py` runs every tool on the synthetic workspace (no real
 data), checks the canonical bytes (`dump_text(load_edits(file)) == file`), anchors against a parcel next to a road,
-warnings, the selection and the sketch through a fake `editor-state.json`, two writer threads on one file, and a session through the
+warnings, the selection through a fake `editor-state.json`, the sketch tools through `sketch.json`, two writer threads on one file, and a session through the
 MCP SDK's in-memory client.

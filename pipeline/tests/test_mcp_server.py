@@ -116,7 +116,7 @@ def test_get_sketch(env):
         tools.get_sketch()
     state = {"format_version": 1, "selected": [], "camera": {"x": 1, "y": 2, "z": 3, "yaw_deg": 4}}
     settings.state_path.write_text(json.dumps(state))
-    with pytest.raises(ToolError, match="older than the Sketch tool"):
+    with pytest.raises(ToolError, match="no sketch file at"):
         tools.get_sketch()
     empty = {"lines": [], "next_line": 0, "next_point": 0, "points": []}
     settings.state_path.write_text(json.dumps({**state, "sketch": empty}))
@@ -140,7 +140,7 @@ def test_get_sketch(env):
     out = tools.get_sketch()
     assert out["count"] == 4 and "warnings" not in out
     a, b = out["points"]
-    assert a == {"id": "A", "position": [OX + 50, OY + 50], "parcel": "P-0001", "kind": "building_plot"}
+    assert a == {"id": "A", "sketch": "DEFAULT", "position": [OX + 50, OY + 50], "parcel": "P-0001", "kind": "building_plot"}
     assert b["parcel"] is None and b["kind"] is None
     l1, l2 = out["lines"]
     assert l1["closed"] is False and l1["length_m"] == 70.0 and "area_m2" not in l1
@@ -159,7 +159,7 @@ def test_get_sketch(env):
     # one mark by name
     one = tools.get_sketch("L2")
     assert one["count"] == 1 and one["points"] == [] and one["lines"][0]["id"] == "L2"
-    with pytest.raises(ToolError, match="has no 'L9'; it has A, B, L1, L2"):
+    with pytest.raises(ToolError, match="has no 'L9'; marks: A, B, L1, L2; sketches: DEFAULT"):
         tools.get_sketch("L9")
     # a mark off the map alone: answered, with a warning about the area
     assert "another area" in tools.get_sketch("B")["warnings"][0]
@@ -180,6 +180,80 @@ def test_get_sketch(env):
     # the selection still reads a state file that carries a sketch
     settings.state_path.write_text(json.dumps({**state, "selected": ["P-0001"], "sketch": sketch}))
     assert [p["id"] for p in tools.find_parcels(selected=True)["parcels"]] == ["P-0001"]
+
+
+def test_sketch_tools(env):
+    tools, settings, tmp = env
+    path = settings.sketch_file
+    assert path == tmp / "sketch.json"
+    # the first mark makes the sketch; with one sketch the name may be left out
+    assert tools.sketch_add_point(OX + 50, OY + 50, "ROAD") == {"id": "A", "sketch": "ROAD", "position": [OX + 50, OY + 50]}
+    assert tools.sketch_add_point(OX + 60, OY + 50)["sketch"] == "ROAD"
+    line = tools.sketch_add_line([[OX + 50, OY + 60], [OX + 120, OY + 60]], sketch="road")  # names match ignoring case
+    assert line == {"id": "L1", "sketch": "ROAD", "closed": False, "corners": 2}
+    tools.sketch_add_line([[OX + 90, OY + 50], [OX + 100, OY + 50], [OX + 100, OY + 60]], closed=True, sketch="PLAN")
+    with pytest.raises(ToolError, match="name the sketch: there are several"):
+        tools.sketch_add_point(OX + 1, OY + 1)
+    with pytest.raises(ToolError, match="must not cross itself"):
+        tools.sketch_add_line([[OX, OY], [OX + 10, OY + 10], [OX + 10, OY], [OX, OY + 10]], closed=True, sketch="PLAN")
+    with pytest.raises(ToolError, match="not a sketch name"):
+        tools.sketch_add_point(1, 1, "has space")
+    doc = json.loads(path.read_text())
+    assert doc["version"] == 4 and doc["sketches"] == ["ROAD", "PLAN"] and doc["format_version"] == 1
+    # reading: marks carry their sketch, a sketch name returns its marks
+    out = tools.get_sketch()
+    assert [s["name"] for s in out["sketches"]] == ["ROAD", "PLAN"] and out["count"] == 4
+    assert out["sketches"][0] == {"name": "ROAD", "points": 2, "lines": 1}
+    road = tools.get_sketch("ROAD")
+    assert [p["id"] for p in road["points"]] == ["A", "B"] and [ln["id"] for ln in road["lines"]] == ["L1"]
+    assert tools.get_sketch("L2")["lines"][0]["sketch"] == "PLAN"
+    # removing a mark, then a whole sketch; ids start again once nothing is left
+    assert tools.sketch_remove("B") == {"removed": "B"}
+    assert tools.sketch_remove("plan") == {"removed_sketch": "PLAN", "removed_marks": ["L2"]}
+    with pytest.raises(ToolError, match="no mark or sketch"):
+        tools.sketch_remove("PLAN")
+    tools.sketch_remove("A")
+    tools.sketch_remove("L1")
+    assert tools.create_sketch("EMPTY") == {"sketch": "EMPTY"}
+    with pytest.raises(ToolError, match="exists already"):
+        tools.create_sketch("empty")
+    assert tools.get_sketch()["count"] == 0
+    assert tools.sketch_add_point(OX + 5, OY + 5, "EMPTY")["id"] == "A"
+
+
+def test_sketch_add_road(env):
+    tools, settings, _ = env
+    graph = json.loads((settings.work / "roads.json").read_text())
+    edge = graph["edges"][0]
+    out = tools.sketch_add_road(road=edge["id"], sketch="ROAD")
+    assert out["sketch"] == "ROAD" and out["road"]["id"] == edge["id"] and out["lines"]
+    line = tools.get_sketch(out["lines"][0])["lines"][0]
+    assert line["points"][0] == [OX + edge["polyline"][0][0], OY + edge["polyline"][0][1]]
+    # the way an edge belongs to, by OSM id; a spot near a road; a sketch point as the spot
+    way = tools.sketch_add_road(road=edge["osm_id"], sketch="ROAD")  # w10: two edges, chained into one line
+    assert len(way["lines"]) == 1 and way["length_m"] == 180.0
+    assert len(tools.get_sketch(way["lines"][0])["lines"][0]["points"]) == 3
+    mid = [60, 106]
+    near = tools.sketch_add_road(near=[OX + mid[0], OY + mid[1] + 1], sketch="NEAR")
+    assert near["road"]["id"] == edge["id"]
+    pid = tools.sketch_add_point(OX + mid[0], OY + mid[1], "NEAR")["id"]
+    assert tools.sketch_add_road(near=pid, sketch="NEAR")["road"]["id"] == edge["id"]
+    with pytest.raises(ToolError, match="exactly one of"):
+        tools.sketch_add_road(sketch="ROAD")
+    with pytest.raises(ToolError, match="no road 'E-9999'"):
+        tools.sketch_add_road(road="E-9999", sketch="ROAD")
+    with pytest.raises(ToolError, match="within 30 m"):
+        tools.sketch_add_road(near=[OX + 5000, OY + 5000], sketch="ROAD")
+
+
+def test_sketch_migrates_legacy_state_sketch(env):
+    tools, settings, _ = env
+    legacy = {"format_version": 1, "selected": [], "sketch": {
+        "lines": [], "next_line": 0, "next_point": 1, "points": [{"id": "A", "x": OX + 50, "y": OY + 50}]}}
+    settings.state_path.write_text(json.dumps(legacy))
+    assert tools.get_sketch()["points"][0]["sketch"] == "DEFAULT"
+    assert tools.sketch_add_point(OX + 1, OY + 1)["id"] == "B"  # joins DEFAULT, continues the names
+    assert json.loads(settings.sketch_file.read_text())["sketches"] == ["DEFAULT"]
 
 
 def test_get_parcel_front_edge_and_buildings(tools):
@@ -714,7 +788,7 @@ def test_through_mcp_session(env):
                 "list_assets", "find_parcels", "get_parcel", "set_fence", "reset_fence", "set_trees",
                 "reset_trees", "place_object", "remove_object", "move_object", "create_group", "merge_groups",
                 "dissolve_group", "create_region", "set_region_colour", "set_region_water", "move_region_point",
-                "delete_region", "list_regions", "connect_poles", "disconnect_poles", "list_cables", "get_sketch",
+                "delete_region", "list_regions", "connect_poles", "disconnect_poles", "list_cables", "get_sketch", "create_sketch", "sketch_add_point", "sketch_add_line", "sketch_add_road", "sketch_remove",
             }
             tool = next(t for t in (await client.list_tools()).tools if t.name == "place_object")
             assert {"parcel", "asset", "anchor", "offset_m", "position"} <= set(tool.input_schema["properties"])

@@ -273,6 +273,7 @@ public partial class EditorMode
         "Poles edit\tdrag a pole or its ring, R / Shift+R turn, LMB on a cable selects it, Del removes the cable or the pole with its cables\n" +
         "Sketch\tP points, L lines: LMB or C marks, Enter finishes a line, Shift+Enter or the first corner closes it\n" +
         "Sketch edit\tLMB on a mark or [ ] selects it, Del deletes it, Backspace last corner, Ctrl+Z undo; marks are temporary and named in prompts\n" +
+        "Sketches\tpick, New, Rename, Delete in the Sketch panel: marks go into the active sketch, prompts can name a whole sketch (\"sketch ROAD\")\n" +
         "Commands\tCtrl+P: tools, undo, region, sketch and parcel IDs\n" +
         "View\tT top-down, F1 this sheet, F2 walk mode\n" +
         "Esc\tgoes one level back: drawing, colour, region or sketch selection, placement, planning, connecting, gate, cable, object, selection, sidebar";

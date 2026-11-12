@@ -212,8 +212,8 @@ A hand-drawn shape of any form, independent of parcel boundaries, painted in one
 _Avoid_: zone, area (an "area" is the slice or the village)
 
 **Sketch**:
-The temporary marks a developer draws on the ground in the map editor to point at places in a prompt: points (A, B, ...) and lines (L1, L2, ...; a closed line means the ground inside it). A sketch is never map content and is not a hand edit; it lives in the editor's state file only.
-_Avoid_: annotation, drawing, region (a region is saved and paints the ground)
+A named group (ROAD, FENCE_PLAN, ...) of the temporary marks a developer draws on the ground in the map editor to point at places in a prompt. Several sketches exist at once, each holding any number of **marks**: points (A, B, ...) and lines (L1, L2, ...; a closed line means the ground inside it). Mark names are unique across all sketches; a prompt can name one mark ("at A"), or a whole sketch ("everything in sketch ROAD"). The developer draws in the editor, and Claude draws through the MCP server (`sketch_add_*`, e.g. "highlight this road under sketch ROAD"). A sketch is never map content and is not a hand edit; it lives in `out/sketch.json` only.
+_Avoid_: annotation, drawing, region (a region is saved and paints the ground), layer
 
 **Building detail**:
 A hand-written description of one real building's geometry beyond its OSM footprint (`pipeline/config/buildings/<OSM id>.yaml`): wall openings, roof overhang, read from reference photos. The shell stays the rule-generated one; the detail adds to it and never changes the footprint.

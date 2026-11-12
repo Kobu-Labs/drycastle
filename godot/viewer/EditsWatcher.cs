@@ -18,7 +18,7 @@ using Godot;
 /// MapLoader.ApplyRegions. Parcel and region work of one file change run one after the other in one run and are
 /// applied together, or not at all when either subprocess fails.
 /// A file that cannot be parsed (half-written) is ignored until it changes again; a failed run only
-/// prints the error. Also writes editor-state.json (camera, selection, sketch) at most once a second.
+/// prints the error. Also writes editor-state.json (camera, selection) at most once a second.
 /// The state at start is assumed to be what the map was built with, so nothing runs at startup.
 /// A re-exported map (its buildings) is reloaded too, see EditsWatcher.Map.cs.
 /// </summary>
@@ -40,10 +40,7 @@ public partial class EditsWatcher : Node
     /// <summary>Selected parcel ids for editor-state.json (the editor mode); null writes an empty selection.</summary>
     public Func<IReadOnlyCollection<string>>? SelectionProvider { get; init; }
 
-    /// <summary>The editor's sketch as the JSON value of `sketch` in editor-state.json (EditorMode.SketchJson); null writes an empty sketch.</summary>
-    public Func<string>? SketchProvider { get; init; }
-
-    /// <summary>Write editor-state.json on the next frame instead of waiting for the once-a-second tick (the sketch changed).</summary>
+    /// <summary>Write editor-state.json on the next frame instead of waiting for the once-a-second tick.</summary>
     public void StateSoon() => _stateT = StateSeconds;
 
     /// <summary>Raised on the main thread when a parcel-run starts: the parcel ids.</summary>
@@ -627,7 +624,7 @@ public partial class EditsWatcher : Node
             var yaw = Mathf.RadToDeg(Mathf.Atan2(-fwd.Z, fwd.X)); // counter-clockwise from east, like rotation_deg
             var json = "{\"camera\":{" +
                        $"\"x\":{F(pos.X)},\"y\":{F(-pos.Z)},\"yaw_deg\":{F(yaw)},\"z\":{F(pos.Y)}" +
-                       "},\"format_version\":1,\"selected\":[" + selected + "],\"sketch\":" + (SketchProvider?.Invoke() ?? EditorMode.EmptySketchJson) + "}\n";
+                       "},\"format_version\":1,\"selected\":[" + selected + "]}\n";
             if (json == _lastState) return;
             _lastState = json;
             var dir = Path.GetDirectoryName(StatePath);
