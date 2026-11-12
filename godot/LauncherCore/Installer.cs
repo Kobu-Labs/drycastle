@@ -24,7 +24,12 @@ public sealed class Installer
 
     public Installer(HttpClient http, string root) { _http = http; Root = root; }
 
-    public static string DefaultRoot() => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Drycastle");
+    /// <summary>%LOCALAPPDATA%/Drycastle, ~/Library/Application Support/Drycastle on macOS (.NET would give ~/.local/share there), ~/.local/share/Drycastle on Linux.</summary>
+    public static string DefaultRoot() => Path.Combine(
+        OperatingSystem.IsMacOS()
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support")
+            : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Drycastle");
 
     public InstalledState? Installed()
     {

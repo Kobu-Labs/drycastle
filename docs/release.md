@@ -29,7 +29,7 @@ The server address is not baked into the client: players type it on the connect 
 
 Merging a PR into the **`release`** branch (open it as `main` -> `release`) runs `.github/workflows/release.yml`:
 
-1. **build**: tests, Windows and Linux game zips, the server export with the map named in `map-version.txt`.
+1. **build**: tests, Windows, Linux and macOS game zips, the server export with the map named in `map-version.txt`.
 2. **deploy** (environment `production`): backs up the database on the VPS (`/opt/drycastle/backups/pre-deploy-<sha>.sql`, last 10 kept), then runs `deploy/deploy.sh`
    (rsync plus `docker compose up --wait`; the job fails if the server does not become healthy, and then nothing is published).
 3. **publish**: creates release `v0.<run>` with the game zips and `manifest.json`; the launcher picks it up as the stable channel.

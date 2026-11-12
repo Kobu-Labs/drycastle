@@ -31,10 +31,10 @@ public sealed record Manifest(
     [property: JsonPropertyName("platforms")] Dictionary<string, PlatformBuild>? Platforms = null)
 {
     public const int SupportedSchema = 2;
-    public const string Windows = "windows", Linux = "linux";
+    public const string Windows = "windows", Linux = "linux", MacOs = "macos";
 
     /// <summary>The platform this launcher runs on, or null when no game build exists for it.</summary>
-    public static string? CurrentPlatform() => OperatingSystem.IsWindows() ? Windows : OperatingSystem.IsLinux() ? Linux : null;
+    public static string? CurrentPlatform() => OperatingSystem.IsWindows() ? Windows : OperatingSystem.IsLinux() ? Linux : OperatingSystem.IsMacOS() ? MacOs : null;
 
     /// <summary>The game archive for the chosen platform (set by <see cref="Parse"/>).</summary>
     [JsonIgnore] public FileRef Game { get; init; } = null!;

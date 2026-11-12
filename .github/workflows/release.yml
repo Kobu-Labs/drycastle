@@ -1,5 +1,5 @@
 # Release pipeline. Merging a PR into the `release` branch (usually main -> release):
-#   build   tests, Windows + Linux game zips, server export with the map
+#   build   tests, Windows + Linux + macOS game zips, server export with the map
 #   deploy  rsync + docker compose to the production VPS (environment `production`: secrets, optional required reviewers)
 #   publish GitHub release vX (stable channel): game zips + launcher zips + manifest.json, which the launcher reads (docs/launcher.md)
 # Clients only see the new release after the server is live. A manual run on any other branch skips deploy and publishes a `dev-<run>` prerelease.
@@ -53,7 +53,7 @@ jobs:
         run: |
           python3 scripts/make_manifest.py --repo "$GITHUB_REPOSITORY" --tag "${{ steps.v.outputs.tag }}" --channel "${{ steps.v.outputs.channel }}" \
             --commit "$GITHUB_SHA" --protocol "${{ steps.v.outputs.protocol }}" \
-            --windows-zip out/shooter/drycastle-game-windows.zip --linux-zip out/shooter/drycastle-game-linux.zip \
+            --windows-zip out/shooter/drycastle-game-windows.zip --linux-zip out/shooter/drycastle-game-linux.zip --macos-zip out/shooter/drycastle-game-macos.zip \
             --map-tag "${{ steps.v.outputs.map }}" --map-json "$RUNNER_TEMP/map/map.json" --out out/shooter/manifest.json
       - uses: actions/upload-artifact@v4
         with:
@@ -61,6 +61,7 @@ jobs:
           path: |
             out/shooter/drycastle-game-windows.zip
             out/shooter/drycastle-game-linux.zip
+            out/shooter/drycastle-game-macos.zip
             out/shooter/manifest.json
           if-no-files-found: error
       - uses: actions/upload-artifact@v4

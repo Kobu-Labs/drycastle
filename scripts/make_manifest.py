@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Write manifest.json for a game release (read by the launcher).
 
-make_manifest.py --repo R --tag T --channel stable|dev --commit SHA --protocol N --windows-zip W.zip --linux-zip L.zip --map-tag map-X --map-json map.json --out manifest.json
+make_manifest.py --repo R --tag T --channel stable|dev --commit SHA --protocol N --windows-zip W.zip --linux-zip L.zip --macos-zip M.zip --map-tag map-X --map-json map.json --out manifest.json
 """
 import argparse, hashlib, json, os
 
 ap = argparse.ArgumentParser()
-for a in ("repo", "tag", "channel", "commit", "windows-zip", "linux-zip", "map-tag", "map-json", "out"):
+for a in ("repo", "tag", "channel", "commit", "windows-zip", "linux-zip", "macos-zip", "map-tag", "map-json", "out"):
     ap.add_argument("--" + a, required=True)
 ap.add_argument("--protocol", type=int, required=True)
 a = ap.parse_args()
@@ -27,6 +27,8 @@ manifest = {
     "platforms": {
         "windows": build(getattr(a, "windows_zip"), "drycastle-shooter.exe"),
         "linux": build(getattr(a, "linux_zip"), "drycastle-shooter.x86_64"),
+        # the .app bundle's executable; assets/ and map/ sit next to the .app (GamePaths.cs)
+        "macos": build(getattr(a, "macos_zip"), "Drycastle Shooter.app/Contents/MacOS/Drycastle Shooter"),
     },
     "map": {"id": a.map_tag, "file": {"name": m["name"], "url": f"{base}/{a.map_tag}/{m['name']}", "sha256": m["sha256"], "size": m["size"]}},
 }

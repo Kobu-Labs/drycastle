@@ -171,14 +171,17 @@ public class LauncherTests : IDisposable
     {
         const string ok = """
         {"schema":2,"version":"dev-1","channel":"dev","commit":"c","protocol":17,"map":{"id":"m","file":{"name":"m","url":"u","sha256":"s","size":1}},
-        "platforms":{"windows":{"exe":"g.exe","game":{"name":"g","url":"u","sha256":"s","size":1}},"linux":{"exe":"g.x86_64","game":{"name":"gl","url":"ul","sha256":"s","size":2}}}}
+        "platforms":{"windows":{"exe":"g.exe","game":{"name":"g","url":"u","sha256":"s","size":1}},"linux":{"exe":"g.x86_64","game":{"name":"gl","url":"ul","sha256":"s","size":2}},"macos":{"exe":"G.app/Contents/MacOS/G","game":{"name":"gm","url":"um","sha256":"s","size":3}}}}
         """;
         Assert.Equal("dev-1", Manifest.Parse(ok, "windows").Version);
         Assert.Equal("g.exe", Manifest.Parse(ok, "windows").Exe);
         var lin = Manifest.Parse(ok, "linux");
         Assert.Equal("g.x86_64", lin.Exe);
         Assert.Equal("ul", lin.Game.Url);
-        Assert.Throws<FormatException>(() => Manifest.Parse(ok, "macos"));
+        var mac = Manifest.Parse(ok, Manifest.MacOs);
+        Assert.Equal("G.app/Contents/MacOS/G", mac.Exe);
+        Assert.Equal("um", mac.Game.Url);
+        Assert.Throws<FormatException>(() => Manifest.Parse(ok, "freebsd"));
         Assert.Throws<FormatException>(() => Manifest.Parse(ok.Replace("\"schema\":2", "\"schema\":99"), "windows"));
         Assert.Throws<FormatException>(() => Manifest.Parse(ok.Replace("\"g.exe\"", "\"../g.exe\""), "windows"));
     }

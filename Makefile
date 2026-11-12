@@ -284,11 +284,13 @@ shooter-export-check:
 
 shooter-export: shooter-export-check
 	dotnet build godot/shooter/shooter.csproj
-	mkdir -p out/shooter/windows/assets out/shooter/linux-client/assets out/shooter/linux-server/assets out/shooter/windows/map out/shooter/linux-client/map out/shooter/linux-server/map
+	mkdir -p out/shooter/windows/assets out/shooter/linux-client/assets out/shooter/linux-server/assets out/shooter/windows/map out/shooter/linux-client/map out/shooter/linux-server/map out/shooter/macos/assets out/shooter/macos/map out/shooter/macos-export
 	godot --headless --path godot/shooter --export-release "Windows Client"
 	godot --headless --path godot/shooter --export-release "Linux Client"
 	godot --headless --path godot/shooter --export-release "Linux Server"
-	for d in windows linux-client linux-server; do cp -r assets/. out/shooter/$$d/assets/; [ -n "$(SHOOTER_NO_MAP)" ] || cp -r $(SHOOTER_PKG_MAP)/. out/shooter/$$d/map/; done
+	godot --headless --path godot/shooter --export-release "macOS Client"
+	unzip -qo out/shooter/macos-export/drycastle-shooter.zip -d out/shooter/macos   # Godot writes the .app as a zip; unzip keeps the exec bits
+	for d in windows linux-client linux-server macos; do cp -r assets/. out/shooter/$$d/assets/; [ -n "$(SHOOTER_NO_MAP)" ] || cp -r $(SHOOTER_PKG_MAP)/. out/shooter/$$d/map/; done
 	@echo "exported to out/shooter/ (assets/ and map/ next to each binary; see docs/shooter-server.md)"
 
 # Double-click Windows package: out/shooter/drycastle-windows.zip (exe + assets/ + map/ + README.txt).
@@ -302,14 +304,15 @@ shooter-package: shooter-export
 	@echo "package: out/shooter/drycastle-windows.zip ($$(du -h out/shooter/drycastle-windows.zip | cut -f1))"
 
 # Launcher distribution (docs/launcher.md). The CI release job runs these; they work locally too.
-# Game zips WITHOUT the map (the launcher installs the map from its own release): out/shooter/drycastle-game-{windows,linux}.zip, files at the zip root.
+# Game zips WITHOUT the map (the launcher installs the map from its own release): out/shooter/drycastle-game-{windows,linux,macos}.zip, files at the zip root.
 .PHONY: shooter-export-server shooter-package-game map-package launcher-build launcher-export launcher-test
 shooter-package-game:
 	$(MAKE) shooter-export SHOOTER_NO_MAP=1
-	rm -f out/shooter/drycastle-game-windows.zip out/shooter/drycastle-game-linux.zip
+	rm -f out/shooter/drycastle-game-windows.zip out/shooter/drycastle-game-linux.zip out/shooter/drycastle-game-macos.zip
 	cd out/shooter/windows && zip -qr ../drycastle-game-windows.zip . -x 'map/*'
 	cd out/shooter/linux-client && zip -qr ../drycastle-game-linux.zip . -x 'map/*'
-	@echo "packages: out/shooter/drycastle-game-{windows,linux}.zip"
+	cd out/shooter/macos && zip -qr ../drycastle-game-macos.zip . -x 'map/*'
+	@echo "packages: out/shooter/drycastle-game-{windows,linux,macos}.zip"
 
 # Linux server export only (used by the release pipeline to deploy): out/shooter/linux-server with assets/ and map/ (SHOOTER_PKG_MAP).
 shooter-export-server: shooter-export-check
@@ -332,12 +335,15 @@ launcher-build:
 launcher-test:
 	dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj --filter "FullyQualifiedName~Launcher"
 
-# Exports godot/launcher to out/launcher/ (Windows and Linux zips). Needs the same 4.7.2 mono templates as shooter-export.
+# Exports godot/launcher to out/launcher/ (Windows, Linux and macOS zips). Needs the same 4.7.2 mono templates as shooter-export.
 launcher-export: launcher-build
-	mkdir -p out/launcher/windows out/launcher/linux
+	mkdir -p out/launcher/windows out/launcher/linux out/launcher/macos
 	godot --headless --path godot/launcher --export-release "Windows Launcher"
 	godot --headless --path godot/launcher --export-release "Linux Launcher"
-	cp docs/launcher-readme.txt out/launcher/windows/README.txt; cp docs/launcher-readme.txt out/launcher/linux/README.txt
-	rm -f out/launcher/drycastle-launcher-windows.zip out/launcher/drycastle-launcher-linux.zip
+	godot --headless --path godot/launcher --export-release "macOS Launcher"
+	unzip -qo out/launcher/macos/DrycastleLauncher.zip -d out/launcher/macos && rm out/launcher/macos/DrycastleLauncher.zip   # Godot writes the .app as a zip; re-zipped below with the README
+	cp docs/launcher-readme.txt out/launcher/windows/README.txt; cp docs/launcher-readme.txt out/launcher/linux/README.txt; cp docs/launcher-readme.txt out/launcher/macos/README.txt
+	rm -f out/launcher/drycastle-launcher-windows.zip out/launcher/drycastle-launcher-linux.zip out/launcher/drycastle-launcher-macos.zip
 	cd out/launcher/windows && zip -qr ../drycastle-launcher-windows.zip .
 	cd out/launcher/linux && zip -qr ../drycastle-launcher-linux.zip .
+	cd out/launcher/macos && zip -qr ../drycastle-launcher-macos.zip .

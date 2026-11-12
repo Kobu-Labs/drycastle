@@ -22,3 +22,7 @@ project/assembly_name="shooter"
 
 common/physics_ticks_per_second=30
 3d/physics_engine="Jolt Physics"
+
+[rendering]
+
+textures/vram_compression/import_etc2_astc=true

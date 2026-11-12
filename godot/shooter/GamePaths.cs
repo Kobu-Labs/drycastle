@@ -9,7 +9,21 @@ public static class GamePaths
     /// <summary>True in an exported build (no editor), false when run from source.</summary>
     public static bool Exported => !OS.HasFeature("editor");
 
-    static string ExeDir => Path.GetDirectoryName(OS.GetExecutablePath()) ?? ".";
+    /// <summary>Folder holding assets/ and map/. Next to the executable, except on macOS where the executable is inside <c>X.app/Contents/MacOS</c> and the folder is the one that contains the .app.</summary>
+    static string ExeDir
+    {
+        get
+        {
+            var dir = Path.GetDirectoryName(OS.GetExecutablePath()) ?? ".";
+            if (OS.GetName() == "macOS")
+            {
+                var contents = Path.GetDirectoryName(dir);
+                var app = contents is null ? null : Path.GetDirectoryName(contents);
+                if (app is not null && app.EndsWith(".app", System.StringComparison.OrdinalIgnoreCase)) return Path.GetDirectoryName(app) ?? dir;
+            }
+            return dir;
+        }
+    }
 
     /// <summary>Asset library: DRYCASTLE_ASSETS, else <c>assets/</c> next to the executable (export) or the repo's assets/ (source).</summary>
     public static string Assets()
