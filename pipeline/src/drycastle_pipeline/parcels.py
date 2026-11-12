@@ -21,7 +21,8 @@ from drycastle_pipeline.registry import (
     match_parcels,
     save_registry,
 )
-from drycastle_pipeline.rules import ParcelRules, load_rules
+from drycastle_pipeline.parcel_fit import fit_roads
+from drycastle_pipeline.rules import DEFAULT_RULES, ParcelRules, load_rules, load_section
 
 KINDS = ("building_plot", "road", "forest", "field", "water", "garden", "other")
 PARCELS_FORMAT_VERSION = 1
@@ -158,8 +159,9 @@ def build_parcels(
     work_dir: Path = DEFAULT_WORK_DIR,
     registry_path: Path = DEFAULT_REGISTRY,
     rules: ParcelRules | None = None,
+    rules_path: Path = DEFAULT_RULES,
 ) -> ParcelsResult:
-    rules = rules or load_rules()
+    rules = rules or load_rules(rules_path)
     norm = work_dir / "normalised"
     frame = json.loads((work_dir / "frame.json").read_text())
     ox, oy = frame["origin_epsg5514"]
@@ -198,6 +200,11 @@ def build_parcels(
         list(buildings.values()),
         rules,
     )
+
+    # Road parcels fitted to their OSM road (parcel_fit in rules.yaml); the registry above keeps the cadastre's outlines.
+    ways = {f["properties"]["osm_id"]: shape(f["geometry"]) for f in _read(norm / "highways.geojson")}
+    fitted = fit_roads({match.ids[r]: g for r, g in zip(refs, parcels, strict=True)}, ways, load_section("parcel_fit", rules_path))
+    parcels = [fitted[match.ids[r]] for r in refs]
 
     out = []
     for i, (ref, geom, kind) in enumerate(zip(refs, parcels, kinds, strict=True)):

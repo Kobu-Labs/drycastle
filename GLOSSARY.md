@@ -9,7 +9,7 @@ A separate game built on the base map, with its own gameplay, database, and mult
 _Avoid_: game mode, plugin
 
 **Parcel**:
-A land unit of the base map with a stable ID of our own (not the cadastral number), covering every cadastral parcel including roads and fields. Its boundary is fixed; its contents (building, props, events) can be replaced by a mod.
+A land unit of the base map with a stable ID of our own (not the cadastral number), covering every cadastral parcel including roads and fields. Its boundary is fixed (the stage's `parcel_fit` rule may reshape listed road parcels to their OSM road); its contents (building, props, events) can be replaced by a mod.
 _Avoid_: plot, lot, tile
 
 **Map pipeline**:

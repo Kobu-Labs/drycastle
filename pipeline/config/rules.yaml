@@ -16,6 +16,15 @@ building_assignment:
   # otherwise it is listed as unassigned.
   max_distance_m: 10
 
+# --- Road parcel fit (parcels stage, parcel_fit.py) ----------------------------------------
+# The cadastre's road parcels are offset from the carriageway and ragged along its edges. A rule turns the listed parcels
+# into a strip of constant width along the named OSM ways (half_width_m each side of the centre line, flat ends). The
+# ground a parcel gives up goes to the neighbours, the ground it takes comes out of them: no holes, no overlaps.
+parcel_fit:
+  rules:
+    # the main road into the village from the north (w4987914, continued by w1198894774): 6 m, the width of the ribbon
+    - {parcels: [P-1019, P-1060], ways: [w4987914, w1198894774], half_width_m: 3.0}
+
 # --- Parcel kind ----------------------------------------------------------------------------
 # kind is one of: building_plot, road, forest, field, water, garden, other.
 # Rules are tried in this order, the first that matches wins:
@@ -152,7 +161,9 @@ terrain:
     field: ["#6f9a69", "#78a272", "#68925f", "#7fa878"]
     forest: ["#2f5f38", "#2a5633", "#356a3c"]
     water: ["#6b7a6a", "#62725f"]
-    road: ["#8e8e8e"]
+    # road parcels are grass underneath: the asphalt is the OSM ribbon on top, and a grey base would show as a spill where a
+    # 4 m terrain face centred in the narrow road parcel reaches over the edge (same shades as the road grass, detail.road)
+    road: ["#86b362", "#7aa858"]
     other: ["#72996b", "#7aa072", "#6a9163"]
 
 # --- Regions (export, region-run) ---------------------------------------------------------
@@ -418,9 +429,8 @@ detail:
       pebble: {spacing_m: 0.7, dirt: 0.2, scale: [0.6, 1.4]}
       tuft:   {spacing_m: 1.5, tone: 0.1, interior: 0.06, scale: [0.8, 1.3]}
       fern:   {per_tree: 0.45, group_max: 3, ring_m: [0.5, 1.8], scale: [0.8, 1.3]}
-  # Road land (parcel kind road): a grass shoulder this wide beside the carriageway.
+  # Road land (parcel kind road): grass on all of the parcel beside the carriageway (OSM roads are the only paved ground).
   road:
-    grass_width_m: 1.2
     grass_colours: ["#86b362", "#7aa858"]
     clutter:
       tuft:   {spacing_m: 0.6, grass: 0.3, dirt: 0.15, scale: [0.8, 1.3], kinds: [[tuft, 0.7], [tall_grass, 0.15], [clover, 0.15]]}

@@ -1,5 +1,7 @@
 # AREA=village (default): the whole village, data/village/..., out/village/map. AREA=slice: the small test area (data/raw, data/work, out/map).
 AREA ?= village
+# MAP: the map folder the viewer, editor and shooter targets load; follows AREA (override with MAP=<dir>).
+MAP ?= $(if $(filter slice,$(AREA)),out/map,out/village/map)
 
 .PHONY: editor setup test fetch normalise parcels rules terrain roads props detail export parcel-run region-run preview poles-preview poles-manifest floodwall-preview floodwall-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
@@ -78,7 +80,6 @@ floodwall-manifest:
 map:
 	cd pipeline && uv run python -m drycastle_pipeline run-all --area $(AREA)
 
-# MAP: map folder (default: DRYCASTLE_MAP env var, else ../../out/map relative to godot/viewer)
 MAP_ARG = $(if $(MAP),--map $(abspath $(MAP)),)
 SEED ?= 1
 

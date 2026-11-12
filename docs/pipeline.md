@@ -55,6 +55,15 @@ per chunk, 29 MB of glb in all (fences without collision and the tree cap took t
 full run after the fetch takes about half a minute; the fetch takes about two minutes. Nothing was
 measured in Godot yet; terrain (4 m grid, 7.7k triangles per chunk) is now the biggest visual part.
 
+## Road parcel fit
+
+The cadastre's road parcels are often offset from the carriageway and ragged along its edges. `parcel_fit` in
+`rules.yaml` (`parcel_fit.py`, applied by the parcels stage after the IDs are matched) turns the listed parcels into a strip of
+constant width along named OSM ways: `half_width_m` each side of the way's centre line, flat ends. The ground a parcel
+gives up goes to its neighbours (each part to the neighbour whose shared boundary is nearest), the ground it takes comes
+out of them, so the tiling stays whole with no overlaps. IDs, cadastral references and the registry keep the cadastre's
+outlines. Today: P-1019 and P-1060 along `w4987914` and `w1198894774`, 6 m wide.
+
 ## Normalise and the parcel registry
 
 `make normalise` reprojects the OSM data and cadastral parcels from WGS84 to EPSG:5514 and then
@@ -235,7 +244,7 @@ objects (a circle of half the footprint diagonal plus 0.3 m), hand-drawn regions
   parcels, sparse tufts, pebbles, rocks and flowers that thicken towards the edge and on the tones.
 * **forest**: leaf litter under some trees, dark and light forest-floor tones, a few bare spots; leaves, sticks, rocks,
   pebbles, tufts and ferns in groups round the trunks.
-* **road** (road parcels): a grass shoulder (`road.grass_width_m`) beside the carriageway, tufts along the asphalt edge,
+* **road** (road parcels): grass on all the parcel beside the OSM carriageway (the cadastral road parcel is often offset from it; no grey leftovers), tufts along the asphalt edge,
   pebbles on the gravel.
 * **dike** (`dike.py`, `detail.dike` in `rules.yaml`; the parcels P-0073, P-0821 and P-0805 are the earth dike north of the village, whatever
   their kind, and `clips` names parcels of which only a part is: the ground of P-1057 within 12 m of the dike's road, the rest keeps its

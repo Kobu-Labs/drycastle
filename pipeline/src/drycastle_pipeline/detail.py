@@ -514,15 +514,22 @@ def _gate_point(ctx: ParcelContext, cfg: dict) -> Point | None:
     return max(lines, key=lambda ln: ln.length).interpolate(0.5, normalized=True)
 
 
+def _own_buildings(ctx: ParcelContext) -> list:
+    """The buildings standing on this parcel (``ctx.buildings`` also holds those within 8 m on the neighbours' ground, which
+    are only there to keep clearance: a path or a bed must never lead to one of them)."""
+    return [b for b in ctx.buildings if b.intersects(ctx.polygon)]
+
+
 def _gravel_path(ctx: ParcelContext, free: BaseGeometry, cfg: dict, rng: random.Random) -> BaseGeometry:
     """A wobbling strip from the gate to the nearest building (none without a gate or a building)."""
     g = cfg["gravel"]
-    if not ctx.buildings or free.is_empty:
+    own = _own_buildings(ctx)
+    if not own or free.is_empty:
         return Polygon()
     start = _gate_point(ctx, cfg)
     if start is None:
         return Polygon()
-    target_b = min(ctx.buildings, key=lambda b: b.distance(start))
+    target_b = min(own, key=lambda b: b.distance(start))
     end = nearest_points(target_b, start)[0]
     length = start.distance(end)
     if length < float(g["min_length_m"]) or length > float(g["max_length_m"]):
@@ -548,9 +555,10 @@ def _beds(ctx: ParcelContext, free: BaseGeometry, cfg: dict, rng: random.Random
     """Vegetable beds: (rectangle, angle, centre), aligned with the main building."""
     b = cfg["beds"]
     n = min(int(b["max"]), round(float(b["per_1000m2"]) * ctx.polygon.area / 1000))
-    if n <= 0 or not ctx.buildings:
+    own = _own_buildings(ctx)
+    if n <= 0 or not own:
         return []
-    main = max(ctx.buildings, key=lambda p: p.area)
+    main = max(own, key=lambda p: p.area)
     ring = list(main.minimum_rotated_rectangle.exterior.coords)
     edge = max(zip(ring, ring[1:], strict=False), key=lambda e: math.dist(*e))
     angle = math.atan2(edge[1][1] - edge[0][1], edge[1][0] - edge[0][0])
@@ -898,17 +906,17 @@ def forest_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
 
 
 def road_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
-    """Road land (``road`` parcels): the grass shoulder beside the carriageway, with gravel and dirt verge
+    """Road land (``road`` parcels): grass over all the parcel beside the carriageway (the cadastral road parcel is
+    often offset from the OSM carriageway, and a grey leftover strip would read as a second road), with gravel and dirt verge
     blobs, tufts along the asphalt edge and pebbles on the gravel."""
     pid, rc = ctx.id, cfg["road"]
     res = DetailResult(pid)
     if ctx.road is None or ctx.road.is_empty:
         return res
     free = free_area(ctx, cfg, trunks=False)
-    strip = ctx.road.buffer(float(rc["grass_width_m"])).intersection(free)
     verge_g, verge_d = _verge(ctx)
     cols = [hex_to_rgb(h) for h in rc["grass_colours"]]
-    got = _assemble(res, free, {"verge_gravel": verge_g, "verge_dirt": verge_d, "lawn": strip}, {"lawn": cols}, {}, seeded(f"{pid}:detail:colours"))
+    got = _assemble(res, free, {"verge_gravel": verge_g, "verge_dirt": verge_d, "lawn": free}, {"lawn": cols}, {}, seeded(f"{pid}:detail:colours"))
     c, out = rc["clutter"], []
     grass = got.get("lawn", Polygon())
     gravel, dirt = got.get("verge_gravel", Polygon()), got.get("verge_dirt", Polygon())

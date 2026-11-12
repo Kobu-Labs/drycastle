@@ -8,7 +8,7 @@ Details for `godot/viewer/`. Setup and the make targets are in the [README](../R
 (namespace `Drycastle.MapLoader`) and lets you walk around in first person.
 
 Map folder: `--map <dir>` after Godot's own args, else the env var `DRYCASTLE_MAP`, else
-`../../out/map` relative to `godot/viewer`. With make: `make viewer MAP=/path/to/out/map`.
+`../../out/map` relative to `godot/viewer`. With make: `make viewer` (MAP defaults to `out/village/map`, or `out/map` with `AREA=slice`; override with `MAP=/path/to/map`).
 
 - Controls: WASD, mouse look, Space jump, Shift sprint, Escape frees or recaptures the mouse,
   R replaces the nearest parcel with a magenta test cube (`test_cube.tscn`) and restores it on the

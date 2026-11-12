@@ -164,3 +164,14 @@ def test_a_yard_has_garden_flowers_only_and_tall_grass_by_the_fence(cfg: dict) -
     lawn = [c for c in res.clutter if c["kind"] == "tuft"]
     d = lambda c: min(Point(c["x"], c["y"]).distance(f) for f in yard().fences)  # noqa: E731
     assert np.mean([d(c) for c in tall]) < np.mean([d(c) for c in lawn])
+
+
+def test_garden_paths_and_beds_never_lead_to_a_neighbours_building() -> None:
+    from shapely.geometry import box
+    from drycastle_pipeline.detail import _own_buildings
+
+    class Ctx:  # only what _own_buildings reads
+        polygon = box(0, 0, 20, 6)
+        buildings = [box(25, 0, 30, 5), box(10, 1, 14, 4)]
+
+    assert _own_buildings(Ctx()) == [Ctx.buildings[1]]
