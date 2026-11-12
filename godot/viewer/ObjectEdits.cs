@@ -204,12 +204,13 @@ public static class ObjectEdits
         return errs;
     }
 
-    /// <summary>Mirror of edits.py `_check_region`: colour, and a simple ring of at least 3 [x, y] points (closing point optional).</summary>
+    /// <summary>Mirror of edits.py `_check_region`: colour, an optional water_y (a water region's surface height), and a simple ring of at least 3 [x, y] points (closing point optional).</summary>
     static List<string> CheckRegion(object? entry, string path)
     {
         var errs = new List<string>();
         if (entry is not Obj r) { errs.Add($"{path}: must be an object"); return errs; }
-        foreach (var k in r.Keys) if (k is not ("colour" or "polygon")) errs.Add($"{path}.{k}: unknown key");
+        foreach (var k in r.Keys) if (k is not ("colour" or "polygon" or "water_y")) errs.Add($"{path}.{k}: unknown key");
+        if (r.TryGetValue("water_y", out var wy) && !(Number(wy) is double w && double.IsFinite(w))) errs.Add($"{path}.water_y: must be a number (metres, terrain datum)");
         if (!r.TryGetValue("colour", out var c)) errs.Add($"{path}.colour: required");
         else if (!(c is string cs && EditSchema.ColourRx.IsMatch(cs))) errs.Add($"{path}.colour: must be a colour like \"#rrggbb\"");
         if (!r.TryGetValue("polygon", out var poly)) { errs.Add($"{path}.polygon: required"); return errs; }
