@@ -309,8 +309,17 @@ public partial class Shooter : Node3D
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
         var s = _map.Stats;
         // Lamps are solid, so the server gets the same pole colliders as the client (map 0.5.0+; none on older maps).
-        if (_map.Lamps.Count > 0) AddChild(new StreetLamps { Bases = _map.Lamps.Select(l => l.Position).ToList(), CollisionOnly = _map.CollisionOnly });
-        GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} load={s.LoadSeconds:F2}s");
+        // The lamps of placed utility poles shine like the street lamps; their pole is the placed object, already solid (client only).
+        var poleLamps = _map.ObjectLights();
+        if (_map.CollisionOnly) poleLamps.Clear();
+        if (_map.Lamps.Count > 0 || poleLamps.Count > 0)
+            AddChild(new StreetLamps
+            {
+                Bases = _map.Lamps.Select(l => l.Position).ToList(),
+                PoleHeads = poleLamps.Select(l => (l.Position, l.YawDeg)).ToList(),
+                CollisionOnly = _map.CollisionOnly,
+            });
+        GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} pole_lamps={poleLamps.Count} load={s.LoadSeconds:F2}s");
     }
 
     Vector3 RandomSpawn() =>

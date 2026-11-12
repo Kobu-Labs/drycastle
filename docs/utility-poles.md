@@ -61,8 +61,8 @@ primitives: `prim:pole_lamp_1` etc. are placed like any object, the export write
 category is `pole`: in the shooter only the column is solid (a 0.4 m box as high as the pole), not the box
 around the lamp arm. `rotation_deg` turns the line direction; 0 = wires east-west, lamp to the south.
 
-In the editor the **Poles tool** (rail icon, key 7) has the poles as renders and the cables; see
-`docs/viewer-and-editor.md`. Through MCP: `place_object` with a pole asset, then `connect_poles`.
+In the editor the **Poles tool** (rail icon, key 7) has the poles as renders, the cables and a plan mode that
+places and connects a whole line along the roads; see `docs/viewer-and-editor.md`. Through MCP: `place_object` with a pole asset, then `connect_poles`.
 
 After changing the variants or any part, run `make poles-manifest` (a test compares the manifest with the
 generator) and `make poles-preview` to look at the result.
@@ -93,6 +93,15 @@ The rule (`godot/ShooterCore/Environment/CableWires.cs`, tested in `CableWiresTe
   same every time for the same cable id.
 
 `poles.span_mesh` is the older Python version of this, used only by `make poles-preview` (`row.png`).
+
+## Lamps
+
+A pole with a luminaire says where its light is: `lights` in its `assets/manifest.json` entry, the point under
+the luminaire in the pole's frame (written by `make poles-manifest`). In the shooter the lamps of placed poles
+shine like the street lamps of `lamps.json` (`MapLoader.ObjectLights`, `StreetLamps.PoleHeads`): a lit plate
+under the luminaire, a glow and a share of the light pool, all following the night factor. The pole and the
+luminaire are the placed object's own model and collider, so nothing else is added. The viewer and the editor
+have no night and show no light.
 
 ## House connections
 
@@ -128,8 +137,6 @@ the id of a connector that exists, e.g. `[pole, connector]`.
 
 ## Not done yet
 
-- Light. A pole with a lamp knows where its light is (`Pole.lights`), but it is not in `lamps.json`, so it
-  does not glow at night.
 - Poles are the 15 fixed variants; a pole of any seed and archetype (a mesh per placed pole) is not possible
   through placed objects.
 - The editor's object list shows `pole` after its own categories (it appends categories it does not know).

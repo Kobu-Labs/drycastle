@@ -163,6 +163,9 @@ def test_manifest_pole_entries_are_in_sync() -> None:
         line = [s for s in a["seats"] if s["kind"] == "line"]
         assert line and all(len(s["pos"]) == 3 and s["pos"][2] > 5 for s in line), a["id"]
         assert {s["kind"] for s in a["seats"]} <= {"line", "service", "bundle"}
+        # a pole with a lamp says where its light is (under the luminaire, out over the road side)
+        assert (len(a["lights"]) == 1) == ("street-lamp" in a["tags"]), a["id"]
+        assert all(p[2] > 6 and p[1] < -0.3 for p in a["lights"]), a["id"]
 
 
 # --- house connectors ---

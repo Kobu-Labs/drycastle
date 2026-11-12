@@ -167,6 +167,8 @@ def manifest_entries() -> list[dict]:
             "source": SOURCE,
             "pack": None,
             "seats": pole.seats(),
+            # under each luminaire, in the pole's frame (z up): where the game puts the glow and the light at night
+            "lights": [[round(float(v), 3) for v in p] for p in pole.lights],
         })
     return out
 
