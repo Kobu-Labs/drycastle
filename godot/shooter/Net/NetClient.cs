@@ -114,6 +114,7 @@ public partial class NetClient : Node
         InitCarePackages();
         InitMissile();
         InitTurrets();
+        InitAnimals();
         InitAircraft();
         InitFlak();
         InitSeats();
@@ -159,6 +160,7 @@ public partial class NetClient : Node
         if (_owned != null && GodotObject.IsInstanceValid(_owned)) _owned.QueueFree();
         _owned = null;
         _missiles.Clear();
+        _animals.Clear(); // the nodes are under Owned
         _impacts = null; Array.Clear(_impactNext);
         _rings = null; _ringNext = 0; _ringMesh = null;
         _dust = null; _dustNext = 0;
@@ -213,6 +215,7 @@ public partial class NetClient : Node
         RenderCorpses();
         RenderCarePackages();
         RenderTurrets();
+        RenderAnimals();
         RenderCars();
         RenderAircraft(delta);
         RenderRockets();

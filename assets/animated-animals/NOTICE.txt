@@ -1,0 +1,13 @@
+LICENCE UNVERIFIED.
+
+The twelve models here (alpaca, bull, cow, deer, donkey, fox, horse, husky, shiba-inu, stag, white-horse, wolf) come from
+"Animated Animal Pack-glb.zip", which the project owner downloaded and provided as a local file on 2026-11-12. The archive
+holds the twelve GLBs only: no licence file, no author, no source page was recorded. They are NOT claimed to be CC0. Before
+any release or public distribution the owner must confirm the author, licence and required attribution, then replace this
+notice with the real licence text (or remove the files).
+
+Files are the archive's, copied unchanged and renamed to lower case with hyphens (Shiba Inu.glb -> shiba-inu.glb). Each has
+one skinned mesh and one skeleton ("AnimalArmature") and the same clips, every one twice (plain and "AnimalArmature|" prefixed;
+filter one set when importing): Idle, Idle_2, Idle_Headlow (Idle_2_HeadLow on the dogs, fox, wolf), Eating, Walk, Gallop,
+Gallop_Jump, Jump_toIdle, Idle_HitReact_Left, Idle_HitReact_Right, Death, and Attack (dogs, fox, wolf) or Attack_Headbutt and
+Attack_Kick (hooved animals). The stag has two meshes (body and antlers).

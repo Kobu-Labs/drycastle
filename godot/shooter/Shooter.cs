@@ -242,7 +242,7 @@ public partial class Shooter : Node3D
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
-                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
+                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(null),
             };
             client.OnFailed = (why, joined) =>
@@ -303,7 +303,7 @@ public partial class Shooter : Node3D
         static string Read(string f) =>
             Godot.FileAccess.Open($"res://data/{f}", Godot.FileAccess.ModeFlags.Read)?.GetAsText()
             ?? throw new DataFileException($"{f}: cannot open ({Godot.FileAccess.GetOpenError()})");
-        return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"));
+        return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"), Read("animals.json"));
     }
 
     void LoadMap(Config cfg) { foreach (var _ in LoadMapSteps(cfg)) { } }
@@ -494,7 +494,7 @@ public partial class Shooter : Node3D
             BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6,
             Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"),
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
-            FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), BazookaBot = cfg.Str("bazooka-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, Map = _map,
+            FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), BazookaBot = cfg.Str("bazooka-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, Map = _map,
         });
     }
 

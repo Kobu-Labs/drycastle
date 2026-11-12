@@ -266,3 +266,7 @@ _Avoid_: squad, clan, faction
 
 **Friend / enemy colours**:
 The blue (friend) and orange (enemy) the HUD uses, seen from the local player's team, for names in the kill feed and scoreboard and for the minimap dots. A team tag ("A"/"B") always accompanies the colour, and both colours have a colour-blind set (`TeamPalette`).
+
+**Animal**:
+A creature of the world that is not a player: a deer, a dog, a cow. It has hit points and can be shot dead (`animals.json` lists the species, their hit points, speeds and models). It stands, eats, wanders around the spot it spawned at, and runs from players, vehicles and the shot that hurt it. A killed animal lies for `corpse_seconds` with its death clip held on the last frame, then is removed. It is a world entity (wire type 50) the server owns; clients only draw it. Not a target dummy (a player-shaped practice target) and not a corpse (what a killed player leaves).
+_Avoid_: NPC (alone), mob, critter
