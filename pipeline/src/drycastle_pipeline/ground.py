@@ -48,6 +48,25 @@ def kept_parcels(with_building: set[str], groups: dict[str, list[str]]) -> set[s
     return kept
 
 
+def carve_parcel(
+    geom: BaseGeometry, footprints: list[BaseGeometry], margin_m: float, keep_out: BaseGeometry
+) -> tuple[BaseGeometry | None, BaseGeometry]:
+    """A parcel cut down to its buildings: ``(new parcel, the rest of the old one)``.
+
+    The new parcel is the footprints grown by ``margin_m`` (a slim yard round the building), minus ``keep_out`` (the
+    other parcels, so no two parcels overlap). It may reach beyond the old outline when the building lies partly on
+    other cadastral land; that land stops being ground (the caller takes it out of the free land). None when there
+    is no building or nothing is left of it."""
+    if not footprints:
+        return None, geom
+    new = unary_union(footprints).buffer(margin_m, join_style="mitre").difference(keep_out)
+    parts = [p for p in _polys(new) if p.area >= 1.0]
+    if not parts:
+        return None, geom
+    new = unary_union(parts)
+    return new, geom.difference(new)
+
+
 def dike_ground(geoms: dict[str, BaseGeometry], ways: dict[str, BaseGeometry], dike_cfg: dict) -> BaseGeometry:
     """The flood dike of ``detail.dike`` as one outline: its ``parcels`` whole, and of each ``clips`` parcel the
     ground within ``within_m`` of the named way. ``geoms`` are the cadastral outlines by parcel ID (the dropped

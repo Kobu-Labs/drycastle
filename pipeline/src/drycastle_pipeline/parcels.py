@@ -17,7 +17,7 @@ from shapely.ops import unary_union
 from drycastle_pipeline.config import DEFAULT_AREA, area_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits
 from drycastle_pipeline.ground import ID_PREFIX as GROUND_PREFIX
-from drycastle_pipeline.ground import build_ground, dike_ground, drawn_ground, kept_parcels
+from drycastle_pipeline.ground import build_ground, carve_parcel, dike_ground, drawn_ground, kept_parcels
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.registry import (
     DEFAULT_REGISTRY,
@@ -157,8 +157,31 @@ def build_parcels(
     groups = {gid: g.get("parcels", []) for gid, g in edits.groups.items()}
     kept = kept_parcels(built, groups)
 
+    # parcels cut down to their buildings (ground.carve in rules.yaml): the land round them is ground
+    gcfg = load_section("ground", rules_path)
+    geoms = list(parcels)
+    leftovers: dict[str, BaseGeometry] = {}
+    carve = gcfg.get("carve") or {}
+    index = {pid: i for i, pid in enumerate(ids)}
+    others = None
+    for pid, spec in sorted(carve.items()):
+        i = index.get(pid)
+        if i is None or pid not in kept:
+            print(f"parcels: warning: ground.carve: {pid} is not a kept parcel; skipped", file=sys.stderr)
+            continue
+        if others is None:
+            others = unary_union([g for j, g in enumerate(parcels) if ids[j] in kept and ids[j] not in carve])
+        new, rest = carve_parcel(
+            parcels[i], [buildings[b] for b in assignment.by_parcel.get(i, [])], float((spec or {}).get("margin_m", 2.0)), others
+        )
+        if new is None:
+            print(f"parcels: warning: ground.carve: {pid} has no building to keep; skipped", file=sys.stderr)
+            continue
+        geoms[i] = new
+        leftovers[pid] = rest
+
     out = []
-    for i, (ref, geom) in enumerate(zip(refs, parcels, strict=True)):
+    for i, (ref, geom) in enumerate(zip(refs, geoms, strict=True)):
         if ids[i] not in kept:
             continue
         rec = _record(ids[i], geom, "building_plot" if ids[i] in built else "garden", rules.chunk_size_m)
@@ -166,9 +189,10 @@ def build_parcels(
     out.sort(key=lambda p: p["id"])
 
     # the land of all the other cadastral parcels, by ground type
-    gcfg = load_section("ground", rules_path)
-    dropped = {pid: g for pid, g in zip(ids, parcels, strict=True) if pid not in kept}
+    dropped = {pid: g for pid, g in zip(ids, parcels, strict=True) if pid not in kept} | leftovers
     free = unary_union([g if g.is_valid else g.buffer(0) for g in dropped.values()]) if dropped else Polygon()
+    if leftovers:  # a carved parcel may reach over land that was another parcel's
+        free = free.difference(unary_union([geoms[index[pid]] for pid in leftovers]))
     ways = {f["properties"]["osm_id"]: shape(f["geometry"]) for f in _read(norm / "highways.geojson")}
     landuse = [
         (f["properties"]["class"], f["properties"]["value"], shape(f["geometry"])) for f in _read(norm / "landuse.geojson")
@@ -177,7 +201,7 @@ def build_parcels(
     drawn, warnings = drawn_ground(edits.regions, (ox, oy), gcfg["types"])
     for warning in warnings:
         print(f"parcels: warning: {warning}", file=sys.stderr)
-    kept_union = unary_union([g for pid, g in zip(ids, parcels, strict=True) if pid in kept]) if drawn else None
+    kept_union = unary_union([g for pid, g in zip(ids, geoms, strict=True) if pid in kept]) if drawn else None
     ground = [
         {**_record(f"{GROUND_PREFIX}{n:04d}", geom, kind, rules.chunk_size_m), "buildings": []}
         for n, (kind, geom) in enumerate(build_ground(free, landuse, dike, gcfg, drawn, kept_union), 1)

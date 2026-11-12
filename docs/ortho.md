@@ -62,12 +62,12 @@ indistinguishable in an RGB photo); some roadside shadows still pass. There is n
 eye on windows of the village (forest, hedge and allotments, open meadow, house gardens). A canopy-height model (surface
 minus ground) would find trees far more reliably, but only the ground model is served by the INSPIRE WCS.
 
-### Planting from the detector (experiment)
+### Planting from the detector
 
-`DRYCASTLE_TREE_SOURCE=ortho make map` (or just `props detail export`) makes the props stage plant **every** tree from
-`trees.json` and `canopy.png` (`props.ortho_trees`); without the variable nothing changes. All rule-based trees, OSM trees
-and shore rows are left out. (Per-parcel tree settings in `edits.json` no longer exist: they were removed, see
-`docs/viewer-and-editor.md`.)
+The props stage plants **every** tree from `trees.json` and `canopy.png` (`props.ortho_trees`); this is the only tree source.
+There are no rule-based trees, OSM trees or shore rows, and no per-parcel tree settings (see `docs/viewer-and-editor.md`).
+The detector's output is read from `data/<area>/ortho/`; an area without it, or a `parcels.json` without a frame origin,
+has no trees, and `make props` warns. Run `make ortho-trees` first.
 
 * Each standalone tree is planted where it was found, scale = 2 x crown radius / `canopy_m`, kept within 0.8-3.
 * The canopy is planted so the forest looks closed from above, as in the photo: `props.trees.ortho` in `rules.yaml` gives

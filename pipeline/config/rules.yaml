@@ -23,6 +23,12 @@ building_assignment:
 ground:
   # A piece of ground smaller than this (m2) is dropped (the terrain keeps the fallback colour there).
   min_area_m2: 1.0
+  # Parcels cut down to their buildings: the parcel becomes the building outline(s) grown by margin_m (a slim yard), and the
+  # rest of its land is ground (whatever the types below make of it). Use it for a big cadastral parcel (a field, the
+  # dike) that is only a parcel because a building stands on it.
+  carve:
+    P-0073: {margin_m: 2.0}   # the dike strip north of the village: a hut stands on it
+    P-0754: {margin_m: 2.0}   # a 13 ha field with one building
   # What no type below claims.
   default: field
   # A type is the whole description of a kind of ground. Types are tried top to bottom; each takes what the ones above

@@ -362,3 +362,19 @@ def test_stage_turns_a_region_with_a_ground_type_into_ground(tmp_path: Path, cap
     meadow = next(g for g in doc["ground"] if g["kind"] == "meadow")
     assert shape(meadow["polygon"]).equals(box(100, 0, 150, 50))
     assert "R-0002" in capsys.readouterr().err  # unknown type: warned about and skipped
+
+
+def test_a_carved_parcel_is_its_building_outline_and_the_rest_is_ground(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    _write_normalised(work)  # P-0001 = 100 x 100 m with a 10 x 10 m building, P-0002 beside it, no building
+    rules = tmp_path / "rules.yaml"
+    rules.write_text("ground:\n  carve:\n    P-0001: {margin_m: 2}\n    P-0002: {}\n")  # P-0002 has no building
+    build_parcels(work, tmp_path / "registry" / "parcels.registry.json", ParcelRules(), rules_path=rules,
+                  edits_path=_edits(tmp_path, {}))
+    doc = json.loads((work / "parcels.json").read_text())
+    (p1,) = doc["parcels"]
+    assert p1["id"] == "P-0001" and p1["kind"] == "building_plot" and p1["buildings"] == ["w1"]
+    assert abs(p1["area"] - 14 * 14) < 1.0 and box(10, 10, 20, 20).within(shape(p1["polygon"]))
+    (g1,) = doc["ground"]  # the rest of P-0001 and all of P-0002 are one field, with no hole and no overlap
+    assert abs(g1["area"] - (20000 - p1["area"])) < 0.1
+    assert shape(g1["polygon"]).intersection(shape(p1["polygon"])).area < 1e-6

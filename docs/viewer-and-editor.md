@@ -203,7 +203,7 @@ parcel's own fence override, which wins field by field over the group's.
   metres, to 1 mm), Esc cancels. Existing gates are orange markers; `gate N` in the list selects (magenta), its
   width spin changes it, `delete` removes it.
 * **Trees are not edited per parcel** (the Trees tool, `set_trees` and the `trees` key of `edits.json` were removed):
-  the rules, or the orthophoto detector (`docs/ortho.md`), plant them. To add one by hand, place a tree object
+  the orthophoto detector (`docs/ortho.md`) is the only source of trees. To add one by hand, place a tree object
   (`pack:kenney-city-kit-suburban/tree-large` or `tree-small`) with the Objects tool.
 * **Apply**: changes are pending per target (`* unsaved changes` under the header, `N unsaved targets` at the
   bottom; selecting something else keeps them). `Apply` (button, or Enter when no text field has focus) reloads

@@ -88,10 +88,15 @@ shape of a parcel (`id` `A-0001`..., `kind` = the type, polygon, area, anchor, c
 
 A type is the whole description of a kind of ground, one entry of `ground.types`: its source (`osm` or `rule`), terrain
 `colours`, detail `recipe` (field, forest, village, dike) with optional `detail` settings laid over that recipe's
-section for this type only (a meadow is the field recipe without furrows and headlands), `trees` (`per_1000m2`,
-`forest`), `water` and `spawns`. A new type is one new entry; the map area can override a type
+section for this type only (a meadow is the field recipe without furrows and headlands), `water` and `spawns`. A new type is one new entry; the map area can override a type
 (`areas.village.ground.types`). There is no road ground: a road is the OSM ribbon on top of whatever lies under it.
-Ground areas have no fence and no edits of their own, and their IDs are only stable while the inputs are.
+Ground areas have no fence and no edits of their own, and their IDs are only stable while the inputs are. Trees are not
+part of a type: they come from the orthophoto only (`docs/ortho.md`).
+
+**Carving.** A big cadastral parcel can be a parcel only because a building stands on it (a field, the dike strip, public
+land). `ground.carve` in `rules.yaml` lists such parcels: the parcel keeps its ID but becomes the building outline(s)
+grown by `margin_m` (a slim yard, mitre corners, never over another parcel), and the rest of its land becomes ground like
+any other. Today P-0073 (the dike strip, with a hut) and P-0754 (a 13 ha field with one building).
 Edits of a parcel that is no longer kept are skipped with a warning by the props stage; putting the parcel in a group
 with a building plot (by hand in `edits.json`, it is not shown in the editor) brings it back.
 
@@ -171,8 +176,8 @@ accepted in v1, and a higher road class sits a hair above a lower one.
 
 **Props** (`make props`): low fences (thin boxes, 1.2 m) along the boundaries of building plots
 and of gardens near buildings (seeded per parcel, a gate gap on road frontage, no fence through
-buildings or the carriageway), OSM trees and seeded rule-based trees in gardens, plots and forests
-(blocky box canopy, or stacked pyramids in forests). Fences also get a simple closed-box
+buildings or the carriageway), and trees planted from the orthophoto detector only (`docs/ortho.md`; blocky box
+canopy, or stacked pyramids in forests). Fences also get a simple closed-box
 collision node. Trees are not in the chunk collision: `trees.json` (map 0.6.0, `files.trees`) lists every tree (position,
 ground height, scale, rotation, broadleaf or conifer, chunk) and the game builds the solids from it (see below).
 
@@ -373,7 +378,7 @@ the parcel's own chunk file so one parcel's props can be swapped at runtime; `pa
 (map 0.7.0: the textured parts of that parcel's typed fences, one node per texture; it carries UVs and a tint as
 vertex colour, and no image: the loader draws a node named `<node>_tex_<id>` with texture `<id>` of the asset
 library, and the manifest's `textures` lists the ids the map uses); `region_<ID>` (see Regions); `props` and
-`props_collision` remain only for items without a parcel (OSM trees). The manifest says
+`props_collision` remain only for items without a parcel (the orthophoto trees). The manifest says
 `"props_layout": "per_parcel"`; `map_version` went from `0.1.0` to `0.2.0` for this node-layout
 change (pre-1.0, a node-layout change bumps the minor part). Also
 `parcels.json` (ID, cadastral reference, kind, polygon and anchor in local metres with x east and
