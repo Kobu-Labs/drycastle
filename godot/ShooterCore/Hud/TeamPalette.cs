@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Friend and enemy colours of team deathmatch (kill feed, scoreboard, markers, minimap) as plain sRGB triples, so the
