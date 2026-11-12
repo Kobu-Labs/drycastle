@@ -47,11 +47,12 @@ public class VehiclesFile : IVersioned
                 if (l.Head.Concat(l.Tail).Any(p => p is null || p.Length != 3)) throw new DataFileException($"vehicles.json: {v.Id}: each lamp is [x, y, z]");
                 if (l.BeamRange <= 0 || l.BeamAngle <= 0 || l.BeamAngle >= 89) throw new DataFileException($"vehicles.json: {v.Id}: beam_range must be positive, beam_angle 1..88 degrees");
             }
-            if (v.Glass.Count > 16) throw new DataFileException($"vehicles.json: {v.Id}: at most 16 glass panes");
+            if (v.Glass.Count > 24) throw new DataFileException($"vehicles.json: {v.Id}: at most 24 glass panes");
             foreach (var pane in v.Glass)
             {
                 if (pane is null || pane.Centre.Length != 3 || pane.Normal.Length != 3 || pane.Size.Length != 2) throw new DataFileException($"vehicles.json: {v.Id}: a glass pane needs centre [x, y, z], normal [x, y, z] and size [width, height]");
                 if (pane.Normal.Sum(x => x * x) < 1e-6f || !(pane.Size[0] > 0) || !(pane.Size[1] > 0) || pane.Hp is <= 0) throw new DataFileException($"vehicles.json: {v.Id}: glass pane {pane.Id}: the normal must not be zero, size and hp must be positive");
+                if (pane.OutlineProblem() is { } problem) throw new DataFileException($"vehicles.json: {v.Id}: glass pane {pane.Id}: {problem}");
             }
             if (v.Glass.Select(g => g.Id).Distinct().Count() != v.Glass.Count) throw new DataFileException($"vehicles.json: {v.Id}: glass pane ids must differ");
             if (v.Tint is { Length: not 3 } || v.Tint != null && v.Paints.Count > 0) throw new DataFileException($"vehicles.json: {v.Id}: tint is [r, g, b] and excludes paints");
@@ -342,9 +343,11 @@ public class FlightCameraDef
 }
 
 /// <summary>
-/// One glass pane of a vehicle type (vehicles.json "glass", ADR 0007): a flat rectangle in the vehicle frame (forward -Z, origin on the
-/// ground, as the hood). The model's glass is not a mesh of its own, so the rectangle is what the server tests shots against and where the
-/// client draws the crack. <see cref="Size"/> is [width, height]: the width runs horizontally, the height up the pane (its slant length).
+/// One glass pane of a vehicle type (vehicles.json "glass", ADR 0007, superseded in part by ADR 0008): a flat pane in the vehicle frame
+/// (forward -Z, origin on the ground, as the hood), the server tests shots against it and the client draws the crack on it.
+/// <see cref="Size"/> is [width, height] of its bounding rectangle: the width runs horizontally, the height up the pane (its slant length).
+/// <see cref="Outline"/> is its real shape inside that rectangle. A generated model (bus, flak truck, helicopter) writes the list with its
+/// script and has the pane as a node <c>glass_N</c>, N being the pane's place in the list.
 /// </summary>
 public class VehicleGlassDef
 {
@@ -353,10 +356,33 @@ public class VehicleGlassDef
     /// <summary>The outward direction of the pane (any length).</summary>
     public float[] Normal { get; set; } = { 0, 0, -1 };
     public float[] Size { get; set; } = { 1, 1 };
+    /// <summary>
+    /// The pane's shape: a convex polygon of 3 to 12 points [[u, v], ...] in metres from <see cref="Centre"/>, u along the pane's width, v up it,
+    /// counter-clockwise seen from outside, inside the <see cref="Size"/> box. Null: the whole rectangle.
+    /// </summary>
+    public float[][]? Outline { get; set; }
     /// <summary>Hit points of this pane; null takes glass.json vehicle_pane_hp.</summary>
     public float? Hp { get; set; }
 
-    public GlassPaneRect Rect() => GlassPaneRect.Make(new System.Numerics.Vector3(Centre[0], Centre[1], Centre[2]), new System.Numerics.Vector3(Normal[0], Normal[1], Normal[2]), Size[0], Size[1]);
+    public GlassPaneRect Rect() => GlassPaneRect.Make(new System.Numerics.Vector3(Centre[0], Centre[1], Centre[2]), new System.Numerics.Vector3(Normal[0], Normal[1], Normal[2]), Size[0], Size[1],
+        Outline?.Select(p => new System.Numerics.Vector2(p[0], p[1])).ToList());
+
+    /// <summary>Null when the outline is fine (or there is none), else what is wrong with it.</summary>
+    public string? OutlineProblem()
+    {
+        if (Outline == null) return null;
+        if (Outline.Length is < 3 or > 12 || Outline.Any(p => p is null || p.Length != 2 || !float.IsFinite(p[0]) || !float.IsFinite(p[1]))) return "an outline is 3 to 12 points [u, v]";
+        const float eps = 0.002f;
+        if (Outline.Any(p => MathF.Abs(p[0]) > Size[0] / 2 + eps || MathF.Abs(p[1]) > Size[1] / 2 + eps)) return "the outline must lie inside the size box";
+        float area = 0;
+        for (var i = 0; i < Outline.Length; i++)
+        {
+            float[] a = Outline[i], b = Outline[(i + 1) % Outline.Length], c = Outline[(i + 2) % Outline.Length];
+            area += a[0] * b[1] - b[0] * a[1];
+            if ((b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) < -1e-4f) return "the outline must be convex and counter-clockwise";
+        }
+        return area > 1e-4f ? null : "the outline must be counter-clockwise and have an area";
+    }
 }
 
 /// <summary>
@@ -490,7 +516,7 @@ public class VehicleDef
     public float ModelYawDeg { get; set; }
     /// <summary>Headlights and tail lights (vehicles.json "lights"); null for a type without lamps.</summary>
     public VehicleLights? Lights { get; set; }
-    /// <summary>The glass panes of this type (vehicles.json "glass"), at most 16; empty for a type without glass. A pane's place in the list is its index on the wire.</summary>
+    /// <summary>The glass panes of this type (vehicles.json "glass"), at most 24; empty for a type without glass. A pane's place in the list is its index on the wire.</summary>
     public List<VehicleGlassDef> Glass { get; set; } = new();
     List<GlassPaneRect>? _glassRects;
     /// <summary>The panes as rectangles in the vehicle's frame, in the order of <see cref="Glass"/> (built once).</summary>

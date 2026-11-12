@@ -7,20 +7,35 @@ namespace Suchohrad.ShooterCore;
 /// The flat rectangle of a glass pane in some frame (the world for a building's pane, the vehicle's node frame for a vehicle's):
 /// its centre, the outward normal, and the two in-plane axes. <see cref="Right"/> is horizontal, <see cref="Up"/> points up the pane,
 /// and Right x Up = Normal, so the three are the columns of the pane's basis (a quad facing +Z maps onto the pane).
+/// <see cref="Outline"/> is the pane's real shape when it is not the whole rectangle (a triangle, a trapezoid): a convex polygon, counter-clockwise
+/// seen from outside, as (along Right, along Up) metres from the centre, inside the Width x Height box. Null: the rectangle itself.
 /// </summary>
-public readonly record struct GlassPaneRect(Vector3 Centre, Vector3 Normal, Vector3 Right, Vector3 Up, float Width, float Height)
+public readonly record struct GlassPaneRect(Vector3 Centre, Vector3 Normal, Vector3 Right, Vector3 Up, float Width, float Height, IReadOnlyList<Vector2>? Outline = null)
 {
-    public static GlassPaneRect Make(Vector3 centre, Vector3 normal, float width, float height)
+    public static GlassPaneRect Make(Vector3 centre, Vector3 normal, float width, float height, IReadOnlyList<Vector2>? outline = null)
     {
         normal = Vector3.Normalize(normal);
         // a pane lying flat (a roof light) has no horizontal direction of its own: its width runs along the frame's X
         var right = MathF.Abs(normal.Y) > 0.999f ? Vector3.UnitX : Vector3.Normalize(Vector3.Cross(Vector3.UnitY, normal));
         var up = Vector3.Normalize(Vector3.Cross(normal, right));
-        return new(centre, normal, right, up, width, height);
+        return new(centre, normal, right, up, width, height, outline is { Count: >= 3 } ? outline : null);
+    }
+
+    /// <summary>Whether the point (<paramref name="u"/> along Right, <paramref name="v"/> along Up, metres from the centre) is on the pane: in the rectangle and, when there is an outline, inside it.</summary>
+    public bool Contains(float u, float v)
+    {
+        if (MathF.Abs(u) > Width / 2 || MathF.Abs(v) > Height / 2) return false;
+        if (Outline == null) return true;
+        for (var i = 0; i < Outline.Count; i++)
+        {
+            Vector2 a = Outline[i], b = Outline[(i + 1) % Outline.Count];
+            if ((b.X - a.X) * (v - a.Y) - (b.Y - a.Y) * (u - a.X) < -1e-5f) return false; // right of an edge of a counter-clockwise polygon
+        }
+        return true;
     }
 
     /// <summary>
-    /// Metres along the ray to where it crosses the pane from outside, or null: it misses the rectangle, runs along it, starts behind it
+    /// Metres along the ray to where it crosses the pane from outside, or null: it misses the pane (its outline, else its rectangle), runs along it, starts behind it
     /// or comes from the inside. <paramref name="dir"/> is a unit vector.
     /// </summary>
     public float? Cross(Vector3 origin, Vector3 dir)
@@ -30,7 +45,7 @@ public readonly record struct GlassPaneRect(Vector3 Centre, Vector3 Normal, Vect
         var t = Vector3.Dot(Centre - origin, Normal) / facing;
         if (t < 0) return null;
         var p = origin + dir * t - Centre;
-        return MathF.Abs(Vector3.Dot(p, Right)) <= Width / 2 && MathF.Abs(Vector3.Dot(p, Up)) <= Height / 2 ? t : null;
+        return Contains(Vector3.Dot(p, Right), Vector3.Dot(p, Up)) ? t : null;
     }
 }
 

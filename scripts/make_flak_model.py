@@ -307,6 +307,96 @@ class Node:
             yield from c.walk()
 
 
+# ----------------------------------------------------------------------------- glass panes (shared by the bus, flak and helicopter scripts)
+
+class GlassSet:
+    """The breakable glass panes of one vehicle (ADR 0007). Each pane is its own glTF node `glass_N` (N = its place in the list, which is
+    its index in vehicles.json `glass` and on the wire) so the client can hide it when it shatters. Several slabs of one pane go under
+    one node. The pane list for vehicles.json (centre, normal, bounding size and the outline polygon) comes from the outline given here,
+    not from hand measuring: `outline` is the pane's visible edge as 3D points in the vehicle frame (convex, in order)."""
+
+    def __init__(self, vehicle_id):
+        self.vehicle_id, self.panes = vehicle_id, []
+
+    def pane(self, parent, pane_id, slabs, outline, inside=None):
+        """Adds the slabs (lists of triangles) as node glass_N under `parent`. `inside` is a point inside the vehicle: the normal faces away from it."""
+        assert len(outline) >= 3 and len(outline) <= 12, pane_id
+        n = len(self.panes)
+        node = parent.child(f"glass_{n}")
+        for s in slabs:
+            node.add(s)
+        cen = tuple(sum(p[i] for p in outline) / len(outline) for i in range(3))
+        # Newell's normal of the outline, turned to face away from the inside
+        nx = ny = nz = 0.0
+        for a, b in zip(outline, outline[1:] + outline[:1]):
+            nx += (a[1] - b[1]) * (a[2] + b[2]); ny += (a[2] - b[2]) * (a[0] + b[0]); nz += (a[0] - b[0]) * (a[1] + b[1])
+        normal = unit((nx, ny, nz))
+        if dot(normal, sub(cen, inside if inside is not None else (0.0, cen[1], 0.0))) < 0:
+            normal = mul(normal, -1)
+        # the same in-plane axes as GlassPaneRect.Make: right is horizontal, up runs up the pane (a flat pane's width runs along x)
+        right = (1.0, 0.0, 0.0) if abs(normal[1]) > 0.999 else unit(cross((0.0, 1.0, 0.0), normal))
+        up = unit(cross(normal, right))
+        uv = [(dot(sub(p, cen), right), dot(sub(p, cen), up)) for p in outline]
+        u0, u1, v0, v1 = min(u for u, _ in uv), max(u for u, _ in uv), min(v for _, v in uv), max(v for _, v in uv)
+        centre = add(cen, add(mul(right, (u0 + u1) / 2), mul(up, (v0 + v1) / 2)))
+        poly = [(u - (u0 + u1) / 2, v - (v0 + v1) / 2) for u, v in uv]
+        if sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(poly, poly[1:] + poly[:1])) < 0:
+            poly.reverse()                       # counter-clockwise seen from outside
+        turns = [(b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) for a, b, c in zip(poly, poly[1:] + poly[:1], poly[2:] + poly[:2])]
+        assert all(t > -1e-6 for t in turns), f"glass pane {pane_id} is not convex (cracks and fragments are cut for convex outlines)"
+        self.panes.append({"id": pane_id, "centre": centre, "normal": normal, "size": (u1 - u0, v1 - v0), "outline": poly})
+        return node
+
+    @staticmethod
+    def _num(x):
+        s = ("%.3f" % x).rstrip("0").rstrip(".")
+        return "0" if s in ("-0", "") else s
+
+    def json_lines(self, indent):
+        f = self._num
+        out = []
+        for p in self.panes:
+            vec = lambda v: "[" + ", ".join(f(x) for x in v) + "]"
+            outline = "[" + ", ".join(vec(q) for q in p["outline"]) + "]"
+            out.append(f'{indent}{{ "id": "{p["id"]}", "centre": {vec(p["centre"])}, "normal": {vec(p["normal"])}, "size": {vec(p["size"])}, "outline": {outline} }}')
+        return ",\n".join(out)
+
+    def write_vehicles_json(self, path):
+        """Replaces the `glass` list of this vehicle in vehicles.json, leaving everything else of the file as it is."""
+        text = Path(path).read_text()
+        at = text.index(f'"id": "{self.vehicle_id}"')
+        start = text.index('"glass": [', at)
+        nxt = text.find('"id": "', at + 10)
+        assert nxt < 0 or start < nxt, f"{self.vehicle_id} has no glass list in {path}"
+        i, depth = start + len('"glass": ['), 1
+        while depth:
+            depth += {"[": 1, "]": -1}.get(text[i], 0)
+            i += 1
+        indent = "        "
+        Path(path).write_text(text[:start] + '"glass": [\n' + self.json_lines(indent) + "\n      ]" + text[i:])
+
+    def report(self):
+        for i, p in enumerate(self.panes):
+            print(f"glass_{i:<2d} {p['id']:18s} size={p['size'][0]:.3f}x{p['size'][1]:.3f} outline={len(p['outline'])} points")
+
+
+def vehicles_json_path():
+    return Path(__file__).resolve().parent.parent / "godot" / "shooter" / "data" / "vehicles.json"
+
+
+def panel_face(a, b, c, d, u0, u1, v0, v1, h, centre):
+    """The four corners of the outer face of the raised panel `panel` makes with the same arguments (the outline of a glass pane)."""
+    def P(u, v):
+        top = add(mul(a, 1 - u), mul(b, u))
+        bot = add(mul(d, 1 - u), mul(c, u))
+        return add(mul(top, 1 - v), mul(bot, v))
+    n = unit(cross(sub(b, a), sub(d, a)))
+    mid = mul(add(add(a, b), add(c, d)), 0.25)
+    if dot(n, sub(mid, centre)) < 0:
+        n = mul(n, -1)
+    return [add(P(u, v), mul(n, h)) for u, v in ((u0, v0), (u1, v0), (u1, v1), (u0, v1))]
+
+
 # ----------------------------------------------------------------------------- dimensions
 
 WHEEL_R, WHEEL_X = 0.56, 1.07
@@ -323,6 +413,9 @@ def wheel(spare=False):
     prof = [(-0.20, 0.0, "Rubber"), (-0.20, 0.56), (0.15, 0.56), (0.20, 0.47), (0.20, 0.34, "Olive"),
             (0.11, 0.30), (0.11, 0.16, "Steel"), (0.22, 0.12), (0.22, 0.0)]
     return lathe((0, 0, 0), (1, 0, 0), prof, 10 if spare else 12)
+
+
+GLASS = GlassSet("flak")
 
 
 def build():
@@ -385,11 +478,15 @@ def build():
     cab.add(loft("Olive", [g0, g1, g2], cap0=False))
     cc = (0, 2.0, -1.4)
     f = (g0[0], g0[1], g1[1], g1[0])     # windscreen face
-    cab.add(panel("Glass", *f, 0.045, 0.485, 0.10, 0.90, 0.012, cc), panel("Glass", *f, 0.515, 0.955, 0.10, 0.90, 0.012, cc))
+    # the breakable panes are nodes of their own (glass_N, see GlassSet): two windscreen halves, and on each side a door window and a quarter light
+    for pid, u0, u1 in (("windscreen_left", 0.045, 0.485), ("windscreen_right", 0.515, 0.955)):
+        GLASS.pane(cab, pid, [panel("Glass", *f, u0, u1, 0.10, 0.90, 0.012, cc)], panel_face(*f, u0, u1, 0.10, 0.90, 0.012, cc))
     for i0, i1, s in ((1, 2, 1), (3, 0, -1)):  # side windows: door glass and a quarter light (u runs along the face)
         q = (g0[i0], g0[i1], g1[i1], g1[i0])
         d1, d2, q1, q2 = (0.06, 0.60, 0.68, 0.93) if s > 0 else (0.40, 0.94, 0.07, 0.32)
-        cab.add(panel("Glass", *q, d1, d2, 0.10, 0.88, 0.012, cc), panel("Glass", *q, q1, q2, 0.10, 0.88, 0.012, cc))
+        side = "right" if s > 0 else "left"
+        for pid, u0, u1 in (("door_" + side, d1, d2), ("quarter_" + side, q1, q2)):
+            GLASS.pane(cab, pid, [panel("Glass", *q, u0, u1, 0.10, 0.88, 0.012, cc)], panel_face(*q, u0, u1, 0.10, 0.88, 0.012, cc))
     cab.add(panel("Glass", g0[2], g0[3], g1[3], g1[2], 0.28, 0.72, 0.15, 0.80, 0.012, cc))  # rear window
     cab.add(extrude("OliveDark", [(-2.02, 2.20), (-1.76, 2.30), (-1.76, 2.335), (-2.04, 2.23)], 'x', -1.02, 1.02))  # sun visor
     cab.add(lathe((0.42, 2.36, -1.34), (0, 1, 0), [(0, 0), (0, 0.30), (0.035, 0.30), (0.06, 0.25), (0.06, 0)], 8, mat="OliveDark"))  # roof hatch
@@ -662,6 +759,10 @@ def main():
         print(f"{n.name:16s} pivot=({n.origin[0]:.3f}, {n.origin[1]:.3f}, {n.origin[2]:.3f}) tris={len(n.tris)}")
     print(f"triangles: {total}")
     print("bounds: x %.2f..%.2f  y %.2f..%.2f  z %.2f..%.2f" % (lo[0], hi[0], lo[1], hi[1], lo[2], hi[2]))
+    GLASS.report()
+    if len(sys.argv) <= 1:
+        GLASS.write_vehicles_json(vehicles_json_path())
+        print("wrote the glass list of vehicles.json")
     print(f"wrote {out}")
 
 

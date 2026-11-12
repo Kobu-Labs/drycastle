@@ -1,5 +1,7 @@
 # Glass panes are declared rectangles with server-owned hit points
 
+> **Partly superseded by ADR 0008** (`0008-generated-vehicle-glass-is-a-node-per-pane-with-an-outline.md`): the vehicle panes of our generated models (bus, flak truck, utility helicopter) are now a node per pane with an outline polygon, and the "darkened, not removed" consequence below no longer holds for them. A building's pane and the Kenney vehicles' panes are still rectangles as described here.
+
 Decided while implementing shatterable glass (map #225, tickets #226 and #227). The tickets were never grilled with the user: these are the conservative defaults the implementation chose, written down so they can be challenged. The numbers live in `glass.json` and are cheap to change; the three decisions below are the ones that are hard to reverse.
 
 **1. A pane is a rectangle in data, not a mesh.** A glass pane is a flat rectangle: centre, outward normal, width and height. A building's comes from `windows.json` (the pipeline already writes one record per window pane of a detailed building). A vehicle's is declared in the `glass` list of its type in `vehicles.json`, in the vehicle frame.

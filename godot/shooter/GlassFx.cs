@@ -8,7 +8,8 @@ namespace Suchohrad.Shooter;
 /// Client visuals of a glass pane (ADR 0007, docs/glass.md). A pane that is not whole gets an overlay quad just in front of it
 /// (glass_crack.gdshader): cracks that reach further with each crack stage, and a dark opening with shards along the edge once it has
 /// shattered. The moment it shatters, the pane's rectangle is cut into fragments (<see cref="GlassShards"/>) that fly out of it as one mesh
-/// (glass_shards.gdshader), freed when they are gone. A whole pane has no node here at all. Callers skip headless runs (ShotFx.Enabled).
+/// (glass_shards.gdshader), freed when they are gone. A pane with an outline polygon (generated vehicle models, ADR 0008) is clipped to it by
+/// the crack shader and cut to it by the fragments. A whole pane has no node here at all. Callers skip headless runs (ShotFx.Enabled).
 /// </summary>
 public static class GlassFx
 {
@@ -16,6 +17,8 @@ public static class GlassFx
     public const string ShardShaderPath = "res://shaders/glass_shards.gdshader";
     /// <summary>How far in front of the pane the overlay sits, metres (clear of the pane's own surface, no z-fighting).</summary>
     const float Lift = 0.015f;
+    /// <summary>Most points of an outline the crack shader takes (glass_crack.gdshader, `outline[12]`; vehicles.json allows no more).</summary>
+    const int MaxOutline = 12;
 
     static Shader? _crack, _shards;
     static int _active;
@@ -28,6 +31,17 @@ public static class GlassFx
     /// <summary>A number that differs between panes, for the crack pattern and the cut of the fragments.</summary>
     public static float Seed(GlassPaneKey key) => (key.Owner * 7919 + key.Index * 104729) % 9973 / 97f;
 
+    /// <summary>Gives the crack shader the pane's outline polygon (none: the whole rectangle).</summary>
+    static void SetOutline(ShaderMaterial mat, GlassPaneRect rect)
+    {
+        var o = rect.Outline;
+        var n = Math.Min(o?.Count ?? 0, MaxOutline);
+        var points = new Vector2[MaxOutline];
+        for (var i = 0; i < MaxOutline; i++) points[i] = n > 0 ? new Vector2(o![Math.Min(i, n - 1)].X, o[Math.Min(i, n - 1)].Y) : Vector2.Zero;
+        mat.SetShaderParameter("outline", points);
+        mat.SetShaderParameter("outline_count", n);
+    }
+
     /// <summary>The overlay of one pane under <paramref name="parent"/> (the vehicle's node, or a world node for a building's pane). <paramref name="holeDarkness"/> is how opaque the opening of the shattered pane is.</summary>
     public static MeshInstance3D MakeOverlay(Node3D parent, GlassPaneRect rect, GlassPaneKey key, float holeDarkness)
     {
@@ -35,6 +49,7 @@ public static class GlassFx
         mat.SetShaderParameter("pane_size", new Vector2(rect.Width, rect.Height));
         mat.SetShaderParameter("seed", Seed(key));
         mat.SetShaderParameter("hole_darkness", holeDarkness);
+        SetOutline(mat, rect);
         var mi = new MeshInstance3D
         {
             Name = $"Glass_{key.Owner}_{key.Index}",
@@ -67,7 +82,7 @@ public static class GlassFx
         var frame = paneParent * Frame(rect, Lift);
         if (Sfx.ListenerDistance(frame.Origin) > cfg.ShatterEffectRange) return;
 
-        var shards = GlassShards.Cut(rect.Width, rect.Height, cfg.Shards, (uint)(key.Owner * 7919 + key.Index * 104729));
+        var shards = GlassShards.Cut(rect.Width, rect.Height, cfg.Shards, (uint)(key.Owner * 7919 + key.Index * 104729), rect.Outline);
         var verts = new Vector3[shards.Count * 3];
         var normals = new Vector3[shards.Count * 3];
         var centres = new Vector2[shards.Count * 3];

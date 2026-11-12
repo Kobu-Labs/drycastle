@@ -423,6 +423,87 @@ public class GlassTests
         Assert.NotEqual(GlassShards.Cut(1.4f, 2.4f, 28, 7), GlassShards.Cut(1.4f, 2.4f, 28, 8));
     }
 
+    static readonly Vector2[] Trapezoid = { new(0.6f, -0.4f), new(0.6f, 0.4f), new(-0.2f, 0.4f), new(-0.6f, -0.4f) }; // counter-clockwise, in a 1.2 x 0.8 box
+    static readonly Vector2[] Triangle = { new(-0.5f, -0.5f), new(0.5f, -0.5f), new(-0.5f, 0.5f) };
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void TheFragmentsOfAnOutlinedPaneTileItsOutlineExactly(int which)
+    {
+        var outline = which == 0 ? Trapezoid : Triangle;
+        var (w, h) = which == 0 ? (1.2f, 0.8f) : (1f, 1f);
+        var shards = GlassShards.Cut(w, h, 28, 42, outline);
+        Assert.Equal(GlassShards.Area(outline), shards.Sum(s => s.Area), 3);
+        Assert.NotEmpty(shards);
+        Assert.All(shards, s =>
+        {
+            Assert.True(s.Area > 0);
+            foreach (var p in new[] { s.A, s.B, s.C })
+                for (var i = 0; i < outline.Length; i++)
+                {
+                    Vector2 a = outline[i], b = outline[(i + 1) % outline.Length];
+                    Assert.True((b.X - a.X) * (p.Y - a.Y) - (b.Y - a.Y) * (p.X - a.X) >= -1e-4f, "a fragment lies outside the outline");
+                }
+        });
+        Assert.InRange(shards.Count, 8, 80); // a pane that fills less of its box still breaks into about as many fragments
+    }
+
+    [Fact]
+    public void AnOutlineOfTheWholeRectangleCutsLikeNoOutline()
+    {
+        var box = new[] { new Vector2(-0.7f, -1.2f), new Vector2(0.7f, -1.2f), new Vector2(0.7f, 1.2f), new Vector2(-0.7f, 1.2f) };
+        Assert.Equal(1.4f * 2.4f, GlassShards.Cut(1.4f, 2.4f, 28, 7, box).Sum(s => s.Area), 3);
+        Assert.Equal(GlassShards.Cut(1.4f, 2.4f, 28, 7).Count, GlassShards.Cut(1.4f, 2.4f, 28, 7, box).Count);
+    }
+
+    // ---- outlines ----
+
+    [Fact]
+    public void AShotMissesTheCornersOfTheRectangleOutsideTheOutline()
+    {
+        var pane = GlassPaneRect.Make(new Vector3(0, 1, 0), new Vector3(0, 0, 1), 1.2f, 0.8f, Trapezoid);
+        var dir = new Vector3(0, 0, -1);
+        Assert.NotNull(pane.Cross(new Vector3(0.3f, 1.1f, 5), dir));    // inside
+        Assert.NotNull(pane.Cross(new Vector3(0.55f, 1.35f, 5), dir));  // near the long edge, inside
+        Assert.Null(pane.Cross(new Vector3(-0.5f, 1.35f, 5), dir));     // the cut top left corner: in the rectangle, outside the pane
+        Assert.Null(pane.Cross(new Vector3(0.7f, 1.0f, 5), dir));       // outside the rectangle
+        var plain = GlassPaneRect.Make(new Vector3(0, 1, 0), new Vector3(0, 0, 1), 1.2f, 0.8f);
+        Assert.NotNull(plain.Cross(new Vector3(-0.5f, 1.35f, 5), dir)); // without an outline the rectangle is the pane
+    }
+
+    [Fact]
+    public void AnOutlineParsesAndTravelsWithTheRectangle()
+    {
+        var v = ParseGlass("[ { \"id\": \"a\", \"centre\": [0, 1, 0], \"normal\": [0, 0, 1], \"size\": [1.2, 0.8], \"outline\": [[0.6, -0.4], [0.6, 0.4], [-0.2, 0.4], [-0.6, -0.4]] }, { \"id\": \"b\", \"centre\": [0, 1, 1], \"normal\": [0, 0, 1], \"size\": [1, 1] } ]").Vehicles[0];
+        Assert.Equal(4, v.GlassRects[0].Outline!.Count);
+        Assert.Equal(new Vector2(-0.2f, 0.4f), v.GlassRects[0].Outline![2]);
+        Assert.Null(v.GlassRects[1].Outline);
+    }
+
+    [Theory]
+    [InlineData("[[0, 0], [1, 0]]")]                                        // two points
+    [InlineData("[[0.6, -0.4], [-0.6, -0.4], [-0.6, 0.4], [0.6, 0.4]]")]    // clockwise
+    [InlineData("[[0.6, -0.4], [0.2, 0], [0.6, 0.4], [-0.6, 0.4], [-0.6, -0.4]]")] // concave
+    [InlineData("[[0.9, -0.4], [0.9, 0.4], [-0.6, 0.4], [-0.6, -0.4]]")]    // outside the size box
+    [InlineData("[[0, 0], [0.1, 0.1], [0.2, 0.2]]")]                        // no area
+    [InlineData("[[0.6, -0.4], [0.6]]")]                                    // not [u, v]
+    public void ABadOutlineIsRefused(string outline) =>
+        Assert.Throws<DataFileException>(() => ParseGlass("[ { \"id\": \"a\", \"centre\": [0, 1, 0], \"normal\": [0, 0, 1], \"size\": [1.2, 0.8], \"outline\": " + outline + " } ]"));
+
+    [Fact]
+    public void TheGeneratedVehiclesHaveAnOutlineOnEveryPaneAndTheirCountsMatchTheModels()
+    {
+        var counts = new Dictionary<string, int> { ["bus"] = 18, ["flak"] = 6, ["utility_helicopter"] = 4 };
+        foreach (var v in Shipped().Vehicles.Where(v => counts.ContainsKey(v.Id)))
+        {
+            Assert.Equal(counts[v.Id], v.Glass.Count);
+            Assert.All(v.Glass, g => Assert.NotNull(g.Outline));
+            Assert.All(v.GlassRects, r => Assert.True(GlassShards.Area(r.Outline!) <= r.Width * r.Height + 1e-3f));
+        }
+        Assert.Equal(counts.Count, Shipped().Vehicles.Count(v => counts.ContainsKey(v.Id)));
+    }
+
     // ---- data files ----
 
     static VehiclesFile Shipped() => VehiclesFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "vehicles.json"));
@@ -496,9 +577,9 @@ public class GlassTests
     public void ABadGlassPaneIsRefused(string glass) => Assert.Throws<DataFileException>(() => ParseGlass(glass));
 
     [Fact]
-    public void MoreThanSixteenPanesAreRefused()
+    public void MoreThanTwentyFourPanesAreRefused()
     {
-        var panes = string.Join(", ", Enumerable.Range(0, 17).Select(i => "{ \"id\": \"p" + i + "\", \"centre\": [0, 1, " + i + "], \"normal\": [1, 0, 0], \"size\": [1, 1] }"));
+        var panes = string.Join(", ", Enumerable.Range(0, 25).Select(i => "{ \"id\": \"p" + i + "\", \"centre\": [0, 1, " + i + "], \"normal\": [1, 0, 0], \"size\": [1, 1] }"));
         Assert.Throws<DataFileException>(() => ParseGlass("[ " + panes + " ]"));
     }
 
@@ -517,7 +598,9 @@ public class GlassTests
             var fromMiddle = r.Centre - new Vector3(0, r.Centre.Y, 0);
             Assert.True(Vector3.Dot(r.Normal, fromMiddle) > 0 || r.Normal.Y > 0.5f, $"{v.Id} {g.Id} faces inwards");
             // and it is within reach of a bullet that entered the box in front of it
-            var origin = r.Centre + r.Normal * 20;
+            // (aimed at the middle of the outline, which is on the pane even when the middle of the rectangle is not)
+            var aim = r.Outline is { } o ? new Vector2(o.Average(p => p.X), o.Average(p => p.Y)) : Vector2.Zero;
+            var origin = r.Centre + r.Right * aim.X + r.Up * aim.Y + r.Normal * 20;
             var wall = VehicleBox.Ray(origin, -r.Normal, 100, Vector3.Zero, 0, v.HalfWidth, v.HalfLength, v.Height);
             Assert.True(wall is { } w && GlassRules.FirstCrossed(v.GlassRects, origin, -r.Normal, w.Distance - 0.1f, w.Distance + new GlassConfig().VehicleReach) >= 0, $"{v.Id} {g.Id} is out of a bullet's reach");
         }

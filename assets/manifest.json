@@ -1430,7 +1430,7 @@
       "licence": "CC0",
       "source": "scripts/make_flak_model.py (original geometry written as code; python3 -I scripts/make_flak_model.py rebuilds the file)",
       "pack": "suchohrad-generated-models",
-      "used_for": "godot/shooter vehicle id flak (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground, metres), separate nodes for turret, gun_cradle, barrels, wheels, outriggers"
+      "used_for": "godot/shooter vehicle id flak (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground, metres), separate nodes for turret, gun_cradle, barrels, wheels, outriggers; each breakable glass pane is its own node glass_N (N = its place in the glass list of vehicles.json, which the script rewrites with the pane outlines)"
     },
     {
       "id": "pack:suchohrad-generated-models/bus",
@@ -1451,7 +1451,7 @@
       "licence": "CC0",
       "source": "scripts/make_bus_model.py (original geometry written as code; python3 -I scripts/make_bus_model.py rebuilds the file)",
       "pack": "suchohrad-generated-models",
-      "used_for": "godot/shooter vehicle id bus (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground at the centre, metres), separate nodes for the four wheels and the four door leaves, modelled interior"
+      "used_for": "godot/shooter vehicle id bus (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground at the centre, metres), separate nodes for the four wheels and the four door leaves, modelled interior; each breakable glass pane (18) is its own node glass_N (N = its place in the glass list of vehicles.json, which the script rewrites with the pane outlines; a door leaf's pane is under the leaf)"
     },
     {
       "id": "pack:suchohrad-generated-models/utility_helicopter",
@@ -1472,7 +1472,7 @@
       "licence": "CC0",
       "source": "scripts/make_utility_helicopter_model.py (original geometry written as code; python3 -I scripts/make_utility_helicopter_model.py rebuilds the file)",
       "pack": "suchohrad-generated-models",
-      "used_for": "godot/shooter vehicle id utility_helicopter (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground under the rotor mast, metres), separate nodes for rotor_main, rotor_tail, gun_mount, gun, barrel"
+      "used_for": "godot/shooter vehicle id utility_helicopter (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground under the rotor mast, metres), separate nodes for rotor_main, rotor_tail, gun_mount, gun, barrel; each breakable glass pane (two windscreen halves, two cockpit doors) is its own node glass_N (N = its place in the glass list of vehicles.json, which the script rewrites with the pane outlines)"
     },
     {
       "id": "prim:pole_lamp_1",
