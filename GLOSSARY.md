@@ -270,3 +270,7 @@ _Avoid_: squad, clan, faction
 
 **Friend / enemy colours**:
 The blue (friend) and orange (enemy) the HUD uses, seen from the local player's team, for names in the kill feed and scoreboard and for the minimap dots. A team tag ("A"/"B") always accompanies the colour, and both colours have a colour-blind set (`TeamPalette`).
+
+**Tactical map**:
+The full-screen, north-up map sheet of the whole base map that the M key (rebindable, `map`) opens and closes; Esc also closes it. It is view only and does not pause anything. Terrain, parcels and roads come from the same data as the minimap; a square grid labels columns A, B, C... from the west and rows 1, 2, 3... from the south, so a square has a short reference such as "C7" (the cell is 50, 100 or 200 m, chosen so there are about 10 to 20 a side; these are not S-JTSK coordinates). The margin shows a compass rose, the player's heading in degrees, the grid reference and position in metres from the south-west corner, a scale bar and a legend. Markers (the player's arrow, vehicles, friends in team deathmatch, UAV pings) are the minimap's, drawn from the same data. It closes on the respawn screen, at the end of a match and in a missile or turret view.
+_Avoid_: world map, big map, full map

@@ -37,6 +37,9 @@ public sealed partial class Minimap : Control
     public bool TeamColours { get => _markers.TeamColours; set => _markers.TeamColours = value; }
     static readonly Vector2[] Arrow = { new(0, -ArrowHalf), new(ArrowHalf * 0.8f, ArrowHalf), new(0, ArrowHalf * 0.4f), new(-ArrowHalf * 0.8f, ArrowHalf) };
 
+    /// <summary>The shared map data (null before <see cref="Build"/> or without a map); the tactical map draws from the same base.</summary>
+    public MapBase? Base => _map;
+
     /// <param name="markers">The shared markers; the HUD gives the same instance to the tactical map.</param>
     public Minimap(MapMarkers markers)
     {
