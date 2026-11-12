@@ -6,14 +6,15 @@ using NVector2 = System.Numerics.Vector2;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// Top-down minimap (ticket #119, quality and orientation in #150). Two layers:
+/// Top-down minimap (ticket #119, quality and orientation in #150). Two layers, both from the shared <see cref="MapBase"/>:
 /// - Terrain and parcel fills: one mipmapped texture per map, sized from the on-screen scale (UI scale times device pixel
 ///   ratio), rebuilt only when that scale changes by a lot. Sampled with linear filtering, so it is not blocky when zoomed.
 /// - Roads: anti-aliased polylines drawn each frame in screen space, culled to the view, so they stay crisp at any scale.
 /// Dots: the player arrow (fixed at the centre), vehicles (squares), enemy pings (circles, the UAV streak's layer, expiring
 /// on their own), and a north marker "N" on the rim. The view turns to the player's view direction (see
 /// <see cref="MinimapView"/>), eased along the shorter arc.
-/// Positions are ground (x, z) in metres, the same axes as the game's world (north is -z).
+/// Positions are ground (x, z) in metres, the same axes as the game's world (north is -z). The player, vehicles, friends and
+/// pings live in the shared <see cref="MapMarkers"/> that the tactical map reads as well.
 /// </summary>
 public sealed partial class Minimap : Control
 {
@@ -21,42 +22,25 @@ public sealed partial class Minimap : Control
     public const int MinTextureSide = 512, MaxTextureSide = 2048;
     /// <summary>How fast the shown yaw eases to the view yaw, per second (about 0.15 s to settle).</summary>
     public const float FollowRate = 14f;
-    const float PadMetres = 10f;
     const float ArrowHalf = 9f;
 
     /// <summary>Half the view's width in metres (zoom). A smaller value zooms in.</summary>
     public float ZoomMetres { get; set; } = 90f;
 
+    readonly MapMarkers _markers;
+    MapBase? _map;
     ImageTexture? _base;
-    Drycastle.MapLoader.MapLoader? _map;
     int _side;               // texture side in texels (0 = not built)
-    float _sideMetres;       // the map's extent covered by the texture, metres
-    Vector2 _origin;         // ground (x, z) of texel (0, 0)
     float _metresPerTexel = 1f;
-    Vector2 _player;
-    float _yaw;              // target: the view yaw
-    float _shownYaw;         // eased towards _yaw
-    bool _hasPlayer;
-    readonly List<NVector2> _vehicles = new();
-    readonly List<NVector2> _friends = new();
+    float _shownYaw;         // eased towards the markers' view yaw
     /// <summary>Team deathmatch: pings use the enemy colour (orange) and friends are drawn, as outlined circles in the friend colour.</summary>
-    public bool TeamColours { get; set; }
-    readonly MinimapPings _pings = new();
-    readonly List<RoadDraw> _roads = new();
+    public bool TeamColours { get => _markers.TeamColours; set => _markers.TeamColours = value; }
     static readonly Vector2[] Arrow = { new(0, -ArrowHalf), new(ArrowHalf * 0.8f, ArrowHalf), new(0, ArrowHalf * 0.4f), new(-ArrowHalf * 0.8f, ArrowHalf) };
 
-    /// <summary>A road drawn as geometry: ground points, its own screen scratch buffer (reused every frame), and its bounds.</summary>
-    sealed class RoadDraw
+    /// <param name="markers">The shared markers; the HUD gives the same instance to the tactical map.</param>
+    public Minimap(MapMarkers markers)
     {
-        public Vector2[] Ground = Array.Empty<Vector2>();
-        public Vector2[] Screen = Array.Empty<Vector2>();
-        public Rect2 Bounds;
-        public float WidthM;
-        public Color Colour;
-    }
-
-    public Minimap()
-    {
+        _markers = markers;
         MouseFilter = MouseFilterEnum.Ignore;
         ClipContents = true;
         TextureFilter = TextureFilterEnum.LinearWithMipmaps;
@@ -64,72 +48,36 @@ public sealed partial class Minimap : Control
     }
 
     /// <summary>
-    /// Stores the map and prepares the roads. The terrain texture is built on the first frame, once the on-screen size is known.
+    /// Takes the shared map base. The terrain texture is built on the first frame, once the on-screen size is known.
     /// Returns false when the map has no parcels or roads (the minimap then shows the player only).
     /// </summary>
     public bool Build(Drycastle.MapLoader.MapLoader? map)
     {
         _base = null;
         _side = 0;
-        _map = map;
-        _roads.Clear();
-        if (map == null) return false;
-        var roads = RoadNetwork.Parse(map.RoadsJson);
-        var box = default(Rect2);
-        var any = false;
-        void Grow(Rect2 r) { box = any ? box.Merge(r) : r; any = true; }
-        foreach (var p in map.Parcels.Values) Grow(p.Bounds);
-        foreach (var r in roads)
-        {
-            var g = new Vector2[r.Points.Length];
-            for (var i = 0; i < g.Length; i++) g[i] = new Vector2(r.Points[i].X, -r.Points[i].Y); // local north-up to ground z
-            var bounds = new Rect2(g[0], Vector2.Zero);
-            foreach (var q in g) bounds = bounds.Expand(q);
-            Grow(bounds);
-            _roads.Add(new RoadDraw { Ground = g, Screen = new Vector2[g.Length], Bounds = bounds, WidthM = r.WidthM, Colour = RoadColour(r.Highway) });
-        }
-        if (!any) return false;
-
-        _sideMetres = Math.Max(box.Size.X, box.Size.Y) + 2 * PadMetres;
-        _origin = box.GetCenter() - new Vector2(_sideMetres / 2, _sideMetres / 2);
-        return true;
+        _map = MapBase.For(map);
+        return _map != null;
     }
 
     /// <summary>The player's ground position (x, z) and view yaw, in the game's convention. Call every frame.</summary>
     public void SetPlayer(Vector2 groundXZ, float viewYaw)
     {
-        _player = groundXZ;
-        _yaw = viewYaw;
-        if (!_hasPlayer) _shownYaw = viewYaw; // first frame: no sweep from zero
-        _hasPlayer = true;
+        if (_markers.SetPlayer(groundXZ, viewYaw)) _shownYaw = viewYaw; // first frame: no sweep from zero
     }
 
     /// <summary>Vehicle positions (ground x, z) shown as squares. Copied, so the caller may reuse its list.</summary>
-    public void SetVehicleDots(IReadOnlyList<Vector2> groundXZ)
-    {
-        _vehicles.Clear();
-        for (var i = 0; i < groundXZ.Count; i++) _vehicles.Add(new NVector2(groundXZ[i].X, groundXZ[i].Y));
-    }
+    public void SetVehicleDots(IReadOnlyList<Vector2> groundXZ) => _markers.SetVehicles(groundXZ);
 
     /// <summary>Teammates' positions (ground x, z), drawn in team deathmatch only. Copied, so the caller may reuse its list.</summary>
-    public void SetFriendDots(IReadOnlyList<Vector2> groundXZ)
-    {
-        _friends.Clear();
-        for (var i = 0; i < groundXZ.Count; i++) _friends.Add(new NVector2(groundXZ[i].X, groundXZ[i].Y));
-    }
+    public void SetFriendDots(IReadOnlyList<Vector2> groundXZ) => _markers.SetFriends(groundXZ);
 
     /// <summary>
     /// Shows enemy pings (circles) until <paramref name="expiry"/> on the Time.GetTicksMsec()/1000 clock. A new call replaces
     /// the previous set. This is the UAV streak's layer.
     /// </summary>
-    public void SetEnemyPings(IReadOnlyList<Vector2> groundXZ, double expiry)
-    {
-        var copy = new NVector2[groundXZ.Count];
-        for (var i = 0; i < copy.Length; i++) copy[i] = new NVector2(groundXZ[i].X, groundXZ[i].Y);
-        _pings.Set(copy, expiry);
-    }
+    public void SetEnemyPings(IReadOnlyList<Vector2> groundXZ, double expiry) => _markers.SetPings(groundXZ, expiry);
 
-    public void ClearEnemyPings() => _pings.Clear();
+    public void ClearEnemyPings() => _markers.Pings.Clear();
 
     /// <summary>Screen pixels per metre at the minimap's current size, UI scale and device pixel ratio.</summary>
     float DevicePxPerMetre()
@@ -138,76 +86,20 @@ public sealed partial class Minimap : Control
         return localPxPerMetre * Math.Max(0.01f, GetGlobalTransformWithCanvas().Scale.X);
     }
 
-    /// <summary>Rebuilds the terrain texture when the on-screen scale asks for a different resolution (rare: resize, zoom, UI scale).</summary>
+    /// <summary>Takes a new terrain texture from the shared base when the on-screen scale asks for a different resolution (rare: resize, zoom, UI scale).</summary>
     void EnsureTexture()
     {
-        if (_map == null || Size.X <= 0 || _sideMetres <= 0) return;
-        var wanted = MinimapView.TextureSide(_sideMetres, DevicePxPerMetre(), MinTextureSide, MaxTextureSide);
-        if (MinimapView.NeedsRebuild(_side, wanted)) Rasterise(wanted);
-    }
-
-    /// <summary>The last terrain texture, kept for its map and side: a second join on the same map does not rasterise again (#170, T2-19).</summary>
-    static Drycastle.MapLoader.MapLoader? _cachedMap;
-    static int _cachedSide;
-    static ImageTexture? _cachedTex;
-    readonly List<float> _crossings = new();
-    readonly List<(int From, int To)> _spans = new();
-
-    static byte[] Rgba(Color c) => new[] { (byte)Math.Round(c.R * 255f), (byte)Math.Round(c.G * 255f), (byte)Math.Round(c.B * 255f), (byte)Math.Round(c.A * 255f) };
-
-    /// <summary>Rasterises the parcel fills into a square of <paramref name="side"/> texels, with mipmaps. Each row takes its edge crossings once (scanline fill), and the image is built from one byte buffer.</summary>
-    void Rasterise(int side)
-    {
-        _side = side;
-        _metresPerTexel = _sideMetres / side;
-        if (_cachedTex != null && ReferenceEquals(_cachedMap, _map) && _cachedSide == side) { _base = _cachedTex; return; }
-        var px = new byte[side * side * 4];
-        var terrain = Rgba(Terrain);
-        for (var i = 0; i < px.Length; i += 4) Buffer.BlockCopy(terrain, 0, px, i, 4);
-        foreach (var parcel in _map!.Parcels.Values)
-        {
-            var colour = Rgba(ParcelColour(parcel.Kind));
-            var rings = parcel.Rings.Select(r => r.Select(v => new NVector2(v.X, v.Y)).ToArray()).ToList();
-            var b = parcel.Bounds;
-            var u0 = Math.Clamp((int)Math.Floor((b.Position.X - _origin.X) / _metresPerTexel), 0, side - 1);
-            var u1 = Math.Clamp((int)Math.Ceiling((b.End.X - _origin.X) / _metresPerTexel), 0, side - 1);
-            var v0 = Math.Clamp((int)Math.Floor((b.Position.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
-            var v1 = Math.Clamp((int)Math.Ceiling((b.End.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
-            for (var v = v0; v <= v1; v++)
-            {
-                ScanlineFill.Crossings(rings, _origin.Y + (v + 0.5f) * _metresPerTexel, _crossings);
-                ScanlineFill.Spans(_crossings, _origin.X, _metresPerTexel, u0, u1, _spans);
-                foreach (var (from, to) in _spans)
-                    for (var u = from; u <= to; u++) Buffer.BlockCopy(colour, 0, px, (v * side + u) * 4, 4);
-            }
-        }
-        foreach (var region in _map.RegionPaints)
-        {
-            var colour = Rgba(region.Colour);
-            var rings = new List<NVector2[]> { region.Ring.Select(v => new NVector2(v.X, v.Y)).ToArray() };
-            var box = new Rect2(region.Ring[0], Vector2.Zero);
-            foreach (var v in region.Ring) box = box.Expand(v);
-            var u0 = Math.Clamp((int)Math.Floor((box.Position.X - _origin.X) / _metresPerTexel), 0, side - 1);
-            var u1 = Math.Clamp((int)Math.Ceiling((box.End.X - _origin.X) / _metresPerTexel), 0, side - 1);
-            var v0 = Math.Clamp((int)Math.Floor((box.Position.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
-            var v1 = Math.Clamp((int)Math.Ceiling((box.End.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
-            for (var v = v0; v <= v1; v++)
-            {
-                ScanlineFill.Crossings(rings, _origin.Y + (v + 0.5f) * _metresPerTexel, _crossings);
-                ScanlineFill.Spans(_crossings, _origin.X, _metresPerTexel, u0, u1, _spans);
-                foreach (var (from, to) in _spans)
-                    for (var u = from; u <= to; u++) Buffer.BlockCopy(colour, 0, px, (v * side + u) * 4, 4);
-            }
-        }
-        using var img = Image.CreateFromData(side, side, false, Image.Format.Rgba8, px);
-        img.GenerateMipmaps();
-        _base = ImageTexture.CreateFromImage(img);
-        _cachedMap = _map; _cachedSide = side; _cachedTex = _base;
+        if (_map == null || Size.X <= 0) return;
+        var wanted = MinimapView.TextureSide(_map.SideMetres, DevicePxPerMetre(), MinTextureSide, MaxTextureSide);
+        if (!MinimapView.NeedsRebuild(_side, wanted)) return;
+        _side = wanted;
+        _metresPerTexel = _map.SideMetres / wanted;
+        _base = _map.Texture(wanted);
     }
 
     public override void _Process(double delta)
     {
-        if (_hasPlayer) _shownYaw = MinimapView.Follow(_shownYaw, _yaw, (float)delta, FollowRate);
+        if (_markers.HasPlayer) _shownYaw = MinimapView.Follow(_shownYaw, _markers.Yaw, (float)delta, FollowRate);
         EnsureTexture();
         QueueRedraw();
     }
@@ -220,14 +112,14 @@ public sealed partial class Minimap : Control
         if (half <= 0) return;
         var centre = size / 2f;
         var now = Time.GetTicksMsec() / 1000.0;
-        if (_hasPlayer)
+        if (_markers.HasPlayer)
         {
             var theta = MinimapMath.RotationFor(_shownYaw);
             var pxPerMetre = MinimapMath.PxPerMetre(half, ZoomMetres);
             if (_base is { } tex && _side > 0)
             {
                 var k = pxPerMetre * _metresPerTexel;
-                var playerTexel = (_player - _origin) / _metresPerTexel;
+                var playerTexel = (_markers.Player - _map!.Origin) / _metresPerTexel;
                 var extent = _side * k;
                 DrawSetTransform(centre, theta, Vector2.One);
                 DrawTextureRect(tex, new Rect2(-playerTexel * k, new Vector2(extent, extent)), false);
@@ -235,20 +127,20 @@ public sealed partial class Minimap : Control
             }
             DrawRoads(centre, theta, pxPerMetre, half);
             var inner = half - 6f;
-            for (var i = 0; i < _vehicles.Count; i++)
+            for (var i = 0; i < _markers.Vehicles.Count; i++)
             {
-                var p = centre + Screen(_vehicles[i], theta, pxPerMetre, inner);
+                var p = centre + Screen(_markers.Vehicles[i], theta, pxPerMetre, inner);
                 DrawRect(new Rect2(p - new Vector2(4, 4), new Vector2(8, 8)), ShooterTheme.Warn);
             }
             if (TeamColours)
-                for (var i = 0; i < _friends.Count; i++) // a ring, not a disc: the shape differs from the filled enemy pings (never colour only)
+                for (var i = 0; i < _markers.Friends.Count; i++) // a ring, not a disc: the shape differs from the filled enemy pings (never colour only)
                 {
-                    var p = centre + Screen(_friends[i], theta, pxPerMetre, inner);
+                    var p = centre + Screen(_markers.Friends[i], theta, pxPerMetre, inner);
                     DrawCircle(p, 7f, ShooterTheme.Outline);
                     DrawCircle(p, 5f, ShooterTheme.Friend);
                     DrawCircle(p, 2.5f, ShooterTheme.Outline);
                 }
-            var pings = _pings.Positions(now);
+            var pings = _markers.Pings.Positions(now);
             for (var i = 0; i < pings.Count; i++)
             {
                 var p = centre + Screen(pings[i], theta, pxPerMetre, inner);
@@ -266,12 +158,14 @@ public sealed partial class Minimap : Control
     /// <summary>Anti-aliased roads in screen space. Roads outside the view are skipped; each road reuses its own buffer.</summary>
     void DrawRoads(Vector2 centre, float theta, float pxPerMetre, float half)
     {
+        if (_map == null) return;
         var reach = ZoomMetres * 1.5f; // the view's corner is ZoomMetres * sqrt(2) from the player
-        var view = new Rect2(_player - new Vector2(reach, reach), new Vector2(reach * 2, reach * 2));
-        var player = new NVector2(_player.X, _player.Y);
-        for (var i = 0; i < _roads.Count; i++)
+        var view = new Rect2(_markers.Player - new Vector2(reach, reach), new Vector2(reach * 2, reach * 2));
+        var player = new NVector2(_markers.Player.X, _markers.Player.Y);
+        var roads = _map.Roads;
+        for (var i = 0; i < roads.Count; i++)
         {
-            var road = _roads[i];
+            var road = roads[i];
             if (!road.Bounds.Intersects(view)) continue;
             var ground = road.Ground;
             for (var p = 0; p < ground.Length; p++)
@@ -295,43 +189,10 @@ public sealed partial class Minimap : Control
     /// <summary>Screen offset from the centre of a ground point, clamped into the square of half-size <paramref name="inner"/>.</summary>
     Vector2 Screen(NVector2 worldXZ, float theta, float pxPerMetre, float inner)
     {
-        var d = worldXZ - new NVector2(_player.X, _player.Y);
+        var d = worldXZ - new NVector2(_markers.Player.X, _markers.Player.Y);
         var p = MinimapMath.ClampToSquare(MinimapMath.ToScreen(d, theta, pxPerMetre), inner);
         return new Vector2(p.X, p.Y);
     }
 
     static readonly Color Backdrop = new(0.05f, 0.06f, 0.08f, 0.85f);
-    static readonly Color Terrain = new(0.20f, 0.23f, 0.19f);
-
-    static Color ParcelColour(string kind) => kind switch
-    {
-        "building_plot" => new Color(0.56f, 0.54f, 0.50f),
-        "garden" => new Color(0.30f, 0.42f, 0.27f),
-        "forest" => new Color(0.16f, 0.28f, 0.18f),
-        "water" => new Color(0.22f, 0.36f, 0.52f),
-        "road" => new Color(0.30f, 0.30f, 0.31f),
-        _ => new Color(0.26f, 0.28f, 0.25f),
-    };
-
-    static Color RoadColour(string highway) => highway switch
-    {
-        "path" or "footway" or "track" => new Color(0.58f, 0.48f, 0.34f),
-        "residential" => new Color(0.82f, 0.82f, 0.80f),
-        _ => new Color(0.90f, 0.84f, 0.55f),
-    };
-}
-
-/// <summary>Minimap placement in the HUD: top-left, under the control hint line.</summary>
-public partial class Hud
-{
-    Minimap _minimap = null!;
-
-    /// <summary>The HUD's minimap: build it with the map, set the player each frame, feed enemy pings.</summary>
-    public Minimap Minimap => _minimap;
-
-    void BuildMinimap()
-    {
-        _minimap = Place(new Minimap(), 0, 0, ShooterTheme.Margin, ShooterTheme.Margin + 32, 224, 224);
-        _root.AddChild(_minimap);
-    }
 }
