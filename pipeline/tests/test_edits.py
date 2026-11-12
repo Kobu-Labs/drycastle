@@ -540,11 +540,13 @@ def test_stale_entries_warn_and_are_skipped(ws, tmp_path, capsys) -> None:
     )
     counts = run_props(ws["work"], DEFAULT_RULES, edits_path=edits)
     err = capsys.readouterr().err
-    assert "parcels.P-9999: parcel not found; entry skipped" in err
+    assert "parcels.P-9999: parcel not found; fence skipped" in err
     assert "groups.G-0001: parcel P-9998 not found; skipped" in err
     assert "groups.G-0002: no member parcels left; group skipped" in err
-    assert read_objects(ws["work"])["objects"] == []
-    assert counts["objects"] == 0
+    # the object of an entry whose parcel is not kept is placed all the same (a dropped parcel loses no object)
+    (ghost,) = read_objects(ws["work"])["objects"]
+    assert (ghost["id"], ghost["owner"], ghost["parcel"]) == ("ghost", "P-9999", None)
+    assert counts["objects"] == 1 and "outside every parcel" not in err
     props = json.loads((ws["work"] / "props.json").read_text())
     assert not [s for s in props["fences"] if s["parcel"] == "P-0001"]  # mode none applied
 

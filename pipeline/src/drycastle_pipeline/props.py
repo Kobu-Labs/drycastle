@@ -615,9 +615,11 @@ def plan_edits(
 ) -> EditPlan:
     """Resolve the edits against this run's parcels.
 
-    Entries for parcels that no longer exist (parcel entries, group members, objects) are skipped
-    with a warning. An object outside every parcel, or outside the parcel it is listed under, is
-    still placed, with a warning; its ``parcel`` is the parcel containing it, or null. A cable is
+    Entries for parcels that no longer exist (parcel entries, group members) are skipped with a
+    warning, except the objects of such an entry: they are placed all the same (an object only needs
+    its position, so dropping a parcel, see ground.py, loses no placed object). An object outside every
+    parcel, or outside the parcel it is listed under, is still placed, with a warning; its ``parcel`` is
+    the parcel containing it, or null. A cable is
     kept when both its ends are placed utility poles or house connectors, else skipped with a warning.
     """
     plan = EditPlan()
@@ -636,7 +638,9 @@ def plan_edits(
     member_group = {pid: gid for gid, pids in plan.groups.items() for pid in pids}
     for pid in sorted(edits.parcels):
         if pid not in polys:
-            plan.warnings.append(f"parcels.{pid}: parcel not found; entry skipped")
+            kept = [k for k in ("fence",) if k in edits.parcels[pid]]
+            if kept:  # the objects of the entry are still placed (below)
+                plan.warnings.append(f"parcels.{pid}: parcel not found; {', '.join(kept)} skipped")
     for pid in sorted(polys):
         entry = edits.parcels.get(pid, {})
         group_fence = edits.groups[member_group[pid]].get("fence") if pid in member_group else None
@@ -645,13 +649,13 @@ def plan_edits(
             gaps = tuple((*_local_xy(x, y, origin), w) for x, y, w in spec.gaps)
             plan.specs[pid] = replace(spec, gaps=gaps)
     for pid in sorted(edits.parcels):
-        if pid not in polys:
-            continue
         for obj in edits.parcels[pid].get("objects", []):
             lx, ly = _local_xy(*obj["position"], origin)
             hits = sorted(q for q, g in polys.items() if g.covers(Point(lx, ly)))
             inside = hits[0] if hits else None
-            if inside is None:
+            if pid not in polys:
+                pass  # listed under a parcel that is not kept: ground, an object there is normal
+            elif inside is None:
                 plan.warnings.append(f"objects {obj['id']}: outside every parcel; placed anyway")
             elif inside != pid:
                 plan.warnings.append(
