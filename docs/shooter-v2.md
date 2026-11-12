@@ -333,6 +333,13 @@ belt), hitscan from the muzzle, and its kills are ordinary kills (kill-feed weap
 client as a turret record (entity type 4, as the flak's, here the mount's yaw and the gun's pitch against the airframe), so the gun follows the
 aim on everyone's model; the tracer leaves the drawn muzzle, the barrel recoils and the muzzle flashes. The gunner's ammo is event 160.
 
+**What it shows and sounds like** (client only, `NetClient.FlightFx.cs`; nothing but the flight record is on the wire). The rotors turn at the
+record's rotor speed: they spool up when a pilot sits down (`spool_up_time`) and run down on the ground without one, a little faster under load
+(climbing, tilted hard), with a faint disc for the blur of the blades at speed. The rotor sound is generated (`RotorSound`, as the killstreak
+aircraft's) and its blade beat, engine tone and level follow the rotor speed and the load. The body pitches and rolls for everyone. Damage
+smoke comes from the engine exhaust (`hood`). In a hover under 11 m the downwash raises dust on the ground, or spray over a water body (off
+with reduce motion). Riders sit (the crouch pose every rider has) and do not walk.
+
 *Who can be shot in their seat.* The door gunner (`exposed_gunner`): they sit in the open door, so a shot that reaches their body hits them
 and not the hull (`GunnerCover`), and killing them silences the gun. The pilot is behind the nose and the glazing and is covered by the hull,
 as the driver of every other vehicle is: to stop the pilot, destroy the helicopter.

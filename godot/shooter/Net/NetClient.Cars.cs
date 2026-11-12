@@ -20,6 +20,8 @@ public partial class NetClient
         public FlakNodes? Flak;
         /// <summary>A door gun's moving nodes (the utility helicopter; null for every other type, or a model without them).</summary>
         public DoorGunNodes? DoorGun;
+        /// <summary>A flying vehicle's rotors, their sound and the downwash (null for everything that drives, or a model without rotors).</summary>
+        public RotorFx? Rotor;
         public readonly Interpolator Buf = new();
         public ushort Driver;
         public int Kind;
@@ -53,6 +55,7 @@ public partial class NetClient
             v = new CarView { Id = id, Node = CarFx.Make(Owned, Vehicles!.Vehicles[Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1)], VehicleRecord.Colour(rec)), Kind = Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1), Pos = rec.Position, Yaw = rec.YawRad };
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flak != null) v.Flak = FlakNodes.Find(v.Node);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].DoorGun is { } doorGun) v.DoorGun = DoorGunNodes.Find(v.Node, doorGun);
+            if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flight != null) v.Rotor = RotorFx.Find(v.Node);
             _cars[id] = v;
         }
         v.Lamps ??= ShotFx.Enabled ? CarLights.Attach(v.Node, Vehicles!.Vehicles[v.Kind]) : null;
@@ -94,6 +97,7 @@ public partial class NetClient
     {
         v.Exploded = true;
         v.Snd?.Release(); v.Snd = null;
+        v.Rotor?.Stop();
         v.ExplodedAt = Now;
         if (v.Smoke != null) { v.Smoke.Stop(); v.Smoke.QueueFree(); v.Smoke = null; } // freed with its particles, not just stopped: nothing of the smoke outlives the vehicle
         v.Destroyed = true; // the wreck is gone until the server returns it: a live record must not bring it back or its smoke
@@ -140,7 +144,7 @@ public partial class NetClient
         var flakGunner = false;
         FlightState? flown = null; // the helicopter the local player flies, for the pilot's readout and prompt
         var doorGunner = false;    // the local player is at a door gun: its camera and ammo readout are on
-        var chased = false;        // the local player drives or flies: the chase camera is on this frame
+        var chased = false;        // the local player flies: the helicopter's chase camera is on this frame
         var dt = (float)GetProcessDeltaTime();
         foreach (var v in _cars.Values)
         {
@@ -157,18 +161,19 @@ public partial class NetClient
             if (v.DoorGun != null && RenderDoorGun(v, rot, rt, dt)) { flakMine = true; doorGunner = true; } // the gun camera, as at the flak
             if (flakMine) flakGunner = true;
             v.Smoke?.Near(Sfx.ListenerDistance(p) < 90f); // far vehicles do not smoke: particle budget
-            if (!flies) SfxCar(v, p); // a helicopter has no car engine
+            if (flies) StepFlightFx(v, FlightDef(v)!, p, rot, dt); // rotors, their sound, the downwash
+            else SfxCar(v, p);
             if (v.Driver == _myId && _driving && _me != null)
             {
-                _carYaw = rot.Y; chased = true;
-                if (flies) { ChaseFlight(v, p, rot, dt); flown = FlightOf(v); } else _me.Chase(p, s.Yaw);
+                _carYaw = rot.Y;
+                if (flies) { ChaseFlight(v, p, rot, dt); flown = FlightOf(v); chased = true; } else _me.Chase(p, s.Yaw);
                 kmh = v.Kmh;
                 ShowSelfInCar(v);
             }
             else if (!flakMine && _driving && _me != null && _seats is { Mine: > 0 } st && st.CarId == v.Id) { RideSeat(v, st.Mine); kmh = v.Kmh; } // another seat: first person from it, the speed shown as the driver's is
         }
         if (!_driving) HideSelfInCar();
-        if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) _me?.EndChase(_me.Yaw); } // the gun camera ends where the look pointed (a switch to the driver's seat has started the chase camera already)
+        if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) _me?.EndChase(_me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
         if (!_driving && _gunship == null) _me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
         _hud?.SetSeats(SeatPanel());
         if (flakGunner) _hud?.SetVehicleReadout(doorGunner ? DoorGunReadout() : FlakReadout());
