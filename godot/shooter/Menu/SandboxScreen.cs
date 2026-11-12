@@ -11,7 +11,7 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public sealed partial class SandboxScreen : MenuScreen
 {
-    static readonly string[] Vehicles = { "car", "jeep", "quad", "boat", "amphibious", "flak" };
+    static readonly string[] Vehicles = { "car", "jeep", "quad", "boat", "amphibious", "flak", "bus" };
 
     readonly NetClient _client;
     readonly Func<GameData> _data;

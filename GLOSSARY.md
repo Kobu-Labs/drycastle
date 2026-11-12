@@ -152,6 +152,10 @@ _Avoid_: plane (for helicopters), drone
 A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every other vehicle.
 _Avoid_: AA gun, anti-air vehicle, SPAAG
 
+**Bus**:
+A 12 m land vehicle modelled on the regional bus that serves the village: a driver seat and three passenger seats, no weapon, slow to turn and heavy to run into. It is boarded, left and destroyed like any other vehicle; its doors do not open, riders are placed on their seats.
+_Avoid_: coach, autobus, transport (that is the amphibious one)
+
 **Airburst**:
 A flak shell's end by an aircraft: the shell flies straight at 700 m/s, and once it passes within 12 m of an aircraft it bursts at the closest approach. An aircraft within 15 m of the burst takes 150 damage out to 4 m, falling to 40 at the edge. The gunner has to lead the aircraft, which flies a known circle. A shell that meets no aircraft ends on the ground with a small blast (4 m, weak), or runs out of range.
 _Avoid_: proximity fuse (the fuse is how it works, the burst is the thing), flak burst

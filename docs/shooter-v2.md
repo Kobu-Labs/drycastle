@@ -279,6 +279,10 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 - Seat switch: while seated in any vehicle the number keys (the `slot_1` to `slot_4` actions, rebindable) take that seat, and a seat
   schematic shows the seats (bottom right). Client request: event kind 161 (u8 seat index); the server answers the riders with kind 162 (who
   sits in each seat) whenever that changes; protocol 20. `VehicleSeat.TrySwitch` is the rule, `SeatSchematic` the layout.
+- Bus (`bus`): a 12 m land vehicle with a generated model (`scripts/make_bus_model.py`), one on the map and in the sandbox vehicle list. It is data
+  only: a driver seat and three passenger seats (the seat limit is four), the usual driving model with a wide turn circle (`turn_radius` 9.5), smoke
+  from the rear where its engine is. It is boarded like a car, within 3 m of its centre, so along the middle of either side (the middle door is there),
+  not at the front door. Its doors are separate model nodes that nothing moves yet.
 - Water bodies (#138, #142): the pipeline writes `water.json` into the map artifact; the server and clients swim, submerge
   and hold breath (HUD "AIR"). Surfaces, underwater tint and splashes are client-side and not yet compiled by Godot.
 - Day/night (#135): one server clock, `environment.json` (start time 08:00, day length 24 minutes by default). The sun,

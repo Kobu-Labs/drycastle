@@ -49,6 +49,16 @@ vehicle frame (forward -Z, origin on the ground, metres), so vehicles.json uses 
 their origin at the pivot: `turret` (yaw about Y), `gun_cradle` (pitch about X, positive raises the muzzles), `barrel_l`/`barrel_r` with `muzzle_l`/`muzzle_r`
 empties, `radar`, six `wheel_*`, four `outrigger_*`; empties mark the seats, the lamps, the gunner `sight` and the smoke point (see the script's docstring).
 
+`suchohrad-generated-models/bus.glb` (2026-11-12) is the bus (`godot/shooter` vehicle id `bus`): a 12.05 m low-entry regional bus in red, laid out after
+the one that serves the village (a street-level photo of its left side was the reference; no operator name, logo or fleet number is on the model). Two
+glazed doors on the right (front overhang and mid wheelbase), the black sweep under the driver's window on the left, a low floor from the front door to
+two steps behind the middle door, a raised floor over the rear axle and a bench of five on the engine cover; the interior is modelled (driver's cab, 35
+passenger seats, pram space, yellow handrails) because riders look out of it. Original geometry written as code in `scripts/make_bus_model.py` (standard
+library only; it loads the flak script's mesh helpers; `python3 -I scripts/make_bus_model.py` rebuilds the file byte for byte), CC0, 17 flat-colour
+materials, no texture; `Glass` and `GlassClear` are alpha-blended. Same vehicle frame, origin on the ground at the centre. Separate nodes with their origin
+at the pivot: `wheel_fl`/`_fr`/`_rl`/`_rr` and the door leaves `door_front_1`/`_2`, `door_mid_1`/`_2` (the game does not move them yet); empties mark
+`seat_driver`, `seat_passenger_1` to `_3` (the four seats of vehicles.json), the lamps and `smoke_engine` (the engine is at the rear).
+
 kenney.nl answered automated requests with HTTP 403, and Quaternius distributes through itch.io or
 Patreon pages. Neither was circumvented. The same CC0 archives are published openly by their creators
 on OpenGameArt.org (`opengameart.org/content/car-kit`, `/city-kit-suburban`, `/stylized-nature-megakit`),

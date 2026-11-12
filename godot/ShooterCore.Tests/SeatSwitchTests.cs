@@ -129,6 +129,7 @@ public class SeatSwitchTests
     [InlineData("amphibious")]
     [InlineData("boat")]
     [InlineData("flak")]
+    [InlineData("bus")]
     public void EveryShippedVehicleKeepsItsMarkersApartAndInsideTheBody(string id)
     {
         const float r = 16;

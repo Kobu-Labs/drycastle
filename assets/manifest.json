@@ -1431,6 +1431,27 @@
       "source": "scripts/make_flak_model.py (original geometry written as code; python3 -I scripts/make_flak_model.py rebuilds the file)",
       "pack": "suchohrad-generated-models",
       "used_for": "godot/shooter vehicle id flak (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground, metres), separate nodes for turret, gun_cradle, barrels, wheels, outriggers"
+    },
+    {
+      "id": "pack:suchohrad-generated-models/bus",
+      "category": "other",
+      "name": "Bus (12 m low-entry regional bus, two doors on the right)",
+      "file": "suchohrad-generated-models/bus.glb",
+      "size_m": [
+        3.2,
+        3.32,
+        12.3
+      ],
+      "tags": [
+        "shooter",
+        "vehicle",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_bus_model.py (original geometry written as code; python3 -I scripts/make_bus_model.py rebuilds the file)",
+      "pack": "suchohrad-generated-models",
+      "used_for": "godot/shooter vehicle id bus (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground at the centre, metres), separate nodes for the four wheels and the four door leaves, modelled interior"
     }
   ],
   "textures": [
