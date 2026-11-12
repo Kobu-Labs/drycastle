@@ -126,7 +126,7 @@ jobs:
       - name: Fetch the newest launcher build (attached so players find it on the release page)
         run: |
           ltag=$(gh release list --limit 100 --json tagName --jq '[.[].tagName | select(startswith("launcher-v"))] | first // empty')
-          if [ -n "$ltag" ]; then gh release download "$ltag" --pattern 'drycastle-launcher-*.zip' --dir release-assets
+          if [ -n "$ltag" ]; then gh release download "$ltag" --pattern '*-launcher-*.zip' --dir release-assets
           else echo "::warning::no launcher-v* release found; publishing without launcher zips"; fi
       - name: Publish release
         run: |
