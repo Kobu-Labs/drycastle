@@ -4,7 +4,7 @@ using System.Numerics;
 namespace Suchohrad.ShooterCore;
 
 /// <summary>A living player the UAV could show: their ground position (x, z) and their perk's <c>uav_visibility</c> (0 = hidden).</summary>
-public readonly record struct UavContact(ushort Id, float X, float Z, float Visibility);
+public readonly record struct UavContact(ushort Id, float X, float Z, float Visibility, byte Team = Teams.None);
 
 /// <summary>One UAV pulse as the owner sees it: seconds left in the streak and the enemy ground positions (x, z).</summary>
 public sealed record UavPulseInfo(float SecondsLeft, IReadOnlyList<Vector2> Contacts);
@@ -21,8 +21,14 @@ public static class UavRules
     /// The owner's enemies: everyone alive but the owner (FFA), minus anyone whose perk makes them invisible to UAVs
     /// (<c>uav_visibility</c> of 0, the Ghost perk). Other players never see this data.
     /// </summary>
-    public static IReadOnlyList<Vector2> Visible(IEnumerable<UavContact> alive, ushort owner) =>
-        alive.Where(c => c.Id != owner && c.Visibility > 0).Select(c => new Vector2(c.X, c.Z)).ToList();
+    public static IReadOnlyList<Vector2> Visible(IEnumerable<UavContact> alive, ushort owner)
+    {
+        var all = alive as IReadOnlyList<UavContact> ?? alive.ToList();
+        var ownerTeam = Teams.None;
+        foreach (var c in all) if (c.Id == owner) ownerTeam = c.Team;
+        // team deathmatch: the owner's teammates are not enemies (a shared UAV is a follow-up)
+        return all.Where(c => c.Id != owner && c.Visibility > 0 && (ownerTeam == Teams.None || c.Team != ownerTeam)).Select(c => new Vector2(c.X, c.Z)).ToList();
+    }
 }
 
 /// <summary>

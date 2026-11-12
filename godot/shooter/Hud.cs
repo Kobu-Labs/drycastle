@@ -542,6 +542,27 @@ public partial class Hud : CanvasLayer
     }
 
     /// <summary>Phase, seconds left (null: unchanged clock) and the winner/ending state.</summary>
+    /// <summary>Team deathmatch: the client's match state, read for teams and team scores. Call before <see cref="SetMatch"/>; null or free-for-all hides every team cue.</summary>
+    public void SetTeams(ClientMatchState? match) { _team = match; _boardDirty = true; _feedShown = (-1, -1); Minimap.TeamColours = TeamMode; }
+    ClientMatchState? _team;
+    bool TeamMode => _team is { IsTeamMode: true };
+    byte TeamOf(ushort id) => _team?.TeamOf(id) ?? Teams.None;
+    byte MyTeam => TeamOf(MyId);
+
+    /// <summary>Friend or enemy colour of <paramref name="team"/> as seen by the local player (the HUD text colour when neutral).</summary>
+    Color? RelationColor(byte team) => HudLogic.RelationOf(MyTeam, team) switch
+    {
+        HudLogic.Relation.Friend => ShooterTheme.Friend,
+        HudLogic.Relation.Enemy => ShooterTheme.Enemy,
+        _ => null,
+    };
+
+    /// <summary>A name with its team tag in team deathmatch (so the team is readable without colour), plain otherwise.</summary>
+    string Tagged(string name, byte team) => TeamMode && team != Teams.None ? Strings.F("score.team.tag", Teams.Tag(team), name) : name;
+
+    /// <summary>The label's text colour for a team relation; null restores the theme colour.</summary>
+    static void Tint(Label l, Color? c) { if (c is { } col) l.AddThemeColorOverride("font_color", col); else l.RemoveThemeColorOverride("font_color"); }
+
     public void SetMatch(MatchPhase phase, float timeRemaining, IReadOnlyList<ScoreRow>? rows, IReadOnlyList<ushort>? winners = null, Func<ushort, string>? nameOf = null)
     {
         _phase = phase;
@@ -554,10 +575,17 @@ public partial class Hud : CanvasLayer
         {
             MatchPhase.Waiting => Strings.T("hud.phase.waiting"),
             MatchPhase.Ending => Strings.T("hud.phase.ending"),
+            _ when TeamMode => TeamScoreText(),
             _ => line.IAmLeader ? Strings.F("hud.score.leading", line.MyKills) : Strings.F("hud.score.behind", line.MyKills, line.LeaderName, line.LeaderKills),
         });
         UpdateTimer();
         RefreshXpPanel();
+    }
+
+    string TeamScoreText()
+    {
+        var (mine, theirs, team) = HudLogic.TeamScores(MyTeam, _team!.ScoreA, _team.ScoreB);
+        return Strings.F("hud.score.team", Teams.Tag(team), mine, theirs);
     }
 
     void UpdateTimer()
@@ -736,9 +764,11 @@ public partial class Hud : CanvasLayer
             var suicide = k.Killer == k.Victim;
             _feed[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
             // your own rows say so in words as well as colour (as the scoreboard does)
-            Set(_feedKiller[i], WithYou(suicide ? victim : killer, k.Killer == MyId));
+            var killerTeam = TeamOf(k.Killer); var victimTeam = TeamOf(k.Victim);
+            Set(_feedKiller[i], Tagged(WithYou(suicide ? victim : killer, k.Killer == MyId), killerTeam));
             Set(_feedWeapon[i], $"[{(k.Cause == KillCause.Roadkill ? Strings.T("feed.roadkill") : WeaponName(k.Weapon))}]");
-            Set(_feedVictim[i], suicide ? "" : WithYou(victim, k.Victim == MyId));
+            Set(_feedVictim[i], suicide ? "" : Tagged(WithYou(victim, k.Victim == MyId), victimTeam));
+            Tint(_feedKiller[i], RelationColor(killerTeam)); Tint(_feedVictim[i], RelationColor(victimTeam));
             _feed[i].Visible = true;
         }
     }
@@ -874,11 +904,12 @@ public partial class Hud : CanvasLayer
         if (ending)
         {
             var names = string.Join(", ", _winners.Select(_nameOf));
-            Set(_boardTitle, names == "" ? Strings.T("hud.phase.ending") : Strings.F(_winners.Count > 1 ? "score.ending.tie" : "score.ending", names));
+            if (TeamMode && _winners.Count > 0) Set(_boardTitle, Strings.F("score.ending.team", Teams.Tag(TeamOf(_winners[0]))));
+            else Set(_boardTitle, names == "" ? Strings.T("hud.phase.ending") : Strings.F(_winners.Count > 1 ? "score.ending.tie" : "score.ending", names));
         }
         else Set(_boardTitle, Strings.T("score.title"));
         Set(_boardFoot, Strings.T(ending ? "score.hint.next" : "score.hint.hold"));
-        var sorted = HudLogic.Sort(_rows);
+        var sorted = TeamMode ? HudLogic.SortTeams(_rows, _team!.ScoreA, _team.ScoreB) : HudLogic.Sort(_rows);
         // keep the local row visible even when the room exceeds the pre-built rows
         if (sorted.Count > BoardRows)
         {
@@ -892,7 +923,8 @@ public partial class Hud : CanvasLayer
             var mine = r.Id == MyId;
             _row[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
             var c = _cells[i];
-            Set(c[0], mine ? Strings.F("score.you", r.Name) : r.Name);
+            Set(c[0], Tagged(mine ? Strings.F("score.you", r.Name) : r.Name, r.Team));
+            Tint(c[0], RelationColor(r.Team));
             Set(c[1], r.Kills.ToString()); Set(c[2], r.Deaths.ToString()); Set(c[3], Strings.F("score.ping", r.Ping));
             _row[i].Visible = true;
         }

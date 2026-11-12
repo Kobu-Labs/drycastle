@@ -223,3 +223,14 @@ _Avoid_: damage stage (that is a vehicle's smoke), crack level
 **Shattered**:
 The state of a glass pane with no hit points left: its fragments fly out once, and it then shows an opening (the model's own glass node of the pane is hidden). A shot through a shattered pane of a vehicle can hit the riders behind it. It stays shattered until its vehicle returns repaired or a new round starts.
 _Avoid_: broken, destroyed (that is a vehicle or an aircraft)
+
+**Match mode**:
+How a round is scored and won, set by `mode` in `match.json`: free-for-all (`ffa`, the default: every player alone) or team deathmatch (`tdm`).
+_Avoid_: game mode, playlist
+
+**Team**:
+One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team.
+_Avoid_: squad, clan, faction
+
+**Friend / enemy colours**:
+The blue (friend) and orange (enemy) the HUD uses, seen from the local player's team, for names in the kill feed and scoreboard and for the minimap dots. A team tag ("A"/"B") always accompanies the colour, and both colours have a colour-blind set (`TeamPalette`).

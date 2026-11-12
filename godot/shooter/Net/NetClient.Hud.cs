@@ -68,6 +68,8 @@ public partial class NetClient
         }
     }
 
+    readonly List<Vector2> _friendDots = new();
+
     void UpdateHud()
     {
         _hud?.SetControlMode(_gunship != null || _controlling); // one mode switch: a turret or the missile owns the screen (ticket #152)
@@ -83,6 +85,12 @@ public partial class NetClient
             foreach (var c in _cars.Values)
                 if (!c.Destroyed) _carDots.Add(new Vector2(c.Node.GlobalPosition.X, c.Node.GlobalPosition.Z));
             _hud.Minimap.SetVehicleDots(_carDots);
+            _friendDots.Clear();
+            if (Match.IsTeamMode)
+                foreach (var (id, r) in _remotes)
+                    if (r.State != EntityState.Dead && Match.AreFriends(_myId, id) && GodotObject.IsInstanceValid(r.Node))
+                        _friendDots.Add(new Vector2(r.Node.GlobalPosition.X, r.Node.GlobalPosition.Z));
+            _hud.Minimap.SetFriendDots(_friendDots);
         }
     }
 }

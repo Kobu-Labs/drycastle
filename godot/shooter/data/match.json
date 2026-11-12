@@ -7,6 +7,9 @@
   "end_screen_time": 10,
   "min_spawn_distance": 40,
   "min_players": 1,
+  "mode": "ffa",
+  "friendly_fire": false,
+  "team_score_goal": 75,
   "targets": 0,
   "targets_award_xp": true
 }

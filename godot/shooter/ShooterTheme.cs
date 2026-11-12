@@ -43,6 +43,9 @@ public static class ShooterTheme
     public static Color Danger => From(StatePalette.Danger(ColorBlind));
     /// <summary>The UI scale for a screen of this size (height over 1080 p times the UI scale setting): overlays that size their own text use it, as the HUD does.</summary>
     public static float ScreenScale(Vector2 screen) => HudLogic.ScreenScale(screen.Y, GameSettings.Current.UiScale);
+    /// <summary>Team deathmatch friend / enemy colours (blue / orange; <see cref="TeamPalette"/>), also under the colour-blind setting.</summary>
+    public static Color Friend => From(TeamPalette.Friend(ColorBlind));
+    public static Color Enemy => From(TeamPalette.Enemy(ColorBlind));
     static Color From(StatePalette.Rgb c) => new(c.R, c.G, c.B);
     public static readonly Color Outline = new(0f, 0f, 0f, 0.85f);
     public static readonly Color Scrim = new(0f, 0f, 0f, 0.60f);
