@@ -91,6 +91,16 @@ viewing and headless servers are unaffected):
   file changes nothing.
   `parcel-run`/`export` take `--work DIR` and `export` takes `--out DIR` for such experiments.
 
+### Ground clutter (near-only)
+
+Maps with `files.clutter` in `manifest.json` (and `files.clutter_meshes`) draw small ground clutter: tufts, flowers, pebbles, rocks, leaves, sticks, ferns.
+`clutter.json` lists instances per chunk and kind (`[x, y, z, rot_rad, scale]`, map metres, `rot` counter-clockwise seen from above); `clutter_meshes.glb` has one
+mesh node per kind (Y-up, on y = 0, unit scale, `COLOR_0` colours). `MapLoader.Clutter.cs` builds one `MultiMeshInstance3D` per 48 m cell and kind (`clutter_<kind>`,
+child of the chunk root): no shadows, no collision, the shared flat material, a visibility range of 70 m (pebble, leaf, stick 40 m, flower 55 m, rock 80 m; all in
+`ClutterSettings`) plus half a cell and an 8 m fade. Cells, not chunks, because a visibility range is measured to the node as a whole.
+A headless load (`CollisionOnly`, the dedicated server) and a map without the files build nothing and print nothing. `SUCHOHRAD_CLUTTER=0` (or `off`) turns it off; a number scales the
+distances (`0.5` = half); `MapLoader.ClutterScale` is the same setting in code (set before `Load`). Old loaders ignore the files.
+
 ## Editor mode
 
 The first visible part of the world map editor: `--editor` starts the viewer in editor mode (it implies

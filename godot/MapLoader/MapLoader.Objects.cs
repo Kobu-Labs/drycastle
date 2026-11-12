@@ -77,6 +77,7 @@ public sealed partial class MapLoader
         foreach (var t in _assetTemplates.Values)
             if (t != null && GodotObject.IsInstanceValid(t)) t.Free();
         _assetTemplates.Clear();
+        FreeClutter();
     }
 
     /// <summary>Messages the loader would print as warnings (also written with GD.PushWarning).</summary>

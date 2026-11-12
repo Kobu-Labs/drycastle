@@ -14,6 +14,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Pure (no Godot types) clutter parsing of the map loader, compiled in so it can be tested -->
+    <Compile Include="../MapLoader/ClutterData.cs" Link="MapLoader/ClutterData.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../ShooterCore/ShooterCore.csproj" />
     <ProjectReference Include="../LauncherCore/LauncherCore.csproj" />
     <ProjectReference Include="../ShooterServer.Persistence/ShooterServer.Persistence.csproj" />
