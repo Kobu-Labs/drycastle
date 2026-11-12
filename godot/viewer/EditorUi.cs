@@ -265,7 +265,7 @@ public partial class EditorMode
         "Objects\tLMB place, R / Shift+R rotate, Ctrl free position, Ctrl+D duplicate, Del delete, arrows nudge\n" +
         "Region\tN new region, LMB or C adds a corner, Enter closes, then choose the colour and Enter creates\n" +
         "Region edit\tdrag a corner, [ ] pick one, arrows move it, Backspace last corner, Del delete (asks), Ctrl+Z undo\n" +
-        "Poles\tchoose a pole and LMB places it, C connects: LMB on a pole, then on the next ones, Esc stops\n" +
+        "Poles\tchoose a pole and LMB places it, C connects: LMB on a pole, then on the next poles or on a house, Esc stops\n" +
         "Poles edit\tdrag a pole or its ring, R / Shift+R turn, LMB on a cable selects it, Del removes the cable or the pole with its cables\n" +
         "Commands\tCtrl+P: tools, undo, region and parcel IDs\n" +
         "View\tT top-down, F1 this sheet, F2 walk mode\n" +

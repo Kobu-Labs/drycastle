@@ -162,6 +162,7 @@ public class PropCollidersTests
     public void ObjectSolidsFollowTheCategory()
     {
         Assert.Empty(ObjectColliders.ForCategory("flower", 1, 1, 1));
+        Assert.Empty(ObjectColliders.ForCategory("connector", 0.4f, 1.4f, 0.5f)); // a house connector stops nothing
         var bush = ObjectColliders.ForCategory("bush", 2, 1.5f, 2);
         Assert.Single(bush);
         Assert.Equal(CollisionLayers.ShotOnly, bush[0].Layer);

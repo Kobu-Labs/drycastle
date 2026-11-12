@@ -70,10 +70,12 @@ formatting is fixed, so git diffs stay small. Version 1::
                         to water.json (swimming, drowning, the shooter's water surface) with its bed
                         at the lowest terrain inside the polygon. Without it the region is ground paint.
 
-``cables`` (the wires strung between two placed utility poles; drawn by the game, see docs/utility-poles.md)
-    from, to            ids of two different placed objects (utility poles, ``prim:pole_*``). The
-                        direction has no meaning. A pair of poles is joined by at most one cable. A
-                        cable whose pole no longer exists, or is not a pole, is skipped with a
+``cables`` (the wires strung between two placed utility poles, or from a pole to a house connector;
+drawn by the game, see docs/utility-poles.md)
+    from, to            ids of two different placed objects: utility poles (``prim:pole_*``) or
+                        house connectors (``prim:connector_*``, placed on a wall or roof with a
+                        ``z``). The direction has no meaning. A pair is joined by at most one cable.
+                        A cable whose end no longer exists, or is neither, is skipped with a
                         warning by the props stage. The ``cables`` key is only written when there
                         are cables.
 
@@ -124,7 +126,9 @@ OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour"
 GROUP_KEYS = ("parcels", "fence")
 REGION_KEYS = ("colour", "polygon", "water_y")
 CABLE_KEYS = ("from", "to")
-POLE_ASSET_PREFIX = "prim:pole_"  # the assets a cable can hang from
+POLE_ASSET_PREFIX = "prim:pole_"
+CONNECTOR_ASSET_PREFIX = "prim:connector_"
+WIRE_ASSET_PREFIXES = (POLE_ASSET_PREFIX, CONNECTOR_ASSET_PREFIX)  # the assets a cable can end on
 
 _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")

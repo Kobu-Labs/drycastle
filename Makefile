@@ -57,7 +57,7 @@ preview:
 poles-preview:
 	cd pipeline && uv run python -m suchohrad_pipeline.poles_preview $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb,)
 
-# Rewrites the prim:pole_* entries of assets/manifest.json after the pole variants changed.
+# Rewrites the prim:pole_* and prim:connector_* entries of assets/manifest.json after the poles or connectors changed.
 poles-manifest:
 	cd pipeline && uv run python -m suchohrad_pipeline.poles_preview --sync-manifest
 

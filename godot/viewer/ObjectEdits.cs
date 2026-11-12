@@ -64,6 +64,9 @@ public static class ObjectEdits
         return o;
     }
 
+    /// <summary>Fix the object at an elevation (map metres, the terrain's datum) instead of on the ground: a connector on a wall or roof.</summary>
+    public static void SetZ(Obj o, double z) => o["z"] = N3(z);
+
     public static void Add(Obj root, string pid, Obj o)
     {
         var parcels = Parcels(root);

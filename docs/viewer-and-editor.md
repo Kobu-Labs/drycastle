@@ -267,7 +267,12 @@ renders (the name is the tooltip), and adds the cables.
   pole when there is one); each further click on another pole strings a cable from the last pole and carries on from
   the clicked one, so a street is a row of clicks. A line from the start pole follows the cursor (cyan over a pole a
   click would join). Esc or a right click stops. A click on a pair that is already joined only moves the start on.
-* **Cables**: a cable is `cables.<C-NNNN>` in `edits.json` with `from` and `to`, the ids of its two poles. A click on a
+* **Houses**: in connect mode, after a pole, a click on a house wall or roof fixes a house connector there (a placed
+  object `prim:connector_*` with a `z`; a wall or a roof kind after the surface, which one picked from the spot) and
+  strings a cable to it, in one save. The start stays on the pole, so the next click can be another house. A click on
+  a connector that exists strings a cable to it. The selected connector has "Another kind of connector".
+* **Cables**: a cable is `cables.<C-NNNN>` in `edits.json` with `from` and `to`, the ids of its two ends (poles, or a
+  pole and a house connector). A click on a
   cable selects it (yellow), `Del` removes it; the selected pole lists its cables with a Remove button each. Deleting a
   pole removes its cables in the same save. Each of these is one save and one undo step.
 * **Nothing is turned for you**: a pole keeps the rotation you gave it. The wires are matched left to right across each

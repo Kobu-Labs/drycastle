@@ -302,7 +302,7 @@ public static class SolidShapeKeys
 public static class ObjectColliders
 {
     /// <summary>
-    /// Flowers have none (walk and shoot through). Bushes stop shots only. Trees have a trunk (solid, lower third) and a crown
+    /// Flowers and house connectors have none (walk and shoot through). Bushes stop shots only. Trees have a trunk (solid, lower third) and a crown
     /// box (shot-only). A pole (utility pole) is its column alone: a thin solid box at the origin, as high as the pole, so the
     /// lamp arm, the crossarm and a cabinet beside it (which make the size wide) stop nothing. Every other category (car, slab,
     /// pot, wall, fence, radio tower, other) is one solid box.
@@ -317,6 +317,7 @@ public static class ObjectColliders
         switch (category)
         {
             case "flower":
+            case "connector": // a house connector: a small fitting high on a wall or roof
                 return [];
             case "bush":
                 return [new(PartRole.Crown, PartShape.Box, 0, 0, 0, sy, hx, hz, 0)];

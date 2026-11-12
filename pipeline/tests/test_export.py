@@ -164,8 +164,8 @@ def test_export_writes_prim_glbs_and_manifest_entries(workspace) -> None:
         # same axes as the chunk files: y up, standing on y = 0, size matches the registry
         lo, hi = geom.bounds
         sx, sy, sz = PRIMITIVES[name].size_m
-        if not PRIMITIVES[name].centred:  # a utility pole: origin at the foot, column into the ground
-            assert lo[1] < -0.3 and hi[1] == pytest.approx(sy, abs=0.02)
+        if not PRIMITIVES[name].centred:  # a utility pole or house connector: the origin is where it is fixed
+            assert lo[1] < -0.2 and hi[1] == pytest.approx(sy, abs=0.02)
             assert 2 * max(-lo[0], hi[0]) == pytest.approx(sx, abs=0.02)
             assert 2 * max(-lo[2], hi[2]) == pytest.approx(sz, abs=0.02)
             continue

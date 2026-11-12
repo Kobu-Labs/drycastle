@@ -9,7 +9,8 @@ a plan footprint of x by z and a height y. Output is deterministic: same paramet
 The utility poles (``pole_*``, built by ``poles.py``) are the exception to "centred": their origin is
 the foot of the column, wherever the lamp arm or a cabinet reaches, and the column goes half a metre
 into the ground. Their ``size_m`` is the box centred on the origin that holds them (``centred`` is
-False).
+False). The same goes for the house connectors (``connector_*``, ``connectors.py``): their origin is
+on the wall or roof they sit on.
 """
 
 import math
@@ -19,6 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from suchohrad_pipeline.buildings import hex_to_rgb
+from suchohrad_pipeline.connectors import CONNECTORS, build_connector
 from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.poles import VARIANTS as POLE_VARIANTS
 from suchohrad_pipeline.poles import build_variant
@@ -266,6 +268,16 @@ def _pole_primitive(name: str) -> Primitive:
 
 
 PRIMITIVES.update({name: _pole_primitive(name) for name in POLE_VARIANTS})
+
+
+def _connector_primitive(name: str) -> Primitive:
+    connector = build_connector(name)
+    return Primitive(
+        lambda params=None: build_connector(name).mesh, {}, connector.size_m, connector.colour, centred=False
+    )
+
+
+PRIMITIVES.update({name: _connector_primitive(name) for name in CONNECTORS})
 
 
 def build_primitive(name: str, params: dict | None = None) -> Mesh:

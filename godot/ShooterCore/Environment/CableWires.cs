@@ -3,7 +3,7 @@ using System.Numerics;
 namespace Suchohrad.ShooterCore;
 
 /// <summary>
-/// A place on a placed utility pole where a wire sits, in map space (Godot axes, Y up). Kind is "line" (crossarm and
+/// A place on a placed utility pole or house connector where a wire sits, in map space (Godot axes, Y up). Kind is "line" (crossarm and
 /// top insulators), "service" (side brackets) or "bundle" (hooks); Tier is the crossarm's index, -1 for a seat that is
 /// on no crossarm.
 /// </summary>
@@ -19,6 +19,9 @@ public sealed record CableWire(Vector3[] Points, float Radius, string Kind);
 /// spacing and never cross, whichever way a pole faces. When one pole has more seats, the spare ones stay empty (the
 /// ones used are spread evenly over the arm). A lower service cable joins the side brackets when both poles have one,
 /// and a thick bundled cable the hooks.
+/// A house connector is an end like a pole: one with insulators takes as many of the pole's line wires as it has
+/// insulators; one that is only a hook for a bundled cable gets a single thick cable from the pole's hook, else from
+/// its side bracket, else from the nearest insulator of its crossarm.
 /// </summary>
 public static class CableWires
 {
@@ -46,8 +49,13 @@ public static class CableWires
 
         if (Nearest(a, "service", cb) is { } sa && Nearest(b, "service", ca) is { } sb)
             wires.Add(Hang(sa, sb, ServiceSag * (0.85f + 0.35f * Hash01(cableId, 100)), ServiceRadius, "service"));
-        if (Nearest(a, "bundle", cb) is { } ba && Nearest(b, "bundle", ca) is { } bb)
-            wires.Add(Hang(ba, bb, ServiceSag * (0.9f + 0.3f * Hash01(cableId, 200)), BundleRadius, "bundle"));
+        var ba = Nearest(a, "bundle", cb);
+        var bb = Nearest(b, "bundle", ca);
+        // an end that is nothing but a hook (a house connector) takes its cable from whatever the other end has
+        if (ba != null && bb == null && la.Count == 0) bb = Nearest(b, "service", ca) ?? Nearest(b, "line", ca);
+        if (bb != null && ba == null && lb.Count == 0) ba = Nearest(a, "service", cb) ?? Nearest(a, "line", cb);
+        if (ba is { } p && bb is { } q)
+            wires.Add(Hang(p, q, ServiceSag * (0.9f + 0.3f * Hash01(cableId, 200)), BundleRadius, "bundle"));
         return wires;
     }
 

@@ -2715,6 +2715,264 @@
           ]
         }
       ]
+    },
+    {
+      "id": "prim:connector_wall_2",
+      "category": "connector",
+      "name": "House connector: two wall hooks with insulators and a conduit",
+      "file": null,
+      "size_m": [
+        0.423,
+        0.163,
+        0.352
+      ],
+      "tags": [
+        "house-connector",
+        "wall",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            -0.14,
+            0.163
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            0.14,
+            0.163
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_wall_4",
+      "category": "connector",
+      "name": "House connector: four wall hooks with insulators and a conduit",
+      "file": null,
+      "size_m": [
+        0.423,
+        0.163,
+        0.912
+      ],
+      "tags": [
+        "house-connector",
+        "wall",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            -0.42,
+            0.163
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            -0.14,
+            0.163
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            0.14,
+            0.163
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            0.42,
+            0.163
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_wall_hook",
+      "category": "connector",
+      "name": "House connector: wall hook for a bundled cable, with a box and a conduit",
+      "file": null,
+      "size_m": [
+        0.446,
+        0.04,
+        0.22
+      ],
+      "tags": [
+        "house-connector",
+        "wall",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "bundle",
+          "tier": -1,
+          "pos": [
+            0.22,
+            0.0,
+            -0.03
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_roof_mast_2",
+      "category": "connector",
+      "name": "House connector: roof mast with two insulators",
+      "file": null,
+      "size_m": [
+        0.356,
+        1.357,
+        0.5
+      ],
+      "tags": [
+        "house-connector",
+        "roof",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            -0.18,
+            1.173
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            0.18,
+            1.173
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_roof_mast_4",
+      "category": "connector",
+      "name": "House connector: tall roof mast with four insulators",
+      "file": null,
+      "size_m": [
+        0.356,
+        1.707,
+        0.9
+      ],
+      "tags": [
+        "house-connector",
+        "roof",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            -0.38,
+            1.523
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            -0.127,
+            1.523
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            0.127,
+            1.523
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            0.38,
+            1.523
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_roof_mast_hook",
+      "category": "connector",
+      "name": "House connector: roof mast with a hook for a bundled cable",
+      "file": null,
+      "size_m": [
+        0.466,
+        1.407,
+        0.34
+      ],
+      "tags": [
+        "house-connector",
+        "roof",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "bundle",
+          "tier": -1,
+          "pos": [
+            0.23,
+            0.0,
+            1.07
+          ]
+        }
+      ]
     }
   ],
   "textures": [

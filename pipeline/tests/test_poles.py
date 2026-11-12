@@ -8,6 +8,7 @@ import pytest
 from suchohrad_pipeline import poleparts as pp
 from suchohrad_pipeline.assets import load_manifest
 from suchohrad_pipeline.buildings import hex_to_rgb
+from suchohrad_pipeline.connectors import CONNECTORS, build_connector, mount_of
 from suchohrad_pipeline.poles import (
     ARCHETYPES,
     VARIANTS,
@@ -17,7 +18,7 @@ from suchohrad_pipeline.poles import (
     random_spec,
     span_mesh,
 )
-from suchohrad_pipeline.poles_preview import manifest_entries
+from suchohrad_pipeline.poles_preview import connector_entries, manifest_entries
 from suchohrad_pipeline.primitives import PRIMITIVES, build_primitive
 
 
@@ -162,3 +163,39 @@ def test_manifest_pole_entries_are_in_sync() -> None:
         line = [s for s in a["seats"] if s["kind"] == "line"]
         assert line and all(len(s["pos"]) == 3 and s["pos"][2] > 5 for s in line), a["id"]
         assert {s["kind"] for s in a["seats"]} <= {"line", "service", "bundle"}
+
+
+# --- house connectors ---
+
+
+@pytest.mark.parametrize("name", sorted(CONNECTORS))
+def test_connector_is_a_small_solid_fitting_with_wire_seats(name) -> None:
+    c = build_connector(name)
+    assert np.isfinite(c.mesh.tris).all() and signed_volume(c.mesh) > 0
+    assert np.array_equal(c.mesh.tris, build_connector(name).mesh.tris)
+    pts = c.mesh.tris.reshape(-1, 3)
+    seats = c.seats()
+    assert seats and {s["kind"] for s in seats} <= {"line", "bundle"}
+    assert all(s["pos"][0] > 0 for s in seats)  # the wires come from +x
+    if mount_of(name) == "wall":
+        assert pts[:, 0].min() >= -1e-9  # nothing goes into the wall
+        assert pts[:, 2].min() < -1.0  # the conduit runs down the wall
+        assert pts[:, 0].max() < 0.3 and all(abs(s["pos"][2]) < 0.3 for s in seats)
+    else:
+        assert pts[:, 2].min() == pytest.approx(-0.35)  # the pipe goes through the roof
+        assert 1.2 < pts[:, 2].max() < 2.0 and all(s["pos"][2] > 0.9 for s in seats)
+    prim = PRIMITIVES[name]
+    assert not prim.centred and prim.size_m == c.size_m
+    assert hex_to_rgb(prim.colour) in c.mesh.colours.tolist()
+
+
+def test_connectors_cover_walls_and_roofs_with_wires_and_bundles() -> None:
+    kinds = {(mount_of(n), build_connector(n).seats()[0]["kind"]) for n in CONNECTORS}
+    assert kinds == {("wall", "line"), ("wall", "bundle"), ("roof", "line"), ("roof", "bundle")}
+
+
+def test_manifest_connector_entries_are_in_sync() -> None:
+    """``python -m suchohrad_pipeline.poles_preview --sync-manifest`` after changing the connectors."""
+    shipped = [a for a in load_manifest()["assets"] if a["id"].startswith("prim:connector_")]
+    assert shipped == connector_entries()
+    assert all(a["category"] == "connector" and a["seats"] for a in shipped)

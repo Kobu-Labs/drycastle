@@ -92,6 +92,34 @@ public class CableWiresTests
     }
 
     [Fact]
+    public void AHouseConnectorTakesAsManyWiresAsItHasInsulators()
+    {
+        // two wall hooks 0.28 m apart, 12 m from a pole with five pins
+        var house = new List<WireSeat> { new("line", 0, new Vector3(12, 4, -0.14f)), new("line", 0, new Vector3(12, 4, 0.14f)) };
+        var wires = CableWires.Span(Pole(0, 0, 5, bracket: true), house, "C-0011");
+        Assert.Equal(2, wires.Count); // no service cable: the house has no bracket for it
+        Assert.All(wires, w => Assert.Equal("line", w.Kind));
+        Assert.False(Cross(wires[0], wires[1]));
+        Assert.Equal(new[] { -0.6f, 0.6f }, wires.Select(w => MathF.Round(w.Points[0].Z, 2))); // the outer pins of the pole
+        Assert.All(wires, w => Assert.Equal(4f, w.Points[^1].Y, 3));
+    }
+
+    [Fact]
+    public void AHookOnAHouseGetsOneBundledCableFromThePole()
+    {
+        var hook = new List<WireSeat> { new("bundle", -1, new Vector3(12, 4, 0)) };
+        var fromBracket = Assert.Single(CableWires.Span(Pole(0, 0, 4, bracket: true), hook, "C-0012"));
+        Assert.Equal("bundle", fromBracket.Kind);
+        Assert.Equal(CableWires.BundleRadius, fromBracket.Radius);
+        Assert.Equal(6f, fromBracket.Points[0].Y, 3); // the pole's side bracket
+        var fromPin = Assert.Single(CableWires.Span(hook, Pole(0, 0, 4), "C-0013")); // either way round
+        Assert.Equal(9f, fromPin.Points[^1].Y, 3); // no bracket: the nearest pin of the crossarm
+        // between two poles a hook on one of them alone still gets nothing
+        var poleWithHook = Pole(0, 0, 4).Append(new WireSeat("bundle", -1, new Vector3(0.2f, 7, 0))).ToList();
+        Assert.DoesNotContain(CableWires.Span(poleWithHook, Pole(30, 0, 4), "C-0014"), w => w.Kind == "bundle");
+    }
+
+    [Fact]
     public void ACableHangsTheSameEveryTimeAndNothingJoinsAPoleToItself()
     {
         var a = CableWires.Span(Pole(0, 0, 4), Pole(30, 0, 4), "C-0008");

@@ -50,10 +50,12 @@ from suchohrad_pipeline.buildings import footprint_polygon
 from suchohrad_pipeline.config import DEFAULT_AREA, REPO_ROOT, area_paths
 from suchohrad_pipeline.edits import (
     COLUMN_TYPES,
+    CONNECTOR_ASSET_PREFIX,
     CUSTOM_FENCE_KEYS,
     DEFAULT_EDITS,
     FENCE_TYPES,
     POLE_ASSET_PREFIX,
+    WIRE_ASSET_PREFIXES,
     Edits,
     EditsError,
     cable_pair,
@@ -1137,13 +1139,14 @@ class ParcelEditTools:
 
     # cables ----------------------------------------------------------------------------------
     def _pole(self, edits: Edits, oid: object) -> dict:
-        """The placed utility pole with this id."""
+        """The placed utility pole or house connector with this id (what a cable can end on)."""
         for _, o in _all_objects(edits):
             if o["id"] == oid:
-                if not o["asset"].startswith(POLE_ASSET_PREFIX):
+                if not o["asset"].startswith(WIRE_ASSET_PREFIXES):
                     raise ToolError(
-                        f"{oid} is {o['asset']}, not a utility pole. Cables hang between objects placed "
-                        f"from the pole assets (list_assets category \"pole\")."
+                        f"{oid} is {o['asset']}, not a utility pole or a house connector. Cables hang between "
+                        f"objects placed from the pole assets (list_assets category \"pole\") and house "
+                        f"connectors (category \"connector\", placed in the editor's Poles tool)."
                     )
                 return o
         poles = [o["id"] for _, o in _all_objects(edits) if o["asset"].startswith(POLE_ASSET_PREFIX)]
@@ -1216,13 +1219,17 @@ class ParcelEditTools:
         placed = {o["id"]: o for _, o in _all_objects(edits)}
         warnings = [f"{r['id']}: {end} is not a placed utility pole (the cable is skipped)"
                     for r in rows for end in (r["from"], r["to"])
-                    if not placed.get(end, {}).get("asset", "").startswith(POLE_ASSET_PREFIX)]
+                    if not placed.get(end, {}).get("asset", "").startswith(WIRE_ASSET_PREFIXES)]
         poles = [{"id": o["id"], "asset": o["asset"], "position": o["position"],
                   "rotation_deg": o.get("rotation_deg", 0),
                   "cables": sum(o["id"] in (cb["from"], cb["to"]) for cb in edits.cables.values())}
                  for o in placed.values() if o["asset"].startswith(POLE_ASSET_PREFIX)]
-        return {"summary": f"{len(rows)} cable{'' if len(rows) == 1 else 's'}, {len(poles)} placed poles",
-                "cables": rows, "poles": sorted(poles, key=lambda p: p["id"]), "warnings": warnings}
+        connectors = [{"id": o["id"], "asset": o["asset"], "position": o["position"], "z": o.get("z")}
+                      for o in placed.values() if o["asset"].startswith(CONNECTOR_ASSET_PREFIX)]
+        return {"summary": f"{len(rows)} cable{'' if len(rows) == 1 else 's'}, {len(poles)} placed poles, "
+                           f"{len(connectors)} house connectors",
+                "cables": rows, "poles": sorted(poles, key=lambda p: p["id"]),
+                "connectors": sorted(connectors, key=lambda c: c["id"]), "warnings": warnings}
 
     def move_object(
         self,
@@ -1694,7 +1701,7 @@ def build_server(settings: Settings) -> Any:
     )
 
     @server.tool(description=f"List assets that place_object can use. Each has id (use as `asset`), "
-                 f"category (car, slab, pot, flower, bush, tree, wall, fence, pole, other), name, size_m "
+                 f"category (car, slab, pot, flower, bush, tree, wall, fence, pole, connector, other), name, size_m "
                  f"and tags; primitives (prim:wall, prim:slab, prim:pot, prim:radio_tower, prim:bunker and the "
                  f"utility poles prim:pole_*, category pole: origin at the foot, the wires run along the object's "
                  f"x axis, the lamp reaches to its -y) are included. "
@@ -1807,7 +1814,9 @@ def build_server(settings: Settings) -> Any:
     @server.tool(description=(
         "String cables between placed utility poles (objects placed from the prim:pole_* assets). `poles` is "
         "a list of two or more pole object ids in the order the line runs; each pole is joined to the next, "
-        "so a whole street is one call. A pair that is already joined is left alone (reported in warnings). "
+        "so a whole street is one call. An id may also be a house connector (prim:connector_*, placed on a "
+        "wall or roof in the editor's Poles tool): [pole, connector] strings the cable to the house. "
+        "A pair that is already joined is left alone (reported in warnings). "
         "The poles keep their rotation: the wires are matched left to right across each span, so they never "
         "cross; turn a pole with move_object so its crossarm stands across the line. list_cables shows the poles."))
     def connect_poles(poles: list[str]) -> dict:
@@ -1818,8 +1827,8 @@ def build_server(settings: Settings) -> Any:
         return tools.disconnect_poles(cable, poles)
 
     @server.tool(description=(
-        "List the cables (id, from, to, length_m) and the placed utility poles (id, asset, position, "
-        "rotation_deg, number of cables). Optional `pole`: only that pole's cables."))
+        "List the cables (id, from, to, length_m), the placed utility poles (id, asset, position, "
+        "rotation_deg, number of cables) and the house connectors. Optional `pole`: only that object's cables."))
     def list_cables(pole: str | None = None) -> dict:
         return tools.list_cables(pole)
 
