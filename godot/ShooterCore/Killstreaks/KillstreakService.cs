@@ -189,6 +189,9 @@ public sealed class KillstreakService
     /// <summary>The sandbox streak the owner holds, or null.</summary>
     public string? SandboxHeldOf(ushort owner) => _sandboxHeld.TryGetValue(owner, out var id) ? id : null;
 
+    /// <summary>Sandbox ended for the owner (an admin turned it off): the held slot empties.</summary>
+    public void SandboxRelease(ushort owner) => _sandboxHeld.Remove(owner);
+
     /// <summary>Uses the owner's held sandbox streak now (it stays held: repeat uses are unlimited). False when nothing is held.</summary>
     public bool SandboxActivateHeld(ushort owner, double now, Vector3 position) =>
         SandboxHeldOf(owner) is { } id && SandboxActivate(owner, id, now, position);

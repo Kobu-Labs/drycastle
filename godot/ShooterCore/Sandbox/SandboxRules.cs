@@ -12,6 +12,7 @@ public readonly record struct SandboxAnswer(bool Granted, string Reason);
 public static class SandboxRules
 {
     public const string GrantedReason = "Sandbox mode on: godmode, unlimited ammo, every killstreak. No XP, stats or score.";
+    public const string RevokedReason = "An admin turned sandbox mode off. Playing normally.";
     public const string RefusedReason = "Sandbox mode is not allowed on this server. Playing normally.";
 
     /// <summary>The answer to a hello: no answer (no notice) unless the client asked; then granted only if the server allows it.</summary>

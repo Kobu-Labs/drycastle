@@ -60,6 +60,7 @@ public partial class NetServer
             case "help": ChatHelp(c, args); break;
             case "bots": ChatBots(c, args); break;
             case "spawn": ChatSpawn(c, args[0]); break;
+            case "sandbox": ChatSandbox(c, args); break;
             case "time": ChatTimeCommand(c, args); break;
         }
         GD.Print($"server: {c.Name} #{c.Id} ran {text}");
@@ -106,6 +107,22 @@ public partial class NetServer
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { ChatTo(c, ChatLineKind.Error, "You must be alive to spawn a vehicle."); return; }
         if (TrySpawnVehicle(c, (byte)kind, AdminVehicleCap) is { } why) { ChatTo(c, ChatLineKind.Error, why); return; }
         ChatTo(c, ChatLineKind.Info, $"Spawned a {id} in front of you.");
+    }
+
+    /// <summary>"/sandbox player [on|off]": a human by name (spaces ignored) or "#id". Without a state it flips.</summary>
+    void ChatSandbox(Client c, IReadOnlyList<string> args)
+    {
+        if (!AllowSandbox) { ChatTo(c, ChatLineKind.Error, "Sandbox mode is not allowed on this server (--allow-sandbox is off)."); return; }
+        var who = args[0];
+        var humans = _byId.Values.Where(o => !o.IsBot && o.Joined).ToList();
+        var target = who.StartsWith('#') && ushort.TryParse(who.AsSpan(1), out var id)
+            ? humans.FirstOrDefault(o => o.Id == id)
+            : humans.FirstOrDefault(o => o.Name.Replace(" ", "").Equals(who, StringComparison.OrdinalIgnoreCase));
+        if (target == null) { ChatTo(c, ChatLineKind.Error, $"No player '{who}'. Use the name without spaces, or #id."); return; }
+        var on = args.Count > 1 ? args[1] == "on" : !target.Sandbox;
+        if (target.Sandbox == on) { ChatTo(c, ChatLineKind.Info, $"{target.Name} is already {(on ? "in" : "out of")} sandbox mode."); return; }
+        SetSandbox(target, on);
+        ChatToAll(ChatLineKind.System, "", $"{c.Name} turned sandbox mode {(on ? "on" : "off")} for {target.Name}.");
     }
 
     void ChatTimeCommand(Client c, IReadOnlyList<string> args)

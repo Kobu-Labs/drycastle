@@ -26,6 +26,23 @@ public partial class NetServer
         GD.Print(answer.Granted ? $"server: {c.Name} #{c.Id} sandbox mode on" : $"server: {c.Name} #{c.Id} sandbox refused (--allow-sandbox is off)");
     }
 
+    /// <summary>
+    /// An admin turns sandbox mode on or off for a joined player (#156). The player gets the status notice, everyone the name tag
+    /// change; unlimited ammo is live at once, the whole hotbar from the next spawn (the loadout is applied at every spawn).
+    /// </summary>
+    void SetSandbox(Client c, bool on)
+    {
+        c.Sandbox = on;
+        _match.SetSandbox(c.Id, on);
+        if (c.W != null) c.W.Unlimited = on;
+        if (!on) _streaks.SandboxRelease(c.Id);
+        Send(c, new EventMsg((byte)EventKind.SandboxStatus, SandboxEvents.EncodeStatus(new SandboxAnswer(on, on ? SandboxRules.GrantedReason : SandboxRules.RevokedReason))));
+        BroadcastEvent(EventKind.SandboxState, SandboxEvents.EncodeState(c.Id, on));
+        SendSandboxHeld(c); // off: the held slot is empty, the client clears it
+        if (c.W != null) SendAmmo(c);
+        GD.Print($"server: {c.Name} #{c.Id} sandbox mode {(on ? "on" : "off")} by an admin");
+    }
+
     /// <summary>Scores (XP, stats, the score) count for every player except a sandbox one. Unknown ids count as normal.</summary>
     bool Scores(ushort id) => _match.Get(id) is not { Sandbox: true } && !IsBot(id); // a bot earns no XP and has no stats (#214)
 

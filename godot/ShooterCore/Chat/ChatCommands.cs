@@ -1,6 +1,6 @@
 namespace Drycastle.ShooterCore;
 
-public enum ChatArgKind { Int, Choice, Time }
+public enum ChatArgKind { Int, Choice, Time, Player }
 
 /// <summary>One argument of a chat command. <see cref="Min"/> and <see cref="Max"/> bound an <see cref="ChatArgKind.Int"/>.</summary>
 public sealed record ChatArg(string Name, ChatArgKind Kind, bool Required = true, int Min = 0, int Max = 0);
@@ -78,6 +78,7 @@ public static class ChatCommands
         new("help", "List the commands, or explain one", new[] { new ChatArg("command", ChatArgKind.Choice, false) }, AdminOnly: false),
         new("bots", "Set how many bots play, or show the count. Takes effect at once", new[] { new ChatArg("count", ChatArgKind.Int, false, 0, MaxBots) }),
         new("spawn", "Spawn a vehicle in front of you", new[] { new ChatArg("vehicle", ChatArgKind.Choice) }),
+        new("sandbox", "Turn sandbox mode on or off for a player (name or #id), or flip it", new[] { new ChatArg("player", ChatArgKind.Player), new ChatArg("state", ChatArgKind.Choice, false) }),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
     };
 
@@ -95,6 +96,7 @@ public static class ChatCommands
             ChatArgKind.Time => ChatTime.Presets.Select(p => (p.Name, ChatTime.Format(p.Minute)))
                 .Concat(new[] { ("freeze", "stop the clock"), ("resume", "let it run") }).ToList(),
             ChatArgKind.Choice when cmd.Name == "spawn" => ctx.Vehicles.Select(v => (v, "")).ToList(),
+            ChatArgKind.Choice when cmd.Name == "sandbox" => new[] { ("on", "godmode, unlimited ammo, no score"), ("off", "back to normal play") },
             ChatArgKind.Choice when cmd.Name == "help" => Visible(ctx).Select(c => (c.Name, c.Summary)).ToList(),
             _ => Array.Empty<(string, string)>(),
         };
@@ -123,6 +125,8 @@ public static class ChatCommands
                     return null;
                 }
                 return token.ToLowerInvariant();
+            case ChatArgKind.Player:
+                return token; // a name or #id: only the server knows who is connected
             default:
                 var hit = Choices(cmd, i, ctx).FirstOrDefault(c => c.Value.Equals(token, StringComparison.OrdinalIgnoreCase));
                 if (hit.Value == null) { error = $"Unknown {arg.Name} '{token}'."; return null; }
@@ -195,6 +199,7 @@ public static class ChatCommands
         {
             ChatArgKind.Int => $"{arg.Name}: a whole number from {arg.Min} to {arg.Max}",
             ChatArgKind.Time => $"{arg.Name}: HH:MM, a word, freeze or resume",
+            ChatArgKind.Player => $"{arg.Name}: a player's name (no spaces) or #id from the scoreboard",
             _ => $"{arg.Name}",
         } + (arg.Required ? "" : " (optional)");
 

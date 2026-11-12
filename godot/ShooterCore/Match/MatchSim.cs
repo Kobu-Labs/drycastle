@@ -180,6 +180,20 @@ public sealed class MatchSim
         return true;
     }
 
+    /// <summary>
+    /// Sandbox, changed while playing (an admin's /sandbox): godmode and unscored on, or normal play back. A sandbox player has no
+    /// team; leaving sandbox in team deathmatch joins the smaller team. False when the player is unknown or already in that state.
+    /// </summary>
+    public bool SetSandbox(ushort id, bool on)
+    {
+        if (!_players.TryGetValue(id, out var p) || p.Sandbox == on) return false;
+        p.Sandbox = on;
+        p.Vulnerable = false;
+        if (IsTeamMode) p.Team = on ? Teams.None : SmallerTeam();
+        Emit(new ScoreboardChanged());
+        return true;
+    }
+
     public void SetPosition(ushort id, Vector3 pos) { if (_players.TryGetValue(id, out var p)) p.Position = pos; }
 
     public void AddPlayer(ushort id, string name, bool sandbox = false)

@@ -11,6 +11,18 @@ public class ChatTests
     // ---- parsing ----
 
     [Fact]
+    public void SandboxTakesAPlayerAndAnOptionalState()
+    {
+        var p = ChatCommands.Parse("/sandbox Bob ON", Admin);
+        Assert.True(p.Ok);
+        Assert.Equal(new[] { "Bob", "on" }, p.Args);
+        Assert.True(ChatCommands.Parse("/sandbox #4", Admin).Ok);
+        Assert.False(ChatCommands.Parse("/sandbox", Admin).Ok);
+        Assert.False(ChatCommands.Parse("/sandbox bob maybe", Admin).Ok);
+        Assert.Contains("admin", ChatCommands.Parse("/sandbox bob", Guest).Error);
+    }
+
+    [Fact]
     public void BotsTakesACountInRange()
     {
         var p = ChatCommands.Parse("/bots 12", Admin);
@@ -85,7 +97,7 @@ public class ChatTests
     {
         var all = ChatCommands.Hint("/", Admin);
         Assert.Equal(ChatCommands.All.Count, all.Suggestions.Count);
-        var b = ChatCommands.Hint("/bo", Admin);
+        var b = ChatCommands.Hint("/bot", Admin);
         Assert.Equal("bots", Assert.Single(b.Suggestions).Insert);
         Assert.Equal("/bots [count]", b.Usage);
     }
