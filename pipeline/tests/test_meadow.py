@@ -6,7 +6,7 @@ from suchohrad_pipeline import meadow
 
 
 def _raster() -> meadow.Meadow:
-    layers = [meadow.MeadowLayer("tuft", "tuft", "", 0.0, 3.0, (0.8, 1.2))]
+    layers = [meadow.MeadowLayer("tuft", "tuft", "", 0.0, 3.0, (0.75, 1.25))]
     m = meadow.Meadow(2.0, 8.0, layers, 0.5, 0.75)
     m.array((0, 0))[0, 1:3, 1:3] = 200
     return m
