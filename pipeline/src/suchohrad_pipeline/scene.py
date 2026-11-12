@@ -14,6 +14,7 @@ import shapely
 
 from suchohrad_pipeline.building_detail import build_detail, load_details
 from suchohrad_pipeline.buildings import hex_to_rgb
+from suchohrad_pipeline.detail import load_patches, patches_by_chunk
 from suchohrad_pipeline.edits import DEFAULT_EDITS, load_edits
 from suchohrad_pipeline.landmarks import build_landmark
 from suchohrad_pipeline.meshes import Mesh, building_mesh, collision_mesh
@@ -184,6 +185,13 @@ def build_scene(
         )
         for rid, mesh in meshes.items():
             put(node_name(rid), _by_chunk(mesh, chunk_m))
+
+    # ground detail (detail stage): patches draped on the terrain, one flat node and one node per texture in each
+    # chunk; the clutter instances are not meshes, the export copies them as clutter.json
+    patches = load_patches(work_dir)
+    if patches is not None:
+        for key, nodes in patches_by_chunk(patches[0], patches[1], chunk_m, k).items():
+            scene.nodes.setdefault(key, {}).update(nodes)
 
     scene.props = _read(work_dir, "props.json")
     if scene.props:

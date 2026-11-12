@@ -16,6 +16,7 @@ import trimesh
 from suchohrad_pipeline.buildings import DEFAULT_OVERRIDES
 from suchohrad_pipeline.config import DEFAULT_AREA, DEFAULT_RAW_DIR, REPO_ROOT, area_paths
 from suchohrad_pipeline.edits import DEFAULT_EDITS
+from suchohrad_pipeline.detail_meshes import clutter_meshes
 from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.primitives import PRIMITIVES, build_primitive
@@ -36,12 +37,16 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # assets/manifest.json), first used for typed fences: "parcel_<ID>_props_tex_<id>". The manifest lists the ids used.
 # (no bump) objects.json may carry "cables": the cables between placed utility poles (id, from, to). The game
 # strings the wires itself from the poles and the wire seats in assets/manifest.json; older loaders ignore the key.
-MAP_VERSION_BASE = "0.7.0"
+# 0.8.0: ground detail (detail stage): per chunk a "detail_patches" node (flat colours) and "detail_patches_tex_<id>" nodes
+# (draped patches of dirt, gravel, leaf litter, beds, furrows, tones), and clutter.json (files.clutter: instances per chunk
+# and kind) with clutter_meshes.glb (files.clutter_meshes: one tiny mesh per kind) for instanced rendering near the player.
+MAP_VERSION_BASE = "0.8.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 TREES_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
-               "props.json", "spawns.json", "lamps.json")
+               "props.json", "spawns.json", "lamps.json", "detail.json", "detail_patches.npy",
+               "detail_patches.json")
 NOT_GENERATED_NOTE = "Landmarks, navmesh and water surface meshes are not generated (water.json holds the water bodies). Textures are not in the map: textured nodes name a texture of the asset library."
 
 
@@ -125,6 +130,15 @@ def build_chunk_scene(
     for name, mesh in sorted((extra or {}).items()):
         scene.add_geometry(node_trimesh(name, mesh), node_name=name, geom_name=name)
     return scene
+
+
+def write_clutter_meshes(path: Path) -> str:
+    """``clutter_meshes.glb``: one node per clutter kind, flat colours, glTF axes (Y up), at scale 1 on y = 0."""
+    scene = trimesh.Scene()
+    for kind, mesh in clutter_meshes().items():
+        scene.add_geometry(to_trimesh(mesh), node_name=kind, geom_name=kind)
+    path.write_bytes(scene.export(file_type="glb"))
+    return path.name
 
 
 def write_primitives(out_dir: Path) -> dict[str, dict]:
@@ -274,6 +288,15 @@ def run_export(
         # street lamp positions (props stage); copied verbatim, the game builds the lamps from them
         (out_dir / "lamps.json").write_bytes(lamps_src.read_bytes())
         files["lamps"] = "lamps.json"
+    clutter_src = work_dir / "detail.json"
+    if clutter_src.is_file():
+        # clutter instances (detail stage); copied verbatim, with the one mesh per kind they are drawn with
+        (out_dir / "clutter.json").write_bytes(clutter_src.read_bytes())
+        files["clutter"] = "clutter.json"
+        files["clutter_meshes"] = write_clutter_meshes(out_dir / "clutter_meshes.glb")
+    else:
+        for stale in ("clutter.json", "clutter_meshes.glb"):
+            (out_dir / stale).unlink(missing_ok=True)
     stale_windows = out_dir / "windows.json"
     stale_windows.unlink(missing_ok=True)
     if scene.windows:
@@ -303,6 +326,8 @@ def run_export(
     generated = {"buildings"}
     if "lamps" in files:
         generated.add("lamps")
+    if "clutter" in files:
+        generated.add("detail")
     terrain_info = None
     if scene.terrain is not None:
         t = scene.terrain

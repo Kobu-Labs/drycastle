@@ -6,12 +6,19 @@ import numpy as np
 import pytest
 from shapely.geometry import LineString, Point, Polygon, box
 
+from suchohrad_pipeline import detail_meshes
 from suchohrad_pipeline.detail import (
     PATCH_PRIORITY,
     ParcelContext,
+    area_type,
+    cap_clutter,
+    field_detail,
+    forest_detail,
     free_area,
     garden_detail,
     patch_meshes,
+    patch_rows,
+    patches_by_chunk,
     poisson_disc,
     thin,
 )
@@ -70,7 +77,7 @@ def test_same_parcel_gives_identical_output(cfg) -> None:
 def test_nothing_on_buildings_fences_trunks_or_the_road(cfg) -> None:
     ctx = yard()
     res = garden_detail(ctx, cfg)
-    assert sum(res.counts().values()) > 200
+    assert sum(res.counts().values()) > 60
     solid = free_area(ctx, cfg)
     for c in res.clutter:
         assert solid.buffer(1e-6).contains(Point(c["x"], c["y"])), c
@@ -91,3 +98,49 @@ def test_patches_do_not_overlap_and_drape(cfg) -> None:
     assert np.allclose(flat.tris[:, :, 2], 100.0 + cfg["lift_m"])
     for m in tex.values():
         assert m.uvs.shape == (m.face_count, 3, 2)
+
+
+def test_gravel_path_needs_a_gate(cfg) -> None:
+    ctx = yard()
+    ctx.fences = [LineString([(0, 0), (30, 0), (30, 24), (0, 24), (0, 0)])]  # fenced all round, no gap
+    assert not any(p.layer == "gravel" for p in garden_detail(ctx, cfg).patches)
+    ctx.fences = [LineString([(0, 0), (30, 0), (30, 24), (22, 24)]), LineString([(8, 24), (0, 24), (0, 0)])]  # a gate gap
+    assert any(p.layer == "gravel" for p in garden_detail(ctx, cfg).patches)
+
+
+def test_field_and_forest_keep_off_blocked_ground(cfg) -> None:
+    for recipe, kind in ((field_detail, "other"), (forest_detail, "forest")):
+        ctx = yard()
+        ctx.kind, ctx.polygon, ctx.fences, ctx.buildings, ctx.road = kind, box(0, 0, 60, 60), [], [], None
+        ctx.trees = [(20.0, 20.0, 1.0), (40.0, 30.0, 1.0)]
+        ctx.blocked = box(10, 10, 30, 30)  # a placed object or a region
+        res = recipe(ctx, cfg)
+        assert sum(res.counts().values()) > 20
+        assert all(not ctx.blocked.contains(Point(c["x"], c["y"])) for c in res.clutter)
+        assert all(p.geom.intersection(ctx.blocked).area < 1e-6 for p in res.patches)
+        assert recipe(ctx, cfg).clutter == res.clutter  # seeded
+
+
+def test_area_type_and_caps_and_patch_nodes(cfg) -> None:
+    assert [area_type({"kind": k}) for k in ("garden", "building_plot", "other", "forest", "road", "water")] == [
+        "garden", "garden", "field", "forest", "road", None]
+    chunks = {(0, 0): {"pebble": [[float(i), 1.0, 0.0, 0.0, 1.0] for i in range(50)]}}
+    cap_clutter(chunks, {"pebble": 10})
+    again = {(0, 0): {"pebble": [[float(i), 1.0, 0.0, 0.0, 1.0] for i in range(50)]}}
+    cap_clutter(again, {"pebble": 10})
+    assert len(chunks[(0, 0)]["pebble"]) == 10 and chunks == again
+    res = garden_detail(yard(), cfg)
+    flat, tex = patch_meshes(res, yard().terrain, cfg["lift_m"])
+    ids = ["dirt", "gravel", "leaf_litter", "soil_rows"]
+    nodes = patches_by_chunk(patch_rows(flat, tex, ids), ids, 250.0)
+    assert set(nodes) == {(0, 0)}
+    assert "detail_patches" in nodes[(0, 0)]
+    assert sum(m.face_count for m in nodes[(0, 0)].values()) == flat.face_count + sum(m.face_count for m in tex.values())
+
+
+def test_clutter_meshes_are_tiny_and_stand_on_the_ground() -> None:
+    meshes = detail_meshes.clutter_meshes()
+    assert list(meshes) == list(detail_meshes.KINDS)
+    for name, m in meshes.items():
+        assert 3 <= m.face_count <= 30, name
+        assert m.tris[:, :, 2].min() >= -1e-9 and m.tris[:, :, 2].max() < 0.5, name

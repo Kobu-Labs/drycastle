@@ -1,12 +1,13 @@
 """A top-down picture of the ground detail of one parcel (Pillow), for judging the look without the game.
 
     uv run python -m suchohrad_pipeline.detail_preview [--parcel P-0637] [--area village] [--out DIR]
-                                                       [--px-per-m 28] [--zoom 70]
+                                                       [--work DIR] [--px-per-m 28] [--zoom 70]
 
-writes ``<out>/detail_<parcel>.png`` (whole parcel) and ``detail_<parcel>_zoom.png`` (the busiest 14 m
-square, at ``--zoom`` pixels per metre) into ``out/detail`` by default: terrain colour, the patches with
-their real library textures, the clutter as small shapes by kind, then buildings, fences and trees, a scale
-bar and a legend. The shapes of the clutter are stand-ins for the meshes the game will draw.
+writes ``<out>/detail_<parcel>.png`` (the parcel, or the busiest 40 m square of a big one) and
+``detail_<parcel>_zoom.png`` (the busiest 14 m square, at ``--zoom`` pixels per metre) into ``out/detail`` by
+default: terrain colour, the patches with their real library textures, the clutter drawn from its real meshes
+(``detail_meshes``, seen from above, shaded by facing), then buildings, fences and trees, a scale bar and a
+legend. ``--work`` reads another work directory (a copy of the area's, for experiments).
 """
 
 import argparse
@@ -20,18 +21,17 @@ from PIL import Image, ImageDraw, ImageFont
 from suchohrad_pipeline.assets import ASSETS_DIR
 from suchohrad_pipeline.buildings import hex_to_rgb
 from suchohrad_pipeline.config import REPO_ROOT, area_paths
-from suchohrad_pipeline.detail import ParcelContext, DetailResult, run_parcel
+from suchohrad_pipeline.detail import CLUTTER_KINDS, DetailResult, ParcelContext, run_parcel
+from suchohrad_pipeline.detail_meshes import clutter_meshes
 from suchohrad_pipeline.rules import load_section
 from suchohrad_pipeline.textures import texture
 
 DEFAULT_OUT = REPO_ROOT / "out" / "detail"
 OUTSIDE = (122, 154, 106)
 ROAD = (138, 140, 144)
-TUFT = [(88, 140, 60), (112, 160, 72), (70, 118, 54)]
-FLOWER = [(245, 245, 235), (240, 205, 70), (232, 120, 150), (214, 70, 60), (150, 110, 200)]
-PEBBLE = [(150, 148, 140), (120, 118, 112), (176, 168, 150)]
-ROCK = [(112, 110, 106), (132, 126, 116), (98, 96, 94)]
-LEAF = [(176, 92, 46), (200, 140, 52), (140, 110, 44), (110, 122, 52)]
+LEGEND = {"tuft": (88, 140, 60), "flower": (232, 120, 150), "pebble": (150, 148, 140), "rock": (112, 110, 106),
+          "leaf": (176, 92, 46), "stick": (110, 79, 51), "fern": (61, 122, 58)}
+DRAW_ORDER = {k: i for i, k in enumerate(("leaf", "stick", "pebble", "tuft", "fern", "rock", "flower"))}
 
 
 def _font(size: int):
@@ -100,7 +100,7 @@ class Canvas:
 def render(ctx: ParcelContext, res: DetailResult, cfg: dict, box: tuple[float, float, float, float], px: float,
            buildings_cfg: dict, trees_cfg: dict, title: str) -> Image.Image:
     cv = Canvas(box, px)
-    kind_colour = hex_to_rgb(load_section("terrain")["colours"].get(ctx.kind, ["#c9b78f"])[0])
+    kind_colour = tuple(ctx.colour) if ctx.colour else hex_to_rgb(load_section("terrain")["colours"].get(ctx.kind, ["#c9b78f"])[0])
     if ctx.road is not None:
         cv.fill(ctx.road, ROAD)
     cv.fill(ctx.polygon.difference(ctx.road) if ctx.road is not None else ctx.polygon, kind_colour)
@@ -115,32 +115,24 @@ def render(ctx: ParcelContext, res: DetailResult, cfg: dict, box: tuple[float, f
     def inside(x: float, y: float) -> bool:
         return box[0] - 1 <= x <= box[2] + 1 and box[1] - 1 <= y <= box[3] + 1
 
-    order = {"leaf": 0, "pebble": 1, "tuft": 2, "rock": 3, "flower": 4}
-    for c in sorted(res.clutter, key=lambda c: order[c["kind"]]):
+    meshes = {k: m.tris for k, m in clutter_meshes().items()}
+    cols = {k: m.colours for k, m in clutter_meshes().items()}
+    for c in sorted(res.clutter, key=lambda c: DRAW_ORDER[c["kind"]]):
         if not inside(c["x"], c["y"]):
             continue
-        x, y = cv.pt(c["x"], c["y"])
-        k, v, sc, rot = c["kind"], c["variant"], c["scale"], c["rot"]
-        if k == "tuft":
-            col, n = TUFT[v % 3], 5
-            for i in range(n):  # a few blades fanning up from the base
-                a = rot + (i - 2) * 0.55
-                d.line([(x, y), (x + math.sin(a) * 6 * s * sc, y - 9 * s * sc * (1 - abs(i - 2) * 0.12))], fill=col, width=max(1, round(1.6 * s)))
-        elif k == "flower":
-            r = 2.6 * s * sc
-            d.line([(x, y), (x, y + 3 * s)], fill=(70, 120, 50), width=max(1, round(s)))
-            d.ellipse([x - r, y - r, x + r, y + r], fill=FLOWER[v % 5], outline=(90, 90, 60))
-        elif k == "pebble":
-            r = 1.7 * s * sc
-            d.ellipse([x - r, y - r * 0.75, x + r, y + r * 0.75], fill=PEBBLE[v % 3])
-        elif k == "rock":
-            r = 6.5 * s * sc
-            pts = [(x + r * (0.8 + 0.25 * math.sin(i * 2.3 + v)) * math.cos(rot + i * math.tau / 7), y + r * 0.8 * (0.8 + 0.25 * math.sin(i * 2.3 + v)) * math.sin(rot + i * math.tau / 7)) for i in range(7)]
-            d.polygon(pts, fill=ROCK[v % 3], outline=(70, 70, 68))
-        else:  # leaf
-            r = 2.4 * s * sc
-            a = rot
-            d.line([(x - math.cos(a) * r, y - math.sin(a) * r), (x + math.cos(a) * r, y + math.sin(a) * r)], fill=LEAF[v % 4], width=max(1, round(2.2 * s)))
+        tris, colours = meshes[c["kind"]], cols[c["kind"]]
+        co, si = math.cos(c["rot"]), math.sin(c["rot"])
+        x = c["x"] + c["scale"] * (tris[:, :, 0] * co - tris[:, :, 1] * si)
+        y = c["y"] + c["scale"] * (tris[:, :, 0] * si + tris[:, :, 1] * co)
+        z = tris[:, :, 2] * c["scale"]
+        # facing: the vertical part of the normal (taller faces seen from above are lit more)
+        n = np.cross(np.stack([x, y, z], axis=2)[:, 1] - np.stack([x, y, z], axis=2)[:, 0],
+                     np.stack([x, y, z], axis=2)[:, 2] - np.stack([x, y, z], axis=2)[:, 0])
+        shade = 0.72 + 0.28 * np.abs(n[:, 2]) / np.maximum(np.linalg.norm(n, axis=1), 1e-9)
+        for i in np.argsort(z.mean(axis=1)):
+            if n[i, 2] <= 0 and c["kind"] not in ("leaf",):
+                continue  # facing down: hidden from above
+            d.polygon([cv.pt(x[i, j], y[i, j]) for j in range(3)], fill=tuple(int(v) for v in colours[i] * shade[i]))
     # buildings, fences, trees
     for b in ctx.buildings:
         for ring in cv.poly(b):
@@ -171,10 +163,10 @@ def legend(width: int, counts: dict[str, int]) -> Image.Image:
     img = Image.new("RGB", (width, 38), (30, 30, 34))
     d, f = ImageDraw.Draw(img), _font(13)
     x = 10
-    for name, col in (("tuft", TUFT[0]), ("flower", FLOWER[3]), ("pebble", PEBBLE[0]), ("rock", ROCK[0]), ("leaf", LEAF[0])):
-        d.ellipse([x, 12, x + 12, 24], fill=col)
+    for name in CLUTTER_KINDS:
+        d.ellipse([x, 12, x + 12, 24], fill=LEGEND[name])
         d.text((x + 18, 10), f"{name} {counts[name]}", fill=(230, 230, 230), font=f)
-        x += 110
+        x += 104
     return img
 
 
@@ -199,16 +191,20 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--parcel", default="P-0637")
     ap.add_argument("--area", default="village")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    ap.add_argument("--work", type=Path, default=None, help="work directory (default: the area's)")
+    ap.add_argument("--window", type=float, default=40.0, help="side of the square shown of a parcel bigger than this, metres")
     ap.add_argument("--px-per-m", type=float, default=28.0)
     ap.add_argument("--zoom", type=float, default=70.0, help="pixels per metre of the close-up")
     a = ap.parse_args(argv)
     paths = area_paths(a.area)
-    ctx, res = run_parcel(a.parcel, paths.work, area=a.area)
+    ctx, res = run_parcel(a.parcel, a.work or paths.work, area=a.area)
     cfg = load_section("detail", area=a.area)
     bcfg, tcfg = {}, load_section("props", area=a.area)["trees"]
     a.out.mkdir(parents=True, exist_ok=True)
     minx, miny, maxx, maxy = ctx.polygon.bounds
     box = (minx - 2, miny - 2, maxx + 2, maxy + 2)
+    if max(maxx - minx, maxy - miny) > a.window * 1.5:  # a big parcel: the busiest window of it
+        box = densest_box(res, a.window, (minx, miny, maxx, maxy))
     counts = res.counts()
     title = f"{a.parcel} ({ctx.kind}, {ctx.polygon.area:.0f} m2)  patches {len(res.patches)}  clutter {sum(counts.values())}"
     whole = render(ctx, res, cfg, box, a.px_per_m, bcfg, tcfg, title)
@@ -219,7 +215,7 @@ def main(argv: list[str] | None = None) -> None:
     p1 = a.out / f"detail_{a.parcel}.png"
     full.save(p1)
     zbox = densest_box(res, 14.0, (minx, miny, maxx, maxy))
-    zoom = render(ctx, res, cfg, zbox, a.zoom, bcfg, tcfg, f"{a.parcel} close-up, 14 m square")
+    zoom = render(ctx, res, cfg, zbox, a.zoom, bcfg, tcfg, f"{a.parcel} ({ctx.kind}) close-up, 14 m square")
     p2 = a.out / f"detail_{a.parcel}_zoom.png"
     zoom.save(p2)
     print(json.dumps({"parcel": a.parcel, "counts": counts, "images": [str(p1), str(p2)]}))
