@@ -615,6 +615,7 @@ public partial class EditorMode : Node
         UpdateRegionTool();
         UpdateSketchTool();
         PollSketchFile(delta);
+        UpdateYouDot();
         _pollT += delta;
         if (_pollT > 0.5)
         {

@@ -157,6 +157,7 @@ Options: `--edits PATH` (default `pipeline/config/edits.json`), `--state PATH` (
 | Shift + left click | add or remove that parcel in the selection |
 | G | create a property group (`G-NNNN`) from 2+ selected parcels |
 | T | snap to a top-down view above the cursor; again restores the previous camera |
+| (Street View) | `streetview_follow.py` moves the character to where a Chrome Street View tab is; in the top-down view (T) a red point marks the spot below it, see `docs/streetview.md` |
 | Esc | stop placing / deselect the object / clear the parcel selection (in that order) |
 | Ctrl+Z, Ctrl+Y (Ctrl+Shift+Z) | undo / redo the saves made in this session (see Objects and undo) |
 

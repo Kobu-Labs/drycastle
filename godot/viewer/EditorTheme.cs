@@ -30,6 +30,8 @@ public static class EditorTheme
     public static readonly Color Scrim = new(0f, 0f, 0f, 0.75f);
     /// <summary>Sketch marks (temporary points and lines): apart from the selection yellow, the region accent and the hover white.</summary>
     public static readonly Color Sketch = new(1f, 0.55f, 0.90f);
+    /// <summary>The character's own point on the ground in the top-down view: red, with a white rim for contrast on any ground.</summary>
+    public static readonly Color You = new(1f, 0.12f, 0.12f);
 
     public static StyleBoxFlat Box(Color bg, int pad = Space, Color? border = null, int radius = Radius)
     {
