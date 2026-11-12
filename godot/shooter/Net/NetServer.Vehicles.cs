@@ -294,7 +294,8 @@ public partial class NetServer
         var yaw = Quant.Yaw(i.Yaw); var pitch = Quant.Pitch(i.Pitch);
         var d = HitMath.SpreadDirection(yaw, RecoilState.ClampPitch(pitch), def.SpreadDegrees, _rng);
         var dir = new Vector3(d.X, d.Y, d.Z);
-        var wall = WorldHit(eye, dir, def.Range, out var shotCar);
+        var crossed = new List<GlassCross>();
+        var wall = BulletHit(eye, dir, def.Range, out var shotCar, crossed);
         var targets = LiveTargets().Where(t => car.Seat.SeatOf(t.Id) < 0).ToList();
         var hit = HitMath.Raycast(N(eye), d, def.Range, wall, targets, c.Id);
         var end = eye + dir * (hit?.Distance ?? Math.Min(wall, def.Range));
@@ -303,6 +304,7 @@ public partial class NetServer
         else if (shotCar != null && shotCar != car && Vehicles != null && wall <= def.Range)
             DamageVehicle(shotCar, def.Damage * Vehicles.BulletDamageMultiplier, c.Id, SpecialWeapons.VehicleGun, 0);
         if (hit == null && shotCar != car && wall <= def.Range) ShotGlass(shotCar, eye, dir, wall, def.Damage);
+        DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, _ => def.Damage);
     }
 
     /// <summary>Exit position: right, left, behind, in front of the car (first with ground and room for the capsule), else above the roof.</summary>

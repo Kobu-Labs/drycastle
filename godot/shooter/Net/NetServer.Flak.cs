@@ -43,7 +43,7 @@ public partial class NetServer
     /// <summary>
     /// A ray, pellet or rocket segment stopped on <paramref name="hull"/>. When that vehicle's gunner sits in the open (vehicles.json exposed_gunner) and is
     /// alive, returns him as a target and the world distance along the ray with the hull left out, so the shot can reach him through the hull
-    /// (<see cref="GunnerCover"/>). The same goes for a rider the ray reaches through a shattered glass pane (<see cref="RiderBehindShatteredGlass"/>).
+    /// (<see cref="GunnerCover"/>). A rider behind a pane is reached by <see cref="BulletHit"/>, which lets bullets through glass.
     /// Otherwise no gunner (every rider stays behind the hull).
     /// </summary>
     (HitTarget? Gunner, float PastHull) ExposedGunnerBehind(ServerCar? hull, Vector3 from, Vector3 dir, float max, IReadOnlyList<HitTarget> targets)
@@ -56,8 +56,6 @@ public partial class NetServer
             var id = seat >= 0 ? hull.Seat.Occupant(seat) : (ushort)0;
             if (id != 0) foreach (var t in targets) if (t.Id == id) { gunner = t; break; }
         }
-        // a rider behind a shattered pane is as open to this ray as a gunner in the open (ADR 0007); the ray has already picked the rider it crosses
-        gunner = RiderBehindShatteredGlass(hull, from, dir, max, targets) ?? gunner;
         if (gunner == null) return (null, float.PositiveInfinity);
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
         q.CollisionMask = CollisionLayers.Bullets;

@@ -183,6 +183,15 @@ public class GlassTests
     }
 
     [Fact]
+    public void ARayLeavingThroughAPaneCrossesItFromTheInside()
+    {
+        var r = Facing(Vector3.UnitZ);
+        Assert.Equal(5f, r.CrossFromInside(new Vector3(0, 1.5f, -5), Vector3.UnitZ)!.Value, 4);
+        Assert.Null(r.CrossFromInside(new Vector3(0, 1.5f, 5), -Vector3.UnitZ));   // from the outside
+        Assert.Null(r.CrossFromInside(new Vector3(1.01f, 1.5f, -5), Vector3.UnitZ)); // past the side
+    }
+
+    [Fact]
     public void TheFirstPaneCrossedInTheWindowIsTheOneHit()
     {
         var panes = new[]

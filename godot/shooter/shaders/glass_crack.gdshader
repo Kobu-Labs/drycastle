@@ -90,6 +90,7 @@ void fragment() {
 		if (to_edge < keep) {
 			alpha = crack_line * 0.85 + 0.10;
 		} else {
+			if (hole_darkness < 0.01) { discard; } // a real opening: nothing to fill
 			col = vec3(0.025, 0.03, 0.035);
 			alpha = hole_darkness;
 		}

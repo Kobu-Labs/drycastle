@@ -709,7 +709,8 @@ public partial class NetServer : Node
             var d = HitMath.SpreadDirection(yaw + kick.YawRad + sway.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad + sway.PitchRad), HitMath.ShotSpread(shot.SpreadDegrees, w, c.Body.State, aiming), _rng);
             var dir = new Vector3(d.X, d.Y, d.Z);
             var range = w.Range > 0 ? w.Range : MaxShotRange;
-            var wall = WorldHit(eye, dir, range, out var shotCar);
+            var crossed = new List<GlassCross>();
+            var wall = BulletHit(eye, dir, range, out var shotCar, crossed);
             var (exposedGunner, pastHull) = ExposedGunnerBehind(shotCar, eye, dir, range, targets);
             var hit = GunnerCover.Raycast(N(eye), d, range, wall, targets, c.Id, exposedGunner, pastHull); // a flak gunner in the open is hit through his hull
             if (hit == null && HitMath.Raycast(N(eye), d, range, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
@@ -720,6 +721,7 @@ public partial class NetServer : Node
                 DamageVehicle(shotCar, HitMath.HitscanDamage(w, wall, false) * Vehicles.BulletDamageMultiplier, c.Id, (byte)shot.WeaponIndex, 0);
             else if (shotCar == null && wall <= range) BulletPuff(N(eye + dir * wall)); // dust where a bullet meets the ground or a wall (ticket #154)
             if (hit == null && wall <= range) ShotGlass(shotCar, eye, dir, wall, HitMath.HitscanDamage(w, wall, false)); // the pane the bullet crossed where it stopped (ADR 0007)
+            DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, d => HitMath.HitscanDamage(w, d, false));
         }
         else if (w.Kind == WeaponKind.Projectile)
         {

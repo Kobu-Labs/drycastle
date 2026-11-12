@@ -26,7 +26,8 @@ The motorcycle, bicycle, quad, amphibious transport and boat have no glass.
 - A bazooka rocket, an attack missile and a vehicle explosion damage every pane in the blast radius (`blast_damage` at the centre, nothing at the edge).
 - Crack stage from the fraction of hit points left: 1 when damaged, 2 at 66 %, 3 at 33 % (`crack_stages`).
 - At zero the pane is shattered. The fragments fly once, on the clients that see it happen.
-- A shot through a shattered vehicle pane can hit a rider behind it (`shattered_exposes_riders`). A building's wall stays solid.
+- A bullet, pellet, roof gun or door gun round goes through a vehicle's glass, whole or shattered (`BulletHit`): it damages the pane it enters by, goes on inside (riders are open to it) and leaves by the next pane it crosses, then on to whatever is beyond, through further panes the same way. With no pane to leave by the hull stops it 1.5 m in. A building's wall stays solid. This replaces ADR 0007 decision 3; `shattered_exposes_riders` in `glass.json` is no longer read.
+- A shattered pane of a model with its own `glass_N` node leaves a real opening (no dark fill); the flak truck (solid glasshouse) and the Kenney cars keep a dark fill.
 - A new round and a repaired vehicle make panes whole again.
 
 ## Code

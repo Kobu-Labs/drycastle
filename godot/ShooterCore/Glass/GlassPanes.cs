@@ -34,6 +34,17 @@ public readonly record struct GlassPaneRect(Vector3 Centre, Vector3 Normal, Vect
         return true;
     }
 
+    /// <summary>Metres along the ray to where it crosses the pane from the inside (a ray leaving the vehicle), or null. <paramref name="dir"/> is a unit vector.</summary>
+    public float? CrossFromInside(Vector3 origin, Vector3 dir)
+    {
+        var facing = Vector3.Dot(dir, Normal);
+        if (facing < 1e-4f) return null;
+        var t = Vector3.Dot(Centre - origin, Normal) / facing;
+        if (t < 0) return null;
+        var p = origin + dir * t - Centre;
+        return Contains(Vector3.Dot(p, Right), Vector3.Dot(p, Up)) ? t : null;
+    }
+
     /// <summary>
     /// Metres along the ray to where it crosses the pane from outside, or null: it misses the pane (its outline, else its rectangle), runs along it, starts behind it
     /// or comes from the inside. <paramref name="dir"/> is a unit vector.

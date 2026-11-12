@@ -9,7 +9,7 @@ namespace Suchohrad.Shooter;
 /// of the base map's buildings (windows.json) and the panes of the vehicle types (vehicles.json "glass"). A bullet that stopped on a wall
 /// or a hull damages the pane it crossed there, a blast damages the panes in its radius, and the changes of a tick go out as one reliable
 /// event per pane. A joiner gets every pane that is not whole. Neither kind of pane has a collider of its own: a building's wall behind
-/// its pane stays solid, and a shattered vehicle pane only lets shots through to the riders (glass.json shattered_exposes_riders).
+/// its pane stays solid, and a bullet goes through a vehicle's panes (<see cref="BulletHit"/>) and hits what is inside and beyond, damaging every pane it crossed.
 /// </summary>
 public partial class NetServer
 {
@@ -64,27 +64,62 @@ public partial class NetServer
         return GlassRules.FirstCrossed(car.Def.GlassRects, GlassRules.ToVehicle(N(from), feet, yaw), GlassRules.DirToVehicle(N(dir), yaw), wall - 0.1f, wall + GlassData.VehicleReach);
     }
 
+    /// <summary>A pane a bullet went through: the vehicle, the pane and the metres along the ray.</summary>
+    readonly record struct GlassCross(ServerCar Car, int Pane, float Dist);
+
+    /// <summary>Panes one bullet may pass (an entry and an exit pane per vehicle).</summary>
+    const int MaxGlassPasses = 6;
+    /// <summary>How far a bullet that came in through a pane and found no pane to leave by goes on inside the hull before the hull stops it.</summary>
+    const float InsideRun = 1.5f;
+
     /// <summary>
-    /// A rider of <paramref name="hull"/> the ray reaches through a shattered pane (the nearest one whose body it crosses), or null: the
-    /// pane it crosses stands, the vehicle has no glass there, nobody sits behind it, or glass.json keeps riders behind the hull.
+    /// As <see cref="WorldHit"/> for a bullet, pellet or gun round: a vehicle's glass does not stop it. A ray that reaches a vehicle through
+    /// one of its panes (whole or shattered) goes on inside, so a rider is open to it, and leaves through the next pane it crosses on
+    /// that vehicle, then on to whatever is beyond (another window, a player, a wall). With no pane to leave by, the hull stops it
+    /// <see cref="InsideRun"/> metres in. Every pane passed is added to <paramref name="crossed"/> for <see cref="DamageCrossed"/>. Returns the
+    /// distance of the stop, and the vehicle it stopped on (null: the world or nothing).
     /// </summary>
-    HitTarget? RiderBehindShatteredGlass(ServerCar hull, Vector3 from, Vector3 dir, float max, IReadOnlyList<HitTarget> targets)
+    float BulletHit(Vector3 from, Vector3 dir, float max, out ServerCar? car, List<GlassCross> crossed, ServerCar? ignore = null)
     {
-        if (!GlassData.ShatteredExposesRiders || hull.Def.Glass.Count == 0) return null;
-        var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
-        q.CollisionMask = CollisionLayers.Bullets;
-        q.Exclude = PlayerRids();
-        var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
-        if (r.Count == 0 || r["collider"].As<GodotObject>() != hull) return null;
-        var pane = VehiclePaneCrossed(hull, from, dir, from.DistanceTo(r["position"].AsVector3()));
-        if (pane < 0 || !_glass.IsShattered(new GlassPaneKey(hull.Id, (ushort)pane))) return null;
-        var riders = new List<HitTarget>();
-        foreach (var t in targets) if (hull.Seat.SeatOf(t.Id) >= 0) riders.Add(t);
-        if (riders.Count == 0) return null;
-        // no shooter to leave out here: GunnerCover refuses a shooter who is the target himself
-        if (HitMath.Raycast(N(from), N(dir), max, float.PositiveInfinity, riders, ushort.MaxValue) is not { } hit) return null;
-        foreach (var t in riders) if (t.Id == hit.Id) return t;
-        return null;
+        var off = 0f;
+        var exclude = ignore == null ? null : new Godot.Collections.Array<Rid>(PlayerRids()) { ignore.GetRid() };
+        var n = N(from); var nd = N(dir);
+        for (var pass = 0; ; pass++)
+        {
+            var q = PhysicsRayQueryParameters3D.Create(from + dir * off, from + dir * max);
+            q.CollisionMask = CollisionLayers.Bullets;
+            q.Exclude = exclude ?? PlayerRids();
+            var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+            if (r.Count == 0) { car = null; return float.PositiveInfinity; }
+            car = r["collider"].As<GodotObject>() as ServerCar;
+            var wall = from.DistanceTo(r["position"].AsVector3());
+            if (car == null || car.Destroyed || car.Def.Glass.Count == 0 || pass >= MaxGlassPasses) return wall;
+            var rects = car.Def.GlassRects;
+            var feet = N(car.GlobalPosition); var yaw = car.State.Yaw;
+            var lo = GlassRules.ToVehicle(n, feet, yaw); var ld = GlassRules.DirToVehicle(nd, yaw);
+            var entry = GlassRules.FirstCrossed(rects, lo, ld, wall - 0.1f, wall + GlassData.VehicleReach);
+            if (entry < 0) return wall;
+            var entryT = rects[entry].Cross(lo, ld)!.Value;
+            crossed.Add(new GlassCross(car, entry, entryT));
+            var exit = -1; var exitT = float.PositiveInfinity;
+            for (var i = 0; i < rects.Count; i++)
+                if (i != entry && rects[i].CrossFromInside(lo, ld) is { } t && t > entryT + 0.05f && t < exitT) { exit = i; exitT = t; }
+            if (exit < 0) return entryT + InsideRun; // no way out: the hull takes the round
+            crossed.Add(new GlassCross(car, exit, exitT));
+            off = exitT + 0.02f;
+            exclude = new Godot.Collections.Array<Rid>(exclude ?? PlayerRids()) { car.GetRid() };
+        }
+    }
+
+    /// <summary>The panes a bullet went through that lie nearer than <paramref name="before"/> (where it hit a player, else infinity) take <paramref name="damage"/> of their distance each.</summary>
+    void DamageCrossed(List<GlassCross> crossed, float before, Func<float, float> damage)
+    {
+        foreach (var x in crossed)
+        {
+            if (x.Dist >= before || x.Car.Destroyed) continue;
+            var dmg = damage(x.Dist);
+            if (dmg > 0 && _glass.Damage(new GlassPaneKey(x.Car.Id, (ushort)x.Pane), dmg, VehiclePaneHp(x.Car.Def, x.Pane))) _glassHits++;
+        }
     }
 
     /// <summary>A blast at <paramref name="at"/> with <paramref name="radius"/>: every pane in it takes the blast damage of glass.json by its distance.</summary>
