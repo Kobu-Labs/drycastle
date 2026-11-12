@@ -119,6 +119,7 @@ class ParcelContext:
     verge: dict[str, BaseGeometry] | None = None  # "gravel" and "dirt" verge blobs along the roads, clipped
     water: BaseGeometry | None = None  # water parcels near the parcel (grass beside them stands fresh)
     road_lines: list[tuple[LineString, float]] | None = None  # centre lines and widths of the road edges near the parcel
+    plain_road: BaseGeometry | None = None  # carriageways of the dike's regular roads (``detail.dike.not_track``): no track, no lawn over them
     dike: bool = False  # this part of the parcel is the flood dike: it gets the dike recipe, whatever the parcel kind
 
 
@@ -1011,7 +1012,11 @@ class Village:
         self.t_tree = shapely.STRtree([Point(t[0], t[1]) for t in self.trees])
         self.road_polys = [ln.buffer(float(e["width"]) / 2) for e, ln in edge_lines(graph)]
         self.r_tree = shapely.STRtree(self.road_polys)
-        self.road_lines = [(ln, float(e["width"])) for e, ln in edge_lines(graph)]
+        # the dike's track follows these edges only: not the ways of ``detail.dike.not_track`` (regular roads beside the dike's own)
+        not_track = set(self.cfg["dike"].get("not_track", []))
+        self.road_lines = [(ln, float(e["width"])) for e, ln in edge_lines(graph) if e.get("osm_id") not in not_track]
+        self.plain_polys = [ln.buffer(float(e["width"]) / 2) for e, ln in edge_lines(graph) if e.get("osm_id") in not_track]
+        self.plain_tree = shapely.STRtree(self.plain_polys)
         self.rl_tree = shapely.STRtree([ln for ln, _ in self.road_lines])
         self.road_osm: dict[str, list[LineString]] = {}
         for e, ln in edge_lines(graph):
@@ -1090,6 +1095,7 @@ class Village:
             blocked=_union(blocked) if blocked else None,
             verge=verge,
             road_lines=self._near(self.rl_tree, self.road_lines, near),
+            plain_road=_union(self._near(self.plain_tree, self.plain_polys, near)) if dike and self.plain_polys else None,
             dike=dike,
             water=_union(self._near(self.w_tree, self.water_polys, part.buffer(float(self.cfg["tint"]["water_m"])))) if self.water_polys else None,
         )

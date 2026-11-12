@@ -107,3 +107,31 @@ def test_the_border_is_ragged_the_green_spills_over_it_and_the_grass_thins_out(c
     deep = [c for c in res.clutter if ctx.polygon.exterior.distance(Point(c["x"], c["y"])) > 4 and ctx.polygon.contains(Point(c["x"], c["y"])) and abs(c["y"] - 15) > 3]
     far = [c for c in res.clutter if not ctx.polygon.buffer(3.2).contains(Point(c["x"], c["y"]))]
     assert len(deep) > 200 and not far
+
+
+def test_a_regular_road_beside_the_dike_gets_no_track(cfg) -> None:
+    from drycastle_pipeline.config import area_paths
+    from drycastle_pipeline.detail import Village
+    from drycastle_pipeline.edits import DEFAULT_EDITS
+    from drycastle_pipeline.rules import DEFAULT_RULES
+
+    work = area_paths("village").work
+    if not (work / "roads.json").exists():
+        pytest.skip("no village work data")
+    skip = set(cfg["dike"]["not_track"])
+    assert skip
+    v = Village(work, DEFAULT_RULES, "village", DEFAULT_EDITS)
+    skipped = {ln.wkb for w in skip for ln in v.road_osm.get(w, [])}
+    assert skipped  # the ways exist in the roads
+    assert not skipped & {ln.wkb for ln, _ in v.road_lines}
+
+
+def test_a_plain_road_in_the_dike_has_no_lawn_over_it(cfg) -> None:
+    ctx = dike()
+    plain = LineString([(0, 5), (50, 5)]).buffer(1.5)
+    ctx.plain_road = plain
+    ctx.road = unary_union([ctx.road, plain])
+    res = dike_detail(ctx, cfg)
+    lawn = unary_union([p.geom for p in res.patches if p.layer == "lawn"])
+    assert lawn.intersection(plain.buffer(-0.2)).area < 1e-6
+    assert lawn.intersection(ctx.polygon.buffer(-1).difference(plain.buffer(2))).area > 100  # the rest is still lawn

@@ -252,7 +252,7 @@ objects (a circle of half the footprint diagonal plus 0.3 m), hand-drawn regions
   gravel track (patch layer `dike_track`, texture `dike_gravel`: fine light pebbles with hard-edged grass patches, 8 m x 4 m tile)
   about 2.2 m wide (`track_width_m` 1.5 plus its edges wandering by up to 0.7 m each side, with loose pebbles beyond), narrower than
   the 3 m carriageway: the track lies 8 cm above the terrain, the lawn 7 cm and so covers the rest of the road ribbon (5 to 6 cm)
-  inside the parcel, and the track is laid in pieces of 8 m, each along its own stretch and start so the patches do not repeat in rows; the rest is flat
+  inside the parcel (except the ways of `dike.not_track`, regular roads beside the dike's own such as `w825143074` in P-0821: no track and no lawn over them), and the track is laid in pieces of 8 m, each along its own stretch and start so the patches do not repeat in rows; the rest is flat
   green lawn; the thick grass is clutter (`tall_grass`, `tuft`, `straw`, about 1 per m2, taller the further from the track) plus tufts
   on the track's grass patches (found by reading the texture). Only the part of a parcel inside the terrain coverage gets detail (of
   P-0821's 73,000 m2 about 7,700 m2). About 30k patch triangles and 14k instances for the three parcels; `tall_grass` reaches its
