@@ -584,7 +584,7 @@ public partial class Hud : CanvasLayer
         UpdateFeed(now);
         UpdateCrosshair();
         UpdateBreath();
-        var want = _phase == MatchPhase.Ending; // the round-end results only; no held-key scoreboard
+        var want = (Input.IsActionPressed("scoreboard") && !ChatOpen) || _phase == MatchPhase.Ending; // Tab completes in the chat box
         if (want != _boardShown || (want && _boardDirty)) UpdateBoard(want);
     }
 
@@ -752,7 +752,7 @@ public partial class Hud : CanvasLayer
             Set(_boardTitle, names == "" ? Strings.T("hud.phase.ending") : Strings.F(_winners.Count > 1 ? "score.ending.tie" : "score.ending", names));
         }
         else Set(_boardTitle, Strings.T("score.title"));
-        Set(_boardFoot, Strings.T("score.hint.next"));
+        Set(_boardFoot, Strings.T(ending ? "score.hint.next" : "score.hint.hold"));
         var sorted = HudLogic.Sort(_rows);
         // keep the local row visible even when the room exceeds the pre-built rows
         if (sorted.Count > BoardRows)
