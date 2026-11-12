@@ -212,6 +212,77 @@ a mesh), `replaces` (the baked `region_<ID>` nodes to hide: the named IDs, even 
 every region overlapping a named one, whose visible area changes with it), `triangles`, `glb`,
 `timing_s`. Like `parcel-run --glb` it is for hot reload; nothing under `data/` is written.
 
+## Detail (ground patches and clutter)
+
+`make detail` (stage `detail`, in `run-all` between `props` and `export`; `AREA=village` for the village) gives the
+ground something to look at. It reads `parcels`, `buildings`, `roads`, `terrain`, `props` (fences, trees), `objects`
+and `edits.json` (regions), and writes `data/work/detail.json` (clutter), `detail_patches.npy` and
+`detail_patches.json` (patch triangles). `python -m suchohrad_pipeline detail --work DIR` reads and writes another work
+directory (experiments). The module is `detail.py`; every number is in the `detail` section of `rules.yaml`.
+
+**Area types and recipes.** `detail.area_type(parcel)` says what kind of ground a parcel is and so which recipe runs:
+`garden` (parcel kinds `garden` and `building_plot`), `field` (`other`), `forest`, `road`, or nothing (`water`). It is
+the only place that reads the parcel kind; a real area-type layer replaces that one function. Parcels are clipped to
+the terrain coverage first (a parcel part under 4 m2 gets nothing). Water bodies, buildings, fences, trunks, placed
+objects (a circle of half the footprint diagonal plus 0.3 m), hand-drawn regions and the carriageway are kept free.
+
+* **garden**: lawn pieces on tan plots (a green garden gets tones of its own terrain colour instead; `lawn.terrain_mix`),
+  worn dirt along walls and in the open, a gravel path from the gate (the middle of the longest unfenced stretch of the
+  boundary within 4 m of the carriageway) to the nearest building, up to two vegetable beds (`soil_rows` texture, turned
+  with the main building), leaf litter under trees; tufts (thick along walls and fences), flower clusters, pebbles on
+  gravel, dirt and along walls, a few rocks, fallen leaves and sticks under trees.
+* **field** (meadow, field): large tone patches, dirt headlands along the boundary, a furrowed strip in some of the larger
+  parcels, sparse tufts, pebbles, rocks and flowers that thicken towards the edge and on the tones.
+* **forest**: leaf litter under some trees, dark and light forest-floor tones, a few bare spots; leaves, sticks, rocks,
+  pebbles, tufts and ferns in groups round the trunks.
+* **road** (road parcels): a grass shoulder (`road.grass_width_m`) beside the carriageway, tufts along the asphalt edge,
+  pebbles on the gravel.
+* **verges**: along `track`, `residential`, `tertiary` and `service` roads, gravel and dirt blobs lie at the carriageway
+  edge (built once per road edge, every parcel they touch takes its share), whatever the parcel kind.
+
+**Patches** are polygons draped on the terrain (`regions.drape`, so they follow the ground triangle by triangle) 2 cm
+above it. The layers (`detail.PATCH_PRIORITY`: gravel, verge gravel, bed, furrow, dirt, verge dirt, litter, two tones,
+lawn) are clipped in that order, so no two patches overlap and nothing z-fights; parcels are disjoint. Hand-drawn
+regions (3 cm) are cut out of every patch. Patches go into the chunk GLBs as the node `detail_patches` (flat colours)
+and one `detail_patches_tex_<texture id>` node per texture (`dirt`, `gravel`, `leaf_litter`, `soil_rows`), at most five per
+chunk; they have no collision. A patch triangle belongs to the chunk of its centroid (terrain cells never cross a chunk
+border). The village has about 143k patch triangles (garden 76k, forest 33k, field 24k, road 10k), which is why the shapes
+are few, soft and simplified: the terrain mesh cuts every patch at its 4 m cells, so area costs about 0.125 triangles
+per m2 before any outline.
+
+**Clutter** is instances, not triangles. `clutter.json` (map 0.8.0, `files.clutter`; the export copies
+`work/detail.json`):
+
+```
+{"format_version": 1, "axes": "map metres: x east, y north, z up (ground height at the instance)",
+ "chunk_size_m": 250,
+ "kinds": {"tuft": {"mesh": "tuft"}, "flower": {...}, "pebble": {...}, "rock": {...}, "leaf": {...}, "stick": {...}, "fern": {...}},
+ "chunks": {"<ix>_<iy>": {"<kind>": [[x, y, z, rot_rad, scale], ...]}}}
+```
+
+Coordinates have two decimals; `rot` turns about the vertical axis counter-clockwise seen from above; `scale` is uniform;
+`z` is the terrain height at (x, y) (instances are only placed on meshed terrain cells). Chunks and kinds are sorted,
+a chunk with no instance is absent. `clutter_meshes.glb` (`files.clutter_meshes`) has one node per kind named as the kind
+(`mesh`), flat vertex colours (a few shades of the kind's palette across its faces; an instance varies only in turn and
+scale), glTF axes (Y up), at scale 1 in metres, standing on y = 0 with its middle on the origin, 4 to 27 triangles
+(`detail_meshes.py`: tuft 15, flower 27, pebble 8, rock 18, leaf 4, stick 12, fern 18). The game draws them as one
+instanced mesh per chunk and kind, near the player only; the headless server ignores them. Nothing in the clutter is solid.
+
+Budgets: `detail.caps_per_chunk` caps each kind per chunk (surplus instances go by a hash of the position, so the result is
+stable); the village has about 139k instances (`clutter.json` 4.6 MB: tuft 89k, pebble 17k, leaf 11k, flower 8k, fern 8k,
+rock 2.4k, stick 2.2k) and the stage takes about 1 to 1.5 minutes. The densities are low in fields and forest on
+purpose: a stored instance costs about 33 bytes, so the open land (150 ha) cannot hold meadow-like density; if that is
+wanted, generate it near the player at run time from a per-chunk density instead.
+
+All random choices are seeded with `sha256("<parcel id>:detail:<purpose>")` (verges with the road edge ID), so reruns give
+identical files. `uv run python -m suchohrad_pipeline.detail_preview --parcel P-0637 --area village` draws the detail of
+one parcel top-down from the real patches, textures and clutter meshes into `out/detail/`.
+
+**Limits.** `parcel-run` (editor hot reload) does not regenerate detail: patches live in chunk-level nodes, not in a
+parcel's `props` node, so after editing a parcel's fence, trees or objects run `make props detail export` to move the detail
+with them. The stage reads the props work file, so it must run after `make props`. Per-parcel opt-out of detail is not
+implemented.
+
 ## Export
 
 `make export` writes `out/map/` (gitignored): `chunks/chunk_<ix>_<iy>.glb` (one glTF per 250 m

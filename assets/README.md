@@ -135,7 +135,9 @@ events (`godot/shooter/data/sounds.json`). All CC0 (OpenGameArt pages above, che
 ## Texture library (generated, 2026-11-12)
 
 `suchohrad-generated-textures/` holds the tileable textures that map meshes can use by id: `brick_red`, `brick_white`,
-`stone`, `concrete`, `picket`, `wire` (256 x 256 RGBA PNG each). They are original pixels computed by
+`stone`, `concrete`, `picket`, `wire`, and the ground textures of the detail stage `dirt`, `gravel`, `leaf_litter`,
+`soil_rows` (256 x 256 RGBA PNG each; the four ground ones are opaque, carry their own colours (a white tint shows them as drawn) and
+tile in 1 to 2 m: `dirt` 2 m, `gravel` 1 m, `leaf_litter` 1.5 m, `soil_rows` 1 m with the rows along u). They are original pixels computed by
 `scripts/make_textures.py` (standard library only; `python3 -I scripts/make_textures.py` rebuilds them byte for byte,
 `--meta` prints the manifest entries, `--sheet FILE` writes a contact sheet), CC0, in a flat style: a few tones, hard
 edges, little noise. The manifest's top-level `textures` array lists them: `id` (lower case, digits and underscores:
