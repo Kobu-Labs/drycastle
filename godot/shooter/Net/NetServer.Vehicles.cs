@@ -14,7 +14,7 @@ public partial class NetServer
     /// <summary>Vehicle type of the car smoke arena (vehicles.json id).</summary>
     public string SmokeKind = "car";
     readonly List<ServerCar> _cars = new();
-    const float EnterRange = 3f, RunOverCooldown = 0.8f;
+    const float RunOverCooldown = 0.8f;
     int _destroyedReturns, _vehicleHits, _vehicleBlasts, _blastHits, _chainHits;
     int _seatSwitches;
     int _carEnters, _carExits, _runOvers, _runOverKills, _carReturns, _carResets;
@@ -176,17 +176,19 @@ public partial class NetServer
 
     bool TryEnterCar(Client c)
     {
-        ServerCar? best = null; var bd = EnterRange;
+        ServerCar? best = null; var bd = float.MaxValue;
         var p = c.Body.GlobalPosition;
         foreach (var car in _cars)
         {
-            if (car.Destroyed || !car.Seat.HasFree || Mathf.Abs(car.GlobalPosition.Y - p.Y) > 2.5f) continue;
-            var d = new Vector2(car.GlobalPosition.X - p.X, car.GlobalPosition.Z - p.Z).Length();
+            if (car.Destroyed || !car.Seat.HasFree) continue;
+            // within the vehicle's enter radius of its footprint (#217), not of its centre
+            if (!VehicleReach.CanEnter(N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(p), Vehicles!.EnterRadiusOf(car.Def))) continue;
+            var d = VehicleReach.DistanceToFootprint(N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(p));
             if (d <= bd) { best = car; bd = d; }
         }
         if (best == null) return false;
         // the free seat nearest to the player (a roof gunner seat is a little further out than the car's centre)
-        var seat = best.Seat.NearestFreeSeat(best.Def, N(best.GlobalPosition), best.State.Yaw, N(p), EnterRange + 1.5f);
+        var seat = best.Seat.NearestFreeSeat(best.Def, N(best.GlobalPosition), best.State.Yaw, N(p), float.MaxValue); // any free seat of a vehicle in reach: the nearest one
         var wasEmpty = !best.Seat.Occupied;
         if (seat < 0 || !best.Seat.TryEnter(c.Id, seat)) return false;
         c.Car = best; c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.Body.InVehicle = true; c.FlakSent = null;

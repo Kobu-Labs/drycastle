@@ -37,6 +37,8 @@ public partial class NetClient
         /// <summary>Headlights on (the record's bit), braking (speed fell this snapshot) and the lamps (null: the type has none).</summary>
         public bool Lights, Braking;
         public CarLights? Lamps;
+        /// <summary>The solid box predicted on-foot movement collides with (#217).</summary>
+        public StaticBody3D? Solid;
     }
 
     readonly Dictionary<ushort, CarView> _cars = new();
@@ -59,6 +61,7 @@ public partial class NetClient
             _cars[id] = v;
             ShowGlassOf(id); // panes whose state arrived before the vehicle was drawn (ADR 0007)
         }
+        v.Solid ??= VehicleCollider.Make(Owned, Vehicles.Vehicles[v.Kind]);
         v.Lamps ??= ShotFx.Enabled ? CarLights.Attach(v.Node, Vehicles!.Vehicles[v.Kind]) : null;
         v.Driver = VehicleRecord.Driver(rec);
         v.Lights = VehicleRecord.Lights(rec);
@@ -72,6 +75,7 @@ public partial class NetClient
         }
         v.LastTick = tick; v.Pos = rec.Position; v.Yaw = rec.YawRad;
         v.Buf.Push(tick, rec.Position, rec.YawRad, 0);
+        VehicleCollider.Place(v.Solid, new Vector3(rec.Position.X, rec.Position.Y, rec.Position.Z), rec.YawRad, !v.Destroyed);
     }
 
     /// <summary>Applies the stage and destroyed flag of a record: smoke stage emitters; a destroyed vehicle disappears (its blast is drawn here if the event has not arrived), a returned one shows again.</summary>
@@ -255,11 +259,15 @@ public partial class NetClient
 
     CarView? NearestFreeCar(Vector3 p)
     {
-        CarView? best = null; var bd = 3f;
+        CarView? best = null; var bd = float.MaxValue;
+        if (Vehicles == null) return null;
         foreach (var v in _cars.Values)
         {
-            if (v.Driver != 0 || Mathf.Abs(v.Pos.Y - p.Y) > 2.5f) continue; // as the server: not one hovering overhead
-            var d = new Vector2(v.Pos.X - p.X, v.Pos.Z - p.Z).Length();
+            if (v.Driver != 0 || v.Destroyed) continue;
+            var def = Vehicles.Vehicles[v.Kind];
+            var np = new NVec3(p.X, p.Y, p.Z);
+            if (!VehicleReach.CanEnter(v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, np, Vehicles.EnterRadiusOf(def))) continue; // as the server: within the radius of the footprint, not one hovering overhead
+            var d = VehicleReach.DistanceToFootprint(v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, np);
             if (d <= bd) { best = v; bd = d; }
         }
         return best;
