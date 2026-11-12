@@ -79,8 +79,10 @@ viewing and headless servers are unaffected):
   or a new chunk is not swapped in; the viewer says to restart.
 - `editor-state.json` (written at most once a second while watching, an ignored build output):
   `{"camera": {"x": east, "y": north, "z": elevation, "yaw_deg": view direction counter-clockwise from east},
-  "format_version": 1, "selected": []}`; x and y are in the map frame (local metres). `selected` is the list of
-  selected parcel IDs while the editor mode is on (empty otherwise).
+  "format_version": 1, "selected": [], "sketch": {...}}`; x and y are in the map frame (local metres). `selected` is the list of
+  selected parcel IDs while the editor mode is on (empty otherwise). `sketch` holds the marks of the Sketch tool in
+  absolute S-JTSK metres: `{"lines": [{"closed": false, "id": "L1", "points": [[x, y], ...]}], "next_line": 1,
+  "next_point": 1, "points": [{"id": "A", "x": .., "y": ..}]}` (see "Sketch tool"); a sketch change is written within a frame.
 - `make viewer-edit-smoke` exports a fresh slice map and a work-directory copy into a scratch directory
   (`SMOKE_DIR=...`, default a temp dir), starts the viewer headless with `--watch`, writes edits files during the
   run and checks objects, swapped props, colliders, replacement without leaks and survival of a broken file.
@@ -326,6 +328,25 @@ renders (the name is the tooltip), and adds the cables.
   since the last export, like any placed object, appears only after the next `make props export`.
 
 There is no headless smoke for this tool yet.
+
+### Sketch tool
+
+Rail icon 9. Temporary marks on the ground that a prompt can name ("plant trees inside L1", "a lamp at A"), read by the
+MCP server's `get_sketch`. One sketch holds any number of **points** (`A`, `B`, ... `Z`, `AA`, ...) and **lines** (`L1`,
+`L2`, ...); every mark shows its name as a tag in the 3D view, in every tool. The marks are not map content: nothing is
+written to `edits.json`. They live in `editor-state.json` (`sketch`), so they survive a viewer restart, until cleared.
+
+- `P` / `L` (or the two buttons) choose what a click makes. **Point**: each LMB (or `C`, the spot under the cursor, the
+  screen centre when the cursor is over the panel) marks a point. **Line**: LMB or `C` adds corners (0.5 m grid, Ctrl
+  free); Enter, or a click on the last corner again, finishes it; Shift+Enter, or a click on the first corner, closes
+  it (3+ corners, refused with the reason when the outline would cross itself). A closed line means the ground inside.
+  Enter with one corner makes a point. Backspace or Ctrl+Z takes the last corner back; a ghost shows the next mark.
+- Click a mark's handle or its row in the panel, or step with `[` `]`, to select it; `Del` deletes it. "Clear the
+  sketch" removes all marks (asks first) and the names start again at `A` and `L1`.
+- Every sketch change (a new mark, a delete, a clear) is one step on the editor's undo stack, in order with the saves:
+  Ctrl+Z / Ctrl+Y. Esc steps back one level: the line being drawn, the selection, the tool.
+- Checked by the build and by the `get_sketch` tests on the state file format only; there is no headless smoke for the
+  tool yet.
 
 ### Regions tool
 

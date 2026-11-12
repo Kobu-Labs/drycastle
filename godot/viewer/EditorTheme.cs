@@ -28,6 +28,8 @@ public static class EditorTheme
     public static readonly Color Warn = new(1f, 0.68f, 0.25f);
     public static readonly Color Danger = new(1f, 0.50f, 0.45f);
     public static readonly Color Scrim = new(0f, 0f, 0f, 0.75f);
+    /// <summary>Sketch marks (temporary points and lines): apart from the selection yellow, the region accent and the hover white.</summary>
+    public static readonly Color Sketch = new(1f, 0.55f, 0.90f);
 
     public static StyleBoxFlat Box(Color bg, int pad = Space, Color? border = null, int radius = Radius)
     {
@@ -130,6 +132,10 @@ public static class EditorTheme
         t.SetTypeVariation("DangerButton", "Button");
         t.SetStylebox("normal", "DangerButton", Box(new Color(Danger, 0.25f), 8, Danger));
         t.SetStylebox("hover", "DangerButton", Box(new Color(Danger, 0.45f), 8, Danger));
+        // the name tag of a sketch mark, drawn over the 3D view
+        t.SetTypeVariation("SketchTag", "Label");
+        t.SetColor("font_color", "SketchTag", Sketch);
+        t.SetStylebox("normal", "SketchTag", Box(Scrim, Space / 2));
         t.SetTypeVariation("Warn", "Label");
         t.SetColor("font_color", "Warn", Warn);
 

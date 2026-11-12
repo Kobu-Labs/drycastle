@@ -73,6 +73,7 @@ from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 DEFAULT_STATE = REPO_ROOT / "out" / "editor-state.json"
 STATE_FORMAT_VERSION = 1
 STATE_STALE_S = 600.0  # a selection older than this probably comes from a viewer that has exited
+SKETCH_PARCELS_MAX = 30  # parcels listed per sketch line, largest overlap first
 
 ANCHORS = ("front", "back", "left", "right", "centre", "near_building")
 EDGE_MERGE_DEG = 8.0  # consecutive polygon edges turning less than this form one "side"
@@ -589,20 +590,38 @@ class ParcelEditTools:
             row["distance_m"] = round(distance, 1)
         return row
 
+    def _state_doc(self, guide: str, what: str) -> tuple[dict, float, list[str]]:
+        """The viewer's editor-state.json: the document, its age in seconds and a staleness warning."""
+        path = self.settings.state_path
+        if not path.is_file():
+            raise ToolError(f"no editor state file at {path}. {guide}")
+        try:
+            doc = json.loads(path.read_text())
+            if not isinstance(doc, dict):
+                raise TypeError("not a JSON object")
+            if doc.get("format_version") != STATE_FORMAT_VERSION:
+                raise ValueError(f"format_version {doc.get('format_version')!r}")
+        except (OSError, ValueError, TypeError) as exc:
+            raise ToolError(f"editor state file {path} is unreadable ({exc}). {guide}") from exc
+        age = max(0.0, time.time() - path.stat().st_mtime)
+        warnings = []
+        if age > STATE_STALE_S:
+            warnings.append(
+                f"the state file is {age / 60:.0f} min old; the viewer may no longer be running, "
+                f"so this {what} could be outdated"
+            )
+        return doc, age, warnings
+
     def _read_state(self) -> tuple[list[str], dict, list[str]]:
         path = self.settings.state_path
         guide = (
             "Start the viewer in editor mode (godot --path godot/viewer -- --editor --watch ...), "
             "select parcels by clicking, then try again; or pass parcel IDs explicitly."
         )
-        if not path.is_file():
-            raise ToolError(f"no editor state file at {path}. {guide}")
+        doc, age, warnings = self._state_doc(guide, "selection")
         try:
-            doc = json.loads(path.read_text())
-            if doc.get("format_version") != STATE_FORMAT_VERSION:
-                raise ValueError(f"format_version {doc.get('format_version')!r}")
             ids = list(doc["selected"])
-        except (OSError, ValueError, KeyError, TypeError) as exc:
+        except (KeyError, TypeError) as exc:
             raise ToolError(f"editor state file {path} is unreadable ({exc}). {guide}") from exc
         if not ids:
             raise ToolError(
@@ -616,15 +635,110 @@ class ParcelEditTools:
                 f"from another area or an older map (this server uses --area {self.settings.area}). "
                 "Check the --area/--state options."
             )
-        age = max(0.0, time.time() - path.stat().st_mtime)
-        warnings = []
-        if age > STATE_STALE_S:
-            warnings.append(
-                f"the state file is {age / 60:.0f} min old; the viewer may no longer be running, "
-                "so this selection could be outdated"
-            )
         extra = {"selection_age_s": round(age, 1), "camera": doc.get("camera")}
         return sorted(ids), extra, warnings
+
+    # get_sketch ----------------------------------------------------------------------------
+    def get_sketch(self, id: str | None = None) -> dict:
+        """The marks the user drew in the viewer's Sketch tool (see the registered tool description)."""
+        m = self.map
+        path = self.settings.state_path
+        guide = (
+            "Start the viewer in editor mode (godot --path godot/viewer -- --editor ...), open the "
+            "Sketch tool (9), mark points (P) or draw lines (L) on the ground, then try again."
+        )
+        doc, age, warnings = self._state_doc(guide, "sketch")
+        sketch = doc.get("sketch")
+        if not isinstance(sketch, dict):
+            raise ToolError(
+                f"the editor state file {path.name} has no sketch: the viewer that wrote it is older "
+                "than the Sketch tool. Rebuild and restart it (make editor)."
+            )
+        try:
+            points = [(str(p["id"]), float(p["x"]), float(p["y"])) for p in sketch.get("points", [])]
+            lines = [
+                (str(ln["id"]), bool(ln["closed"]), [(float(x), float(y)) for x, y in ln["points"]])
+                for ln in sketch.get("lines", [])
+            ]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ToolError(f"the sketch in {path} is unreadable ({exc}). {guide}") from exc
+        names = [p[0] for p in points] + [ln[0] for ln in lines]
+        if not names:
+            raise ToolError(f"nothing is sketched in the viewer (state file {path.name}). {guide}")
+        if id is not None:
+            if id not in names:
+                raise ToolError(f"the sketch has no {id!r}; it has {', '.join(names)}")
+            points = [p for p in points if p[0] == id]
+            lines = [ln for ln in lines if ln[0] == id]
+
+        on_map = False
+        point_rows = []
+        for pid, x, y in points:
+            parcel = m.parcel_at(*m.to_local(x, y))
+            on_map = on_map or parcel is not None
+            point_rows.append({
+                "id": pid,
+                "position": _pt(x, y),
+                "parcel": parcel,
+                "kind": m.parcels[parcel]["kind"] if parcel else None,
+            })
+        line_rows = []
+        for lid, closed, pts in lines:
+            local = [m.to_local(x, y) for x, y in pts]
+            closed = closed and len(local) >= 3
+            if len(local) < 2:
+                warnings.append(f"{lid} has fewer than 2 corners and is left out")
+                continue
+            geom: Any = Polygon(local) if closed else LineString(local)
+            row: dict = {
+                "id": lid,
+                "closed": closed,
+                "points": [_pt(x, y) for x, y in pts],
+                "length_m": round(geom.length, 1),
+                "bbox": [_r3(v) for v in LineString(pts).bounds],
+            }
+            if closed:
+                row["area_m2"] = round(geom.area, 1)
+            if closed and not geom.is_valid:
+                warnings.append(f"{lid} crosses itself, so its area and the parcels it covers are not reliable")
+                row["parcels"] = []
+                line_rows.append(row)
+                continue
+            if closed:
+                c = geom.centroid
+                row["centroid"] = m.to_abs(c.x, c.y)
+            # what the mark lies on: the part of each parcel inside a closed line, the length of a line on each parcel
+            key = "area_m2" if closed else "length_m"
+            hits = []
+            for parcel in m.parcels_near(geom, 0.0):
+                part = geom.intersection(m.polys[parcel])
+                size = part.area if closed else part.length
+                if size <= 1e-6:
+                    continue
+                hit = {"id": parcel, "kind": m.parcels[parcel]["kind"], key: round(size, 1)}
+                if closed:
+                    hit["share_of_parcel"] = round(part.area / m.polys[parcel].area, 3)
+                hits.append(hit)
+            hits.sort(key=lambda h: (-h[key], h["id"]))
+            on_map = on_map or bool(hits)
+            row["parcels"] = hits[:SKETCH_PARCELS_MAX]
+            if len(hits) > SKETCH_PARCELS_MAX:
+                row["parcels_total"] = len(hits)
+            line_rows.append(row)
+        if not on_map:
+            warnings.append(
+                "no mark lies on a parcel of this map: the sketch may come from another area or an "
+                f"older map (this server uses --area {self.settings.area}); check the --area/--state options"
+            )
+        out: dict = {
+            "count": len(point_rows) + len(line_rows),
+            "points": point_rows,
+            "lines": line_rows,
+            "state_age_s": round(age, 1),
+        }
+        if warnings:
+            out["warnings"] = warnings
+        return out
 
     # get_parcel ----------------------------------------------------------------------------
     def get_parcel(self, id: str) -> dict:
@@ -1696,7 +1810,9 @@ def build_server(settings: Settings) -> Any:
             "groups and ground-colour regions, all stored in edits.json (a viewer in --editor --watch "
             "mode shows changes within about a second). Coordinates are absolute S-JTSK metres (x east, y north). "
             "Typical flow: find_parcels (selected=true for what the user selected) -> get_parcel "
-            "-> set_fence / set_trees / place_object; create_region for ground colour."
+            "-> set_fence / set_trees / place_object; create_region for ground colour. When the "
+            "user points at something they drew ('this line', 'this area', 'here', 'at A', "
+            "'inside L1'), call get_sketch for its coordinates."
         ),
     )
 
@@ -1721,6 +1837,20 @@ def build_server(settings: Settings) -> Any:
         near: dict | None = None, kind: str | None = None, selected: bool = False, limit: int = 20
     ) -> dict:
         return tools.find_parcels(near, kind, selected, limit)
+
+    @server.tool(description=(
+        "The temporary marks the user drew on the ground in the viewer's Sketch tool, for "
+        "requests like 'plant trees in this area', 'a fence along L1', 'put a lamp at A' or just "
+        "'here' / 'this line'. A sketch holds points (named A, B, C, ...) and lines (L1, L2, ...; "
+        "`closed: true` joins the last corner to the first and means the ground inside). Returns, in absolute "
+        "S-JTSK metres ready for place_object `position`, create_region `polygon` or a fence gap "
+        "`at`: each point's position and the parcel it is on; each line's corners in drawing "
+        "order, length_m, bbox, and for a closed line area_m2 and centroid; plus the parcels a line "
+        "runs over (length_m on each) or a closed line covers (area_m2 and share_of_parcel). Optional "
+        "`id` returns one mark. Read-only: the user draws and clears the sketch in the viewer "
+        "(read from editor-state.json, like the selection); it is never part of edits.json."))
+    def get_sketch(id: str | None = None) -> dict:
+        return tools.get_sketch(id)
 
     @server.tool(description=(
         "Everything needed to edit one parcel: kind, area, cadastral ref, polygon bounds and "

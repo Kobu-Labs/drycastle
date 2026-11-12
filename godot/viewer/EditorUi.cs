@@ -9,7 +9,7 @@ using Godot;
 /// only the page of the active tool. Clicking the active tool again hides the sidebar. Built from the shared theme
 /// (EditorTheme); no per-control colours or font sizes.
 /// </summary>
-public enum EditorTool { None, Select, Group, Fence, Trees, Objects, Region, Poles, View }
+public enum EditorTool { None, Select, Group, Fence, Trees, Objects, Region, Poles, View, Sketch }
 
 public partial class EditorMode
 {
@@ -34,6 +34,7 @@ public partial class EditorMode
         (EditorTool.Region, "region", "Region", Key.Key6),
         (EditorTool.Poles, "poles", "Poles", Key.Key7),
         (EditorTool.View, "view", "View", Key.Key8),
+        (EditorTool.Sketch, "sketch", "Sketch", Key.Key9),
     };
 
     const string CfgPath = "user://editor_ui.cfg";
@@ -46,6 +47,7 @@ public partial class EditorMode
         root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _ui.AddChild(root);
 
+        BuildSketchTags(root);
         BuildRail(root);
         BuildHud(root);
         BuildSidebar(root);
@@ -190,6 +192,7 @@ public partial class EditorMode
         BuildRegionPage(Page(EditorTool.Region));
         BuildPolesPage(Page(EditorTool.Poles));
         BuildViewPage(Page(EditorTool.View));
+        BuildSketchPage(Page(EditorTool.Sketch));
     }
 
     void BuildViewPage(VBoxContainer page)
@@ -253,13 +256,13 @@ public partial class EditorMode
         sbox.AddChild(_hintLabel);
     }
 
-    const string DefaultHint = "WASD fly, RMB look, LMB select, Shift+LMB add, 1-8 tools, G group, T top-down, Enter apply, Ctrl+Z undo, Ctrl+P commands, Esc back, F1 controls, F2 walk";
+    const string DefaultHint = "WASD fly, RMB look, LMB select, Shift+LMB add, 1-9 tools, G group, T top-down, Enter apply, Ctrl+Z undo, Ctrl+P commands, Esc back, F1 controls, F2 walk";
 
     const string CheatText =
         "Fly\tWASD, Space up, Shift down, Alt x3, hold RMB to look, wheel changes speed\n" +
         "Select\tLMB select, Shift+LMB add or remove, Esc clear\n" +
         "Walk\tF2 walk from where you were, F3 drop to the ground below the camera and walk\n" +
-        "Tools\t1 Select, 2 Group, 3 Fence, 4 Trees, 5 Objects, 6 Region, 7 Poles, 8 View (press again to hide)\n" +
+        "Tools\t1 Select, 2 Group, 3 Fence, 4 Trees, 5 Objects, 6 Region, 7 Poles, 8 View, 9 Sketch (press again to hide)\n" +
         "Group\tG group the selection (marked groups merge)\n" +
         "Edit\tEnter apply, Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo\n" +
         "Objects\tLMB place, R / Shift+R rotate, Ctrl free position, Ctrl+D duplicate, Del delete, arrows nudge\n" +
@@ -268,9 +271,11 @@ public partial class EditorMode
         "Poles plan\tP plans a line: LMB a pole point, RMB a house, Backspace removes the last, Enter builds poles, cables and house connections\n" +
         "Poles\tchoose a pole and LMB places it, C connects: LMB on a pole, then on the next poles or on a house, Esc stops\n" +
         "Poles edit\tdrag a pole or its ring, R / Shift+R turn, LMB on a cable selects it, Del removes the cable or the pole with its cables\n" +
-        "Commands\tCtrl+P: tools, undo, region and parcel IDs\n" +
+        "Sketch\tP points, L lines: LMB or C marks, Enter finishes a line, Shift+Enter or the first corner closes it\n" +
+        "Sketch edit\tLMB on a mark or [ ] selects it, Del deletes it, Backspace last corner, Ctrl+Z undo; marks are temporary and named in prompts\n" +
+        "Commands\tCtrl+P: tools, undo, region, sketch and parcel IDs\n" +
         "View\tT top-down, F1 this sheet, F2 walk mode\n" +
-        "Esc\tgoes one level back: drawing, colour, region selection, placement, planning, connecting, gate, cable, object, selection, sidebar";
+        "Esc\tgoes one level back: drawing, colour, region or sketch selection, placement, planning, connecting, gate, cable, object, selection, sidebar";
 
     void BuildCheatSheet(Control root)
     {
@@ -302,7 +307,8 @@ public partial class EditorMode
     public void SelectTool(EditorTool tool, bool save = true)
     {
         if (Tool == EditorTool.Region && tool != EditorTool.Region) CancelRegionGesture();
-        if (tool == EditorTool.Region) { DisarmPlacement(false); if (GateArmed) CancelGate(); }
+        if (Tool == EditorTool.Sketch && tool != EditorTool.Sketch) CancelSketchGesture();
+        if (tool is EditorTool.Region or EditorTool.Sketch) { DisarmPlacement(false); if (GateArmed) CancelGate(); }
         if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { StopConnecting(false); StopPlanning(false); SelectCable(null); }
         if (tool == EditorTool.Poles && GateArmed) CancelGate();
         Tool = tool;
@@ -350,6 +356,7 @@ public partial class EditorMode
             if (ParseColour((string)cfg.GetValue("ui", "region_colour", _newColour)) is { } rc) _newColour = rc;
             var rsel = (string)cfg.GetValue("ui", "region", "");
             if (rsel != "") _restoreRegion = rsel;
+            if (Enum.TryParse<SketchKind>((string)cfg.GetValue("ui", "sketch_mode", _skMode.ToString()), true, out var sk)) _skMode = sk;
         }
         catch (Exception e) { GD.PushWarning($"editor ui settings not loaded: {e.Message}"); }
     }
@@ -363,6 +370,7 @@ public partial class EditorMode
             cfg.SetValue("ui", "speed", (double)Speed);
             cfg.SetValue("ui", "region_colour", _newColour);
             cfg.SetValue("ui", "region", SelectedRegionId ?? "");
+            cfg.SetValue("ui", "sketch_mode", _skMode.ToString());
             cfg.Save(CfgPath);
         }
         catch (Exception e) { GD.PushWarning($"editor ui settings not saved: {e.Message}"); }
