@@ -7,6 +7,7 @@
     { "id": "shot.sniper", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": 1, "pitch": 0.7, "pitch_variance": 0.04, "max_distance": 400, "priority": 3 },
     { "id": "shot.knife", "files": ["oga-combat-sound-effects-150/knife_swing_1.ogg", "oga-combat-sound-effects-150/knife_swing_2.ogg"], "bus": "SFX", "volume_db": -4, "pitch_variance": 0.08, "max_distance": 15 },
     { "id": "hit.knife", "files": ["oga-combat-sound-effects-150/knife_hit.ogg"], "bus": "SFX", "volume_db": -2, "pitch_variance": 0.06, "max_distance": 15 },
+    { "id": "shot.bazooka", "files": ["suchohrad-generated-sounds/launch_bazooka.ogg"], "bus": "SFX", "volume_db": 3, "pitch": 0.7, "pitch_variance": 0.03, "max_distance": 600, "priority": 4 },
     { "id": "launch.bazooka", "files": ["suchohrad-generated-sounds/launch_bazooka.ogg"], "bus": "SFX", "volume_db": -2, "pitch_variance": 0.03, "max_distance": 250, "priority": 3 },
     { "id": "rocket.flight", "files": ["suchohrad-generated-sounds/rocket_flight.ogg"], "bus": "SFX", "volume_db": -8, "max_distance": 60, "loop": true },
     { "id": "explosion.bazooka", "files": ["oga-combat-sound-effects-150/explosion_bazooka.ogg"], "bus": "SFX", "volume_db": 0, "pitch_variance": 0.05, "max_distance": 300, "priority": 4 },
