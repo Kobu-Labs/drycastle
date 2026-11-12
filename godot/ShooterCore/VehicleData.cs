@@ -47,6 +47,13 @@ public class VehiclesFile : IVersioned
                 if (l.Head.Concat(l.Tail).Any(p => p is null || p.Length != 3)) throw new DataFileException($"vehicles.json: {v.Id}: each lamp is [x, y, z]");
                 if (l.BeamRange <= 0 || l.BeamAngle <= 0 || l.BeamAngle >= 89) throw new DataFileException($"vehicles.json: {v.Id}: beam_range must be positive, beam_angle 1..88 degrees");
             }
+            if (v.Glass.Count > 16) throw new DataFileException($"vehicles.json: {v.Id}: at most 16 glass panes");
+            foreach (var pane in v.Glass)
+            {
+                if (pane is null || pane.Centre.Length != 3 || pane.Normal.Length != 3 || pane.Size.Length != 2) throw new DataFileException($"vehicles.json: {v.Id}: a glass pane needs centre [x, y, z], normal [x, y, z] and size [width, height]");
+                if (pane.Normal.Sum(x => x * x) < 1e-6f || !(pane.Size[0] > 0) || !(pane.Size[1] > 0) || pane.Hp is <= 0) throw new DataFileException($"vehicles.json: {v.Id}: glass pane {pane.Id}: the normal must not be zero, size and hp must be positive");
+            }
+            if (v.Glass.Select(g => g.Id).Distinct().Count() != v.Glass.Count) throw new DataFileException($"vehicles.json: {v.Id}: glass pane ids must differ");
             if (v.Tint is { Length: not 3 } || v.Tint != null && v.Paints.Count > 0) throw new DataFileException($"vehicles.json: {v.Id}: tint is [r, g, b] and excludes paints");
             if (v.Seats.Count is < 1 or > 4 || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..4 and the first is the driver");
             foreach (var seat in v.Seats)
@@ -335,6 +342,24 @@ public class FlightCameraDef
 }
 
 /// <summary>
+/// One glass pane of a vehicle type (vehicles.json "glass", ADR 0007): a flat rectangle in the vehicle frame (forward -Z, origin on the
+/// ground, as the hood). The model's glass is not a mesh of its own, so the rectangle is what the server tests shots against and where the
+/// client draws the crack. <see cref="Size"/> is [width, height]: the width runs horizontally, the height up the pane (its slant length).
+/// </summary>
+public class VehicleGlassDef
+{
+    public string Id { get; set; } = "";
+    public float[] Centre { get; set; } = { 0, 0, 0 };
+    /// <summary>The outward direction of the pane (any length).</summary>
+    public float[] Normal { get; set; } = { 0, 0, -1 };
+    public float[] Size { get; set; } = { 1, 1 };
+    /// <summary>Hit points of this pane; null takes glass.json vehicle_pane_hp.</summary>
+    public float? Hp { get; set; }
+
+    public GlassPaneRect Rect() => GlassPaneRect.Make(new System.Numerics.Vector3(Centre[0], Centre[1], Centre[2]), new System.Numerics.Vector3(Normal[0], Normal[1], Normal[2]), Size[0], Size[1]);
+}
+
+/// <summary>
 /// vehicles.json "lights" per type: lamp positions [x, y, z] in the vehicle frame (forward -Z, origin on the ground, as the hood).
 /// A boat's bow light is just another "head" point. Client and server only read it; the rules are in <see cref="Headlights"/>.
 /// </summary>
@@ -465,6 +490,11 @@ public class VehicleDef
     public float ModelYawDeg { get; set; }
     /// <summary>Headlights and tail lights (vehicles.json "lights"); null for a type without lamps.</summary>
     public VehicleLights? Lights { get; set; }
+    /// <summary>The glass panes of this type (vehicles.json "glass"), at most 16; empty for a type without glass. A pane's place in the list is its index on the wire.</summary>
+    public List<VehicleGlassDef> Glass { get; set; } = new();
+    List<GlassPaneRect>? _glassRects;
+    /// <summary>The panes as rectangles in the vehicle's frame, in the order of <see cref="Glass"/> (built once).</summary>
+    public IReadOnlyList<GlassPaneRect> GlassRects => _glassRects ??= Glass.Select(g => g.Rect()).ToList();
     /// <summary>Offset applied to the model node before scale, as [x, y, z].</summary>
     public float[] ModelOffset { get; set; } = { 0, 0, 0 };
     /// <summary>The model's own material that takes the colour variants, and the model's own materials whose colours the variants are (index = colour byte).</summary>

@@ -73,5 +73,6 @@ public partial class NetServer
         else if (shotCar != null && Vehicles != null && wall <= gun.Range)
             DamageVehicle(shotCar, gun.Damage * Vehicles.BulletDamageMultiplier, c.Id, SpecialWeapons.VehicleGun, 0);
         else if (shotCar == null && wall <= gun.Range) BulletPuff(N(end)); // dust where the round meets the ground or a wall
+        if (hit == null && wall <= gun.Range) ShotGlass(shotCar, from, dir, wall, gun.Damage);
     }
 }

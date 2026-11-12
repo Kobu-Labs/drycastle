@@ -169,7 +169,8 @@ public partial class NetServer
     void ResetCars()
     {
         foreach (var cl in _clients.Values) cl.Car = null;
-        foreach (var car in _cars) { car.Seat.Clear(); car.Reset(); }
+        foreach (var car in _cars) { car.Seat.Clear(); car.Reset(); RestoreVehicleGlass(car); }
+        RestoreGlassForRound();
         _carResets += _cars.Count > 0 ? 1 : 0;
     }
 
@@ -299,6 +300,7 @@ public partial class NetServer
         if (hit is { } h) Deal(c.Id, SpecialWeapons.VehicleGun, h.Id, def.Damage, false, false);
         else if (shotCar != null && shotCar != car && Vehicles != null && wall <= def.Range)
             DamageVehicle(shotCar, def.Damage * Vehicles.BulletDamageMultiplier, c.Id, SpecialWeapons.VehicleGun, 0);
+        if (hit == null && shotCar != car && wall <= def.Range) ShotGlass(shotCar, eye, dir, wall, def.Damage);
     }
 
     /// <summary>Exit position: right, left, behind, in front of the car (first with ground and room for the capsule), else above the roof.</summary>
@@ -342,7 +344,7 @@ public partial class NetServer
             var def = car.Def;
             if (car.Destroyed)
             {
-                if (_elapsed >= car.ReturnAt) { car.Reset(); _destroyedReturns++; if (BlastSmoke && _destroyedReturns >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5; GD.Print($"server: {def.Id} {car.Id} returned after its destruction"); }
+                if (_elapsed >= car.ReturnAt) { car.Reset(); RestoreVehicleGlass(car); _destroyedReturns++; if (BlastSmoke && _destroyedReturns >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5; GD.Print($"server: {def.Id} {car.Id} returned after its destruction"); }
                 continue;
             }
             // seats of players who have gone (disconnect, death) are freed; the driver is seat 0 and only the driver steers
@@ -424,6 +426,7 @@ public partial class NetServer
         _vehicleBlasts++;
         BroadcastEvent(EventKind.VehicleExplosion, WeaponCodec.Encode(new VehicleExplosionMsg(car.Id, attacker, N(at), e.Splash.Radius)));
         BroadcastImpact(N(car.GlobalPosition), ImpactSize.Plume); // the blast throws up dirt or road where the car sits (ticket #154)
+        BlastGlass(at, e.Splash.Radius);
         GD.Print($"server: {car.Def.Id} {car.Id} exploded at ({at.X:F1},{at.Y:F1},{at.Z:F1}), credited to #{attacker}");
 
         foreach (var o in Occupants(car))
