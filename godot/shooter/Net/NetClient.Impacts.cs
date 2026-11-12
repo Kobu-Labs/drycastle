@@ -64,7 +64,7 @@ public partial class NetClient
             {
                 var p = new CpuParticles3D
                 {
-                    Emitting = false, OneShot = true, Explosiveness = 1f, Lifetime = ImpactLifeS * 0.4f, Amount = SizeAmount((ImpactSize)b),
+                    Emitting = false, Visible = false, OneShot = true, Explosiveness = 1f, Lifetime = ImpactLifeS * 0.4f, Amount = SizeAmount((ImpactSize)b),
                     Direction = Vector3.Up, Spread = 70f, Gravity = new Vector3(0, -9.8f, 0),
                     Mesh = new BoxMesh { Size = new Vector3(0.12f, 0.12f, 0.12f), Material = mat },
                 };
@@ -84,7 +84,7 @@ public partial class NetClient
         {
             var p = new CpuParticles3D
             {
-                Emitting = false, OneShot = true, Explosiveness = 0.2f, Amount = 24, Lifetime = ImpactLifeS,
+                Emitting = false, Visible = false, OneShot = true, Explosiveness = 0.2f, Amount = 24, Lifetime = ImpactLifeS,
                 Direction = Vector3.Up, Spread = 45f, InitialVelocityMin = 0.6f, InitialVelocityMax = 1.6f,
                 Gravity = new Vector3(0, 0.8f, 0), ScaleAmountMin = 0.8f, ScaleAmountMax = 1.6f,
                 Mesh = new SphereMesh { Radius = 0.45f, Height = 0.9f, RadialSegments = 6, Rings = 3, Material = mat },
@@ -113,8 +113,7 @@ public partial class NetClient
         p.Color = tint;
         p.InitialVelocityMin = speed * 0.5f;
         p.InitialVelocityMax = speed;
-        p.Restart();
-        p.Emitting = true;
+        ParticleFx.Fire(p);
         if (i.Size != ImpactSize.Plume) return;
         ShockwaveRing(at);
         DustLift(at, tint);
@@ -184,7 +183,6 @@ public partial class NetClient
         _dustNext = (_dustNext + 1) % _dust.Length;
         d.GlobalPosition = at + Vector3.Up * 0.3f;
         d.Color = tint.Lerp(new Color(0.6f, 0.56f, 0.5f), 0.6f);
-        d.Restart();
-        d.Emitting = true;
+        ParticleFx.Fire(d);
     }
 }

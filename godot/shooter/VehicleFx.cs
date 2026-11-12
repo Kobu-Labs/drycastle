@@ -28,6 +28,7 @@ public static partial class VehicleFx
         var p = new CpuParticles3D
         {
             Mesh = mesh, ColorRamp = ramp, ScaleAmountCurve = curve, LocalCoords = false, OneShot = false, Emitting = false,
+            Visible = false, // hidden until it runs: an emitter that has not emitted yet must not be drawn (ParticleFx)
             Direction = Vector3.Up, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             AngularVelocityMin = -90, AngularVelocityMax = 90,
         };
@@ -75,8 +76,8 @@ public static partial class VehicleFx
 
         void Refresh()
         {
-            _smoke.Emitting = _near && _stage >= 1;
-            _sparks.Emitting = _near && _stage >= 3;
+            ParticleFx.Run(_smoke, _near && _stage >= 1);
+            ParticleFx.Run(_sparks, _near && _stage >= 3);
         }
 
         /// <summary>The vehicle is gone: stop and let the remaining particles die.</summary>
@@ -84,7 +85,8 @@ public static partial class VehicleFx
 
         static void Configure(CpuParticles3D p, Gradient ramp, int amount, double life, float sMin, float sMax, float vMin, float vMax, float spread, float rise)
         {
-            p.ColorRamp = ramp; p.Amount = amount; p.Lifetime = life;
+            p.ColorRamp = ramp; p.Lifetime = life;
+            ParticleFx.SetAmount(p, amount);
             p.ScaleAmountMin = sMin * 1.2f; p.ScaleAmountMax = sMax * 1.6f;
             p.InitialVelocityMin = vMin; p.InitialVelocityMax = vMax; p.Spread = spread; p.Gravity = new Vector3(0, rise, 0);
         }
@@ -110,10 +112,10 @@ public static partial class VehicleFx
 
         var fire = Stream(root, rc.Fire, rc.FireRamp, rc.Grow);
         fire.Amount = 18; fire.Lifetime = 0.9; fire.Spread = 25; fire.InitialVelocityMin = 1f; fire.InitialVelocityMax = 2.5f;
-        fire.Gravity = new Vector3(0, 1.5f, 0); fire.ScaleAmountMin = 0.8f; fire.ScaleAmountMax = 1.4f; fire.Emitting = true;
+        fire.Gravity = new Vector3(0, 1.5f, 0); fire.ScaleAmountMin = 0.8f; fire.ScaleAmountMax = 1.4f; ParticleFx.Run(fire, true);
         var column = Stream(root, rc.Smoke, C.Black, C.Grow);
         column.Amount = 26; column.Lifetime = VehicleBlastFx.ColumnLife; column.Spread = 12; column.InitialVelocityMin = 1.5f; column.InitialVelocityMax = 3f;
-        column.Gravity = new Vector3(0, 0.3f, 0); column.ScaleAmountMin = 1.0f; column.ScaleAmountMax = 1.8f; column.Emitting = true;
+        column.Gravity = new Vector3(0, 0.3f, 0); column.ScaleAmountMin = 1.0f; column.ScaleAmountMax = 1.8f; ParticleFx.Run(column, true);
 
         var light = new OmniLight3D { LightColor = new Color(1f, 0.5f, 0.15f), LightEnergy = 3f, OmniRange = r * 1.6f, ShadowEnabled = false, Position = new Vector3(0, 0.6f, 0) };
         root.AddChild(light);

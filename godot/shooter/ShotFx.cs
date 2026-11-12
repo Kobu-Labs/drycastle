@@ -65,7 +65,7 @@ public static class ShotFx
         {
             var p = new CpuParticles3D
             {
-                Emitting = false, Mesh = _sparkMesh, Amount = SparkAmount, Lifetime = 0.3, OneShot = true, Explosiveness = 1f,
+                Emitting = false, Visible = false, Mesh = _sparkMesh, Amount = SparkAmount, Lifetime = 0.3, OneShot = true, Explosiveness = 1f,
                 Spread = 55f, InitialVelocityMin = 1.5f, InitialVelocityMax = 4.5f, Gravity = new Vector3(0, -9f, 0),
                 LocalCoords = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             };
@@ -126,8 +126,7 @@ public static class ShotFx
         _sparkNext = (_sparkNext + 1) % _sparks.Length;
         p.Direction = normal;
         p.GlobalPosition = at;
-        p.Restart();
-        p.Emitting = true;
+        ParticleFx.Fire(p);
     }
 
     /// <summary>Spark burst only (no tracer), for shotgun pellets that each end in the world.</summary>
