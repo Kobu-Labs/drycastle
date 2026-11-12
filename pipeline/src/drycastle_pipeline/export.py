@@ -15,7 +15,7 @@ import trimesh
 
 from drycastle_pipeline.buildings import DEFAULT_OVERRIDES
 from drycastle_pipeline.config import DEFAULT_AREA, DEFAULT_RAW_DIR, REPO_ROOT, area_paths
-from drycastle_pipeline.edits import DEFAULT_EDITS
+from drycastle_pipeline.edits import DEFAULT_EDITS, GROUND_RECIPES
 from drycastle_pipeline.detail_meshes import clutter_meshes
 from drycastle_pipeline.meshes import Mesh
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
@@ -346,6 +346,11 @@ def run_export(
     rule_types = rules_ground_types(rules_path, area)
     effective = ground_types(rules_path, area, edits_path)
     parcels_file["ground_default"] = load_section("ground", rules_path, area)["default"]
+    # the shipped settings of each detail recipe (without the clutter tables): what a ground type's `detail` is laid over
+    detail_cfg = load_section("detail", rules_path, area)
+    parcels_file["ground_recipes"] = {
+        r: {k: v for k, v in detail_cfg[r].items() if k != "clutter"} for r in GROUND_RECIPES if isinstance(detail_cfg.get(r), dict)
+    }
     parcels_file["ground_types"] = [
         ground_type_row(name, rule_types.get(name), effective.get(name) or rule_types.get(name) or {})
         for name in [*rule_types, *(n for n in effective if n not in rule_types)]

@@ -316,7 +316,7 @@ public partial class EditorMode
         if (ground != null)
         {
             if (r.Water) { Say($"{id} is a body of water and cannot also be ground", true); return false; }
-            var match = Map.GroundTypes.Where(t => t.Name == ground).ToList();
+            var match = GroundChoices().Where(t => t.Name == ground).ToList();
             if (match.Count == 0) { Say($"this map has no ground type {ground}", true); return false; }
             colour = ParseColour(match[0].Colour);
         }
@@ -705,6 +705,8 @@ public partial class EditorMode
     Label _rgGroundNote = null!;
     VBoxContainer _rgList = null!;
     bool _rgSync;
+    string _rgGroundSig = "\0";
+    List<(string Name, string Colour)> _rgGroundChoices = new();
     readonly Dictionary<string, Button> _rgRows = new();
 
     Button FocusBtn(string text, Action onPress, string? variation = null)
@@ -754,11 +756,10 @@ public partial class EditorMode
         _rgGroundRow = new HBoxContainer();
         _rgGroundRow.AddChild(new Label { Text = "Ground" });
         _rgGround = new OptionButton { FocusMode = Control.FocusModeEnum.All, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        _rgGround.AddItem("Paint only");
-        foreach (var t in Map.GroundTypes) _rgGround.AddIconItem(Swatch(t.Colour), t.Name);
+        FillRegionGround();
         _rgGround.ItemSelected += i =>
         {
-            if (!_rgSync && SelectedRegionId != null) SetRegionGround(SelectedRegionId, i <= 0 ? null : Map.GroundTypes[(int)i - 1].Name);
+            if (!_rgSync && SelectedRegionId != null) SetRegionGround(SelectedRegionId, i <= 0 || i > _rgGroundChoices.Count ? null : _rgGroundChoices[(int)i - 1].Name);
             _rgGround.ReleaseFocus();
         };
         _rgGroundRow.AddChild(_rgGround);
@@ -781,6 +782,22 @@ public partial class EditorMode
         _rgList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         page.AddChild(_rgList);
         page.AddChild(Note("Where regions overlap the higher ID wins. Esc steps back: cancel drawing, deselect, leave the tool."));
+    }
+
+    /// <summary>The Ground dropdown lists the types as they are now (your edits included); rebuilt only when they change and the list is closed.</summary>
+    void FillRegionGround()
+    {
+        var choices = GroundChoices();
+        var sig = string.Join("|", choices.Select(c => c.Name + c.Colour));
+        if (sig == _rgGroundSig || _rgGround.GetPopup().Visible) return;
+        _rgGroundSig = sig;
+        _rgGroundChoices = choices;
+        var was = _rgSync;
+        _rgSync = true;
+        _rgGround.Clear();
+        _rgGround.AddItem("Paint only");
+        foreach (var t in choices) _rgGround.AddIconItem(Swatch(t.Colour), t.Name);
+        _rgSync = was;
     }
 
     void OnPickerColour(Color c)
@@ -886,16 +903,17 @@ public partial class EditorMode
         _rgGroundNote.Visible = mode == RegionState.Selected;
         if (sel != null)
         {
-            var at = sel.Ground == null ? 0 : Map.GroundTypes.ToList().FindIndex(t => t.Name == sel.Ground) + 1;
+            FillRegionGround();
+            var at = sel.Ground == null ? 0 : _rgGroundChoices.FindIndex(t => t.Name == sel.Ground) + 1;
             _rgSync = true;
             if (!_rgGround.GetPopup().Visible) _rgGround.Selected = at;
             _rgSync = false;
-            _rgGround.Disabled = sel.Water || Map.GroundTypes.Count == 0;
+            _rgGround.Disabled = sel.Water || _rgGroundChoices.Count == 0;
             _rgGround.TooltipText = sel.Water ? "A body of water cannot also be ground"
-                : Map.GroundTypes.Count == 0 ? "This map lists no ground types: build it again (make map)"
+                : _rgGroundChoices.Count == 0 ? "This map lists no ground types: build it again (make map)"
                 : "Paint only changes the colour. A ground type makes this shape real ground of that type: its colour, grass and trees";
             (_rgGroundNote.Text, _rgGroundNote.ThemeTypeVariation) =
-                sel.Ground != null && at == 0 ? ($"Ground type {sel.Ground} is not in this map; the map build will skip it.", "Warn")
+                sel.Ground != null && at == 0 ? ($"Ground type {sel.Ground} does not exist (deleted, or not in this map); the map build will skip it.", "Warn")
                 : sel.Ground != null ? ($"Shown as paint for now. The {sel.Ground} ground (grass, trees) appears after the next full map build (make map).", "Dim")
                 : sel.Water ? ("A body of water (set through the prompt).", "Dim")
                 : ("Paint: only the colour changes.", "Dim");
@@ -1031,6 +1049,7 @@ public partial class EditorMode
     IEnumerable<(string label, Action run)> PaletteAll(string filter)
     {
         foreach (var (tool, _, name, key) in Tools) { var t = tool; yield return ($"Tool: {name}  ({OS.GetKeycodeString(key)})", () => SelectTool(t)); }
+        foreach (var g in GroundRows()) { var gn = g.Name; yield return ($"{g.Name}  ground type  {RecipeWord(g)}  {StateWord(g.State)}", () => { SelectTool(EditorTool.Ground); SelectGroundType(gn); }); }
         yield return ("Region: new  (N)", () => { SelectTool(EditorTool.Region); StartRegion(); });
         yield return ("Sketch: mark points  (P)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Point); });
         yield return ("Sketch: draw a line  (L)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Line); });

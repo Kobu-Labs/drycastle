@@ -2,6 +2,14 @@ using Godot;
 
 namespace Drycastle.MapLoader;
 
+/// <summary>
+/// One ground type of the map as the last build wrote it (parcels.json `ground_types`): <paramref name="Colour"/> is its
+/// first terrain colour, <paramref name="RulesJson"/> its entry of rules.yaml (null for a type the user made, <paramref name="Custom"/>),
+/// which the editor lays the current edits.json over. <paramref name="Legacy"/>: a map built before ground types could be
+/// edited, with only the name and colour.
+/// </summary>
+public sealed record MapGroundType(string Name, string Colour, bool Custom, string? RulesJson, bool Legacy);
+
 /// <summary>A parcel of the base map (from parcels.json).</summary>
 public sealed class ParcelInfo
 {

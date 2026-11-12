@@ -551,6 +551,7 @@ public partial class EditorMode : Node
             case InputEventKey { Pressed: true, Echo: false } k:
                 if (HandleRegionKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Modal) break;
+                if (HandleGroundKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleSketchKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandlePolesKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleObjectKey(k)) { GetViewport().SetInputAsHandled(); break; }
@@ -575,6 +576,7 @@ public partial class EditorMode : Node
                         else if (GateArmed) CancelGate();
                         else if (SelectedCableId != null) SelectCable(null);
                         else if (SelectedObjectId != null) SelectObject(null);
+                        else if (Tool == EditorTool.Ground && GroundEscape()) { }
                         else if (Selection.Count > 0) GuardUnsaved(() => Click(null, false));
                         else if (Tool != EditorTool.None) SelectTool(EditorTool.None);
                         break;
@@ -851,6 +853,7 @@ public partial class EditorMode : Node
         RefreshEditPanel();
         RefreshObjectsPanel();
         RefreshPolesPanel();
+        RefreshGroundPanel();
         RefreshRegionsPanel();
         RefreshSketchPanel();
     }
