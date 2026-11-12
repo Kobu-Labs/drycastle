@@ -283,6 +283,8 @@ public class VehicleFlightDef
     /// <summary>Below this height over the ground the descent is slowed (the cushion), down to touchdown_speed at the ground, m and m/s.</summary>
     public float CushionHeight { get; set; } = 7;
     public float TouchdownSpeed { get; set; } = 1.5f;
+    /// <summary>A flying vehicle with run_over runs people over only while it is no higher than this over the ground, m (skids and fuselage skimming them).</summary>
+    public float RunOverAgl { get; set; } = 1.5f;
     /// <summary>Deceleration of the skids sliding on the ground, m/s².</summary>
     public float GroundFriction { get; set; } = 10;
     /// <summary>Highest it climbs above the ground under it, metres; the climb fades out over the last ceiling_fade metres.</summary>

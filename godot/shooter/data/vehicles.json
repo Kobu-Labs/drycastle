@@ -116,7 +116,7 @@
       "lights": { "head": [[-0.875, 0.7, -6.045], [0.875, 0.7, -6.045]], "tail": [[-1.04, 1.17, 6.045], [1.04, 1.17, 6.045]], "beam_range": 45, "beam_angle": 26 }
     },
     {
-      "id": "utility_helicopter", "medium": "air", "top_speed": 40, "acceleration": 11, "mass": 4000, "hp": 800, "run_over": false, "exposed_gunner": true, "hood": [0, 2.6, 3.3], "spawn_count": 1, "half_width": 1.3, "half_length": 4.0, "height": 2.95,
+      "id": "utility_helicopter", "medium": "air", "top_speed": 40, "acceleration": 11, "mass": 4000, "run_over_mass": 1500, "hp": 800, "exposed_gunner": true, "hood": [0, 2.6, 3.3], "spawn_count": 1, "half_width": 1.3, "half_length": 4.0, "height": 2.95,
       "model": "suchohrad-generated-models/utility_helicopter.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
       "seats": [{ "role": "driver", "offset": [0.55, 0.72, -1.9] }, { "role": "gunner", "offset": [0.4, 0.72, 0.15] }],

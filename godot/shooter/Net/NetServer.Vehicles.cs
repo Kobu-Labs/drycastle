@@ -369,7 +369,7 @@ public partial class NetServer
                 o.Body.Teleport(at);
                 _match.SetPosition(o.Id, N(at));
             }
-            if (driver != null && car.Def.RunOver && !car.Afloat) RunOverCheck(car, driver); // road kill: on land only
+            if (driver != null && car.Def.RunOver && !car.Afloat && (!car.Flies || car.Flight.Agl <= car.Def.Flight!.RunOverAgl)) RunOverCheck(car, driver); // road kill: on land only; a helicopter only skimming the ground
             if (!occupied && car.Abandon.Update(false, car.AtOrigin, dt, Vehicles.AbandonReturnTime))
             {
                 car.Reset(false); _carReturns++;
