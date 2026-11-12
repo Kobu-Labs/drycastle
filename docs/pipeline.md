@@ -171,8 +171,11 @@ edge; road ribbons, fences, trees and spawns outside coverage are dropped.
 `out/map/roads.json` (`nodes`: id, x, y; `edges`: id, osm_id, from, to, polyline, highway, width,
 oneway, surface, length_m; local metres, x east, y north). Ribbon footprints are clipped against the
 terrain triangles they cover, so every piece lies in a terrain triangle's plane lifted by `lift_m` (0.05 m)
-and no terrain crease can poke through; overlapping ribbons at intersections are
-accepted in v1, and a higher road class sits a hair above a lower one.
+and no terrain crease can poke through. A higher road class sits a hair above a lower one. Ribbons of
+one class share a height, so where two of them differ in colour (asphalt and gravel at a node) the
+overlap is split along the bisector of the two ways and each keeps its own side; a junction patch
+only fills ground that no ribbon of its class or a higher one covers. Nothing at one height overlaps
+a surface of another colour, so nothing z-fights.
 
 **Props** (`make props`): low fences (thin boxes, 1.2 m) along the boundaries of building plots
 and of gardens near buildings (seeded per parcel, a gate gap on road frontage, no fence through
@@ -288,7 +291,7 @@ objects (a circle of half the footprint diagonal plus 0.3 m), hand-drawn regions
   gravel track (patch layer `dike_track`, texture `dike_gravel`: fine light pebbles with hard-edged grass patches, 8 m x 4 m tile)
   about 2.2 m wide (`track_width_m` 1.5 plus its edges wandering by up to 0.7 m each side, with loose pebbles beyond), narrower than
   the 3 m carriageway: the track lies 8 cm above the terrain, the lawn 7 cm and so covers the rest of the road ribbon (5 to 6 cm)
-  inside the parcel, and the track is laid in pieces of 8 m, each along its own stretch and start so the patches do not repeat in rows; the rest is flat
+  inside the parcel (except the ways of `dike.not_track`, regular roads beside the dike's own such as `w825143074` in P-0821: no track and no lawn over them), and the track is laid in pieces of 8 m, each along its own stretch and start so the patches do not repeat in rows; the rest is flat
   green lawn; the thick grass is clutter (`tall_grass`, `tuft`, `straw`, about 1 per m2, taller the further from the track) plus tufts
   on the track's grass patches (found by reading the texture). Only the part of a parcel inside the terrain coverage gets detail (of
   P-0821's 73,000 m2 about 7,700 m2). About 30k patch triangles and 14k instances for the three parcels; `tall_grass` reaches its

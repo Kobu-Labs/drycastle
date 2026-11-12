@@ -177,6 +177,8 @@ def dike_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
     free = free_area(dataclasses.replace(wide, road=None), cfg)
     if ctx.road is not None and not ctx.road.is_empty:
         free = free.difference(ctx.road.difference(ctx.polygon.buffer(0.3)).buffer(float(cfg["road_clearance_m"]), join_style="mitre"))
+    if ctx.plain_road is not None and not ctx.plain_road.is_empty:
+        free = free.difference(ctx.plain_road.buffer(0.1))  # a regular road beside the dike's own shows as a road: no lawn over it
     cols = [hex_to_rgb(h) for h in rc["lawn_colours"]]
     lawn = len(res.patches)
     got = _assemble(res, free, {"lawn": free}, {"lawn": cols}, {}, seeded(f"{pid}:detail:colours"))

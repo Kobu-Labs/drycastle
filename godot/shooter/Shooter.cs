@@ -171,7 +171,7 @@ public partial class Shooter : Node3D
         {
             PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks)),
             WantsFreeMouse = () => _client is { Dead: true } or { ChatOpen: true }, // the respawn screen and the chat box release the mouse (buttons to click, keys to type)
-            BackHandler = () => _client?.CloseChat() ?? false, // Esc closes the chat box before it opens Pause
+            BackHandler = () => (_client?.CloseChat() ?? false) || (_client?.CloseTacticalMap() ?? false), // Esc closes the chat box, then the tactical map, before it opens Pause
         };
         AddChild(_shell);
         GD.Print("SHOOTER_MENU role=client");

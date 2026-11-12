@@ -214,6 +214,7 @@ public static class InputBindings
         ("killstreak", Binding.Key((int)Key.Q)),
         ("sandbox_panel", Binding.Key((int)Key.F4)),
         ("chat", Binding.Key((int)Key.T)),
+        ("map", Binding.Key((int)Key.M)),
     };
 
     public static BindingMap NewMap() => new(Defaults);

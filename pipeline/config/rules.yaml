@@ -194,9 +194,10 @@ regions:
   road_lift_m: 0.02
 
 # --- Roads (roads stage) --------------------------------------------------------------------
-# Ribbons from OSM highways in normalised/highways.geojson, draped on the terrain. Overlapping
-# ribbons at junctions are accepted in v1 (a higher road class is lifted a hair above lower ones
-# to avoid z-fighting). roads.json: nodes are way ends and shared vertices, edges run between them.
+# Ribbons from OSM highways in normalised/highways.geojson, draped on the terrain. A higher road
+# class is lifted a hair above a lower one; ribbons of one class and different colour meeting at a
+# node are split along the bisector instead of stacked, so nothing z-fights.
+# roads.json: nodes are way ends and shared vertices, edges run between them.
 roads:
   # Ribbon sample spacing along a way, in metres (the ribbon follows the terrain at this step).
   sample_step_m: 2
@@ -318,6 +319,9 @@ detail:
       P-0847: {osm_id: w825140519, within_m: 12}   # the dike's north end: the service road on from P-0073 through H to G
       P-0089: {osm_id: w825140519, within_m: 12}
       P-1059: {osm_id: w1148486728, within_m: 12}  # the dike hill reaches over the P-0073 line here (L1)
+    # Regular roads beside the dike's own pebbled road: no track and no lawn over them (P-0821: the grass track w825143074, drawn as L2
+    # and L3, runs alongside the gravel pair w150827706 and w192898627, which is the dike's road).
+    not_track: [w825143074]
     track_width_m: 1.5       # the gravel track: this wide plus the wandering of its edges (about 2.2 m on average); the road under it is wider, the lawn covers the rest
     track_wobble_m: 0.7      # how far the edge of the track wanders out beyond that, each side (waves of 1.4 to 16 m)
     track_lift_m: 0.08       # above the terrain: over the road ribbon (roads.lift_m 0.05 plus 3 mm per class rank) so the texture shows

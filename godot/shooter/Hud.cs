@@ -116,6 +116,7 @@ public partial class Hud : CanvasLayer
         BuildStreaks();
         BuildUav();
         BuildSandbox();
+        BuildTacticalMap();
         BuildChat();
         ApplyMinimapSettings();
         Relayout();
@@ -612,6 +613,7 @@ public partial class Hud : CanvasLayer
         UpdateFeed(now);
         UpdateCrosshair();
         UpdateBreath();
+        UpdateTacticalMap();
         var want = (Input.IsActionPressed("scoreboard") && !ChatOpen) || _phase == MatchPhase.Ending; // Tab completes in the chat box
         if (want != _boardShown || (want && _boardDirty)) UpdateBoard(want);
     }

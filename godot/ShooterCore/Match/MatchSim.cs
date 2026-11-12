@@ -94,7 +94,7 @@ public sealed class MatchSim
     /// <summary>World entities (turrets, missiles, ...) of this match. Cleared at each round start. The server ticks it.</summary>
     public WorldEntityManager Entities { get; }
 
-    public MatchMode Mode { get; }
+    public MatchMode Mode { get; private set; }
     public bool IsTeamMode => Mode == MatchMode.TeamDeathmatch;
     readonly int[] _teamScore = new int[3];
     /// <summary>Team deathmatch: kills of the team's members this round (team kills and suicides do not count). 0 for no team.</summary>
@@ -290,6 +290,24 @@ public sealed class MatchSim
                 if (now >= _endsAt) { StartRound(); Emit(new ScoreboardChanged()); }
                 break;
         }
+    }
+
+    /// <summary>
+    /// An admin's restart: a fresh round now, whatever the phase, optionally in another <see cref="MatchMode"/>. Scores, lives and world entities
+    /// are reset like at any round start. A mode change regroups everyone: free-for-all drops the teams, team deathmatch deals the
+    /// non-sandbox players alternately into A and B. With fewer than <see cref="MatchConfig.MinPlayers"/> players the match waits, in the new mode.
+    /// </summary>
+    public void Restart(MatchMode? mode = null)
+    {
+        if (mode is { } m && m != Mode)
+        {
+            Mode = m;
+            foreach (var p in _players.Values) p.Team = Teams.None;
+            if (IsTeamMode) foreach (var p in _players.Values.Where(p => !p.Sandbox)) p.Team = SmallerTeam();
+        }
+        if (_players.Count >= _cfg.MinPlayers && _players.Count > 0) StartRound();
+        else ToWaiting();
+        Emit(new ScoreboardChanged());
     }
 
     void StartIfReady() { if (_players.Count >= _cfg.MinPlayers && _players.Count > 0) { StartRound(); } }

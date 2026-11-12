@@ -204,6 +204,52 @@ public class TeamMatchTests
         // free-for-all contacts carry no team: everyone else shows
         Assert.Equal(2, UavRules.Visible(new[] { new UavContact(1, 0, 0, 1), new UavContact(2, 1, 0, 1), new UavContact(3, 2, 0, 1) }, 1).Count);
     }
+
+    [Fact]
+    public void RestartKeepsTheModeAndResetsTheRound()
+    {
+        var r = new Rig();
+        for (ushort i = 1; i <= 4; i++) r.M.AddPlayer(i, $"p{i}");
+        var teams = r.M.Players.ToDictionary(p => p.Id, p => p.Team);
+        r.Pass(); // spawn protection over
+        r.Kill(1, 2);
+        Assert.Equal(1, r.M.TeamScore(Teams.A));
+        r.M.Restart();
+        Assert.Equal((MatchPhase.Running, MatchMode.TeamDeathmatch, 0, 0), (r.M.Phase, r.M.Mode, r.M.TeamScore(Teams.A), r.M.TeamScore(Teams.B)));
+        Assert.All(r.M.Players, p => Assert.Equal((0, 0, PlayerLife.Alive, teams[p.Id]), (p.Kills, p.Deaths, p.Life, p.Team)));
+    }
+
+    [Fact]
+    public void RestartInAnotherModeRegroupsEveryone()
+    {
+        var r = new Rig();
+        for (ushort i = 1; i <= 5; i++) r.M.AddPlayer(i, $"p{i}");
+        r.M.AddPlayer(6, "sb", sandbox: true);
+        r.M.Restart(MatchMode.FreeForAll);
+        Assert.False(r.M.IsTeamMode);
+        Assert.All(r.M.Players, p => Assert.Equal(Teams.None, p.Team));
+        r.M.Restart(MatchMode.TeamDeathmatch);
+        Assert.True(r.M.IsTeamMode);
+        Assert.Equal(3, r.M.Players.Count(p => p.Team == Teams.A));
+        Assert.Equal(2, r.M.Players.Count(p => p.Team == Teams.B));
+        Assert.Equal(Teams.None, r.M.Get(6)!.Team);
+        Assert.Equal(MatchPhase.Running, r.M.Phase);
+    }
+
+    [Fact]
+    public void RestartRestartsAFinishedRoundAndWaitsWithoutPlayers()
+    {
+        var r = new Rig(c => c.TeamScoreGoal = 1);
+        r.M.AddPlayer(1, "a"); r.M.AddPlayer(2, "b");
+        r.Pass(); // spawn protection over
+        r.Kill(1, 2);
+        Assert.Equal(MatchPhase.Ending, r.M.Phase);
+        r.M.Restart(MatchMode.FreeForAll);
+        Assert.Equal((MatchPhase.Running, MatchMode.FreeForAll), (r.M.Phase, r.M.Mode));
+        var empty = new Rig();
+        empty.M.Restart(MatchMode.FreeForAll);
+        Assert.Equal((MatchPhase.Waiting, MatchMode.FreeForAll), (empty.M.Phase, empty.M.Mode));
+    }
 }
 
 public class TeamPaletteTests

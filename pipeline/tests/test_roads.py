@@ -1,10 +1,13 @@
 import numpy as np
 import pytest
+import shapely
+from shapely.geometry import Point
 
 from drycastle_pipeline.roads import (
     build_graph,
     is_unpaved,
     resample,
+    ribbon_footprint,
     ribbon_mesh,
     ribbon_sides,
     road_colour,
@@ -116,3 +119,34 @@ def test_road_mesh_is_clipped_to_terrain_coverage() -> None:
     m2 = road_mesh(g2, t, CFG)
     zs = sorted({round(float(z), 4) for z in (m2.tris[..., 2] - t.surface(m2.tris[..., 0], m2.tris[..., 1])).ravel()})
     assert len(zs) == 2 and zs[1] > zs[0]
+
+
+def _footprint_by_colour(m, colour):
+    sel = m.tris[(m.colours == colour).all(axis=1)]
+    polys = shapely.polygons(sel[:, :, :2])
+    return shapely.union_all(polys[shapely.area(polys) > 1e-12])
+
+
+def test_same_class_roads_of_different_colour_never_overlap() -> None:
+    """Asphalt and gravel residential roads meeting at a node share one height: where they
+    overlapped, nothing decided which was on top and the two colours flickered."""
+    t = make_terrain()
+    g = build_graph(
+        [
+            line_feature("a", "residential", [[30, 50], [60, 50]], surface="asphalt"),
+            line_feature("b", "residential", [[60, 50], [100, 70]], surface="asphalt"),
+            line_feature("c", "residential", [[60, 50], [100, 25]], surface="gravel"),
+        ],
+        CFG,
+    )
+    m = road_mesh(g, t, CFG)
+    asphalt = _footprint_by_colour(m, road_colour("residential", "asphalt", CFG))
+    gravel = _footprint_by_colour(m, road_colour("residential", "gravel", CFG))
+    assert gravel.area > 100 and asphalt.area > 100
+    assert asphalt.intersection(gravel).area < 1e-6
+    # nothing is lost: the three plain ribbons covered the same ground
+    plain = shapely.union_all(
+        [ribbon_footprint(np.array(e["polyline"]), e["width"], 2.0) for e in g["edges"]]
+    )
+    assert plain.difference(asphalt.union(gravel)).area < 0.5
+    assert asphalt.union(gravel).contains(Point(60, 50))

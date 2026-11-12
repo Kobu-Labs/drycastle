@@ -62,6 +62,7 @@ public partial class NetServer
             case "spawn": ChatSpawn(c, args[0]); break;
             case "sandbox": ChatSandbox(c, args); break;
             case "time": ChatTimeCommand(c, args); break;
+            case "restart": ChatRestart(c, args); break;
         }
         GD.Print($"server: {c.Name} #{c.Id} ran {text}");
     }
@@ -123,6 +124,17 @@ public partial class NetServer
         if (target.Sandbox == on) { ChatTo(c, ChatLineKind.Info, $"{target.Name} is already {(on ? "in" : "out of")} sandbox mode."); return; }
         SetSandbox(target, on);
         ChatToAll(ChatLineKind.System, "", $"{c.Name} turned sandbox mode {(on ? "on" : "off")} for {target.Name}.");
+    }
+
+    /// <summary>"/restart [ffa|tdm]": a new round now, in the current mode or the named one. Everyone is told which.</summary>
+    void ChatRestart(Client c, IReadOnlyList<string> args)
+    {
+        var mode = args.Count > 0 ? (args[0] == "tdm" ? MatchMode.TeamDeathmatch : MatchMode.FreeForAll) : _match.Mode;
+        var changed = mode != _match.Mode;
+        _match.Restart(mode);
+        var name = mode == MatchMode.TeamDeathmatch ? "team deathmatch" : "free-for-all";
+        ChatToAll(ChatLineKind.System, "", changed ? $"{c.Name} restarted the round in {name}." : $"{c.Name} restarted the round.");
+        GD.Print($"server: round restarted by {c.Name} #{c.Id}, mode {name}");
     }
 
     void ChatTimeCommand(Client c, IReadOnlyList<string> args)

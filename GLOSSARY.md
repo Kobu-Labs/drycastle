@@ -81,7 +81,7 @@ A player whose player token is listed on the server (`--admin-token`). Admins ma
 _Avoid_: operator, moderator, op
 
 **Chat command**:
-A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
+A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
 _Avoid_: console command, cheat
 
 **Care package**:
@@ -269,7 +269,7 @@ What a bunker's room gives the players in it: a blast outside the room does not 
 _Avoid_: blast cover, shot-only cover (that stops shots, not blasts), protection (that is spawn protection)
 
 **Match mode**:
-How a round is scored and won, set by `mode` in `match.json`: free-for-all (`ffa`, the default: every player alone) or team deathmatch (`tdm`).
+How a round is scored and won, set by `mode` in `match.json` at server start, or by an admin's `/restart`: free-for-all (`ffa`, the default: every player alone) or team deathmatch (`tdm`).
 _Avoid_: game mode, playlist
 
 **Team**:
@@ -278,3 +278,7 @@ _Avoid_: squad, clan, faction
 
 **Friend / enemy colours**:
 The blue (friend) and orange (enemy) the HUD uses, seen from the local player's team, for names in the kill feed and scoreboard and for the minimap dots. A team tag ("A"/"B") always accompanies the colour, and both colours have a colour-blind set (`TeamPalette`).
+
+**Tactical map**:
+The full-screen, north-up map sheet of the whole base map that the M key (rebindable, `map`) opens and closes; Esc also closes it. It is view only and does not pause anything. Terrain, parcels and roads come from the same data as the minimap; a square grid labels columns A, B, C... from the west and rows 1, 2, 3... from the south, so a square has a short reference such as "C7" (the cell is 50, 100 or 200 m, chosen so there are about 10 to 20 a side; these are not S-JTSK coordinates). The margin shows a compass rose, the player's heading in degrees, the grid reference and position in metres from the south-west corner, a scale bar and a legend. Markers (the player's arrow, vehicles, friends in team deathmatch, UAV pings) are the minimap's, drawn from the same data. It closes on the respawn screen, at the end of a match and in a missile or turret view.
+_Avoid_: world map, big map, full map

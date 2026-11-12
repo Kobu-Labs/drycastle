@@ -200,21 +200,42 @@ def _area2(t) -> float:
     return (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
 
 
-def ribbon_mesh(
-    pts: np.ndarray, width: float, terrain: Terrain, lift: float, colour: list[int], step: float
-) -> Mesh:
-    """Ribbon laid exactly on the terrain surface (counter-clockwise seen from above).
-
-    The ribbon footprint is clipped against every terrain triangle it touches, and each piece
-    lies in that triangle's plane (plus ``lift``). The ribbon therefore has vertices on every
-    terrain edge it crosses and cannot be cut through by a terrain crease between its samples.
-    """
+def ribbon_footprint(pts: np.ndarray, width: float, step: float):
+    """Ground outline of a ribbon: the union of one quad per sample step along the way."""
     pts = resample(np.asarray(pts, float), step)
     left, right = ribbon_sides(pts, width)
     quads = [
         Polygon([left[k], left[k + 1], right[k + 1], right[k]]) for k in range(len(pts) - 1)
     ]
-    foot = shapely.unary_union([q.buffer(0) for q in quads if q.area > 1e-9])
+    return shapely.unary_union([q.buffer(0) for q in quads if q.area > 1e-9])
+
+
+def ribbon_mesh(
+    pts: np.ndarray,
+    width: float,
+    terrain: Terrain,
+    lift: float,
+    colour: list[int],
+    step: float,
+    clip=None,
+) -> Mesh:
+    """Ribbon laid exactly on the terrain surface (counter-clockwise seen from above).
+
+    The ribbon footprint (less ``clip``, a ground area another surface owns) is clipped against
+    every terrain triangle it touches, and each piece lies in that triangle's plane (plus
+    ``lift``). The ribbon therefore has vertices on every terrain edge it crosses and cannot be
+    cut through by a terrain crease between its samples.
+    """
+    foot = ribbon_footprint(pts, width, step)
+    if clip is not None and not clip.is_empty:
+        foot = foot.difference(clip)
+    return drape_mesh(foot, terrain, lift, colour)
+
+
+def drape_mesh(foot, terrain: Terrain, lift: float, colour: list[int]) -> Mesh:
+    """Ground area ``foot`` as triangles lying in the terrain triangles' planes, ``lift`` above."""
+    if foot.is_empty:
+        return Mesh.empty()
     tris = []
     for tri in _terrain_triangles(terrain, foot.bounds, foot):
         piece = foot.intersection(Polygon(tri[:, :2]))
@@ -244,25 +265,71 @@ def ribbon_mesh(
     return Mesh(np.array(tris), np.tile(np.array(colour, np.uint8), (len(tris), 1)))
 
 
-def junction_mesh(
-    centre: tuple[float, float], radius: float, terrain: Terrain, lift: float, colour: list[int]
-) -> Mesh:
-    """Octagon patch closing the gap where ribbons meet at a bend."""
-    angles = [2 * math.pi * k / 8 for k in range(9)]
-    ring = np.array(
-        [(centre[0] + radius * math.cos(a), centre[1] + radius * math.sin(a)) for a in angles]
-    )
-    z = terrain.surface(ring[:, 0], ring[:, 1]) + lift
-    zc = float(terrain.surface(np.array([centre[0]]), np.array([centre[1]]))[0]) + lift
-    tris = [[(*centre, zc), (*ring[k], z[k]), (*ring[k + 1], z[k + 1])] for k in range(8)]
-    return Mesh(np.array(tris), np.tile(np.array(colour, np.uint8), (8, 1)))
+def _junction_outline(centre: tuple[float, float], radius: float) -> Polygon:
+    """Octagon closing the gap where ribbons meet at a bend."""
+    angles = [2 * math.pi * k / 8 for k in range(8)]
+    return Polygon([(centre[0] + radius * math.cos(a), centre[1] + radius * math.sin(a)) for a in angles])
+
+
+def _end_vector(edge: dict, nid: str) -> np.ndarray:
+    """Unit vector along the way, away from node ``nid`` (at the end of the edge that meets it)."""
+    pl = np.asarray(edge["polyline"], float)
+    v = pl[1] - pl[0] if edge["from"] == nid else pl[-2] - pl[-1]
+    return v / max(float(np.linalg.norm(v)), 1e-12)
+
+
+def _tie_trims(graph: dict, order: dict, cfg: dict, footprint) -> dict[str, object]:
+    """Ground each edge must give up so that no two ribbons of one class and different colour overlap.
+
+    Ribbons of one class float at the same height, so where two meet at a node and differ in
+    colour (asphalt and gravel) the overlap has no owner and z-fights. The overlap is split along
+    the bisector of the two ways (each keeps the half on its own side), so every point of ground
+    belongs to one surface. Ribbons of different classes keep the class lift instead (see
+    :func:`road_mesh`). ``footprint(edge)`` gives an edge's ribbon outline.
+    """
+    at_node: dict[str, list[dict]] = {}
+    for e in graph["edges"]:
+        for nid in {e["from"], e["to"]}:
+            at_node.setdefault(nid, []).append(e)
+    nodes = {n["id"]: n for n in graph["nodes"]}
+    trims: dict[str, list] = {}
+    reach = 1000.0
+    for nid, edges in sorted(at_node.items()):
+        centre = np.array([nodes[nid]["x"], nodes[nid]["y"]])
+        for i, a in enumerate(edges):
+            for b in edges[i + 1 :]:
+                if order.get(a["highway"], 0) != order.get(b["highway"], 0):
+                    continue
+                if road_colour(a["highway"], a["surface"], cfg) == road_colour(b["highway"], b["surface"], cfg):
+                    continue  # same colour: the overlap is invisible
+                ua, ub = _end_vector(a, nid), _end_vector(b, nid)
+                m, n = ua + ub, ub - ua  # bisector of the two ways, and across it from a to b
+                if np.linalg.norm(m) < 1e-6 or np.linalg.norm(n) < 1e-6:
+                    continue  # opposite ways overlap only at their ends; the same way twice has no bisector
+                m, n = m / np.linalg.norm(m), n / np.linalg.norm(n)
+                overlap = footprint(a).intersection(footprint(b))
+                if overlap.area < 1e-9:
+                    continue
+                for loser, side in ((a, n), (b, -n)):  # the side of the bisector that is the other's
+                    half = Polygon(
+                        [centre - m * reach, centre + m * reach,
+                         centre + m * reach + side * reach, centre - m * reach + side * reach]
+                    )
+                    trims.setdefault(loser["id"], []).append(overlap.intersection(half))
+    return {k: shapely.unary_union(v) for k, v in trims.items()}
 
 
 def road_mesh(graph: dict, terrain: Terrain, cfg: dict, only: set[str] | None = None) -> Mesh:
     """All ribbons and junction patches of the graph, clipped to the terrain coverage.
 
     ``only`` limits the output to those edge IDs (and the junctions they touch); junction
-    patches are still derived from every edge of the graph.
+    patches and the trimming of overlapping ribbons are still derived from every edge of the
+    graph, so chunks agree where they meet.
+
+    Surfaces of one class sit at one height, so they never overlap where their colours differ:
+    :func:`_tie_trims` splits such overlaps between ribbons, and a junction patch only fills the
+    ground that no ribbon of its class or a higher one covers. A higher class lies a hair above
+    a lower one.
     """
     order = {hw: i for i, hw in enumerate(cfg["order"])}
     lift, step = float(cfg["lift_m"]), float(cfg["sample_step_m"])
@@ -271,25 +338,41 @@ def road_mesh(graph: dict, terrain: Terrain, cfg: dict, only: set[str] | None = 
     nodes = {n["id"]: n for n in graph["nodes"]}
     deg: dict[str, int] = {}
     touched: set[str] = set()
+    feet: dict[str, object] = {}
+
+    def footprint(e: dict):
+        if e["id"] not in feet:
+            feet[e["id"]] = ribbon_footprint(np.array(e["polyline"]), e["width"], step)
+        return feet[e["id"]]
+
+    trims = _tie_trims(graph, order, cfg, footprint)
+    edges_at: dict[str, list[dict]] = {}
     for e in sorted(graph["edges"], key=lambda e: (order.get(e["highway"], 0), e["id"])):
         rank = order.get(e["highway"], 0)
         z = lift + rank * 0.003
         colour = road_colour(e["highway"], e["surface"], cfg)
         keep = only is None or e["id"] in only
         if keep:
-            meshes.append(ribbon_mesh(np.array(e["polyline"]), e["width"], terrain, z, colour, step))
+            meshes.append(drape_mesh(footprint(e).difference(trims.get(e["id"], Polygon())), terrain, z, colour))
             touched.update((e["from"], e["to"]))
         for end in (e["from"], e["to"]):
             deg[end] = deg.get(end, 0) + 1
+            edges_at.setdefault(end, []).append(e)
             if end not in node_best or (e["width"], rank) > node_best[end][:2]:
                 node_best[end] = (e["width"], rank, colour)
     for nid in sorted(node_best):
         if deg[nid] >= 2 and nid in touched:
             w, rank, colour = node_best[nid]
             n = nodes[nid]
-            meshes.append(
-                junction_mesh((n["x"], n["y"]), w / 2, terrain, lift + rank * 0.003, colour)
+            covered = shapely.unary_union(
+                [
+                    footprint(e).difference(trims.get(e["id"], Polygon()))
+                    for e in edges_at[nid]
+                    if order.get(e["highway"], 0) >= rank
+                ]
             )
+            patch = _junction_outline((n["x"], n["y"]), w / 2).difference(covered)
+            meshes.append(drape_mesh(patch, terrain, lift + rank * 0.003, colour))
     mesh = Mesh.concat(meshes)
     if not mesh.face_count:
         return mesh

@@ -42,6 +42,16 @@ public class ChatTests
     public void BotsWithoutACountAsksForTheCurrentOne() => Assert.True(ChatCommands.Parse("/bots", Admin).Ok);
 
     [Fact]
+    public void RestartTakesNoModeOrOneKnownMode()
+    {
+        Assert.True(ChatCommands.Parse("/restart", Admin).Ok);
+        Assert.Equal(new[] { "tdm" }, ChatCommands.Parse("/restart TDM", Admin).Args);
+        Assert.False(ChatCommands.Parse("/restart ctf", Admin).Ok);
+        Assert.False(ChatCommands.Parse("/restart ffa tdm", Admin).Ok);
+        Assert.Contains("admin", ChatCommands.Parse("/restart", Guest).Error);
+    }
+
+    [Fact]
     public void SpawnNeedsAKnownVehicleAndNormalisesTheCase()
     {
         Assert.False(ChatCommands.Parse("/spawn", Admin).Ok);

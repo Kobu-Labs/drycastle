@@ -50,6 +50,16 @@ public static class ShooterTheme
     public static readonly Color Outline = new(0f, 0f, 0f, 0.85f);
     public static readonly Color Scrim = new(0f, 0f, 0f, 0.60f);
 
+    // tactical map sheet (the M map): a dark olive margin, a faint paper wash and light ink over muted terrain
+    public static readonly Color MapPaper = new(0.10f, 0.12f, 0.09f, 0.94f);
+    public static readonly Color MapGround = new(0.20f, 0.23f, 0.19f);
+    public static readonly Color MapWash = new(0.80f, 0.76f, 0.60f, 0.10f);
+    public static readonly Color MapGrid = new(0.94f, 0.95f, 0.84f, 0.40f);
+    public static readonly Color MapFrame = new(0.82f, 0.84f, 0.70f);
+    public static readonly Color MapRoadCasing = new(0.07f, 0.08f, 0.06f, 0.85f);
+    public const int MapGutter = 28;
+    public const float MapFadeSeconds = 0.15f;
+
     public static StyleBoxFlat Box(Color bg, int pad = Space, Color? border = null, int borderWidth = Border, int radius = Radius)
     {
         var s = new StyleBoxFlat { BgColor = bg };
