@@ -38,6 +38,9 @@ public sealed partial class Minimap : Control
     float _shownYaw;         // eased towards _yaw
     bool _hasPlayer;
     readonly List<NVector2> _vehicles = new();
+    readonly List<NVector2> _friends = new();
+    /// <summary>Team deathmatch: pings use the enemy colour (orange) and friends are drawn, as outlined circles in the friend colour.</summary>
+    public bool TeamColours { get; set; }
     readonly MinimapPings _pings = new();
     readonly List<RoadDraw> _roads = new();
     static readonly Vector2[] Arrow = { new(0, -ArrowHalf), new(ArrowHalf * 0.8f, ArrowHalf), new(0, ArrowHalf * 0.4f), new(-ArrowHalf * 0.8f, ArrowHalf) };
@@ -106,6 +109,13 @@ public sealed partial class Minimap : Control
     {
         _vehicles.Clear();
         for (var i = 0; i < groundXZ.Count; i++) _vehicles.Add(new NVector2(groundXZ[i].X, groundXZ[i].Y));
+    }
+
+    /// <summary>Teammates' positions (ground x, z), drawn in team deathmatch only. Copied, so the caller may reuse its list.</summary>
+    public void SetFriendDots(IReadOnlyList<Vector2> groundXZ)
+    {
+        _friends.Clear();
+        for (var i = 0; i < groundXZ.Count; i++) _friends.Add(new NVector2(groundXZ[i].X, groundXZ[i].Y));
     }
 
     /// <summary>
@@ -230,12 +240,20 @@ public sealed partial class Minimap : Control
                 var p = centre + Screen(_vehicles[i], theta, pxPerMetre, inner);
                 DrawRect(new Rect2(p - new Vector2(4, 4), new Vector2(8, 8)), ShooterTheme.Warn);
             }
+            if (TeamColours)
+                for (var i = 0; i < _friends.Count; i++) // a ring, not a disc: the shape differs from the filled enemy pings (never colour only)
+                {
+                    var p = centre + Screen(_friends[i], theta, pxPerMetre, inner);
+                    DrawCircle(p, 7f, ShooterTheme.Outline);
+                    DrawCircle(p, 5f, ShooterTheme.Friend);
+                    DrawCircle(p, 2.5f, ShooterTheme.Outline);
+                }
             var pings = _pings.Positions(now);
             for (var i = 0; i < pings.Count; i++)
             {
                 var p = centre + Screen(pings[i], theta, pxPerMetre, inner);
                 DrawCircle(p, 6f, ShooterTheme.Outline);
-                DrawCircle(p, 4f, ShooterTheme.Danger);
+                DrawCircle(p, 4f, TeamColours ? ShooterTheme.Enemy : ShooterTheme.Danger);
             }
             DrawNorth(centre, theta, half);
         }

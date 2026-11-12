@@ -255,3 +255,14 @@ _Avoid_: stairs, climbing (that is the verb)
 **Shelter**:
 What a bunker's room gives the players in it: a blast outside the room does not hurt them, and a blast inside it hurts nobody outside. The MOAB is not stopped.
 _Avoid_: blast cover, shot-only cover (that stops shots, not blasts), protection (that is spawn protection)
+
+**Match mode**:
+How a round is scored and won, set by `mode` in `match.json`: free-for-all (`ffa`, the default: every player alone) or team deathmatch (`tdm`).
+_Avoid_: game mode, playlist
+
+**Team**:
+One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team.
+_Avoid_: squad, clan, faction
+
+**Friend / enemy colours**:
+The blue (friend) and orange (enemy) the HUD uses, seen from the local player's team, for names in the kill feed and scoreboard and for the minimap dots. A team tag ("A"/"B") always accompanies the colour, and both colours have a colour-blind set (`TeamPalette`).

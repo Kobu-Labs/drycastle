@@ -74,6 +74,7 @@ in the host and provider firewalls (and SSH). Nothing else is exposed (Postgres 
    `server: progression db postgres shooter@db:5432/shooter` and the map line.
 
 The server flags are the compose `command:` (see `docs/shooter-server.md`). The production server runs with `--allow-sandbox` on purpose (sandbox players are not scored and nothing of theirs is saved); keep `--unlock-all` and `--debug-cmds` off.
+Admins (chat commands) come from `ADMIN_TOKEN` in the VPS's `deploy/.env`: comma-separated `player_token`s, passed to the server as `--admin-token`. The file is never overwritten by a deploy; edit it and run `docker compose up -d` in `deploy/`. Never use `--admin-all` here.
 The database URL comes from `DRYCASTLE_DB`, so the password is never on a command line. `GAME_PORT` in `.env` changes the host port.
 
 - **Backups:** `docker compose exec -T db pg_dump -U shooter shooter > shooter-$(date +%F).sql` (cron it). Deleting the `pgdata` volume

@@ -17,5 +17,5 @@ public partial class NetServer
     /// <summary>Living players with their UAV visibility (the perk's <c>uav_visibility</c>; 0 hides them).</summary>
     IReadOnlyList<UavContact> UavContacts() =>
         _byId.Values.Where(o => _match.Get(o.Id)?.Life == PlayerLife.Alive)
-            .Select(o => new UavContact(o.Id, o.Body.GlobalPosition.X, o.Body.GlobalPosition.Z, o.Perks.UavVisibility)).Concat(TargetUavContacts()).ToList();
+            .Select(o => new UavContact(o.Id, o.Body.GlobalPosition.X, o.Body.GlobalPosition.Z, o.Perks.UavVisibility, _match.Get(o.Id)?.Team ?? Teams.None)).Concat(TargetUavContacts()).ToList();
 }

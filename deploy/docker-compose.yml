@@ -45,7 +45,8 @@ services:
       DRYCASTLE_DB: postgres://shooter:${POSTGRES_PASSWORD}@db:5432/shooter
     # Extra server flags (match options, time of day, ...) go here; see docs/shooter-server.md. --allow-sandbox is on by choice
     # (sandbox players are not scored and write nothing to the database); leave out --unlock-all and --debug-cmds on a public server.
-    command: ["--allow-sandbox"]
+    # --admin-token takes ADMIN_TOKEN from .env (comma-separated player_tokens; see docs/shooter-v2.md, "Chat and admin commands"). Keep it out of git.
+    command: ["--allow-sandbox", "--admin-token", "${ADMIN_TOKEN:-}"]
     # Healthy once the map is loaded and the server is listening (/tmp/drycastle-ready, written by Shooter.cs).
     healthcheck:
       test: ["CMD-SHELL", "test -f /tmp/drycastle-ready"]
