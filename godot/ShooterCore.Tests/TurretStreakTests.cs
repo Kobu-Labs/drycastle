@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>The turret killstreak through the real <see cref="KillstreakService"/>: placing ghost, confirm, cancel and expiry.</summary>
 public class TurretStreakTests

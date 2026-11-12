@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The seat schematic's drawing (the vehicle seat switch): a top-down body outline to scale, forward up (a small arrow above the nose), and one numbered

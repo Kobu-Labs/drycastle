@@ -118,7 +118,7 @@ on-change mode is needed to save bandwidth.
 ## Reproducing
 
 ```sh
-export SUCHOHRAD_MAP=/path/to/out/map
+export DRYCASTLE_MAP=/path/to/out/map
 make netspike-quick                  # about 4 minutes
 make netspike                        # about 30 minutes: 4 variants x N=16,32,64 x ~75 s, plus the probe
 python3 godot/netspike/run_spike.py --ns 64 --variants custom --seconds 30 --skip-probe

@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 public enum ToastKind { Info, Warn, Error }
 
@@ -157,6 +157,9 @@ public partial class UiShell : CanvasLayer
         if (Input.MouseMode != want) Input.MouseMode = want;
     }
 
+    /// <summary>Esc goes here first: true when it closed something of the match's own (the chat box) and so was used.</summary>
+    public Func<bool>? BackHandler { get; set; }
+
     /// <summary>True while the match asks for a free mouse with no screen open (the respawn screen, so its buttons can be clicked).</summary>
     public Func<bool>? WantsFreeMouse { get; set; }
 
@@ -177,6 +180,7 @@ public partial class UiShell : CanvasLayer
             _fading = null;
         }
         if (Top is { } t && t.HandleInput(e)) { GetViewport().SetInputAsHandled(); return; }
+        if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape } && BackHandler?.Invoke() == true) { GetViewport().SetInputAsHandled(); return; }
         if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
         {
             if (Top is { } top) { top.Back(); GetViewport().SetInputAsHandled(); }

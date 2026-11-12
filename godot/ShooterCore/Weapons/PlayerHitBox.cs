@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// The hit volume of a player body and of a target dummy, derived from the drawn character model. One place for the numbers, so the server

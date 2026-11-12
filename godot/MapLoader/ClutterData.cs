@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Suchohrad.MapLoader;
+namespace Drycastle.MapLoader;
 
 // Pure (no Godot types): compiled into ShooterCore.Tests by a link, so the parsing and the grouping can be tested.
 
@@ -81,7 +81,7 @@ public static class ClutterTint
 public static class ClutterSettings
 {
     /// <summary>Environment variable: 0 or off = no clutter, 1 or unset = default distances, another number scales the distances (0.5 = half).</summary>
-    public const string EnvVar = "SUCHOHRAD_CLUTTER";
+    public const string EnvVar = "DRYCASTLE_CLUTTER";
     /// <summary>Instances are grouped into cells this wide (metres), one MultiMesh per cell and kind, because a visibility range
     /// is measured to the node as a whole: one chunk-sized MultiMesh would vanish while the player stands inside it.</summary>
     public const float CellM = 48f;

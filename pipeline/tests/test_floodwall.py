@@ -3,11 +3,11 @@ import math
 import numpy as np
 import pytest
 
-from suchohrad_pipeline import floodwall as fw
-from suchohrad_pipeline.assets import load_manifest
-from suchohrad_pipeline.buildings import hex_to_rgb
-from suchohrad_pipeline.floodwall_preview import above_ground
-from suchohrad_pipeline.primitives import PRIMITIVES, build_primitive
+from drycastle_pipeline import floodwall as fw
+from drycastle_pipeline.assets import load_manifest
+from drycastle_pipeline.buildings import hex_to_rgb
+from drycastle_pipeline.floodwall_preview import above_ground
+from drycastle_pipeline.primitives import PRIMITIVES, build_primitive
 
 RUN = ("floodwall_straight_4", "floodwall_straight_2", "floodwall_access")  # the pieces with the full profile
 

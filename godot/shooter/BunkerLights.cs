@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The look of a bunker interior (#224, ADR 0009), client only: dark, with a dim lamp in every room. Inside a room the ambient

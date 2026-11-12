@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// A dev check of the character poses in the real map (<c>--pose-demo</c>): once the local player exists, a row of characters stands a few metres

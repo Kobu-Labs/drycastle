@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Why an active killstreak ended. The byte is on the wire (StreakEnded).</summary>
 public enum KillstreakEndReason : byte

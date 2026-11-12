@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Concealment (0..1) from stance and movement, the gameplay hook of the camouflage framework. It is server-side data:

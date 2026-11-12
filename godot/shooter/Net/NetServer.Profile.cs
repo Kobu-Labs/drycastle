@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
-using Suchohrad.ShooterServer.Persistence;
+using Drycastle.ShooterCore;
+using Drycastle.ShooterServer.Persistence;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Profile handshake (ADR 0003, ticket #107). A hello carries the player token; the server loads the profile through the

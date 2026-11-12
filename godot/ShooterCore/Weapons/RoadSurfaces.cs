@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// The road surface of the base map (roads.json, the graph's edges): a point is on a road when it lies within half the

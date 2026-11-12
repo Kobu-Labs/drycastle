@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Who sits in each seat of one vehicle (index = seat, 0 = free). Sent to the riders when it changes.</summary>
 public sealed record SeatState(ushort CarId, ushort[] Occupants);

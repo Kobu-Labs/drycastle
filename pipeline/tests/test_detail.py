@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 from shapely.geometry import LineString, Point, Polygon, box
 
-from suchohrad_pipeline import detail_meshes
-from suchohrad_pipeline.detail import (
+from drycastle_pipeline import detail_meshes
+from drycastle_pipeline.detail import (
     PATCH_PRIORITY,
     ParcelContext,
     area_type,
@@ -22,9 +22,9 @@ from suchohrad_pipeline.detail import (
     poisson_disc,
     thin,
 )
-from suchohrad_pipeline.props import seeded
-from suchohrad_pipeline.rules import load_section
-from suchohrad_pipeline.terrain import Terrain
+from drycastle_pipeline.props import seeded
+from drycastle_pipeline.rules import load_section
+from drycastle_pipeline.terrain import Terrain
 
 
 def flat_terrain() -> Terrain:

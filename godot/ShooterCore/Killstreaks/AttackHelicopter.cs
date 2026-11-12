@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// The attack helicopter killstreak (killstreaks.json "attack_helicopter", ticket #126): a helicopter circles the map and its

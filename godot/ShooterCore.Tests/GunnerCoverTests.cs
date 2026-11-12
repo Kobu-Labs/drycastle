@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
 /// The flak truck's gunner sits in the open turret and can be shot (<see cref="GunnerCover"/>): a ray that reaches his body hits him instead of the hull

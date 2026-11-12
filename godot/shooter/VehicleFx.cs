@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Vehicle damage and blast visuals (ticket #103). Damage stages are particle emitters at the hood: 1 a little light gray smoke, 2 a bigger, much darker cloud,

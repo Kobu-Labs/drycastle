@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>What a level unlocks: a loadout item kind (levels.json "kind": weapon, perk, streak, loadout_slot).</summary>
 public enum UnlockKind { Weapon, Perk, Streak, LoadoutSlot }

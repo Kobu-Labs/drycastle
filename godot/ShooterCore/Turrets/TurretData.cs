@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Tuning of the sentry turret (turret.json). Lengths are metres, angles degrees, times seconds.</summary>
 public sealed class TurretDef

@@ -1,8 +1,8 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
-/// <summary>Loads glTF/GLB models from the asset library (assets/, or SUCHOHRAD_ASSETS) once and hands out copies. Null when the file is missing or the run is headless, so callers keep their primitive fallback.</summary>
+/// <summary>Loads glTF/GLB models from the asset library (assets/, or DRYCASTLE_ASSETS) once and hands out copies. Null when the file is missing or the run is headless, so callers keep their primitive fallback.</summary>
 public static class ModelLib
 {
     static readonly Dictionary<string, Node3D?> Cache = new();
@@ -25,7 +25,7 @@ public static class ModelLib
         Cache[relPath] = Load(relPath);
     }
 
-    /// <summary>Absolute path of a file in the asset library (assets/, or SUCHOHRAD_ASSETS).</summary>
+    /// <summary>Absolute path of a file in the asset library (assets/, or DRYCASTLE_ASSETS).</summary>
     public static string AssetPath(string relPath)
     {
         return Path.GetFullPath(Path.Combine(GamePaths.Assets(), relPath));

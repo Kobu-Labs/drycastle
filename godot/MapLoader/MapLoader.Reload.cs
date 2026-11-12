@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.MapLoader;
+namespace Drycastle.MapLoader;
 
 /// <summary>Runtime swap of the buildings of one chunk for those of a re-exported chunk file (hot reload of the map).</summary>
 public sealed partial class MapLoader

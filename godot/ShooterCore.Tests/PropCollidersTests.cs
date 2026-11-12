@@ -1,9 +1,9 @@
 using System.Numerics;
 using System.Text.Json;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Shooter v2 (#158): tree trunk and crown solids from trees.json, the ray and surface lookups, object solids.</summary>
 public class PropCollidersTests

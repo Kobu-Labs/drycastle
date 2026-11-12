@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>Target dummies on the client (#148): the roster gives their names; their bodies come from snapshots (entity type Target).</summary>
 public partial class NetClient

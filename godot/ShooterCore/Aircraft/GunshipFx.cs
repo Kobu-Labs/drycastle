@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// The coalescing limits of the gunship FX (ticket #159). A server tick is 1/30 s; a gunner at 25 rounds a second lands about one

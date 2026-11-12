@@ -1,7 +1,7 @@
 # Glossary
 
 **Base map**:
-The versioned, shared data artifact of the real village of Suchohrad (terrain, roads, parcels, default buildings, landmarks, navigation data). Every mod consumes a specific version of it; it is not a game itself.
+The versioned, shared data artifact of the real village of Drycastle (terrain, roads, parcels, default buildings, landmarks, navigation data). Every mod consumes a specific version of it; it is not a game itself.
 _Avoid_: world, level, scene
 
 **Mod**:

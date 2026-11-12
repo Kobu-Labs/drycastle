@@ -7,7 +7,7 @@ using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 
 /// <summary>
 /// The schema constants of edits.json that the editor needs, kept in this one place. They mirror
-/// pipeline/src/suchohrad_pipeline/edits.py (FENCE_MODES, FENCE_TYPES, DEFAULT_FENCE_TYPE); the panel smoke
+/// pipeline/src/drycastle_pipeline/edits.py (FENCE_MODES, FENCE_TYPES, DEFAULT_FENCE_TYPE); the panel smoke
 /// compares them with what Python prints, so a drift fails `make viewer-panel-smoke`. The colour of a type is a
 /// tint over its texture (picket, wire and concrete are near-white, so the colour is their paint).
 /// </summary>

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// <c>--menu-shots DIR</c>: renders the menu screens in an off-screen SubViewport at 1280x720 and 3840x2160 and saves one PNG

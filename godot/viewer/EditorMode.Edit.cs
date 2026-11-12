@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Godot;
-using Suchohrad.MapLoader;
+using Drycastle.MapLoader;
 
 /// <summary>
 /// The Fence and Trees sections of the editor panel (Editor 6): the target (a parcel, several parcels or a

@@ -2,7 +2,7 @@
 
 from shapely.geometry import box
 
-from suchohrad_pipeline.water import WATER_FORMAT_VERSION, build_water, water_heights
+from drycastle_pipeline.water import WATER_FORMAT_VERSION, build_water, water_heights
 from tests.synthetic import make_terrain, parcel, plane
 
 
@@ -43,8 +43,8 @@ def test_water_parcel_outside_terrain_coverage_is_skipped() -> None:
 def test_export_writes_water_json_and_manifest_entry(tmp_path) -> None:
     import json
 
-    from suchohrad_pipeline.export import run_export
-    from suchohrad_pipeline.rules import DEFAULT_RULES
+    from drycastle_pipeline.export import run_export
+    from drycastle_pipeline.rules import DEFAULT_RULES
     from tests.synthetic import make_workspace
 
     ws = make_workspace(tmp_path)

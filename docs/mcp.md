@@ -1,6 +1,6 @@
 # MCP server for parcel edits
 
-A small stdio MCP server (`pipeline/src/suchohrad_pipeline/mcp_server.py`) that lets Claude Code edit parcels in
+A small stdio MCP server (`pipeline/src/drycastle_pipeline/mcp_server.py`) that lets Claude Code edit parcels in
 plain language: fences, trees, placed objects (cars, slabs, pots, bushes, ...), property groups and regions (ground colour shapes). It writes
 `pipeline/config/edits.json`, the same file the viewer's editor panel writes. It never talks to the viewer: a
 viewer started with `--editor --watch` notices the file change within about a second and regenerates just the
@@ -15,10 +15,10 @@ Nothing registers it for you. Pick one (replace `/path/to/drycastle` with your c
 
 ```sh
 # user-local, just for this checkout
-claude mcp add suchohrad-edits -- uv run --directory /path/to/drycastle/pipeline python -m suchohrad_pipeline.mcp_server
+claude mcp add drycastle-edits -- uv run --directory /path/to/drycastle/pipeline python -m drycastle_pipeline.mcp_server
 
 # the village area instead of the slice
-claude mcp add suchohrad-edits-village -- uv run --directory /path/to/drycastle/pipeline python -m suchohrad_pipeline.mcp_server --area village
+claude mcp add drycastle-edits-village -- uv run --directory /path/to/drycastle/pipeline python -m drycastle_pipeline.mcp_server --area village
 ```
 
 or check a `.mcp.json` into your own working copy (project scope):
@@ -26,22 +26,22 @@ or check a `.mcp.json` into your own working copy (project scope):
 ```json
 {
   "mcpServers": {
-    "suchohrad-edits": {
+    "drycastle-edits": {
       "command": "uv",
       "args": [
         "run", "--directory", "/path/to/drycastle/pipeline",
-        "python", "-m", "suchohrad_pipeline.mcp_server", "--area", "slice"
+        "python", "-m", "drycastle_pipeline.mcp_server", "--area", "slice"
       ]
     }
   }
 }
 ```
 
-Then `/mcp` in Claude Code should list `suchohrad-edits` with 23 tools. `make mcp` runs the same thing in a
+Then `/mcp` in Claude Code should list `drycastle-edits` with 23 tools. `make mcp` runs the same thing in a
 terminal (it waits for JSON-RPC on stdin, so it is only useful for debugging); the repo does not ship a
 `.mcp.json`.
 
-Options (`python -m suchohrad_pipeline.mcp_server --help`):
+Options (`python -m drycastle_pipeline.mcp_server --help`):
 
 | Option | Default | Meaning |
 | --- | --- | --- |

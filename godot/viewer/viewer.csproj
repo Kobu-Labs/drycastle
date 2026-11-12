@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
-    <RootNamespace>Suchohrad.Viewer</RootNamespace>
+    <RootNamespace>Drycastle.Viewer</RootNamespace>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 

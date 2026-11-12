@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Launcher;
+namespace Drycastle.Launcher;
 
 /// <summary>The launcher's one Theme and tokens (docs/standards/ui-ux.md section 4): 8 px grid, five text sizes, no per-control overrides in screens.</summary>
 public static class LauncherTheme

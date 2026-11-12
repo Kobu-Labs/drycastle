@@ -4,7 +4,7 @@ Decided by grilling #224 (map #220) with the user. The Shooter v2 map (#104) rul
 
 **1. Only bunkers.** A general interior needs a floor plan for some 380 buildings that the source data does not have, and it changes every fight in the village. A bunker is one small concrete room, there are three of them, and they are worth going into. Glass panes of other buildings keep ADR 0007's rule: the wall behind a pane stays solid.
 
-**2. The bunker stays a code model, not a hand-made asset.** Map #220 is about hand-modelling real buildings in an external tool (#221). The bunker does not follow it: one model in `pipeline/src/suchohrad_pipeline/bunker.py` already fits itself to each real footprint (8, 10 and 18 corners), so one change makes all three enterable and none of them waits for #221.
+**2. The bunker stays a code model, not a hand-made asset.** Map #220 is about hand-modelling real buildings in an external tool (#221). The bunker does not follow it: one model in `pipeline/src/drycastle_pipeline/bunker.py` already fits itself to each real footprint (8, 10 and 18 corners), so one change makes all three enterable and none of them waits for #221.
 
 **3. All three bunkers are buildings; the placeable bunker stays closed.** A placed object collides as one solid box (`PropColliders`), so nobody can enter one. The third bunker was a placed `prim:bunker` standing on top of the plain building OSM draws there; that building is now the bunker (an override, like the other two) and the placed object is gone. `prim:bunker` remains in the catalogue as the closed form.
 

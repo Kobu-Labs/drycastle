@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from suchohrad_pipeline.assets import (
+from drycastle_pipeline.assets import (
     CATEGORIES,
     DEFAULT_MANIFEST,
     MANIFEST_FORMAT_VERSION,
@@ -9,8 +9,8 @@ from suchohrad_pipeline.assets import (
     load_manifest,
     validate_asset_ref,
 )
-from suchohrad_pipeline.buildings import hex_to_rgb
-from suchohrad_pipeline.primitives import PRIMITIVES, build_primitive
+from drycastle_pipeline.buildings import hex_to_rgb
+from drycastle_pipeline.primitives import PRIMITIVES, build_primitive
 
 MANIFEST = load_manifest()
 
@@ -126,7 +126,7 @@ def test_validate_asset_ref() -> None:
 
 
 def test_props_warns_for_unknown_assets_only() -> None:
-    from suchohrad_pipeline.props import unknown_asset_warnings
+    from drycastle_pipeline.props import unknown_asset_warnings
 
     objs = [
         {"id": "a", "asset": "prim:slab"},

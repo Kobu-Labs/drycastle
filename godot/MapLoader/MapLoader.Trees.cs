@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using GVector3 = Godot.Vector3;
 
-namespace Suchohrad.MapLoader;
+namespace Drycastle.MapLoader;
 
 /// <summary>
 /// Collision of the base map's trees and of placed objects (trees.json, objects.json). Trunks are solid (world layer, players

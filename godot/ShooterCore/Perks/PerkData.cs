@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// The typed stats a perk can change (perks.json "modifiers" keys, snake_case). Every modifier has a neutral value

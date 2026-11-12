@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Sandbox mode on the server (#156): the grant at hello, the status notice, the held killstreak (grant from the panel,
@@ -123,7 +123,7 @@ public partial class NetServer
     }
 
     /// <summary>Sandbox vehicles per server run. Spawned cars are never removed, so an uncapped count would eventually wrap the vehicle id (T3-016).</summary>
-    const int SandboxVehicleCap = 8;
+    const int SandboxVehicleCap = 8, AdminVehicleCap = 32;
     int _sandboxVehicles;
 
     /// <summary>
@@ -132,9 +132,18 @@ public partial class NetServer
     /// </summary>
     void SandboxSpawnVehicle(Client c, byte kind)
     {
-        if (Vehicles == null || kind >= Vehicles.Vehicles.Count) { SandboxNote(c, "Unknown vehicle."); return; }
-        if (c.Car != null) { SandboxNote(c, "Leave the vehicle first."); return; }
-        if (_sandboxVehicles >= SandboxVehicleCap) { SandboxNote(c, $"The sandbox vehicle limit ({SandboxVehicleCap}) is reached until the server restarts."); return; }
+        if (TrySpawnVehicle(c, kind, SandboxVehicleCap) is { } why) SandboxNote(c, why);
+    }
+
+    /// <summary>
+    /// Spawns a vehicle in front of the player (the sandbox panel and the admin's /spawn). Returns why it did not, or null.
+    /// <paramref name="cap"/> bounds the vehicles spawned this run.
+    /// </summary>
+    string? TrySpawnVehicle(Client c, byte kind, int cap)
+    {
+        if (Vehicles == null || kind >= Vehicles.Vehicles.Count) return "Unknown vehicle.";
+        if (c.Car != null) return "Leave the vehicle first.";
+        if (_sandboxVehicles >= cap) return $"The spawned vehicle limit ({cap}) is reached until the server restarts.";
         _sandboxVehicles++;
         var def = Vehicles.Vehicles[kind];
         var yaw = c.Body.Yaw;
@@ -152,5 +161,6 @@ public partial class NetServer
         foreach (var cl in _byId.Values) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); }
         _cars.Add(car);
         GD.Print($"server: {c.Name} #{c.Id} spawned a {def.Id}");
+        return null;
     }
 }

@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// One ladder between two floors of a bunker (bunkers.json, #224). The climber stands at <see cref="Rail"/> and faces

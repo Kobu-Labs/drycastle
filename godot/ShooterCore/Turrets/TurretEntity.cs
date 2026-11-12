@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Turret world entity rules: wire type id and the state byte the clients read.</summary>
 public static class TurretRules

@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// A character's look (tickets #140, #141 and the character layer): the body model, skin tone, headgear, camouflage suit, foliage and face paint.

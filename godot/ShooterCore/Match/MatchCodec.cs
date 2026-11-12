@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Numerics;
 using System.Text;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 public readonly record struct ScoreRow(ushort Id, string Name, int Kills, int Deaths, ushort Ping);
 

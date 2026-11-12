@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>The numbers that make a bot easier or harder. Starting values, to be playtested; a data file comes with the fill rules.</summary>
 public sealed record BotTuning

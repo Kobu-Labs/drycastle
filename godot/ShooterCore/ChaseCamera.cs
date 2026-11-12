@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// The third-person camera on a driven ground vehicle (#218): how far behind and how high above the vehicle it wants to sit, and how it

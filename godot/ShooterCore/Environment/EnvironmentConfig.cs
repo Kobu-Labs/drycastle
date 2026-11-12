@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// environment.json: the day/night clock defaults. Server flags (--time, --day-length, --freeze-time) override these

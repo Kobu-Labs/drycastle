@@ -1,10 +1,10 @@
-using Suchohrad.ShooterCore;
-using Suchohrad.ShooterServer.Persistence;
-using Suchohrad.ShooterServer.Persistence.InMemory;
-using Suchohrad.ShooterServer.Persistence.Sqlite;
+using Drycastle.ShooterCore;
+using Drycastle.ShooterServer.Persistence;
+using Drycastle.ShooterServer.Persistence.InMemory;
+using Drycastle.ShooterServer.Persistence.Sqlite;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Camouflage framework (ticket #140): codec, validation, camo.json, concealment, wire messages and persistence.</summary>
 public class CamoTests

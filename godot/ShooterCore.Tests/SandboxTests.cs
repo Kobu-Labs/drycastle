@@ -1,9 +1,9 @@
 using System.Numerics;
 using System.Text;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Ticket #156: sandbox mode. Hello flag and negotiation, godmode, no score, unlimited ammo, streak grant.</summary>
 public class SandboxTests

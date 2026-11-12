@@ -1,9 +1,9 @@
 using Godot;
-using Suchohrad.ShooterCore;
-using Suchohrad.ShooterServer.Persistence;
+using Drycastle.ShooterCore;
+using Drycastle.ShooterServer.Persistence;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Authoritative 30 Hz server over raw ENet (see ADR 0002): ch0 reliable messages, ch1 unreliable-sequenced input and snapshots.
@@ -68,6 +68,8 @@ public partial class NetServer : Node
         public string Token = "";
         public int PacketsThisTick;
         public double SaveTokens = 10;
+        /// <summary>What this player may send to the chat: a short burst, then about a line a second.</summary>
+        public readonly ChatRateLimiter Chat = new();
         public long BytesOut;
     }
 
@@ -89,7 +91,7 @@ public partial class NetServer : Node
     public bool WeaponsSmoke;
     public float KillY = float.NegativeInfinity;
     /// <summary>The map's water (water.json); players swim, drown and lose the weapon lock under it.</summary>
-    public Suchohrad.ShooterCore.Water Water = Suchohrad.ShooterCore.Water.Empty;
+    public Drycastle.ShooterCore.Water Water = Drycastle.ShooterCore.Water.Empty;
     public int Port = 27015;
     /// <summary>Network impairment for the loss and latency test (--net-sim); null = none.</summary>
     public NetSim? Sim;
@@ -358,6 +360,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SeatSwitch } sw && c.Joined) OnSeatSwitch(c, sw.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) OnChatSend(c, cs.Payload);
             else if (c.Joined) OnProfileMessage(c, m);
         }
         else if (c.Joined && d[0] == Wire.TInput)
@@ -411,6 +414,7 @@ public partial class NetServer : Node
         c.Enc = new SnapshotEncoder(_sentStates);
         SendProfile(c);
         SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
+        SendChatStatus(c); // admin or not, and the vehicles /spawn takes
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick,
             (ushort)(Clock.StartMinute), (uint)Math.Round(Clock.DayLengthSeconds * 1000), Clock.Frozen));
         foreach (var o in _byId.Values)

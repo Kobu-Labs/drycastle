@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>How a used killstreak is controlled: nothing (it acts on its own) or a point-of-view takeover (the owner steers an entity).</summary>
 public enum KillstreakControl { None, Pov }

@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterServer.Persistence;
+namespace Drycastle.ShooterServer.Persistence;
 
 // Repository interfaces (ADR 0003). Callers are never on the game tick: reads are awaited on a worker,
 // writes are queued and complete in the background. The SQLite store logs a failed write instead of throwing it.

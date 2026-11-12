@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Pure numbers for the water look and sound (the "water visuals and audio" ticket, #142). No Godot here: the client

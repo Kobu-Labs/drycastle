@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Godot;
-using Suchohrad.MapLoader;
+using Drycastle.MapLoader;
 
 /// <summary>
 /// Editor mode shell: a free-fly camera, parcel hover and selection, outlines (selection, hovered parcel,
@@ -17,7 +17,7 @@ public partial class EditorMode : Node
     const float StatusHeight = 58f;
     const float TopDownHeight = 120f;
 
-    public Suchohrad.MapLoader.MapLoader Map { get; init; } = null!;
+    public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
     public Player Player { get; init; } = null!;
     public EditsWatcher? Watcher { get; init; }
     public string EditsPath { get; init; } = "";

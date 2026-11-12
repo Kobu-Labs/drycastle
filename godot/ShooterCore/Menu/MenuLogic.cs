@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Result of validating the connect form: the parsed target or the translation key of what is wrong (per field).</summary>
 public readonly record struct ConnectCheck(string Host, int Port, string? AddressError, string? PortError, string? NameError)

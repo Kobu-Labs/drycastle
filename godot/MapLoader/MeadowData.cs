@@ -1,9 +1,9 @@
 using System.IO.Compression;
 
-namespace Suchohrad.MapLoader;
+namespace Drycastle.MapLoader;
 
 // Pure (no Godot types): compiled into ShooterCore.Tests by a link. The format and the generator are specified in
-// pipeline/src/suchohrad_pipeline/meadow.py, which has the same hash and the same instance rules (a test pins both).
+// pipeline/src/drycastle_pipeline/meadow.py, which has the same hash and the same instance rules (a test pins both).
 
 /// <summary>One generated piece of meadow clutter. Map metres, x east, y north (no height: the loader reads the ground); Rot is counter-clockwise seen from above.</summary>
 public readonly record struct MeadowInstance(string Kind, float X, float Y, float Rot, float Scale, byte Tint = ClutterTint.Neutral);

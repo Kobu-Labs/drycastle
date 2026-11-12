@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>What a shot or shell hit, for the impact particles. Chosen on the server so every client draws the same thing.</summary>
 public enum SurfaceKind : byte { Ground = 0, Road = 1, Building = 2, Water = 3, Metal = 4, Flesh = 5, Wood = 6, Foliage = 7 }

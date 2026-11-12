@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>What one loadout streak slot shows on the HUD tracker (ticket #119).</summary>
 public enum StreakSlotState

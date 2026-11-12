@@ -25,8 +25,8 @@ m = json.load(open(a.map_json))
 manifest = {
     "schema": 2, "version": a.tag, "channel": a.channel, "commit": a.commit, "protocol": a.protocol,
     "platforms": {
-        "windows": build(getattr(a, "windows_zip"), "suchohrad-shooter.exe"),
-        "linux": build(getattr(a, "linux_zip"), "suchohrad-shooter.x86_64"),
+        "windows": build(getattr(a, "windows_zip"), "drycastle-shooter.exe"),
+        "linux": build(getattr(a, "linux_zip"), "drycastle-shooter.x86_64"),
     },
     "map": {"id": a.map_tag, "file": {"name": m["name"], "url": f"{base}/{a.map_tag}/{m['name']}", "sha256": m["sha256"], "size": m["size"]}},
 }

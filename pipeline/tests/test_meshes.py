@@ -3,9 +3,9 @@ import pytest
 from shapely.affinity import rotate
 from shapely.geometry import Polygon, box
 
-from suchohrad_pipeline.buildings import derive_building, load_building_rules
-from suchohrad_pipeline.export import to_trimesh
-from suchohrad_pipeline.meshes import building_mesh, collision_mesh
+from drycastle_pipeline.buildings import derive_building, load_building_rules
+from drycastle_pipeline.export import to_trimesh
+from drycastle_pipeline.meshes import building_mesh, collision_mesh
 
 RULES = load_building_rules()
 

@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// The hotbar a loadout gives a player: primary, secondary and knife, in that order (keys 1-3 and the next-weapon cycle).

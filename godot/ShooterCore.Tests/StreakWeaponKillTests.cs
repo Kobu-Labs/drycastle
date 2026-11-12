@@ -1,7 +1,7 @@
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Ticket #143: kills made with a killstreak's own weapon never advance the Streak counter (HUD tracker and server).</summary>
 public class StreakWeaponKillTests

@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// The care package's random reward (killstreaks.json "streak_weights", ticket #151): a roll picks one killstreak with a

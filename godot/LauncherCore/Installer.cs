@@ -2,7 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 
-namespace Suchohrad.LauncherCore;
+namespace Drycastle.LauncherCore;
 
 public enum InstallPhase { DownloadingGame, DownloadingMap, Installing }
 
@@ -24,7 +24,7 @@ public sealed class Installer
 
     public Installer(HttpClient http, string root) { _http = http; Root = root; }
 
-    public static string DefaultRoot() => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Suchohrad");
+    public static string DefaultRoot() => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Drycastle");
 
     public InstalledState? Installed()
     {

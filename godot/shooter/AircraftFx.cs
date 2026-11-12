@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The aircraft models (ticket #125). No free CC0 aircraft model was hand-checked for this ticket, so both kinds are built

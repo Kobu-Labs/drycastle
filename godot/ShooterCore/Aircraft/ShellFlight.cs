@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>When a gunship round detonates: now (instant, as a cannon round), or later at the time its tracer arrives.</summary>
 public readonly record struct ShellTiming(bool Deferred, double DueAt);

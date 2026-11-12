@@ -9,8 +9,8 @@ import shapely
 import trimesh
 from shapely.geometry import Polygon
 
-from suchohrad_pipeline import cli, region_run
-from suchohrad_pipeline.edits import (
+from drycastle_pipeline import cli, region_run
+from drycastle_pipeline.edits import (
     Edits,
     EditsError,
     dump_edits,
@@ -19,8 +19,8 @@ from suchohrad_pipeline.edits import (
     parse,
     validate,
 )
-from suchohrad_pipeline.export import run_export
-from suchohrad_pipeline.regions import (
+from drycastle_pipeline.export import run_export
+from drycastle_pipeline.regions import (
     _terrain_triangles,
     drape,
     overlapping,
@@ -30,7 +30,7 @@ from suchohrad_pipeline.regions import (
     road_layers,
     visible_area,
 )
-from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace
 
 OX, OY = SYNTHETIC_ORIGIN
@@ -238,7 +238,7 @@ def test_mesh_lies_on_the_terrain_and_follows_a_kink() -> None:
 
 
 def test_region_over_a_road_floats_above_the_ribbon() -> None:
-    from suchohrad_pipeline.roads import road_mesh
+    from drycastle_pipeline.roads import road_mesh
 
     ws = make_workspace_graph()
     t = make_terrain()
@@ -449,7 +449,7 @@ def test_water_mesh_is_flat_under_the_level_and_follows_the_shore() -> None:
 
 
 def test_water_region_becomes_water_bodies_and_dry_levels_are_skipped() -> None:
-    from suchohrad_pipeline.water import build_water
+    from drycastle_pipeline.water import build_water
 
     terrain, plan = _wet_setup(1.0)
     docw, skipped = build_water([], terrain, plan.regions)

@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// The complete entity states of recent ticks. The server keeps what it sent and the client what it committed, so a

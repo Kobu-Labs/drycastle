@@ -1,7 +1,7 @@
 using System.Numerics;
 using System.Text.Json;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// One room of a bunker: a ring in Godot ground axes (x east, y = -north) between two heights. The pipeline grows it a

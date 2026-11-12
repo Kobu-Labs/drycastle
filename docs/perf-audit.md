@@ -156,7 +156,7 @@ Fix: default to 2x, or off with FXAA, and add a render-scale setting. Effort S. 
 **T2-24 Each remote player and corpse builds its own materials, and its ghillie tufts cast shadows.** Hot. Per character: three `StandardMaterial3D`, a suit `ShaderMaterial`, a tuft material and up to about eight tuft `MultiMeshInstance3D`, plus a face decal (`godot/shooter/CharacterView.Camo.cs:103-134`, `:247-258`, `:309-315`). About 20 to 25 draws per character, for up to 16 players and 16 corpses.
 Fix: cache materials by look; `CastShadow = Off` on tufts and eyes. Effort S to M. CONFIRMED; draw count UNVERIFIED. Source: REN-07.
 
-**T2-25 Tree and fence meshes are unindexed: 1,147,350 vertices for 382,450 triangles.** Hot (vertex memory) and cold (file size, load). `propmeshes.py` emits a triangle list with three vertices per triangle (`pipeline/src/suchohrad_pipeline/propmeshes.py:11-55`, `:73-124`), and `to_trimesh` writes every mesh the same way with RGBA per vertex (`pipeline/src/suchohrad_pipeline/export.py:52-62`). The chunk files total 44 MB.
+**T2-25 Tree and fence meshes are unindexed: 1,147,350 vertices for 382,450 triangles.** Hot (vertex memory) and cold (file size, load). `propmeshes.py` emits a triangle list with three vertices per triangle (`pipeline/src/drycastle_pipeline/propmeshes.py:11-55`, `:73-124`), and `to_trimesh` writes every mesh the same way with RGBA per vertex (`pipeline/src/drycastle_pipeline/export.py:52-62`). The chunk files total 44 MB.
 Fix: emit indexed boxes and pyramids for props; index the terrain grid if per-vertex colour is acceptable. Effort M. CONFIRMED (measured). Sources: REN-09, PY-18.
 
 ### 3D world and map load
@@ -184,13 +184,13 @@ Fix: one ground hit per frame, cached by mouse position and camera transform; a 
 **T2-32 The region tool rebuilds a formatted signature and copies the region list every frame.** Hot (editor). `RegionWorld` builds a string from every draft and selected point each frame, `Regions()` returns a copy on every call and `Region(id)` scans it, and handles are repositioned in a per-frame loop with one `SphereMesh` each (`godot/viewer/EditorMode.Regions.cs:85-101`, `:551-568`, `:588-650`).
 Fix: a version counter bumped on change; cache the selected region; return the cached list read-only; place handles only on change; share one mesh. Effort S. CONFIRMED. Sources: VX-01, W3D-22.
 
-**T2-33 A fence, tree or region edit starts a Python process that rebuilds its indices every time.** Cold (edit latency). Placed objects are applied in process, but other edits run `uv run` parcel-run or region-run (`godot/viewer/EditsWatcher.cs:492-530`). Each run re-parses `parcels.json`, `buildings.json` and `roads.json` and rebuilds the spatial indices (`pipeline/src/suchohrad_pipeline/parcel_run.py:121-127`, `:166-167`, `:280-283`); region-run parses all of `parcels.json` for two origin numbers (`pipeline/src/suchohrad_pipeline/region_run.py:51`, `:54`) and `rules.yaml` is parsed with the pure-Python loader per call (`pipeline/src/suchohrad_pipeline/rules.py:80-97`). `docs/parcel-run-timing.md` gives 0.3 to 0.85 s warm and lists pre-indexing as not done.
+**T2-33 A fence, tree or region edit starts a Python process that rebuilds its indices every time.** Cold (edit latency). Placed objects are applied in process, but other edits run `uv run` parcel-run or region-run (`godot/viewer/EditsWatcher.cs:492-530`). Each run re-parses `parcels.json`, `buildings.json` and `roads.json` and rebuilds the spatial indices (`pipeline/src/drycastle_pipeline/parcel_run.py:121-127`, `:166-167`, `:280-283`); region-run parses all of `parcels.json` for two origin numbers (`pipeline/src/drycastle_pipeline/region_run.py:51`, `:54`) and `rules.yaml` is parsed with the pure-Python loader per call (`pipeline/src/drycastle_pipeline/rules.py:80-97`). `docs/parcel-run-timing.md` gives 0.3 to 0.85 s warm and lists pre-indexing as not done.
 Fix: a long-lived pipeline worker, or a compact index written at map build and keyed by file times; read the origin from `frame.json`; cache parsed rules by modification time. Effort M to L. CONFIRMED. Sources: W3D-12, PY-04, PY-05.
 
 ### Map pipeline
 
-**T2-34 Region-run clips terrain triangle by triangle and recomputes road ribbons per region.** Cold (edit latency and export). The region drape overlays the region with one triangle at a time and calls `terrain.surface` per triangle (`pipeline/src/suchohrad_pipeline/regions.py:207-226`). Road ribbons test every terrain cell in an edge's bounding box against an unprepared union (`pipeline/src/suchohrad_pipeline/roads.py:156-170`, `:207-210`) and are rebuilt for each region and again for the roads node (`pipeline/src/suchohrad_pipeline/regions.py:145`, `:246`; `pipeline/src/suchohrad_pipeline/scene.py:156`, `:161-165`).
-Fix: `shapely.prepare` plus a vectorised `intersects` prefilter as `pipeline/src/suchohrad_pipeline/terrain.py:266` already does; compute ribbon meshes once per build and pass them in; one batched `terrain.surface` call. Diff the GLB to prove identical output. Effort S to M. Path CONFIRMED (*sampled*); time UNVERIFIED. Sources: PY-01, PY-02, PY-03.
+**T2-34 Region-run clips terrain triangle by triangle and recomputes road ribbons per region.** Cold (edit latency and export). The region drape overlays the region with one triangle at a time and calls `terrain.surface` per triangle (`pipeline/src/drycastle_pipeline/regions.py:207-226`). Road ribbons test every terrain cell in an edge's bounding box against an unprepared union (`pipeline/src/drycastle_pipeline/roads.py:156-170`, `:207-210`) and are rebuilt for each region and again for the roads node (`pipeline/src/drycastle_pipeline/regions.py:145`, `:246`; `pipeline/src/drycastle_pipeline/scene.py:156`, `:161-165`).
+Fix: `shapely.prepare` plus a vectorised `intersects` prefilter as `pipeline/src/drycastle_pipeline/terrain.py:266` already does; compute ribbon meshes once per build and pass them in; one batched `terrain.surface` call. Diff the GLB to prove identical output. Effort S to M. Path CONFIRMED (*sampled*); time UNVERIFIED. Sources: PY-01, PY-02, PY-03.
 
 ### Docker, build and deploy
 
@@ -211,7 +211,7 @@ Fix: append `docker image prune -f`. Effort S. CONFIRMED. Source: DOCK-13.
 
 ## 4. Tier 3: Low impact and polish
 
-Path prefixes: `s/` = `godot/shooter/`, `n/` = `godot/shooter/Net/`, `c/` = `godot/ShooterCore/`, `m/` = `godot/MapLoader/`, `v/` = `godot/viewer/`, `d/` = `godot/ShooterServer.Persistence/`, `p/` = `pipeline/src/suchohrad_pipeline/`. Confidence: C = CONFIRMED, U = UNVERIFIED.
+Path prefixes: `s/` = `godot/shooter/`, `n/` = `godot/shooter/Net/`, `c/` = `godot/ShooterCore/`, `m/` = `godot/MapLoader/`, `v/` = `godot/viewer/`, `d/` = `godot/ShooterServer.Persistence/`, `p/` = `pipeline/src/drycastle_pipeline/`. Confidence: C = CONFIRMED, U = UNVERIFIED.
 
 | # | area | path:line | hot/cold | effort | confidence | fix |
 |---|---|---|---|---|---|---|
@@ -356,7 +356,7 @@ Each item is UNVERIFIED in size or behaviour. The cheapest confirmation comes fi
 
 | Finding | What is unknown | Cheapest way to confirm |
 |---|---|---|
-| T1-1 | Whether the uncapped headless loop spins a core | `docker stats --no-stream` on an idle server; or `top -H -p $(pgrep -f suchohrad-server)` |
+| T1-1 | Whether the uncapped headless loop spins a core | `docker stats --no-stream` on an idle server; or `top -H -p $(pgrep -f drycastle-server)` |
 | T2-20, T2-21, T2-22 | Frame cost of 998 draws, shadow passes and missing ranges | Godot debugger monitors (draw calls, objects drawn, primitives) and the visual profiler's shadow pass, from a spawn looking down the village, before and after each change |
 | T2-23 | Cost of MSAA 4x | GPU frame time at MSAA off, 2x and 4x on the same view |
 | T3-061 | Forward+ against Mobile | Same view and MSAA, both renderers |
@@ -381,7 +381,7 @@ Each item is UNVERIFIED in size or behaviour. The cheapest confirmation comes fi
 | T2-38, T3-108 | Layer and base image sizes | `docker history --no-trunc <image>` after one build |
 | T3-116 | Latency added by Docker NAT | Loss test or ping comparison with `network_mode: host` |
 | T2-34, T2-33 | Region-run and parcel-run time split | The `timing_s` values both commands already print, per region, before and after |
-| T3-083 to T3-106 | Which pipeline stage dominates a full run | `cProfile` on `python -m suchohrad_pipeline export` and `props`; `python -X importtime` for T3-095 |
+| T3-083 to T3-106 | Which pipeline stage dominates a full run | `cProfile` on `python -m drycastle_pipeline export` and `props`; `python -X importtime` for T3-095 |
 | T3-010 | Whether the capsule setter early-outs on an unchanged value | Count shape updates per tick in the profiler |
 | T3-014 | Whether freed bodies drop their collision exceptions | Read a vehicle's exception count after 50 join and leave cycles |
 | T3-053 | Cost of changing `Amount` | Profile `OnImpactFx` |
@@ -407,7 +407,7 @@ Seen while auditing, not counted as findings:
 
 - `docs/shooter-server.md:40` says the server validates every sound against `assets/`; it no longer does. The same doc says SQLite foreign keys are off; `godot/ShooterServer.Persistence/Sqlite/SqliteWorker.cs:31` turns them on.
 - `ProjectileMath.WithBlast` (`godot/ShooterCore/Weapons/ProjectileMath.cs:62`) copies only four fields of a `WeaponDef`; every other field reads zero on the copy.
-- `pipeline/src/suchohrad_pipeline/roads.py:183-191` defines `_area2` twice and repeats the sliver check at `:222-225`.
+- `pipeline/src/drycastle_pipeline/roads.py:183-191` defines `_area2` twice and repeats the sliver check at `:222-225`.
 - The database password travels in environment variables, and backups are a documented manual step with nothing scheduled.
 - The editor's watcher detects changes by size and modification time only, so a same-size rewrite within one timestamp tick would be missed.
 - Not covered by this audit: test and smoke-script run time, and a full read of `Hud.Streaks.cs`, `Hud.Uav.cs`, `Hud.Sandbox.cs`, `CorpseChooser.cs` and `MoabBanner.cs` for redraw cost (they were read in full for allocations only).

@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Where a slot's autosave stands. Saved = nothing unsent or in flight; the screen words each one.</summary>
 public enum AutosaveState { Saved, Pending, Saving, Retrying, Rejected }

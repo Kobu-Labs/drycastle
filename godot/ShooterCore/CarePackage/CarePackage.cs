@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Care package rules (ticket #124, reward reworked in #151): the killstreak that drops a crate on a parachute. The owner's

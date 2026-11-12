@@ -10,75 +10,75 @@ test:
 	cd pipeline && uv run pytest
 
 fetch:
-	cd pipeline && uv run python -m suchohrad_pipeline fetch --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline fetch --area $(AREA)
 
 normalise:
-	cd pipeline && uv run python -m suchohrad_pipeline normalise --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline normalise --area $(AREA)
 
 parcels:
-	cd pipeline && uv run python -m suchohrad_pipeline parcels --area $(AREA) --report
+	cd pipeline && uv run python -m drycastle_pipeline parcels --area $(AREA) --report
 
 rules:
-	cd pipeline && uv run python -m suchohrad_pipeline rules --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline rules --area $(AREA)
 
 terrain:
-	cd pipeline && uv run python -m suchohrad_pipeline terrain --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline terrain --area $(AREA)
 
 roads:
-	cd pipeline && uv run python -m suchohrad_pipeline roads --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline roads --area $(AREA)
 
 props:
-	cd pipeline && uv run python -m suchohrad_pipeline props --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline props --area $(AREA)
 
 # Ground detail: draped patches (dirt, gravel, leaf litter, beds, furrows, verges) and clutter instances (tufts, pebbles, ...)
 # for every parcel; writes data/work/detail*.{json,npy}. Needs props. See docs/pipeline.md "Detail".
 detail:
-	cd pipeline && uv run python -m suchohrad_pipeline detail --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline detail --area $(AREA)
 
 export:
-	cd pipeline && uv run python -m suchohrad_pipeline export --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline export --area $(AREA)
 
 # PARCEL=P-0412 [GROUP=G-0001] [OUT=file.json] [GLB=file.glb]: fences and trees of one parcel as JSON
 # (stdout by default), optionally also as a GLB with parcel_<ID>_props nodes
 PARCEL_ARGS = $(if $(PARCEL),--parcel $(PARCEL),) $(if $(GROUP),--group $(GROUP),) $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb $(abspath $(GLB)),)
 
 parcel-run:
-	cd pipeline && uv run python -m suchohrad_pipeline parcel-run --area $(AREA) $(PARCEL_ARGS)
+	cd pipeline && uv run python -m drycastle_pipeline parcel-run --area $(AREA) $(PARCEL_ARGS)
 
 # [REGION=R-0001] [OUT=file.json] GLB=file.glb: meshes of the regions (none named: all) as a GLB with
 # region_<ID> nodes (hot reload); the JSON summary lists the regions to replace
 REGION_ARGS = $(if $(REGION),--region $(REGION),) $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb $(abspath $(GLB)),)
 
 region-run:
-	cd pipeline && uv run python -m suchohrad_pipeline region-run --area $(AREA) $(REGION_ARGS)
+	cd pipeline && uv run python -m drycastle_pipeline region-run --area $(AREA) $(REGION_ARGS)
 
 EXAG ?= 3
 
 preview:
-	cd pipeline && uv run python -m suchohrad_pipeline preview --area $(AREA) --exaggeration $(EXAG)
+	cd pipeline && uv run python -m drycastle_pipeline preview --area $(AREA) --exaggeration $(EXAG)
 
 # Pictures of the generated utility poles in out/poles (variants, random seeds, a wired row, the parts kit); GLB=1 also
 # writes each placeable pole as a GLB. No map data needed. See docs/utility-poles.md.
 poles-preview:
-	cd pipeline && uv run python -m suchohrad_pipeline.poles_preview $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb,)
+	cd pipeline && uv run python -m drycastle_pipeline.poles_preview $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb,)
 
 # Rewrites the prim:pole_* and prim:connector_* entries of assets/manifest.json after the poles or connectors changed.
 poles-manifest:
-	cd pipeline && uv run python -m suchohrad_pipeline.poles_preview --sync-manifest
+	cd pipeline && uv run python -m drycastle_pipeline.poles_preview --sync-manifest
 
 # Pictures of the flood wall kit in out/floodwall (the pieces from both sides, a laid run, the access point); GLB=1 also
 # writes each piece as a GLB. No map data needed. See docs/flood-wall.md.
 floodwall-preview:
-	cd pipeline && uv run python -m suchohrad_pipeline.floodwall_preview $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb,)
+	cd pipeline && uv run python -m drycastle_pipeline.floodwall_preview $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb,)
 
 # Rewrites the prim:floodwall_* entries of assets/manifest.json after the kit changed.
 floodwall-manifest:
-	cd pipeline && uv run python -m suchohrad_pipeline.floodwall_preview --sync-manifest
+	cd pipeline && uv run python -m drycastle_pipeline.floodwall_preview --sync-manifest
 
 map:
-	cd pipeline && uv run python -m suchohrad_pipeline run-all --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline run-all --area $(AREA)
 
-# MAP: map folder (default: SUCHOHRAD_MAP env var, else ../../out/map relative to godot/viewer)
+# MAP: map folder (default: DRYCASTLE_MAP env var, else ../../out/map relative to godot/viewer)
 MAP_ARG = $(if $(MAP),--map $(abspath $(MAP)),)
 SEED ?= 1
 
@@ -135,7 +135,7 @@ viewer-objects-smoke:
 MCP_ARGS = $(if $(EDITS),--edits $(abspath $(EDITS)),) $(if $(STATE),--state $(abspath $(STATE)),) $(if $(ASSETS),--assets $(abspath $(ASSETS)),)
 
 mcp:
-	cd pipeline && uv run python -m suchohrad_pipeline.mcp_server --area $(AREA) $(MCP_ARGS)
+	cd pipeline && uv run python -m drycastle_pipeline.mcp_server --area $(AREA) $(MCP_ARGS)
 
 # Loads every glTF in assets/manifest.json with GLTFDocument (headless); exits nonzero on failure.
 assets-check:
@@ -151,7 +151,7 @@ viewer-shot:
 	godot --path godot/viewer --resolution 1600x900 -- --view player --seed $(SEED) --screenshot $(abspath out/screens)/player.png $(MAP_ARG)
 
 # 64-client netcode spike (see godot/netspike/README in the main README). Needs a map folder:
-# MAP=/path/to/out/map or SUCHOHRAD_MAP. Results go to out/netspike/<timestamp>/.
+# MAP=/path/to/out/map or DRYCASTLE_MAP. Results go to out/netspike/<timestamp>/.
 NETSPIKE_MAP = $(if $(MAP),--map $(abspath $(MAP)),)
 
 netspike:
@@ -160,14 +160,14 @@ netspike:
 netspike-quick:
 	python3 godot/netspike/run_spike.py --quick $(NETSPIKE_MAP)
 
-# Shooter v1 (godot/shooter + godot/ShooterCore). MAP=/path/to/out/map or SUCHOHRAD_MAP.
+# Shooter v1 (godot/shooter + godot/ShooterCore). MAP=/path/to/out/map or DRYCASTLE_MAP.
 # shooter-server runs headless; add SMOKE=1 to boot, load and exit cleanly.
 SHOOTER_MAP = $(if $(MAP),--map $(abspath $(MAP)),)
 # Dev mode (issue #149): every weapon, perk, killstreak and level-gated item unlocked on the dev servers. Nothing is saved
 # to the database. Release servers are never started with it (see docs/shooter-server.md). UNLOCK_ALL=0 turns it off.
 UNLOCK_ALL ?= 1
 UNLOCK_ARG = $(if $(filter 1 true,$(UNLOCK_ALL)),--unlock-all,)
-UNLOCK_ENV = SUCHOHRAD_UNLOCK_ALL=$(UNLOCK_ALL)
+UNLOCK_ENV = DRYCASTLE_UNLOCK_ALL=$(UNLOCK_ALL)
 
 # Loadout and HUD icons (#146): weapon renders need a display (DISPLAY); the rest is ImageMagick + Pillow.
 shooter-icons:
@@ -286,25 +286,25 @@ shooter-export: shooter-export-check
 	for d in windows linux-client linux-server; do cp -r assets/. out/shooter/$$d/assets/; [ -n "$(SHOOTER_NO_MAP)" ] || cp -r $(SHOOTER_PKG_MAP)/. out/shooter/$$d/map/; done
 	@echo "exported to out/shooter/ (assets/ and map/ next to each binary; see docs/shooter-server.md)"
 
-# Double-click Windows package: out/shooter/suchohrad-windows.zip (exe + assets/ + map/ + README.txt).
+# Double-click Windows package: out/shooter/drycastle-windows.zip (exe + assets/ + map/ + README.txt).
 # Staged as symlinks and zipped (zip follows them), so nothing is copied or deleted. Map: the bundled map folder
 # (default out/village/map, set above) is already inside each export; it must be the build the server runs.
 shooter-package: shooter-export
-	mkdir -p out/shooter/package/Suchohrad
-	for f in out/shooter/windows/*; do ln -sfn "$$PWD/$$f" out/shooter/package/Suchohrad/; done
-	ln -sfn "$$PWD/docs/player-readme.txt" out/shooter/package/Suchohrad/README.txt
-	cd out/shooter/package && zip -qrFS ../suchohrad-windows.zip Suchohrad
-	@echo "package: out/shooter/suchohrad-windows.zip ($$(du -h out/shooter/suchohrad-windows.zip | cut -f1))"
+	mkdir -p out/shooter/package/Drycastle
+	for f in out/shooter/windows/*; do ln -sfn "$$PWD/$$f" out/shooter/package/Drycastle/; done
+	ln -sfn "$$PWD/docs/player-readme.txt" out/shooter/package/Drycastle/README.txt
+	cd out/shooter/package && zip -qrFS ../drycastle-windows.zip Drycastle
+	@echo "package: out/shooter/drycastle-windows.zip ($$(du -h out/shooter/drycastle-windows.zip | cut -f1))"
 
 # Launcher distribution (docs/launcher.md). The CI release job runs these; they work locally too.
-# Game zips WITHOUT the map (the launcher installs the map from its own release): out/shooter/suchohrad-game-{windows,linux}.zip, files at the zip root.
+# Game zips WITHOUT the map (the launcher installs the map from its own release): out/shooter/drycastle-game-{windows,linux}.zip, files at the zip root.
 .PHONY: shooter-export-server shooter-package-game map-package launcher-build launcher-export launcher-test
 shooter-package-game:
 	$(MAKE) shooter-export SHOOTER_NO_MAP=1
-	rm -f out/shooter/suchohrad-game-windows.zip out/shooter/suchohrad-game-linux.zip
-	cd out/shooter/windows && zip -qr ../suchohrad-game-windows.zip . -x 'map/*'
-	cd out/shooter/linux-client && zip -qr ../suchohrad-game-linux.zip . -x 'map/*'
-	@echo "packages: out/shooter/suchohrad-game-{windows,linux}.zip"
+	rm -f out/shooter/drycastle-game-windows.zip out/shooter/drycastle-game-linux.zip
+	cd out/shooter/windows && zip -qr ../drycastle-game-windows.zip . -x 'map/*'
+	cd out/shooter/linux-client && zip -qr ../drycastle-game-linux.zip . -x 'map/*'
+	@echo "packages: out/shooter/drycastle-game-{windows,linux}.zip"
 
 # Linux server export only (used by the release pipeline to deploy): out/shooter/linux-server with assets/ and map/ (SHOOTER_PKG_MAP).
 shooter-export-server: shooter-export-check
@@ -333,6 +333,6 @@ launcher-export: launcher-build
 	godot --headless --path godot/launcher --export-release "Windows Launcher"
 	godot --headless --path godot/launcher --export-release "Linux Launcher"
 	cp docs/launcher-readme.txt out/launcher/windows/README.txt; cp docs/launcher-readme.txt out/launcher/linux/README.txt
-	rm -f out/launcher/suchohrad-launcher-windows.zip out/launcher/suchohrad-launcher-linux.zip
-	cd out/launcher/windows && zip -qr ../suchohrad-launcher-windows.zip .
-	cd out/launcher/linux && zip -qr ../suchohrad-launcher-linux.zip .
+	rm -f out/launcher/drycastle-launcher-windows.zip out/launcher/drycastle-launcher-linux.zip
+	cd out/launcher/windows && zip -qr ../drycastle-launcher-windows.zip .
+	cd out/launcher/linux && zip -qr ../drycastle-launcher-linux.zip .

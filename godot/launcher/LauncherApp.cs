@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using Godot;
-using Suchohrad.LauncherCore;
+using Drycastle.LauncherCore;
 
-namespace Suchohrad.Launcher;
+namespace Drycastle.Launcher;
 
 /// <summary>
 /// The launcher screen: checks the release feed, downloads/updates the game and the map (LauncherCore), then starts the game.

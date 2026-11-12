@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Why a player got XP (one per award line, so the post-match summary can list them).</summary>
 public enum XpReason { Kill, Headshot, Roadkill, Assist, StreakKill, MatchWin, MatchTop3 }

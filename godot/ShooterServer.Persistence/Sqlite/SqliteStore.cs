@@ -1,7 +1,7 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 
-namespace Suchohrad.ShooterServer.Persistence.Sqlite;
+namespace Drycastle.ShooterServer.Persistence.Sqlite;
 
 /// <summary>SQLite-backed <see cref="IProgressionStore"/>. Open with a file path (default ./shooter.db set by the server).</summary>
 public sealed class SqliteProgressionStore : IProgressionStore

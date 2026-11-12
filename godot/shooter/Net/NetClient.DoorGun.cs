@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The utility helicopter's door gun on the client (<see cref="DoorGunRules"/>). Every client poses the model's mount (yaw), gun (pitch) and barrel
@@ -13,7 +13,7 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class NetClient
 {
-    /// <summary>The nodes of a door gun that move, found by name (the model's own, see assets/suchohrad-generated-models), and the barrel's recoil.</summary>
+    /// <summary>The nodes of a door gun that move, found by name (the model's own, see assets/drycastle-generated-models), and the barrel's recoil.</summary>
     sealed class DoorGunNodes
     {
         public Node3D Mount = null!, Gun = null!;

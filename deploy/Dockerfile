@@ -9,14 +9,14 @@ RUN apt-get update \
  && useradd --system --create-home --uid 10001 shooter
 
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
-    SUCHOHRAD_ASSETS=/app/assets
+    DRYCASTLE_ASSETS=/app/assets
 
 WORKDIR /app
 COPY --chown=shooter:shooter . /app
-RUN chmod +x /app/suchohrad-server.x86_64
+RUN chmod +x /app/drycastle-server.x86_64
 
 USER shooter
 EXPOSE 27015/udp
 
-# Database comes from SUCHOHRAD_DB (a postgres:// URL, or a SQLite file path); the map is /app/map next to the binary.
-ENTRYPOINT ["/app/suchohrad-server.x86_64", "--headless", "--", "--role", "server", "--port", "27015"]
+# Database comes from DRYCASTLE_DB (a postgres:// URL, or a SQLite file path); the map is /app/map next to the binary.
+ENTRYPOINT ["/app/drycastle-server.x86_64", "--headless", "--", "--role", "server", "--port", "27015"]

@@ -1,24 +1,25 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Shooter entry point. Args after "--":
 ///   --role server|client      (default client; the server is for --headless)
-///   --map DIR                 map folder (else SUCHOHRAD_MAP, else ../../out/map relative to the project)
+///   --map DIR                 map folder (else DRYCASTLE_MAP, else ../../out/map relative to the project)
 ///   --connect HOST[:PORT] --name NAME   join a server (default port 27015); --headless-bot [--bot-seconds N] scripts a walk
 ///   --port N                  server listen port (default 27015); --quit-after SECONDS ends the server with a verdict
 ///   --net-sim latency_ms=50,jitter_ms=5,loss=0.03   server and client: delay every outgoing packet, drop that share of the unreliable ones (see NetSim.cs)
 ///   --loss-test N [--loss-measure S] [--loss-out DIR]   server: loss/latency test round for N bots (use with --match-set min_players=N); --loss-bot walker|shooter on the bots (make shooter-loss-test)
 ///   --match-set k=v,k=v       server: override match.json values (score_goal, time_limit, respawn_delay, spawn_protection, end_screen_time, min_spawn_distance, min_players)
-///   --unlock-all              server: dev mode, every weapon, perk, killstreak and level-gated item unlocked (also SUCHOHRAD_UNLOCK_ALL=1); nothing is saved (issue #149)
+///   --unlock-all              server: dev mode, every weapon, perk, killstreak and level-gated item unlocked (also DRYCASTLE_UNLOCK_ALL=1); nothing is saved (issue #149)
 ///   --targets N               server: plant N stationary target dummies around the spawn area (0-64; default from match.json, 0; make shooter-server uses 24)
 ///   --allow-sandbox           server: grant sandbox mode (godmode, unlimited ammo, every killstreak on demand, no XP or score) to clients that ask (#156); dev only, make SANDBOX=1
+///   --admin-token T[,T...]    server: player tokens (the player_token in the client's settings file) whose owners may use chat commands: /bots, /spawn, /time
 ///   --bots N                  server: N bots (0-64) play while at least one human is in the match (#214); they walk to the nearest player and shoot what they see, earn and grant no XP
 ///   --nav-cache DIR           server: where the bots' baked navigation tiles are kept (default navcache in the Godot user data folder); baked once per map version
 ///   --cluster-spawns          server: keep one dense cluster of spawn points (dev aid: players and bots meet at once instead of crossing the village)
-///   --sandbox                 client: ask the server for sandbox mode (also SUCHOHRAD_SANDBOX=1); the server may refuse
+///   --sandbox                 client: ask the server for sandbox mode (also DRYCASTLE_SANDBOX=1); the server may refuse
 ///   --dev-ui                  client: show the dev-only UI (the Advanced section of the connect screen); debug builds always show it
 ///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
 ///   --match-bot alice|bob     client: scripted match smoke role (alice kills bob with the debug command, bob fires after each spawn)
@@ -46,10 +47,10 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class Shooter : Node3D
 {
-    readonly Suchohrad.MapLoader.MapLoader _map = new();
+    readonly Drycastle.MapLoader.MapLoader _map = new();
     /// <summary>The map's water (water.json), parsed when the map loads; Water.Empty on a dry map.</summary>
-    Suchohrad.ShooterCore.Water _water = Suchohrad.ShooterCore.Water.Empty;
-    Suchohrad.ShooterServer.Persistence.IProgressionStore? _progression;
+    Drycastle.ShooterCore.Water _water = Drycastle.ShooterCore.Water.Empty;
+    Drycastle.ShooterServer.Persistence.IProgressionStore? _progression;
     bool _smoke;
     bool _smokeMove;
     readonly Random _rng = new();
@@ -121,7 +122,7 @@ public partial class Shooter : Node3D
     }
 
     /// <summary>Written once the dedicated server is listening; the container healthcheck in deploy/docker-compose.yml tests for it (#177).</summary>
-    const string ReadyMarker = "/tmp/suchohrad-ready";
+    const string ReadyMarker = "/tmp/drycastle-ready";
 
     static void SetReadyMarker(bool ready)
     {
@@ -156,7 +157,8 @@ public partial class Shooter : Node3D
         _shell = new UiShell
         {
             PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks)),
-            WantsFreeMouse = () => _client is { Dead: true }, // the respawn screen releases the mouse so its buttons can be clicked
+            WantsFreeMouse = () => _client is { Dead: true } or { ChatOpen: true }, // the respawn screen and the chat box release the mouse (buttons to click, keys to type)
+            BackHandler = () => _client?.CloseChat() ?? false, // Esc closes the chat box before it opens Pause
         };
         AddChild(_shell);
         GD.Print("SHOOTER_MENU role=client");
@@ -309,15 +311,15 @@ public partial class Shooter : Node3D
     IEnumerable<float> LoadMapSteps(Config cfg)
     {
         var dir = GamePaths.Map(cfg.Str("map", ""));
-        if (!Directory.Exists(dir)) throw new InvalidOperationException($"map folder not found: {dir} (pass --map DIR or set SUCHOHRAD_MAP)");
+        if (!Directory.Exists(dir)) throw new InvalidOperationException($"map folder not found: {dir} (pass --map DIR or set DRYCASTLE_MAP)");
         AddChild(_map.Root);
         _map.CollisionOnly = cfg.Str("role", "client") == "server"; // the server never draws the map
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
-        _water = string.IsNullOrEmpty(_map.WaterJson) ? Suchohrad.ShooterCore.Water.Empty : Suchohrad.ShooterCore.Water.Parse(_map.WaterJson);
+        _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Water.Empty : Drycastle.ShooterCore.Water.Parse(_map.WaterJson);
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {
-            var bunkers = Suchohrad.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));
+            var bunkers = Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));
             if (bunkers.Rooms.Count > 0) AddChild(new BunkerLights { Shelters = bunkers });
         }
         var s = _map.Stats;
@@ -363,11 +365,11 @@ public partial class Shooter : Node3D
     {
         // Opened here so a bad path or failed migration stops the server at start, like a bad --match-set.
         // Write failures are logged by the store, never thrown into the match. Disposed in _ExitTree (flushes queued writes).
-        // --db is a SQLite file path or a PostgreSQL URL/connection string; SUCHOHRAD_DB (else ./shooter.db) when absent, so a password stays out of the command line.
-        var envDb = OS.GetEnvironment("SUCHOHRAD_DB");
+        // --db is a SQLite file path or a PostgreSQL URL/connection string; DRYCASTLE_DB (else ./shooter.db) when absent, so a password stays out of the command line.
+        var envDb = OS.GetEnvironment("DRYCASTLE_DB");
         var dbPath = cfg.Str("db", string.IsNullOrEmpty(envDb) ? "./shooter.db" : envDb);
-        _progression = Suchohrad.ShooterServer.Persistence.ProgressionStores.Open(dbPath, s => GD.PrintErr(s), _data.Levels.Curve);
-        GD.Print($"server: progression db {Suchohrad.ShooterServer.Persistence.ProgressionStores.Describe(dbPath)}");
+        _progression = Drycastle.ShooterServer.Persistence.ProgressionStores.Open(dbPath, s => GD.PrintErr(s), _data.Levels.Curve);
+        GD.Print($"server: progression db {Drycastle.ShooterServer.Persistence.ProgressionStores.Describe(dbPath)}");
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var server = new NetServer
         {
@@ -389,11 +391,13 @@ public partial class Shooter : Node3D
             LossOut = cfg.Str("loss-out"),
             UnlockAll = DevUnlocks.Enabled(cfg.Flag("unlock-all"), System.Environment.GetEnvironmentVariable(DevUnlocks.EnvVar)),
             AllowSandbox = cfg.Flag("allow-sandbox"),
+            AdminTokens = new HashSet<string>(cfg.Str("admin-token").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.OrdinalIgnoreCase),
             Bots = int.TryParse(cfg.Str("bots", "0"), out var bots) ? Math.Clamp(bots, 0, NetServer.MaxBots) : 0,
             ClusterSpawns = cfg.Flag("cluster-spawns"),
             MapDir = Path.GetFullPath(GamePaths.Map(cfg.Str("map", ""))),
             NavCacheDir = cfg.Str("nav-cache", Path.Combine(OS.GetUserDataDir(), "navcache")),
         };
+        if (server.AdminTokens.Count > 0) GD.Print($"server: {server.AdminTokens.Count} admin token(s) (--admin-token): those players can use chat commands");
         if (server.AllowSandbox) GD.Print("server: sandbox mode allowed (--allow-sandbox, #156)");
         if (server.Bots > 0) GD.Print($"server: {server.Bots} bots join while a player is in the match (--bots, #214)");
         if (server.UnlockAll) GD.Print("server: dev mode, every unlock on (not saved to the database)");
@@ -466,9 +470,9 @@ public partial class Shooter : Node3D
     }
 
     /// <summary>Networked client: light/sky, then prediction and interpolation via <see cref="NetClient"/>.</summary>
-    /// <summary>--sandbox or SUCHOHRAD_SANDBOX=1: the client asks for sandbox mode (#156).</summary>
+    /// <summary>--sandbox or DRYCASTLE_SANDBOX=1: the client asks for sandbox mode (#156).</summary>
     static bool SandboxAsked(Config cfg) =>
-        cfg.Flag("sandbox") || System.Environment.GetEnvironmentVariable("SUCHOHRAD_SANDBOX") is "1" or "true"
+        cfg.Flag("sandbox") || System.Environment.GetEnvironmentVariable("DRYCASTLE_SANDBOX") is "1" or "true"
         || (DevUi.Enabled && GameSettings.LoadConnect("sandbox", "0") == "1"); // the connect screen's checkbox (dev builds)
 
     void BuildNetClient(Config cfg)
@@ -503,7 +507,7 @@ public partial class Shooter : Node3D
     {
         AddLightAndSky();
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
-        var player = new Player { Name = "Player", KillY = killY, Water = _water, Ladders = Suchohrad.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; no ladders")).Ladders, PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
+        var player = new Player { Name = "Player", KillY = killY, Water = _water, Ladders = Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; no ladders")).Ladders, PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
         AddChild(player);
         var spawn = RandomSpawn();
         player.Teleport(spawn + Vector3.Up * 0.1f);

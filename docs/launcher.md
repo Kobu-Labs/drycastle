@@ -1,6 +1,6 @@
 # Launcher and release pipeline
 
-Players install the launcher once (`suchohrad-launcher-windows.zip`); it downloads and updates the game from GitHub Releases of Kobu-Labs/drycastle
+Players install the launcher once (`drycastle-launcher-windows.zip`); it downloads and updates the game from GitHub Releases of Kobu-Labs/drycastle
 (public repo, unauthenticated API). Code: `godot/launcher` (Godot UI), `godot/LauncherCore` (logic, tested in `ShooterCore.Tests/LauncherTests.cs`).
 
 ## Flow at a glance
@@ -27,10 +27,10 @@ what changed, then Play. **Maintainer, release (game and server together):** ope
 
 | Release | Made by | Contains |
 |---|---|---|
-| `v0.<run>` (stable) | merging a PR into the `release` branch (`.github/workflows/release.yml`, which also deploys the server first) | `suchohrad-game-windows.zip`, `suchohrad-game-linux.zip` (no map), `manifest.json` |
+| `v0.<run>` (stable) | merging a PR into the `release` branch (`.github/workflows/release.yml`, which also deploys the server first) | `drycastle-game-windows.zip`, `drycastle-game-linux.zip` (no map), `manifest.json` |
 | `dev-<run>` (prerelease) | manual run of the `release` workflow on any branch (no deploy) | same, channel `dev`; last 15 kept |
 | `map-<date>-<hash>` (prerelease) | you, `scripts/publish-map.sh` | `map.zip`, `map.json` |
-| `launcher-vX.Y.Z` (prerelease, so it is never GitHub "latest") | pushing a tag `launcher-v*` (`launcher.yml`) | `suchohrad-launcher-windows.zip`, `suchohrad-launcher-linux.zip` |
+| `launcher-vX.Y.Z` (prerelease, so it is never GitHub "latest") | pushing a tag `launcher-v*` (`launcher.yml`) | `drycastle-launcher-windows.zip`, `drycastle-launcher-linux.zip` |
 
 `manifest.json` (schema 2) lists one build per platform (`windows`, `linux`: exe and game zip) and the map release, each with sha256 and size. The launcher picks the build for its own OS. Players on **stable** get the newest non-prerelease
 (`v0.<run>`, fetched through the API's `releases/latest` so map and dev releases never hide it); players on **dev** get the newest of the last 100. Nothing is published on a plain push to `main`: only the `release` branch (or a manual run) produces release assets. Deploying and releasing are one pipeline, see `docs/release.md` ("Release pipeline").
@@ -44,7 +44,7 @@ Most game updates then download only the game zip; a map change downloads the ma
 
 ## Launcher behaviour
 
-Installs under `%LOCALAPPDATA%/Suchohrad` on Windows or `~/.local/share/Suchohrad` on Linux (`game/`, `installed.json`, `settings.json`). Downloads are sha256-checked, extracted to a staging folder and swapped in;
+Installs under `%LOCALAPPDATA%/Drycastle` on Windows or `~/.local/share/Drycastle` on Linux (`game/`, `installed.json`, `settings.json`). Downloads are sha256-checked, extracted to a staging folder and swapped in;
 a failed, cancelled or interrupted update leaves the previous install playable. Offline with an install: Play still works. Settings: channel, auto-update, UI scale.
 Esc closes Settings or cancels a download; it never quits.
 

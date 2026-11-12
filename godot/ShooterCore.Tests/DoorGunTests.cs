@@ -1,9 +1,9 @@
 using System.Numerics;
 using System.Text.Json;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
 /// The utility helicopter's door gun: the aim held inside its arc in the airframe's own frame, the arc clear of the helicopter's own hull,

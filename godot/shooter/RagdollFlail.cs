@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The limbs of a body thrown by a blast or a car (the ragdoll): arms and legs flail about while it is in the air, over a neutral clip, and hang

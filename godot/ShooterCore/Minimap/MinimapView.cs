@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Which camera the minimap follows (ticket #150). Precedence matches the camera the player actually sees.</summary>
 public enum MinimapViewSource { OnFoot, Vehicle, Turret, Missile }

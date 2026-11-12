@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Street lamp maths, pure and scene-free. The shooter's <c>StreetLamps</c> node feeds it the night factor, the

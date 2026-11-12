@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds assets/suchohrad-generated-textures/*.png: the tileable textures of the texture library.
+"""Builds assets/drycastle-generated-textures/*.png: the tileable textures of the texture library.
 
 Original pixels computed by this script (no third-party image, no photo); standard library only:
 
@@ -24,7 +24,7 @@ import sys
 import zlib
 from pathlib import Path
 
-OUT_DIR = Path(__file__).resolve().parent.parent / "assets" / "suchohrad-generated-textures"
+OUT_DIR = Path(__file__).resolve().parent.parent / "assets" / "drycastle-generated-textures"
 
 # ----------------------------------------------------------------------------- helpers
 

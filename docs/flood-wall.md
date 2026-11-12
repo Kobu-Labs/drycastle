@@ -1,7 +1,7 @@
 # Flood wall
 
 The concrete wall between the river and the village is a kit of placeable pieces, generated in
-`pipeline/src/suchohrad_pipeline/floodwall.py` (pictures and the manifest sync in `floodwall_preview.py`).
+`pipeline/src/drycastle_pipeline/floodwall.py` (pictures and the manifest sync in `floodwall_preview.py`).
 It is modelled after photos of the real wall: a stepped concrete profile with a ledge on the village side,
 a thinner upper wall behind it, a pale blue pipe railing on top, piers at the openings, a ladder, and the
 plaque of the flood of 4 April 2006.

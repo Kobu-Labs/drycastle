@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Movement and health constants from the "Player movement and health model" ticket (starting values, to be playtested).</summary>
 public static class MoveConsts

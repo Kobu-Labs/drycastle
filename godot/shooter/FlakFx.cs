@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The airburst of a flak shell: the black smoke ball that anti-aircraft fire leaves in the sky. A short orange-white flash at the burst, then a

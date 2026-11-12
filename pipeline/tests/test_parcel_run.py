@@ -6,10 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from suchohrad_pipeline import cli, parcel_run
-from suchohrad_pipeline.edits import EditsError
-from suchohrad_pipeline.props import run_props
-from suchohrad_pipeline.rules import DEFAULT_RULES
+from drycastle_pipeline import cli, parcel_run
+from drycastle_pipeline.edits import EditsError
+from drycastle_pipeline.props import run_props
+from drycastle_pipeline.rules import DEFAULT_RULES
 from tests.synthetic import SYNTHETIC_ORIGIN, make_workspace
 
 OX, OY = SYNTHETIC_ORIGIN
@@ -165,7 +165,7 @@ def test_glb_nodes_match_the_export_per_parcel_nodes(tmp_path):
     import numpy as np
     import trimesh
 
-    from suchohrad_pipeline.export import run_export
+    from drycastle_pipeline.export import run_export
 
     full = make_workspace(tmp_path)
     work = full["work"]

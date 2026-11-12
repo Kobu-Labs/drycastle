@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Suchohrad.LauncherCore;
+namespace Drycastle.LauncherCore;
 
 public static class Channels
 {
@@ -21,14 +21,14 @@ public sealed class ReleaseFeed
     public ReleaseFeed(HttpClient http, string? repo = null)
     {
         _http = http;
-        _repo = repo ?? Environment.GetEnvironmentVariable("SUCHOHRAD_REPO") ?? DefaultRepo;
+        _repo = repo ?? Environment.GetEnvironmentVariable("DRYCASTLE_REPO") ?? DefaultRepo;
     }
 
     /// <summary>Feed calls use a short timeout so a dead network never blocks Play for long; downloads get a long one.</summary>
     public static HttpClient CreateClient(TimeSpan? timeout = null)
     {
         var c = new HttpClient { Timeout = timeout ?? TimeSpan.FromSeconds(15) };
-        c.DefaultRequestHeaders.UserAgent.ParseAdd("suchohrad-launcher");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("drycastle-launcher");
         c.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return c;
     }

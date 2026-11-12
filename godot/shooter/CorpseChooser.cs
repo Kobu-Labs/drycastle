@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The two-option chooser opened by a tap of the interact key at a corpse (ticket #130): pick which hotbar position the

@@ -1,0 +1,132 @@
+using Godot;
+using Drycastle.ShooterCore;
+
+namespace Drycastle.Shooter;
+
+/// <summary>
+/// The chat and the admin's commands. A line from a player goes to everyone; a line starting with "/" is a command, which only
+/// an admin may use (<see cref="AdminTokens"/>, from --admin-token: the player token of the admin is their identity, ADR 0003).
+/// The grammar is <see cref="ChatCommands"/>, shared with the client's autocomplete; this file runs what parsed. Everything an
+/// admin changes takes effect on the next tick: <see cref="Bots"/> is read each tick by <see cref="BotsTick"/>, the clock goes
+/// to every client at once.
+/// </summary>
+public partial class NetServer
+{
+    /// <summary>Player tokens (lower case compare) of the admins, from --admin-token. A guest (no token) is never an admin.</summary>
+    public HashSet<string> AdminTokens = new(StringComparer.OrdinalIgnoreCase);
+
+    bool IsAdmin(Client c) => !c.IsBot && c.Token.Length > 0 && AdminTokens.Contains(c.Token);
+
+    ChatContext ChatCtx(Client c) => new(IsAdmin(c), Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>());
+
+    /// <summary>Join: tells the client if it is an admin and which vehicles it may name.</summary>
+    void SendChatStatus(Client c)
+    {
+        var ctx = ChatCtx(c);
+        Send(c, new EventMsg((byte)EventKind.ChatStatus, ChatEvents.EncodeStatus(new ChatStatus(ctx.IsAdmin, ctx.Vehicles))));
+        if (ctx.IsAdmin) GD.Print($"server: {c.Name} #{c.Id} is an admin");
+    }
+
+    void ChatTo(Client c, ChatLineKind kind, string text) =>
+        Send(c, new EventMsg((byte)EventKind.ChatLine, ChatEvents.EncodeLine(new ChatLine(kind, "", text))));
+
+    void ChatToAll(ChatLineKind kind, string sender, string text) =>
+        BroadcastEvent(EventKind.ChatLine, ChatEvents.EncodeLine(new ChatLine(kind, sender, text)));
+
+    void OnChatSend(Client c, byte[] payload)
+    {
+        if (!c.Joined || ChatEvents.DecodeSend(payload) is not { } text) return;
+        if (!c.Chat.TryTake(_elapsed)) { ChatTo(c, ChatLineKind.Error, "You are sending messages too fast."); return; }
+        if (text[0] == '/') { RunChatCommand(c, text); return; }
+        GD.Print($"server: chat {c.Name}: {text}");
+        ChatToAll(ChatLineKind.Player, c.Name, text);
+    }
+
+    void RunChatCommand(Client c, string text)
+    {
+        var parsed = ChatCommands.Parse(text, ChatCtx(c));
+        if (!parsed.Ok)
+        {
+            if (!IsAdmin(c) && parsed.Command is { AdminOnly: true }) GD.Print($"server: {c.Name} #{c.Id} tried {text} without being an admin");
+            ChatTo(c, ChatLineKind.Error, parsed.Error ?? "That did not work.");
+            return;
+        }
+        var args = parsed.Args;
+        switch (parsed.Command!.Name)
+        {
+            case "help": ChatHelp(c, args); break;
+            case "bots": ChatBots(c, args); break;
+            case "spawn": ChatSpawn(c, args[0]); break;
+            case "time": ChatTimeCommand(c, args); break;
+        }
+        GD.Print($"server: {c.Name} #{c.Id} ran {text}");
+    }
+
+    void ChatHelp(Client c, IReadOnlyList<string> args)
+    {
+        var ctx = ChatCtx(c);
+        if (args.Count == 1 && ChatCommands.Find(args[0]) is { } one)
+        {
+            ChatTo(c, ChatLineKind.Info, $"{one.Usage}: {one.Summary}.");
+            return;
+        }
+        ChatTo(c, ChatLineKind.Info, ctx.IsAdmin ? "Commands (Tab completes, Up and Down bring back what you sent):" : "Commands are for admins. You can use:");
+        foreach (var cmd in ChatCommands.Visible(ctx)) ChatTo(c, ChatLineKind.Info, $"{cmd.Usage}: {cmd.Summary}.");
+    }
+
+    void ChatBots(Client c, IReadOnlyList<string> args)
+    {
+        var live = _byId.Values.Count(o => o.IsBot);
+        if (args.Count == 0)
+        {
+            ChatTo(c, ChatLineKind.Info, $"Bots: {Bots} wanted, {live} in the match (at most {MaxBots}).");
+            return;
+        }
+        var n = int.Parse(args[0], System.Globalization.CultureInfo.InvariantCulture);
+        if (n == Bots) { ChatTo(c, ChatLineKind.Info, $"Bots are already {n}."); return; }
+        Bots = n; // BotsTick reads this every tick: bots join and leave from the next one
+        if (n > 0 && _nav == null && !_navTried && !ArenaMode && MapDir != "")
+        {
+            ChatTo(c, ChatLineKind.Info, "Building the bots' navigation for the first time. The server pauses for a few seconds.");
+            _host.Flush(); // the notice goes out before the pause
+            BuildBotNav();
+            ChatTo(c, ChatLineKind.Info, _nav != null ? $"Bot navigation ready in {_nav.BuildSeconds:F1} s." : "Bot navigation failed: the bots will stand where they spawn. See the server log.");
+        }
+        ChatToAll(ChatLineKind.System, "", $"{c.Name} set the bots to {n}.");
+        GD.Print($"server: bots set to {n} by {c.Name} #{c.Id}");
+    }
+
+    void ChatSpawn(Client c, string id)
+    {
+        var kind = Vehicles?.Vehicles.FindIndex(v => v.Id == id) ?? -1;
+        if (kind < 0) { ChatTo(c, ChatLineKind.Error, $"Unknown vehicle '{id}'."); return; }
+        if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { ChatTo(c, ChatLineKind.Error, "You must be alive to spawn a vehicle."); return; }
+        if (TrySpawnVehicle(c, (byte)kind, AdminVehicleCap) is { } why) { ChatTo(c, ChatLineKind.Error, why); return; }
+        ChatTo(c, ChatLineKind.Info, $"Spawned a {id} in front of you.");
+    }
+
+    void ChatTimeCommand(Client c, IReadOnlyList<string> args)
+    {
+        var now = _tick / (double)Wire.TickRate;
+        string Shown() => Drycastle.ShooterCore.ChatTime.Format((int)(Clock.HourAt(now) * 60));
+        if (args.Count == 0)
+        {
+            ChatTo(c, ChatLineKind.Info, $"It is {Shown()}{(Clock.Frozen ? ", the clock is frozen" : "")}. A day lasts {Clock.DayLengthSeconds / 60:0.#} minutes.");
+            return;
+        }
+        var set = Drycastle.ShooterCore.ChatTime.Parse(args[0])!.Value;
+        string said;
+        if (set.Minute is { } m)
+        {
+            Clock = Clock.WithHour(now, m / 60.0);
+            said = $"set the time to {Shown()}";
+        }
+        else
+        {
+            Clock = Clock.WithFrozen(now, set.Frozen == true);
+            said = set.Frozen == true ? $"froze the time at {Shown()}" : "set the time running again";
+        }
+        BroadcastEvent(EventKind.ClockSet, ChatEvents.EncodeClock(new ClockChange(Clock, _tick)));
+        ChatToAll(ChatLineKind.System, "", $"{c.Name} {said}.");
+    }
+}

@@ -1,8 +1,8 @@
 using Godot;
 using Num = System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Street lamps of the base map (lamps.json), and the lamps of placed utility poles (<see cref="PoleHeads"/>: the pole

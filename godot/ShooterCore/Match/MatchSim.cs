@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 public enum MatchPhase : byte { Waiting = 0, Running = 1, Ending = 2 }
 

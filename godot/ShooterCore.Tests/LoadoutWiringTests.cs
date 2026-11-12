@@ -1,7 +1,7 @@
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Ticket #117: the loadout hotbar, the starter kit against the shipped data, and the XP event payloads.</summary>
 public class LoadoutWiringTests

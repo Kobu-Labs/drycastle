@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>The server's answer to one <see cref="SaveLoadoutMsg"/>: the slot, the client's seq, and ok or the reason.</summary>
 public sealed record LoadoutAckInfo(int Slot, uint Seq, bool Ok, string Reason);

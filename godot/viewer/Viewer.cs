@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Godot;
-using Suchohrad.MapLoader;
+using Drycastle.MapLoader;
 
 /// <summary>
 /// Map viewer root. Loads the map, adds light and sky, spawns the player.
@@ -16,12 +16,12 @@ using Suchohrad.MapLoader;
 /// --editor-shot PNG [--select P-0001,P-0002] [--shot-at P-0001] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-reroll] [--shot-tool Select|Group|Fence|Trees|Objects|View]
 /// [--shot-object ID] [--shot-arm ASSET --shot-ghost x,y --shot-ghost-rot DEG] [--shot-filter TEXT] [--shot-open car,pot]
 /// (editor screenshot of the main window).
-/// Env: SUCHOHRAD_MAP, SUCHOHRAD_ASSETS, SUCHOHRAD_UV (the uv executable).
+/// Env: DRYCASTLE_MAP, DRYCASTLE_ASSETS, DRYCASTLE_UV (the uv executable).
 /// --watch hot-reloads the edits file (see EditsWatcher) and writes editor-state.json.
 /// </summary>
 public partial class Viewer : Node3D
 {
-    readonly Suchohrad.MapLoader.MapLoader _map = new();
+    readonly Drycastle.MapLoader.MapLoader _map = new();
     Player _player = null!;
     Camera3D? _shotCam;
     PackedScene _testCube = GD.Load<PackedScene>("res://test_cube.tscn");
@@ -35,13 +35,13 @@ public partial class Viewer : Node3D
     {
         ParseArgs();
         var mapDir = _opts.GetValueOrDefault("map")
-            ?? OS.GetEnvironment("SUCHOHRAD_MAP");
+            ?? OS.GetEnvironment("DRYCASTLE_MAP");
         if (string.IsNullOrEmpty(mapDir))
             mapDir = ProjectSettings.GlobalizePath("res://") + "../../out/map";
         mapDir = Path.GetFullPath(mapDir);
 
         var repo = Path.GetFullPath(ProjectSettings.GlobalizePath("res://") + "../..");
-        var assets = _opts.GetValueOrDefault("assets") ?? OS.GetEnvironment("SUCHOHRAD_ASSETS");
+        var assets = _opts.GetValueOrDefault("assets") ?? OS.GetEnvironment("DRYCASTLE_ASSETS");
         _map.AssetsDir = string.IsNullOrEmpty(assets) ? Path.Combine(repo, "assets") : Path.GetFullPath(assets);
         try
         {

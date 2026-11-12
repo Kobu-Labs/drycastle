@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The flak truck on the client (ADR 0005). Every client animates the model's turret (yaw), gun cradle (pitch) and barrels (recoil) from the turret
@@ -13,7 +13,7 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class NetClient
 {
-    /// <summary>The nodes of a flak model that move, found by name (the model's own, see assets/suchohrad-generated-models), and the barrels' recoil.</summary>
+    /// <summary>The nodes of a flak model that move, found by name (the model's own, see assets/drycastle-generated-models), and the barrels' recoil.</summary>
     sealed class FlakNodes
     {
         public Node3D Turret = null!, Cradle = null!;

@@ -4,13 +4,13 @@ import struct
 import numpy as np
 import pytest
 
-from suchohrad_pipeline.assets import ASSETS_DIR, DEFAULT_MANIFEST
-from suchohrad_pipeline.edits import COLUMN_TYPES, FENCE_TYPES, parse
-from suchohrad_pipeline.export import build_chunk_scene, parcel_props_nodes
-from suchohrad_pipeline.fencestyles import COLUMN_STYLES, FENCE_STYLES, styled_fence_meshes
-from suchohrad_pipeline.propmeshes import fence_meshes, parcel_props_meshes
-from suchohrad_pipeline.rules import load_section
-from suchohrad_pipeline.textures import (
+from drycastle_pipeline.assets import ASSETS_DIR, DEFAULT_MANIFEST
+from drycastle_pipeline.edits import COLUMN_TYPES, FENCE_TYPES, parse
+from drycastle_pipeline.export import build_chunk_scene, parcel_props_nodes
+from drycastle_pipeline.fencestyles import COLUMN_STYLES, FENCE_STYLES, styled_fence_meshes
+from drycastle_pipeline.propmeshes import fence_meshes, parcel_props_meshes
+from drycastle_pipeline.rules import load_section
+from drycastle_pipeline.textures import (
     flat_mesh,
     load_textures,
     split_tex_node,
@@ -38,7 +38,7 @@ def run(ftype: str, n: int = 2, slope: float = 0.0, **extra) -> list[dict]:
 def test_every_library_texture_has_its_file_with_the_listed_size() -> None:
     doc = json.loads(DEFAULT_MANIFEST.read_text())
     assert {t["id"] for t in doc["textures"]} == set(load_textures())
-    assert any(p["name"] == "suchohrad-generated-textures" for p in doc["packs"])
+    assert any(p["name"] == "drycastle-generated-textures" for p in doc["packs"])
     for t in doc["textures"]:
         data = (ASSETS_DIR / t["file"]).read_bytes()
         assert data[:8] == b"\x89PNG\r\n\x1a\n", t["id"]

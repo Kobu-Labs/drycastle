@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Glass panes (ADR 0007): hit points and state on the server, the wire, the client's copy, the pane geometry and the data files.</summary>
 public class GlassTests

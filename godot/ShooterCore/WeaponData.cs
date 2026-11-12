@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 public enum WeaponKind { Hitscan, Projectile, Melee }
 

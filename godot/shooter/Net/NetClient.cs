@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Network client over raw ENet (ADR 0002). Sends one input per 30 Hz physics tick (the last 3 for loss cover),
@@ -51,7 +51,7 @@ public partial class NetClient : Node
     public bool Headless;
     public float KillY = float.NegativeInfinity;
     /// <summary>The map's water (water.json), shared with the prediction so swimming matches the server.</summary>
-    public Suchohrad.ShooterCore.Water Water = Suchohrad.ShooterCore.Water.Empty;
+    public Drycastle.ShooterCore.Water Water = Drycastle.ShooterCore.Water.Empty;
     /// <summary>Match smoke role: "alice" (kills bob with the debug command) or "bob" (fires after each spawn); empty = normal bot/player.</summary>
     public string MatchBot = "";
     /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
@@ -290,6 +290,7 @@ public partial class NetClient : Node
             case EventMsg e:
                 if ((EventKind)e.Kind == EventKind.TargetRoster) OnTargetRoster(e.Payload); // target dummies' names (#148)
                 OnSandboxEvent((EventKind)e.Kind, e.Payload); // sandbox answer (#156)
+                OnChatEvent((EventKind)e.Kind, e.Payload); // chat lines, the admin flag, the day clock
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 OnProgressionEvent((EventKind)e.Kind, e.Payload);
@@ -740,6 +741,7 @@ public partial class NetClient : Node
 
     public override void _UnhandledInput(InputEvent e)
     {
+        if (HandleChatInput(e)) return; // T or "/": the chat box
         if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
         if (HandleSeatInput(e)) return; // a number key while seated takes that seat
         if (HandleViewInput(e)) return; // the vehicle view key while driving: chase camera or cockpit

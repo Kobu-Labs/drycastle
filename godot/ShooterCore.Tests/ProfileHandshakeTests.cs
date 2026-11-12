@@ -1,7 +1,7 @@
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Protocol v2 profile handshake (ticket #107): hello token, profile, loadout messages and the loadout rules.</summary>
 public class ProfileHandshakeTests

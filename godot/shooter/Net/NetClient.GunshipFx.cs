@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The gunship FX on the client (ticket #159): one server tick's tracers, impacts and blasts, coalesced by the server (kinds 121-123).

@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// What a flying vehicle shows and sounds like beyond its attitude: the rotors turn at the rotor speed of its flight record (they spool up when a

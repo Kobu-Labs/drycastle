@@ -1,9 +1,9 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Vector2 = Godot.Vector2;
 using NVector2 = System.Numerics.Vector2;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Top-down minimap (ticket #119, quality and orientation in #150). Two layers:
@@ -28,7 +28,7 @@ public sealed partial class Minimap : Control
     public float ZoomMetres { get; set; } = 90f;
 
     ImageTexture? _base;
-    Suchohrad.MapLoader.MapLoader? _map;
+    Drycastle.MapLoader.MapLoader? _map;
     int _side;               // texture side in texels (0 = not built)
     float _sideMetres;       // the map's extent covered by the texture, metres
     Vector2 _origin;         // ground (x, z) of texel (0, 0)
@@ -64,7 +64,7 @@ public sealed partial class Minimap : Control
     /// Stores the map and prepares the roads. The terrain texture is built on the first frame, once the on-screen size is known.
     /// Returns false when the map has no parcels or roads (the minimap then shows the player only).
     /// </summary>
-    public bool Build(Suchohrad.MapLoader.MapLoader? map)
+    public bool Build(Drycastle.MapLoader.MapLoader? map)
     {
         _base = null;
         _side = 0;
@@ -137,7 +137,7 @@ public sealed partial class Minimap : Control
     }
 
     /// <summary>The last terrain texture, kept for its map and side: a second join on the same map does not rasterise again (#170, T2-19).</summary>
-    static Suchohrad.MapLoader.MapLoader? _cachedMap;
+    static Drycastle.MapLoader.MapLoader? _cachedMap;
     static int _cachedSide;
     static ImageTexture? _cachedTex;
     readonly List<float> _crossings = new();
@@ -163,6 +163,24 @@ public sealed partial class Minimap : Control
             var u1 = Math.Clamp((int)Math.Ceiling((b.End.X - _origin.X) / _metresPerTexel), 0, side - 1);
             var v0 = Math.Clamp((int)Math.Floor((b.Position.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
             var v1 = Math.Clamp((int)Math.Ceiling((b.End.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
+            for (var v = v0; v <= v1; v++)
+            {
+                ScanlineFill.Crossings(rings, _origin.Y + (v + 0.5f) * _metresPerTexel, _crossings);
+                ScanlineFill.Spans(_crossings, _origin.X, _metresPerTexel, u0, u1, _spans);
+                foreach (var (from, to) in _spans)
+                    for (var u = from; u <= to; u++) Buffer.BlockCopy(colour, 0, px, (v * side + u) * 4, 4);
+            }
+        }
+        foreach (var region in _map.RegionPaints)
+        {
+            var colour = Rgba(region.Colour);
+            var rings = new List<NVector2[]> { region.Ring.Select(v => new NVector2(v.X, v.Y)).ToArray() };
+            var box = new Rect2(region.Ring[0], Vector2.Zero);
+            foreach (var v in region.Ring) box = box.Expand(v);
+            var u0 = Math.Clamp((int)Math.Floor((box.Position.X - _origin.X) / _metresPerTexel), 0, side - 1);
+            var u1 = Math.Clamp((int)Math.Ceiling((box.End.X - _origin.X) / _metresPerTexel), 0, side - 1);
+            var v0 = Math.Clamp((int)Math.Floor((box.Position.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
+            var v1 = Math.Clamp((int)Math.Ceiling((box.End.Y - _origin.Y) / _metresPerTexel), 0, side - 1);
             for (var v = v0; v <= v1; v++)
             {
                 ScanlineFill.Crossings(rings, _origin.Y + (v + 0.5f) * _metresPerTexel, _crossings);

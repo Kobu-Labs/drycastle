@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>The server's answer to a sandbox request: granted or refused, with the reason sent to the client.</summary>
 public readonly record struct SandboxAnswer(bool Granted, string Reason);

@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>Ticket #152: the turret reaches the orbit centre, a gunship round at a dummy is a hit, impact surfaces and the impact codec.</summary>
 public class GunshipAimAndImpactTests

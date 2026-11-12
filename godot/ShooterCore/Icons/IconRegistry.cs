@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>What an icon is for. Each kind has its own folder under ui/icons.</summary>
 public enum IconKind { Weapon, Category, Perk, Streak }

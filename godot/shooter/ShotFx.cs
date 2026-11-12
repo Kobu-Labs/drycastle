@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Shot effects: a short bright tracer streak that flies from the muzzle to the end point at 250 m/s, and a small spark burst where a shot ends in the world. (Muzzle flashes live on the weapon models, see MuzzleFlash.)

@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Target: a stationary target dummy (#148), drawn like a player with the target look. Turret: the aim of a vehicle's gun (<see cref="FlakRecord"/>),

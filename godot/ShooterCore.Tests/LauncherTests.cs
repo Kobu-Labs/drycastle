@@ -2,10 +2,10 @@ using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
-using Suchohrad.LauncherCore;
+using Drycastle.LauncherCore;
 using Xunit;
 
-namespace Suchohrad.Tests;
+namespace Drycastle.Tests;
 
 public class LauncherTests : IDisposable
 {

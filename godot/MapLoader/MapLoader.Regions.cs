@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Godot;
 
-namespace Suchohrad.MapLoader;
+namespace Drycastle.MapLoader;
 
 /// <summary>Result of <see cref="MapLoader.ApplyRegions"/>: the region IDs whose baked nodes were hidden and the new nodes added.</summary>
 public sealed record RegionResult(IReadOnlyList<string> Replaced, int Nodes);

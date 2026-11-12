@@ -4,10 +4,10 @@ from pathlib import Path
 import pytest
 import requests
 
-from suchohrad_pipeline import fetch
-from suchohrad_pipeline.cache import Source, fetch_cached, sidecar_path, write_manifest
-from suchohrad_pipeline.config import SliceConfig
-from suchohrad_pipeline.http import HttpError, PoliteClient
+from drycastle_pipeline import fetch
+from drycastle_pipeline.cache import Source, fetch_cached, sidecar_path, write_manifest
+from drycastle_pipeline.config import SliceConfig
+from drycastle_pipeline.http import HttpError, PoliteClient
 
 SRC = Source("Test source", "CC0", "https://example.invalid/licence", "Test attribution")
 TIFF = b"II*\x00" + b"\x00" * 16
@@ -116,7 +116,7 @@ def test_client_retries_with_backoff_and_rotates_urls() -> None:
         "https://a.invalid"
     ]
     assert sleeps == [2.0, 4.0]
-    assert session.headers["User-Agent"] == "suchohrad-pipeline"
+    assert session.headers["User-Agent"] == "drycastle-pipeline"
     assert all(c[2]["timeout"] for c in session.calls)
 
 
@@ -202,7 +202,7 @@ def test_stage_downloads_then_skips_then_forces(tmp_path: Path) -> None:
 
 
 def test_dmr_params_snap_outwards_and_osm_query_covers_layers() -> None:
-    from suchohrad_pipeline.geo import compute_bbox
+    from drycastle_pipeline.geo import compute_bbox
 
     bbox = compute_bbox(17.0, 48.5, 100, 25)
     params = fetch.dmr_params(bbox)
@@ -231,7 +231,7 @@ def test_bad_dmr_response_is_rejected(tmp_path: Path) -> None:
 
 
 def test_dmr_tiles_single_when_small_and_cover_box_when_large() -> None:
-    from suchohrad_pipeline.geo import compute_bbox
+    from drycastle_pipeline.geo import compute_bbox
 
     small = compute_bbox(17.0, 48.5, 100, 25)
     assert fetch.dmr_tiles(small) == [fetch.dmr_params(small)]

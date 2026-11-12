@@ -8,8 +8,8 @@ import time
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from suchohrad_pipeline.edits import dump_text, load_edits, validate
-from suchohrad_pipeline.mcp_server import (
+from drycastle_pipeline.edits import dump_text, load_edits, validate
+from drycastle_pipeline.mcp_server import (
     ParcelEditTools,
     Settings,
     build_server,
@@ -736,7 +736,7 @@ def test_through_mcp_session(env):
 
 
 def test_validation_doc_includes_regions(env):
-    from suchohrad_pipeline.mcp_server import _edits_doc
+    from drycastle_pipeline.mcp_server import _edits_doc
 
     tools, settings, _ = env
     tools.create_region("#111111", polygon=SQUARE)

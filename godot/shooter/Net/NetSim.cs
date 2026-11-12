@@ -1,8 +1,8 @@
 using System.Globalization;
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Network impairment for tests (issue #93), applied in the application send path of both the client and the server

@@ -6,10 +6,10 @@ from pathlib import Path
 import pytest
 from shapely.geometry import LineString, Point, box
 
-from suchohrad_pipeline.normalise import parse_osm
-from suchohrad_pipeline.parcels import Landuse, assign_buildings, build_parcels, classify_parcels
-from suchohrad_pipeline.registry import load_registry, match_parcels, save_registry
-from suchohrad_pipeline.rules import ParcelRules, load_rules
+from drycastle_pipeline.normalise import parse_osm
+from drycastle_pipeline.parcels import Landuse, assign_buildings, build_parcels, classify_parcels
+from drycastle_pipeline.registry import load_registry, match_parcels, save_registry
+from drycastle_pipeline.rules import ParcelRules, load_rules
 
 # Synthetic cadastre: three 100 x 100 m squares in a row, in EPSG:5514-like metres.
 BASE = {

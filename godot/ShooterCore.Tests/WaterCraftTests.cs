@@ -1,8 +1,8 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>The water craft (ticket #132): the boat and the amphibious transport, their water driving, road kill on land only, and water spawn placement.</summary>
 public class WaterCraftTests

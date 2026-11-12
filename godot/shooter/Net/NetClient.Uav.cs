@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Vector2 = Godot.Vector2;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The client side of the UAV (issue #121). The owner gets a <see cref="EventKind.UavPing"/> every second with the enemy

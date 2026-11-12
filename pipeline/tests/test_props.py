@@ -5,9 +5,9 @@ import pytest
 import yaml
 from shapely.geometry import LineString, Point, box, shape
 
-from suchohrad_pipeline.propmeshes import fence_mesh, tree_mesh
-from suchohrad_pipeline.props import make_fences, make_spawns, make_trees, run_props, seeded
-from suchohrad_pipeline.rules import load_section
+from drycastle_pipeline.propmeshes import fence_mesh, tree_mesh
+from drycastle_pipeline.props import make_fences, make_spawns, make_trees, run_props, seeded
+from drycastle_pipeline.rules import load_section
 from tests.synthetic import make_terrain, make_workspace
 
 FENCE, TREE = load_section("props")["fences"], load_section("props")["trees"]
@@ -27,7 +27,7 @@ def ws(tmp_path):
 
 
 def building_poly(ws):
-    from suchohrad_pipeline.buildings import footprint_polygon
+    from drycastle_pipeline.buildings import footprint_polygon
 
     return footprint_polygon(ws["buildings"][0]["footprint"])
 
@@ -204,7 +204,7 @@ def test_area_overlay_only_applies_to_that_area(tmp_path) -> None:
 
 
 def test_cap_trees_is_per_chunk_stable_and_keeps_osm_trees() -> None:
-    from suchohrad_pipeline.props import cap_trees
+    from drycastle_pipeline.props import cap_trees
 
     trees = [{"src": "rule", "x": float(i), "y": 1.0} for i in range(40)]
     trees += [{"src": "rule", "x": 300.0 + i, "y": 1.0} for i in range(5)]

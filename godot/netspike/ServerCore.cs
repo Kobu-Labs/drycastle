@@ -8,7 +8,7 @@ using Godot;
 public class ServerCore
 {
     public readonly Config Cfg;
-    public readonly Suchohrad.MapLoader.MapLoader Map = new();
+    public readonly Drycastle.MapLoader.MapLoader Map = new();
     public readonly Node3D World = new() { Name = "World" };
     public readonly List<NetPlayer> Players = new();
     public int Tick;
@@ -53,8 +53,8 @@ public class ServerCore
 
     public void Load()
     {
-        var dir = Cfg.Str("map", OS.GetEnvironment("SUCHOHRAD_MAP"));
-        if (string.IsNullOrEmpty(dir)) throw new InvalidOperationException("no map: pass --map DIR or set SUCHOHRAD_MAP");
+        var dir = Cfg.Str("map", OS.GetEnvironment("DRYCASTLE_MAP"));
+        if (string.IsNullOrEmpty(dir)) throw new InvalidOperationException("no map: pass --map DIR or set DRYCASTLE_MAP");
         _owner.AddChild(World);
         World.AddChild(Map.Root);
         Map.Load(Path.GetFullPath(dir));

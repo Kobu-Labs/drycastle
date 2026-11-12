@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Godot;
 
-namespace Suchohrad.MapLoader;
+namespace Drycastle.MapLoader;
 
 /// <summary>
-/// Shared runtime loader for the Suchohrad base map. Loads a map folder (manifest.json,
+/// Shared runtime loader for the Drycastle base map. Loads a map folder (manifest.json,
 /// parcels.json, spawns.json, roads.json, chunks/*.glb) with Godot's runtime glTF importer,
 /// turns collision meshes into static trimesh colliders and supports parcel replacement.
 /// Node names in a chunk: parcel_&lt;ID&gt;_visual / _collision (buildings), parcel_&lt;ID&gt;_props /
@@ -13,6 +13,9 @@ namespace Suchohrad.MapLoader;
 /// props / props_collision (items without a parcel, e.g. OSM trees).
 /// Independent of any mod. Axes: map x east, y north; Godot x east, y up, z = -north.
 /// </summary>
+/// <summary>A hand-drawn ground colour region, for the minimap: ring in ground (x, z) metres.</summary>
+public sealed record RegionPaint(string Id, Color Colour, Vector2[] Ring);
+
 public sealed partial class MapLoader
 {
     readonly Dictionary<string, ParcelInfo> _parcels = new();
@@ -95,6 +98,8 @@ public sealed partial class MapLoader
         if (File.Exists(lamps)) ReadLamps(lamps); // map 0.5.0+
         var roads = Path.Combine(mapDir, "roads.json");
         if (File.Exists(roads)) RoadsJson = File.ReadAllText(roads); // no consumer in v1
+        var regionsFile = Path.Combine(mapDir, "regions.json");
+        ReadRegionPaint(File.Exists(regionsFile) ? regionsFile : null);
         var water = Path.Combine(mapDir, "water.json");
         WaterJson = File.Exists(water) ? File.ReadAllText(water) : "";
         var trees = Path.Combine(mapDir, "trees.json");
@@ -199,6 +204,24 @@ public sealed partial class MapLoader
             return false;
         });
         if (dropped > 0) GD.Print($"map: dropped {dropped} spawn points within 2 m of the terrain rim");
+    }
+
+    /// <summary>Ground paint regions (regions.json) for the minimap, in ID order (the higher ID paints last): ring in ground (x, z) metres and colour.</summary>
+    public IReadOnlyList<RegionPaint> RegionPaints => _regionPaints;
+    readonly List<RegionPaint> _regionPaints = new();
+
+    void ReadRegionPaint(string? path)
+    {
+        _regionPaints.Clear();
+        if (path == null) return;
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        foreach (var r in doc.RootElement.GetProperty("regions").EnumerateArray())
+        {
+            var c = r.GetProperty("colour");
+            var ring = r.GetProperty("ring").EnumerateArray().Select(p => new Vector2(p[0].GetSingle(), -p[1].GetSingle())).ToArray();
+            if (ring.Length < 3) continue;
+            _regionPaints.Add(new RegionPaint(r.GetProperty("id").GetString() ?? "", new Color(c[0].GetInt32() / 255f, c[1].GetInt32() / 255f, c[2].GetInt32() / 255f), ring));
+        }
     }
 
     void ReadParcels(string path)

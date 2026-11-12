@@ -6,10 +6,10 @@ from pathlib import Path
 import numpy as np
 from shapely.geometry import Polygon, box, mapping
 
-from suchohrad_pipeline.buildings import derive_building, load_building_rules
-from suchohrad_pipeline.roads import build_graph
-from suchohrad_pipeline.rules import load_section
-from suchohrad_pipeline.terrain import flatten_buildings, grid_from_samples, save_terrain
+from drycastle_pipeline.buildings import derive_building, load_building_rules
+from drycastle_pipeline.roads import build_graph
+from drycastle_pipeline.rules import load_section
+from drycastle_pipeline.terrain import flatten_buildings, grid_from_samples, save_terrain
 
 COVERAGE = box(10, 10, 210, 200)
 # Absolute S-JTSK position of the local origin (0, 0) of the synthetic slice.

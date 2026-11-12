@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The physics space as <see cref="FlightModel"/> sees it (<see cref="IFlightWorld"/>): a hidden kinematic body with the helicopter's hull box and
@@ -84,7 +84,7 @@ public sealed partial class FlightProbe : CharacterBody3D, IFlightWorld
     }
 
     /// <summary>The map's flyable rectangle: the box around every parcel (the pipeline's parcels cover the whole map). No map: no edge.</summary>
-    public static FlightBounds MapBounds(Suchohrad.MapLoader.MapLoader? map)
+    public static FlightBounds MapBounds(Drycastle.MapLoader.MapLoader? map)
     {
         if (map == null) return FlightBounds.None;
         float minX = float.PositiveInfinity, maxX = float.NegativeInfinity, minZ = float.PositiveInfinity, maxZ = float.NegativeInfinity;

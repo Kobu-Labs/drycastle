@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The corner indicator "Dev: all unlocked" (issue #149). Shown on the loadout screen and the pause menu while the server runs

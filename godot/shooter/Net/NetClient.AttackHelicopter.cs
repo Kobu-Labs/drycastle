@@ -1,6 +1,6 @@
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The attack helicopter's gunner HUD state on the client (ticket #126): the time left and the owner's kills during the

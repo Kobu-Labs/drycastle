@@ -89,7 +89,7 @@ def main() -> int:
     ap.add_argument("--shots", help="also write two screenshots into this directory (needs a display)")
     ap.add_argument("--skip-smoke", action="store_true", help="only the screenshots")
     args = ap.parse_args()
-    scratch = Path(args.dir or tempfile.mkdtemp(prefix="suchohrad-objects-smoke-")).resolve()
+    scratch = Path(args.dir or tempfile.mkdtemp(prefix="drycastle-objects-smoke-")).resolve()
     scratch.mkdir(parents=True, exist_ok=True)
     print(f"objects smoke: scratch directory {scratch}")
 
@@ -249,7 +249,7 @@ def main() -> int:
         shutil.rmtree(steps_dir)
     (scratch / "plan.json").write_text(json.dumps(plan, indent=1))
 
-    r = es.uv("-m", "suchohrad_pipeline", "export", "--area", "slice", "--out", str(scratch / "map"), "--work", str(work))
+    r = es.uv("-m", "drycastle_pipeline", "export", "--area", "slice", "--out", str(scratch / "map"), "--work", str(work))
     print(r.stdout.strip())
     if r.returncode != 0:
         print(r.stderr)
@@ -279,7 +279,7 @@ def verify_steps(steps_dir: Path, work: Path, pdoc: dict) -> int:
     check = (
         "import sys, json\n"
         "from pathlib import Path\n"
-        "from suchohrad_pipeline import edits, props\n"
+        "from drycastle_pipeline import edits, props\n"
         "pdoc = json.loads((Path(sys.argv[1]) / 'parcels.json').read_text())\n"
         "bad = 0\n"
         "for f in sys.argv[2:]:\n"

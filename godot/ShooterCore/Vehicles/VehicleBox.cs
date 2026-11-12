@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// A ray hit on a vehicle's hit box, in the vehicle's own frame: the node frame of the vehicle (origin on the ground under its centre,

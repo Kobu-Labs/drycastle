@@ -1,7 +1,7 @@
-using Suchohrad.ShooterServer.Persistence.Postgres;
-using Suchohrad.ShooterServer.Persistence.Sqlite;
+using Drycastle.ShooterServer.Persistence.Postgres;
+using Drycastle.ShooterServer.Persistence.Sqlite;
 
-namespace Suchohrad.ShooterServer.Persistence;
+namespace Drycastle.ShooterServer.Persistence;
 
 /// <summary>Picks the database from the server's <c>--db</c> value: a PostgreSQL URL or connection string, else a SQLite file path.</summary>
 public static class ProgressionStores

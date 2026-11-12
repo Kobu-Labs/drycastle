@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>One fragment of a shattered pane: a triangle in the pane's plane (x along its width, y up it, the origin at its centre).</summary>
 public readonly record struct GlassShard(Vector2 A, Vector2 B, Vector2 C)

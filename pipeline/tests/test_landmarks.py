@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 import yaml
 
-from suchohrad_pipeline.buildings import RulesError, load_overrides
-from suchohrad_pipeline.landmarks import MODELS, build_landmark
+from drycastle_pipeline.buildings import RulesError, load_overrides
+from drycastle_pipeline.landmarks import MODELS, build_landmark
 
 # footprint of the church w378900220 (map metres) and the bearing of its front
 CHURCH = {
@@ -191,7 +191,7 @@ def _crosses(mesh, a, b) -> bool:
 
 
 def test_bunker_has_a_room_behind_an_open_doorway() -> None:
-    from suchohrad_pipeline import bunker as bk
+    from drycastle_pipeline import bunker as bk
 
     ring = np.array(BUNKER_RING)
     west = ring[:, 0].min()
@@ -212,7 +212,7 @@ def test_bunker_has_a_room_behind_an_open_doorway() -> None:
 
 
 def test_bunker_collision_keeps_the_openings_and_has_no_floor() -> None:
-    from suchohrad_pipeline import bunker as bk
+    from drycastle_pipeline import bunker as bk
 
     full, light = build_landmark(BUNKER), build_landmark(BUNKER, detail=False)
     assert 0 < light.face_count < full.face_count
@@ -223,7 +223,7 @@ def test_bunker_collision_keeps_the_openings_and_has_no_floor() -> None:
 
 
 def test_bunker_slits_are_shot_through_at_crouch_height() -> None:
-    from suchohrad_pipeline import bunker as bk
+    from drycastle_pipeline import bunker as bk
 
     mesh = build_landmark(BUNKER, detail=False)
     ring = np.array(BUNKER_RING)
@@ -249,7 +249,7 @@ def test_bunker_too_small_for_a_room_stays_closed() -> None:
 def test_bunker_rooms_cover_the_room_and_stop_short_of_the_outer_wall() -> None:
     from shapely.geometry import Point, Polygon
 
-    from suchohrad_pipeline import bunker as bk
+    from drycastle_pipeline import bunker as bk
 
     rooms = bk.bunker_rooms(BUNKER_RING, (-1.0, 0.0))["floors"]
     assert [r["level"] for r in rooms] == [0, -1, -2, -3]
@@ -267,7 +267,7 @@ def test_bunker_underground_floors_are_stacked_under_one_footprint() -> None:
 
     from shapely.geometry import Point, Polygon
 
-    from suchohrad_pipeline import bunker as bk
+    from drycastle_pipeline import bunker as bk
 
     info = bk.bunker_rooms(BUNKER_RING, (-1.0, 0.0))
     floors = info["floors"]
@@ -288,7 +288,7 @@ def test_bunker_underground_floors_are_stacked_under_one_footprint() -> None:
 
 
 def test_bunker_hatch_is_open_in_every_floor_and_the_ladder_is_not_collided_with() -> None:
-    from suchohrad_pipeline import bunker as bk
+    from drycastle_pipeline import bunker as bk
 
     info = bk.bunker_rooms(BUNKER_RING, (-1.0, 0.0))
     ld = info["ladders"][0]

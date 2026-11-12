@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from suchohrad_pipeline.config import ConfigError, load_slice_config
-from suchohrad_pipeline.geo import centroid_of_geometry, compute_bbox
+from drycastle_pipeline.config import ConfigError, load_slice_config
+from drycastle_pipeline.geo import centroid_of_geometry, compute_bbox
 
 # Synthetic point, not a real location of interest.
 LON, LAT = 17.0, 48.5
@@ -92,7 +92,7 @@ def test_village_section_defaults_and_overrides(tmp_path: Path) -> None:
 
 
 def test_area_paths_keep_slice_layout_and_separate_village(tmp_path: Path) -> None:
-    from suchohrad_pipeline.config import area_paths
+    from drycastle_pipeline.config import area_paths
 
     s, v = area_paths("slice", tmp_path), area_paths("village", tmp_path)
     assert (s.raw, s.work, s.out) == (
@@ -107,7 +107,7 @@ def test_area_paths_keep_slice_layout_and_separate_village(tmp_path: Path) -> No
 def test_fetched_bounds_come_from_area_json_or_config(tmp_path: Path) -> None:
     import json
 
-    from suchohrad_pipeline.normalise import fetched_bounds
+    from drycastle_pipeline.normalise import fetched_bounds
 
     raw = tmp_path / "raw"
     raw.mkdir()

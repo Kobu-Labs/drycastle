@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>A named look in camo.json: its id, its display name and the resolved <see cref="CamoSpec"/>.</summary>
 public sealed record CamoPreset(string Id, string Name, CamoSpec Spec);

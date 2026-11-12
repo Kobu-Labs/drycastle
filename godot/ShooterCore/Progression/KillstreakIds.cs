@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Killstreak ids the code names. The full table is killstreaks.json (<see cref="KillstreakFile"/>); only the starter

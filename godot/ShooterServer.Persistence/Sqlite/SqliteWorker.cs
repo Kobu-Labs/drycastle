@@ -1,6 +1,6 @@
 using Microsoft.Data.Sqlite;
 
-namespace Suchohrad.ShooterServer.Persistence.Sqlite;
+namespace Drycastle.ShooterServer.Persistence.Sqlite;
 
 /// <summary>
 /// The SQLite database behind the store: a write connection and a read connection, each on its own thread (WAL lets the

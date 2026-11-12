@@ -20,8 +20,8 @@ Each file has a `<name>.meta.json` sidecar (request, url, fetched-at, sha256, so
 attribution) and `manifest.json` lists the sources, licences and required attribution.
 
 Reruns skip files whose request parameters are unchanged and download nothing; use
-`cd pipeline && uv run python -m suchohrad_pipeline fetch --force` to refetch everything.
-Requests are sequential, use the User-Agent `suchohrad-pipeline`, have timeouts and retry with
+`cd pipeline && uv run python -m drycastle_pipeline fetch --force` to refetch everything.
+Requests are sequential, use the User-Agent `drycastle-pipeline`, have timeouts and retry with
 backoff (Overpass falls back to a second public instance).
 
 ## Whole village (areas)
@@ -150,7 +150,7 @@ The textures are a library, not part of the fences: `assets/manifest.json` `text
 PNG under `assets/`, `tile_m` = the size of one repeat in metres, `alpha`, `tintable`, mean colour), and
 `textures.py` gives any mesh builder `texture(id).uv(...)` and a `TexturedBuilder`. The PNGs are built by
 `python3 -I scripts/make_textures.py` (standard library only, deterministic; `--sheet FILE` writes a contact
-sheet). `uv run python -m suchohrad_pipeline.fence_preview` (in `pipeline/`) draws every fence type from its
+sheet). `uv run python -m drycastle_pipeline.fence_preview` (in `pipeline/`) draws every fence type from its
 real meshes, UVs and textures into `out/textures/fences.png`, so the look can be checked without the game.
 
 **Hand edits** (`pipeline/config/edits.json`, read by the props stage; `--edits PATH` overrides the
@@ -161,7 +161,7 @@ Objects go to `work/objects.json`, and with them the `cables` (`C-NNNN`: `from` 
 placed utility poles) whose poles are both placed; the game strings the wires (`docs/utility-poles.md`). `regions` (`R-NNNN`: `colour` `#rrggbb`, `polygon` one ring of at
 least 3 `[x, y]` absolute S-JTSK points, no self-intersection) are shapes painted over the ground;
 they are not read by the props stage, only by the export and `region-run` (below). The format and validator are documented in
-`pipeline/src/suchohrad_pipeline/edits.py`. Entries for parcels that no longer exist are skipped
+`pipeline/src/drycastle_pipeline/edits.py`. Entries for parcels that no longer exist are skipped
 with a warning; schema errors fail the stage.
 
 **Spawns**: `out/map/spawns.json` has a seeded subset (default 60) of points on roads and on
@@ -205,7 +205,7 @@ coverage are cut off; a region wholly outside it is skipped with a warning (`exp
 Nodes are `region_<ID>` in each chunk file the region touches (so a region over a chunk border is
 several nodes with the same name, one per chunk file); the manifest lists `regions` in `generated`.
 
-`make region-run [REGION=R-0001] [GLB=file.glb] [OUT=file.json]` (`python -m suchohrad_pipeline
+`make region-run [REGION=R-0001] [GLB=file.glb] [OUT=file.json]` (`python -m drycastle_pipeline
 region-run --region ID ... --glb PATH`, none named = all) writes a GLB with one `region_<ID>` node
 per region (the whole region, in the chunk files' frame) and prints a JSON summary: `regions` (with
 a mesh), `replaces` (the baked `region_<ID>` nodes to hide: the named IDs, even deleted ones, plus
@@ -217,7 +217,7 @@ every region overlapping a named one, whose visible area changes with it), `tria
 `make detail` (stage `detail`, in `run-all` between `props` and `export`; `AREA=village` for the village) gives the
 ground something to look at. It reads `parcels`, `buildings`, `roads`, `terrain`, `props` (fences, trees), `objects`
 and `edits.json` (regions), and writes `data/work/detail.json` (clutter), `detail_patches.npy` and
-`detail_patches.json` (patch triangles). `python -m suchohrad_pipeline detail --work DIR` reads and writes another work
+`detail_patches.json` (patch triangles). `python -m drycastle_pipeline detail --work DIR` reads and writes another work
 directory (experiments). The module is `detail.py`; every number is in the `detail` section of `rules.yaml`.
 
 **Area types and recipes.** `detail.area_type(parcel)` says what kind of ground a parcel is and so which recipe runs:
@@ -275,7 +275,7 @@ purpose: a stored instance costs about 33 bytes, so the open land (150 ha) canno
 wanted, generate it near the player at run time from a per-chunk density instead.
 
 All random choices are seeded with `sha256("<parcel id>:detail:<purpose>")` (verges with the road edge ID), so reruns give
-identical files. `uv run python -m suchohrad_pipeline.detail_preview --parcel P-0637 --area village` draws the detail of
+identical files. `uv run python -m drycastle_pipeline.detail_preview --parcel P-0637 --area village` draws the detail of
 one parcel top-down from the real patches, textures and clutter meshes into `out/detail/`.
 
 **Limits.** `parcel-run` (editor hot reload) does not regenerate detail: patches live in chunk-level nodes, not in a
@@ -332,7 +332,7 @@ attribution, input hashes including the work files). The output has no timestamp
 byte-identical for identical input.
 
 **Bunkers (`bunkers.json`).** The three bunkers are buildings with `model: bunker` in `config/overrides.yaml`
-(`pipeline/src/suchohrad_pipeline/bunker.py`, ADR 0009): one room behind 0.5 m walls, an open doorway on the wall facing
+(`pipeline/src/drycastle_pipeline/bunker.py`, ADR 0009): one room behind 0.5 m walls, an open doorway on the wall facing
 `model_axis`, firing slits that are real openings, and three more rooms under it (2.4 m floor to floor), one per floor on the
 same footprint. A 1 m square hatch in each floor, in a different place on each, leads down; a ladder hangs on one edge of
 it. The ground floor has no collision (a player stands on the flattened terrain, so the terrain collision round a bunker is

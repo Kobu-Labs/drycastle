@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>English strings of sandbox mode (#156). Registered with <see cref="Strings.Register"/>; screens use the keys.</summary>
 public static class SandboxStrings

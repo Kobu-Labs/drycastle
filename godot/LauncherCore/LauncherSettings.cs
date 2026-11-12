@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Suchohrad.LauncherCore;
+namespace Drycastle.LauncherCore;
 
 /// <summary>Launcher preferences (settings.json in the install root). Never throws: a missing or broken file gives defaults.</summary>
 public sealed class LauncherSettings

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// English strings behind translation keys (standard: English only for now, but screens use keys). Registered once
@@ -50,7 +50,7 @@ public static class Strings
         ("heli.weapon", "Attack Helicopter"), ("heli.clock", "TIME {0}"), ("heli.kills", "KILLS {0}"),
         ("ac130.title", "AC-130"), ("ac130.kill", "AC-130"), ("ac130.timer", "TIME {0} s"), ("ac130.hint", "{0}  Fire     {1}  Zoom     1 2 3  Weapon"),
         ("helper.weapon", "Helicopter"), ("helper.warning", "HELICOPTER TARGETING YOU"),
-        ("app.title", "SUCHOHRAD"), ("app.subtitle", "Shooter"),
+        ("app.title", "DRYCASTLE"), ("app.subtitle", "Shooter"),
         ("menu.play", "Play"), ("menu.settings", "Settings"), ("menu.quit", "Quit"),
         ("menu.hint", "Up/Down or Tab to move   Enter to select   Esc to go back"),
         ("dialog.cancel", "Cancel"), ("dialog.back", "Back"),
@@ -197,6 +197,7 @@ public static class Strings
         foreach (var (k, v) in Table) tr.AddMessage(k, v);
         foreach (var (k, v) in Hud2Strings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in SandboxStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in ChatStrings.Table) tr.AddMessage(k, v);
         TranslationServer.AddTranslation(tr);
         TranslationServer.SetLocale("en");
     }

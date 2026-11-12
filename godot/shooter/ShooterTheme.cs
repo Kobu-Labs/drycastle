@@ -1,7 +1,7 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The shooter's one Theme and its tokens (docs/standards/ui-ux.md section 4), same pattern as the viewer's
@@ -102,6 +102,18 @@ public static class ShooterTheme
         var prot = new StyleBoxFlat { DrawCenter = false, BorderColor = new Color(Accent, 0.45f) };
         prot.SetBorderWidthAll(Space);
         PanelVariation(t, "HudProtection", prot);
+
+        // the chat (admin commands, #chat): the log is rich text on a HudPanel; the completion rows are small buttons, the one Tab takes next is marked
+        t.SetTypeVariation("HudChatLog", "RichTextLabel");
+        t.SetColor("default_color", "HudChatLog", Text);
+        t.SetColor("font_outline_color", "HudChatLog", Outline);
+        t.SetConstant("outline_size", "HudChatLog", 4);
+        t.SetFontSize("normal_font_size", "HudChatLog", FontBody);
+        t.SetFontSize("bold_font_size", "HudChatLog", FontBody);
+        t.SetStylebox("normal", "HudChatLog", new StyleBoxEmpty());
+        t.SetStylebox("focus", "HudChatLog", new StyleBoxEmpty());
+        VariationButton(t, "ChatSuggest", Box(Raised, Space / 2, null, 0), Box(Hover, Space / 2, Accent), Box(Active, Space / 2, Accent, BorderStrong));
+        VariationButton(t, "ChatSuggestNext", Box(Active, Space / 2, Accent, BorderStrong), Box(Hover, Space / 2, Accent, BorderStrong), Box(Active, Space / 2, Accent, BorderStrong));
 
         t.SetStylebox("background", "ProgressBar", Box(new Color(0, 0, 0, 0.55f), 0, Line));
         Bar(t, "HealthBar", Good);

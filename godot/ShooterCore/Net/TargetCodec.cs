@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Target dummies on the wire (#148). The roster (<see cref="EventKind.TargetRoster"/>) is sent on join: u16 count, then per

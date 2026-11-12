@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>An aircraft as the flak fuse sees it: its entity id and where it will be a number of seconds from now (its orbit is known).</summary>
 public readonly record struct FlakTarget(ushort Id, Func<float, Vector3> PositionAfter);

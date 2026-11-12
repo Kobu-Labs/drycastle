@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Score line data for the top-centre readout: own kills against the leader.</summary>
 public readonly record struct ScoreLine(int MyKills, string LeaderName, int LeaderKills, bool IAmLeader);

@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Corpse rules (ticket #130): what a killed player leaves behind and who may take it.</summary>
 public static class CorpseRules

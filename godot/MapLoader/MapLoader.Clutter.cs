@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Godot;
 
-namespace Suchohrad.MapLoader;
+namespace Drycastle.MapLoader;
 
 /// <summary>
 /// Near-only ground clutter (tufts, pebbles, rocks, leaves, flowers): clutter.json (manifest <c>files.clutter</c>) lists instances per
@@ -13,7 +13,7 @@ namespace Suchohrad.MapLoader;
 /// </summary>
 public sealed partial class MapLoader
 {
-    /// <summary>Clutter distance scale: 0 = off, 1 = default distances. Initialised from SUCHOHRAD_CLUTTER; set before Load.</summary>
+    /// <summary>Clutter distance scale: 0 = off, 1 = default distances. Initialised from DRYCASTLE_CLUTTER; set before Load.</summary>
     public static float ClutterScale { get; set; } = ClutterSettings.ParseScale(System.Environment.GetEnvironmentVariable(ClutterSettings.EnvVar));
 
     readonly List<GeometryInstance3D> _clutterNodes = new();

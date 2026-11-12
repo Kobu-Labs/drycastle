@@ -1,7 +1,7 @@
 using System.Numerics;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>The box prefilter and array loops in <see cref="Water"/> must give the same answers as a plain scan of every body (T3-017).</summary>
 public class WaterQueryTests

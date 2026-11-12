@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>First-person stand-in for arms: the weapon placed low on the right of the view, no hands.</summary>
 public sealed partial class WeaponViewmodel : Node3D

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The motion of a thrown body (the ragdoll) on the client: the whole body spins about its middle while it flies, then falls flat onto its

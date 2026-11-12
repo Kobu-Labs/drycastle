@@ -39,7 +39,7 @@ def main() -> int:
     ap.add_argument("--godot", default="godot")
     ap.add_argument("--seed", default="1")
     args = ap.parse_args()
-    scratch = Path(args.dir or tempfile.mkdtemp(prefix="suchohrad-region-editor-smoke-")).resolve()
+    scratch = Path(args.dir or tempfile.mkdtemp(prefix="drycastle-region-editor-smoke-")).resolve()
     scratch.mkdir(parents=True, exist_ok=True)
     print(f"region editor smoke: scratch directory {scratch}")
 
@@ -87,7 +87,7 @@ def main() -> int:
     }
     (scratch / "plan.json").write_text(json.dumps(plan, indent=1))
 
-    r = es.uv("-m", "suchohrad_pipeline", "export", "--area", "slice", "--out", str(scratch / "map"), "--edits", str(edits))
+    r = es.uv("-m", "drycastle_pipeline", "export", "--area", "slice", "--out", str(scratch / "map"), "--edits", str(edits))
     print(r.stdout.strip())
     if r.returncode != 0:
         print(r.stderr)
@@ -106,7 +106,7 @@ def main() -> int:
     check = (
         "import sys\n"
         "from pathlib import Path\n"
-        "from suchohrad_pipeline.edits import load_edits, dump_text\n"
+        "from drycastle_pipeline.edits import load_edits, dump_text\n"
         "bad = 0\n"
         "for f in sys.argv[1:]:\n"
         "    t = Path(f).read_text(encoding='utf-8')\n"

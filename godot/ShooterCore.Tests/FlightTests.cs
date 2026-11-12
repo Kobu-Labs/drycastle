@@ -1,9 +1,9 @@
 using System.Numerics;
 using System.Text.Json;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
 /// The utility helicopter's flight (ADR 0006). Nobody can feel it in a test, so the feel is pinned as numbers on the shipped vehicles.json:
@@ -76,7 +76,7 @@ public class FlightTests
         Assert.True(v.RunOver);   // runs people over only while skimming the ground (flight.run_over_agl)
         Assert.True(v.CrashDamage);
         Assert.Equal("driver", v.Seats[0].Role);   // the pilot's seat is the driver seat of the seat framework
-        Assert.Equal("suchohrad-generated-models/utility_helicopter.glb", v.Model);
+        Assert.Equal("drycastle-generated-models/utility_helicopter.glb", v.Model);
         Assert.Equal(1, v.SpawnCount);
         Assert.Null(v.Flak);
     }

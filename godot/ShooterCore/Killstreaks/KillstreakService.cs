@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Server-side killstreak rules (ticket #118): the Streak counter per life, the three loadout streaks earned at their kill

@@ -1,4 +1,4 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>match.json. Values from the FFA match loop ticket (#72).</summary>
 public class MatchConfig : IVersioned

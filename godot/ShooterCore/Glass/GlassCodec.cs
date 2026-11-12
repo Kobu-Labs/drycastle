@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>A <see cref="EventKind.GlassSync"/>: the panes of <see cref="Scope"/> are whole except <see cref="Panes"/>.</summary>
 public sealed record GlassSyncMsg(ushort Scope, IReadOnlyList<GlassPaneState> Panes);

@@ -2,7 +2,7 @@
 
 The concrete electricity poles of the village (line wires on top, often a street lamp, sometimes public
 address horns, boxes and a tangle of cables) are generated from parts. Three modules in
-`pipeline/src/suchohrad_pipeline/`:
+`pipeline/src/drycastle_pipeline/`:
 
 | Module | What it holds |
 |---|---|
@@ -106,7 +106,7 @@ have no night and show no light.
 ## House connections
 
 A cable can also end on a house: on a **house connector**, a small fitting on a wall or a roof
-(`pipeline/src/suchohrad_pipeline/connectors.py`, drawn in `out/poles/connectors.png`). There are six,
+(`pipeline/src/drycastle_pipeline/connectors.py`, drawn in `out/poles/connectors.png`). There are six,
 placeable objects like the poles (`prim:connector_*`, category `connector`, no collision), each with wire seats:
 
 | Asset | Where | What |

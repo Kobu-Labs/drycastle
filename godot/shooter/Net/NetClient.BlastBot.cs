@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Vehicle blast smoke scripts (ticket #103; headless, flat arena, three cars: car 0 and car 1 side by side, car 2 far away). Alice empties an AK-47 into car 0 from 6.5 m

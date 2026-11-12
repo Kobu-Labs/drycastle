@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Bot navigation spike (#214): can the server bake a navigation mesh for the whole map from its own colliders, and is the
@@ -19,7 +19,7 @@ public partial class NavSpike : Node
 {
     /// <summary>The node whose descendants hold the map's static bodies (the shooter root: map chunks and the lamp poles).</summary>
     public Node3D World = null!;
-    public Suchohrad.MapLoader.MapLoader Map = null!;
+    public Drycastle.MapLoader.MapLoader Map = null!;
     public string MapDir = "";
     /// <summary>Folder for report.json and the cached tiles; empty = no files, the cache test is skipped.</summary>
     public string OutDir = "";

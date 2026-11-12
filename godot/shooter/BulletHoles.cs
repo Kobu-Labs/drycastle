@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// Bullet holes: a pool of 64 projective Decal nodes reused oldest-first (nothing is allocated per shot after init). A hole stays fully visible for 15 s, then fades over 5 s.
@@ -129,7 +129,7 @@ public partial class BulletHoles : Node3D
         if (!ShotFx.Enabled || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree()) return;
         var dir = end - from;
         if (dir.LengthSquared() < 0.01f) return;
-        var q = PhysicsRayQueryParameters3D.Create(from, end + dir.Normalized() * 0.1f, Suchohrad.ShooterCore.CollisionLayers.WorldShots);
+        var q = PhysicsRayQueryParameters3D.Create(from, end + dir.Normalized() * 0.1f, Drycastle.ShooterCore.CollisionLayers.WorldShots);
         var hit = world.GetWorld3D().DirectSpaceState.IntersectRay(q);
         if (hit.Count == 0) return;
         var p = hit["position"].AsVector3();
