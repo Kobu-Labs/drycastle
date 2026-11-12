@@ -28,3 +28,36 @@ whole village), unshaded, with an opacity slider (10-100 %, default 85 %). **O**
 the View page, and both are remembered in `editor_ui.cfg`. It is a child of the editor outlines, so it disappears in walk
 mode. Without a download the switch says what to run. The picture is one texture for the whole area (about 35 MP at
 level 11), so it costs some video memory; the lower level is plenty to place things by eye.
+
+## Trees read from the photo
+
+`make ortho-trees` (after `make ortho`; module `drycastle_pipeline.ortho_trees`) reads where the trees are and writes
+`data/AREA/ortho/trees.json` and `canopy.png`. It is a local, derived result: only facts read from the photo (positions,
+a mask), never its pixels, and into the gitignored `data/`. Whether the map may use them is the licence judgement made in
+`docs/research/slovak-open-data.md`; nothing reads them yet, and nothing here reaches `out/`.
+
+The two kinds of tree look different from above, so there are two detectors:
+
+* **Canopy** (forest, dense tree belts). A logistic regression on each pixel's colour, excess green and brightness texture
+  at three scales (5, 13, 31 px). Its training labels come from the photo's own area: OSM forest and wood polygons are
+  "tree", meadow, farmland, buildings and roads "not tree", each polygon pulled 15 m in from its edge. Because it learns
+  context, a dark meadow is not mistaken for forest (the first, threshold-only try was). On polygons it never saw it is
+  right 74-88 % of the time, the labels being coarse (clearings inside forests, trees inside meadows). The photo does not
+  resolve single crowns in a forest, so it gives an **extent**, not trunks.
+* **Standalone trees** (gardens, hedges, roadsides). Compact green blobs darker than a ring around them, at three crown
+  sizes (radius about 2, 3.5 and 5.5 m), one circle per crown (a weaker crown overlapping a stronger one is dropped).
+  Darkness is **relative** (a tree in dark scrub counts like one on a lawn). The threshold is strict in open ground
+  (0.18) and sensitive (0.10) where the neighbourhood is somewhat tree-like (mean canopy probability over about 8 m above
+  0.12: gardens, hedges), so open meadow stays clean while a hedge along a path is found. Never inside the canopy, never
+  within 2.4 m of a building (roofs and their shadows), and a blob must be green (shadows are not).
+
+Output: `trees.json` lists the standalone trees (`x`, `y` in the map's local metres, `radius_m`, `score`), with the
+parameters used, and `canopy.png` is a 1-bit mask on the photo's pixel grid (bounds in the json). Everything is clipped to
+the area polygon. The photo is processed in strips of 1024 rows, so it runs on the whole village (about 1.5 minutes for
+7 km2: 4200 standalone trees, 18 % canopy); `tree_model.npz` caches the trained model (`make ortho-trees RETRAIN=1`
+fits it again), `--tau-open` and `--tau-wooded` move the two thresholds.
+
+Known limits: a forest edge is read as canopy plus a few standalone circles; shrubs and hedges count as trees (they are
+indistinguishable in an RGB photo); some roadside shadows still pass. There is no ground truth, so the checks were by
+eye on windows of the village (forest, hedge and allotments, open meadow, house gardens). A canopy-height model (surface
+minus ground) would find trees far more reliably, but only the ground model is served by the INSPIRE WCS.
