@@ -82,6 +82,7 @@ public partial class NetClient
         _flightCorrections++;
         var moved = before - _pilot.Predict.State.Position;
         _pilot.Smooth += new Vector3(moved.X, moved.Y, moved.Z);
+        TelemetryFlightCorrection(new Vector3(moved.X, moved.Y, moved.Z).Length());
     }
 
     void StopPiloting()

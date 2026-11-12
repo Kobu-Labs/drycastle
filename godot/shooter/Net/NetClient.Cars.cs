@@ -139,6 +139,24 @@ public partial class NetClient
         return _beams;
     }
 
+    /// <summary>
+    /// The pilot's own helicopter is drawn from the prediction (the present) while the other riders are interpolated like everyone else (the past), so
+    /// without this a gunner trails behind the helicopter. Each rider seated on it keeps the offset it has from the interpolated helicopter, in the
+    /// helicopter's own frame, and wears it on the drawn one.
+    /// </summary>
+    void CarryRiders(Vector3 interpPos, Vector3 interpRot, Vector3 drawnPos, Vector3 drawnRot)
+    {
+        var from = Basis.FromEuler(interpRot).Inverse();
+        var to = Basis.FromEuler(drawnRot);
+        foreach (var r in _remotes.Values)
+        {
+            if (r.State != EntityState.InVehicle || !GodotObject.IsInstanceValid(r.Node)) continue;
+            var off = r.Node.GlobalPosition - interpPos;
+            if (off.LengthSquared() > 64f) continue; // not seated on this helicopter
+            r.Node.GlobalPosition = drawnPos + to * (from * off);
+        }
+    }
+
     void RenderCars()
     {
         if (_lastTick == 0) return;
@@ -160,7 +178,9 @@ public partial class NetClient
             var p = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
             var rot = new Vector3(0, s.Yaw, 0);
             var flies = FlightDef(v) != null;
+            var p0 = p; var rot0 = rot;
             if (flies) PoseFlight(v, rt, dt, ref p, ref rot); // a helicopter pitches and rolls; the one this player flies is drawn from its prediction
+            if (flies && _pilot != null && _pilot.CarId == v.Id) CarryRiders(p0, rot0, p, rot); // the pilot's helicopter is drawn ahead of the snapshots: its riders go with it
             v.Node.GlobalPosition = p;
             v.Node.Rotation = rot;
             if (v.Destroyed) continue;

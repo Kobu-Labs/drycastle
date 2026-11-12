@@ -126,6 +126,7 @@ public partial class NetClient : Node
 
     public override void _ExitTree()
     {
+        TelemetryClose();
         _conn.Destroy();
         FreeOwned(); // also when the client leaves without Teardown
     }
@@ -139,6 +140,7 @@ public partial class NetClient : Node
     public void Teardown()
     {
         _done = true;
+        TelemetryClose();
         SfxTeardown();
         if (_peer != null) { _peer.PeerDisconnect(); _conn.Flush(); _peer = null; }
         foreach (var r in _remotes.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
@@ -198,6 +200,7 @@ public partial class NetClient : Node
 
     public override void _Process(double delta)
     {
+        TelemetryFrame(delta);
         if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
         if (_done) return;
         Poll();
@@ -350,6 +353,7 @@ public partial class NetClient : Node
         if (_me == null || !_dec.Apply(d, out var h)) return;
         if (_lastTick != 0 && h.Tick < _lastTick) return;
         LossOnSnapshot(h);
+        TelemetrySnapshot(h.Tick);
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         DayNightCycle.Current?.SetServerTick(h.Tick);
         foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); cg.Solid?.QueueFree(); _flights.Remove(id); } }
@@ -446,6 +450,7 @@ public partial class NetClient : Node
         var err = (predicted.Position - sp).Length();
         _maxErr = MathF.Max(_maxErr, err);
         LossOnPredictionError(err);
+        TelemetryPredictionError(err);
         _pending.RemoveRange(0, idx + 1);
         if (err <= ReconcileEpsilon) return;
         _recon++;
