@@ -3744,6 +3744,25 @@
       "licence": "CC0",
       "source": "scripts/make_textures.py",
       "pack": "drycastle-generated-textures"
+    },
+    {
+      "id": "dike_gravel",
+      "name": "Dike gravel",
+      "file": "drycastle-generated-textures/dike_gravel.png",
+      "size_px": [
+        512,
+        256
+      ],
+      "tile_m": [
+        8.0,
+        4.0
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#a2a48e",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "drycastle-generated-textures"
     }
   ],
   "sounds": [

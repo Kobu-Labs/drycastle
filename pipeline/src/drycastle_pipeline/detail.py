@@ -26,6 +26,7 @@ This is the ``detail`` stage (``make detail``, between ``props`` and ``export``)
   hand-drawn region or the road. Crowns do not exclude: leaf litter belongs under them.
 """
 
+import functools
 import hashlib
 import json
 import math
@@ -60,11 +61,11 @@ DETAIL_FORMAT_VERSION = 1
 CLUTTER_KINDS = KINDS
 # The first layer wins where two overlap (a path crosses lawn, litter lies on lawn, ...).
 PATCH_PRIORITY = (
-    "gravel", "verge_gravel", "bed", "furrow", "dirt", "verge_dirt", "litter", "tone_a", "tone_b", "lawn",
+    "dike_track", "gravel", "verge_gravel", "bed", "furrow", "dirt", "verge_dirt", "litter", "tone_a", "tone_b", "lawn",
 )
 # Library texture of a layer; layers without one are flat colour.
 PATCH_TEXTURE = {
-    "gravel": "gravel", "verge_gravel": "gravel", "bed": "soil_rows", "furrow": "soil_rows",
+    "dike_track": "dike_gravel", "gravel": "gravel", "verge_gravel": "gravel", "bed": "soil_rows", "furrow": "soil_rows",
     "dirt": "dirt", "verge_dirt": "dirt", "litter": "leaf_litter",
 }
 _SOFT_LAYERS = ("lawn", "tone_a", "tone_b", "litter")  # big soft shapes: simplified harder (fewer triangles)
@@ -84,6 +85,7 @@ class Patch:
     texture: str | None = None
     angle: float = 0.0  # texture rotation (radians) about ``origin``
     origin: tuple[float, float] = (0.0, 0.0)
+    lift: float | None = None  # height above the terrain when not the stage's ``lift_m`` (the dike track lies over the road)
 
 
 @dataclass
@@ -116,6 +118,8 @@ class ParcelContext:
     blocked: BaseGeometry | None = None  # placed objects and hand-drawn regions
     verge: dict[str, BaseGeometry] | None = None  # "gravel" and "dirt" verge blobs along the roads, clipped
     water: BaseGeometry | None = None  # water parcels near the parcel (grass beside them stands fresh)
+    road_lines: list[tuple[LineString, float]] | None = None  # centre lines and widths of the road edges near the parcel
+    dike: bool = False  # this part of the parcel is the flood dike: it gets the dike recipe, whatever the parcel kind
 
 
 # --- tools ----------------------------------------------------------------------------------
@@ -920,7 +924,19 @@ def road_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
     return res
 
 
-RECIPES = {"garden": garden_detail, "field": field_detail, "forest": forest_detail, "road": road_detail}
+def dike_recipe(ctx: ParcelContext, cfg: dict) -> DetailResult:
+    from drycastle_pipeline.dike import dike_detail  # dike.py builds on this module
+
+    return dike_detail(ctx, cfg)
+
+
+RECIPES = {"garden": garden_detail, "field": field_detail, "forest": forest_detail, "road": road_detail, "dike": dike_recipe}
+
+
+@functools.cache
+def dike_parcels() -> frozenset[str]:
+    """The parcels that are a flood dike (``detail.dike.parcels``): they get the dike recipe, whatever their kind."""
+    return frozenset(load_section("detail", DEFAULT_RULES)["dike"]["parcels"])
 
 
 def area_type(parcel: dict) -> str | None:
@@ -928,6 +944,8 @@ def area_type(parcel: dict) -> str | None:
 
     The only place that reads the parcel kind. A real area-type layer (gardens, fields, paths, ... drawn or
     derived per area instead of per parcel) replaces this function."""
+    if parcel.get("id") in dike_parcels():
+        return "dike"
     return {"garden": "garden", "building_plot": "garden", "other": "field", "forest": "forest", "road": "road", "water": None}.get(
         parcel["kind"], "field"
     )
@@ -985,6 +1003,11 @@ class Village:
         self.t_tree = shapely.STRtree([Point(t[0], t[1]) for t in self.trees])
         self.road_polys = [ln.buffer(float(e["width"]) / 2) for e, ln in edge_lines(graph)]
         self.r_tree = shapely.STRtree(self.road_polys)
+        self.road_lines = [(ln, float(e["width"])) for e, ln in edge_lines(graph)]
+        self.rl_tree = shapely.STRtree([ln for ln, _ in self.road_lines])
+        self.road_osm: dict[str, list[LineString]] = {}
+        for e, ln in edge_lines(graph):
+            self.road_osm.setdefault(e.get("osm_id"), []).append(ln)
         sizes = {a["id"]: a.get("size_m", [1, 1, 1]) for a in load_manifest().get("assets", [])}
         self.object_polys = []
         for o in objects:
@@ -1005,37 +1028,63 @@ class Village:
     def _near(tree: shapely.STRtree, items: list, geom: BaseGeometry) -> list:
         return [items[i] for i in tree.query(geom, predicate="intersects")]
 
+    def dike_clip(self, pid: str) -> BaseGeometry | None:
+        """The part of a parcel that is the dike when only a part is (``detail.dike.clips``): the ground within
+        ``within_m`` of a road way (``osm_id``); None for any other parcel."""
+        clip = self.cfg["dike"].get("clips", {}).get(pid)
+        if clip is None:
+            return None
+        lines = self.road_osm.get(clip["osm_id"], [])
+        return unary_union([ln.buffer(float(clip["within_m"])) for ln in lines]) if lines else Polygon()
+
     def contexts(self, parcel: dict):
-        """One context per polygon of the parcel clipped to the terrain coverage (the largest keeps the ID)."""
+        """One context per polygon of the parcel clipped to the terrain coverage (the largest keeps the ID).
+        A parcel that is a dike, or has a dike part, also gets ``dike`` contexts for it (the rest keeps its own recipe)."""
         poly = shape(parcel["polygon"]).intersection(self.terrain.coverage)
         parts = sorted(_polys(poly), key=lambda p: -p.area)
-        for k, part in enumerate(parts):
-            if part.area < float(self.cfg["min_parcel_m2"]):
-                continue
-            near = part.buffer(_NEAR_M)
-            roads = self._near(self.r_tree, self.road_polys, near)
-            blocked = self._near(self.o_tree, self.object_polys, part)
-            if not self.regions.is_empty and self.regions.intersects(part):
-                blocked.append(self.regions.intersection(part.buffer(1.0)))
-            verge = {
-                name: _union(self._near(tree, self.verge_polys[name], part)).intersection(part)
-                for name, tree in self.v_tree.items()
-            }
-            yield ParcelContext(
-                id=parcel["id"] if k == 0 else f"{parcel['id']}.{k}",
-                kind=parcel["kind"],
-                polygon=part,
-                buildings=self._near(self.b_tree, self.buildings, near),
-                fences=self._near(self.f_tree, self.fences, near),
-                trees=self._near(self.t_tree, self.trees, near),
-                road=_union(roads) if roads else None,
-                terrain=self.terrain,
-                tree_cfg=self.tree_cfg,
-                colour=self.colour[parcel["id"]],
-                blocked=_union(blocked) if blocked else None,
-                verge=verge,
-                water=_union(self._near(self.w_tree, self.water_polys, part.buffer(float(self.cfg["tint"]["water_m"])))) if self.water_polys else None,
-            )
+        whole = parcel["id"] in dike_parcels()
+        clip = self.dike_clip(parcel["id"])
+        k = 0
+        for part in parts:
+            if whole:
+                pieces = [(part, True)]
+            elif clip is not None:
+                pieces = [(piece, dike) for dike, geom in ((False, part.difference(clip)), (True, part.intersection(clip))) for piece in _polys(geom)]
+            else:
+                pieces = [(part, False)]
+            for piece, dike in pieces:
+                if piece.area < float(self.cfg["min_parcel_m2"]):
+                    continue
+                yield self._context(parcel, piece, parcel["id"] if k == 0 else f"{parcel['id']}.{k}", dike)
+                k += 1
+
+    def _context(self, parcel: dict, part: Polygon, cid: str, dike: bool) -> ParcelContext:
+        near = part.buffer(_NEAR_M)
+        roads = self._near(self.r_tree, self.road_polys, near)
+        blocked = self._near(self.o_tree, self.object_polys, part)
+        if not self.regions.is_empty and self.regions.intersects(part):
+            blocked.append(self.regions.intersection(part.buffer(1.0)))
+        verge = {
+            name: _union(self._near(tree, self.verge_polys[name], part)).intersection(part)
+            for name, tree in self.v_tree.items()
+        }
+        return ParcelContext(
+            id=cid,
+            kind=parcel["kind"],
+            polygon=part,
+            buildings=self._near(self.b_tree, self.buildings, near),
+            fences=self._near(self.f_tree, self.fences, near),
+            trees=self._near(self.t_tree, self.trees, near),
+            road=_union(roads) if roads else None,
+            terrain=self.terrain,
+            tree_cfg=self.tree_cfg,
+            colour=self.colour[parcel["id"]],
+            blocked=_union(blocked) if blocked else None,
+            verge=verge,
+            road_lines=self._near(self.rl_tree, self.road_lines, near),
+            dike=dike,
+            water=_union(self._near(self.w_tree, self.water_polys, part.buffer(float(self.cfg["tint"]["water_m"])))) if self.water_polys else None,
+        )
 
 
 @dataclass
@@ -1103,13 +1152,14 @@ def build_village_detail(
         if atype is None or (only is not None and parcel["id"] not in only):
             continue
         for ctx in v.contexts(parcel):
-            res = RECIPES[atype](ctx, v.cfg)
-            if atype in meadow_mod.MEADOW_TYPES:
+            kind = "dike" if ctx.dike else atype
+            res = RECIPES[kind](ctx, v.cfg)
+            if kind in meadow_mod.MEADOW_TYPES:
                 # the game generates the dense kinds from the raster; the recipe's own instances stay only for the rest
                 res.clutter = [c for c in res.clutter if c["kind"] in stored]
-                band = float(v.cfg[atype].get("edge_band_m", 0.0))
-                meadow_cells += meadow_mod.add_parcel(meadow, ctx, res, atype, free_area(ctx, v.cfg, trunks=False), mcfg, band)
-            flat, tex = patch_meshes(res, v.terrain, lift, by_type.setdefault(atype, {}))
+                band = float(v.cfg[kind].get("edge_band_m", 0.0))
+                meadow_cells += meadow_mod.add_parcel(meadow, ctx, res, kind, free_area(ctx, v.cfg, trunks=False), mcfg, band)
+            flat, tex = patch_meshes(res, v.terrain, lift, by_type.setdefault(kind, {}))
             rows.append(patch_rows(flat, tex, textures))
             for c in res.clutter:
                 key = tuple(chunk_of(c["x"], c["y"], v.chunk_m))
@@ -1226,6 +1276,7 @@ def run_parcel(
     if atype is None:
         raise ValueError(f"parcel {parcel_id} ({parcel['kind']}) has no ground detail")
     ctx = next(v.contexts(parcel))
+    atype = "dike" if ctx.dike else atype
     res = RECIPES[atype](ctx, v.cfg)
     if with_meadow and atype in meadow_mod.MEADOW_TYPES:
         mcfg = v.cfg["meadow"]
@@ -1257,13 +1308,13 @@ def patch_meshes(res: DetailResult, terrain: Terrain, lift_m: float, tally: dict
     textured: dict[str, list[TexturedMesh]] = {}
     for p in res.patches:
         if p.texture is None:
-            m = drape(p.geom, p.colour or [128, 128, 128], terrain, [], lift_m, lift_m)
+            m = drape(p.geom, p.colour or [128, 128, 128], terrain, [], p.lift or lift_m, p.lift or lift_m)
             if m.face_count:
                 flat.append(m)
                 if tally is not None:
                     tally[p.layer] = tally.get(p.layer, 0) + m.face_count
             continue
-        m = drape(p.geom, [255, 255, 255], terrain, [], lift_m, lift_m)
+        m = drape(p.geom, [255, 255, 255], terrain, [], p.lift or lift_m, p.lift or lift_m)
         if not m.face_count:
             continue
         if tally is not None:

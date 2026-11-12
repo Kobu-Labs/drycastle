@@ -10,7 +10,7 @@ Original pixels computed by this script (no third-party image, no photo); standa
 Every texture repeats seamlessly in both directions. The style is flat: a few tones, hard edges, very
 little noise, so the textures sit next to the flat-colour map. Two kinds:
 
-* coloured   (brick_red, brick_white, stone, dirt, gravel, leaf_litter, soil_rows): carry their own colours; a white tint shows them as drawn.
+* coloured   (brick_red, brick_white, stone, dirt, gravel, leaf_litter, soil_rows, dike_gravel): carry their own colours; a white tint shows them as drawn.
 * tintable   (concrete, picket, wire): near-white, shaded only; the mesh's vertex colour is the paint.
 
 ``TEXTURES`` below is the single list: id, size in pixels, the size of one repeat in metres, and the
@@ -325,6 +325,69 @@ def soil_rows(w, h):
     return out
 
 
+def vnoise2(x, y, px, py, seed=0):
+    """Value noise that wraps every ``px`` cells along x and ``py`` along y (so a texture tiles both ways)."""
+    x0, y0 = math.floor(x), math.floor(y)
+    fx, fy = x - x0, y - y0
+    sx, sy = fx * fx * (3 - 2 * fx), fy * fy * (3 - 2 * fy)
+
+    def at(i, j):
+        return hash01(i % px, j % py, seed)
+
+    top = at(x0, y0) * (1 - sx) + at(x0 + 1, y0) * sx
+    bot = at(x0, y0 + 1) * (1 - sx) + at(x0 + 1, y0 + 1) * sx
+    return top * (1 - sy) + bot * sy
+
+
+def dike_gravel(w, h):
+    """The gravel track of a flood dike: fine, light pebbles with a few hard-edged grass patches. Coloured, tiles both ways.
+
+    Flat style like ``gravel`` (wrapped Voronoi pebbles, a few tones, hard edges, no per-pixel noise) but finer and
+    lighter. The tile is 8 m along u and 4 m across, laid with the track's centre line at v = 0.5: the grass patches
+    are stretched along u and sit mostly in the middle and near the edges of a 3 m track. ``dike.PATCH_RGB`` are the
+    two patch colours (fill, rim); ``dike.py`` reads this picture to plant tufts on the patches, so keep them.
+    """
+    tile_w, tile_h = 8.0, 4.0
+    gx, gy = 128, 64  # pebble lattice: 6.25 cm cells
+    cell = tile_w / gx
+    stones = [rgb(c) for c in ("#bdb9ae", "#aaa79d", "#cdc7b6", "#9a978f", "#bdb29b", "#d6d1c4", "#a8a396")]
+    gap = rgb("#98948a")
+    patch, rim = rgb("#6fa04a"), rgb("#4f7d3a")
+    seeds = {(i, j): ((i + 0.2 + 0.6 * hash01(i, j, 301)) * cell, (j + 0.2 + 0.6 * hash01(i, j, 303)) * cell)
+             for j in range(gy) for i in range(gx)}
+    out = []
+    for y in range(h):
+        ym = (y + 0.5) / h * tile_h
+        v = (y + 0.5) / h
+        line = []
+        for x in range(w):
+            xm = (x + 0.5) / w * tile_w
+            pv = 0.6 * vnoise2(x / 32, y / 12, w // 32, h // 12, 321) + 0.4 * vnoise2(x / 8, y / 6, w // 8, h // 6, 323)
+            thr = 0.72 - 0.08 * math.exp(-(((v - 0.5) / 0.12) ** 2)) - 0.06 * math.exp(-((abs(v - 0.5) - 0.36) / 0.06) ** 2)
+            q = pv - thr
+            if q > 0:
+                line.append((*(rim if q < 0.025 else patch), 255))
+                continue
+            ci, cj = int(xm // cell), int(ym // cell)
+            best, second, who = 1e9, 1e9, None
+            for dj in (-1, 0, 1):
+                for di in (-1, 0, 1):
+                    i, j = ci + di, cj + dj
+                    sx, sy = seeds[(i % gx, j % gy)]
+                    d = math.hypot(xm - (sx + (i - i % gx) * cell), ym - (sy + (j - j % gy) * cell))
+                    if d < best:
+                        second, best, who = best, d, (i % gx, j % gy)
+                    elif d < second:
+                        second = d
+            if (second - best) / 2 < 0.006:
+                line.append((*gap, 255))
+            else:
+                tone = stones[int(hash01(*who, 305) * len(stones)) % len(stones)]
+                line.append((*shade(tone, 0.95 + 0.08 * hash01(*who, 307)), 255))
+        out.append(line)
+    return out
+
+
 # id, pixels (w, h), one repeat in metres (w, h), tintable, drawing function.
 # A tile height of 0 means "as tall as the surface": the texture is stretched over the full height once.
 TEXTURES = [
@@ -338,6 +401,7 @@ TEXTURES = [
     ("gravel", (256, 256), (1.0, 1.0), False, gravel),
     ("leaf_litter", (256, 256), (1.5, 1.5), False, leaf_litter),
     ("soil_rows", (256, 256), (1.0, 1.0), False, soil_rows),
+    ("dike_gravel", (512, 256), (8.0, 4.0), False, dike_gravel),
 ]
 
 

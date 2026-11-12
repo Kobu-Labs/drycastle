@@ -248,6 +248,10 @@ _Avoid_: pillbox, fortification
 The concrete wall between the river and the village, built from placed pieces (`prim:floodwall_*`): a ledge on the village side that players walk on, an upper wall with a railing behind it, access points and road gates. Its village side is the piece's `-y`.
 _Avoid_: levee, dike, river wall
 
+**Dike**:
+The earth embankment north of the village, with a gravel track on top and thick grass on its sides; the cadastral parcel P-0073. Distinct from the flood wall, which is the concrete wall between the river and the village.
+_Avoid_: levee, flood wall (that is the concrete wall)
+
 **Ladder**:
 How a player moves between the floors of a bunker: they get on with the interact key, climb with forward and back, and step off at either end. They cannot fire on it.
 _Avoid_: stairs, climbing (that is the verb)
