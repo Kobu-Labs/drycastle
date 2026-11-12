@@ -8,6 +8,7 @@
   "destroyed_return_time": 30,
   "crash_min_speed_loss": 6,
   "crash_damage_per_speed": 8,
+  "bump_restitution": 0.3,
   "bullet_damage_multiplier": 0.5,
   "rocket_damage_multiplier": 1.5,
   "explosion": {

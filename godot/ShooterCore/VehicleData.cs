@@ -15,6 +15,8 @@ public class VehiclesFile : IVersioned
     /// <summary>Wall impact: speed lost in one tick above the minimum (m/s) hurts the vehicle by this much per m/s.</summary>
     public float CrashMinSpeedLoss { get; set; } = 6;
     public float CrashDamagePerSpeed { get; set; } = 8;
+    /// <summary>Vehicle against vehicle (#253): how much of the closing speed comes back as a bounce (0 = the two stick, 1 = a perfect bounce). The speed each vehicle loses in the bump goes through the crash numbers above.</summary>
+    public float BumpRestitution { get; set; } = 0.3f;
     /// <summary>Weapon damage against vehicles is the weapon's damage times these (hitscan bullets, rockets and their splash).</summary>
     public float BulletDamageMultiplier { get; set; } = 0.5f;
     public float RocketDamageMultiplier { get; set; } = 1.5f;
@@ -123,6 +125,7 @@ public class VehiclesFile : IVersioned
         if (f.DamageStages.Count != 3 || f.DamageStages.Any(x => x <= 0 || x >= 1) || f.DamageStages[0] <= f.DamageStages[1] || f.DamageStages[1] <= f.DamageStages[2])
             throw new DataFileException("vehicles.json: damage_stages are three descending fractions between 0 and 1");
         if (f.Explosion.Splash.Radius <= 0) throw new DataFileException("vehicles.json: explosion.splash.radius must be positive");
+        if (f.BumpRestitution is < 0 or > 1) throw new DataFileException("vehicles.json: bump_restitution is between 0 and 1");
         if (f.RunOverReferenceMass <= 0) throw new DataFileException("vehicles.json: run_over_reference_mass must be positive");
         return f;
     }

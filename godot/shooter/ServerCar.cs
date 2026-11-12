@@ -190,6 +190,37 @@ public partial class ServerCar : CharacterBody3D
         Velocity = new Vector3(Flight.Velocity.X, Flight.Velocity.Y, Flight.Velocity.Z);
     }
 
+    /// <summary>What of this vehicle other vehicles touch (#253): the hit box and, for a helicopter, the rotor disc, where the vehicle is now.</summary>
+    public ContactShape ContactShape()
+    {
+        var p = Flies ? Flight.Position : new System.Numerics.Vector3(GlobalPosition.X, GlobalPosition.Y, GlobalPosition.Z);
+        var f = Def.Flight;
+        return new ContactShape(p, State.Yaw, HalfWidth, HalfLength, Def.Height, f?.RotorRadius ?? 0, f?.RotorHeight ?? 0, f?.RotorThickness ?? 0);
+    }
+
+    /// <summary>This vehicle as one side of a bump: its mass (a type with none counts as a car) and the velocity it is moving with.</summary>
+    public BumpBody BumpBody() => new(Def.Mass > 0 ? Def.Mass : 1200f, Flies ? Flight.Velocity : new System.Numerics.Vector3(Forward.X, 0, Forward.Z) * State.Speed, Flies);
+
+    /// <summary>
+    /// Applies a bump (<see cref="VehicleContact.Bump"/>): moves the vehicle apart and changes its velocity. A ground vehicle is moved through the
+    /// world (it stops at a wall) and keeps only the part of the change along its facing, as the arcade model has no sideways speed; a helicopter
+    /// moves freely (the flight probe finds what it ended up in on its next step) and, standing on its skids, is shoved without taking speed.
+    /// </summary>
+    public void ApplyBump(System.Numerics.Vector3 move, System.Numerics.Vector3 deltaV)
+    {
+        if (Flies)
+        {
+            Flight.Position += move;
+            if (!Flight.Grounded) Flight.Velocity += deltaV;
+            GlobalPosition = new Vector3(Flight.Position.X, Flight.Position.Y, Flight.Position.Z);
+            Velocity = new Vector3(Flight.Velocity.X, Flight.Velocity.Y, Flight.Velocity.Z);
+            return;
+        }
+        if (move.X != 0 || move.Z != 0) MoveAndCollide(new Vector3(move.X, 0, move.Z));
+        var fwd = Forward;
+        State.Speed += deltaV.X * fwd.X + deltaV.Z * fwd.Z;
+    }
+
     /// <summary>Over a water body (amphibious or boat): the origin rides its surface and gravity does not apply.</summary>
     public bool Afloat;
 

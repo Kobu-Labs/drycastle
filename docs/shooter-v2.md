@@ -362,7 +362,7 @@ as the driver of every other vehicle is: to stop the pilot, destroy the helicopt
   does not stop a car. The helicopter stops against what it hits and slides along it; the speed a surface takes in one tick is the impact,
   and the crash damage rules apply to it (`crash_min_speed_loss`, `crash_damage_per_speed`: full speed into a wall is about a third of its
   hit points). A touchdown under power is always under the threshold. The tail boom and the blade tips beyond the disc do not collide, and
-  it does not collide with players or other vehicles (no vehicle does) or run anyone over.
+  it does not collide with players or run anyone over. It does bump other vehicles (see "Vehicle against vehicle" in `docs/vehicle-collision-and-entering.md`).
 - *Water.* The surface is a floor: it does not sink. While the skids are in a water body it loses `water_damage_per_second` (60) hit points
   a second, and it can lift out again. The cushion treats the surface as ground.
 
