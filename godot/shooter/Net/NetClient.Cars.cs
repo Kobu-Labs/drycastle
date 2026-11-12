@@ -171,7 +171,7 @@ public partial class NetClient
             if (v.Driver == _myId && _driving && _me != null)
             {
                 _carYaw = rot.Y;
-                if (flies) { ChaseFlight(v, p, rot, dt); flown = FlightOf(v); chased = true; } else _me.Chase(p, s.Yaw);
+                if (flies) { ChaseFlight(v, p, rot, dt); flown = FlightOf(v); chased = true; } else _me.Chase(p, s.Yaw, Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null, dt);
                 kmh = v.Kmh;
                 ShowSelfInCar(v);
             }

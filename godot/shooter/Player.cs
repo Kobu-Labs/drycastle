@@ -126,8 +126,9 @@ public partial class Player : CharacterBody3D
     bool _chase;
 
     /// <summary>Third-person camera on a car (driving): the body sits in the car and the mouse orbits the camera freely around it; the keys alone steer. Starts behind the car.</summary>
-    public void Chase(Vector3 carPos, float carYaw)
+    public void Chase(Vector3 carPos, float carYaw, VehicleDef? def = null, float dt = 0.016f)
     {
+        var fresh = !_chase || _flightChase;
         if (!_chase) { _yaw = carYaw; _pitch = -0.22f; }
         _chase = true; _flightChase = false; FovBoost = 0;
         GlobalPosition = carPos;
@@ -135,9 +136,19 @@ public partial class Player : CharacterBody3D
         if (!_camera.IsInsideTree()) return; // headless bots have no camera
         var rot = new Vector3(_pitch, _yaw, 0);
         var fwd = -Basis.FromEuler(rot).Z;
-        _camera.GlobalPosition = carPos + Vector3.Up * 1.5f - fwd * 6.5f;
+        var (dist, height) = def != null ? ChaseCamera.Wanted(def) : (ChaseCamera.BaseDistance, ChaseCamera.BaseHeight);
+        var focus = carPos + Vector3.Up * height;
+        // world only (vehicles are on their own layer), so the camera comes in at walls, trees and buildings; coming in is instant, going out eased
+        var q = PhysicsRayQueryParameters3D.Create(focus, focus - fwd * dist);
+        q.CollisionMask = CollisionLayers.World;
+        q.Exclude = _selfOnly ??= new Godot.Collections.Array<Rid> { GetRid() };
+        var hit = GetWorld3D().DirectSpaceState.IntersectRay(q);
+        var free = hit.Count > 0 ? (hit["position"].AsVector3() - focus).Length() - ChaseCamera.Margin : dist;
+        _chaseDist = fresh ? Mathf.Max(ChaseCamera.MinDistance, Mathf.Min(dist, free)) : ChaseCamera.Step(_chaseDist, dist, free, dt);
+        _camera.GlobalPosition = focus - fwd * _chaseDist;
         _camera.GlobalRotation = rot;
     }
+    float _chaseDist;
 
     /// <summary>Degrees added to the field of view (the helicopter's chase camera widens with speed); eased like the scope.</summary>
     public float FovBoost { get; set; }
