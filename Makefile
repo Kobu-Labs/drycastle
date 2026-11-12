@@ -173,9 +173,13 @@ TARGETS ?= 24
 SANDBOX ?= 1
 SANDBOX_ARG = $(if $(filter 1 true,$(SANDBOX)),--allow-sandbox,)
 
+# BOTS=N adds N bots while a player is in the match (#214); CLUSTER=1 keeps one dense cluster of spawns so they are met (they do not walk yet).
+BOTS ?= 0
+BOTS_ARG = $(if $(filter-out 0,$(BOTS)),--bots $(BOTS),) $(if $(filter 1 true,$(CLUSTER)),--cluster-spawns,)
+
 shooter-server:
 	dotnet build godot/shooter/shooter.csproj
-	godot --headless --path godot/shooter -- --role server --targets $(TARGETS) $(if $(SMOKE),--smoke,) $(UNLOCK_ARG) $(SANDBOX_ARG) $(SHOOTER_MAP)
+	godot --headless --path godot/shooter -- --role server --targets $(TARGETS) $(if $(SMOKE),--smoke,) $(UNLOCK_ARG) $(SANDBOX_ARG) $(BOTS_ARG) $(SHOOTER_MAP)
 
 shooter-client:
 	dotnet build godot/shooter/shooter.csproj
@@ -223,6 +227,13 @@ shooter-bike-smoke:
 shooter-loss-test:
 	dotnet build godot/shooter/shooter.csproj
 	python3 godot/shooter/run_loss_test.py $(if $(MAP),--map $(abspath $(MAP)),) $(if $(SCENARIOS),--scenarios $(SCENARIOS),) $(if $(BOTS),--bots $(BOTS),) $(if $(MEASURE),--measure $(MEASURE),)
+
+# Bot navigation spike (#214): headless collision-only map load, navmesh bake from the colliders, then bake time, cache size and
+# path queries (spawn pairs, yards behind fences). No server, no clients. NAV="--nav-cell 0.5 --nav-split 2 --nav-threads 8" for
+# other settings. Results in out/navspike/<timestamp>/report.json.
+shooter-nav-spike:
+	dotnet build godot/shooter/shooter.csproj
+	godot --headless --path godot/shooter -- --role server --nav-spike --nav-out $(abspath out/navspike) $(NAV) $(SHOOTER_MAP)
 
 shooter-test:
 	dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj

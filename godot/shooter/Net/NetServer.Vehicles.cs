@@ -160,7 +160,7 @@ public partial class NetServer
                 FlightWater = Water, FlightBounds = MapFlightBounds,
             };
             World.AddChild(car);
-            foreach (var cl in _clients.Values.Where(x => x.Joined)) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); }
+            foreach (var cl in _byId.Values) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); }
             _cars.Add(car);
         }
         GD.Print($"server: {_cars.Count} vehicles spawned ({string.Join(", ", colours.Select(k => $"{Vehicles!.Vehicles[k.Key].Id} x{k.Value.Count} colours {string.Join(",", k.Value)}"))})");

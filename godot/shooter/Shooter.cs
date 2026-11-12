@@ -15,6 +15,9 @@ namespace Suchohrad.Shooter;
 ///   --unlock-all              server: dev mode, every weapon, perk, killstreak and level-gated item unlocked (also SUCHOHRAD_UNLOCK_ALL=1); nothing is saved (issue #149)
 ///   --targets N               server: plant N stationary target dummies around the spawn area (0-64; default from match.json, 0; make shooter-server uses 24)
 ///   --allow-sandbox           server: grant sandbox mode (godmode, unlimited ammo, every killstreak on demand, no XP or score) to clients that ask (#156); dev only, make SANDBOX=1
+///   --bots N                  server: N bots (0-32) play while at least one human is in the match (#214); they walk to the nearest player and shoot what they see, earn and grant no XP
+///   --nav-cache DIR           server: where the bots' baked navigation tiles are kept (default navcache in the Godot user data folder); baked once per map version
+///   --cluster-spawns          server: keep one dense cluster of spawn points (dev aid: players and bots meet at once instead of crossing the village)
 ///   --sandbox                 client: ask the server for sandbox mode (also SUCHOHRAD_SANDBOX=1); the server may refuse
 ///   --dev-ui                  client: show the dev-only UI (the Advanced section of the connect screen); debug builds always show it
 ///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
@@ -36,6 +39,9 @@ namespace Suchohrad.Shooter;
 ///   --time HH:MM              server: start time of day (overrides environment.json start_time)
 ///   --day-length MIN          server: real minutes for one 24 hour day (overrides environment.json day_length_minutes)
 ///   --freeze-time             server: hold the clock at its start time (or --time)
+///   --nav-spike               server: bot navigation spike (#214): bake a navmesh from the map colliders, report bake time, cache size and path queries, then exit
+///                             (make shooter-nav-spike); --nav-out DIR (report.json and cached tiles in DIR/&lt;timestamp&gt;), --nav-cell 0.25, --nav-threads N, --nav-split 1, --nav-pairs 300,
+///                             --nav-edge-err 1.0, --nav-detail-dist 6, --nav-detail-err 1, --nav-snap 0, --nav-edge-connections 1, --nav-max-polys 0, --nav-skip-trunks
 /// No gameplay yet: this only boots the role on the loaded map.
 /// </summary>
 public partial class Shooter : Node3D
@@ -86,6 +92,7 @@ public partial class Shooter : Node3D
             var data = _data = LoadData();
             GD.Print($"data: {data.Weapons.Weapons.Count} weapons, score goal {data.Match.ScoreGoal}, {data.Vehicles.Vehicles.Count} vehicle types");
             LoadMap(cfg);
+            if (role == "server" && cfg.Flag("nav-spike")) { BuildNavSpike(cfg); return; }
             if (role == "server" && !_smoke)
             {
                 SetReadyMarker(false);
@@ -322,6 +329,27 @@ public partial class Shooter : Node3D
         GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} pole_lamps={poleLamps.Count} load={s.LoadSeconds:F2}s");
     }
 
+    /// <summary>Bot navigation spike (#214): bakes a navmesh from the loaded colliders, reports and quits. See <see cref="NavSpike"/>.</summary>
+    void BuildNavSpike(Config cfg)
+    {
+        static float F(string s, float d) => float.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : d;
+        static int I(string s, int d) => int.TryParse(s, out var v) ? v : d;
+        var spike = new NavSpike { World = this, Map = _map, MapDir = Path.GetFullPath(GamePaths.Map(cfg.Str("map", ""))) };
+        spike.Cell = F(cfg.Str("nav-cell"), spike.Cell);
+        spike.Threads = Math.Max(1, I(cfg.Str("nav-threads"), spike.Threads));
+        spike.Split = Math.Max(0, I(cfg.Str("nav-split"), spike.Split)); // 0 = one bake of the whole map, the control without tiles
+        spike.Pairs = Math.Max(1, I(cfg.Str("nav-pairs"), spike.Pairs));
+        spike.EdgeMaxError = F(cfg.Str("nav-edge-err"), spike.EdgeMaxError);
+        spike.DetailSampleDistance = F(cfg.Str("nav-detail-dist"), spike.DetailSampleDistance);
+        spike.DetailSampleMaxError = F(cfg.Str("nav-detail-err"), spike.DetailSampleMaxError);
+        spike.Snap = F(cfg.Str("nav-snap"), spike.Snap);
+        spike.MaxPolygons = Math.Max(0, I(cfg.Str("nav-max-polys"), spike.MaxPolygons));
+        spike.SkipTrunks = cfg.Flag("nav-skip-trunks");
+        spike.EdgeConnections = cfg.Str("nav-edge-connections", "1") != "0";
+        if (cfg.Str("nav-out") != "") spike.OutDir = Path.Combine(cfg.Str("nav-out"), DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+        AddChild(spike);
+    }
+
     Vector3 RandomSpawn() =>
         _map.SpawnPoints.Count > 0 ? _map.SpawnPoints[_rng.Next(_map.SpawnPoints.Count)].Position : Vector3.Zero;
 
@@ -355,8 +383,13 @@ public partial class Shooter : Node3D
             LossOut = cfg.Str("loss-out"),
             UnlockAll = DevUnlocks.Enabled(cfg.Flag("unlock-all"), System.Environment.GetEnvironmentVariable(DevUnlocks.EnvVar)),
             AllowSandbox = cfg.Flag("allow-sandbox"),
+            Bots = int.TryParse(cfg.Str("bots", "0"), out var bots) ? Math.Clamp(bots, 0, NetServer.MaxBots) : 0,
+            ClusterSpawns = cfg.Flag("cluster-spawns"),
+            MapDir = Path.GetFullPath(GamePaths.Map(cfg.Str("map", ""))),
+            NavCacheDir = cfg.Str("nav-cache", Path.Combine(OS.GetUserDataDir(), "navcache")),
         };
         if (server.AllowSandbox) GD.Print("server: sandbox mode allowed (--allow-sandbox, #156)");
+        if (server.Bots > 0) GD.Print($"server: {server.Bots} bots join while a player is in the match (--bots, #214)");
         if (server.UnlockAll) GD.Print("server: dev mode, every unlock on (not saved to the database)");
         if (server.Sim != null) GD.Print($"server: net-sim {server.Sim}");
         // The dedicated server idles at the tick rate instead of spinning a core; the test modes release delayed packets at frame rate.

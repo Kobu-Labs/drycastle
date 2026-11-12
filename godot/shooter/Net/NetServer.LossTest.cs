@@ -51,15 +51,18 @@ public partial class NetServer
     void LossKill(ushort killer, ushort victim) { if (LossTest > 0 && killer != victim) Ls(killer).Kills++; }
     void LossRoundStart() { if (LossTest > 0 && _lossT0 < 0) { _lossT0 = _elapsed; GD.Print($"loss-test: round started with {_clients.Count} players, schedule t0={_elapsed:F2}"); } }
 
+    /// <summary>--cluster-spawns: keep one dense cluster of spawn candidates, as the loss test does. A dev aid for trying bots, which do not walk yet (#214).</summary>
+    public bool ClusterSpawns;
+
     /// <summary>Keeps one dense cluster of spawn candidates so the bots meet and shoot each other (the real map's spawns are spread over the whole village).</summary>
     void LossClusterSpawns()
     {
-        if (LossTest == 0 || Spawns.Count == 0) return;
+        if ((LossTest == 0 && !ClusterSpawns) || Spawns.Count == 0) return;
         // flat neighbourhoods only (within 60 m horizontally and 4 m vertically), so prediction error in the report is not dominated by slopes and falls
         bool Near(NVec3 a, NVec3 b) => new System.Numerics.Vector2(a.X - b.X, a.Z - b.Z).Length() < 60f && MathF.Abs(a.Y - b.Y) < 4f;
         var best = Spawns.OrderByDescending(a => Spawns.Count(b => Near(a, b))).First();
         var keep = Spawns.Where(b => Near(best, b)).Take(40).ToList();
-        GD.Print($"loss-test: spawn cluster {keep.Count}/{Spawns.Count} candidates, y {keep.Min(v => v.Y):F1}..{keep.Max(v => v.Y):F1}, around ({best.X:F0},{best.Y:F0},{best.Z:F0})");
+        GD.Print($"server: spawn cluster {keep.Count}/{Spawns.Count} candidates, y {keep.Min(v => v.Y):F1}..{keep.Max(v => v.Y):F1}, around ({best.X:F0},{best.Y:F0},{best.Z:F0})");
         Spawns.Clear(); Spawns.AddRange(keep);
     }
 

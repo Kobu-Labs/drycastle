@@ -16,7 +16,7 @@ public partial class NetServer
     /// <summary>Sends each joined player's look to the joiner, and the joiner's look to every other player.</summary>
     void SendAppearancesOnJoin(Client c)
     {
-        foreach (var o in _clients.Values.Where(o => o.Joined))
+        foreach (var o in _byId.Values)
         {
             Send(c, AppearanceEvent(o));
             if (o != c) Send(o, AppearanceEvent(c));
@@ -46,7 +46,7 @@ public partial class NetServer
     void BroadcastAppearance(Client c)
     {
         var ev = AppearanceEvent(c);
-        foreach (var o in _clients.Values.Where(o => o.Joined)) Send(o, ev);
+        foreach (var o in _byId.Values) Send(o, ev);
     }
 
     EventMsg AppearanceEvent(Client c) => new((byte)EventKind.Appearance, AppearanceCodec.Encode(c.Id, c.Profile!.Camo));

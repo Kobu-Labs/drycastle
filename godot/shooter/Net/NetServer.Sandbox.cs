@@ -27,12 +27,12 @@ public partial class NetServer
     }
 
     /// <summary>Scores (XP, stats, the score) count for every player except a sandbox one. Unknown ids count as normal.</summary>
-    bool Scores(ushort id) => _match.Get(id) is not { Sandbox: true };
+    bool Scores(ushort id) => _match.Get(id) is not { Sandbox: true } && !IsBot(id); // a bot earns no XP and has no stats (#214)
 
     /// <summary>Join: the sandbox name tags of everyone already in sandbox mode go to the joiner, and the joiner's to everyone.</summary>
     void SandboxAnnounce(Client c)
     {
-        var joined = _clients.Values.Where(o => o.Joined).ToList();
+        var joined = _byId.Values.ToList();
         if (c.Sandbox) foreach (var o in joined) Send(o, new EventMsg((byte)EventKind.SandboxState, SandboxEvents.EncodeState(c.Id, true)));
         foreach (var o in joined.Where(o => o != c && o.Sandbox)) Send(c, new EventMsg((byte)EventKind.SandboxState, SandboxEvents.EncodeState(o.Id, true)));
         if (c.Sandbox) SendSandboxHeld(c);
@@ -142,7 +142,7 @@ public partial class NetServer
             FlightWater = Water, FlightBounds = MapFlightBounds,
         };
         World.AddChild(car);
-        foreach (var cl in _clients.Values.Where(x => x.Joined)) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); }
+        foreach (var cl in _byId.Values) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); }
         _cars.Add(car);
         GD.Print($"server: {c.Name} #{c.Id} spawned a {def.Id}");
     }
