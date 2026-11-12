@@ -300,8 +300,13 @@ public static class ObjectColliders
 {
     /// <summary>
     /// Flowers have none (walk and shoot through). Bushes stop shots only. Trees have a trunk (solid, lower third) and a crown
-    /// box (shot-only). Every other category (car, slab, pot, wall, fence, radio tower, other) is one solid box.
+    /// box (shot-only). A pole (utility pole) is its column alone: a thin solid box at the origin, as high as the pole, so the
+    /// lamp arm, the crossarm and a cabinet beside it (which make the size wide) stop nothing. Every other category (car, slab,
+    /// pot, wall, fence, radio tower, other) is one solid box.
     /// </summary>
+    /// <summary>Half the side of a utility pole's solid column, metres.</summary>
+    public const float PoleHalf = 0.2f;
+
     public static List<SolidPart> ForCategory(string category, float sx, float sy, float sz)
     {
         var hx = sx / 2;
@@ -318,6 +323,8 @@ public static class ObjectColliders
                     new(PartRole.Trunk, PartShape.Box, 0, 0, 0, sy * 0.35f, 0.15f, 0.15f, 0),
                     new(PartRole.Crown, PartShape.Box, 0, 0, sy * 0.35f, sy, hx, hz, 0),
                 ];
+            case "pole":
+                return [new(PartRole.Trunk, PartShape.Box, 0, 0, 0, sy, PoleHalf, PoleHalf, 0)];
             default:
                 return [new(PartRole.Trunk, PartShape.Box, 0, 0, 0, sy, hx, hz, 0)];
         }

@@ -17,6 +17,8 @@ public partial class EditorMode
 {
     public const double MoveSnap = 0.5, RotateSnap = 15.0, DuplicateOffset = 1.0, NudgeStep = 0.5;
     public static readonly string[] Categories = { "car", "slab", "pot", "flower", "bush", "tree", "wall", "fence", "other" };
+    /// <summary>Categories whose palette items show their render alone once it has arrived (the name stays in the tooltip).</summary>
+    public static readonly string[] IconOnlyCategories = { "pole" };
     const float PickMargin = 0.15f, RingBand = 0.45f;
 
     public sealed record ObjectInfo(string Id, string Parcel, string Asset, double X, double Y, double Rotation, double Scale, string? Colour);
@@ -711,7 +713,12 @@ public partial class EditorMode
         AddChild(_thumbs);
         _thumbs.Ready += (id, tex) =>
         {
-            foreach (var (a, b) in _palButtons) if (a.Id == id) b.Icon = tex;
+            foreach (var (a, b) in _palButtons)
+                if (a.Id == id)
+                {
+                    b.Icon = tex;
+                    if (IconOnlyCategories.Contains(a.Category)) b.Text = "";
+                }
             foreach (var (_, t) in _palTabs) if (t.sample == id) { t.btn.Icon = tex; t.btn.Text = ""; }
         };
         // the visible category first, then the rest

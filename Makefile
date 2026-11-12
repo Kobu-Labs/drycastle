@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview poles-preview poles-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -51,6 +51,15 @@ EXAG ?= 3
 
 preview:
 	cd pipeline && uv run python -m suchohrad_pipeline preview --area $(AREA) --exaggeration $(EXAG)
+
+# Pictures of the generated utility poles in out/poles (variants, random seeds, a wired row, the parts kit); GLB=1 also
+# writes each placeable pole as a GLB. No map data needed. See docs/utility-poles.md.
+poles-preview:
+	cd pipeline && uv run python -m suchohrad_pipeline.poles_preview $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb,)
+
+# Rewrites the prim:pole_* entries of assets/manifest.json after the pole variants changed.
+poles-manifest:
+	cd pipeline && uv run python -m suchohrad_pipeline.poles_preview --sync-manifest
 
 map:
 	cd pipeline && uv run python -m suchohrad_pipeline run-all --area $(AREA)

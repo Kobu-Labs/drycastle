@@ -173,6 +173,13 @@ public class PropCollidersTests
         Assert.Single(wall);
         Assert.Equal(CollisionLayers.World, wall[0].Layer);
         Assert.Equal(2.5f, wall[0].Z1);
+        // a utility pole is as wide as its lamp arm reaches, but only its column is solid
+        var pole = ObjectColliders.ForCategory("pole", 0.97f, 9.2f, 3.9f);
+        Assert.Single(pole);
+        Assert.Equal(CollisionLayers.World, pole[0].Layer);
+        Assert.Equal(9.2f, pole[0].Z1);
+        Assert.Equal(ObjectColliders.PoleHalf, pole[0].HalfU);
+        Assert.Equal(ObjectColliders.PoleHalf, pole[0].HalfV);
     }
 
     [Fact]

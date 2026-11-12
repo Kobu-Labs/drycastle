@@ -1473,6 +1473,327 @@
       "source": "scripts/make_utility_helicopter_model.py (original geometry written as code; python3 -I scripts/make_utility_helicopter_model.py rebuilds the file)",
       "pack": "suchohrad-generated-models",
       "used_for": "godot/shooter vehicle id utility_helicopter (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground under the rotor mast, metres), separate nodes for rotor_main, rotor_tail, gun_mount, gun, barrel"
+    },
+    {
+      "id": "prim:pole_lamp_1",
+      "category": "pole",
+      "name": "Utility pole: single column, crossarm, street lamp (1)",
+      "file": null,
+      "size_m": [
+        0.973,
+        9.225,
+        3.929
+      ],
+      "tags": [
+        "utility-pole",
+        "lamp",
+        "seed-1",
+        "flat-colour",
+        "primitive",
+        "street-lamp"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_lamp_2",
+      "category": "pole",
+      "name": "Utility pole: single column, crossarm, street lamp (2)",
+      "file": null,
+      "size_m": [
+        0.786,
+        9.6,
+        3.918
+      ],
+      "tags": [
+        "utility-pole",
+        "lamp",
+        "seed-2",
+        "flat-colour",
+        "primitive",
+        "street-lamp"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_lamp_3",
+      "category": "pole",
+      "name": "Utility pole: single column, crossarm, street lamp (3)",
+      "file": null,
+      "size_m": [
+        0.758,
+        9.303,
+        4.05
+      ],
+      "tags": [
+        "utility-pole",
+        "lamp",
+        "seed-3",
+        "flat-colour",
+        "primitive",
+        "street-lamp"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_plain_1",
+      "category": "pole",
+      "name": "Utility pole: single column and crossarm, no lamp (1)",
+      "file": null,
+      "size_m": [
+        0.675,
+        9.247,
+        1.551
+      ],
+      "tags": [
+        "utility-pole",
+        "plain",
+        "seed-1",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_plain_2",
+      "category": "pole",
+      "name": "Utility pole: single column and crossarm, no lamp (2)",
+      "file": null,
+      "size_m": [
+        0.765,
+        8.373,
+        1.585
+      ],
+      "tags": [
+        "utility-pole",
+        "plain",
+        "seed-2",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_twin_lamp_1",
+      "category": "pole",
+      "name": "Utility pole: two clamped columns, long crossarm, street lamp (1)",
+      "file": null,
+      "size_m": [
+        0.915,
+        9.271,
+        3.812
+      ],
+      "tags": [
+        "utility-pole",
+        "twin_lamp",
+        "seed-1",
+        "flat-colour",
+        "primitive",
+        "street-lamp"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_twin_lamp_2",
+      "category": "pole",
+      "name": "Utility pole: two clamped columns, long crossarm, street lamp (2)",
+      "file": null,
+      "size_m": [
+        1.057,
+        9.712,
+        3.893
+      ],
+      "tags": [
+        "utility-pole",
+        "twin_lamp",
+        "seed-2",
+        "flat-colour",
+        "primitive",
+        "street-lamp"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_junction_1",
+      "category": "pole",
+      "name": "Utility pole: several crossarm tiers, hanging cables, boxes and a cabinet (1)",
+      "file": null,
+      "size_m": [
+        3.304,
+        9.784,
+        1.437
+      ],
+      "tags": [
+        "utility-pole",
+        "junction",
+        "seed-1",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_junction_2",
+      "category": "pole",
+      "name": "Utility pole: several crossarm tiers, hanging cables, boxes and a cabinet (2)",
+      "file": null,
+      "size_m": [
+        3.381,
+        8.967,
+        2.227
+      ],
+      "tags": [
+        "utility-pole",
+        "junction",
+        "seed-2",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_junction_3",
+      "category": "pole",
+      "name": "Utility pole: several crossarm tiers, hanging cables, boxes and a cabinet (3)",
+      "file": null,
+      "size_m": [
+        2.287,
+        8.752,
+        2.242
+      ],
+      "tags": [
+        "utility-pole",
+        "junction",
+        "seed-3",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_twin_riser_1",
+      "category": "pole",
+      "name": "Utility pole: two columns with a meter box, riser pipe and bundled cable (1)",
+      "file": null,
+      "size_m": [
+        0.826,
+        9.558,
+        2.967
+      ],
+      "tags": [
+        "utility-pole",
+        "twin_riser",
+        "seed-1",
+        "flat-colour",
+        "primitive",
+        "street-lamp"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_field_1",
+      "category": "pole",
+      "name": "Utility pole: thin leaning pole with a braced crossarm (1)",
+      "file": null,
+      "size_m": [
+        2.196,
+        7.079,
+        2.375
+      ],
+      "tags": [
+        "utility-pole",
+        "field",
+        "seed-1",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_field_2",
+      "category": "pole",
+      "name": "Utility pole: thin leaning pole with a braced crossarm (2)",
+      "file": null,
+      "size_m": [
+        3.16,
+        7.736,
+        2.178
+      ],
+      "tags": [
+        "utility-pole",
+        "field",
+        "seed-2",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_megaphone_1",
+      "category": "pole",
+      "name": "Utility pole: single column with public address horns (1)",
+      "file": null,
+      "size_m": [
+        1.637,
+        8.58,
+        0.832
+      ],
+      "tags": [
+        "utility-pole",
+        "megaphone",
+        "seed-1",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:pole_megaphone_2",
+      "category": "pole",
+      "name": "Utility pole: single column with public address horns (2)",
+      "file": null,
+      "size_m": [
+        1.68,
+        9.18,
+        0.832
+      ],
+      "tags": [
+        "utility-pole",
+        "megaphone",
+        "seed-2",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null
     }
   ],
   "textures": [

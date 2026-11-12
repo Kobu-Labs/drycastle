@@ -4,11 +4,11 @@ Curated, redistributable 3D assets for placed objects (cars, flowers, bushes, fe
 pavement, pots, walls). Placed objects reference an asset by id (see `pipeline/src/suchohrad_pipeline/edits.py`):
 
 - `pack:<pack>/<model>`: a glTF/GLB in `assets/<pack>/`, for example `pack:kenney-car-kit/sedan`.
-- `prim:<name>`: a pipeline primitive with no file (`wall`, `slab`, `pot`, `radio_tower`, `bunker`), built by
-  `pipeline/src/suchohrad_pipeline/primitives.py`.
+- `prim:<name>`: a pipeline primitive with no file (`wall`, `slab`, `pot`, `radio_tower`, `bunker` and the
+  utility poles `pole_*`), built by `pipeline/src/suchohrad_pipeline/primitives.py`.
 
 `manifest.json` (format_version 1) is the index: per asset `id`, `category`
-(car, slab, pot, flower, bush, tree, wall, fence, other), `name`, `file` (relative to this
+(car, slab, pot, flower, bush, tree, wall, fence, pole, other), `name`, `file` (relative to this
 directory; null for primitives), `size_m` (bounding box [x, y, z] in metres, glTF axes with y up, as
 measured after import in Godot), `tags`, `licence`, `source`, `pack`; plus a top-level `packs` list
 (name, URL, download URL, licence, download date).
@@ -145,6 +145,15 @@ the paint) and `mean_colour` (previews). A map node named `<node>_tex_<id>` is d
 (`godot/MapLoader/MapLoader.Textures.cs`); the first user is typed fences (`docs/pipeline.md`). To add a texture: draw it
 in the script (or drop in a CC0 PNG with power-of-two sides), add its entry to `textures`, and use it from a mesh builder
 through `suchohrad_pipeline.textures`.
+
+## Utility poles (generated, 2026-11-12)
+
+`prim:pole_*` (category `pole`) are 15 concrete electricity poles assembled from a parts kit by
+`pipeline/src/suchohrad_pipeline/poles.py`: street lamp poles, plain ones, twin columns, junction poles with
+boxes and hanging cables, a leaning field pole, poles with public address horns. Original geometry, CC0, flat
+colour. Their origin is the foot of the column (not the middle of the plan), the wires run along the object's
+x axis and the lamp reaches to its -y; `size_m` is the box centred on the foot that holds the pole. The
+manifest entries are written by `make poles-manifest`. See `docs/utility-poles.md`.
 
 ## Style: flat colour, and what the packs really contain
 
