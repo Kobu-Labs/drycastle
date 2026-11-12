@@ -3089,6 +3089,82 @@
       "licence": "CC0",
       "source": "scripts/make_textures.py",
       "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "dirt",
+      "name": "Dirt",
+      "file": "suchohrad-generated-textures/dirt.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        2.0,
+        2.0
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#816547",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "gravel",
+      "name": "Gravel",
+      "file": "suchohrad-generated-textures/gravel.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.0,
+        1.0
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#88847a",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "leaf_litter",
+      "name": "Leaf litter",
+      "file": "suchohrad-generated-textures/leaf_litter.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.5,
+        1.5
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#674f32",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "soil_rows",
+      "name": "Soil rows",
+      "file": "suchohrad-generated-textures/soil_rows.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.0,
+        1.0
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#674c33",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
     }
   ],
   "sounds": [
