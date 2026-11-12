@@ -343,6 +343,7 @@ public partial class NetServer
     void StepVehicles(float dt)
     {
         if (Vehicles == null || _cars.Count == 0) return;
+        ResolveVehicleContacts();
         foreach (var car in _cars)
         {
             var def = car.Def;
@@ -380,6 +381,45 @@ public partial class NetServer
             else if (!occupied && !car.AtOrigin && car.GlobalPosition.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
             if (occupied && car.GlobalPosition.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
         }
+    }
+
+    /// <summary>
+    /// Vehicles bump into each other (#253). Every pair of live vehicles that overlap (hit box, and a helicopter's rotor disc) is moved apart and
+    /// exchanges its closing speed (<see cref="VehicleContact"/>); each loses speed by what the bump took from it, and a loss above the crash
+    /// minimum hurts it by the crash rules, credited to the other vehicle's driver (nobody when that one is empty). Riders take nothing from the
+    /// bump itself, only from the blast of a vehicle it destroys. The server alone resolves it: the pilot's client predicts against the world, not
+    /// against other vehicles (the client sees them a snapshot late), and the reconciliation carries the bump to it.
+    /// </summary>
+    void ResolveVehicleContacts()
+    {
+        for (var i = 0; i < _cars.Count; i++)
+        {
+            var a = _cars[i];
+            if (a.Destroyed) continue;
+            for (var j = i + 1; j < _cars.Count; j++)
+            {
+                var b = _cars[j];
+                if (b.Destroyed) continue;
+                if (a.GlobalPosition.DistanceSquaredTo(b.GlobalPosition) > ContactBroadRange * ContactBroadRange) continue;
+                var shapeA = a.ContactShape(); var shapeB = b.ContactShape();
+                if (VehicleContact.Test(shapeA, shapeB, a.Flies || b.Flies) is not { } hit) continue;
+                var bump = VehicleContact.Bump(hit, a.BumpBody(), b.BumpBody(), Vehicles!.BumpRestitution);
+                a.ApplyBump(bump.MoveA, bump.DeltaVA);
+                b.ApplyBump(bump.MoveB, bump.DeltaVB);
+                BumpDamage(a, bump.SpeedLossA, b);
+                BumpDamage(b, bump.SpeedLossB, a);
+            }
+        }
+    }
+
+    /// <summary>Beyond this distance between two origins no pair of vehicles can touch (the bus is 12 m long, a rotor disc 9 m across).</summary>
+    const float ContactBroadRange = 20f;
+
+    void BumpDamage(ServerCar car, float speedLoss, ServerCar other)
+    {
+        if (!car.Def.CrashDamage || speedLoss <= Vehicles!.CrashMinSpeedLoss) return;
+        var attacker = OccupantAt(other, 0)?.Id ?? 0;
+        DamageVehicle(car, (speedLoss - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, attacker, SpecialWeapons.Vehicle, 0);
     }
 
     /// <summary>

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  // Rules every animal follows. Times in seconds, lengths in metres.
+  "corpse_seconds": 30,
+  "alarm_seconds": 8,
+  "calm_seconds": 2,
+  "max_step_m": 0.8,
+  "wander_min_m": 3,
+  "idle_min_seconds": 2,
+  "idle_max_seconds": 8,
+  "eat_chance": 0.35,
+  "eat_min_seconds": 3,
+  "eat_max_seconds": 7,
+  // Species. scale and hit_box come from the models (assets/animated-animals, measured with `make assets-check`: scale brings the
+  // import to the real size, hit_box = measured size x scale as [width, height, length], head up and antlers included). hp, speeds and
+  // radii are placeholders tuned by feel; the models face +Z, so model_yaw_deg 180. The species index is its position in this list.
+  "animals": [
+    { "id": "alpaca", "name": "Alpaca", "model": "animated-animals/alpaca.glb", "scale": 0.3, "model_yaw_deg": 180, "hp": 80,
+      "walk_speed": 1.2, "run_speed": 7, "turn_rate_deg_per_s": 160, "flee_radius": 12, "wander_radius": 25, "hit_box": [0.38, 1.62, 1.29] },
+    { "id": "bull", "name": "Bull", "model": "animated-animals/bull.glb", "scale": 0.32, "model_yaw_deg": 180, "hp": 160,
+      "walk_speed": 1.2, "run_speed": 8, "turn_rate_deg_per_s": 140, "flee_radius": 8, "wander_radius": 20, "hit_box": [0.8, 1.47, 2.58] },
+    { "id": "cow", "name": "Cow", "model": "animated-animals/cow.glb", "scale": 0.3, "model_yaw_deg": 180, "hp": 120,
+      "walk_speed": 1.0, "run_speed": 6, "turn_rate_deg_per_s": 140, "flee_radius": 8, "wander_radius": 20, "hit_box": [0.69, 1.38, 2.42] },
+    { "id": "deer", "name": "Deer", "model": "animated-animals/deer.glb", "scale": 0.33, "model_yaw_deg": 180, "hp": 60,
+      "walk_speed": 1.5, "run_speed": 12, "turn_rate_deg_per_s": 240, "flee_radius": 35, "wander_radius": 60, "hit_box": [0.48, 1.41, 1.45] },
+    { "id": "donkey", "name": "Donkey", "model": "animated-animals/donkey.glb", "scale": 0.33, "model_yaw_deg": 180, "hp": 100,
+      "walk_speed": 1.3, "run_speed": 8, "turn_rate_deg_per_s": 160, "flee_radius": 10, "wander_radius": 25, "hit_box": [0.38, 1.3, 1.55] },
+    { "id": "fox", "name": "Fox", "model": "animated-animals/fox.glb", "scale": 0.19, "model_yaw_deg": 180, "hp": 30,
+      "walk_speed": 1.4, "run_speed": 10, "turn_rate_deg_per_s": 300, "flee_radius": 25, "wander_radius": 50, "hit_box": [0.2, 0.51, 1.12] },
+    { "id": "horse", "name": "Horse", "model": "animated-animals/horse.glb", "scale": 0.38, "model_yaw_deg": 180, "hp": 150,
+      "walk_speed": 1.6, "run_speed": 12, "turn_rate_deg_per_s": 180, "flee_radius": 15, "wander_radius": 30, "hit_box": [0.53, 1.83, 2.16] },
+    { "id": "husky", "name": "Husky", "model": "animated-animals/husky.glb", "scale": 0.19, "model_yaw_deg": 180, "hp": 40,
+      "walk_speed": 1.5, "run_speed": 8, "turn_rate_deg_per_s": 300, "flee_radius": 10, "wander_radius": 30, "hit_box": [0.19, 0.61, 0.74] },
+    { "id": "shiba_inu", "name": "Shiba Inu", "model": "animated-animals/shiba-inu.glb", "scale": 0.17, "model_yaw_deg": 180, "hp": 35,
+      "walk_speed": 1.4, "run_speed": 7, "turn_rate_deg_per_s": 300, "flee_radius": 10, "wander_radius": 30, "hit_box": [0.18, 0.53, 0.67] },
+    { "id": "stag", "name": "Stag", "model": "animated-animals/stag.glb", "scale": 0.38, "model_yaw_deg": 180, "hp": 90,
+      "walk_speed": 1.5, "run_speed": 12, "turn_rate_deg_per_s": 220, "flee_radius": 35, "wander_radius": 60, "hit_box": [1.03, 2.07, 1.84] },
+    { "id": "white_horse", "name": "White Horse", "model": "animated-animals/white-horse.glb", "scale": 0.38, "model_yaw_deg": 180, "hp": 150,
+      "walk_speed": 1.6, "run_speed": 12, "turn_rate_deg_per_s": 180, "flee_radius": 15, "wander_radius": 30, "hit_box": [0.53, 1.83, 2.16] },
+    { "id": "wolf", "name": "Wolf", "model": "animated-animals/wolf.glb", "scale": 0.3, "model_yaw_deg": 180, "hp": 60,
+      "walk_speed": 1.6, "run_speed": 10, "turn_rate_deg_per_s": 300, "flee_radius": 20, "wander_radius": 60, "hit_box": [0.32, 0.8, 1.67] }
+  ]
+}
