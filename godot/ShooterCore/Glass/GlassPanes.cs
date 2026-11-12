@@ -77,6 +77,13 @@ public readonly record struct GlassPaneState(GlassPaneKey Key, byte Hp)
     public bool Shattered => Hp == 0;
 }
 
+/// <summary>
+/// The way of a bullet through a vehicle (<see cref="GlassRules.Through"/>). <see cref="Enters"/>: it gets in, <see cref="EntryT"/> metres along
+/// the ray, by pane <see cref="EntryPane"/> (-1: by an open side). <see cref="Leaves"/>: it gets out again, <see cref="ExitT"/> metres along,
+/// by pane <see cref="ExitPane"/> (-1: by an open side); when it does not, the body stops it inside. The default value does not get in.
+/// </summary>
+public readonly record struct GlassPassage(bool Enters, int EntryPane, float EntryT, bool Leaves, int ExitPane, float ExitT);
+
 /// <summary>The rules of glass panes (ADR 0007). Pure, so the tests run the server's own arithmetic.</summary>
 public static class GlassRules
 {
@@ -120,6 +127,32 @@ public static class GlassRules
             best = i; bestT = t;
         }
         return best;
+    }
+
+    /// <summary>How far before the place a ray stopped on a vehicle's hit box a pane may lie and still be the one the ray came in by.</summary>
+    public const float EntrySlack = 0.1f;
+
+    /// <summary>
+    /// The way of a bullet through a vehicle whose hit box it stopped on <paramref name="wall"/> metres along the ray (the ray, the panes and the
+    /// open sides are in the vehicle's frame; <paramref name="dir"/> is a unit vector). It gets in by the first pane or open side it crosses from
+    /// outside between <paramref name="wall"/> and <paramref name="reach"/> metres further (the hit box is larger than the body, so the pane lies a
+    /// little inside it), and out by the next pane or open side it crosses from inside. Anywhere else the body is solid: a ray that crosses neither
+    /// on its way in does not get in, however many panes lie beyond.
+    /// </summary>
+    public static GlassPassage Through(IReadOnlyList<GlassPaneRect> panes, IReadOnlyList<GlassPaneRect> openSides, Vector3 origin, Vector3 dir, float wall, float reach)
+    {
+        var enters = false; var entry = -1; var entryT = float.PositiveInfinity;
+        for (var i = 0; i < panes.Count; i++)
+            if (panes[i].Cross(origin, dir) is { } t && t >= wall - EntrySlack && t <= wall + reach && t < entryT) { enters = true; entry = i; entryT = t; }
+        for (var i = 0; i < openSides.Count; i++)
+            if (openSides[i].Cross(origin, dir) is { } t && t >= wall - EntrySlack && t <= wall + reach && t < entryT) { enters = true; entry = -1; entryT = t; }
+        if (!enters) return default;
+        var leaves = false; var exit = -1; var exitT = float.PositiveInfinity;
+        for (var i = 0; i < panes.Count; i++)
+            if (i != entry && panes[i].CrossFromInside(origin, dir) is { } t && t > entryT + 0.05f && t < exitT) { leaves = true; exit = i; exitT = t; }
+        for (var i = 0; i < openSides.Count; i++)
+            if (openSides[i].CrossFromInside(origin, dir) is { } t && t > entryT + 0.05f && t < exitT) { leaves = true; exit = -1; exitT = t; }
+        return new GlassPassage(true, entry, entryT, leaves, exit, exitT);
     }
 
     /// <summary>Damage of a blast to a pane <paramref name="distance"/> metres from its centre: <paramref name="damage"/> at the centre, nothing at <paramref name="radius"/>.</summary>

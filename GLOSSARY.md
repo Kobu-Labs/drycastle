@@ -220,12 +220,16 @@ The glass of a window opening, exported as its own node `window_<building>_<id>`
 A flat piece of breakable glass with hit points that the server owns: a window pane of a building (`windows.json`, unless its `breakable` is false) or a pane of a vehicle type (the `glass` list in `vehicles.json`). It is a rectangle, or, for the generated vehicles (bus, flak truck, helicopter), a convex outline polygon inside its bounding rectangle, and there it is also its own node `glass_N` in the model. Bullets and blasts take its hit points; below full it shows a crack (see Crack stage), at zero it is shattered. It has no collider of its own.
 _Avoid_: window (for a vehicle's), glass (alone), windowpane
 
+**Open side**:
+A place where the body of a vehicle type has no wall and no glass (the `open_sides` list in `vehicles.json`): the two sides of the utility helicopter's cabin. A bullet gets into and out of the vehicle through it as through a glass pane; it has no hit points and nothing is drawn for it.
+_Avoid_: opening (that is a hole in a building's wall), door (the helicopter's cockpit doors are solid with a glass pane)
+
 **Crack stage**:
 How far the crack of a standing glass pane has spread, from the fraction of its hit points left: 0 at full hit points, 1 as soon as it is damaged, one more at each fraction of `crack_stages` in `glass.json`.
 _Avoid_: damage stage (that is a vehicle's smoke), crack level
 
 **Shattered**:
-The state of a glass pane with no hit points left: its fragments fly out once, and it then shows an opening (the model's own glass node of the pane is hidden). A shot through a shattered pane of a vehicle can hit the riders behind it. It stays shattered until its vehicle returns repaired or a new round starts.
+The state of a glass pane with no hit points left: its fragments fly out once, and it then shows an opening (the model's own glass node of the pane is hidden). A bullet goes through a vehicle's pane whether it is shattered or not. It stays shattered until its vehicle returns repaired or a new round starts.
 _Avoid_: broken, destroyed (that is a vehicle or an aircraft)
 
 **Flood wall**:

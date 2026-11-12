@@ -257,6 +257,53 @@ public class GlassTests
         Assert.Equal(-1, GlassRules.FirstCrossed(rects, GlassRules.ToVehicle(o2, feet, yaw), GlassRules.DirToVehicle(low, yaw), wall2 - 0.1f, wall2 + new GlassConfig().VehicleReach));
     }
 
+    /// <summary>The way of a shot from <paramref name="origin"/> at <paramref name="target"/> (both in the vehicle's frame) through a vehicle standing at the origin.</summary>
+    static GlassPassage Way(VehicleDef v, Vector3 origin, Vector3 target)
+    {
+        var dir = Vector3.Normalize(target - origin);
+        var wall = VehicleBox.Ray(origin, dir, 100, Vector3.Zero, 0, v.HalfWidth, v.HalfLength, v.Height)!.Value.Distance;
+        return GlassRules.Through(v.GlassRects, v.OpenSideRects, origin, dir, wall, new GlassConfig().VehicleReach);
+    }
+
+    [Fact]
+    public void AShotThroughACarsWindscreenLeavesByItsRearPaneAndItsDoorStaysSolid()
+    {
+        var car = Shipped().Vehicles.First(v => v.Id == "car");
+        var way = Way(car, new Vector3(0, 1.75f, -10), new Vector3(0, 1.75f, 10));
+        Assert.True(way.Enters && way.Leaves);
+        Assert.Equal(car.Glass.FindIndex(g => g.Id == "windscreen"), way.EntryPane);
+        Assert.Equal(car.Glass.FindIndex(g => g.Id == "rear"), way.ExitPane);
+        Assert.True(way.ExitT > way.EntryT);
+        // a round with no way out is stopped where its ray leaves the hit box
+        Assert.Equal(10 + car.HalfLength, VehicleBox.ExitDistance(new Vector3(0, 1.75f, -10), Vector3.UnitZ, car.HalfWidth, car.HalfLength, car.Height), 3);
+        Assert.Equal(1.75f, VehicleBox.ExitDistance(new Vector3(0, 1.75f, 0), -Vector3.UnitY, car.HalfWidth, car.HalfLength, car.Height), 3);
+        // a shot from low down into the door, rising towards the far side pane: the door is solid, the pane beyond does not let it through
+        Assert.False(Way(car, new Vector3(3, 0.2f, -0.24f), car.GlassRects[car.Glass.FindIndex(g => g.Id == "side_left")].Centre).Enters);
+    }
+
+    [Fact]
+    public void AShotGoesInByTheHelicoptersOpenSideAndOutByThePaneOnTheFarSide()
+    {
+        var heli = Shipped().Vehicles.First(v => v.Id == "utility_helicopter");
+        Assert.Equal(2, heli.OpenSideRects.Count);
+        // in by the open right side of the cabin, forwards across it, out by the left cockpit door's pane from the inside
+        Vector3 inCabin = new(1.2f, 1.7f, 0.3f), onDoor = new(-1.176f, 1.76f, -1.695f);
+        var way = Way(heli, inCabin + (inCabin - onDoor) * 2, onDoor);
+        Assert.True(way.Enters && way.Leaves);
+        Assert.Equal(-1, way.EntryPane);
+        Assert.Equal(heli.Glass.FindIndex(g => g.Id == "door_left"), way.ExitPane);
+        // straight across the cabin: in by one open side, out by the other, no pane touched
+        var across = Way(heli, new Vector3(6, 1.4f, 0), new Vector3(-6, 1.4f, 0));
+        Assert.True(across.Enters && across.Leaves);
+        Assert.Equal((-1, -1), (across.EntryPane, across.ExitPane));
+        Assert.Equal(2.4f, across.ExitT - across.EntryT, 2);
+        // the engine housing behind the cabin and the belly are solid, also with a pane further along the ray
+        Assert.False(Way(heli, new Vector3(6, 1.8f, 2.5f), new Vector3(-6, 1.8f, 2.5f)).Enters);
+        Assert.False(Way(heli, new Vector3(0.5f, -3, -1), heli.GlassRects[heli.Glass.FindIndex(g => g.Id == "windscreen_right")].Centre).Enters);
+        // from behind, through the engine and the cabin's rear wall towards the windscreen
+        Assert.False(Way(heli, new Vector3(0.5f, 1.8f, 12), new Vector3(0.5f, 1.8f, -12)).Enters);
+    }
+
     [Theory]
     [InlineData(0f, 150f)]
     [InlineData(4.5f, 75f)]

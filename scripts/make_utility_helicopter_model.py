@@ -181,6 +181,8 @@ def build():
         hull.add(cyl("DarkMetal", (x, FLOOR, -2.25), (x, 1.18, -2.18), 0.018, 5, smooth=False), cyl("DarkMetal", (x, 1.18, -2.18), (x, 1.26, -2.20), 0.028, 5, smooth=False))
 
     # ---- open cabin: rear wall, a troop bench, the gunner's seat; nothing closes the sides
+    # (the two openings are the `open_sides` of this vehicle in vehicles.json, written by hand: x = +-HALF, z from CABIN0 to the rear
+    #  door posts, y from the sill to the door rail; bullets fly in and out through them. Change them there when these numbers change)
     hull.add(box("Olive", -HALF, HALF, FLOOR, ROOF0, CABIN1, CABIN1 + 0.10))
     hull.add(box("Khaki", -1.08, 1.08, 1.00, 1.98, CABIN1 - 0.03, CABIN1, c=0.05, axis='z', e=0))                # quilted soundproofing
     hull.add(box("Khaki", -1.08, 0.10, 1.04, 1.10, 0.86, CABIN1 - 0.03, c=0.02, axis='x', e=0))                  # bench canvas

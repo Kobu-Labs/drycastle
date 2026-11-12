@@ -709,8 +709,8 @@ public partial class NetServer : Node
             var d = HitMath.SpreadDirection(yaw + kick.YawRad + sway.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad + sway.PitchRad), HitMath.ShotSpread(shot.SpreadDegrees, w, c.Body.State, aiming), _rng);
             var dir = new Vector3(d.X, d.Y, d.Z);
             var range = w.Range > 0 ? w.Range : MaxShotRange;
-            var crossed = new List<GlassCross>();
-            var wall = BulletHit(eye, dir, range, out var shotCar, crossed);
+            List<GlassCross>? crossed = null;
+            var wall = BulletHit(eye, dir, range, out var shotCar, ref crossed);
             var (exposedGunner, pastHull) = ExposedGunnerBehind(shotCar, eye, dir, range, targets);
             var hit = GunnerCover.Raycast(N(eye), d, range, wall, targets, c.Id, exposedGunner, pastHull); // a flak gunner in the open is hit through his hull
             if (hit == null && HitMath.Raycast(N(eye), d, range, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
@@ -806,7 +806,7 @@ public partial class NetServer : Node
 
     /// <summary>
     /// Explosion: the direct-hit victim takes the full damage (and no splash on top); everyone else alive within the splash
-    /// radius takes the linear falloff damage, the owner scaled by the self multiplier. Splash ignores walls. Affected players get knockback.
+    /// radius takes the linear falloff damage, the owner scaled by the self multiplier. Splash ignores walls, except a bunker room's (<see cref="BlastReaches"/>). Affected players get knockback.
     /// </summary>
     void Explode(Rocket r, WeaponDef weapon, Vector3 pos, ushort? direct, ServerCar? directCar = null)
     {
@@ -819,6 +819,7 @@ public partial class NetServer : Node
         foreach (var t in LiveTargets())
         {
             var isDirect = direct == t.Id;
+            if (!isDirect && !BlastReaches(N(pos), t)) continue; // a bunker room's walls are between them
             var dist = HitMath.DistanceToBody(N(pos), t);
             var self = t.Id == r.Owner;
             var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, self);

@@ -231,6 +231,9 @@ public partial class NetClient
     /// <summary>
     /// The nearest vehicle the ray (<paramref name="from"/>, <paramref name="dir"/>) enters within <paramref name="maxDistance"/>, on the
     /// vehicle's hit box (<see cref="VehicleBox"/>, the server's own collider) at its latest snapshot: the position the server resolved the shot against.
+    /// As on the server (NetServer.BulletHit, docs/glass.md) a ray that goes in by a glass pane or an open side and out by another is not stopped
+    /// by that vehicle, and one that goes in and finds no way out is stopped on the far side of the hit box, not where it met it.
+    /// <paramref name="dir"/> is a unit vector.
     /// </summary>
     bool VehicleAlong(Vector3 from, Vector3 dir, float maxDistance, out CarView car, out VehicleBoxHit hit)
     {
@@ -242,6 +245,18 @@ public partial class NetClient
             if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count) continue;
             var def = Vehicles.Vehicles[v.Kind];
             if (VehicleBox.Ray(NV(from), NV(dir), maxDistance, v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, def.Height) is not { } h || h.Distance >= best) continue;
+            if (def.GlassRects.Count > 0 || def.OpenSideRects.Count > 0)
+            {
+                var lo = GlassRules.ToVehicle(NV(from), v.Pos, v.Yaw); var ld = GlassRules.DirToVehicle(NV(dir), v.Yaw);
+                var way = GlassRules.Through(def.GlassRects, def.OpenSideRects, lo, ld, h.Distance, GlassData.VehicleReach);
+                if (way.Enters)
+                {
+                    if (way.Leaves) continue; // through the glass and out again
+                    var far = MathF.Max(VehicleBox.ExitDistance(lo, ld, def.HalfWidth, def.HalfLength, def.Height), way.EntryT);
+                    if (far > maxDistance || far >= best) continue;
+                    h = new VehicleBoxHit(far, lo + ld * far, -ld); // inside, on the far side, facing back along the ray
+                }
+            }
             best = h.Distance; hit = h; car = v;
         }
         return car != null;

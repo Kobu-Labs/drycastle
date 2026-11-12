@@ -57,6 +57,13 @@ public class VehiclesFile : IVersioned
                 if (pane.OutlineProblem() is { } problem) throw new DataFileException($"vehicles.json: {v.Id}: glass pane {pane.Id}: {problem}");
             }
             if (v.Glass.Select(g => g.Id).Distinct().Count() != v.Glass.Count) throw new DataFileException($"vehicles.json: {v.Id}: glass pane ids must differ");
+            if (v.OpenSides.Count > 8) throw new DataFileException($"vehicles.json: {v.Id}: at most 8 open sides");
+            foreach (var side in v.OpenSides)
+            {
+                if (side is null || side.Centre.Length != 3 || side.Normal.Length != 3 || side.Size.Length != 2) throw new DataFileException($"vehicles.json: {v.Id}: an open side needs centre [x, y, z], normal [x, y, z] and size [width, height]");
+                if (side.Normal.Sum(x => x * x) < 1e-6f || !(side.Size[0] > 0) || !(side.Size[1] > 0)) throw new DataFileException($"vehicles.json: {v.Id}: open side {side.Id}: the normal must not be zero and the size must be positive");
+                if (side.OutlineProblem() is { } problem) throw new DataFileException($"vehicles.json: {v.Id}: open side {side.Id}: {problem}");
+            }
             if (v.Tint is { Length: not 3 } || v.Tint != null && v.Paints.Count > 0) throw new DataFileException($"vehicles.json: {v.Id}: tint is [r, g, b] and excludes paints");
             if (v.Seats.Count is < 1 or > 4 || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..4 and the first is the driver");
             foreach (var seat in v.Seats)
@@ -535,6 +542,15 @@ public class VehicleDef
     List<GlassPaneRect>? _glassRects;
     /// <summary>The panes as rectangles in the vehicle's frame, in the order of <see cref="Glass"/> (built once).</summary>
     public IReadOnlyList<GlassPaneRect> GlassRects => _glassRects ??= Glass.Select(g => g.Rect()).ToList();
+    /// <summary>
+    /// The places where the body of this type is open (vehicles.json "open_sides": the helicopter's cabin has no doors), written as glass panes are
+    /// (centre, outward normal, size, an optional outline; hp is not read). A bullet gets in and out through an open side as through a pane
+    /// (<see cref="GlassRules.Through"/>); it has no state and nothing is drawn for it. Written by hand, not by the model script.
+    /// </summary>
+    public List<VehicleGlassDef> OpenSides { get; set; } = new();
+    List<GlassPaneRect>? _openSideRects;
+    /// <summary>The open sides as rectangles in the vehicle's frame (built once).</summary>
+    public IReadOnlyList<GlassPaneRect> OpenSideRects => _openSideRects ??= OpenSides.Select(g => g.Rect()).ToList();
     /// <summary>Offset applied to the model node before scale, as [x, y, z].</summary>
     public float[] ModelOffset { get; set; } = { 0, 0, 0 };
     /// <summary>The model's own material that takes the colour variants, and the model's own materials whose colours the variants are (index = colour byte).</summary>
