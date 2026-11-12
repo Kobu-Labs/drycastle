@@ -545,7 +545,7 @@ def test_through_mcp_session(env):
             assert names == {
                 "list_assets", "find_parcels", "get_parcel", "set_fence", "reset_fence",
                 "place_object", "remove_object", "move_object", "create_group", "merge_groups",
-                "dissolve_group", "create_region", "set_region_colour", "set_region_water", "set_region_ground", "list_ground_types", "move_region_point",
+                "dissolve_group", "create_region", "set_region_colour", "set_region_water", "set_region_ground", "list_ground_types", "set_ground_type", "reset_ground_type", "delete_ground_type", "move_region_point",
                 "delete_region", "list_regions", "connect_poles", "disconnect_poles", "list_cables", "get_sketch", "create_sketch", "sketch_add_point", "sketch_add_line", "sketch_add_road", "sketch_remove",
             }
             tool = next(t for t in (await client.list_tools()).tools if t.name == "place_object")
@@ -677,3 +677,68 @@ def test_region_ground_types(env):
     tools.set_region_water("R-0001", 100.0)
     with pytest.raises(ToolError, match="body of water"):
         tools.set_region_ground("R-0001", "meadow")
+
+
+def test_ground_type_tools(env):
+    tools, settings, _ = env
+    rows = {t["type"]: t for t in tools.list_ground_types()["types"]}
+    assert rows["meadow"]["source"] == "rules" and rows["meadow"]["trees_per_1000m2"] == 0.1 and rows["forest"]["forest_trees"]
+    out = tools.set_ground_type("meadow", trees_per_1000m2=2.5, spawns=False, detail={"tone_per_ha": 9})
+    assert "overridden" in out["summary"] and "make map" in out["summary"]
+    assert out["type"]["source"] == "overridden" and out["type"]["trees_per_1000m2"] == 2.5 and out["type"]["spawns"] is False
+    assert out["type"]["detail"]["furrow"]["probability"] == 0.0 and out["type"]["detail"]["tone_per_ha"] == 9  # merged
+    assert load_edits(settings.edits_path).ground_types["meadow"] == {"trees": {"per_1000m2": 2.5}, "spawns": False, "detail": {"tone_per_ha": 9}}
+    canonical(settings)
+
+    out = tools.set_ground_type("dunes", colours=["#d8c38a"], recipe="field", osm={"natural": ["sand"]})
+    assert "created" in out["summary"] and out["type"]["source"] == "custom"
+    assert [r["type"] for r in tools.list_ground_types()["types"]][-1] == "dunes"
+    assert tools.create_region(polygon=SQUARE, ground="dunes")["ground"] == "dunes"  # a custom type is usable
+    assert "updated" in tools.set_ground_type("dunes", recipe="none")["summary"]
+    assert load_edits(settings.edits_path).ground_types["dunes"]["recipe"] is None
+
+    with pytest.raises(ToolError, match="at least one"):
+        tools.set_ground_type("meadow")
+    with pytest.raises(ToolError, match="1 to 6"):
+        tools.set_ground_type("meadow", colours=[])
+    with pytest.raises(ToolError, match="type names"):
+        tools.set_ground_type("Bad Name", spawns=True)
+    with pytest.raises(ToolError, match="0 to 50"):
+        tools.set_ground_type("meadow", trees_per_1000m2=60)
+    assert "Bad Name" not in settings.edits_path.read_text()  # nothing was written
+
+    out = tools.reset_ground_type("meadow")
+    assert out["type"]["source"] == "rules" and "meadow" not in load_edits(settings.edits_path).ground_types
+    with pytest.raises(ToolError, match="no override"):
+        tools.reset_ground_type("meadow")
+    with pytest.raises(ToolError, match="delete_ground_type"):
+        tools.reset_ground_type("dunes")
+    canonical(settings)
+
+
+def test_delete_ground_type(env):
+    tools, settings, _ = env
+    for protected, why in (("field", "default"), ("dike", "rule")):
+        with pytest.raises(ToolError, match=why):
+            tools.delete_ground_type(protected)
+    with pytest.raises(ToolError, match="unknown ground type"):
+        tools.delete_ground_type("swamp")
+    tools.set_ground_type("dunes", colours=["#d8c38a"])
+    assert tools.delete_ground_type("dunes")["type"] == "dunes"
+    assert load_edits(settings.edits_path).ground_types == {}  # a custom type is just removed
+
+    tools.create_region(polygon=SQUARE, ground="orchard")
+    out = tools.delete_ground_type("orchard")
+    assert "reset_ground_type" in out["summary"] and "R-0001" in out["warnings"][0]
+    assert load_edits(settings.edits_path).ground_types == {"orchard": {"deleted": True}}
+    listing = tools.list_ground_types()
+    assert "orchard" not in {t["type"] for t in listing["types"]} and listing["deleted"] == ["orchard"]
+    with pytest.raises(ToolError, match="unknown ground type"):
+        tools.set_region_ground("R-0001", "orchard")
+    with pytest.raises(ToolError, match="already deleted"):
+        tools.delete_ground_type("orchard")
+    with pytest.raises(ToolError, match="reset_ground_type it first"):
+        tools.set_ground_type("orchard", spawns=True)
+    assert "it was deleted" in tools.reset_ground_type("orchard")["summary"]
+    assert load_edits(settings.edits_path).ground_types == {}
+    assert '"ground_types"' not in settings.edits_path.read_text()

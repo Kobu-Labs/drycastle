@@ -17,7 +17,14 @@ from shapely.ops import unary_union
 from drycastle_pipeline.config import DEFAULT_AREA, area_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits
 from drycastle_pipeline.ground import ID_PREFIX as GROUND_PREFIX
-from drycastle_pipeline.ground import build_ground, dike_ground, drawn_ground, kept_parcels
+from drycastle_pipeline.ground import (
+    build_ground,
+    dike_ground,
+    drawn_ground,
+    kept_parcels,
+    merge_ground_types,
+    rules_ground_types,
+)
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.registry import (
     DEFAULT_REGISTRY,
@@ -127,7 +134,8 @@ def build_parcels(
     rules_path: Path = DEFAULT_RULES,
     edits_path: Path = DEFAULT_EDITS,
 ) -> ParcelsResult:
-    """``edits_path`` is read for the property groups: they decide which parcels without a building stay parcels."""
+    """``edits_path`` is read for the property groups (they decide which parcels without a building stay parcels), the
+    hand-drawn ground areas and the user's ground types."""
     rules = rules or load_rules(rules_path)
     norm = work_dir / "normalised"
     frame = json.loads((work_dir / "frame.json").read_text())
@@ -166,7 +174,8 @@ def build_parcels(
     out.sort(key=lambda p: p["id"])
 
     # the land of all the other cadastral parcels, by ground type
-    gcfg = load_section("ground", rules_path)
+    # the types are those of rules.yaml with the user's overrides and additions of the edits
+    gcfg = {**load_section("ground", rules_path), "types": merge_ground_types(rules_ground_types(rules_path), edits.ground_types)}
     dropped = {pid: g for pid, g in zip(ids, parcels, strict=True) if pid not in kept}
     free = unary_union([g if g.is_valid else g.buffer(0) for g in dropped.values()]) if dropped else Polygon()
     ways = {f["properties"]["osm_id"]: shape(f["geometry"]) for f in _read(norm / "highways.geojson")}

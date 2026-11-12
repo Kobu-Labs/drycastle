@@ -24,7 +24,7 @@ from drycastle_pipeline.regions import region_rank
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.scene import build_scene
 from drycastle_pipeline.textures import TexturedMesh, tex_node_name
-from drycastle_pipeline.ground import ground_types, ground_units, water_kinds
+from drycastle_pipeline.ground import ground_type_row, ground_types, ground_units, rules_ground_types, water_kinds
 from drycastle_pipeline.water import build_water
 
 DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
@@ -340,18 +340,21 @@ def run_export(
     }
     if "origin_epsg5514" in parcels_doc:  # always there from the parcels stage on
         parcels_file["origin_epsg5514"] = parcels_doc["origin_epsg5514"]
-    # the ground types a region can be given in the editor (hand-drawn ground areas): not the ones a rule makes, and
-    # not water (a water region has a level instead)
+    # the ground types for the editor (ground types tool, the ground list of a region): every type of the rules, with the
+    # rules' own entry (`rules`; the editor lays the user's edits.json overrides over it, so the list stays live between
+    # builds), then the types the user made (`custom`); name, first colour and a summary are those at this build
+    rule_types = rules_ground_types(rules_path, area)
+    effective = ground_types(rules_path, area, edits_path)
+    parcels_file["ground_default"] = load_section("ground", rules_path, area)["default"]
     parcels_file["ground_types"] = [
-        {"name": name, "colour": (spec.get("colours") or ["#808080"])[0].lower()}
-        for name, spec in ground_types(rules_path, area).items()
-        if not spec.get("rule") and not spec.get("water")
+        ground_type_row(name, rule_types.get(name), effective.get(name) or rule_types.get(name) or {})
+        for name in [*rule_types, *(n for n in effective if n not in rule_types)]
     ]
     _dump(out_dir / "parcels.json", parcels_file)
     water_file = out_dir / "water.json"
     if scene.terrain is not None:
         water_doc, water_skipped = build_water(
-            ground_units(parcels_doc), scene.terrain, scene.regions, water_kinds(ground_types(rules_path, area))
+            ground_units(parcels_doc), scene.terrain, scene.regions, water_kinds(effective)
         )
         for pid in water_skipped:
             print(f"export: warning: water parcel/region {pid} has no terrain under it (or none below its surface); no water body", file=sys.stderr)

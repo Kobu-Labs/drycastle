@@ -8,7 +8,8 @@ formatting is fixed, so git diffs stay small. Version 1::
      "parcels": {"P-0412": {"fence": {...}, "objects": [...]}},
      "groups":  {"G-0001": {"parcels": ["P-0412", "P-0413"], "fence": {...}}},
      "regions": {"R-0001": {"colour": "#8a7a5c", "polygon": [[x, y], ...]}},
-     "cables":  {"C-0001": {"from": "o-0012", "to": "o-0015"}}}
+     "cables":  {"C-0001": {"from": "o-0012", "to": "o-0015"}},
+     "ground_types": {"meadow": {"trees": {"per_1000m2": 2.0}}, "my_dunes": {"colours": ["#d8c38a"]}}}
 
 ``fence`` (all keys optional)
     mode              auto | none | custom. Default auto, or custom when type, height_m,
@@ -78,6 +79,21 @@ drawn by the game, see docs/utility-poles.md)
                         warning by the props stage. The ``cables`` key is only written when there
                         are cables.
 
+``ground_types`` (overrides and additions to the ground types of ``ground.types`` in rules.yaml, by name; see
+ground.py. The key is only written when there are some.)
+    name                lower_snake, ``^[a-z][a-z0-9_]{0,23}$``. A name of rules.yaml overrides that type, a new name
+                        is a new type (appended after the rules' types). Names are IDs: there is no rename.
+    colours             1-6 terrain shades, each "#rrggbb" (replaces the type's list).
+    recipe              field | forest | village | dike, or null for no detail (replaces the type's recipe).
+    detail              object laid over the shipped ``detail.<recipe>`` section of rules.yaml (deep merge); its
+                        top-level keys must exist in that section. Needs a recipe, own or the rules type's.
+    trees               {per_1000m2: number 0..50, forest: bool}; keys merge with the rules type's.
+    water, spawns       bool.
+    osm                 {landuse|natural: [str, ...]}: the OSM values the type takes (a key replaces that class's list).
+    deleted             true (and nothing else): removes the type that rules.yaml defines. Not the default type and
+                        not a type with a ``rule`` (the dike).
+    There is no ``rule`` key: rule types stay in rules.yaml. Unknown keys are errors.
+
 Unknown keys are validation errors. Entries that refer to parcels that no longer exist are not
 errors: the props stage warns about them and skips them (see props.plan_edits).
 """
@@ -115,7 +131,7 @@ FENCE_TYPES: dict[str, dict[str, float | str]] = {
 # Columns a fence can be given instead of its type's own (fencestyles.COLUMN_STYLES).
 COLUMN_TYPES = ("none", "wood_post", "metal_post", "brick_red", "brick_white", "stone", "concrete")
 
-TOP_KEYS = ("version", "parcels", "groups", "regions", "cables")
+TOP_KEYS = ("version", "parcels", "groups", "regions", "cables", "ground_types")
 PARCEL_KEYS = ("fence", "objects")
 FENCE_KEYS = ("mode", "type", "column", "height_m", "thickness_m", "colour", "gaps")
 CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "gaps")
@@ -124,6 +140,13 @@ OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour"
 GROUP_KEYS = ("parcels", "fence")
 REGION_KEYS = ("colour", "polygon", "water_y", "ground")
 CABLE_KEYS = ("from", "to")
+GROUND_TYPE_KEYS = ("colours", "recipe", "detail", "trees", "water", "spawns", "osm", "deleted")
+GROUND_TREE_KEYS = ("per_1000m2", "forest")
+GROUND_OSM_CLASSES = ("landuse", "natural")
+GROUND_RECIPES = ("field", "forest", "village", "dike")  # the detail.RECIPES a ground type can use (not garden)
+GROUND_COLOURS_MAX = 6
+GROUND_NAME_MAX = 24
+GROUND_TREES_MAX = 50.0
 POLE_ASSET_PREFIX = "prim:pole_"
 CONNECTOR_ASSET_PREFIX = "prim:connector_"
 WIRE_ASSET_PREFIXES = (POLE_ASSET_PREFIX, CONNECTOR_ASSET_PREFIX)  # the assets a cable can end on
@@ -132,6 +155,7 @@ _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")
 _REGION_ID = re.compile(r"R-\d{4,}")
 _GROUND_TYPE = re.compile(r"[a-z][a-z0-9_]*")
+_GROUND_NAME = re.compile(r"[a-z][a-z0-9_]{0,%d}" % (GROUND_NAME_MAX - 1))
 _CABLE_ID = re.compile(r"C-\d{4,}")
 _COLOUR = re.compile(r"#[0-9a-fA-F]{6}")
 _ASSET = re.compile(r"pack:[^/\s]+/\S+|prim:[A-Za-z0-9_.-]+")
@@ -147,12 +171,13 @@ class EditsError(ValueError):
 
 @dataclass
 class Edits:
-    """A validated edits document. ``parcels``, ``groups``, ``regions`` and ``cables`` are JSON-native, as written."""
+    """A validated edits document. ``parcels``, ``groups``, ``regions``, ``cables`` and ``ground_types`` are JSON-native, as written."""
 
     parcels: dict[str, dict] = field(default_factory=dict)
     groups: dict[str, dict] = field(default_factory=dict)
     regions: dict[str, dict] = field(default_factory=dict)
     cables: dict[str, dict] = field(default_factory=dict)
+    ground_types: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -417,6 +442,83 @@ def _check_cables(cables: dict, errors: list[str]) -> None:
             seen[pair] = cid
 
 
+def protected_ground_types() -> dict[str, str]:
+    """The types of the shipped rules.yaml that cannot be deleted, with the reason: the default type, and the types
+    made by a rule (the dike, which ``detail.dike`` needs)."""
+    from drycastle_pipeline.rules import load_section
+
+    gcfg = load_section("ground")
+    out = {name: "has a rule (detail.dike needs it)" for name, spec in gcfg["types"].items() if (spec or {}).get("rule")}
+    out[gcfg["default"]] = "is the default type (what no other type claims)"
+    return out
+
+
+def _check_ground_type(name: str, entry: object, path: str, errors: list[str]) -> None:
+    from drycastle_pipeline.rules import load_section
+
+    if not (_GROUND_NAME.fullmatch(name)):
+        errors.append(f"{path}: type names are lower case letters, digits and _, starting with a letter, at most {GROUND_NAME_MAX} long")
+    if not _is_dict(entry, path, errors):
+        return
+    if "rule" in entry:
+        errors.append(f"{path}.rule: rule types stay in rules.yaml")
+    _unknown_keys({k: v for k, v in entry.items() if k != "rule"}, GROUND_TYPE_KEYS, path, errors)
+    shipped = load_section("ground")["types"]
+    if "deleted" in entry:
+        if entry["deleted"] is not True:
+            errors.append(f"{path}.deleted: must be true (remove the entry to bring the type back)")
+        if len([k for k in entry if k != "rule"]) > 1:
+            errors.append(f"{path}: a deleted type has no other keys")
+        if name not in shipped:
+            errors.append(f"{path}.deleted: {name!r} is not a type of rules.yaml; remove this entry instead")
+        elif name in (why := protected_ground_types()):
+            errors.append(f"{path}.deleted: {name!r} cannot be deleted, it {why[name]}")
+        return
+    if "colours" in entry:
+        cols = entry["colours"]
+        if not (isinstance(cols, list) and 1 <= len(cols) <= GROUND_COLOURS_MAX):
+            errors.append(f"{path}.colours: must be a list of 1 to {GROUND_COLOURS_MAX} colours")
+        else:
+            for i, c in enumerate(cols):
+                _check_colour(c, f"{path}.colours.{i}", errors)
+    recipe = (entry.get("recipe") if "recipe" in entry else (shipped.get(name) or {}).get("recipe"))
+    if "recipe" in entry and entry["recipe"] is not None and entry["recipe"] not in GROUND_RECIPES:
+        errors.append(f"{path}.recipe: must be one of {', '.join(GROUND_RECIPES)}, or null for no detail")
+        recipe = None
+    if "detail" in entry:
+        detail = entry["detail"]
+        if _is_dict(detail, f"{path}.detail", errors):
+            section = load_section("detail").get(recipe) if recipe in GROUND_RECIPES else None
+            if detail and not isinstance(section, dict):
+                errors.append(f"{path}.detail: needs a recipe (one of {', '.join(GROUND_RECIPES)}) to lay the settings over")
+            else:
+                for key in detail:
+                    if section is not None and key not in section:
+                        errors.append(f"{path}.detail.{key}: not a setting of detail.{recipe} (known: {', '.join(section)})")
+    if "trees" in entry and _is_dict(entry["trees"], f"{path}.trees", errors):
+        trees = entry["trees"]
+        _unknown_keys(trees, GROUND_TREE_KEYS, f"{path}.trees", errors)
+        if "per_1000m2" in trees and not (_is_num(trees["per_1000m2"]) and 0 <= trees["per_1000m2"] <= GROUND_TREES_MAX):
+            errors.append(f"{path}.trees.per_1000m2: must be a number from 0 to {GROUND_TREES_MAX:g}")
+        if "forest" in trees and not isinstance(trees["forest"], bool):
+            errors.append(f"{path}.trees.forest: must be true or false")
+    for key in ("water", "spawns"):
+        if key in entry and not isinstance(entry[key], bool):
+            errors.append(f"{path}.{key}: must be true or false")
+    if "osm" in entry and _is_dict(entry["osm"], f"{path}.osm", errors):
+        _unknown_keys(entry["osm"], GROUND_OSM_CLASSES, f"{path}.osm", errors)
+        for cls, values in entry["osm"].items():
+            if cls in GROUND_OSM_CLASSES and not (
+                isinstance(values, list) and all(isinstance(v, str) and v.strip() for v in values)
+            ):
+                errors.append(f"{path}.osm.{cls}: must be a list of OSM values (text)")
+
+
+def _check_ground_types(types: dict, errors: list[str]) -> None:
+    for name, entry in types.items():
+        _check_ground_type(name, entry, f"ground_types.{name}", errors)
+
+
 def validate(doc: object) -> list[str]:
     """Every problem in an edits document as ``path: message``; an empty list means valid."""
     if not isinstance(doc, dict):
@@ -438,6 +540,9 @@ def validate(doc: object) -> list[str]:
     cables = doc.get("cables", {})
     if _is_dict(cables, "cables", errors):
         _check_cables(cables, errors)
+    gtypes = doc.get("ground_types", {})
+    if _is_dict(gtypes, "ground_types", errors):
+        _check_ground_types(gtypes, errors)
     return errors
 
 
@@ -452,6 +557,7 @@ def parse(doc: object) -> Edits:
         groups=copy.deepcopy(doc.get("groups", {})),
         regions=copy.deepcopy(doc.get("regions", {})),
         cables=copy.deepcopy(doc.get("cables", {})),
+        ground_types=copy.deepcopy(doc.get("ground_types", {})),
     )
 
 
@@ -476,6 +582,8 @@ def dump_text(edits: Edits) -> str:
         doc["regions"] = edits.regions
     if edits.cables:  # likewise
         doc["cables"] = edits.cables
+    if edits.ground_types:  # likewise
+        doc["ground_types"] = edits.ground_types
     errors = validate(doc)
     if errors:
         raise EditsError(errors)

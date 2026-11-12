@@ -724,11 +724,11 @@ def unknown_asset_warnings(objects: list[dict]) -> list[str]:
     return out
 
 
-def props_rules(rules_path: Path = DEFAULT_RULES, area: str | None = None) -> dict:
+def props_rules(rules_path: Path = DEFAULT_RULES, area: str | None = None, edits_path: Path | None = None) -> dict:
     """The ``props`` section with the trees of the ground types (``ground.types.<type>.trees``) laid over the tree
     rules: their densities in ``density_per_1000m2``, and ``forest_kinds`` (the types with forest trees)."""
     cfg = load_section("props", rules_path, area)
-    types = ground_types(rules_path, area)
+    types = ground_types(rules_path, area, edits_path)
     cfg["trees"]["density_per_1000m2"] = {**cfg["trees"]["density_per_1000m2"], **tree_density(types)}
     cfg["trees"]["forest_kinds"] = sorted(forest_kinds(types))
     return cfg
@@ -747,9 +747,9 @@ def run_props(
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     graph = json.loads((work_dir / "roads.json").read_text())
     osm_trees = json.loads((work_dir / "normalised" / "trees.geojson").read_text())["features"]
-    fcfg = props_rules(rules_path, area)
+    fcfg = props_rules(rules_path, area, edits_path)
     scfg = load_section("spawns", rules_path, area)
-    scfg["ground_kinds"] = sorted(set(scfg["ground_kinds"]) | spawn_kinds(ground_types(rules_path, area)))
+    scfg["ground_kinds"] = sorted(set(scfg["ground_kinds"]) | spawn_kinds(ground_types(rules_path, area, edits_path)))
     chunk_m = float(parcels_doc["chunk_size_m"])
     plan = plan_edits(load_edits(edits_path), parcels, parcels_doc.get("origin_epsg5514"), chunk_m)
     for warning in plan.warnings + unknown_asset_warnings(plan.objects):
