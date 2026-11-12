@@ -134,8 +134,11 @@ edge; road ribbons, fences, trees and spawns outside coverage are dropped.
 `out/map/roads.json` (`nodes`: id, x, y; `edges`: id, osm_id, from, to, polyline, highway, width,
 oneway, surface, length_m; local metres, x east, y north). Ribbon footprints are clipped against the
 terrain triangles they cover, so every piece lies in a terrain triangle's plane lifted by `lift_m` (0.05 m)
-and no terrain crease can poke through; overlapping ribbons at intersections are
-accepted in v1, and a higher road class sits a hair above a lower one.
+and no terrain crease can poke through. A higher road class sits a hair above a lower one. Ribbons of
+one class share a height, so where two of them differ in colour (asphalt and gravel at a node) the
+overlap is split along the bisector of the two ways and each keeps its own side; a junction patch
+only fills ground that no ribbon of its class or a higher one covers. Nothing at one height overlaps
+a surface of another colour, so nothing z-fights.
 
 **Props** (`make props`): low fences (thin boxes, 1.2 m) along the boundaries of building plots
 and of gardens near buildings (seeded per parcel, a gate gap on road frontage, no fence through

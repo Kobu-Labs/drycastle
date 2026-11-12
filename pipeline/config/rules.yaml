@@ -174,9 +174,10 @@ regions:
   road_lift_m: 0.02
 
 # --- Roads (roads stage) --------------------------------------------------------------------
-# Ribbons from OSM highways in normalised/highways.geojson, draped on the terrain. Overlapping
-# ribbons at junctions are accepted in v1 (a higher road class is lifted a hair above lower ones
-# to avoid z-fighting). roads.json: nodes are way ends and shared vertices, edges run between them.
+# Ribbons from OSM highways in normalised/highways.geojson, draped on the terrain. A higher road
+# class is lifted a hair above a lower one; ribbons of one class and different colour meeting at a
+# node are split along the bisector instead of stacked, so nothing z-fights.
+# roads.json: nodes are way ends and shared vertices, edges run between them.
 roads:
   # Ribbon sample spacing along a way, in metres (the ribbon follows the terrain at this step).
   sample_step_m: 2
