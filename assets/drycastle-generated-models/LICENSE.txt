@@ -4,3 +4,4 @@ Dedicated to the public domain under CC0 1.0 (http://creativecommons.org/publicd
 flak.glb  built by scripts/make_flak_model.py (python3 -I scripts/make_flak_model.py; standard library only, deterministic)
 bus.glb  built by scripts/make_bus_model.py (python3 -I scripts/make_bus_model.py; standard library only, deterministic)
 utility_helicopter.glb  built by scripts/make_utility_helicopter_model.py (python3 -I scripts/make_utility_helicopter_model.py; standard library only, deterministic)
+amphibious_transport.glb  built by scripts/make_amphibious_model.py (python3 -I scripts/make_amphibious_model.py; standard library only, deterministic)

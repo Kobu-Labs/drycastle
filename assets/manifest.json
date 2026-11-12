@@ -3552,6 +3552,27 @@
           "surface": "wall"
         }
       ]
+    },
+    {
+      "id": "pack:drycastle-generated-models/amphibious_transport",
+      "category": "other",
+      "name": "Amphibious transport (open boat-hulled car, ring gun over the rear)",
+      "file": "drycastle-generated-models/amphibious_transport.glb",
+      "size_m": [
+        2.28,
+        2.27,
+        4.68
+      ],
+      "tags": [
+        "shooter",
+        "vehicle",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_amphibious_model.py (original geometry written as code; python3 -I scripts/make_amphibious_model.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "godot/shooter vehicle id amphibious (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground at the centre, metres), separate nodes for hull, the four wheels, the two front steering pivots, propeller, gun_mount, gun, barrel"
     }
   ],
   "textures": [

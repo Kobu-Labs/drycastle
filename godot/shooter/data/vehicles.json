@@ -54,10 +54,12 @@
       "lights": { "head": [[-0.4, 0.55, -0.95], [0.4, 0.55, -0.95]], "tail": [[-0.4, 0.6, 0.95], [0.4, 0.6, 0.95]], "beam_range": 25, "beam_angle": 30 }
     },
     {
-      "id": "amphibious", "medium": "amphibious", "top_speed": 22, "acceleration": 4.0, "brake": 8, "turn_radius": 4.2, "max_lateral_accel": 7.5, "mass": 2500, "run_over_mass": 1800, "hp": 420, "hood": [0, 1.0, -1.6], "spawn_count": 2, "half_width": 1.15, "half_length": 2.2, "height": 1.2,
-      "water_top_speed": 7, "water_acceleration": 1.5, "tint": [0.27, 0.31, 0.25],
-      "seats": [{ "role": "driver", "offset": [-0.5, 0.5, 0.4] }, { "role": "passenger", "offset": [0.5, 0.5, 0.4] }, { "role": "passenger", "offset": [-0.5, 0.5, -0.9] }, { "role": "passenger", "offset": [0.5, 0.5, -0.9] }],
-      "lights": { "head": [[-0.8, 0.8, -2.1], [0.8, 0.8, -2.1]], "tail": [[-0.8, 0.8, 2.1], [0.8, 0.8, 2.1]], "beam_range": 35, "beam_angle": 26 }
+      "id": "amphibious", "medium": "amphibious", "top_speed": 22, "acceleration": 4.0, "brake": 8, "turn_radius": 4.2, "max_lateral_accel": 7.5, "mass": 2500, "run_over_mass": 1800, "hp": 420, "hood": [0, 1.16, 1.88], "spawn_count": 2, "half_width": 1.15, "half_length": 2.3, "height": 1.2,
+      "water_top_speed": 7, "water_acceleration": 1.5,
+      "model": "suchohrad-generated-models/amphibious_transport.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
+      "paint_material": "Olive", "paints": ["Olive"],
+      "seats": [{ "role": "driver", "offset": [-0.45, 0.64, -0.37] }, { "role": "passenger", "offset": [0.45, 0.64, -0.37] }, { "role": "passenger", "offset": [0, 0.685, 1.0] }],
+      "lights": { "head": [[-0.98, 1.0, -1.81], [0.98, 1.0, -1.81]], "tail": [[-0.55, 0.98, 2.08], [0.55, 0.98, 2.08]], "beam_range": 35, "beam_angle": 26 }
     },
     {
       "id": "boat", "medium": "boat", "top_speed": 18, "acceleration": 4.5, "brake": 8, "turn_radius": 3.6, "max_lateral_accel": 8.5, "planing_speed": 7, "land_decel": 5, "run_over": false, "crash_damage": false, "mass": 900, "hp": 200, "hood": [0, 0.9, -1.5], "spawn_count": 2, "half_width": 1.2, "half_length": 2.6, "height": 1.5,

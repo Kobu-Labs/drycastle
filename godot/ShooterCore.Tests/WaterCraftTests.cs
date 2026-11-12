@@ -35,16 +35,14 @@ public class WaterCraftTests
     }
 
     [Fact]
-    public void ShippedAmphibiousDrivesOnLandWithFourSeatsAndRunsPeopleOverOnLand()
+    public void ShippedAmphibiousDrivesOnLandWithThreeSeatsAndRunsPeopleOverOnLand()
     {
         var a = Type("amphibious");
         Assert.Equal(VehicleMedium.Amphibious, a.Medium);
         Assert.True(a.RunOver);
         Assert.True(a.CrashDamage);
-        Assert.Equal(4, a.Seats.Count);
+        Assert.Equal(3, a.Seats.Count); // the driver and two riders (AmphibiousTransportTests holds what the riders do)
         Assert.Equal("driver", a.Seats[0].Role);
-        Assert.All(a.Seats.Skip(1), s => Assert.Equal("passenger", s.Role)); // passengers never shoot in v2
-        Assert.Null(a.Gun);
         Assert.True(a.WaterTopSpeed < a.TopSpeed);
         Assert.NotNull(a.Lights);
     }
