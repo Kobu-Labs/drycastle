@@ -301,11 +301,19 @@ def _flats(b: dict, detail: bool) -> Mesh:
     return flats_mesh(b, detail)
 
 
+def _loggia_house(b: dict, detail: bool) -> Mesh:
+    """Flat-roofed house with corner loggias and a recessed staircase bay (see ``loggia_house.py``)."""
+    from suchohrad_pipeline.loggia_house import loggia_house_mesh
+
+    return loggia_house_mesh(b, detail)
+
+
 # Models built straight on the footprint (map metres) instead of in a local frame.
 FOOTPRINT_MODELS: dict[str, Callable[[dict, bool], Mesh]] = {
     "bunker": _bunker,
     "office": _office,
     "flats": _flats,
+    "loggia_house": _loggia_house,
 }
 
 
