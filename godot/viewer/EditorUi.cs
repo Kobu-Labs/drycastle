@@ -9,7 +9,7 @@ using Godot;
 /// only the page of the active tool. Clicking the active tool again hides the sidebar. Built from the shared theme
 /// (EditorTheme); no per-control colours or font sizes.
 /// </summary>
-public enum EditorTool { None, Select, Group, Fence, Objects, Region, Poles, View, Sketch }
+public enum EditorTool { None, Select, Group, Fence, Ground, Objects, Region, Poles, View, Sketch }
 
 public partial class EditorMode
 {
@@ -29,6 +29,7 @@ public partial class EditorMode
         (EditorTool.Select, "select", "Select", Key.Key1),
         (EditorTool.Group, "group", "Group", Key.Key2),
         (EditorTool.Fence, "fence", "Fence", Key.Key3),
+        (EditorTool.Ground, "ground", "Ground types", Key.Key4),
         (EditorTool.Objects, "objects", "Objects", Key.Key5),
         (EditorTool.Region, "region", "Region", Key.Key6),
         (EditorTool.Poles, "poles", "Poles", Key.Key7),
@@ -187,6 +188,7 @@ public partial class EditorMode
 
         BuildFenceSection(Page(EditorTool.Fence));
         BuildObjectsSection(Page(EditorTool.Objects));
+        BuildGroundPage(Page(EditorTool.Ground));
         BuildRegionPage(Page(EditorTool.Region));
         BuildPolesPage(Page(EditorTool.Poles));
         BuildViewPage(Page(EditorTool.View));
@@ -262,10 +264,11 @@ public partial class EditorMode
         "Fly\tWASD, Space up, Shift down, Alt x3, hold RMB to look, wheel changes speed\n" +
         "Select\tLMB select, Shift+LMB add or remove, Esc clear\n" +
         "Walk\tF2 walk from where you were, F3 drop to the ground below the camera and walk\n" +
-        "Tools\t1 Select, 2 Group, 3 Fence, 5 Objects, 6 Region, 7 Poles, 8 View, 9 Sketch (press again to hide)\n" +
+        "Tools\t1 Select, 2 Group, 3 Fence, 4 Ground types, 5 Objects, 6 Region, 7 Poles, 8 View, 9 Sketch (press again to hide)\n" +
         "Group\tG group the selection (marked groups merge)\n" +
         "Edit\tEnter apply, Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo\n" +
         "Objects\tLMB place, R / Shift+R rotate, Ctrl free position, Ctrl+D duplicate, Del delete, arrows nudge\n" +
+        "Ground types\tpick one in the list (Tab reaches it), edit colours, recipe, flags and OSM values: each change saves and Ctrl+Z undoes; N new type, Del delete (asks); changes show after make map\n" +
         "Region\tN new region, LMB or C adds a corner, Enter closes, then choose the colour and Enter creates\n" +
         "Region edit\tdrag a corner, [ ] pick one, arrows move it, Backspace last corner, Del delete (asks), Ctrl+Z undo\n" +
         "Poles plan\tP plans a line: LMB a pole point, RMB a house, Backspace removes the last, Enter builds poles, cables and house connections\n" +
@@ -357,6 +360,8 @@ public partial class EditorMode
             SetOrthoOpacity((float)(double)cfg.GetValue("ui", "ortho_opacity", (double)_orthoOpacity), save: false);
             _orthoRestore = (bool)cfg.GetValue("ui", "ortho_on", false); // applied when the editor first opens, the map is not up yet
             if (ParseColour((string)cfg.GetValue("ui", "region_colour", _newColour)) is { } rc) _newColour = rc;
+            var gsel = (string)cfg.GetValue("ui", "ground_type", "");
+            if (gsel != "") _restoreGround = gsel;
             var rsel = (string)cfg.GetValue("ui", "region", "");
             if (rsel != "") _restoreRegion = rsel;
             if (Enum.TryParse<SketchKind>((string)cfg.GetValue("ui", "sketch_mode", _skMode.ToString()), true, out var sk)) _skMode = sk;
@@ -375,6 +380,7 @@ public partial class EditorMode
             cfg.SetValue("ui", "ortho_opacity", (double)_orthoOpacity);
             cfg.SetValue("ui", "region_colour", _newColour);
             cfg.SetValue("ui", "region", SelectedRegionId ?? "");
+            cfg.SetValue("ui", "ground_type", SelectedGroundType ?? "");
             cfg.SetValue("ui", "sketch_mode", _skMode.ToString());
             cfg.Save(CfgPath);
         }

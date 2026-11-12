@@ -955,7 +955,7 @@ def dike_parcels() -> frozenset[str]:
     return frozenset(load_section("detail", DEFAULT_RULES)["dike"]["parcels"])
 
 
-def area_type(parcel: dict) -> str | None:
+def area_type(parcel: dict, types: dict[str, dict] | None = None) -> str | None:
     """The recipe (:data:`RECIPES`) of a parcel or ground area, by its kind; None: no detail (water).
 
     The only place that reads the kind: a parcel is a yard, a ground area has the ``recipe`` of its type
@@ -964,7 +964,7 @@ def area_type(parcel: dict) -> str | None:
         return "dike"
     if parcel["kind"] in ("garden", "building_plot"):
         return "garden"
-    return _shipped_types().get(parcel["kind"], {}).get("recipe")
+    return (types if types is not None else _shipped_types()).get(parcel["kind"], {}).get("recipe")
 
 
 # --- the village ----------------------------------------------------------------------------
@@ -1009,7 +1009,7 @@ class Village:
         props = json.loads((work_dir / "props.json").read_text())
         graph = json.loads((work_dir / "roads.json").read_text())
         objects = json.loads((work_dir / "objects.json").read_text())["objects"] if (work_dir / "objects.json").is_file() else []
-        self.types = ground_types(rules_path, area)
+        self.types = ground_types(rules_path, area, edits_path)
         colours = ParcelColours(self.parcels, {**load_section("terrain", rules_path)["colours"], **type_colours(self.types)})
         self._type_cfg: dict[str, dict] = {}
         self.colour = {p["id"]: colours._pick(p) for p in self.parcels}
@@ -1182,7 +1182,7 @@ def build_village_detail(
     meadow_cells = 0
     t0 = time.time()
     for n, parcel in enumerate(sorted(v.parcels, key=lambda p: p["id"])):
-        atype = area_type(parcel)
+        atype = area_type(parcel, v.types)
         if atype is None or (only is not None and parcel["id"] not in only):
             continue
         for ctx in v.contexts(parcel):
@@ -1307,7 +1307,7 @@ def run_parcel(
     parcel = next((p for p in v.parcels if p["id"] == parcel_id), None)
     if parcel is None:
         raise ValueError(f"no parcel {parcel_id}")
-    atype = area_type(parcel)
+    atype = area_type(parcel, v.types)
     if atype is None:
         raise ValueError(f"parcel {parcel_id} ({parcel['kind']}) has no ground detail")
     ctx = next(v.contexts(parcel))

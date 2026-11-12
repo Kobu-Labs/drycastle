@@ -164,7 +164,7 @@ public static class ObjectEdits
     {
         var errs = new List<string>();
         if (!(root.GetValueOrDefault("version") is EditsFile.Num v && v.Text == "1")) errs.Add("version: must be 1");
-        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "groups" or "regions" or "cables")) errs.Add($"{k}: unknown key");
+        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "groups" or "regions" or "cables" or "ground_types")) errs.Add($"{k}: unknown key");
         var seen = new Dictionary<string, string>();
         foreach (var (pid, entry) in Parcels(root))
         {
@@ -208,6 +208,11 @@ public static class ObjectEdits
         {
             if (cables is not Obj co) errs.Add("cables: must be an object");
             else errs.AddRange(CheckCables(co));
+        }
+        if (root.GetValueOrDefault("ground_types") is { } gtypes)
+        {
+            if (gtypes is not Obj go) errs.Add("ground_types: must be an object");
+            else errs.AddRange(GroundTypeEdits.Validate(go));
         }
         return errs;
     }

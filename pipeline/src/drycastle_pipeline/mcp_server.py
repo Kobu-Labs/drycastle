@@ -49,7 +49,7 @@ from drycastle_pipeline import sketchfile
 from drycastle_pipeline.assets import DEFAULT_MANIFEST, load_manifest, validate_asset_ref
 from drycastle_pipeline.buildings import footprint_polygon
 from drycastle_pipeline.config import DEFAULT_AREA, REPO_ROOT, area_paths
-from drycastle_pipeline.ground import ground_types
+from drycastle_pipeline.ground import ground_type_source, ground_types, merge_ground_types, rules_ground_types
 from drycastle_pipeline.edits import (
     COLUMN_TYPES,
     CONNECTOR_ASSET_PREFIX,
@@ -63,6 +63,7 @@ from drycastle_pipeline.edits import (
     cable_pair,
     dump_edits,
     load_edits,
+    protected_ground_types,
     region_ring,
     resolve_fence,
     validate,
@@ -70,7 +71,7 @@ from drycastle_pipeline.edits import (
 from drycastle_pipeline.fencestyles import FENCE_STYLES
 from drycastle_pipeline.regions import region_rank
 from drycastle_pipeline.roads import edge_lines
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
 
 DEFAULT_STATE = REPO_ROOT / "out" / "editor-state.json"
 STATE_FORMAT_VERSION = 1
@@ -367,6 +368,8 @@ def _edits_doc(edits: Edits) -> dict:
         doc["regions"] = edits.regions
     if edits.cables:
         doc["cables"] = edits.cables
+    if edits.ground_types:
+        doc["ground_types"] = edits.ground_types
     return doc
 
 
@@ -1771,7 +1774,9 @@ class ParcelEditTools:
         return out
 
     def _ground_types(self) -> dict[str, dict]:
-        return ground_types(self.settings.rules_path, self.settings.area)
+        """The effective ground types: rules.yaml with the overrides and additions of edits.json."""
+        _read_edits(self.settings.edits_path)  # an invalid edits file is reported as such, not as a crash
+        return ground_types(self.settings.rules_path, self.settings.area, self.settings.edits_path)
 
     def _ground_type(self, name: object) -> str:
         types = self._ground_types()
@@ -1780,17 +1785,136 @@ class ParcelEditTools:
         return name
 
     def list_ground_types(self) -> dict:
-        """The ground types of the rules (see the registered tool description)."""
+        """The ground types, effective values and where each comes from (see the registered tool description)."""
+        rules = rules_ground_types(self.settings.rules_path, self.settings.area)
+        edited = _read_edits(self.settings.edits_path).ground_types
         rows = []
-        for name, spec in self._ground_types().items():
+        for name, spec in merge_ground_types(rules, edited).items():
             rows.append({
                 "type": name,
+                "source": ground_type_source(name, rules, edited),
                 "colours": spec.get("colours", []),
                 "recipe": spec.get("recipe"),
+                "detail": spec.get("detail") or {},
                 "water": bool(spec.get("water")),
+                "spawns": bool(spec.get("spawns")),
+                "osm": spec.get("osm") or {},
                 "from": "rule: " + spec["rule"] if spec.get("rule") else ("osm: " + json.dumps(spec["osm"], sort_keys=True) if spec.get("osm") else "hand-drawn or default only"),
             })
-        return {"summary": f"{len(rows)} ground types", "types": rows}
+        deleted = sorted(n for n in edited if ground_type_source(n, rules, edited) == "deleted")
+        out: dict = {"summary": f"{len(rows)} ground types" + (f" ({len(deleted)} deleted by you)" if deleted else ""), "types": rows}
+        if deleted:
+            out["deleted"] = deleted
+        return out
+
+    def _ground_type_regions(self, name: str, edits: Edits) -> list[str]:
+        return sorted(rid for rid, r in edits.regions.items() if r.get("ground") == name)
+
+    def set_ground_type(
+        self,
+        name: str,
+        colours: list[str] | None = None,
+        recipe: str | None = None,
+        water: bool | None = None,
+        spawns: bool | None = None,
+        osm: dict | None = None,
+        detail: dict | None = None,
+    ) -> dict:
+        """Create a ground type or change the user's override of one (see the registered tool description)."""
+        if not isinstance(name, str):
+            raise ToolError("name must be text, a lower_snake type name like my_meadow")
+        change_keys = {
+            "colours": colours, "recipe": recipe,
+            "water": water, "spawns": spawns, "osm": osm, "detail": detail,
+        }
+        if all(v is None for v in change_keys.values()):
+            raise ToolError("give at least one of colours, recipe, water, spawns, osm, detail")
+        rules = rules_ground_types(self.settings.rules_path, self.settings.area)
+
+        def change(edits: Edits) -> str:
+            before = ground_type_source(name, rules, edits.ground_types)
+            if before == "deleted":
+                raise ToolError(f"{name} is deleted by you; reset_ground_type it first to bring it back. Nothing was changed.")
+            existed = name in edits.ground_types
+            entry = edits.ground_types.setdefault(name, {})
+            if colours is not None:
+                entry["colours"] = colours
+            if recipe is not None:
+                entry["recipe"] = None if recipe == "none" else recipe
+            if water is not None:
+                entry["water"] = water
+            if spawns is not None:
+                entry["spawns"] = spawns
+            if osm is not None:
+                entry["osm"] = osm
+            if detail is not None:
+                if not isinstance(detail, dict):
+                    raise ToolError("detail must be an object, e.g. {\"furrow\": {\"probability\": 0.0}}")
+                entry["detail"] = _merge(entry.get("detail") or {}, detail)
+            return "updated" if existed else ("created" if name not in rules else "overridden")
+
+        what = self._write(change)
+        row = next(r for r in self.list_ground_types()["types"] if r["type"] == name)
+        return {
+            "summary": f"ground type {name} {what}; the map shows it after the next full run (make map)",
+            "type": row,
+            "warnings": [],
+        }
+
+    def reset_ground_type(self, name: str) -> dict:
+        """Remove the user's override of a ground type of the rules (also brings a deleted one back)."""
+        rules = rules_ground_types(self.settings.rules_path, self.settings.area)
+
+        def change(edits: Edits) -> str:
+            source = ground_type_source(name, rules, edits.ground_types) if isinstance(name, str) else "custom"
+            if source == "custom":
+                raise ToolError(
+                    f"{name!r} is not a type of rules.yaml, so there is nothing to reset to; use delete_ground_type to remove it. "
+                    f"Types of the rules: {', '.join(rules)}. Nothing was changed."
+                )
+            if source == "rules":
+                raise ToolError(f"{name} has no override of yours; it is as in rules.yaml. Nothing was changed.")
+            del edits.ground_types[name]
+            return source
+
+        was = self._write(change)
+        return {
+            "summary": f"ground type {name} is as in rules.yaml again" + (" (it was deleted)" if was == "deleted" else "")
+            + "; the map shows it after the next full run (make map)",
+            "type": next(r for r in self.list_ground_types()["types"] if r["type"] == name),
+            "warnings": [],
+        }
+
+    def delete_ground_type(self, name: str) -> dict:
+        """Delete a ground type: a custom one is removed, one of the rules is marked deleted (reset_ground_type undoes)."""
+        rules = rules_ground_types(self.settings.rules_path, self.settings.area)
+        used: list[str] = []
+
+        def change(edits: Edits) -> str:
+            nonlocal used
+            if not isinstance(name, str) or name not in {*rules, *edits.ground_types}:
+                raise ToolError(f"unknown ground type {name!r}; choose one of {', '.join(self._ground_types())} (see list_ground_types)")
+            source = ground_type_source(name, rules, edits.ground_types)
+            if source == "deleted":
+                raise ToolError(f"{name} is already deleted. Nothing was changed.")
+            if name in protected_ground_types():
+                raise ToolError(f"{name} cannot be deleted, it {protected_ground_types()[name]}. Nothing was changed.")
+            used = self._ground_type_regions(name, edits)
+            if source == "custom":
+                del edits.ground_types[name]
+            else:
+                edits.ground_types[name] = {"deleted": True}
+            return source
+
+        was = self._write(change)
+        return {
+            "summary": f"ground type {name} deleted" + ("" if was == "custom" else " (reset_ground_type brings it back)")
+            + "; the map shows it after the next full run (make map)",
+            "type": name,
+            "warnings": [
+                f"regions {', '.join(used)} still use {name}: they are skipped with a warning until you give them another ground type"
+            ] if used else [],
+        }
 
     def set_region_ground(self, id: str, ground: str | None) -> dict:
         """Make a region a hand-drawn ground area of a type, or None to make it ground paint again."""
@@ -2266,11 +2390,46 @@ def build_server(settings: Settings) -> Any:
         return tools.set_region_ground(id, ground)
 
     @server.tool(description=(
-        "List the ground types (rules.yaml ground.types): name, terrain colours, detail recipe, trees per "
-        "1000 m2, whether it is water, and where it comes from on its own (OSM, a rule, or only hand-drawn). "
-        "Use a name as `ground` in create_region or set_region_ground."))
+        "List the ground types (rules.yaml ground.types plus your overrides and additions in edits.json): name, "
+        "`source` (rules = as in rules.yaml, overridden = rules.yaml plus your override, custom = made by you), "
+        "effective terrain colours, detail recipe and settings, water, spawns, "
+        "the OSM values it takes, and where it comes from on its own (OSM, a rule, or only hand-drawn); `deleted` "
+        "names the types of the rules you removed. Use a name as `ground` in create_region or set_region_ground."))
     def list_ground_types() -> dict:
         return tools.list_ground_types()
+
+    @server.tool(description=(
+        "Create a ground type, or change your override of one that rules.yaml defines. Name: lower_snake, at most 24 "
+        "characters, an ID that cannot be renamed. Give any of: `colours` (1-6 \"#rrggbb\" terrain shades), "
+        "`recipe` (field, forest, village, dike or \"none\" for no detail), "
+        "`water`, `spawns`, `osm` ({\"landuse\": [...], \"natural\": [...]}, the OSM values the "
+        "type takes; each class given replaces its list), `detail` (settings laid over that recipe's section of "
+        "rules.yaml `detail`, e.g. {\"furrow\": {\"probability\": 0.0}, \"tone_per_ha\": 8}; merged into your earlier "
+        "ones). Only what you give is overridden; the rest stays as in rules.yaml. A new name makes a custom type "
+        "(usable as `ground` of a region). Needs the next full run to show on the map (make map)."))
+    def set_ground_type(
+        name: str,
+        colours: list[str] | None = None,
+        recipe: str | None = None,
+        water: bool | None = None,
+        spawns: bool | None = None,
+        osm: dict | None = None,
+        detail: dict | None = None,
+    ) -> dict:
+        return tools.set_ground_type(name, colours, recipe, water, spawns, osm, detail)
+
+    @server.tool(description=(
+        "Remove your override of a ground type of rules.yaml, so it is as in rules.yaml again; also brings back one you "
+        "deleted. Not for custom types (delete_ground_type)."))
+    def reset_ground_type(name: str) -> dict:
+        return tools.reset_ground_type(name)
+
+    @server.tool(description=(
+        "Delete a ground type: a custom one is removed, one of rules.yaml is marked deleted (reset_ground_type brings it "
+        "back). Refused for the default type and for the dike. Regions that use it are skipped with a warning at the next "
+        "build; the result names them."))
+    def delete_ground_type(name: str) -> dict:
+        return tools.delete_ground_type(name)
 
     @server.tool(description=(
         "Make a region a real body of water: a flat surface at `water_y` (metres on the terrain's "

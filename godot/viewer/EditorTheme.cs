@@ -115,6 +115,11 @@ public static class EditorTheme
         t.SetColor("font_pressed_color", "FlatButton", Accent);
 
         t.SetStylebox("panel", "PanelContainer", Box(Surface, Space, null, 0));
+        // a notice that stays on screen (warn) and a read-only block of text
+        t.SetTypeVariation("BannerPanel", "PanelContainer");
+        t.SetStylebox("panel", "BannerPanel", Box(new Color(Warn, 0.15f), Space, Warn));
+        t.SetTypeVariation("ReadOnlyBox", "PanelContainer");
+        t.SetStylebox("panel", "ReadOnlyBox", Box(Raised, Space, Border));
         t.SetStylebox("normal", "LineEdit", Box(Raised, 8, Border));
         t.SetStylebox("focus", "LineEdit", Focus());
         t.SetStylebox("read_only", "LineEdit", Box(new Color(Raised, 0.45f), 8));

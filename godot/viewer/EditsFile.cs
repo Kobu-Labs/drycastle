@@ -33,6 +33,13 @@ public static class EditsFile
         return root;
     }
 
+    /// <summary>Parse any JSON value into the same tree (no edits-document normalising): the rules entry of a ground type.</summary>
+    public static object? ParseValue(string text)
+    {
+        using var doc = JsonDocument.Parse(text);
+        return Convert(doc.RootElement);
+    }
+
     /// <summary>Make sure version, parcels and groups exist, as dump_text always writes them.</summary>
     public static void Normalise(SortedDictionary<string, object?> root)
     {
@@ -85,8 +92,8 @@ public static class EditsFile
                 var first = true;
                 foreach (var kv in o)
                 {
-                    // like dump_text: the regions and cables keys are only written when there are any
-                    if (depth == 0 && kv.Key is "regions" or "cables" && kv.Value is SortedDictionary<string, object?> { Count: 0 }) continue;
+                    // like dump_text: the regions, cables and ground_types keys are only written when there are any
+                    if (depth == 0 && kv.Key is "regions" or "cables" or "ground_types" && kv.Value is SortedDictionary<string, object?> { Count: 0 }) continue;
                     if (!first) sb.Append(",\n");
                     first = false;
                     Indent(sb, depth + 1);

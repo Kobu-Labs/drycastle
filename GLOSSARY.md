@@ -22,6 +22,10 @@ The category of a parcel: building plot (it holds a building) or garden (the res
 A piece of the land outside the parcels with a ground type (field, forest, water, village, dike), cut from OSM land use and rules instead of cadastral outlines, or drawn by hand (a region with a ground type). The type picks its colour, vegetation and detail recipe. It has no fence and no stable ID.
 _Avoid_: area (that is the map area: slice or village), zone, road parcel
 
+**Ground type**:
+The whole description of one kind of ground (forest, field, meadow, orchard, allotments, village, dike, water, ...): where it comes from (OSM land use or a rule), its terrain colours, detail recipe and settings, whether it is water and whether players spawn on it. Defined in `rules.yaml` (`ground.types`); you override, add and delete types in `edits.json` (`ground_types`) from the editor's Ground types tool or MCP. A change shows after the next full map build. Names are IDs and cannot be renamed.
+_Avoid_: biome, terrain type
+
 **Replacement scene**:
 What a mod supplies to replace a parcel's base contents.
 

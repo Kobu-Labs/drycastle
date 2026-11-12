@@ -15,7 +15,7 @@ public partial class EditorMode
 {
     public const int UndoCap = 200;
 
-    /// <summary>One touched entry: kind is "parcels", "groups", "regions" or "cables"; Before/After null means absent.</summary>
+    /// <summary>One touched entry: kind is "parcels", "groups", "regions", "cables" or "ground_types"; Before/After null means absent.</summary>
     /// <summary>
     /// Key is null for the whole entry (groups, regions, cables). For a parcel it names the part that changed: "fence",
     /// or "objects/&lt;object id&gt;", so undo leaves the parcel's other keys (and other writers' edits) alone.
@@ -37,7 +37,7 @@ public partial class EditorMode
     static List<EntryChange> DiffEntries(Obj before, Obj after)
     {
         var list = new List<EntryChange>();
-        foreach (var kind in new[] { "parcels", "groups", "regions", "cables" })
+        foreach (var kind in new[] { "parcels", "groups", "regions", "cables", "ground_types" })
         {
             var a = before.GetValueOrDefault(kind) as Obj ?? EditsFile.NewObject(); var b = after.GetValueOrDefault(kind) as Obj ?? EditsFile.NewObject();
             foreach (var id in a.Keys.Union(b.Keys).OrderBy(x => x, StringComparer.Ordinal))

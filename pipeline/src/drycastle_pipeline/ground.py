@@ -18,13 +18,15 @@ colour, detail recipes, trees, water) read parcels and ground areas alike throug
 ``rule``), its terrain ``colours``, its detail ``recipe`` (one of ``detail.RECIPES``, none: no detail) with optional
 ``detail`` settings laid over that recipe's section of the rules, whether it is ``water`` and whether players may
 spawn on it (``spawns``). (Trees are not a property of a type: they come from the orthophoto only.) The functions at the end of this
-module hand those to the stages. Ground areas have no fence, no edits and no cadastral reference, and their IDs are
+module hand those to the stages. The user can override and extend the types in ``edits.json`` (``ground_types``, see
+:func:`ground_types`); every stage that reads the types passes the edits path. Ground areas have no fence, no edits and no cadastral reference, and their IDs are
 only stable while the inputs are (they are numbered by type and place).
 """
 
+import copy
 from pathlib import Path
 
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
 
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
@@ -150,9 +152,66 @@ def ground_units(doc: dict) -> list[dict]:
 # --- the type table -------------------------------------------------------------------------
 
 
-def ground_types(rules_path: Path = DEFAULT_RULES, area: str | None = None) -> dict[str, dict]:
-    """``ground.types`` by name (with the map area's overlay, ``areas.<area>.ground``), every entry a dict."""
+def rules_ground_types(rules_path: Path = DEFAULT_RULES, area: str | None = None) -> dict[str, dict]:
+    """``ground.types`` of the rules by name (with the map area's overlay, ``areas.<area>.ground``), every entry a
+    dict; the user's overrides of ``edits.json`` are not in it (see :func:`ground_types`)."""
     return {name: spec or {} for name, spec in load_section("ground", rules_path, area)["types"].items()}
+
+
+def merge_ground_types(rules: dict[str, dict], edited: dict[str, dict]) -> dict[str, dict]:
+    """``rules`` types with the user's ``edited`` types (``ground_types`` of ``edits.json``) laid over them: a key of
+    an edited entry overrides that key of the rules entry (the dicts ``osm`` and ``detail`` key by key,
+    deeper dicts the same way, lists and values replace); a new name is a new type, appended at the end; an entry
+    with ``deleted`` removes the rules type. Neither input is changed."""
+    out = {name: copy.deepcopy(spec) for name, spec in rules.items()}
+    for name, entry in edited.items():
+        if entry.get("deleted"):
+            out.pop(name, None)
+        else:
+            out[name] = _merge(out.get(name, {}), copy.deepcopy(entry))
+    return out
+
+
+def ground_types(rules_path: Path = DEFAULT_RULES, area: str | None = None, edits_path: Path | None = None) -> dict[str, dict]:
+    """The effective ground types by name: those of ``rules.yaml`` (with the area overlay) and, when ``edits_path`` is
+    given, the user's overrides and additions of that edits file laid over them (:func:`merge_ground_types`)."""
+    types = rules_ground_types(rules_path, area)
+    if edits_path is None:
+        return types
+    from drycastle_pipeline.edits import load_edits
+
+    return merge_ground_types(types, load_edits(edits_path).ground_types)
+
+
+def ground_type_row(name: str, rules_spec: dict | None, spec: dict) -> dict:
+    """One ground type of ``parcels.json`` ``ground_types`` for the editor: ``spec`` is the effective type (summary:
+    colour, recipe, water, spawns, source), ``rules_spec`` the entry of rules.yaml (None: a type of the user,
+    ``custom``), which the editor lays the current edits over."""
+    row = {
+        "name": name,
+        "colour": (spec.get("colours") or ["#808080"])[0].lower(),
+        "colours": [c.lower() for c in spec.get("colours") or []],
+        "recipe": spec.get("recipe"),
+        "water": bool(spec.get("water")),
+        "spawns": bool(spec.get("spawns")),
+        "source": "rule" if spec.get("rule") else ("osm" if spec.get("osm") else "drawn"),
+    }
+    if rules_spec is None:
+        row["custom"] = True
+    else:
+        row["rules"] = rules_spec
+    return row
+
+
+def ground_type_source(name: str, rules: dict[str, dict], edited: dict[str, dict]) -> str:
+    """Where a type comes from: ``rules`` (as in rules.yaml), ``overridden`` (rules.yaml plus an override of the
+    user), ``custom`` (made by the user) or ``deleted`` (a type of the rules the user removed)."""
+    entry = edited.get(name)
+    if name not in rules:
+        return "custom"
+    if entry is None:
+        return "rules"
+    return "deleted" if entry.get("deleted") else "overridden"
 
 
 def type_colours(types: dict[str, dict]) -> dict[str, list[str]]:
