@@ -129,7 +129,8 @@ public class VehicleTests
     public void EveryMotorisedTypePullsAwayHardFromAStandstill()
     {
         // the launch boost: the first two seconds matter most, so each engine type is at 10 m/s (36 km/h) within 2 s of full throttle
-        foreach (var def in Shipped().Vehicles.Where(v => v.Id is "car" or "jeep" or "quad" or "motorcycle" or "amphibious"))
+        // (the amphibious transport is not stepped by the car model: DriveTests holds the same two seconds for it)
+        foreach (var def in Shipped().Vehicles.Where(v => v.Id is "car" or "jeep" or "quad" or "motorcycle"))
         {
             var s = new CarState(); var t = 0f;
             while (s.Speed < 10f && t < 5f) { CarModel.Step(ref s, def, 1, 0, false, 1f / 60); t += 1f / 60; }

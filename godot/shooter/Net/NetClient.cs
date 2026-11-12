@@ -13,7 +13,9 @@ namespace Drycastle.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
+    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
+        /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the driven vehicle and seat this player was last matched to (<see cref="SeatRiders"/>).</summary>
+        public float ShownYaw, ShownPitch; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -149,7 +151,7 @@ public partial class NetClient : Node
         foreach (var r in _rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         _rockets.Clear();
         foreach (var v in _cars.Values) if (GodotObject.IsInstanceValid(v.Node)) v.Node.QueueFree();
-        _cars.Clear(); _flights.Clear(); _pilot = null; // the probe is under Owned and goes with it
+        _cars.Clear(); _flights.Clear(); _pilot = null; _drives.Clear(); _drive = null; // the probes are under Owned and go with them
         GlassTeardown();
         if (_me != null && GodotObject.IsInstanceValid(_me)) _me.QueueFree();
         _me = null;
@@ -359,7 +361,7 @@ public partial class NetClient : Node
         TelemetrySnapshot(h.Tick);
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         DayNightCycle.Current?.SetServerTick(h.Tick);
-        foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); cg.Solid?.QueueFree(); _flights.Remove(id); } }
+        foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); cg.Solid?.QueueFree(); _flights.Remove(id); _drives.Remove(id); } }
         foreach (var (id, rec) in _dec.States)
         {
             if (id == _myId) { OnSelf(rec, h.Ack); continue; }
@@ -367,6 +369,7 @@ public partial class NetClient : Node
             if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
             if (rec.Type == EntityType.Turret) { OnTurretState(rec, h.Tick); continue; }
             if (rec.Type == EntityType.Flight) { OnFlightState(rec, h.Tick); continue; }
+            if (rec.Type == EntityType.Drive) { OnDriveState(rec, h.Tick); continue; }
             if (rec.Type is not (EntityType.Player or EntityType.Target)) continue;
             if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); _remotes[id] = r; }
             r.State = rec.State; r.Stance = rec.Stance; r.Slot = rec.Weapon;
@@ -374,6 +377,7 @@ public partial class NetClient : Node
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
         }
         UpdatePiloting(h.Ack); // the helicopter this player flies is predicted, and reconciled here (ADR 0006)
+        UpdateDriving(h.Ack);  // and so is the amphibious transport this player drives (ADR 0010)
         LossAfterSnapshot(h);
     }
 
@@ -515,6 +519,7 @@ public partial class NetClient : Node
         var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? _wantSlot : 0), GunnerAim);
         if (!_driving && !_controlling && _gunship == null) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         PredictFlight(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
+        PredictDrive(ni, dt);  // and so does the driver of an amphibious transport
         _pending.Add(new Pending { Input = ni, After = _me.State });
         if (_pending.Count > 120) _pending.RemoveAt(0);
         var recent = new NetInput[Math.Min(3, _pending.Count)];
@@ -535,10 +540,11 @@ public partial class NetClient : Node
             {
                 var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 var dead = r.State == EntityState.Dead;
+                r.ShownYaw = s.Yaw; r.ShownPitch = s.Pitch;
                 TumbleRemote(r, at, s.Yaw, dead && TargetDummies.IsDummyId(id), dt);
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
                 r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && CorpseOf(id)); // riders are drawn in their seat (the server puts the body there), seated rather than standing
-                r.View?.SetStance(r.State == EntityState.InVehicle ? Stance.Crouch : r.Stance);
+                r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
                 AnimateRemote(r, s.Pos);
                 UpdateNameTag(id, r);
             }
@@ -579,7 +585,8 @@ public partial class NetClient : Node
         var slot = Ammo?.Slot ?? _wantSlot;
         var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
         _viewmodel.Show(id);
-        _viewmodel.Visible = !Dead && !_driving && !_controlling && _gunship == null && _myState != EntityState.InVehicle && _me is not { ZoomFov: > 0 };
+        var seated = (_driving || _myState == EntityState.InVehicle) && !InArmedSeat; // an armed seat's rider holds their weapon (ADR 0011)
+        _viewmodel.Visible = !Dead && !seated && !_controlling && _gunship == null && _me is not { ZoomFov: > 0 };
     }
 
     /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
@@ -728,7 +735,7 @@ public partial class NetClient : Node
         // iron sights: any non-scoped, non-melee weapon while zoom is held
         var kind = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Kind : WeaponKind.Melee;
         if (_viewmodel != null)
-            _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead
+            _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && (!_driving && _myState != EntityState.InVehicle || InArmedSeat)
                 && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
         _me.IronSightZoom = _viewmodel is { Aiming: true };
     }

@@ -101,8 +101,20 @@ A water-only vehicle: it floats on a water body, has no drive on land (it coasts
 _Avoid_: ship, watercraft
 
 **Amphibious transport**:
-A four-seat vehicle that drives on land like the war jeep (and runs people over there) and floats at reduced speed on water.
-_Avoid_: APC, amphib
+An open three-seat vehicle, a boat-shaped hull on four wheels: a driver, an armed seat beside them and a ring gun over the rear. On land it drives (and runs people over there); in a water body it floats and handles as a boat, slower. Nothing covers its riders: all three sit in exposed seats.
+_Avoid_: APC, amphib, Schwimmwagen, duck
+
+**Armed seat**:
+A passenger seat whose rider keeps their own loadout and fights with it from the seat, in first person, aiming with the view inside the seat's arc. The mouse wheel changes the weapon there, since the number keys are the seat switch. The amphibious transport's front right seat is one; the bus's passenger seats are not.
+_Avoid_: shotgun seat, gunner seat (that seat works the vehicle's own gun), fighting seat
+
+**Exposed seat**:
+A seat the hull does not cover: a shot that reaches its rider's body hits the rider and not the hull, and a shot that misses them hits the hull. The flak truck's and the utility helicopter's gunner seats are exposed, and all three seats of the amphibious transport. Riders of one vehicle never hit each other.
+_Avoid_: open seat, unprotected seat
+
+**Ring gun**:
+The amphibious transport's machine gun, on a ring mount over the rear compartment and worked from the gunner seat by a gunner who stands inside the ring. The gunner's view aims it all the way round; over the two riders in front it cannot be depressed. Its rounds are the jeep's roof gun's, and its kills are ordinary kills.
+_Avoid_: turret (alone), pintle gun, rear gun
 
 **Seat switch**:
 Moving to another seat of the vehicle you sit in, without getting out: while seated, the number keys (the weapon slot keys) take that seat (key 2 is the second seat of the vehicle's `seats` list), and a small top-down schematic in the bottom right shows each seat with its number (free: outlined; yours: filled, double ring; taken: struck through). A vehicle with no `seats` list has the one driver seat. A free seat is taken at once; a taken one is refused. Leaving the driver seat leaves the vehicle without input, so it coasts to a stop (a utility helicopter in the air holds a hover, then sets itself down); a gunner's turret keeps its aim. One player can drive, go to the turret and drive again.
@@ -113,7 +125,7 @@ The weapons a player can select: the primary, the secondary and the knife of the
 _Avoid_: inventory, toolbar, slots
 
 **Streak weapon**:
-A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the turret, the MOAB, the aircraft guns). Kills made with one do not advance the Streak counter. The jeep's roof gun and the utility helicopter's door gun are not streak weapons.
+A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the turret, the MOAB, the aircraft guns). Kills made with one do not advance the Streak counter. The jeep's roof gun, the utility helicopter's door gun and the amphibious transport's ring gun are not streak weapons.
 _Avoid_: killstreak weapon (ambiguous with the streak itself)
 
 **Pellet fan**:
@@ -121,7 +133,7 @@ The pellets of one shotgun shot, sent as a seed, an aim and a cone so every clie
 _Avoid_: spread (alone), buckshot
 
 **Shot spread**:
-The half-angle of the cone a shot can land in. It starts from the weapon's own spread (base plus growth per shot, or the pellet cone of a shotgun), grows with the shooter's speed up to sprint speed and is at its widest in the air, and is then reduced by crouch, prone and aiming. The server and the crosshair use the same rule, so the crosshair gap is the cone.
+The half-angle of the cone a shot can land in. It starts from the weapon's own spread (base plus growth per shot, or the pellet cone of a shotgun), grows with the shooter's speed up to sprint speed and is at its widest in the air, and is then reduced by crouch, prone and aiming. From an armed seat the vehicle's speed stands in for the shooter's own, and the seat gives no stance bonus. The server and the crosshair use the same rule, so the crosshair gap is the cone.
 _Avoid_: accuracy, bloom, recoil (recoil moves the aim; spread scatters around it)
 
 **Camouflage**:
@@ -173,7 +185,7 @@ The utility helicopter's machine gun, on a pintle in its right door and worked f
 _Avoid_: turret (alone), minigun, side gun
 
 **Flak truck**:
-A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every other vehicle.
+A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every closed vehicle.
 _Avoid_: AA gun, anti-air vehicle, SPAAG
 
 **Bus**:

@@ -74,6 +74,18 @@ is alpha-blended. Same vehicle frame, with the origin on the ground under the ro
 `gun` (pitch about X, positive raises the muzzle), `barrel` (recoil along +Z) with the `muzzle` empty; empties mark `gunner_sight`, `seat_pilot`,
 `seat_gunner`, the lights (`light_head`, `light_tail`, `light_nav_l`/`_r`) and `smoke_engine`.
 
+`drycastle-generated-models/amphibious_transport.glb` (2026-11-12) is the amphibious transport (`godot/shooter` vehicle id `amphibious`): an open-topped
+amphibious car, a boat-shaped hull on four wheels with no roof and no doors, low sides, a propeller under the stern, two seats in front and a machine gun
+on a ring mount over the rear compartment. Nothing covers the riders: the game draws them in their seats, and they can be shot. Original geometry written
+as code in `scripts/make_amphibious_model.py` (standard library only; it loads the flak script's mesh helpers from the file beside it;
+`python3 -I scripts/make_amphibious_model.py` rebuilds the file byte for byte), CC0, 12 flat-colour materials, no texture. Same vehicle frame, origin on
+the ground at the centre. Moving parts are separate nodes with their origin at the pivot: `hull` (the body, which the game leans and bobs over the
+wheels), `wheel_fl`/`_fr`/`_rl`/`_rr` (spin about X) with the front pair under `wheel_fl_steer`/`wheel_fr_steer` (steer about Y), `propeller` (spin about
+Z), `gun_mount` (the ring's carriage, yaw about Y from the ring centre, all the way round), `gun` (pitch about X, positive raises the muzzle; it rides
+0.45 m out from the ring centre) and `barrel` (recoil along +Z) with the `muzzle` empty; empties mark `gunner_sight`, `seat_driver`, `seat_passenger`,
+`seat_gunner`, the lights (`light_head_l`/`_r`, `light_tail_l`/`_r`), `smoke_engine` (the engine is in the stern) and the wake points at the waterline
+(`wake_bow`, `wake_stern_l`/`_r`; the waterline afloat is 0.56 m above the origin, under the cockpit floor).
+
 kenney.nl answered automated requests with HTTP 403, and Quaternius distributes through itch.io or
 Patreon pages. Neither was circumvented. The same CC0 archives are published openly by their creators
 on OpenGameArt.org (`opengameart.org/content/car-kit`, `/city-kit-suburban`, `/stylized-nature-megakit`),

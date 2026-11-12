@@ -284,6 +284,8 @@ one match and level 20 after about six good matches. No telemetry exists yet.
   from the rear where its engine is. It is boarded like a car, within 3 m of its centre, so along the middle of either side (the middle door is there),
   not at the front door. Its doors are separate model nodes that nothing moves yet.
 - Utility helicopter (ADR 0006): the flown vehicle (`utility_helicopter`, medium `air`), see "Utility helicopter" below.
+- Amphibious transport (ADR 0010, 0011, 0012): an open three-seat vehicle with its own driving model on land and water, an armed seat and a
+  ring gun, and riders the hull does not cover (`amphibious`, medium `amphibious`), see "Amphibious transport" below.
 - Water bodies (#138, #142): the pipeline writes `water.json` into the map artifact; the server and clients swim, submerge
   and hold breath (HUD "AIR"). Surfaces, underwater tint and splashes are client-side and not yet compiled by Godot.
 - Day/night (#135): one server clock, `environment.json` (start time 08:00, day length 24 minutes by default). The sun,
@@ -366,6 +368,92 @@ as the driver of every other vehicle is: to stop the pilot, destroy the helicopt
 - *Water.* The surface is a floor: it does not sink. While the skids are in a water body it loses `water_damage_per_second` (60) hit points
   a second, and it can lift out again. The cushion treats the surface as ground.
 
+### Amphibious transport
+
+Two spawn on the map (`spawn_count` 2, near a shore where there is one) and it is in the sandbox vehicle list. The model is generated
+(`scripts/make_amphibious_model.py`): a boat-shaped hull on four wheels, no roof, no doors, low sides, a propeller under the stern. Three seats
+(it had four): the driver front left, an armed seat beside them, and a gunner standing in a ring over the rear. The driver's client predicts it
+and the server corrects it (ADR 0010); everyone else, its riders included, sees it interpolated.
+
+**Controls** (the rebindable movement actions; nothing new to bind):
+
+| Input | On its wheels | Afloat |
+|---|---|---|
+| W / S (`move_forward`, `move_back`) | Accelerate / brake, then reverse | Ahead / astern (there is no brake: astern is how it stops) |
+| A / D (`move_left`, `move_right`) | Steer (ramped: a tap is a small correction) | Helm: lazy, and it turns from rest under power |
+| Space (`jump`) | Handbrake: stops it and lets the tail slide | Nothing |
+| Mouse | Looks round the vehicle; the camera swings round with it on its own | The same |
+| E (`interact`), 1-3 (`slot_1`..), H | Get out, switch seat, headlights, as in every vehicle | The same |
+
+**Driving** is `DriveModel` (pure, in ShooterCore), not the car model the other vehicles share. On land it pulls hard from a standstill and eases
+off towards top speed, the brake bites at once, and the steering sets a circle that widens with speed and is held to what the tyres grip, so it
+is quick at low speed and calm at top speed. In a water body it floats (wherever the water over the ground is at least `float_depth` deep; the
+village's ponds are only 0.2 to 0.9 m deep in the terrain, so depth decides no more than that) and is a boat: thrust against a drag that grows
+with the square of the speed, a lazy helm, a stern that swings out, sideways speed the water takes away slowly. Going in fast, that same drag
+checks it hard, and the hull drops to its waterline on a spring and comes up again; coming out, the wheels haul it up the bank over a few
+ticks. It lies on the slope under its four wheels; a ledge higher than `step_height` under a wheel is a wall, a drop deeper than `snap_down`
+puts it in the air. Walls, trunks and buildings stop the hull box, which is swept half a metre clear of the ground. It does not collide with
+players or other vehicles (no vehicle does); it runs people over on land only.
+
+**Handling** is all in `vehicles.json`: `top_speed`, `acceleration`, `brake`, `turn_radius`, `high_speed_radius_factor`, `water_top_speed`,
+`water_acceleration`, and the `drive` block (`land`, `water`, `body`, `camera`; each key's summary in `VehicleDriveDef` and its parts says what
+turning it up does). `dotnet test ShooterCore.Tests --filter "DriveTests.The_feel_in_numbers" --logger "console;verbosity=detailed"` prints the
+resulting times and distances without the game; `DriveTests` holds the limits. With the shipped numbers:
+
+| | Land | Water |
+|---|---|---|
+| Top speed | 22 m/s (79 km/h), reverse 6.6 m/s | 7 m/s (25 km/h), astern about 5 m/s |
+| To 10 m/s / 90 % of top | 1.7 s / 5.2 s | (never 10) / 4.6 s |
+| Stop from top speed | brake 27 m in 2.4 s; coasting 109 m | full astern 9 m in 3.1 s; lifting off it still does 3.8 m/s after 2 s |
+| Circle | 6 m at 3 m/s, 9 m at 8 m/s, 57 m at top speed (the grip limit) | 12 m at 5.4 m/s, sliding 18 degrees off its heading |
+| Going in at top speed | | checked at up to 17 m/s², 12.5 m/s a second after the splash |
+
+**What is drawn** (client only; nothing but the drive record and the players' own records is on the wire). The body's weight is `DriveBody`
+(pure, tested): on its wheels the tail squats under throttle, the nose dives under braking and the body leans out of a turn, over wheels that
+stay on the ground; afloat the bow rises under power, the hull heels out of a turn and bobs, harder just after it has gone in, settling to a
+gentle bob at rest. The wheels roll with the speed and the front pair steer, the propeller turns in the water, a wake trails from the stern
+and spray flies from the bow in proportion to the speed (off with reduce motion), it goes in with a splash, and damage smoke comes from the
+engine in the stern (`hood`). The driver's camera is the helicopter's spring camera (`drive.camera`), and it swings round with the vehicle
+(`turn_follow`, `turn_response`), because here the keys steer. Riders are drawn on their seats on the drawn body, so they lean and bob with it
+and stay aboard the vehicle its driver sees in the present; they sit (the crouch pose), the gunner stands, and they do not walk. A rider who
+aims (the armed seat, the ring gun) faces where they aim and their weapon is pitched to it.
+
+**Armed seat** (seat 2, ADR 0011). Its rider keeps their own loadout and fights with it from the seat, in first person: fire, reload, aim and
+scope, recoil and breath as on foot, the weapon in the view, ordinary kills with that weapon. It is a property of the seat (`"armed": true`),
+so the bus's passengers stay unarmed.
+
+- *Changing weapon:* the mouse wheel, as on foot. The number keys stay the seat switch, as in every seat of every vehicle.
+- *How far round:* the seat's `aim` arc, in the vehicle's frame: from 60 degrees left of the nose round the right side to 150 degrees, 40
+  down, 70 up. The view is held inside it. Not across the driver, not back through the gunner.
+- *Spread:* the vehicle's speed widens it as the rider's own speed does on foot: nothing at a standstill, the weapon's whole movement spread
+  at `spread_full_speed` (16 m/s). The seat gives no stance bonus. The crosshair shows it.
+- *The knife:* as on foot, from the seat, against anyone in reach who is not aboard.
+
+**Ring gun** (seat 3). The vehicle gun and door gun rules (`gun`, `door_gun`; the helicopter's belt and the jeep's round), on a ring: the gun
+rides `ring_radius` out from the ring's centre and swings round the gunner, who stands there and turns with it. The gunner's view aims it, all
+the way round, 35 down and 55 up; within `guard_arc_deg` (50) of the nose it goes no lower than `guard_min_pitch_deg` (-4), coming down to the
+full depression over the next `guard_blend_deg` (20), so the barrel rides up over the two in front (`AmphibiousTransportTests` sweeps every aim
+against their bodies and the hull). Its camera is at the model's sight, its aim reaches every client as a turret record, the tracer leaves the
+drawn muzzle, the barrel recoils and the muzzle flashes, and the gunner's ammo is event 160: all as the door gun's. Kill-feed weapon
+"Mounted MG".
+
+*Who can be shot in their seat.* All three (ADR 0012): each seat is `"exposed": true`. A bullet, a pellet, a rocket or a killstreak round that
+reaches a rider's body hits that rider and not the hull, and the hull takes nothing from it; one that misses them hits the hull. The hit box
+is the hull only, 1.2 m high, so the riders stand out of it and are the drawn figures: seated ones as tall as a crouch, the gunner standing.
+Riders of one vehicle never hit each other, and their own hull is not in their way. A rider who dies frees their seat; if it was the driver,
+the vehicle coasts to a stop. Blast was already unprotected for every vehicle (a splash reaches every body in range, through hulls) and is
+unchanged; when the vehicle blows up, everyone aboard dies with it.
+
+**Decisions on the edges.**
+
+- *The flak truck and the helicopter.* Their gunner's exposure is unchanged, including that the jeep's roof gun and the killstreak guns do not
+  reach them through the hull; those weapons do reach the transport's riders. One to unify later, if wanted.
+- *A rider's own rocket.* It passes their vehicle's hull and spares their fellow riders, direct hit and blast, while the shooter still rides
+  it. The shooter takes their own blast as on foot, and so does the vehicle.
+- *Shallow water.* In a pond shallower than its draft it still floats; its wheels are drawn under the bed.
+- *No driver.* It is stepped hands off every tick and coasts, on land or water. A driver whose inputs stop arriving for 6 ticks is driven the
+  same way until they resume.
+
 ## 8. Known gaps (collected from the closed tickets)
 
 Not built:
@@ -428,8 +516,11 @@ The grammar, completion and history are pure code in `ShooterCore/Chat` (`ChatCo
 
 ## 9. Wire protocol
 
-Protocol version: **23** (`Wire.ProtocolVersion`, whose summary lists every bump). The hello carries it; a mismatch is refused with a message naming both
-versions. Version 23 (chat and admin commands): event kinds 180 (a line or command from a player), 181 (a chat log line), 182 (admin flag and spawnable vehicles for a joiner) and 183 (the day clock changed live). Version 21 (the utility helicopter, ADR 0006): snapshot entity type 5 (Flight: a flying vehicle's velocity, pitch, roll, rotor speed and
+Protocol version: **24** (`Wire.ProtocolVersion`, whose summary lists every bump). The hello carries it; a mismatch is refused with a message naming both
+versions. Version 24 (the amphibious transport, ADR 0010 to 0012): snapshot entity type 6 (Drive: a driven vehicle's speeds along and across its
+heading and vertically, the slope it stands on, its steering, throttle and flags, `DriveRecord`, ids from 0x5000), the driver's inputs step it
+one for one as the pilot's do the helicopter, a turret record for its ring gun, and the server answers a seated player's Fire, Reload and weapon
+change when their seat is armed (no new fields for that; the bump is the behaviour change). Version 23 (chat and admin commands): event kinds 180 (a line or command from a player), 181 (a chat log line), 182 (admin flag and spawnable vehicles for a joiner) and 183 (the day clock changed live). Version 21 (the utility helicopter, ADR 0006): snapshot entity type 5 (Flight: a flying vehicle's velocity, pitch, roll, rotor speed and
 flags, `FlightRecord`, ids from 0x6000), and the pilot's inputs step the helicopter one for one, so the snapshot's input acknowledgement is the
 helicopter's too. Versions 17 to 20: delta snapshots against the acknowledged tick (17), the flak truck's turret record and aircraft hit points
 (19), seat switching (20). Version 16 (gunship rocket flight): a gunship rocket flies at its own `projectile_speed_mps` and lives out its range, and
@@ -490,7 +581,7 @@ Switch 128, Headlights 256, Prone 512, Killstreak 1024.
 
 Snapshot entity types (`EntityType`, one byte in a snapshot entry): Player 0, Projectile 1, Vehicle 2, Target 3 (the target
 dummies, #148: planned on the ground, Defeat pose when down), Turret 4 (the aim of a vehicle's gun, `FlakRecord`), Flight 5 (a flying
-vehicle's velocity and attitude, `FlightRecord`).
+vehicle's velocity and attitude, `FlightRecord`), Drive 6 (a driven vehicle's speeds, slope, steering and whether it floats, `DriveRecord`).
 
 Entity state (`EntityState`, one byte): Alive 0, Protected 1, InVehicle 2, Dead 3.
 

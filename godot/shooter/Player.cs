@@ -170,11 +170,39 @@ public partial class Player : CharacterBody3D
     /// <param name="speedFraction">Its speed over its top speed, 0 to 1.</param>
     public void FlightChase(Vector3 at, float yaw, float pitch, float roll, float speedFraction, FlightCameraDef cam, float dt)
     {
-        if (!_chase || !_flightChase)
+        if (!_chase || !_flightChase || _driveChase)
         {
             if (!_cockpit) _yaw = yaw; // out of the cockpit view the look is the heading already asked for: it stays
             _pitch = -0.14f; _chaseFocus = at; _chaseFocusVel = Vector3.Zero;
         }
+        _driveChase = false;
+        SpringChase(at, yaw, pitch, roll, speedFraction, cam, dt);
+    }
+
+    bool _driveChase;
+    float _driveYawSeen, _driveYawOwed;
+
+    /// <summary>
+    /// The driver's chase camera on a vehicle their client predicts (the amphibious transport): the helicopter's spring camera
+    /// (<see cref="FlightChase"/>: the place follows on a spring, a share of the body's pitch and roll, wider with speed), and the view swings round
+    /// with the vehicle, because here the keys steer and the mouse only looks. The vehicle's turning is owed to the view and paid off at
+    /// <see cref="DriveCameraDef.TurnResponse"/>, so in a turn the vehicle swings in the frame first and the camera comes round behind it; the mouse
+    /// still looks about freely on top of that. <see cref="EndChase"/> ends it.
+    /// </summary>
+    public void DriveChase(Vector3 at, float yaw, float pitch, float roll, float speedFraction, DriveCameraDef cam, float dt)
+    {
+        if (!_chase || !_flightChase || !_driveChase) { _yaw = yaw; _pitch = -0.2f; _chaseFocus = at; _chaseFocusVel = Vector3.Zero; _driveYawSeen = yaw; _driveYawOwed = 0; }
+        _driveChase = true;
+        _driveYawOwed += FlightMath.Wrap(yaw - _driveYawSeen) * cam.TurnFollow;
+        _driveYawSeen = yaw;
+        var paid = _driveYawOwed * (1f - Mathf.Exp(-cam.TurnResponse * Mathf.Min(dt, 0.25f)));
+        _yaw += paid; _driveYawOwed -= paid;
+        SpringChase(at, yaw, pitch, roll, speedFraction, cam, dt);
+    }
+
+    /// <summary>The spring camera both chase cameras share: see <see cref="FlightChase"/>.</summary>
+    void SpringChase(Vector3 at, float yaw, float pitch, float roll, float speedFraction, FlightCameraDef cam, float dt)
+    {
         _chase = true; _flightChase = true; _cockpit = false;
         GlobalPosition = at;
         _pitch = Mathf.Clamp(_pitch, -1.1f, 0.5f);
@@ -205,6 +233,16 @@ public partial class Player : CharacterBody3D
         _camera.GlobalPosition = want;
         _camera.GlobalRotation = rot;
         FovBoost = GameSettings.Current.ReduceMotion ? 0f : cam.FovBoostDeg * Mathf.Clamp(speedFraction, 0f, 1f) * Mathf.Clamp(speedFraction, 0f, 1f);
+    }
+
+    /// <summary>
+    /// First person from a vehicle seat whose rider sits (or stands) in the open: the body is on the seat and the eye is the seated figure's,
+    /// <paramref name="eyeHeight"/> above it. The stance shape puts the camera back when the body is its own again (<see cref="SetState"/>, <see cref="EndChase"/>).
+    /// </summary>
+    public void SeatView(Vector3 feet, float eyeHeight)
+    {
+        GlobalPosition = feet;
+        _camera.Position = new Vector3(0, eyeHeight, 0);
     }
 
     /// <summary>Turret camera (a gunship's owner): the camera sits at the turret and looks along the given world yaw and pitch. The body does not move; <see cref="EndChase"/> ends it.</summary>

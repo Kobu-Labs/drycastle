@@ -160,7 +160,7 @@ public partial class NetServer
                 FlightWater = Water, FlightBounds = MapFlightBounds,
             };
             World.AddChild(car);
-            foreach (var cl in _byId.Values) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); }
+            foreach (var cl in _byId.Values) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); car.DriveWorld?.Ignore(cl.Body); }
             _cars.Add(car);
         }
         GD.Print($"server: {_cars.Count} vehicles spawned ({string.Join(", ", colours.Select(k => $"{Vehicles!.Vehicles[k.Key].Id} x{k.Value.Count} colours {string.Join(",", k.Value)}"))})");
@@ -261,7 +261,9 @@ public partial class NetServer
     {
         var offset = car.Def.Seats[seat].Offset;
         if (car.Def.Flak is { } flak && car.Def.Seats[seat].Role == "gunner") offset = FlakRules.TurretSeatOffset(flak, offset, car.TurretLocalYaw);
-        var p = car.Flies ? car.Flight.ToWorld(offset) : VehicleSeat.SeatPosition(N(car.GlobalPosition), car.State.Yaw, offset); // a helicopter's seats tilt with it
+        var p = car.Flies ? car.Flight.ToWorld(offset) // a helicopter's seats tilt with it
+            : car.Drives ? car.Drive.ToWorld(offset)   // a driven vehicle's lie on the slope it stands on
+            : VehicleSeat.SeatPosition(N(car.GlobalPosition), car.State.Yaw, offset);
         return new Vector3(p.X, p.Y, p.Z);
     }
 
@@ -297,7 +299,9 @@ public partial class NetServer
         List<GlassCross>? crossed = null;
         var wall = BulletHit(eye, dir, def.Range, out var shotCar, ref crossed, solid: car); // the gunner's own car stops the round as before: its glass is not shot out from the roof
         var targets = LiveTargets().Where(t => car.Seat.SeatOf(t.Id) < 0).ToList();
-        var hit = HitMath.Raycast(N(eye), d, def.Range, wall, targets, c.Id);
+        // riders whose seat is in the open (an amphibious transport's) are reached through their hull, as by every weapon
+        var (riders, pastHull) = ExposedGunnerBehind(shotCar == car ? null : shotCar, eye, dir, def.Range, targets, seatsOnly: true);
+        var hit = GunnerCover.Raycast(N(eye), d, def.Range, wall, targets, c.Id, riders, pastHull);
         var end = eye + dir * (hit?.Distance ?? Math.Min(wall, def.Range));
         BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, SpecialWeapons.VehicleGun, N(eye), N(end))));
         if (hit is { } h) Deal(c.Id, SpecialWeapons.VehicleGun, h.Id, def.Damage, false, false);
@@ -356,10 +360,12 @@ public partial class NetServer
             for (var s = 0; s < car.Seat.Count; s++) if (car.Seat.Occupant(s) != 0 && OccupantAt(car, s) == null) car.Seat.Clear(s);
             SendSeatState(car);
             var driver = OccupantAt(car, 0);
-            car.PrevPos = car.GlobalPosition;
+            car.PrevPos = car.Drives ? car.TickEndPos : car.GlobalPosition; // a driven vehicle has already moved this tick, on its driver's inputs
             if (car.Flies) StepFlyingVehicle(car, driver, dt);
+            else if (car.Drives) StepDrivenVehicle(car, driver, dt);
             else if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt, Water);
             else car.Step(def, 0, 0, false, dt, Water);
+            car.TickEndPos = car.GlobalPosition;
             if (car.GlobalPosition.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); continue; }
             // a wall takes speed from a driven car; a helicopter is hurt by what it hits whoever flies it, or nobody
             if ((driver != null || car.Flies) && car.Def.CrashDamage && car.LastImpact > Vehicles.CrashMinSpeedLoss)
@@ -435,6 +441,22 @@ public partial class NetServer
         car.LastImpact = car.FlightImpact;
         car.FlightImpact = 0;
         if (car.Flight.InWater) DamageVehicle(car, car.Def.Flight!.WaterDamagePerSecond * dt, 0, SpecialWeapons.Vehicle, 0);
+    }
+
+    /// <summary>A driver whose inputs have not arrived for this many ticks is driven hands off (it coasts), so a stalled client does not freeze the vehicle.</summary>
+    const uint DriveStarveTicks = 6;
+
+    /// <summary>
+    /// The tick of a driven vehicle (the amphibious transport, ADR 0010). With a driver, it was already stepped in <see cref="SimulateClient"/>, once
+    /// for each of the driver's inputs (that is what lets the driver's client predict it), so there is nothing to step here unless the inputs have
+    /// stopped arriving. With nobody at the wheel it is stepped hands off every tick: it coasts to a stop, on its wheels or on the water. The hardest
+    /// impact since the last tick goes to the crash damage rules.
+    /// </summary>
+    void StepDrivenVehicle(ServerCar car, Client? driver, float dt)
+    {
+        if (driver == null || _tick - car.DriveTick > DriveStarveTicks) car.StepDrive(DriveInput.None, dt);
+        car.LastImpact = car.DriveImpact;
+        car.DriveImpact = 0;
     }
 
     /// <summary>

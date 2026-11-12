@@ -22,6 +22,8 @@ public partial class NetClient
         public DoorGunNodes? DoorGun;
         /// <summary>A flying vehicle's rotors, their sound and the downwash (null for everything that drives, or a model without rotors).</summary>
         public RotorFx? Rotor;
+        /// <summary>A driven vehicle's moving nodes and water effects (the amphibious transport; null for every other type, or a model without them).</summary>
+        public DriveNodes? Drive;
         public readonly Interpolator Buf = new();
         public ushort Driver;
         public int Kind;
@@ -58,6 +60,7 @@ public partial class NetClient
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flak != null) v.Flak = FlakNodes.Find(v.Node);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].DoorGun is { } doorGun) v.DoorGun = DoorGunNodes.Find(v.Node, doorGun);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flight != null) v.Rotor = RotorFx.Find(v.Node);
+            if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Drive != null) v.Drive = DriveNodes.Find(v.Node);
             _cars[id] = v;
             ShowGlassOf(id); // panes whose state arrived before the vehicle was drawn (ADR 0007)
         }
@@ -103,6 +106,7 @@ public partial class NetClient
         v.Exploded = true;
         v.Snd?.Release(); v.Snd = null;
         v.Rotor?.Stop();
+        v.Drive?.Stop();
         v.ExplodedAt = Now;
         if (v.Smoke != null) { v.Smoke.Stop(); v.Smoke.QueueFree(); v.Smoke = null; } // freed with its particles, not just stopped: nothing of the smoke outlives the vehicle
         v.Destroyed = true; // the wreck is gone until the server returns it: a live record must not bring it back or its smoke
@@ -179,17 +183,22 @@ public partial class NetClient
             var rot = new Vector3(0, s.Yaw, 0);
             var flies = FlightDef(v) != null;
             var p0 = p; var rot0 = rot;
+            var drive = flies ? null : DriveDef(v);
             if (flies) PoseFlight(v, rt, dt, ref p, ref rot); // a helicopter pitches and rolls; the one this player flies is drawn from its prediction
+            if (drive != null) PoseDrive(v, drive, rt, dt, ref p, ref rot); // an amphibious transport lies on the slope and bobs; the one this player drives is drawn from its prediction
             if (flies && _pilot != null && _pilot.CarId == v.Id) CarryRiders(p0, rot0, p, rot); // the pilot's helicopter is drawn ahead of the snapshots: its riders go with it
             v.Node.GlobalPosition = p;
             v.Node.Rotation = rot;
             if (v.Destroyed) continue;
             var flakMine = v.Flak != null && RenderFlak(v, s, rt, dt);
-            if (v.DoorGun != null && RenderDoorGun(v, rot, rt, dt)) { flakMine = true; doorGunner = true; } // the gun camera, as at the flak
+            // the gun stands on the body: on a driven vehicle that is the slope plus the body's own lean over its wheels
+            var gunRot = drive != null && _drives.TryGetValue(v.Id, out var lean) ? rot + new Vector3(lean.Pose.BodyPitch, 0, lean.Pose.BodyRoll) : rot;
+            if (v.DoorGun != null && RenderDoorGun(v, gunRot, rt, dt)) { flakMine = true; doorGunner = true; } // the gun camera, as at the flak
             if (flakMine) flakGunner = true;
             v.Smoke?.Near(Sfx.ListenerDistance(p) < 90f); // far vehicles do not smoke: particle budget
             if (flies) StepFlightFx(v, FlightDef(v)!, p, rot, dt); // rotors, their sound, the downwash
             else SfxCar(v, p);
+            if (drive != null) StepDriveFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
             if (v.Driver == _myId && _driving && _me != null)
             {
                 _carYaw = rot.Y;
@@ -197,14 +206,18 @@ public partial class NetClient
                 if (CockpitFrame(v, p, rot, dt)) cockpit = true; // the view from the seat, in the place of the chase camera
                 else
                 {
-                    if (flies) ChaseFlight(v, p, rot, dt); else _me.Chase(p, s.Yaw, Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null, dt);
+                    if (flies) ChaseFlight(v, p, rot, dt);
+                    else if (drive != null) ChaseDrive(v, drive, p, rot, dt);
+                    else _me.Chase(p, s.Yaw, Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null, dt);
                     ShowSelfInCar(v);
                 }
                 if (flies) { flown = FlightOf(v); chased = true; }
-                kmh = v.Kmh;
+                else if (drive != null && !cockpit) chased = true;
+                kmh = DriveOf(v) is { } ds ? MathF.Abs(ds.Speed) * 3.6f : v.Kmh; // the driver of a predicted vehicle reads its speed now, not a tenth of a second ago
             }
-            else if (!flakMine && _driving && _me != null && _seats is { Mine: > 0 } st && st.CarId == v.Id) { RideSeat(v, st.Mine); kmh = v.Kmh; } // another seat: first person from it, the speed shown as the driver's is
+            else if (!flakMine && _driving && _me != null && _seats is { Mine: > 0 } st && st.CarId == v.Id) { RideSeat(v, st.Mine); kmh = DriveOf(v) is { } rs ? MathF.Abs(rs.Speed) * 3.6f : v.Kmh; } // another seat: first person from it, the speed shown as the driver's is
         }
+        SeatRiders(); // the riders of driven vehicles, on their seats as the vehicles are drawn this frame
         if (!_driving) HideSelfInCar();
         if (!cockpit) EndCockpit();
         if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) _me?.EndChase(_me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
@@ -214,7 +227,7 @@ public partial class NetClient
         else if (flown is { } fr) _hud?.SetVehicleReadout(FlightReadout(fr));
         else _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
         string? prompt = null;
-        if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         if (hasCockpit && prompt != null && _gunship == null && !_controlling) prompt = WithViewHint(prompt);
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
         _hud?.SetPrompt(TurretPrompt() ?? prompt ?? CratePrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
@@ -228,13 +241,14 @@ public partial class NetClient
         if (Vehicles == null) return;
         var seats = Vehicles.Vehicles[car.Kind].Seats;
         var o = seats.Count > 0 && seats[0].Offset.Length == 3 ? seats[0].Offset : new float[3];
-        if (_selfView == null || _selfView.GetParent() != car.Node)
+        var anchor = SeatAnchor(car); // the body of a driven vehicle: the figure leans with it
+        if (_selfView == null || _selfView.GetParent() != anchor)
         {
             _selfView?.QueueFree();
             _selfView = CharacterView.Make();
             if (Appearances.TryGetValue(_myId, out var look)) _selfView.SetCamo(look, CamoData);
             _selfView.SetStance(Stance.Crouch); // seated: there is no sitting animation, the crouch squash is the closest pose
-            car.Node.AddChild(_selfView);
+            anchor.AddChild(_selfView);
         }
         _selfView.Position = new Vector3(o[0], o[1], o[2]);
     }
@@ -255,14 +269,15 @@ public partial class NetClient
     /// by that vehicle, and one that goes in and finds no way out is stopped on the far side of the hit box, not where it met it.
     /// <paramref name="dir"/> is a unit vector.
     /// </summary>
-    bool VehicleAlong(Vector3 from, Vector3 dir, float maxDistance, out CarView car, out VehicleBoxHit hit)
+    /// <param name="skip">A vehicle the ray passes through: the one the local player fires from, in an armed seat (the server leaves that hull out too).</param>
+    bool VehicleAlong(Vector3 from, Vector3 dir, float maxDistance, out CarView car, out VehicleBoxHit hit, CarView? skip = null)
     {
         car = null!; hit = default;
         if (Vehicles == null) return false;
         var best = float.MaxValue;
         foreach (var v in _cars.Values)
         {
-            if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count) continue;
+            if (v.Destroyed || v == skip || v.Kind >= Vehicles.Vehicles.Count) continue;
             var def = Vehicles.Vehicles[v.Kind];
             if (VehicleBox.Ray(NV(from), NV(dir), maxDistance, v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, def.Height) is not { } h || h.Distance >= best) continue;
             if (def.GlassRects.Count > 0 || def.OpenSideRects.Count > 0)

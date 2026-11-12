@@ -144,6 +144,14 @@ public sealed partial class CharacterView : Node3D
         ApplyPose();
     }
 
+    /// <summary>
+    /// How far up or down the held weapon points, radians (a rider aiming from a vehicle seat); 0 puts it level again, as everyone on foot holds it.
+    /// </summary>
+    public void SetAimPitch(float pitch)
+    {
+        if (_arms != null) _arms.Pitch = Mathf.Clamp(pitch, -1.1f, 1.1f);
+    }
+
     /// <summary>Swimming pose: the body leans forward (<see cref="UnderwaterFx.SwimLeanDegrees"/>) and moves at the slow walk; stands up again when not swimming.</summary>
     public void SetSwim(bool swimming)
     {
