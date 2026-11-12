@@ -265,11 +265,12 @@ public partial class EditorMode
         "Objects\tLMB place, R / Shift+R rotate, Ctrl free position, Ctrl+D duplicate, Del delete, arrows nudge\n" +
         "Region\tN new region, LMB or C adds a corner, Enter closes, then choose the colour and Enter creates\n" +
         "Region edit\tdrag a corner, [ ] pick one, arrows move it, Backspace last corner, Del delete (asks), Ctrl+Z undo\n" +
+        "Poles plan\tP plans a line: LMB a pole point, RMB a house, Backspace removes the last, Enter builds poles, cables and house connections\n" +
         "Poles\tchoose a pole and LMB places it, C connects: LMB on a pole, then on the next poles or on a house, Esc stops\n" +
         "Poles edit\tdrag a pole or its ring, R / Shift+R turn, LMB on a cable selects it, Del removes the cable or the pole with its cables\n" +
         "Commands\tCtrl+P: tools, undo, region and parcel IDs\n" +
         "View\tT top-down, F1 this sheet, F2 walk mode\n" +
-        "Esc\tgoes one level back: drawing, colour, region selection, placement, connecting, gate, cable, object, selection, sidebar";
+        "Esc\tgoes one level back: drawing, colour, region selection, placement, planning, connecting, gate, cable, object, selection, sidebar";
 
     void BuildCheatSheet(Control root)
     {
@@ -302,7 +303,7 @@ public partial class EditorMode
     {
         if (Tool == EditorTool.Region && tool != EditorTool.Region) CancelRegionGesture();
         if (tool == EditorTool.Region) { DisarmPlacement(false); if (GateArmed) CancelGate(); }
-        if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { StopConnecting(false); SelectCable(null); }
+        if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { StopConnecting(false); StopPlanning(false); SelectCable(null); }
         if (tool == EditorTool.Poles && GateArmed) CancelGate();
         Tool = tool;
         _panel.Visible = tool != EditorTool.None;

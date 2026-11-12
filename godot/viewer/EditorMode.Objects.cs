@@ -100,6 +100,7 @@ public partial class EditorMode
         if (GateArmed) CancelGate();
         DisarmPlacement(false);
         StopConnecting(false);
+        StopPlanning(false);
         PlacementAsset = asset;
         _ghostTint = null;
         _ghost = new Node3D { Name = "Ghost", Visible = false };

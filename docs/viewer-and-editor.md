@@ -293,6 +293,16 @@ Rail icon 7 (View moved to 8): utility poles and the cables between them (`docs/
 placed objects (`prim:pole_*`), so everything under Objects and undo applies to them; the page shows the poles alone as
 renders (the name is the tooltip), and adds the cables.
 
+* **Planning** (`P`): left click where poles should stand, right click (no drag) a house wall or roof to connect it;
+  a point clicked again is removed, Backspace removes the last, Esc leaves plan mode (the plan is kept in memory).
+  What will be built is drawn while planning (`PolePlanner.cs`): cyan posts with their crossarm, cyan links, red for
+  a span over 70 m or a house more than 40 m from every pole. `Build poles` (Enter) places a pole at every point,
+  strings the cables and connects the houses in one save (one undo step) and says what it skipped. Links follow the
+  roads of `roads.json`: a point is joined to the next point along the road graph, through junctions, loops left out;
+  a point over 25 m from every road joins its nearest neighbours. The pole follows from its place: three links or
+  more a junction pole, a line end or a turn over 30 degrees a twin pole, off-road or on a track or path a field
+  pole, a megaphone pole about every 150 m of plain street, else a lamp or plain pole. Planned poles are turned:
+  crossarm across the line, lamp over the road. Existing poles are ignored.
 * **Placing**: choose a pole, click on the ground; it stays armed, `R` / `Shift+R` turn the ghost. A pole's wires run
   along its own x axis (the knob of the rotation ring) and its lamp reaches to the right of that.
 * **Connecting**: `C` (or the button) turns connect mode on. The first click picks the pole to start from (the selected

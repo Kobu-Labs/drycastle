@@ -59,6 +59,7 @@ public partial class EditorMode
     {
         if (AllPoles().Count == 0) { Say("place a pole first: cables run from pole to pole, or from a pole to a house", true); return; }
         DisarmPlacement(false);
+        StopPlanning(false);
         if (GateArmed) CancelGate();
         SelectCable(null);
         Connecting = true;
@@ -265,6 +266,7 @@ public partial class EditorMode
     /// <summary>Left press with the Poles tool and nothing armed: connect mode takes the click, else an object, then a cable, then the usual.</summary>
     void PolesLeftPress(Vector2 screen, bool shift)
     {
+        if (Planning) { PlanLeftPress(screen); return; }
         var o = FlyCam.ProjectRayOrigin(screen); var d = FlyCam.ProjectRayNormal(screen);
         if (Connecting)
         {
@@ -286,6 +288,9 @@ public partial class EditorMode
         if (Tool != EditorTool.Poles || k.CtrlPressed || k.AltPressed) return false;
         switch (k.Keycode)
         {
+            case Key.P: TogglePlanning(); return true;
+            case Key.Enter or Key.KpEnter when Planning: BuildPlan(); return true;
+            case Key.Backspace when Planning: PlanUndoLast(); return true;
             case Key.C: ToggleConnecting(); return true;
             case Key.Delete when SelectedCableId != null: DeleteSelectedCable(); return true;
         }
@@ -333,6 +338,7 @@ public partial class EditorMode
 
     void UpdatePolesTool()
     {
+        UpdatePlanWorld();
         // cables follow a pole while it is dragged, and go back when the drag is cancelled or refused
         if (Dragging && _dragId != null && Map.Cables.Any(c => c.From == _dragId || c.To == _dragId))
         {
@@ -399,83 +405,80 @@ public partial class EditorMode
     // ---- the page ----
 
     readonly List<(AssetInfo info, Button btn)> _poleButtons = new();
-    Label _plNoOrigin = null!, _plPlaceStatus = null!, _plEmpty = null!, _plCount = null!, _plConnectState = null!;
-    Label _plSelInfo = null!, _plSelNone = null!, _plCableInfo = null!;
-    Button _plConnect = null!, _plDeletePole = null!, _plDeleteCable = null!, _plCycle = null!;
-    VBoxContainer _plSelBox = null!, _plSelCables = null!, _plCableBox = null!;
+    Label _plNoOrigin = null!, _plCount = null!, _plSelInfo = null!, _plCableInfo = null!, _plPlanInfo = null!;
+    Button _plConnect = null!, _plPlan = null!, _plDeletePole = null!, _plDeleteCable = null!, _plCycle = null!, _plBuild = null!, _plClear = null!;
+    VBoxContainer _plSelBox = null!, _plSelCables = null!, _plCableBox = null!, _plPlanBox = null!;
+    GridContainer _plGrid = null!;
     string _plRowsKey = "";
 
     void BuildPolesPage(VBoxContainer page)
     {
-        page.AddChild(new Label { Text = "Utility poles", ThemeTypeVariation = "Header" });
-        page.AddChild(Note("Place poles, turn each so its crossarm stands across the line, then string cables between them and on to the houses. The wires are matched left to right, so they never cross."));
-        _plNoOrigin = Note("This map has no origin_epsg5514, so poles cannot be placed. Export it again (map 0.4.0+).", "Danger");
+        _plNoOrigin = Note("This map has no origin_epsg5514: export it again (map 0.4.0+).", "Danger");
         page.AddChild(_plNoOrigin);
 
-        page.AddChild(new HSeparator());
-        page.AddChild(new Label { Text = "Place a pole", ThemeTypeVariation = "Header" });
-        _plPlaceStatus = Note("");
-        page.AddChild(_plPlaceStatus);
-        var grid = new GridContainer { Columns = 3 };
-        grid.AddThemeConstantOverride("h_separation", EditorTheme.Space / 2);
-        grid.AddThemeConstantOverride("v_separation", EditorTheme.Space / 2);
-        page.AddChild(grid);
-        foreach (var a in Map.AssetCatalog.Where(a => a.Id.StartsWith(EditsFile.PoleAssetPrefix, StringComparison.Ordinal)).OrderBy(a => a.Id, StringComparer.Ordinal))
+        var modes = new HBoxContainer();
+        _plPlan = FocusBtn("Plan  (P)", TogglePlanning, "PrimaryButton");
+        _plPlan.TooltipText = "Plan a line: left click where poles go, right click a house wall or roof to connect it, then Build poles places and connects everything along the roads";
+        _plConnect = FocusBtn("Connect  (C)", ToggleConnecting);
+        _plConnect.TooltipText = "By hand: click a pole, then the next pole or a house; each click strings a cable from the last pole";
+        foreach (var b in new[] { _plPlan, _plConnect }) { b.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; modes.AddChild(b); }
+        page.AddChild(modes);
+        _plCount = Note("");
+        page.AddChild(_plCount);
+
+        _plPlanBox = new VBoxContainer { Visible = false };
+        _plPlanInfo = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
+        _plPlanBox.AddChild(_plPlanInfo);
+        _plBuild = FocusBtn("Build poles  (Enter)", () => BuildPlan(), "PrimaryButton");
+        _plBuild.TooltipText = "Place a pole at every planned point, string the cables along the roads and connect the houses. One Ctrl+Z undoes all of it.";
+        _plClear = FocusBtn("Clear plan", ClearPlan);
+        _plPlanBox.AddChild(_plBuild);
+        _plPlanBox.AddChild(_plClear);
+        page.AddChild(_plPlanBox);
+
+        _plGrid = new GridContainer { Columns = 3 };
+        _plGrid.AddThemeConstantOverride("h_separation", EditorTheme.Space / 2);
+        _plGrid.AddThemeConstantOverride("v_separation", EditorTheme.Space / 2);
+        page.AddChild(_plGrid);
+        foreach (var a in Map.AssetCatalog.Where(a => EditsFile.IsPoleAsset(a.Id)).OrderBy(a => a.Id, StringComparer.Ordinal))
         {
             var info = a;
             var b = new Button
             {
                 // the short name shows until the render arrives (and stays if it never does)
                 Text = a.Id[EditsFile.PoleAssetPrefix.Length..].Replace('_', ' '), ToggleMode = true, FocusMode = Control.FocusModeEnum.All, ClipText = true, ExpandIcon = true,
-                AutowrapMode = TextServer.AutowrapMode.WordSmart, TooltipText = $"{a.Name}\n{a.Id}", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+                AutowrapMode = TextServer.AutowrapMode.WordSmart, TooltipText = $"{a.Name}\n{a.Id}\nClick, then click on the ground to place it", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
                 ThemeTypeVariation = "PaletteButton", CustomMinimumSize = new Vector2(0, 128), IconAlignment = HorizontalAlignment.Center,
             };
             b.Pressed += () => { if (PlacementAsset == info.Id) DisarmPlacement(); else ArmPlacement(info.Id); b.ReleaseFocus(); };
-            grid.AddChild(b);
+            _plGrid.AddChild(b);
             _poleButtons.Add((a, b));
         }
-        _plEmpty = Note("No pole assets in the asset manifest. Run make poles-manifest.", "Danger");
-        _plEmpty.Visible = _poleButtons.Count == 0;
-        page.AddChild(_plEmpty);
-
-        page.AddChild(new HSeparator());
-        page.AddChild(new Label { Text = "Cables", ThemeTypeVariation = "Header" });
-        _plCount = Note("");
-        page.AddChild(_plCount);
-        _plConnect = FocusBtn("Connect poles  (C)", ToggleConnecting, "PrimaryButton");
-        _plConnect.TooltipText = "Click a pole, then the next one: each click strings a cable from the last pole, so a street is a row of clicks. A click on a house fixes a connector on its wall or roof and strings the cable to it. Esc stops.";
-        page.AddChild(_plConnect);
-        _plConnectState = Note("");
-        page.AddChild(_plConnectState);
-
-        page.AddChild(new HSeparator());
-        page.AddChild(new Label { Text = "Selection", ThemeTypeVariation = "Header" });
-        _plSelNone = Note("Click a pole or a cable in the 3D view.");
-        page.AddChild(_plSelNone);
+        if (_poleButtons.Count == 0) page.AddChild(Note("No pole assets in the asset manifest. Run make poles-manifest.", "Danger"));
 
         _plSelBox = new VBoxContainer { Visible = false };
+        _plSelBox.AddChild(new HSeparator());
         _plSelInfo = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
         _plSelBox.AddChild(_plSelInfo);
         _plSelCables = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _plSelBox.AddChild(_plSelCables);
         _plCycle = FocusBtn("Another kind of connector", () => CycleConnector());
-        _plCycle.TooltipText = "Swap this house connector for the next kind made for the same surface (hooks with insulators, a hook with a box, roof masts)";
+        _plCycle.TooltipText = "Swap this house connector for the next kind made for the same surface";
         _plSelBox.AddChild(_plCycle);
-        _plDeletePole = FocusBtn("Delete it and its cables  (Del)", () => DeleteSelected(), "DangerButton");
+        _plDeletePole = FocusBtn("Delete  (Del)", () => DeleteSelected(), "DangerButton");
+        _plDeletePole.TooltipText = "Delete it and its cables (Ctrl+Z brings them back)";
         _plSelBox.AddChild(_plDeletePole);
-        _plSelBox.AddChild(Note("Drag it to move it, drag the ring or press R / Shift+R to turn it. Its cables follow."));
         page.AddChild(_plSelBox);
 
         _plCableBox = new VBoxContainer { Visible = false };
+        _plCableBox.AddChild(new HSeparator());
         _plCableInfo = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
         _plCableBox.AddChild(_plCableInfo);
         _plDeleteCable = FocusBtn("Remove the cable  (Del)", () => DeleteSelectedCable(), "DangerButton");
         _plCableBox.AddChild(_plDeleteCable);
         page.AddChild(_plCableBox);
-
-        page.AddChild(new HSeparator());
-        page.AddChild(Note("Esc steps back: stop connecting or placing, deselect, leave the tool. Ctrl+Z undoes every step."));
         BuildPolesWorld();
+        BuildPlanWorld();
     }
 
     void RefreshPolesPanel()
@@ -487,51 +490,47 @@ public partial class EditorMode
         var hasOrigin = Map.OriginEpsg5514 != null;
         _plNoOrigin.Visible = !hasOrigin;
         foreach (var (a, b) in _poleButtons) { b.SetPressedNoSignal(a.Id == PlacementAsset); b.Disabled = !hasOrigin; }
-        var placingPole = PlacementAsset != null && PlacementAsset.StartsWith(EditsFile.PoleAssetPrefix, StringComparison.Ordinal);
-        _plPlaceStatus.Text = placingPole
-            ? $"placing {AssetName(PlacementAsset!)}, rotation {GhostRotation:0} deg. Click to place, R / Shift+R turn it, Esc stops."
-            : "Choose a pole, then click on the ground. It stays armed, so a row of poles is a row of clicks.";
 
         var poles = AllPoles();
         var cables = AllCables();
         var houses = AllObjects().Count(o => EditsFile.IsConnectorAsset(o.Asset));
-        _plCount.Text = poles.Count == 0
-            ? "No poles placed yet. Choose one above and click on the ground."
-            : $"{poles.Count} pole{(poles.Count == 1 ? "" : "s")} placed, {cables.Count} cable{(cables.Count == 1 ? "" : "s")}, {houses} house connector{(houses == 1 ? "" : "s")}"
-              + (cables.Count(c => c.LengthM < 0) is var stale and > 0 ? $" ({stale} with a missing pole, not drawn)" : "");
-        _plConnect.Text = Connecting ? "Stop connecting  (Esc)" : "Connect poles  (C)";
+        _plCount.Text = $"{poles.Count} poles, {cables.Count} cables, {houses} house connectors"
+            + (cables.Count(c => c.LengthM < 0) is var stale and > 0 ? $" ({stale} with a missing end)" : "");
+        _plPlan.Text = Planning ? "Stop planning  (Esc)" : "Plan  (P)";
+        _plPlan.Disabled = !hasOrigin;
+        _plConnect.Text = Connecting ? "Stop  (Esc)" : "Connect  (C)";
         _plConnect.Disabled = !Connecting && poles.Count == 0;
-        _plConnectState.Text = !Connecting
-            ? (poles.Count == 0 ? "Cables run from a placed pole: place one first." : "Press C, click a pole, then the next pole or a house. Each click strings a cable from the last pole.")
-            : ConnectFrom == null ? "Connecting: click the pole to start from."
-            : $"Connecting from {ConnectFrom}: click the next pole, or a house wall or roof for a house connection. Esc stops.";
 
-        var pole = SelectedObject is { } so && EditsFile.IsWireAsset(so.Asset) ? so : null;
-        _plCycle.Visible = pole != null && EditsFile.IsConnectorAsset(pole.Asset);
-        var cable = SelectedCableId == null ? null : cables.FirstOrDefault(c => c.Id == SelectedCableId);
+        // plan mode shows the plan alone
+        _plPlanBox.Visible = Planning;
+        _plGrid.Visible = _plConnect.Visible = _plCount.Visible = !Planning;
+        if (Planning)
+        {
+            _plPlanInfo.Text = PlanSummary();
+            _plBuild.Disabled = PlanPoleCount == 0;
+            _plClear.Disabled = _plan.Count == 0;
+        }
+
+        var pole = !Planning && SelectedObject is { } so && EditsFile.IsWireAsset(so.Asset) ? so : null;
+        var cable = Planning || SelectedCableId == null ? null : cables.FirstOrDefault(c => c.Id == SelectedCableId);
         _plSelBox.Visible = pole != null;
         _plCableBox.Visible = cable != null;
-        _plSelNone.Visible = pole == null && cable == null;
-        _plSelNone.Text = SelectedObject != null ? $"{SelectedObject.Id} is not a pole or a house connector ({AssetName(SelectedObject.Asset)}). The Objects tool edits it." : "Click a pole, a house connector or a cable in the 3D view.";
+        _plCycle.Visible = pole != null && EditsFile.IsConnectorAsset(pole.Asset);
         if (cable != null)
-            _plCableInfo.Text = $"{cable.Id}\n{cable.From} to {cable.To}" + (cable.LengthM >= 0 ? $", {cable.LengthM:0.0} m" : "\none of its poles is missing: it is not drawn");
+            _plCableInfo.Text = $"{cable.Id}: {cable.From} to {cable.To}" + (cable.LengthM >= 0 ? $", {cable.LengthM:0.0} m" : " (an end is missing)");
         var key = pole == null ? "" : pole.Id + "|" + string.Join(",", cables.Where(c => c.From == pole.Id || c.To == pole.Id).Select(c => $"{c.Id}:{c.From}:{c.To}:{c.LengthM:0.0}"));
-        if (pole != null)
-            _plSelInfo.Text = $"{pole.Id}\n{AssetName(pole.Asset)}\nrotation {pole.Rotation:0.#} deg, on {pole.Parcel}";
+        if (pole != null) _plSelInfo.Text = $"{pole.Id}  {AssetName(pole.Asset)}";
         if (key == _plRowsKey) return;
         _plRowsKey = key;
         foreach (var c in _plSelCables.GetChildren()) { _plSelCables.RemoveChild(c); c.QueueFree(); }
         if (pole == null) return;
-        var mine = cables.Where(c => c.From == pole.Id || c.To == pole.Id).ToList();
-        if (mine.Count == 0) { _plSelCables.AddChild(Note(EditsFile.IsConnectorAsset(pole.Asset) ? "No cable to this connector. Press C, click a pole, then this connector." : "No cables on this pole yet. Press C and click the next pole or a house.")); return; }
-        foreach (var c in mine)
+        foreach (var c in cables.Where(c => c.From == pole.Id || c.To == pole.Id))
         {
             var id = c.Id;
-            var other = c.From == pole.Id ? c.To : c.From;
             var row = new HBoxContainer();
             row.AddChild(new Label
             {
-                Text = $"{c.Id} to {other}" + (c.LengthM >= 0 ? $"  {c.LengthM:0.0} m" : "  (missing)"), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+                Text = $"{c.Id} to {(c.From == pole.Id ? c.To : c.From)}" + (c.LengthM >= 0 ? $"  {c.LengthM:0.0} m" : "  (missing)"), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
                 MouseFilter = Control.MouseFilterEnum.Ignore, ClipText = true,
             });
             var rm = FocusBtn("Remove", () => DisconnectCable(id));
@@ -542,18 +541,20 @@ public partial class EditorMode
     }
 
     public string PolesHintText()
-        => Connecting
+        => Planning ? $"planning ({PlanPoleCount} poles, {PlanHouseCount} houses): LMB a pole point, RMB a house wall or roof, click a point again to remove it, Backspace removes the last, Enter builds, Esc stops"
+            : Connecting
             ? (ConnectFrom == null ? "connecting: LMB on the pole to start from, Esc or RMB stops"
                 : $"connecting from {ConnectFrom}: LMB on the next pole strings a cable and carries on from it, LMB on a house wall or roof connects the house, Esc or RMB stops, Ctrl+Z undo")
             : SelectedCableId != null ? $"{SelectedCableId}: Del removes the cable, Esc deselects, C connects poles"
             : SelectedObjectId != null && IsConnector(SelectedObjectId) ? "house connector: drag moves, the ring or R / Shift+R turns, Del deletes it and its cable, Esc deselects"
             : SelectedObjectId != null ? "pole: drag moves, drag the ring or R / Shift+R turns, C strings a cable from it, Del deletes it and its cables, Esc deselects"
-            : "poles: choose one to place, LMB selects a pole or a cable, C connects poles, Ctrl+P commands, Esc leaves the tool";
+            : "poles: P plans a line, C connects by hand, choose a pole to place it, LMB selects a pole or a cable, Esc leaves the tool";
 
     // for the smoke tests
     public string PolesCountText => _plCount.Text;
     public string PolesConnectText => _plConnect.Text;
-    public string PolesSelectionText => _plSelBox.Visible ? _plSelInfo.Text : _plCableBox.Visible ? _plCableInfo.Text : _plSelNone.Text;
+    public string PolesSelectionText => _plSelBox.Visible ? _plSelInfo.Text : _plCableBox.Visible ? _plCableInfo.Text : "";
+    public string PolesPlanText => _plPlanInfo.Text;
     public int PolesCableRowCount => _plSelCables.GetChildCount();
     public IReadOnlyList<string> PolePaletteIds => _poleButtons.Select(p => p.info.Id).ToList();
 }
