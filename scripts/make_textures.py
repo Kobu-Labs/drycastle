@@ -10,7 +10,7 @@ Original pixels computed by this script (no third-party image, no photo); standa
 Every texture repeats seamlessly in both directions. The style is flat: a few tones, hard edges, very
 little noise, so the textures sit next to the flat-colour map. Two kinds:
 
-* coloured   (brick_red, brick_white, stone): carry their own colours; a white tint shows them as drawn.
+* coloured   (brick_red, brick_white, stone, dirt, gravel, leaf_litter, soil_rows): carry their own colours; a white tint shows them as drawn.
 * tintable   (concrete, picket, wire): near-white, shaded only; the mesh's vertex colour is the paint.
 
 ``TEXTURES`` below is the single list: id, size in pixels, the size of one repeat in metres, and the
@@ -228,6 +228,103 @@ def wire(w, h):
     return out
 
 
+def dirt(w, h):
+    """Bare earth: two soft brown tones in big blotches, a few darker clods and pale grit. Coloured."""
+    base, dark, pale = rgb("#8a6c4c"), rgb("#6f553a"), rgb("#a68a68")
+    out = []
+    for y in range(h):
+        line = []
+        for x in range(w):
+            n = vnoise(x / 48, y / 48, w // 48 + 1, 71) * 0.65 + vnoise(x / 14, y / 14, w // 14 + 1, 73) * 0.35
+            c = base
+            if n < 0.42:
+                c = dark
+            elif n > 0.66:
+                c = pale
+            k = 0.96 + 0.08 * hash01(x // 2, y // 2, 79)
+            if hash01(x // 3, y // 3, 83) > 0.985:
+                k *= 0.78  # clods
+            line.append((*shade(c, k), 255))
+        out.append(line)
+    return out
+
+
+def gravel(w, h):
+    """Gravel: wrapped Voronoi pebbles on a jittered 14 x 14 grid, one grey or tan tone each, dark gaps."""
+    g = 14
+    cw = w / g
+    tones = [rgb(c) for c in ("#a8a49a", "#92908a", "#b9b3a3", "#7f7d78", "#a89f8a", "#c2bdb0", "#8e8a80")]
+    gap = rgb("#55524c")
+    seeds = {(i, j): ((i + 0.2 + 0.6 * hash01(i, j, 89)) * cw, (j + 0.2 + 0.6 * hash01(i, j, 97)) * cw)
+             for j in range(g) for i in range(g)}
+    out = []
+    for y in range(h):
+        line = []
+        cj = int(y // cw)
+        for x in range(w):
+            ci = int(x // cw)
+            best, second, who = 1e9, 1e9, None
+            for dj in (-1, 0, 1):
+                for di in (-1, 0, 1):
+                    i, j = ci + di, cj + dj
+                    sx, sy = seeds[(i % g, j % g)]
+                    d = math.hypot(x + 0.5 - (sx + (i - i % g) * cw), y + 0.5 - (sy + (j - j % g) * cw))
+                    if d < best:
+                        second, best, who = best, d, (i % g, j % g)
+                    elif d < second:
+                        second = d
+            edge = (second - best) / 2
+            if edge < 1.2:
+                line.append((*shade(gap, 0.9 + 0.2 * hash01(x, y, 101)), 255))
+                continue
+            tone = tones[int(hash01(*who, 103) * len(tones)) % len(tones)]
+            k = 0.88 + 0.12 * min(1.0, (edge - 1.2) / 3.0)
+            k *= 0.97 + 0.06 * hash01(x // 2, y // 2, 107)
+            line.append((*shade(tone, k), 255))
+        out.append(line)
+    return out
+
+
+def leaf_litter(w, h):
+    """Fallen leaves on earth: dark brown ground with small hard-edged rust, ochre and olive leaf flecks. Coloured."""
+    ground = rgb("#5e4a33")
+    leaves = [rgb(c) for c in ("#a2562c", "#c08a34", "#8a6a2a", "#6f7a34", "#b5683a", "#7b4a26")]
+    out = [[(*shade(ground, 0.92 + 0.16 * vnoise(x / 20, y / 20, w // 20 + 1, 109)), 255) for x in range(w)] for y in range(h)]
+    n = 150
+    for k in range(n):
+        cx, cy = hash01(k, 1, 113) * w, hash01(k, 2, 113) * h
+        a = hash01(k, 3, 113) * math.pi
+        ca, sa = math.cos(a), math.sin(a)
+        la, lb = 5 + 5 * hash01(k, 4, 113), 2 + 2 * hash01(k, 5, 113)  # half length, half width (pixels)
+        tone = leaves[int(hash01(k, 6, 113) * len(leaves)) % len(leaves)]
+        tone = shade(tone, 0.9 + 0.2 * hash01(k, 7, 113))
+        for dy in range(-12, 13):
+            for dx in range(-12, 13):
+                u, v = dx * ca + dy * sa, -dx * sa + dy * ca
+                if (u / la) ** 2 + (v / lb) ** 2 <= 1:
+                    px, py = round(cx + dx) % w, round(cy + dy) % h  # wraps: tiles
+                    out[py][px] = (*(shade(tone, 0.8) if abs(v) < 0.5 else tone), 255)
+    return out
+
+
+def soil_rows(w, h):
+    """Tilled soil: four ridges running across the tile (along u), light crest and dark furrow, clods. Coloured."""
+    crest, mid, furrow = rgb("#7d5e3f"), rgb("#6a4d33"), rgb("#4a3624")
+    out = []
+    for y in range(h):
+        line = []
+        phase = (y / h * 4) % 1.0
+        wave = 0.5 - 0.5 * math.cos(phase * 2 * math.pi)  # 0 in the furrow, 1 on the crest
+        for x in range(w):
+            c = furrow if wave < 0.25 else mid if wave < 0.65 else crest
+            k = 0.95 + 0.1 * vnoise(x / 10, y / 10, w // 10, 127)
+            if hash01(x // 3, y // 3, 131) > 0.97:
+                k *= 1.12 if wave > 0.5 else 0.85  # clods
+            line.append((*shade(c, k), 255))
+        out.append(line)
+    return out
+
+
 # id, pixels (w, h), one repeat in metres (w, h), tintable, drawing function.
 # A tile height of 0 means "as tall as the surface": the texture is stretched over the full height once.
 TEXTURES = [
@@ -237,6 +334,10 @@ TEXTURES = [
     ("concrete", (256, 256), (2.0, 2.0), True, concrete),
     ("picket", (256, 256), (0.5, 0.0), True, picket),
     ("wire", (256, 256), (0.5, 0.5), True, wire),
+    ("dirt", (256, 256), (2.0, 2.0), False, dirt),
+    ("gravel", (256, 256), (1.0, 1.0), False, gravel),
+    ("leaf_litter", (256, 256), (1.5, 1.5), False, leaf_litter),
+    ("soil_rows", (256, 256), (1.0, 1.0), False, soil_rows),
 ]
 
 

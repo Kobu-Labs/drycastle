@@ -34,6 +34,8 @@ public sealed partial class MapLoader
     public string RoadsJson { get; private set; } = "";
     /// <summary>Contents of water.json (empty when the map has no water file); parsed by the shooter (ShooterCore.Water).</summary>
     public string WaterJson { get; private set; } = "";
+    /// <summary>Contents of windows.json, the glass panes of the detailed buildings (empty when the map has none); parsed by the shooter (ShooterCore.MapGlass).</summary>
+    public string WindowsJson { get; private set; } = "";
     /// <summary>Origin of the local frame in S-JTSK (EPSG:5514) metres (east, north), from parcels.json (map 0.4.0+); null for older maps.</summary>
     public (double X, double Y)? OriginEpsg5514 { get; private set; }
     /// <summary>Rule values (fence and tree defaults) from the manifest (map 0.4.0+); null for older maps.</summary>
@@ -95,6 +97,8 @@ public sealed partial class MapLoader
         WaterJson = File.Exists(water) ? File.ReadAllText(water) : "";
         var trees = Path.Combine(mapDir, "trees.json");
         TreesJson = File.Exists(trees) ? File.ReadAllText(trees) : ""; // map 0.6.0+
+        var windows = Path.Combine(mapDir, "windows.json");
+        WindowsJson = File.Exists(windows) ? File.ReadAllText(windows) : ""; // only maps with hand-described building detail have it
         yield return 0.03f;
 
         var tPhase = Time.GetTicksMsec();
@@ -117,10 +121,12 @@ public sealed partial class MapLoader
             && files.TryGetProperty("objects", out var objFile) && objFile.GetString() is { } of)
             foreach (var f in LoadObjectSteps(Path.Combine(mapDir, of))) yield return 0.92f + 0.05f * f;
         var tObjects = Time.GetTicksMsec();
-        yield return 0.97f;
+        foreach (var f in BuildClutterSteps(mapDir, manifest.RootElement)) yield return 0.97f + 0.02f * f;
+        var tClutter = Time.GetTicksMsec();
+        yield return 0.99f;
         if (BuildBoundary) BuildTerrainBoundary();
         Stats.LoadSeconds = (Time.GetTicksMsec() - t0) / 1000.0;
-        GD.Print($"map load phases: chunks {(tChunks - tPhase) / 1000.0:F1}s, trees {(tTrees - tChunks) / 1000.0:F1}s, objects {(tObjects - tTrees) / 1000.0:F1}s, boundary {(Time.GetTicksMsec() - tObjects) / 1000.0:F1}s");
+        GD.Print($"map load phases: chunks {(tChunks - tPhase) / 1000.0:F1}s, trees {(tTrees - tChunks) / 1000.0:F1}s, objects {(tObjects - tTrees) / 1000.0:F1}s, clutter {(tClutter - tObjects) / 1000.0:F1}s, boundary {(Time.GetTicksMsec() - tClutter) / 1000.0:F1}s");
         yield return 1f;
     }
 
@@ -338,18 +344,18 @@ public sealed partial class MapLoader
     static StandardMaterial3D? _flatMaterial;
 
     /// <summary>Flat colour look: vertex colours drive albedo, fully rough, no specular.</summary>
-    static void FixMaterials(MeshInstance3D mi)
+    static void FixMaterials(MeshInstance3D mi) => mi.MaterialOverride = FlatMaterial();
+
+    /// <summary>The shared flat colour material (see <see cref="_flatMaterial"/>).</summary>
+    static StandardMaterial3D FlatMaterial() => _flatMaterial ??= new StandardMaterial3D
     {
-        mi.MaterialOverride = _flatMaterial ??= new StandardMaterial3D
-        {
-            VertexColorUseAsAlbedo = true,
-            VertexColorIsSrgb = true,
-            AlbedoColor = Colors.White,
-            Roughness = 1f,
-            Metallic = 0f,
-            MetallicSpecular = 0f,
-        };
-    }
+        VertexColorUseAsAlbedo = true,
+        VertexColorIsSrgb = true,
+        AlbedoColor = Colors.White,
+        Roughness = 1f,
+        Metallic = 0f,
+        MetallicSpecular = 0f,
+    };
 
     /// <summary>Static trimesh collider under the (hidden) collision mesh. Dynamic ones (parcel swaps) are not registered.</summary>
     CollisionShape3D? BuildCollider(MeshInstance3D mi, string name, bool dynamic = false)

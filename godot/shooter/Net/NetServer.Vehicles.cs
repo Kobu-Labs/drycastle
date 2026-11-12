@@ -14,7 +14,7 @@ public partial class NetServer
     /// <summary>Vehicle type of the car smoke arena (vehicles.json id).</summary>
     public string SmokeKind = "car";
     readonly List<ServerCar> _cars = new();
-    const float EnterRange = 3f, RunOverCooldown = 0.8f;
+    const float RunOverCooldown = 0.8f;
     int _destroyedReturns, _vehicleHits, _vehicleBlasts, _blastHits, _chainHits;
     int _seatSwitches;
     int _carEnters, _carExits, _runOvers, _runOverKills, _carReturns, _carResets;
@@ -160,7 +160,7 @@ public partial class NetServer
                 FlightWater = Water, FlightBounds = MapFlightBounds,
             };
             World.AddChild(car);
-            foreach (var cl in _clients.Values.Where(x => x.Joined)) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); }
+            foreach (var cl in _byId.Values) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); }
             _cars.Add(car);
         }
         GD.Print($"server: {_cars.Count} vehicles spawned ({string.Join(", ", colours.Select(k => $"{Vehicles!.Vehicles[k.Key].Id} x{k.Value.Count} colours {string.Join(",", k.Value)}"))})");
@@ -169,23 +169,26 @@ public partial class NetServer
     void ResetCars()
     {
         foreach (var cl in _clients.Values) cl.Car = null;
-        foreach (var car in _cars) { car.Seat.Clear(); car.Reset(); }
+        foreach (var car in _cars) { car.Seat.Clear(); car.Reset(); RestoreVehicleGlass(car); }
+        RestoreGlassForRound();
         _carResets += _cars.Count > 0 ? 1 : 0;
     }
 
     bool TryEnterCar(Client c)
     {
-        ServerCar? best = null; var bd = EnterRange;
+        ServerCar? best = null; var bd = float.MaxValue;
         var p = c.Body.GlobalPosition;
         foreach (var car in _cars)
         {
-            if (car.Destroyed || !car.Seat.HasFree || Mathf.Abs(car.GlobalPosition.Y - p.Y) > 2.5f) continue;
-            var d = new Vector2(car.GlobalPosition.X - p.X, car.GlobalPosition.Z - p.Z).Length();
+            if (car.Destroyed || !car.Seat.HasFree) continue;
+            // within the vehicle's enter radius of its footprint (#217), not of its centre
+            if (!VehicleReach.CanEnter(N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(p), Vehicles!.EnterRadiusOf(car.Def))) continue;
+            var d = VehicleReach.DistanceToFootprint(N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(p));
             if (d <= bd) { best = car; bd = d; }
         }
         if (best == null) return false;
         // the free seat nearest to the player (a roof gunner seat is a little further out than the car's centre)
-        var seat = best.Seat.NearestFreeSeat(best.Def, N(best.GlobalPosition), best.State.Yaw, N(p), EnterRange + 1.5f);
+        var seat = best.Seat.NearestFreeSeat(best.Def, N(best.GlobalPosition), best.State.Yaw, N(p), float.MaxValue); // any free seat of a vehicle in reach: the nearest one
         var wasEmpty = !best.Seat.Occupied;
         if (seat < 0 || !best.Seat.TryEnter(c.Id, seat)) return false;
         c.Car = best; c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.Body.InVehicle = true; c.FlakSent = null;
@@ -291,7 +294,8 @@ public partial class NetServer
         var yaw = Quant.Yaw(i.Yaw); var pitch = Quant.Pitch(i.Pitch);
         var d = HitMath.SpreadDirection(yaw, RecoilState.ClampPitch(pitch), def.SpreadDegrees, _rng);
         var dir = new Vector3(d.X, d.Y, d.Z);
-        var wall = WorldHit(eye, dir, def.Range, out var shotCar);
+        var crossed = new List<GlassCross>();
+        var wall = BulletHit(eye, dir, def.Range, out var shotCar, crossed);
         var targets = LiveTargets().Where(t => car.Seat.SeatOf(t.Id) < 0).ToList();
         var hit = HitMath.Raycast(N(eye), d, def.Range, wall, targets, c.Id);
         var end = eye + dir * (hit?.Distance ?? Math.Min(wall, def.Range));
@@ -299,6 +303,8 @@ public partial class NetServer
         if (hit is { } h) Deal(c.Id, SpecialWeapons.VehicleGun, h.Id, def.Damage, false, false);
         else if (shotCar != null && shotCar != car && Vehicles != null && wall <= def.Range)
             DamageVehicle(shotCar, def.Damage * Vehicles.BulletDamageMultiplier, c.Id, SpecialWeapons.VehicleGun, 0);
+        if (hit == null && shotCar != car && wall <= def.Range) ShotGlass(shotCar, eye, dir, wall, def.Damage);
+        DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, _ => def.Damage);
     }
 
     /// <summary>Exit position: right, left, behind, in front of the car (first with ground and room for the capsule), else above the roof.</summary>
@@ -342,7 +348,7 @@ public partial class NetServer
             var def = car.Def;
             if (car.Destroyed)
             {
-                if (_elapsed >= car.ReturnAt) { car.Reset(); _destroyedReturns++; if (BlastSmoke && _destroyedReturns >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5; GD.Print($"server: {def.Id} {car.Id} returned after its destruction"); }
+                if (_elapsed >= car.ReturnAt) { car.Reset(); RestoreVehicleGlass(car); _destroyedReturns++; if (BlastSmoke && _destroyedReturns >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5; GD.Print($"server: {def.Id} {car.Id} returned after its destruction"); }
                 continue;
             }
             // seats of players who have gone (disconnect, death) are freed; the driver is seat 0 and only the driver steers
@@ -365,7 +371,7 @@ public partial class NetServer
                 o.Body.Teleport(at);
                 _match.SetPosition(o.Id, N(at));
             }
-            if (driver != null && car.Def.RunOver && !car.Afloat) RunOverCheck(car, driver); // road kill: on land only
+            if (driver != null && car.Def.RunOver && !car.Afloat && (!car.Flies || car.Flight.Agl <= car.Def.Flight!.RunOverAgl)) RunOverCheck(car, driver); // road kill: on land only; a helicopter only skimming the ground
             if (!occupied && car.Abandon.Update(false, car.AtOrigin, dt, Vehicles.AbandonReturnTime))
             {
                 car.Reset(false); _carReturns++;
@@ -424,6 +430,7 @@ public partial class NetServer
         _vehicleBlasts++;
         BroadcastEvent(EventKind.VehicleExplosion, WeaponCodec.Encode(new VehicleExplosionMsg(car.Id, attacker, N(at), e.Splash.Radius)));
         BroadcastImpact(N(car.GlobalPosition), ImpactSize.Plume); // the blast throws up dirt or road where the car sits (ticket #154)
+        BlastGlass(at, e.Splash.Radius);
         GD.Print($"server: {car.Def.Id} {car.Id} exploded at ({at.X:F1},{at.Y:F1},{at.Z:F1}), credited to #{attacker}");
 
         foreach (var o in Occupants(car))

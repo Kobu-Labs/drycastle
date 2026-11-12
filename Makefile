@@ -1,7 +1,7 @@
 # AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
 AREA ?= slice
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props export parcel-run region-run preview poles-preview poles-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props detail export parcel-run region-run preview poles-preview poles-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -30,6 +30,11 @@ roads:
 props:
 	cd pipeline && uv run python -m suchohrad_pipeline props --area $(AREA)
 
+# Ground detail: draped patches (dirt, gravel, leaf litter, beds, furrows, verges) and clutter instances (tufts, pebbles, ...)
+# for every parcel; writes data/work/detail*.{json,npy}. Needs props. See docs/pipeline.md "Detail".
+detail:
+	cd pipeline && uv run python -m suchohrad_pipeline detail --area $(AREA)
+
 export:
 	cd pipeline && uv run python -m suchohrad_pipeline export --area $(AREA)
 
@@ -57,7 +62,7 @@ preview:
 poles-preview:
 	cd pipeline && uv run python -m suchohrad_pipeline.poles_preview $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb,)
 
-# Rewrites the prim:pole_* entries of assets/manifest.json after the pole variants changed.
+# Rewrites the prim:pole_* and prim:connector_* entries of assets/manifest.json after the poles or connectors changed.
 poles-manifest:
 	cd pipeline && uv run python -m suchohrad_pipeline.poles_preview --sync-manifest
 
@@ -168,9 +173,13 @@ TARGETS ?= 24
 SANDBOX ?= 1
 SANDBOX_ARG = $(if $(filter 1 true,$(SANDBOX)),--allow-sandbox,)
 
+# BOTS=N adds N bots while a player is in the match (#214); CLUSTER=1 keeps one dense cluster of spawns so they are met (they do not walk yet).
+BOTS ?= 0
+BOTS_ARG = $(if $(filter-out 0,$(BOTS)),--bots $(BOTS),) $(if $(filter 1 true,$(CLUSTER)),--cluster-spawns,)
+
 shooter-server:
 	dotnet build godot/shooter/shooter.csproj
-	godot --headless --path godot/shooter -- --role server --targets $(TARGETS) $(if $(SMOKE),--smoke,) $(UNLOCK_ARG) $(SANDBOX_ARG) $(SHOOTER_MAP)
+	godot --headless --path godot/shooter -- --role server --targets $(TARGETS) $(if $(SMOKE),--smoke,) $(UNLOCK_ARG) $(SANDBOX_ARG) $(BOTS_ARG) $(SHOOTER_MAP)
 
 shooter-client:
 	dotnet build godot/shooter/shooter.csproj
@@ -218,6 +227,13 @@ shooter-bike-smoke:
 shooter-loss-test:
 	dotnet build godot/shooter/shooter.csproj
 	python3 godot/shooter/run_loss_test.py $(if $(MAP),--map $(abspath $(MAP)),) $(if $(SCENARIOS),--scenarios $(SCENARIOS),) $(if $(BOTS),--bots $(BOTS),) $(if $(MEASURE),--measure $(MEASURE),)
+
+# Bot navigation spike (#214): headless collision-only map load, navmesh bake from the colliders, then bake time, cache size and
+# path queries (spawn pairs, yards behind fences). No server, no clients. NAV="--nav-cell 0.5 --nav-split 2 --nav-threads 8" for
+# other settings. Results in out/navspike/<timestamp>/report.json.
+shooter-nav-spike:
+	dotnet build godot/shooter/shooter.csproj
+	godot --headless --path godot/shooter -- --role server --nav-spike --nav-out $(abspath out/navspike) $(NAV) $(SHOOTER_MAP)
 
 shooter-test:
 	dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj

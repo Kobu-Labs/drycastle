@@ -63,6 +63,8 @@ public sealed class MatchPlayer
     public byte Team;
     /// <summary>Sandbox mode (#156): godmode, and no kills, score or round end. Ranked after everyone else.</summary>
     public bool Sandbox;
+    /// <summary>A sandbox player who chose to take damage (the panel's switch): hurt and killed like anyone, still unscored. Meaningless without <see cref="Sandbox"/>.</summary>
+    public bool Vulnerable;
     public PlayerLife Life;
     public float Health;
     public Vector3 Position;
@@ -170,6 +172,14 @@ public sealed class MatchSim
         return true;
     }
 
+    /// <summary>Sandbox: whether this player takes damage. Off (the default) is godmode. False for anyone who is not a sandbox player.</summary>
+    public bool SetVulnerable(ushort id, bool on)
+    {
+        if (!_players.TryGetValue(id, out var p) || !p.Sandbox) return false;
+        p.Vulnerable = on;
+        return true;
+    }
+
     public void SetPosition(ushort id, Vector3 pos) { if (_players.TryGetValue(id, out var p)) p.Position = pos; }
 
     public void AddPlayer(ushort id, string name, bool sandbox = false)
@@ -207,7 +217,7 @@ public sealed class MatchSim
         if (TargetDummies.IsDummyId(victim)) return ApplyTargetDamage(victim, attacker, weapon, amount, cause);
         if (Phase != MatchPhase.Running || amount <= 0) return DamageResult.Ignored;
         if (!_players.TryGetValue(victim, out var v) || v.Life != PlayerLife.Alive) return DamageResult.Ignored;
-        if (v.Sandbox) return DamageResult.Ignored; // godmode (#156): nothing hurts a sandbox player
+        if (v.Sandbox && !v.Vulnerable) return DamageResult.Ignored; // godmode (#156): nothing hurts a sandbox player, unless they switched damage on
         if (!_cfg.FriendlyFire && AreFriends(victim, attacker)) return DamageResult.Ignored; // teammates cannot hurt each other (self damage is not friendly fire)
         if (!ignoreProtection && IsProtected(victim)) return DamageResult.Ignored;
         v.Health -= amount;

@@ -27,7 +27,7 @@ from suchohrad_pipeline.buildings import footprint_polygon
 from suchohrad_pipeline.config import DEFAULT_AREA, area_paths
 from suchohrad_pipeline.edits import (
     DEFAULT_EDITS,
-    POLE_ASSET_PREFIX,
+    WIRE_ASSET_PREFIXES,
     Edits,
     EditsError,
     FenceSpec,
@@ -519,7 +519,7 @@ class EditPlan:
     groups: dict[str, list[str]] = field(default_factory=dict)  # valid member parcels only
     tree_overrides: dict[str, dict] = field(default_factory=dict)
     objects: list[dict] = field(default_factory=list)  # objects.json entries, sorted by id
-    cables: list[dict] = field(default_factory=list)  # {"id", "from", "to"} between placed poles, sorted by id
+    cables: list[dict] = field(default_factory=list)  # {"id", "from", "to"} between placed poles and connectors, by id
     object_owner: dict[str, str] = field(default_factory=dict)  # object id -> parcel listing it
     warnings: list[str] = field(default_factory=list)
     water_regions: list[tuple[Polygon, float]] = field(default_factory=list)  # (outline in local metres, water_y)
@@ -539,7 +539,7 @@ def plan_edits(
     Entries for parcels that no longer exist (parcel entries, group members, objects) are skipped
     with a warning. An object outside every parcel, or outside the parcel it is listed under, is
     still placed, with a warning; its ``parcel`` is the parcel containing it, or null. A cable is
-    kept when both its ends are placed utility poles, else skipped with a warning.
+    kept when both its ends are placed utility poles or house connectors, else skipped with a warning.
     """
     plan = EditPlan()
     polys = {p["id"]: shape(p["polygon"]) for p in parcels}
@@ -600,9 +600,9 @@ def plan_edits(
     for cid in sorted(edits.cables):
         cable = edits.cables[cid]
         bad = [
-            f"{end} is not placed" if end not in assets else f"{end} is not a utility pole"
+            f"{end} is not placed" if end not in assets else f"{end} is not a utility pole or a house connector"
             for end in (cable["from"], cable["to"])
-            if not assets.get(end, "").startswith(POLE_ASSET_PREFIX)
+            if not assets.get(end, "").startswith(WIRE_ASSET_PREFIXES)
         ]
         if bad:
             plan.warnings.append(f"cables.{cid}: {'; '.join(bad)}; cable skipped")

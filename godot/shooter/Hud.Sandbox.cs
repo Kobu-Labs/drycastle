@@ -4,13 +4,14 @@ using Suchohrad.ShooterCore;
 namespace Suchohrad.Shooter;
 
 /// <summary>
-/// The sandbox badge in the HUD corner (#156): "SANDBOX" in the warning colour with the held killstreak under it. It is text
+/// The sandbox badge in the HUD corner (#156): "SANDBOX" in the warning colour with the held killstreak under it; the badge
+/// says so when the player has switched damage on, so godmode is never assumed from the badge alone. It is text
 /// (never colour alone) and ignores the mouse. The state is kept until the labels exist, so the client may set it early.
 /// </summary>
 public partial class Hud
 {
     Label _sandboxBadge = null!, _sandboxHeld = null!;
-    bool _sandboxOn;
+    bool _sandboxOn, _sandboxDamage;
     string _sandboxHeldId = "";
 
     void BuildSandbox()
@@ -25,10 +26,11 @@ public partial class Hud
         ApplySandbox();
     }
 
-    /// <summary>Shows or hides the badge; <paramref name="held"/> is the held killstreak id ("" = none).</summary>
-    public void SetSandbox(bool on, string held)
+    /// <summary>Shows or hides the badge; <paramref name="held"/> is the held killstreak id ("" = none); <paramref name="takesDamage"/> is the panel's damage switch.</summary>
+    public void SetSandbox(bool on, string held, bool takesDamage = false)
     {
         _sandboxOn = on;
+        _sandboxDamage = takesDamage;
         _sandboxHeldId = held;
         if (_sandboxBadge != null) ApplySandbox();
     }
@@ -36,6 +38,7 @@ public partial class Hud
     void ApplySandbox()
     {
         _sandboxBadge.Visible = _sandboxOn;
+        _sandboxBadge.Text = Strings.T(_sandboxDamage ? "sandbox.badge.damage" : "sandbox.badge");
         _sandboxHeld.Visible = _sandboxOn;
         _sandboxHeld.Text = _sandboxHeldId == ""
             ? Strings.T("sandbox.held.none")

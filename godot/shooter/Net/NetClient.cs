@@ -147,6 +147,7 @@ public partial class NetClient : Node
         _rockets.Clear();
         foreach (var v in _cars.Values) if (GodotObject.IsInstanceValid(v.Node)) v.Node.QueueFree();
         _cars.Clear(); _flights.Clear(); _pilot = null; // the probe is under Owned and goes with it
+        GlassTeardown();
         if (_me != null && GodotObject.IsInstanceValid(_me)) _me.QueueFree();
         _me = null;
         FreeOwned();
@@ -320,7 +321,7 @@ public partial class NetClient : Node
                 GD.Print($"client {PlayerName}: kill feed: {Match.NameOf(k.Killer)} -> {Match.NameOf(k.Victim)} (weapon {k.Weapon})");
                 break;
             case EventKind.Spawn:
-                var sp = Match.LastSpawn.Values.Last();
+                var sp = Match.LatestSpawn!; // the spawn of this event; the per-player table's last entry is another player's
                 GD.Print($"client {PlayerName}: spawn #{sp.Id} protected {sp.Protection:F1}s");
                 if (sp.Id == _myId && _me != null)
                 {
@@ -332,7 +333,7 @@ public partial class NetClient : Node
                 }
                 break;
             case EventKind.Death:
-                var d = Match.LastDeath.Values.Last();
+                var d = Match.LatestDeath!;
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 SfxDeath(d);
                 if (d.Victim == _myId) { Dead = true; _deaths++; _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay); _hud?.SetProtection(0); OnStreakDeath(); }
@@ -350,7 +351,7 @@ public partial class NetClient : Node
         LossOnSnapshot(h);
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         DayNightCycle.Current?.SetServerTick(h.Tick);
-        foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); _flights.Remove(id); } }
+        foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); cg.Solid?.QueueFree(); _flights.Remove(id); } }
         foreach (var (id, rec) in _dec.States)
         {
             if (id == _myId) { OnSelf(rec, h.Ack); continue; }
@@ -703,6 +704,13 @@ public partial class NetClient : Node
     void ApplyScope()
     {
         if (_me == null || _gunship != null) return; // at a turret the zoom is the gunship's
+        if (_driving || _controlling || _myState == EntityState.InVehicle)
+        {
+            // seated (roof/door gun, turret, any seat) or steering a missile: the held weapon's scope and iron-sight zoom stay off (#241)
+            _me.ZoomFov = 0f; _me.IronSightZoom = false;
+            if (_viewmodel != null) _viewmodel.Aiming = false;
+            return;
+        }
         var slot = Ammo?.Slot ?? _wantSlot;
         var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
         var on = zoom > 0 && !Dead && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
@@ -710,8 +718,9 @@ public partial class NetClient : Node
         // iron sights: any non-scoped, non-melee weapon while zoom is held
         var kind = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Kind : WeaponKind.Melee;
         if (_viewmodel != null)
-            _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && !_driving && _myState != EntityState.InVehicle
+            _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead
                 && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
+        _me.IronSightZoom = _viewmodel is { Aiming: true };
     }
 
     /// <summary>At a turret the slot sent is the key held (1-5, 0 none), not the body's hotbar weapon: the turret reads it as its weapon number (the AC-130's 1-3).</summary>
@@ -734,6 +743,7 @@ public partial class NetClient : Node
     {
         if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
         if (HandleSeatInput(e)) return; // a number key while seated takes that seat
+        if (HandleViewInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
         if (Bot || Weapons == null || Dead || ChooserOpen || Input.MouseMode != Input.MouseModeEnum.Captured) return;
         if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {
@@ -805,6 +815,12 @@ public partial class NetClient : Node
                 break;
             case EventKind.HelperWarning when HelperWarningCodec.Decode(payload) is { } hw:
                 OnHelperWarning(hw);
+                break;
+            case EventKind.GlassPane when GlassCodec.DecodePane(payload) is { } gp:
+                OnGlassPane(gp);
+                break;
+            case EventKind.GlassSync when GlassCodec.DecodeSync(payload) is { } gsync:
+                OnGlassSync(gsync);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 if (KeepEventLogs) _hitLog.Add((Now, h));

@@ -20,6 +20,8 @@ public class VehiclesFile : IVersioned
     public float RocketDamageMultiplier { get; set; } = 1.5f;
     /// <summary>Mass the run-over numbers above are tuned for (the car). A type with <see cref="VehicleDef.RunOverMass"/> scales its run-over damage by its mass over this.</summary>
     public float RunOverReferenceMass { get; set; } = 1200;
+    /// <summary>How far from a vehicle's footprint (metres, measured to its nearest edge, not its centre) an on-foot player can still get in. A type's <see cref="VehicleDef.EnterRadius"/> overrides it.</summary>
+    public float EnterRadius { get; set; } = 1f;
     public VehicleExplosionDef Explosion { get; set; } = new();
     public List<VehicleDef> Vehicles { get; set; } = new();
 
@@ -47,6 +49,14 @@ public class VehiclesFile : IVersioned
                 if (l.Head.Concat(l.Tail).Any(p => p is null || p.Length != 3)) throw new DataFileException($"vehicles.json: {v.Id}: each lamp is [x, y, z]");
                 if (l.BeamRange <= 0 || l.BeamAngle <= 0 || l.BeamAngle >= 89) throw new DataFileException($"vehicles.json: {v.Id}: beam_range must be positive, beam_angle 1..88 degrees");
             }
+            if (v.Glass.Count > 24) throw new DataFileException($"vehicles.json: {v.Id}: at most 24 glass panes");
+            foreach (var pane in v.Glass)
+            {
+                if (pane is null || pane.Centre.Length != 3 || pane.Normal.Length != 3 || pane.Size.Length != 2) throw new DataFileException($"vehicles.json: {v.Id}: a glass pane needs centre [x, y, z], normal [x, y, z] and size [width, height]");
+                if (pane.Normal.Sum(x => x * x) < 1e-6f || !(pane.Size[0] > 0) || !(pane.Size[1] > 0) || pane.Hp is <= 0) throw new DataFileException($"vehicles.json: {v.Id}: glass pane {pane.Id}: the normal must not be zero, size and hp must be positive");
+                if (pane.OutlineProblem() is { } problem) throw new DataFileException($"vehicles.json: {v.Id}: glass pane {pane.Id}: {problem}");
+            }
+            if (v.Glass.Select(g => g.Id).Distinct().Count() != v.Glass.Count) throw new DataFileException($"vehicles.json: {v.Id}: glass pane ids must differ");
             if (v.Tint is { Length: not 3 } || v.Tint != null && v.Paints.Count > 0) throw new DataFileException($"vehicles.json: {v.Id}: tint is [r, g, b] and excludes paints");
             if (v.Seats.Count is < 1 or > 4 || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..4 and the first is the driver");
             foreach (var seat in v.Seats)
@@ -79,7 +89,9 @@ public class VehiclesFile : IVersioned
                 if (fk.MinElevationDeg < -10 || fk.MaxElevationDeg > 89 || fk.MinElevationDeg >= fk.MaxElevationDeg)
                     throw new DataFileException($"vehicles.json: {v.Id}: flak elevation is min_elevation_deg (at least -10) below max_elevation_deg (at most 89)");
             }
+            if (v.ChaseDistance is <= 0 || v.ChaseHeight is < 0) throw new DataFileException($"vehicles.json: {v.Id}: chase_distance must be positive and chase_height not negative");
             if (v.Height <= 0 || v.HalfWidth <= 0 || v.HalfLength <= 0) throw new DataFileException($"vehicles.json: {v.Id}: height, half_width and half_length must be positive");
+            if (v.EnterRadius is < 0 || f.EnterRadius < 0) throw new DataFileException($"vehicles.json: {v.Id}: enter_radius must not be negative");
             if (v.RunOverMass is { } rm && rm <= 0) throw new DataFileException($"vehicles.json: {v.Id}: run_over_mass must be positive");
             if (!VehicleMedium.All.Contains(v.Medium)) throw new DataFileException($"vehicles.json: {v.Id}: medium {v.Medium} is not land, amphibious, boat or air");
             if (v.CanFloat && (v.WaterTopSpeed <= 0 || v.WaterAcceleration <= 0 || v.LandDecel <= 0 || v.PlaningSpeed < 0))
@@ -109,6 +121,8 @@ public class VehiclesFile : IVersioned
     }
 
     /// <summary>Run-over damage multiplier of a type: its run_over_mass over the reference mass, or 1 when it has none (the v1 numbers).</summary>
+    public float EnterRadiusOf(VehicleDef v) => v.EnterRadius ?? EnterRadius;
+
     public float RunOverScale(VehicleDef v) => v.RunOverMass is { } m ? m / RunOverReferenceMass : 1f;
 }
 
@@ -269,6 +283,8 @@ public class VehicleFlightDef
     /// <summary>Below this height over the ground the descent is slowed (the cushion), down to touchdown_speed at the ground, m and m/s.</summary>
     public float CushionHeight { get; set; } = 7;
     public float TouchdownSpeed { get; set; } = 1.5f;
+    /// <summary>A flying vehicle with run_over runs people over only while it is no higher than this over the ground, m (skids and fuselage skimming them).</summary>
+    public float RunOverAgl { get; set; } = 1.5f;
     /// <summary>Deceleration of the skids sliding on the ground, m/s².</summary>
     public float GroundFriction { get; set; } = 10;
     /// <summary>Highest it climbs above the ground under it, metres; the climb fades out over the last ceiling_fade metres.</summary>
@@ -332,6 +348,49 @@ public class FlightCameraDef
 
     public string? Validate() =>
         Distance <= 0 || Follow <= 0 || MaxLag < 0 || Tilt is < 0 or > 1 || FovBoostDeg is < 0 or > 40 ? "camera: distance and follow positive, tilt 0..1, fov_boost_deg 0..40" : null;
+}
+
+/// <summary>
+/// One glass pane of a vehicle type (vehicles.json "glass", ADR 0007, superseded in part by ADR 0008): a flat pane in the vehicle frame
+/// (forward -Z, origin on the ground, as the hood), the server tests shots against it and the client draws the crack on it.
+/// <see cref="Size"/> is [width, height] of its bounding rectangle: the width runs horizontally, the height up the pane (its slant length).
+/// <see cref="Outline"/> is its real shape inside that rectangle. A generated model (bus, flak truck, helicopter) writes the list with its
+/// script and has the pane as a node <c>glass_N</c>, N being the pane's place in the list.
+/// </summary>
+public class VehicleGlassDef
+{
+    public string Id { get; set; } = "";
+    public float[] Centre { get; set; } = { 0, 0, 0 };
+    /// <summary>The outward direction of the pane (any length).</summary>
+    public float[] Normal { get; set; } = { 0, 0, -1 };
+    public float[] Size { get; set; } = { 1, 1 };
+    /// <summary>
+    /// The pane's shape: a convex polygon of 3 to 12 points [[u, v], ...] in metres from <see cref="Centre"/>, u along the pane's width, v up it,
+    /// counter-clockwise seen from outside, inside the <see cref="Size"/> box. Null: the whole rectangle.
+    /// </summary>
+    public float[][]? Outline { get; set; }
+    /// <summary>Hit points of this pane; null takes glass.json vehicle_pane_hp.</summary>
+    public float? Hp { get; set; }
+
+    public GlassPaneRect Rect() => GlassPaneRect.Make(new System.Numerics.Vector3(Centre[0], Centre[1], Centre[2]), new System.Numerics.Vector3(Normal[0], Normal[1], Normal[2]), Size[0], Size[1],
+        Outline?.Select(p => new System.Numerics.Vector2(p[0], p[1])).ToList());
+
+    /// <summary>Null when the outline is fine (or there is none), else what is wrong with it.</summary>
+    public string? OutlineProblem()
+    {
+        if (Outline == null) return null;
+        if (Outline.Length is < 3 or > 12 || Outline.Any(p => p is null || p.Length != 2 || !float.IsFinite(p[0]) || !float.IsFinite(p[1]))) return "an outline is 3 to 12 points [u, v]";
+        const float eps = 0.002f;
+        if (Outline.Any(p => MathF.Abs(p[0]) > Size[0] / 2 + eps || MathF.Abs(p[1]) > Size[1] / 2 + eps)) return "the outline must lie inside the size box";
+        float area = 0;
+        for (var i = 0; i < Outline.Length; i++)
+        {
+            float[] a = Outline[i], b = Outline[(i + 1) % Outline.Length], c = Outline[(i + 2) % Outline.Length];
+            area += a[0] * b[1] - b[0] * a[1];
+            if ((b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) < -1e-4f) return "the outline must be convex and counter-clockwise";
+        }
+        return area > 1e-4f ? null : "the outline must be counter-clockwise and have an area";
+    }
 }
 
 /// <summary>
@@ -412,11 +471,17 @@ public class VehicleDef
     /// <summary>Half extents of the footprint (server collision box and run-over test), metres.</summary>
     public float HalfWidth { get; set; } = 1.1f;
     public float HalfLength { get; set; } = 2.15f;
+    /// <summary>Chase camera distance behind the vehicle, metres (#218). Null: derived from the length, see <see cref="ChaseCamera.Wanted"/>.</summary>
+    public float? ChaseDistance { get; set; }
+    /// <summary>Chase camera height above the vehicle's origin, metres. Null: derived from the length.</summary>
+    public float? ChaseHeight { get; set; }
     /// <summary>
     /// Height of the hit volume, metres from the ground: the top of the visible body (roof, cabin, rider's head). A bullet that passes over
     /// it misses; one that enters the footprint below it hits. See <see cref="VehicleBox"/>.
     /// </summary>
     public float Height { get; set; } = 1.2f;
+    /// <summary>Override of the file's enter_radius for this type (metres from the footprint). Null: the file's.</summary>
+    public float? EnterRadius { get; set; }
     /// <summary>Seats in order; seat 0 is the driver. Default: one driver seat.</summary>
     public List<VehicleSeatDef> Seats { get; set; } = new() { new VehicleSeatDef { Role = "driver" } };
     /// <summary>The gun a gunner seat fires. Null: no gun.</summary>
@@ -465,6 +530,11 @@ public class VehicleDef
     public float ModelYawDeg { get; set; }
     /// <summary>Headlights and tail lights (vehicles.json "lights"); null for a type without lamps.</summary>
     public VehicleLights? Lights { get; set; }
+    /// <summary>The glass panes of this type (vehicles.json "glass"), at most 24; empty for a type without glass. A pane's place in the list is its index on the wire.</summary>
+    public List<VehicleGlassDef> Glass { get; set; } = new();
+    List<GlassPaneRect>? _glassRects;
+    /// <summary>The panes as rectangles in the vehicle's frame, in the order of <see cref="Glass"/> (built once).</summary>
+    public IReadOnlyList<GlassPaneRect> GlassRects => _glassRects ??= Glass.Select(g => g.Rect()).ToList();
     /// <summary>Offset applied to the model node before scale, as [x, y, z].</summary>
     public float[] ModelOffset { get; set; } = { 0, 0, 0 };
     /// <summary>The model's own material that takes the colour variants, and the model's own materials whose colours the variants are (index = colour byte).</summary>

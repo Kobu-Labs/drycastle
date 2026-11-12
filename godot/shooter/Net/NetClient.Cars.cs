@@ -37,6 +37,8 @@ public partial class NetClient
         /// <summary>Headlights on (the record's bit), braking (speed fell this snapshot) and the lamps (null: the type has none).</summary>
         public bool Lights, Braking;
         public CarLights? Lamps;
+        /// <summary>The solid box predicted on-foot movement collides with (#217), at the last snapshot's place: the server's own box is built from the same numbers.</summary>
+        public StaticBody3D? Solid;
     }
 
     readonly Dictionary<ushort, CarView> _cars = new();
@@ -57,7 +59,9 @@ public partial class NetClient
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].DoorGun is { } doorGun) v.DoorGun = DoorGunNodes.Find(v.Node, doorGun);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flight != null) v.Rotor = RotorFx.Find(v.Node);
             _cars[id] = v;
+            ShowGlassOf(id); // panes whose state arrived before the vehicle was drawn (ADR 0007)
         }
+        v.Solid ??= VehicleCollider.Make(Owned, Vehicles.Vehicles[v.Kind]);
         v.Lamps ??= ShotFx.Enabled ? CarLights.Attach(v.Node, Vehicles!.Vehicles[v.Kind]) : null;
         v.Driver = VehicleRecord.Driver(rec);
         v.Lights = VehicleRecord.Lights(rec);
@@ -71,6 +75,7 @@ public partial class NetClient
         }
         v.LastTick = tick; v.Pos = rec.Position; v.Yaw = rec.YawRad;
         v.Buf.Push(tick, rec.Position, rec.YawRad, 0);
+        VehicleCollider.Place(v.Solid, new Vector3(rec.Position.X, rec.Position.Y, rec.Position.Z), rec.YawRad, !v.Destroyed);
     }
 
     /// <summary>Applies the stage and destroyed flag of a record: smoke stage emitters; a destroyed vehicle disappears (its blast is drawn here if the event has not arrived), a returned one shows again.</summary>
@@ -144,7 +149,9 @@ public partial class NetClient
         var flakGunner = false;
         FlightState? flown = null; // the helicopter the local player flies, for the pilot's readout and prompt
         var doorGunner = false;    // the local player is at a door gun: its camera and ammo readout are on
-        var chased = false;        // the local player flies: the helicopter's chase camera is on this frame
+        var chased = false;        // the local player flies: the helicopter's chase camera (or its cockpit view) is on this frame
+        var cockpit = false;       // the local player drives in the cockpit view this frame
+        var hasCockpit = false;    // the local player drives a vehicle that has a cockpit view: the prompt names the view key
         var dt = (float)GetProcessDeltaTime();
         foreach (var v in _cars.Values)
         {
@@ -166,13 +173,20 @@ public partial class NetClient
             if (v.Driver == _myId && _driving && _me != null)
             {
                 _carYaw = rot.Y;
-                if (flies) { ChaseFlight(v, p, rot, dt); flown = FlightOf(v); chased = true; } else _me.Chase(p, s.Yaw);
+                hasCockpit = CockpitOf(v) != null;
+                if (CockpitFrame(v, p, rot, dt)) cockpit = true; // the view from the seat, in the place of the chase camera
+                else
+                {
+                    if (flies) ChaseFlight(v, p, rot, dt); else _me.Chase(p, s.Yaw, Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null, dt);
+                    ShowSelfInCar(v);
+                }
+                if (flies) { flown = FlightOf(v); chased = true; }
                 kmh = v.Kmh;
-                ShowSelfInCar(v);
             }
             else if (!flakMine && _driving && _me != null && _seats is { Mine: > 0 } st && st.CarId == v.Id) { RideSeat(v, st.Mine); kmh = v.Kmh; } // another seat: first person from it, the speed shown as the driver's is
         }
         if (!_driving) HideSelfInCar();
+        if (!cockpit) EndCockpit();
         if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) _me?.EndChase(_me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
         if (!_driving && _gunship == null) _me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
         _hud?.SetSeats(SeatPanel());
@@ -181,6 +195,7 @@ public partial class NetClient
         else _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
         string? prompt = null;
         if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        if (hasCockpit && prompt != null && _gunship == null && !_controlling) prompt = WithViewHint(prompt);
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
         _hud?.SetPrompt(TurretPrompt() ?? prompt ?? CratePrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
     }
@@ -254,11 +269,15 @@ public partial class NetClient
 
     CarView? NearestFreeCar(Vector3 p)
     {
-        CarView? best = null; var bd = 3f;
+        CarView? best = null; var bd = float.MaxValue;
+        if (Vehicles == null) return null;
         foreach (var v in _cars.Values)
         {
-            if (v.Driver != 0 || Mathf.Abs(v.Pos.Y - p.Y) > 2.5f) continue; // as the server: not one hovering overhead
-            var d = new Vector2(v.Pos.X - p.X, v.Pos.Z - p.Z).Length();
+            if (v.Driver != 0 || v.Destroyed) continue;
+            var def = Vehicles.Vehicles[v.Kind];
+            var np = new NVec3(p.X, p.Y, p.Z);
+            if (!VehicleReach.CanEnter(v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, np, Vehicles.EnterRadiusOf(def))) continue; // as the server: within the radius of the footprint, not one hovering overhead
+            var d = VehicleReach.DistanceToFootprint(v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, np);
             if (d <= bd) { best = v; bd = d; }
         }
         return best;

@@ -702,14 +702,20 @@ def test_plan_keeps_cables_between_placed_poles_only() -> None:
     edits = Edits(
         parcels={"P-0001": {"objects": [
             obj("o-0001", "prim:pole_lamp_1", 5), obj("o-0002", "prim:pole_plain_1", 30), obj("o-0003", "prim:slab", 40),
+            {**obj("o-0004", "prim:connector_wall_2", 20), "z": 204.5, "rotation_deg": 90.0},
         ]}},
         cables={
             "C-0002": {"from": "o-0002", "to": "o-0001"},
             "C-0003": {"from": "o-0001", "to": "o-0003"},
             "C-0004": {"from": "o-0002", "to": "o-0009"},
+            "C-0005": {"from": "o-0001", "to": "o-0004"},
         },
     )
     plan = plan_edits(edits, parcels, [0.0, 0.0], 100.0)
-    assert plan.cables == [{"id": "C-0002", "from": "o-0002", "to": "o-0001"}]
-    assert "cables.C-0003: o-0003 is not a utility pole; cable skipped" in plan.warnings
+    assert plan.cables == [
+        {"id": "C-0002", "from": "o-0002", "to": "o-0001"},
+        {"id": "C-0005", "from": "o-0001", "to": "o-0004"},  # a pole to a house connector
+    ]
+    assert next(o for o in plan.objects if o["id"] == "o-0004")["z"] == 204.5
+    assert "cables.C-0003: o-0003 is not a utility pole or a house connector; cable skipped" in plan.warnings
     assert "cables.C-0004: o-0009 is not placed; cable skipped" in plan.warnings

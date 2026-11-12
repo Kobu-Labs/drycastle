@@ -5,7 +5,8 @@ namespace Suchohrad.Shooter;
 
 /// <summary>
 /// The sandbox panel (F4, #156): the eight killstreaks as icon buttons (pick one to hold it), "Use now" for the held one,
-/// and the cheap sandbox actions: heal and refill, teleport to a spawn, a vehicle in front, the target dummy respawn switch.
+/// and the cheap sandbox actions: heal and refill, teleport to a spawn, a vehicle in front, the "Take damage" checkbox
+/// (off is godmode) and the target dummy respawn switch.
 /// Built once and updated in place, so the focus stays where the keyboard left it. Esc closes (one level up). F4 closes too.
 /// Without sandbox mode it says so and offers only Back.
 /// </summary>
@@ -19,6 +20,7 @@ public sealed partial class SandboxScreen : MenuScreen
     VBoxContainer _body = null!;
     Label _off = null!, _held = null!;
     Button _use = null!, _respawn = null!;
+    CheckBox _damage = null!;
     bool _respawnOn = true;
 
     public SandboxScreen(NetClient client, Func<GameData> data) : base("MenuBackdrop") { _client = client; _data = data; }
@@ -63,6 +65,17 @@ public sealed partial class SandboxScreen : MenuScreen
             vehicles.AddChild(Ui.Btn(Strings.T("sandbox.vehicle." + id), () => _client.SendSandboxAction(SandboxAction.SpawnVehicle, (byte)index), null, 140));
         }
         _body.AddChild(vehicles);
+
+        _body.AddChild(Ui.Gap(ShooterTheme.Space));
+        _damage = new CheckBox
+        {
+            Text = Strings.T("sandbox.panel.damage"), TooltipText = Strings.T("sandbox.panel.damage.hint"),
+            FocusMode = Control.FocusModeEnum.All, MouseDefaultCursorShape = Control.CursorShape.PointingHand,
+            SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin,
+        };
+        _damage.Toggled += on => _client.SetSandboxTakesDamage(on);
+        _body.AddChild(_damage);
+        _body.AddChild(Ui.Lbl(Strings.T("sandbox.panel.damage.hint"), "HudDim", 0, true));
 
         _respawn = Ui.Btn("", ToggleRespawn, null, 360);
         _body.AddChild(_respawn);
@@ -128,6 +141,7 @@ public sealed partial class SandboxScreen : MenuScreen
             mark.Visible = isHeld;
         }
         _use.Disabled = held == "";
+        _damage.SetPressedNoSignal(_client.SandboxTakesDamage);
         _respawn.Text = Strings.T(_respawnOn ? "sandbox.panel.respawn_on" : "sandbox.panel.respawn_off");
     }
 

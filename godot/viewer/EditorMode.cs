@@ -148,6 +148,7 @@ public partial class EditorMode : Node
             CancelRegionGesture();
             DisarmPlacement(false);
             StopConnecting(false);
+            StopPlanning(false);
             if (GateArmed) CancelGate();
             HoverId = null;
             _hoverLabel.Visible = false;
@@ -506,7 +507,8 @@ public partial class EditorMode : Node
                 _pitch = Mathf.Clamp(_pitch - mm.Relative.Y * 0.0025f, -1.5698f, 1.5698f);
                 ApplyCamRotation();
                 break;
-            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right }:
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right } rb:
+                _rmbPressPos = rb.Position;
                 _looking = true;
                 _rmbMoved = false;
                 Input.MouseMode = Input.MouseModeEnum.Captured;
@@ -559,6 +561,7 @@ public partial class EditorMode : Node
                     case Key.Escape:
                         if (_cheat.Visible) _cheat.Visible = false;
                         else if (PlacementAsset != null) DisarmPlacement();
+                        else if (Planning) StopPlanning();
                         else if (Connecting) StopConnecting();
                         else if (GateArmed) CancelGate();
                         else if (SelectedCableId != null) SelectCable(null);
@@ -578,7 +581,8 @@ public partial class EditorMode : Node
         {
             _looking = false;
             Input.MouseMode = Input.MouseModeEnum.Visible;
-            if (!_rmbMoved && PlacementAsset != null) DisarmPlacement(); // a right click (no look drag) leaves placement mode
+            if (!_rmbMoved && Planning && Tool == EditorTool.Poles) PlanRightClick(_rmbPressPos); // plan mode: a right click marks a house
+            else if (!_rmbMoved && PlacementAsset != null) DisarmPlacement(); // a right click (no look drag) leaves placement mode
             else if (!_rmbMoved && Connecting) StopConnecting(); // and connect mode
         }
         if (Active && Dragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })

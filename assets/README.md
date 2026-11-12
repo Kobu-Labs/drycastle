@@ -4,11 +4,11 @@ Curated, redistributable 3D assets for placed objects (cars, flowers, bushes, fe
 pavement, pots, walls). Placed objects reference an asset by id (see `pipeline/src/suchohrad_pipeline/edits.py`):
 
 - `pack:<pack>/<model>`: a glTF/GLB in `assets/<pack>/`, for example `pack:kenney-car-kit/sedan`.
-- `prim:<name>`: a pipeline primitive with no file (`wall`, `slab`, `pot`, `radio_tower`, `bunker` and the
-  utility poles `pole_*`), built by `pipeline/src/suchohrad_pipeline/primitives.py`.
+- `prim:<name>`: a pipeline primitive with no file (`wall`, `slab`, `pot`, `radio_tower`, `bunker`, the
+  utility poles `pole_*` and the house connectors `connector_*`), built by `pipeline/src/suchohrad_pipeline/primitives.py`.
 
 `manifest.json` (format_version 1) is the index: per asset `id`, `category`
-(car, slab, pot, flower, bush, tree, wall, fence, pole, other), `name`, `file` (relative to this
+(car, slab, pot, flower, bush, tree, wall, fence, pole, connector, other), `name`, `file` (relative to this
 directory; null for primitives), `size_m` (bounding box [x, y, z] in metres, glTF axes with y up, as
 measured after import in Godot), `tags`, `licence`, `source`, `pack`; plus a top-level `packs` list
 (name, URL, download URL, licence, download date).
@@ -135,7 +135,9 @@ events (`godot/shooter/data/sounds.json`). All CC0 (OpenGameArt pages above, che
 ## Texture library (generated, 2026-11-12)
 
 `suchohrad-generated-textures/` holds the tileable textures that map meshes can use by id: `brick_red`, `brick_white`,
-`stone`, `concrete`, `picket`, `wire` (256 x 256 RGBA PNG each). They are original pixels computed by
+`stone`, `concrete`, `picket`, `wire`, and the ground textures of the detail stage `dirt`, `gravel`, `leaf_litter`,
+`soil_rows` (256 x 256 RGBA PNG each; the four ground ones are opaque, carry their own colours (a white tint shows them as drawn) and
+tile in 1 to 2 m: `dirt` 2 m, `gravel` 1 m, `leaf_litter` 1.5 m, `soil_rows` 1 m with the rows along u). They are original pixels computed by
 `scripts/make_textures.py` (standard library only; `python3 -I scripts/make_textures.py` rebuilds them byte for byte,
 `--meta` prints the manifest entries, `--sheet FILE` writes a contact sheet), CC0, in a flat style: a few tones, hard
 edges, little noise. The manifest's top-level `textures` array lists them: `id` (lower case, digits and underscores:
@@ -156,6 +158,11 @@ x axis and the lamp reaches to its -y; `size_m` is the box centred on the foot t
 also has `seats`: where wires sit on the pole (`kind` line / service / bundle, `tier` the crossarm's index or
 -1, `pos` `[x, y, z]` in the pole's frame, z up), which the game uses to string cables between placed poles.
 The manifest entries are written by `make poles-manifest`. See `docs/utility-poles.md`.
+
+`prim:connector_*` (category `connector`) are six house connectors from `connectors.py`: hooks with insulators
+and a hook for a bundled cable for walls, three masts for roofs. Where the cable from a pole ends on a house;
+their origin is the point of the wall or roof they are fixed to, `+x` towards the incoming wires, and they
+carry `seats` like the poles. Placed by the editor's Poles tool with a `z`; no collision in the shooter.
 
 ## Style: flat colour, and what the packs really contain
 

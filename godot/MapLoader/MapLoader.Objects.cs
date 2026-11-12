@@ -32,7 +32,7 @@ public sealed record FragmentResult(IReadOnlyList<string> Replaced, int Objects,
 // Placed objects, the dynamic per-parcel props swap (parcel-run fragments) and their bookkeeping.
 public sealed partial class MapLoader
 {
-    sealed record AssetEntry(string File, Vector3 Size, string Category, string Name, List<(string kind, int tier, Vector3 local)> Seats);
+    sealed record AssetEntry(string File, Vector3 Size, string Category, string Name, List<(string kind, int tier, Vector3 local)> Seats, List<Vector3> Lights);
 
     string _mapDir = "";
     Node3D? _objectsRoot;
@@ -77,6 +77,7 @@ public sealed partial class MapLoader
         foreach (var t in _assetTemplates.Values)
             if (t != null && GodotObject.IsInstanceValid(t)) t.Free();
         _assetTemplates.Clear();
+        FreeClutter();
     }
 
     /// <summary>Messages the loader would print as warnings (also written with GD.PushWarning).</summary>
@@ -295,7 +296,7 @@ public sealed partial class MapLoader
             var id = a.GetProperty("id").GetString()!;
             var cat = a.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString()! : "other";
             var name = a.TryGetProperty("name", out var nm) && nm.ValueKind == JsonValueKind.String ? nm.GetString()! : id;
-            _assetManifest[id] = new AssetEntry(file, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name, ParseSeats(a));
+            _assetManifest[id] = new AssetEntry(file, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name, ParseSeats(a), ParseLights(a));
         }
     }
 

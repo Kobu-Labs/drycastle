@@ -9,10 +9,11 @@ writes into ``out/poles`` (by default):
 * ``random.png``: ``N`` poles from ``random_spec(seed)`` for seeds 1..N (default 21);
 * ``row.png``: a few poles in a row with the wires strung between them (``span_mesh``);
 * ``parts.png``: every part of ``poleparts.PARTS`` on its own, each scaled to fit its cell;
-* with ``--glb``: ``<variant>.glb`` of every placeable pole, as the map export writes them.
+* ``connectors.png``: the house connectors (``connectors.CONNECTORS``);
+* with ``--glb``: ``<name>.glb`` of every placeable pole and connector, as the map export writes them.
 
-``--sync-manifest`` instead rewrites the ``prim:pole_*`` entries of ``assets/manifest.json`` from
-``poles.VARIANTS`` (run it after changing the variants or anything that changes their size).
+``--sync-manifest`` instead rewrites the ``prim:pole_*`` and ``prim:connector_*`` entries of
+``assets/manifest.json`` from the generators (run it after changing them).
 
 The drawing is a plain painter's sort of the triangles with a fixed light: good enough to judge
 shapes and colours, not a render of the game.
@@ -28,6 +29,7 @@ import numpy as np
 from suchohrad_pipeline import poleparts as pp
 from suchohrad_pipeline.assets import DEFAULT_MANIFEST
 from suchohrad_pipeline.config import REPO_ROOT
+from suchohrad_pipeline.connectors import CONNECTORS, build_connector, mount_of
 from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.poles import (
     ARCHETYPES,
@@ -165,19 +167,44 @@ def manifest_entries() -> list[dict]:
             "source": SOURCE,
             "pack": None,
             "seats": pole.seats(),
+            # under each luminaire, in the pole's frame (z up): where the game puts the glow and the light at night
+            "lights": [[round(float(v), 3) for v in p] for p in pole.lights],
         })
     return out
 
 
+def connector_entries() -> list[dict]:
+    """The ``assets/manifest.json`` records of the house connectors."""
+    out = []
+    for name, (_build, what) in CONNECTORS.items():
+        connector = build_connector(name)
+        out.append({
+            "id": f"prim:{name}",
+            "category": "connector",
+            "name": f"House connector: {what}",
+            "file": None,
+            "size_m": list(connector.size_m),
+            "tags": ["house-connector", mount_of(name), "flat-colour", "primitive"],
+            "licence": "CC0",
+            "source": SOURCE.replace("generated utility pole", "generated house connector").replace("poles.py", "connectors.py"),
+            "pack": None,
+            "seats": connector.seats(),
+        })
+    return out
+
+
+_GENERATED = ("prim:pole_", "prim:connector_")
+
+
 def sync_manifest(path: Path = DEFAULT_MANIFEST) -> int:
-    """Replace the ``prim:pole_*`` entries of the asset manifest with the current ones (kept where
-    the old ones were, or at the end); returns how many were written."""
+    """Replace the ``prim:pole_*`` and ``prim:connector_*`` entries of the asset manifest with the
+    current ones (kept where the old ones were, or at the end); returns how many were written."""
     doc = json.loads(path.read_text(encoding="utf-8"))
     assets = doc["assets"]
-    old = [i for i, a in enumerate(assets) if a["id"].startswith("prim:pole_")]
+    old = [i for i, a in enumerate(assets) if a["id"].startswith(_GENERATED)]
     at = old[0] if old else len(assets)
-    kept = [a for a in assets if not a["id"].startswith("prim:pole_")]
-    entries = manifest_entries()
+    kept = [a for a in assets if not a["id"].startswith(_GENERATED)]
+    entries = manifest_entries() + connector_entries()
     doc["assets"] = kept[:at] + entries + kept[at:]
     path.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
     return len(entries)
@@ -186,8 +213,10 @@ def sync_manifest(path: Path = DEFAULT_MANIFEST) -> int:
 def write_glbs(out_dir: Path) -> None:
     from suchohrad_pipeline.export import build_chunk_scene
 
-    for name in VARIANTS:
-        scene = build_chunk_scene([], {name: build_variant(name).mesh})
+    meshes = {name: build_variant(name).mesh for name in VARIANTS}
+    meshes.update({name: build_connector(name).mesh for name in CONNECTORS})
+    for name, mesh in meshes.items():
+        scene = build_chunk_scene([], {name: mesh})
         (out_dir / f"{name}.glb").write_bytes(scene.export(file_type="glb"))
 
 
@@ -200,7 +229,7 @@ def main(argv: list[str] | None = None) -> None:
                     help="rewrite the prim:pole_* entries of assets/manifest.json and stop")
     a = ap.parse_args(argv)
     if a.sync_manifest:
-        print(f"{sync_manifest()} pole entries written to {DEFAULT_MANIFEST}")
+        print(f"{sync_manifest()} pole and connector entries written to {DEFAULT_MANIFEST}")
         return
     a.out.mkdir(parents=True, exist_ok=True)
     render_sheet(variant_cells(), a.out / "variants.png", 8, (4.6, 11.0),
@@ -212,6 +241,9 @@ def main(argv: list[str] | None = None) -> None:
                  (104.0, 12.0), px_per_m=45.0, view=(-78.0, 7.0), centre=True)
     render_sheet(part_cells(), a.out / "parts.png", 7, (3.0, 3.0), fit=True, view=(-55.0, 14.0),
                  title="The parts kit (poleparts.PARTS)")
+    render_sheet([(n.removeprefix("connector_"), build_connector(n).mesh) for n in CONNECTORS],
+                 a.out / "connectors.png", 6, (3.0, 3.0), fit=True, view=(-40.0, 12.0),
+                 title="House connectors (prim:connector_*): the wall or roof is at the origin, wires come from +x")
     if a.glb:
         write_glbs(a.out)
     for f in sorted(a.out.iterdir()):

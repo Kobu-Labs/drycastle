@@ -27,6 +27,8 @@ Node tree (every moving part is its own node, its origin is its pivot):
         light_head               empty: landing light under the nose
         light_tail               empty: position light on the fin
         light_nav_l, light_nav_r empties: red (left) and green (right) navigation lights
+        glass_0 .. glass_3       the breakable glass panes (two windscreen halves, two cockpit doors), one node each, numbered as the
+                                 `glass` list of vehicles.json (the script rewrites that list, outline polygons included)
         smoke_engine             empty: the smoke point at the engine exhaust
 """
 import importlib.util
@@ -122,6 +124,9 @@ def tube(mat, pts, r, n=6):
     return t
 
 
+GLASS = kit.GlassSet("utility_helicopter")
+
+
 def build():
     root = Node("utility_helicopter")
     hull = root.child("fuselage")
@@ -143,15 +148,21 @@ def build():
     hull.add(box("DarkMetal", -0.16, 0.16, FLOOR, 1.10, COCKPIT + 0.05, -2.15, c=0.03, axis='x', e=0))           # centre console
 
     # ---- cockpit: sills, doors, posts, glazing (the glass is see-through, so the pilot shows)
+    door_panes, screen_panes = [], []
     for sx in (1, -1):
         x = sx * (HALF - 0.03)
         hull.add(slab("OliveLight", (x, 1.38, COCKPIT), (x, 1.38, CABIN0 - 0.08), (x, FLOOR - 0.10, CABIN0 - 0.08), (x, FLOOR - 0.10, COCKPIT), 0.05))   # door, lower half
         hull.add(box("DarkMetal", x - 0.045, x + 0.045, 1.22, 1.26, -1.62, -1.46))                                                                    # door handle
         hull.add(tube("OliveDark", [(sx * 1.13, 1.50, COCKPIT), (sx * 1.15, ROOF0 + 0.05, -2.00)], 0.045, 6))                                         # A post
         hull.add(box("OliveDark", sx * HALF - 0.05 if sx > 0 else sx * HALF - 0.03, sx * HALF + 0.03 if sx > 0 else sx * HALF + 0.05, FLOOR, ROOF0, CABIN0 - 0.08, CABIN0))   # B post
-        hull.add(slab("Glass", (x, 1.40, COCKPIT + 0.06), (x, ROOF0, -1.98), (x, ROOF0, CABIN0 - 0.10), (x, 1.40, CABIN0 - 0.10), 0.012))             # door window
+        door = ((x, 1.40, COCKPIT + 0.06), (x, ROOF0, -1.98), (x, ROOF0, CABIN0 - 0.10), (x, 1.40, CABIN0 - 0.10))
+        door_panes.append(("door_right" if sx > 0 else "door_left", [slab("Glass", *door, 0.012)], [(p[0] + sx * 0.006, p[1], p[2]) for p in door]))   # door window
     for sx in (1, -1):   # windscreen, two panes either side of a centre post
-        hull.add(slab("Glass", (sx * 0.05, 1.52, COCKPIT), (sx * 1.09, 1.52, COCKPIT), (sx * 1.11, ROOF0 + 0.04, -2.00), (sx * 0.05, ROOF0 + 0.04, -2.00), 0.012))
+        screen = ((sx * 0.05, 1.52, COCKPIT), (sx * 1.09, 1.52, COCKPIT), (sx * 1.11, ROOF0 + 0.04, -2.00), (sx * 0.05, ROOF0 + 0.04, -2.00))
+        screen_panes.append(("windscreen_right" if sx > 0 else "windscreen_left", [slab("Glass", *screen, 0.012)], screen))
+    # the breakable panes are nodes of their own (glass_N, see kit.GlassSet): the two windscreen halves first, then the cockpit doors
+    for pid, slabs, outline in sorted(screen_panes, key=lambda q: q[0] != "windscreen_left") + sorted(door_panes, key=lambda q: q[0] != "door_left"):
+        GLASS.pane(hull, pid, slabs, outline)
     hull.add(tube("OliveDark", [(0, 1.50, COCKPIT), (0, ROOF0 + 0.05, -2.00)], 0.04, 6))
     hull.add(box("OliveDark", -1.16, 1.16, ROOF0 - 0.02, ROOF0 + 0.06, -2.06, -1.98))   # windscreen header
 
@@ -385,6 +396,10 @@ def main():
         print(f"{n.name:16s} pivot=({n.origin[0]:.3f}, {n.origin[1]:.3f}, {n.origin[2]:.3f}) yaw={n.yaw:.0f} tris={len(n.tris)}")
     print(f"triangles: {total}")
     print("bounds: x %.2f..%.2f  y %.2f..%.2f  z %.2f..%.2f" % (lo[0], hi[0], lo[1], hi[1], lo[2], hi[2]))
+    GLASS.report()
+    if len(sys.argv) <= 1:
+        GLASS.write_vehicles_json(kit.vehicles_json_path())
+        print("wrote the glass list of vehicles.json")
     print(f"wrote {out}")
 
 

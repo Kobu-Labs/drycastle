@@ -5,7 +5,9 @@ using Suchohrad.ShooterCore;
 namespace Suchohrad.Shooter;
 
 /// <summary>
-/// Street lamps of the base map (lamps.json). Poles and heads are primitive MultiMeshes; each lamp gets a glow
+/// Street lamps of the base map (lamps.json), and the lamps of placed utility poles (<see cref="PoleHeads"/>: the pole
+/// and its luminaire are the placed object's own model, so only the lit plate, the glow and the light are added
+/// here). Poles and heads are primitive MultiMeshes; each lamp gets a glow
 /// billboard in one MultiMesh (hidden far away by visibility range); a pool of <see cref="PoolSize"/> real lights
 /// follows the camera's nearest lamps. Everything is driven by <see cref="DayNightCycle.NightFactor"/>. The lamps
 /// are solid: one thin box per pole, the same on the server. The curve and the pool assignment are in
@@ -29,6 +31,13 @@ public partial class StreetLamps : Node3D
     /// <summary>Foot of each pole on the ground (Godot axes, Y up).</summary>
     public IReadOnlyList<Vector3> Bases { get; init; } = Array.Empty<Vector3>();
 
+    /// <summary>
+    /// Lamps that already have a pole and a luminaire of their own (placed utility poles): the point under each
+    /// luminaire and the way its pole is turned (degrees about Y). They get a lit plate, a glow and a share of the
+    /// light pool like the others, but no pole, no head box and no collider.
+    /// </summary>
+    public IReadOnlyList<(Vector3 Position, float YawDeg)> PoleHeads { get; init; } = Array.Empty<(Vector3, float)>();
+
     /// <summary>Headless server: the pole colliders only, no visuals, light pool or per-frame work.</summary>
     public bool CollisionOnly { get; init; }
 
@@ -44,9 +53,10 @@ public partial class StreetLamps : Node3D
 
     public override void _Ready()
     {
-        if (Bases.Count == 0) { SetProcess(false); return; }
+        if (Bases.Count == 0 && PoleHeads.Count == 0) { SetProcess(false); return; }
         if (CollisionOnly) { SetProcess(false); BuildCollision(); return; }
-        _heads = Bases.Select(b => b + Vector3.Up * (PoleHeight - 0.04f)).ToArray();
+        // the light pool and the glow treat both kinds alike: the lamps of lamps.json first, then the pole lamps
+        _heads = Bases.Select(b => b + Vector3.Up * (PoleHeight - 0.04f)).Concat(PoleHeads.Select(h => h.Position)).ToArray();
         _headsNum = _heads.Select(h => new Num.Vector3(h.X, h.Y, h.Z)).ToArray();
         BuildVisuals();
         BuildCollision();
@@ -109,7 +119,15 @@ public partial class StreetLamps : Node3D
             Emission = LampColour,
         };
         var headMesh = new BoxMesh { Size = new Vector3(0.42f, 0.08f, 0.22f) };
-        AddChild(Batch(headMesh, _heads.Select(h => new Transform3D(Basis.Identity, h)), _headMat));
+        AddChild(Batch(headMesh, _heads.Take(Bases.Count).Select(h => new Transform3D(Basis.Identity, h)), _headMat));
+        if (PoleHeads.Count > 0)
+        {
+            // a thin lit plate under the luminaire of each pole lamp, turned with its pole (the arm reaches along the pole's +Z)
+            var plate = new BoxMesh { Size = new Vector3(0.16f, 0.02f, 0.34f) };
+            var lit = Batch(plate, PoleHeads.Select(h => new Transform3D(new Basis(Vector3.Up, Mathf.DegToRad(h.YawDeg)), h.Position)), _headMat);
+            lit.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+            AddChild(lit);
+        }
 
         var glowTex = new GradientTexture2D
         {

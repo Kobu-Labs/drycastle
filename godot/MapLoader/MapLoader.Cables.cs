@@ -170,6 +170,38 @@ public sealed partial class MapLoader
         return list;
     }
 
+    /// <summary>The lamp of a placed object (a utility pole with a luminaire): where its light is in map space, and the way the object is turned.</summary>
+    public readonly record struct ObjectLight(string ObjectId, Vector3 Position, float YawDeg);
+
+    /// <summary>
+    /// The lamps of the placed objects as they stand now: one per light point of each object's asset (assets/manifest.json
+    /// "lights"). Street lamps of lamps.json are not among them (see <see cref="Lamps"/>); the shooter lights both.
+    /// </summary>
+    public List<ObjectLight> ObjectLights()
+    {
+        var lights = new List<ObjectLight>();
+        if (_assetManifest == null) ReadAssetManifest();
+        foreach (var (id, node) in _objectNodes.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            if (!GodotObject.IsInstanceValid(node) || !_objectAssets.TryGetValue(id, out var asset)
+                || !_assetManifest!.TryGetValue(asset, out var entry)) continue;
+            foreach (var local in entry.Lights)
+                lights.Add(new ObjectLight(id, node.Transform * local, node.RotationDegrees.Y));
+        }
+        return lights;
+    }
+
+    /// <summary>The light points of a manifest asset in the object's own frame (Godot axes), from its "lights" list (pipeline axes, z up).</summary>
+    static List<Vector3> ParseLights(JsonElement asset)
+    {
+        var lights = new List<Vector3>();
+        if (!asset.TryGetProperty("lights", out var arr) || arr.ValueKind != JsonValueKind.Array) return lights;
+        foreach (var p in arr.EnumerateArray())
+            if (p.ValueKind == JsonValueKind.Array && p.GetArrayLength() == 3)
+                lights.Add(new Vector3(p[0].GetSingle(), p[2].GetSingle(), -p[1].GetSingle()));
+        return lights;
+    }
+
     /// <summary>The wire seats of a manifest asset in the object's own frame (Godot axes), from its "seats" list (pipeline axes: x east, y north, z up).</summary>
     static List<(string kind, int tier, Vector3 local)> ParseSeats(JsonElement asset)
     {

@@ -1430,7 +1430,7 @@
       "licence": "CC0",
       "source": "scripts/make_flak_model.py (original geometry written as code; python3 -I scripts/make_flak_model.py rebuilds the file)",
       "pack": "suchohrad-generated-models",
-      "used_for": "godot/shooter vehicle id flak (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground, metres), separate nodes for turret, gun_cradle, barrels, wheels, outriggers"
+      "used_for": "godot/shooter vehicle id flak (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground, metres), separate nodes for turret, gun_cradle, barrels, wheels, outriggers; each breakable glass pane is its own node glass_N (N = its place in the glass list of vehicles.json, which the script rewrites with the pane outlines)"
     },
     {
       "id": "pack:suchohrad-generated-models/bus",
@@ -1451,7 +1451,7 @@
       "licence": "CC0",
       "source": "scripts/make_bus_model.py (original geometry written as code; python3 -I scripts/make_bus_model.py rebuilds the file)",
       "pack": "suchohrad-generated-models",
-      "used_for": "godot/shooter vehicle id bus (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground at the centre, metres), separate nodes for the four wheels and the four door leaves, modelled interior"
+      "used_for": "godot/shooter vehicle id bus (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground at the centre, metres), separate nodes for the four wheels and the four door leaves, modelled interior; each breakable glass pane (18) is its own node glass_N (N = its place in the glass list of vehicles.json, which the script rewrites with the pane outlines; a door leaf's pane is under the leaf)"
     },
     {
       "id": "pack:suchohrad-generated-models/utility_helicopter",
@@ -1472,7 +1472,7 @@
       "licence": "CC0",
       "source": "scripts/make_utility_helicopter_model.py (original geometry written as code; python3 -I scripts/make_utility_helicopter_model.py rebuilds the file)",
       "pack": "suchohrad-generated-models",
-      "used_for": "godot/shooter vehicle id utility_helicopter (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground under the rotor mast, metres), separate nodes for rotor_main, rotor_tail, gun_mount, gun, barrel"
+      "used_for": "godot/shooter vehicle id utility_helicopter (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground under the rotor mast, metres), separate nodes for rotor_main, rotor_tail, gun_mount, gun, barrel; each breakable glass pane (two windscreen halves, two cockpit doors) is its own node glass_N (N = its place in the glass list of vehicles.json, which the script rewrites with the pane outlines)"
     },
     {
       "id": "prim:pole_lamp_1",
@@ -1550,6 +1550,13 @@
             6.178
           ]
         }
+      ],
+      "lights": [
+        [
+          -0.196,
+          -1.731,
+          8.373
+        ]
       ]
     },
     {
@@ -1610,6 +1617,13 @@
             6.5
           ]
         }
+      ],
+      "lights": [
+        [
+          -0.077,
+          -1.688,
+          9.024
+        ]
       ]
     },
     {
@@ -1679,6 +1693,13 @@
             6.043
           ]
         }
+      ],
+      "lights": [
+        [
+          -0.146,
+          -1.757,
+          8.991
+        ]
       ]
     },
     {
@@ -1747,7 +1768,8 @@
             9.242
           ]
         }
-      ]
+      ],
+      "lights": []
     },
     {
       "id": "prim:pole_plain_2",
@@ -1806,7 +1828,8 @@
             5.495
           ]
         }
-      ]
+      ],
+      "lights": []
     },
     {
       "id": "prim:pole_twin_lamp_1",
@@ -1929,6 +1952,13 @@
             6.313
           ]
         }
+      ],
+      "lights": [
+        [
+          -0.22,
+          -1.666,
+          8.301
+        ]
       ]
     },
     {
@@ -2025,6 +2055,13 @@
             4.966
           ]
         }
+      ],
+      "lights": [
+        [
+          -0.278,
+          -1.703,
+          9.334
+        ]
       ]
     },
     {
@@ -2147,7 +2184,8 @@
             5.445
           ]
         }
-      ]
+      ],
+      "lights": []
     },
     {
       "id": "prim:pole_junction_2",
@@ -2269,7 +2307,8 @@
             6.805
           ]
         }
-      ]
+      ],
+      "lights": []
     },
     {
       "id": "prim:pole_junction_3",
@@ -2373,7 +2412,8 @@
             7.501
           ]
         }
-      ]
+      ],
+      "lights": []
     },
     {
       "id": "prim:pole_twin_riser_1",
@@ -2469,6 +2509,13 @@
             5.321
           ]
         }
+      ],
+      "lights": [
+        [
+          0.055,
+          -1.231,
+          8.617
+        ]
       ]
     },
     {
@@ -2537,7 +2584,8 @@
             7.074
           ]
         }
-      ]
+      ],
+      "lights": []
     },
     {
       "id": "prim:pole_field_2",
@@ -2605,7 +2653,8 @@
             7.729
           ]
         }
-      ]
+      ],
+      "lights": []
     },
     {
       "id": "prim:pole_megaphone_1",
@@ -2655,7 +2704,8 @@
             6.75
           ]
         }
-      ]
+      ],
+      "lights": []
     },
     {
       "id": "prim:pole_megaphone_2",
@@ -2712,6 +2762,265 @@
             0.017,
             -0.258,
             7.371
+          ]
+        }
+      ],
+      "lights": []
+    },
+    {
+      "id": "prim:connector_wall_2",
+      "category": "connector",
+      "name": "House connector: two wall hooks with insulators and a conduit",
+      "file": null,
+      "size_m": [
+        0.423,
+        0.163,
+        0.352
+      ],
+      "tags": [
+        "house-connector",
+        "wall",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            -0.14,
+            0.163
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            0.14,
+            0.163
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_wall_4",
+      "category": "connector",
+      "name": "House connector: four wall hooks with insulators and a conduit",
+      "file": null,
+      "size_m": [
+        0.423,
+        0.163,
+        0.912
+      ],
+      "tags": [
+        "house-connector",
+        "wall",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            -0.42,
+            0.163
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            -0.14,
+            0.163
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            0.14,
+            0.163
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            0.42,
+            0.163
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_wall_hook",
+      "category": "connector",
+      "name": "House connector: wall hook for a bundled cable, with a box and a conduit",
+      "file": null,
+      "size_m": [
+        0.446,
+        0.04,
+        0.22
+      ],
+      "tags": [
+        "house-connector",
+        "wall",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "bundle",
+          "tier": -1,
+          "pos": [
+            0.22,
+            0.0,
+            -0.03
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_roof_mast_2",
+      "category": "connector",
+      "name": "House connector: roof mast with two insulators",
+      "file": null,
+      "size_m": [
+        0.356,
+        1.357,
+        0.5
+      ],
+      "tags": [
+        "house-connector",
+        "roof",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            -0.18,
+            1.173
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            0.18,
+            1.173
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_roof_mast_4",
+      "category": "connector",
+      "name": "House connector: tall roof mast with four insulators",
+      "file": null,
+      "size_m": [
+        0.356,
+        1.707,
+        0.9
+      ],
+      "tags": [
+        "house-connector",
+        "roof",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            -0.38,
+            1.523
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            -0.127,
+            1.523
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            0.127,
+            1.523
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            0.38,
+            1.523
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_roof_mast_hook",
+      "category": "connector",
+      "name": "House connector: roof mast with a hook for a bundled cable",
+      "file": null,
+      "size_m": [
+        0.466,
+        1.407,
+        0.34
+      ],
+      "tags": [
+        "house-connector",
+        "roof",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "bundle",
+          "tier": -1,
+          "pos": [
+            0.23,
+            0.0,
+            1.07
           ]
         }
       ]
@@ -2828,6 +3137,82 @@
       "alpha": true,
       "tintable": true,
       "mean_colour": "#d6d6d6",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "dirt",
+      "name": "Dirt",
+      "file": "suchohrad-generated-textures/dirt.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        2.0,
+        2.0
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#816547",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "gravel",
+      "name": "Gravel",
+      "file": "suchohrad-generated-textures/gravel.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.0,
+        1.0
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#88847a",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "leaf_litter",
+      "name": "Leaf litter",
+      "file": "suchohrad-generated-textures/leaf_litter.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.5,
+        1.5
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#674f32",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "soil_rows",
+      "name": "Soil rows",
+      "file": "suchohrad-generated-textures/soil_rows.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.0,
+        1.0
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#674c33",
       "licence": "CC0",
       "source": "scripts/make_textures.py",
       "pack": "suchohrad-generated-textures"

@@ -306,8 +306,12 @@ public static class EditsFile
 
     // ---- cables (wires between two placed utility poles; same rules as the MCP server's connect_poles) ----
 
-    /// <summary>The asset ids a cable can hang from start with this (edits.py POLE_ASSET_PREFIX).</summary>
-    public const string PoleAssetPrefix = "prim:pole_";
+    /// <summary>The asset ids of utility poles and of house connectors start with these (edits.py WIRE_ASSET_PREFIXES): what a cable can end on.</summary>
+    public const string PoleAssetPrefix = "prim:pole_", ConnectorAssetPrefix = "prim:connector_";
+
+    public static bool IsPoleAsset(string asset) => asset.StartsWith(PoleAssetPrefix, StringComparison.Ordinal);
+    public static bool IsConnectorAsset(string asset) => asset.StartsWith(ConnectorAssetPrefix, StringComparison.Ordinal);
+    public static bool IsWireAsset(string asset) => IsPoleAsset(asset) || IsConnectorAsset(asset);
 
     /// <summary>Every cable of the document as (id, from, to), by id; entries that are not well formed are left out.</summary>
     public static List<(string id, string from, string to)> Cables(SortedDictionary<string, object?> root)
@@ -341,7 +345,10 @@ public static class EditsFile
         return assets;
     }
 
-    /// <summary>String a cable between two placed utility poles. Fails when either is no placed pole, both are the same, or they are joined already.</summary>
+    /// <summary>
+    /// String a cable between two placed utility poles, or a pole and a house connector. Fails when either is no
+    /// placed pole or connector, both are the same, or they are joined already.
+    /// </summary>
     public static (bool ok, string message, string? id) Connect(SortedDictionary<string, object?> root, string from, string to)
     {
         if (from == to) return (false, "a cable joins two different poles", null);
@@ -349,7 +356,7 @@ public static class EditsFile
         foreach (var end in new[] { from, to })
         {
             if (!assets.TryGetValue(end, out var asset)) return (false, $"object {end} no longer exists", null);
-            if (!asset.StartsWith(PoleAssetPrefix, StringComparison.Ordinal)) return (false, $"{end} is not a utility pole", null);
+            if (!IsWireAsset(asset)) return (false, $"{end} is not a utility pole or a house connector", null);
         }
         var joined = Cables(root).FirstOrDefault(c => (c.from == from && c.to == to) || (c.from == to && c.to == from));
         if (joined.id != null) return (false, $"{from} and {to} are already joined by {joined.id}", null);

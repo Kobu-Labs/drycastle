@@ -24,12 +24,15 @@ public partial class NetServer
         var walls = new List<float>(dirs.Length);
         var cars = new List<ServerCar?>(dirs.Length);
         var dirsG = new List<Vector3>(dirs.Length);
+        var crossedBy = new List<List<GlassCross>>(dirs.Length);
         var exposed = new List<HitTarget?>(dirs.Length); // a pellet that stopped on a vehicle with its gunner in the open may reach him (GunnerCover)
         var pastHull = new List<float>(dirs.Length);
         foreach (var d in dirs)
         {
             var g = new Vector3(d.X, d.Y, d.Z);
-            walls.Add(WorldHit(eye, g, range, out var car));
+            var crossed = new List<GlassCross>();
+            crossedBy.Add(crossed);
+            walls.Add(BulletHit(eye, g, range, out var car, crossed));
             cars.Add(car);
             dirsG.Add(g);
             var (gunner, past) = ExposedGunnerBehind(car, eye, g, range, targets);
@@ -40,6 +43,15 @@ public partial class NetServer
         var totals = HitMath.ResolvePellets(w, N(eye), dirs, range, walls, targets, c.Id, exposed, pastHull);
         BroadcastEvent(EventKind.PelletFan, WeaponCodec.Encode(new PelletFanMsg(c.Id, weaponIdx, N(eye), aim, seed, cone)));
         foreach (var (id, t) in totals) Deal(c.Id, weaponIdx, id, t.Damage, t.Head, false);
+
+        // a pellet that hit no player damages the pane it crossed where it stopped (ADR 0007); the changes of a tick go out as one event per pane
+        for (var i = 0; i < dirs.Length; i++)
+        {
+            var pelletHit = GunnerCover.Raycast(N(eye), dirs[i], range, walls[i], targets, c.Id, exposed[i], pastHull[i]);
+            DamageCrossed(crossedBy[i], pelletHit?.Distance ?? float.PositiveInfinity, d => HitMath.PelletDamage(w, d, false));
+            if (walls[i] > range || pelletHit != null) continue;
+            ShotGlass(cars[i], eye, dirsG[i], walls[i], HitMath.PelletDamage(w, walls[i], false));
+        }
 
         // pellets that stopped on a car (and no player was closer) damage the car, summed per car
         if (Vehicles == null) return;

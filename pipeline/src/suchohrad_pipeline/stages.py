@@ -6,7 +6,7 @@ keeps the same name in ``STAGES`` so the CLI and ``run-all`` keep working.
 
 from collections.abc import Callable
 
-from suchohrad_pipeline import buildings, export, fetch, normalise, parcels, props, roads, terrain
+from suchohrad_pipeline import buildings, detail, export, fetch, normalise, parcels, props, roads, terrain
 
 
 def _stub(name: str) -> Callable[..., int]:
@@ -26,5 +26,6 @@ STAGES: dict[str, Callable[..., int]] = {
     "terrain": terrain.run,
     "roads": roads.run,
     "props": props.run,
+    "detail": detail.run,
     "export": export.run,
 }

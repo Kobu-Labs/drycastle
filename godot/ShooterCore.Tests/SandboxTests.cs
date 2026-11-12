@@ -113,6 +113,39 @@ public class SandboxTests
     }
 
     [Fact]
+    public void ASandboxPlayerWhoSwitchesDamageOnIsHurtKilledAndRespawns()
+    {
+        var r = new Rig();
+        r.M.AddPlayer(1, "sb", sandbox: true);
+        r.M.AddPlayer(2, "enemy");
+        r.Settle();
+        Assert.True(r.M.SetVulnerable(1, true));
+        Assert.Equal(DamageResult.Damaged, r.M.ApplyDamage(1, 2, 0, 40));
+        Assert.Equal(60, r.M.Get(1)!.Health);
+        Assert.Equal(DamageResult.Killed, r.M.ApplyDamage(1, 2, 0, 500));
+        Assert.Equal(PlayerLife.Dead, r.M.Get(1)!.Life);
+        Assert.Equal(1, r.M.Get(2)!.Kills); // the killer is an ordinary player: the kill is theirs
+        r.Settle();
+        Assert.Equal(PlayerLife.Alive, r.M.Get(1)!.Life); // respawned as usual
+        Assert.True(r.M.Get(1)!.Vulnerable);               // and the switch is still on
+
+        Assert.True(r.M.SetVulnerable(1, false));          // off again: godmode is back
+        Assert.Equal(DamageResult.Ignored, r.M.ApplyDamage(1, 2, 0, 500));
+    }
+
+    [Fact]
+    public void TheDamageSwitchIsForSandboxPlayersOnly()
+    {
+        var r = new Rig();
+        r.M.AddPlayer(2, "enemy");
+        r.Settle();
+        Assert.False(r.M.SetVulnerable(2, false));
+        Assert.False(r.M.SetVulnerable(99, true));
+        Assert.Equal(DamageResult.Damaged, r.M.ApplyDamage(2, 2, 0, 10)); // an ordinary player is hurt whatever was asked
+        Assert.Equal((SandboxAction.TakeDamage, (byte)1), SandboxEvents.DecodeAction(SandboxEvents.EncodeAction(SandboxAction.TakeDamage, 1)));
+    }
+
+    [Fact]
     public void SandboxKillsAreShownButNotScored()
     {
         var r = new Rig(new MatchConfig { ScoreGoal = 2 });

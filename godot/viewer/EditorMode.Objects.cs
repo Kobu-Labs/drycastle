@@ -18,7 +18,7 @@ public partial class EditorMode
     public const double MoveSnap = 0.5, RotateSnap = 15.0, DuplicateOffset = 1.0, NudgeStep = 0.5;
     public static readonly string[] Categories = { "car", "slab", "pot", "flower", "bush", "tree", "wall", "fence", "other" };
     /// <summary>Categories whose palette items show their render alone once it has arrived (the name stays in the tooltip).</summary>
-    public static readonly string[] IconOnlyCategories = { "pole" };
+    public static readonly string[] IconOnlyCategories = { "pole", "connector" };
     const float PickMargin = 0.15f, RingBand = 0.45f;
 
     public sealed record ObjectInfo(string Id, string Parcel, string Asset, double X, double Y, double Rotation, double Scale, string? Colour);
@@ -100,6 +100,7 @@ public partial class EditorMode
         if (GateArmed) CancelGate();
         DisarmPlacement(false);
         StopConnecting(false);
+        StopPlanning(false);
         PlacementAsset = asset;
         _ghostTint = null;
         _ghost = new Node3D { Name = "Ghost", Visible = false };
@@ -414,7 +415,9 @@ public partial class EditorMode
     {
         if (!Map.ObjectNodes.TryGetValue(id, out var node) || !GodotObject.IsInstanceValid(node)) return;
         var l = FromAbsolute(x, y);
-        node.Position = new Vector3(l.X, Map.GroundHeightOrMean(l.X, l.Y), l.Y);
+        // an object fixed at an elevation (a house connector on a wall or roof) keeps it; the others stand on the ground
+        var fixedZ = ObjectEdits.Find(Disk(), id) is { } f ? ObjectEdits.Number(f.obj.GetValueOrDefault("z")) : null;
+        node.Position = new Vector3(l.X, fixedZ is double z ? (float)z : Map.GroundHeightOrMean(l.X, l.Y), l.Y);
         node.RotationDegrees = new Vector3(0, (float)rot, 0);
     }
 

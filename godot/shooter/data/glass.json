@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "_note": "Glass panes (ADR 0007, docs/glass.md). building_pane_hp: a window of the base map (windows.json). vehicle_pane_hp: a pane of vehicles.json \"glass\" without its own hp. crack_stages: HP fractions, highest first, at which the crack grows (a damaged pane starts at stage 1). blast_damage: at a blast's centre, falling to nothing at its radius. building_reach / vehicle_reach: metres past where the bullet stopped that a pane may lie. shattered_exposes_riders: a shot through a shattered vehicle pane can hit the riders. The rest is the client's shatter animation.",
+  "building_pane_hp": 60,
+  "vehicle_pane_hp": 60,
+  "crack_stages": [0.66, 0.33],
+  "blast_damage": 150,
+  "building_reach": 0.5,
+  "vehicle_reach": 2.5,
+  "shattered_exposes_riders": true,
+  "restore_on_round_start": true,
+  "shards": 28,
+  "shard_speed": 3.5,
+  "shard_life": 1.3,
+  "max_shatter_effects": 12,
+  "shatter_effect_range": 150
+}

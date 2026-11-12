@@ -220,17 +220,24 @@ class Pole:
                                                                              and kind == "line"))]
 
     def seats(self) -> list[dict]:
-        """The wire seats as plain data (``kind``, ``tier``, ``pos`` [x, y, z] in the pole's frame): what
-        the asset manifest carries, so the game can string cables between placed poles."""
-        return [{"kind": a.kind, "tier": a.tier, "pos": [round(float(v), 3) for v in a.pos]}
-                for a in self.anchors]
+        return seats_of(self.anchors)
 
     @property
     def size_m(self) -> tuple[float, float, float]:
-        """``[x, y, z]`` in glTF axes (y up): the box centred on the foot that holds the pole."""
-        pts = self.mesh.tris.reshape(-1, 3)
-        return (round(2 * float(np.abs(pts[:, 0]).max()), 3), round(float(pts[:, 2].max()), 3),
-                round(2 * float(np.abs(pts[:, 1]).max()), 3))
+        return size_of(self.mesh)
+
+
+def seats_of(anchors: list[Anchor]) -> list[dict]:
+    """Wire seats as plain data (``kind``, ``tier``, ``pos`` [x, y, z] in the object's frame): what the
+    asset manifest carries, so the game can string cables between placed poles and connectors."""
+    return [{"kind": a.kind, "tier": a.tier, "pos": [round(float(v), 3) for v in a.pos]} for a in anchors]
+
+
+def size_of(mesh: Mesh) -> tuple[float, float, float]:
+    """``[x, y, z]`` in glTF axes (y up): the box centred on the origin that holds the mesh above it."""
+    pts = mesh.tris.reshape(-1, 3)
+    return (round(2 * float(np.abs(pts[:, 0]).max()), 3), round(float(pts[:, 2].max()), 3),
+            round(2 * float(np.abs(pts[:, 1]).max()), 3))
 
 
 def _lean_matrix(deg: float, az_deg: float) -> np.ndarray:

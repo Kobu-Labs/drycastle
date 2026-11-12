@@ -44,7 +44,7 @@ public partial class NetServer
         _shells.Clear();
         _flakShells.Clear();
         AwardXp(_xp.OnMatchEnd(_match.Winners, _match.Ranking().Where(p => !p.Sandbox).Select(p => p.Id).ToList()));
-        foreach (var c in _clients.Values.Where(c => c.Joined))
+        foreach (var c in _clients.Values.Where(c => c.Joined)) // human players: a bot has no stats and no summary
         {
             var p = c.Profile!;
             if (p.Persist) _ = Progression!.Stats.RecordMatchAsync(p.DbId);
@@ -58,7 +58,7 @@ public partial class NetServer
     {
         foreach (var g in grants)
         {
-            if (!_byId.TryGetValue(g.Player, out var c) || c.Profile is not { } p) continue;
+            if (!_byId.TryGetValue(g.Player, out var c) || c.IsBot || c.Profile is not { } p) continue; // a bot's share (a round placing) goes to nobody
             p.Xp += g.Amount;
             c.RoundXp.Add(g);
             if (p.Persist) _ = Progression!.Profiles.AddXpAsync(p.DbId, g.Amount);
@@ -73,13 +73,14 @@ public partial class NetServer
     /// <summary>Kill and roadkill counters. Suicides and kills by no player are not counted.</summary>
     void RecordKill(PlayerKilled k)
     {
-        if (k.Killer == k.Victim || Progression == null || !_byId.TryGetValue(k.Killer, out var c) || !c.Profile!.Persist || c.Sandbox) return;
+        if (k.Killer == k.Victim || !Scores(k.Victim) || Progression == null || !_byId.TryGetValue(k.Killer, out var c) || !c.Profile!.Persist || c.Sandbox) return;
         _ = Progression.Stats.RecordKillAsync(c.Profile.DbId, WeaponKey(k.Weapon), k.Cause == KillCause.Roadkill);
     }
 
     void RecordDeath(ushort victim)
     {
-        if (Progression != null && _byId.TryGetValue(victim, out var c) && c.Profile!.Persist) _ = Progression.Stats.RecordDeathAsync(c.Profile.DbId);
+        // a sandbox player who switched damage on can die; like the rest of sandbox mode it writes nothing
+        if (Progression != null && _byId.TryGetValue(victim, out var c) && c.Profile!.Persist && !c.Sandbox) _ = Progression.Stats.RecordDeathAsync(c.Profile.DbId);
     }
 
     /// <summary>The stats key of a weapon byte: its weapons.json id, or a name for the special causes (vehicle, debug, void, fall).</summary>

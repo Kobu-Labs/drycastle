@@ -61,8 +61,8 @@ primitives: `prim:pole_lamp_1` etc. are placed like any object, the export write
 category is `pole`: in the shooter only the column is solid (a 0.4 m box as high as the pole), not the box
 around the lamp arm. `rotation_deg` turns the line direction; 0 = wires east-west, lamp to the south.
 
-In the editor the **Poles tool** (rail icon, key 7) has the poles as renders and the cables; see
-`docs/viewer-and-editor.md`. Through MCP: `place_object` with a pole asset, then `connect_poles`.
+In the editor the **Poles tool** (rail icon, key 7) has the poles as renders, the cables and a plan mode that
+places and connects a whole line along the roads; see `docs/viewer-and-editor.md`. Through MCP: `place_object` with a pole asset, then `connect_poles`.
 
 After changing the variants or any part, run `make poles-manifest` (a test compares the manifest with the
 generator) and `make poles-preview` to look at the result.
@@ -94,11 +94,51 @@ The rule (`godot/ShooterCore/Environment/CableWires.cs`, tested in `CableWiresTe
 
 `poles.span_mesh` is the older Python version of this, used only by `make poles-preview` (`row.png`).
 
+## Lamps
+
+A pole with a luminaire says where its light is: `lights` in its `assets/manifest.json` entry, the point under
+the luminaire in the pole's frame (written by `make poles-manifest`). In the shooter the lamps of placed poles
+shine like the street lamps of `lamps.json` (`MapLoader.ObjectLights`, `StreetLamps.PoleHeads`): a lit plate
+under the luminaire, a glow and a share of the light pool, all following the night factor. The pole and the
+luminaire are the placed object's own model and collider, so nothing else is added. The viewer and the editor
+have no night and show no light.
+
+## House connections
+
+A cable can also end on a house: on a **house connector**, a small fitting on a wall or a roof
+(`pipeline/src/suchohrad_pipeline/connectors.py`, drawn in `out/poles/connectors.png`). There are six,
+placeable objects like the poles (`prim:connector_*`, category `connector`, no collision), each with wire seats:
+
+| Asset | Where | What |
+|---|---|---|
+| `connector_wall_2`, `connector_wall_4` | wall | J-hooks with an insulator each, a conduit with a weatherhead under them |
+| `connector_wall_hook` | wall | a hook and clamp for a bundled cable, which loops into a box on the wall |
+| `connector_roof_mast_2`, `connector_roof_mast_4` | roof | a pipe through the roof with a gooseneck and a short crossarm of insulators |
+| `connector_roof_mast_hook` | roof | a roof mast with a hook for a bundled cable |
+
+Their origin is the point of the wall or roof they sit on and `+x` points at the incoming wires: a wall
+connector faces out of the wall (`rotation_deg` is the way the wall faces), a roof mast is turned towards
+its pole. A placed connector has a `z` (elevation), so it does not stand on the ground.
+
+In the editor's connect mode a click on a house (after a pole) does it all in one save: the ray is tested
+against the building as drawn (`MapLoader.RayBuildings`: the real walls and roof, not the collision block),
+a wall or a roof connector is picked from the surface's normal, **which one of them from the spot clicked**
+(so houses differ, and the same spot gives the same one), it is placed there and a cable is strung from the
+pole. The start stays on the pole, so one pole can feed several houses. "Another kind of connector" on the
+selected connector swaps it for the next kind for the same surface.
+
+The wires follow the same rule as between poles. A connector with insulators takes as many of the pole's
+line wires as it has insulators (two or four), matched left to right. One that is only a hook gets a single
+bundled cable from the pole's hook, else from its side bracket, else from the nearest insulator of its
+crossarm.
+
+Through MCP a connector cannot be fixed to a wall (`place_object` has no elevation); `connect_poles` accepts
+the id of a connector that exists, e.g. `[pole, connector]`.
+
 ## Not done yet
 
-- Light. A pole with a lamp knows where its light is (`Pole.lights`), but it is not in `lamps.json`, so it
-  does not glow at night.
 - Poles are the 15 fixed variants; a pole of any seed and archetype (a mesh per placed pole) is not possible
   through placed objects.
 - The editor's object list shows `pole` after its own categories (it appends categories it does not know).
 - No headless smoke test drives the Poles tool.
+- House connections are made by hand, one click each; nothing connects the houses of a street by itself.

@@ -715,8 +715,14 @@ def test_connect_poles_strings_a_chain_and_refuses_what_is_not_a_pole(tools, env
     assert load_edits(settings.edits_path).cables == {"C-0001": {"from": a, "to": b}, "C-0002": {"from": b, "to": c}}
     again = tools.connect_poles([b, a])  # the same pair the other way round
     assert again["cables"] == [] and "already joined by C-0001" in again["warnings"][0]
-    with pytest.raises(ToolError, match="not a utility pole"):
+    with pytest.raises(ToolError, match="not a utility pole or a house connector"):
         tools.connect_poles([a, car])
+    wall = tools.place_object("P-0001", "prim:connector_wall_2", anchor="right")["id"]
+    house = tools.connect_poles([c, wall])  # a cable can end on a house connector
+    assert [(x["from"], x["to"]) for x in house["cables"]] == [(c, wall)]
+    assert [x["id"] for x in tools.list_cables()["connectors"]] == [wall]
+    tools.disconnect_poles(poles=[c, wall])
+    tools.remove_object(wall)
     with pytest.raises(ToolError, match="no placed object"):
         tools.connect_poles([a, "o-9999"])
     with pytest.raises(ToolError, match="two or more"):

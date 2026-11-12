@@ -6,8 +6,10 @@ namespace Suchohrad.Shooter;
 /// <summary>
 /// Server-side vehicle (any type in vehicles.json: the def sets the footprint and medium; water craft float, see <see cref="Afloat"/>): a kinematic CharacterBody3D driven by <see cref="CarModel"/> (arcade planar model: speed along the facing, yaw rate
 /// from steering) with the physics move providing wall collision, slopes and gravity. Chosen over VehicleBody3D (Jolt) because
-/// it is deterministic, cannot flip or jitter, and needs no per-wheel tuning. Layer 2: players and bullets (mask 1) pass through it;
-/// run-over is an overlap test in the server. Mask 1 = world only (players are excluded per body with collision exceptions).
+/// it is deterministic, cannot flip or jitter, and needs no per-wheel tuning. Layer 2: bullets and rockets stop on it. Mask 1 = world only,
+/// and players are excluded per body with collision exceptions, so it drives over them; run-over is an overlap test in the server.
+/// An exception works both ways, so this body does not stop a player on foot either: that is the job of its solid box, a static body of
+/// its own (<see cref="PlaceSolid"/>, #217).
 /// </summary>
 public partial class ServerCar : CharacterBody3D
 {
@@ -94,7 +96,26 @@ public partial class ServerCar : CharacterBody3D
         FloorMaxAngle = Mathf.DegToRad(50);
         SetPhysicsProcess(false); // stepped by the server
         if (Flies) { Probe = FlightProbe.Make(Def, FlightWater, FlightBounds); AddChild(Probe); }
+        _solid = VehicleCollider.Make(this, Def);
         Reset();
+        PlaceSolid();
+    }
+
+    StaticBody3D _solid = null!;
+    (int X, int Y, int Z, ushort Yaw, bool Solid)? _solidAt;
+
+    /// <summary>
+    /// Puts the box that stops on-foot players (<see cref="VehicleCollider"/>) where the vehicle is now, gone while it is destroyed. The server calls it
+    /// for every vehicle before it moves the players of a tick. The place is rounded as the snapshot record rounds it, so the box is the very one the
+    /// clients build from that record and predict against.
+    /// </summary>
+    public void PlaceSolid()
+    {
+        var p = GlobalPosition;
+        (int X, int Y, int Z, ushort Yaw, bool Solid) at = (Quant.Pos(p.X), Quant.Pos(p.Y), Quant.Pos(p.Z), Quant.Yaw(State.Yaw), !Destroyed);
+        if (at == _solidAt) return;
+        _solidAt = at;
+        VehicleCollider.Place(_solid, new Vector3(Quant.Pos(at.X), Quant.Pos(at.Y), Quant.Pos(at.Z)), Quant.Yaw(at.Yaw), at.Solid);
     }
 
     /// <summary>Raises the origin onto the ground under it when that is above it (a bank rising out of the water).</summary>
