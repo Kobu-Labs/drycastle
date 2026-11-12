@@ -76,6 +76,15 @@ public class ClutterDataTests
     }
 
     [Fact]
+    public void EveryKindOfTheVarietyHasARangeBetweenAMatAndTheTallestFlowers()
+    {
+        foreach (var kind in new[] { "tall_grass", "straw", "clover", "reed", "weed", "dandelion", "daisy", "red_clover", "buttercup", "poppy", "cornflower", "yarrow", "tulip", "sunflower", "spike", "rose" })
+            Assert.InRange(ClutterSettings.RangeOf(kind), 40f, 80f);
+        Assert.True(ClutterSettings.RangeOf("clover") < ClutterSettings.RangeOf("tall_grass"));
+        Assert.True(ClutterSettings.RangeOf("daisy") < ClutterSettings.RangeOf("sunflower"));
+    }
+
+    [Fact]
     public void SmallThingsVanishSoonerThanTufts()
         => Assert.True(ClutterSettings.RangeOf("pebble") < ClutterSettings.RangeOf("tuft"));
 }

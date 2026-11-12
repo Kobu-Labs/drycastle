@@ -296,6 +296,14 @@ Voronoi patch of `patch_m` ≈ 3 to 8 m, picked from the shares in `zones.<type>
 nibble the dryness (8 = neutral, 10 tint units a step: drier at a field's edge, fresher beside water and fences). A layer lists per mix which kinds it makes and in what shares (a mix names only the
 layers it changes), so a patch of one mix grows one set of species with strays. `meadow.bin` has a kind table (with the tint flag), the mixes per layer, and the zone plane after the layers (format in `meadow.py`).
 
+**Kinds (map 0.10.0).** `clutter_meshes.glb` has 23 tiny meshes (3 to 30 triangles, `detail_meshes.py`; `detail_preview --kinds` draws a contact sheet to `out/detail/kinds.png`):
+the grasses `tuft`, `tall_grass` (seed heads), `straw` (dry), `clover` (a flat mat), `reed` (by water) and `weed` (broad leaves), `fern`; the wild flowers `dandelion` (with a puffball), `daisy`,
+`red_clover`, `buttercup`, `poppy`, `cornflower`, `yarrow` (umbels); the garden flowers `tulip`, `sunflower`, `spike` (hollyhock or lupin) and `rose` (a bush); and `pebble`, `rock`, `leaf`, `stick`
+(and `flower`, the first mixed-flower mesh, which no recipe uses any more). Wild and garden flowers are kept apart: a yard (garden and plot recipes) grows garden flowers only, in one-species clusters
+(`detail.clutter.flower.species`), tall grass beside fences and walls (`tuft.unmown_m`, `tall`) and some clover in the lawn; meadows, fields and road verges grow the wild ones. The meadow's
+species mixes (`detail.meadow.mixes`) name which grass profile and which dominant flower each patch has: `meadow` (short grass and clover, daisies), `tall meadow` (red clover, yarrow), `dry` (straw, poppies and
+cornflowers), `weedy` (dandelions), `wet` (reed, buttercups), `woodland`, and three flower meadows (cornflower, yarrow, dandelion). Tintable kinds are `detail_meshes.TINTABLE` (the grasses and ferns).
+
 **Tint (map 0.10.0).** Tufts and ferns (`detail_meshes.TINTABLE`) carry a tint byte: the sixth number of their `clutter.json` entry, and in `meadow.bin` (format 2) a flag per layer.
 128 is the mesh as drawn, lower is fresher (darker, greener), higher drier. The byte is the smooth tone noise over the ground (2 m cells, 12-cell lattice, `meadow.tone_noise`) plus a per-instance
 jitter, shifted by a bias: stored grass within `detail.tint.fresh_m` of a fence or wall is fresher (`fence_fresh`), grass within `water_m` of water likewise (`water_fresh`).

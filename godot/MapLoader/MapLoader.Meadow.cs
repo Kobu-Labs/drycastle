@@ -16,9 +16,12 @@ public sealed partial class MapLoader
 {
     sealed class MeadowTile
     {
-        public readonly List<MultiMeshInstance3D> Nodes = new();
+        public readonly List<GeometryInstance3D> Nodes = new();
         public int Instances;
     }
+
+    /// <summary>The arrays of a clutter mesh, read once: merged tiles are built from them.</summary>
+    sealed record KindArrays(Vector3[] Vertices, Vector3[]? Normals, Color[]? Colours, int[]? Indices);
 
     MeadowFile? _meadow;
     Node3D? _meadowRoot;
@@ -26,10 +29,26 @@ public sealed partial class MapLoader
     Dictionary<string, Mesh> _meadowMeshes = new();
     readonly Dictionary<(int Tx, int Ty, int Layer), MeadowTile> _meadowTiles = new();
     readonly Dictionary<string, Stack<MultiMeshInstance3D>> _meadowPool = new();
+    readonly Stack<MeshInstance3D> _meadowMergedPool = new();
+    readonly Dictionary<string, KindArrays?> _kindArrays = new();
     int[] _meadowLive = Array.Empty<int>();
     Dictionary<(int, int), List<(float X, float Y, float Scale)>>? _meadowTrees;
     Vector3? _meadowFocusSet;
     Vector3 _meadowScanned = new(float.NaN, 0, 0);
+
+    /// <summary>Nodes alive now: MultiMesh nodes (one per kind with many instances in a tile and layer) and merged meshes (one per tile and layer, for the small groups), and the vertices of the merged ones.</summary>
+    public (int MultiMeshes, int Merged, int MergedVertices) MeadowNodes
+    {
+        get
+        {
+            int mm = 0, merged = 0, verts = 0;
+            foreach (var t in _meadowTiles.Values)
+                foreach (var n in t.Nodes)
+                    if (n is MeshInstance3D { Mesh: ArrayMesh am }) { merged++; verts += am.SurfaceGetArrayLen(0); }
+                    else mm++;
+            return (mm, merged, verts);
+        }
+    }
 
     /// <summary>Tiles and instances alive now (0 when there is no meadow), for tests and the log.</summary>
     public (int Tiles, int Instances) MeadowLive => (_meadowTiles.Count, _meadowLive.Sum());
@@ -52,6 +71,8 @@ public sealed partial class MapLoader
         _meadow = null;
         _meadowTiles.Clear();
         _meadowPool.Clear();
+        _meadowMergedPool.Clear();
+        _kindArrays.Clear();
         _meadowTrees = null;
         _meadowLive = Array.Empty<int>();
         _meadowScanned = new Vector3(float.NaN, 0, 0);
@@ -178,9 +199,11 @@ public sealed partial class MapLoader
         }
         var centre = new Vector3((tx + 0.5f) * tileM, 0, -(ty + 0.5f) * tileM);
         var range = MeadowSettings.RangeOf(layer, ClutterScale) + MeadowSettings.TileAllowanceM(m.CellM);
+        List<(Mesh Mesh, string Kind, List<(Vector3 P, float Rot, float Scale, byte Tint)> List)>? small = null;
         foreach (var (kind, list) in byKind)
         {
             if (!_meadowMeshes.TryGetValue(kind, out var mesh)) { ClutterWarn("meadow-kind:" + kind, $"meadow: no mesh for kind '{kind}'"); continue; }
+            if (!MeadowSettings.UsesMultiMesh(list.Count)) { (small ??= new()).Add((mesh, kind, list)); continue; }
             var node = RentMeadowNode(kind, mesh, list.Count);
             var mm = node.Multimesh;
             var y0 = float.MaxValue; var y1 = float.MinValue;
@@ -200,7 +223,87 @@ public sealed partial class MapLoader
             node.Visible = true;
             tile.Nodes.Add(node);
         }
+        if (small != null && BuildMergedMesh(small, centre, tileM, range, _meadowRoot!, "meadow_merged", _meadowMergedPool) is { } merged) tile.Nodes.Add(merged);
         _meadowLive[li] += tile.Instances;
+    }
+
+    KindArrays? ArraysOf(string kind, Mesh mesh)
+    {
+        if (_kindArrays.TryGetValue(kind, out var cached)) return cached;
+        KindArrays? result = null;
+        if (mesh.GetSurfaceCount() > 0 && mesh.SurfaceGetArrays(0) is { Count: > 0 } a && a[(int)Mesh.ArrayType.Vertex].VariantType != Variant.Type.Nil)
+        {
+            var normals = a[(int)Mesh.ArrayType.Normal];
+            var colours = a[(int)Mesh.ArrayType.Color];
+            var indices = a[(int)Mesh.ArrayType.Index];
+            result = new KindArrays(
+                a[(int)Mesh.ArrayType.Vertex].AsVector3Array(),
+                normals.VariantType == Variant.Type.Nil ? null : normals.AsVector3Array(),
+                colours.VariantType == Variant.Type.Nil ? null : colours.AsColorArray(),
+                indices.VariantType == Variant.Type.Nil ? null : indices.AsInt32Array());
+        }
+        _kindArrays[kind] = result;
+        return result;
+    }
+
+    /// <summary>The small groups of a tile (or stored cell) and layer as one mesh: every instance's triangles transformed into the tile's frame with the tint multiplied into the vertex colours.</summary>
+    MeshInstance3D? BuildMergedMesh(List<(Mesh Mesh, string Kind, List<(Vector3 P, float Rot, float Scale, byte Tint)> List)> groups, Vector3 centre, float tileM, float range,
+        Node3D parent, string name, Stack<MeshInstance3D>? pool = null)
+    {
+        var verts = new List<Vector3>(); var norms = new List<Vector3>(); var cols = new List<Color>();
+        var y0 = float.MaxValue; var y1 = float.MinValue; var reachY = 0.1f;
+        var hasNormals = true;
+        foreach (var (mesh, kind, list) in groups)
+        {
+            if (ArraysOf(kind, mesh) is not { } src) continue;
+            hasNormals &= src.Normals != null;
+            reachY = MathF.Max(reachY, mesh.GetAabb().Size.Length() * 1.5f);
+            var count = src.Indices?.Length ?? src.Vertices.Length;
+            foreach (var (p, rot, scale, tint) in list)
+            {
+                var basis = Basis.Identity.Rotated(Vector3.Up, rot).Scaled(new Vector3(scale, scale, scale));
+                var origin = p - new Vector3(centre.X, 0, centre.Z);
+                var mul = TintColor(tint);
+                y0 = MathF.Min(y0, p.Y); y1 = MathF.Max(y1, p.Y);
+                for (var v = 0; v < count; v++)
+                {
+                    var i = src.Indices != null ? src.Indices[v] : v;
+                    verts.Add(basis * src.Vertices[i] + origin);
+                    if (src.Normals != null) norms.Add((basis * src.Normals[i]).Normalized());
+                    var c = src.Colours != null ? src.Colours[i] : Colors.White;
+                    cols.Add(new Color(c.R * mul.R, c.G * mul.G, c.B * mul.B, c.A));
+                }
+            }
+        }
+        if (verts.Count == 0) return null;
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = verts.ToArray();
+        if (hasNormals && norms.Count == verts.Count) arrays[(int)Mesh.ArrayType.Normal] = norms.ToArray();
+        arrays[(int)Mesh.ArrayType.Color] = cols.ToArray();
+        var am = new ArrayMesh();
+        am.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        var half = tileM * 0.5f + 1f;
+        am.CustomAabb = new Aabb(new Vector3(-half, y0 - reachY, -half), new Vector3(2 * half, y1 - y0 + 2 * reachY, 2 * half));
+        MeshInstance3D node;
+        if (pool is { Count: > 0 }) node = pool.Pop();
+        else
+        {
+            node = new MeshInstance3D
+            {
+                Name = name,
+                MaterialOverride = FlatMaterial(),
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                VisibilityRangeEndMargin = ClutterSettings.FadeMarginM,
+                VisibilityRangeFadeMode = GeometryInstance3D.VisibilityRangeFadeModeEnum.Self,
+            };
+            parent.AddChild(node);
+        }
+        node.Mesh = am;
+        node.Position = new Vector3(centre.X, 0, centre.Z);
+        node.VisibilityRangeEnd = range;
+        node.Visible = true;
+        return node;
     }
 
     MultiMeshInstance3D RentMeadowNode(string kind, Mesh mesh, int count)
@@ -233,7 +336,8 @@ public sealed partial class MapLoader
         foreach (var node in tile.Nodes)
         {
             node.Visible = false;
-            _meadowPool[node.GetMeta("kind").AsString()].Push(node);
+            if (node is MeshInstance3D merged) { merged.Mesh = null; _meadowMergedPool.Push(merged); }
+            else _meadowPool[node.GetMeta("kind").AsString()].Push((MultiMeshInstance3D)node);
         }
     }
 

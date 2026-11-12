@@ -29,9 +29,16 @@ from suchohrad_pipeline.textures import texture
 DEFAULT_OUT = REPO_ROOT / "out" / "detail"
 OUTSIDE = (122, 154, 106)
 ROAD = (138, 140, 144)
-LEGEND = {"tuft": (88, 140, 60), "flower": (232, 120, 150), "pebble": (150, 148, 140), "rock": (112, 110, 106),
-          "leaf": (176, 92, 46), "stick": (110, 79, 51), "fern": (61, 122, 58)}
-DRAW_ORDER = {k: i for i, k in enumerate(("leaf", "stick", "pebble", "tuft", "fern", "rock", "flower"))}
+
+def _kind_colour(kind: str) -> tuple[int, int, int]:
+    """The legend swatch of a kind: the mean of its mesh colours."""
+    return tuple(int(v) for v in clutter_meshes()[kind].colours.mean(axis=0))
+
+
+def _draw_order(kind: str) -> float:
+    """Low things first, tall ones over them."""
+    t = clutter_meshes()[kind].tris
+    return float(t[:, :, 2].max())
 
 
 def _font(size: int):
@@ -117,7 +124,7 @@ def render(ctx: ParcelContext, res: DetailResult, cfg: dict, box: tuple[float, f
 
     meshes = {k: m.tris for k, m in clutter_meshes().items()}
     cols = {k: m.colours for k, m in clutter_meshes().items()}
-    for c in sorted(res.clutter, key=lambda c: DRAW_ORDER[c["kind"]]):
+    for c in sorted(res.clutter, key=lambda c: _draw_order(c["kind"])):
         if not inside(c["x"], c["y"]):
             continue
         tris, colours = meshes[c["kind"]], cols[c["kind"]]
@@ -161,14 +168,52 @@ def render(ctx: ParcelContext, res: DetailResult, cfg: dict, box: tuple[float, f
 
 
 def legend(width: int, counts: dict[str, int]) -> Image.Image:
-    img = Image.new("RGB", (width, 38), (30, 30, 34))
-    d, f = ImageDraw.Draw(img), _font(13)
-    x = 10
-    for name in CLUTTER_KINDS:
-        d.ellipse([x, 12, x + 12, 24], fill=LEGEND[name])
-        d.text((x + 18, 10), f"{name} {counts[name]}", fill=(230, 230, 230), font=f)
-        x += 104
+    """One swatch and count per kind that is present, wrapped over as many rows as it takes."""
+    d0, f = ImageDraw.Draw(Image.new("RGB", (1, 1))), _font(13)
+    items = [(k, n) for k, n in counts.items() if n]
+    rows, x, y = [], 10, 0
+    placed = []
+    for name, n in items:
+        text = f"{name} {n}"
+        w = 24 + int(d0.textlength(text, font=f)) + 14
+        if x + w > width and x > 10:
+            x, y = 10, y + 22
+        placed.append((x, y, name, text))
+        x += w
+    img = Image.new("RGB", (width, y + 38), (30, 30, 34))
+    d = ImageDraw.Draw(img)
+    for x, y, name, text in placed:
+        d.ellipse([x, y + 12, x + 12, y + 24], fill=_kind_colour(name))
+        d.text((x + 18, y + 10), text, fill=(230, 230, 230), font=f)
     return img
+
+
+def kinds_sheet(out: Path) -> Path:
+    """A contact sheet of every clutter kind from the real meshes: a three-quarter view at 220 px per metre (so a mesh of
+    a metre fills it), with the name, the triangle count and the height."""
+    meshes = clutter_meshes()
+    cols, cell = 6, 250
+    rows = math.ceil(len(meshes) / cols)
+    img = Image.new("RGB", (cols * cell, rows * cell), (122, 154, 106))
+    d, f = ImageDraw.Draw(img), _font(14)
+    ang = math.radians(35)
+    for i, (kind, m) in enumerate(meshes.items()):
+        ox, oy = (i % cols) * cell + cell / 2, (i // cols) * cell + cell - 46
+        t = m.tris
+        top = float(t[:, :, 2].max())
+        px = min(220.0, 150.0 / max(top, 0.2), 150.0 / max(float(np.ptp(t[:, :, 0])), 0.2))
+        pts = np.stack([t[:, :, 0] * px, -(t[:, :, 1] * math.sin(ang) + t[:, :, 2] * math.cos(ang)) * px], axis=2)
+        depth = (t[:, :, 1] * math.cos(ang) - t[:, :, 2] * math.sin(ang)).mean(axis=1)
+        n = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+        shade = 0.7 + 0.3 * np.abs(n[:, 2]) / np.maximum(np.linalg.norm(n, axis=1), 1e-9)
+        for j in np.argsort(-depth):
+            col = tuple(int(min(255, v)) for v in m.colours[j] * shade[j])
+            d.polygon([(ox + p[0], oy + p[1]) for p in pts[j]], fill=col)
+        d.text((i % cols * cell + 8, i // cols * cell + 6), f"{kind}  {m.face_count} tris  {top:.2f} m", fill=(20, 20, 20), font=f)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / "kinds.png"
+    img.save(path)
+    return path
 
 
 def densest_box(res: DetailResult, size: float, bounds) -> tuple[float, float, float, float]:
@@ -196,8 +241,12 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--window", type=float, default=40.0, help="side of the square shown of a parcel bigger than this, metres")
     ap.add_argument("--px-per-m", type=float, default=28.0)
     ap.add_argument("--zoom", type=float, default=70.0, help="pixels per metre of the close-up")
+    ap.add_argument("--kinds", action="store_true", help="draw a contact sheet of every clutter kind instead of a parcel")
     ap.add_argument("--meadow", action="store_true", help="field and forest: draw what the game generates from the meadow raster")
     a = ap.parse_args(argv)
+    if a.kinds:
+        print(kinds_sheet(a.out))
+        return
     paths = area_paths(a.area)
     ctx, res = run_parcel(a.parcel, a.work or paths.work, area=a.area, with_meadow=a.meadow)
     cfg = load_section("detail", area=a.area)

@@ -244,6 +244,14 @@ public static class MeadowSettings
     public const float BuildAheadM = 12f;
     /// <summary>A tile is freed when it is this much further than the point where it stops showing (hysteresis against building it again at once).</summary>
     public const float KeepBehindM = 30f;
+    /// <summary>
+    /// A kind with at least this many instances in a meadow tile and layer gets its own MultiMesh node; fewer (the strays of a mix, the minor species of a patch) are
+    /// merged with the tile's other small groups into one mesh with the tint baked into its vertex colours, so one more species does not mean one more draw call.
+    /// </summary>
+    public const int MultiMeshMin = 48;
+
+    public static bool UsesMultiMesh(int instances) => instances >= MultiMeshMin;
+
     /// <summary>Tiles are re-chosen when the focus has moved this far (metres) since the last time.</summary>
     public const float RescanM = 3f;
     /// <summary>Tile builds started per call at most, and the time one call may spend (milliseconds); a build is never split.</summary>

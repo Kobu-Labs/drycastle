@@ -53,11 +53,11 @@ from suchohrad_pipeline.regions import drape, plan_regions
 from suchohrad_pipeline.roads import edge_lines
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 from suchohrad_pipeline.terrain import Terrain, load_terrain
-from suchohrad_pipeline.detail_meshes import TINTABLE
+from suchohrad_pipeline.detail_meshes import KINDS, TINTABLE
 from suchohrad_pipeline.textures import TexturedMesh, tex_node_name, texture
 
 DETAIL_FORMAT_VERSION = 1
-CLUTTER_KINDS = ("tuft", "flower", "pebble", "rock", "leaf", "stick", "fern")
+CLUTTER_KINDS = KINDS
 # The first layer wins where two overlap (a path crosses lawn, litter lies on lawn, ...).
 PATCH_PRIORITY = (
     "gravel", "verge_gravel", "bed", "furrow", "dirt", "verge_dirt", "litter", "tone_a", "tone_b", "lawn",
@@ -413,6 +413,15 @@ def _emit(g: np.random.Generator, kind: str, pts: np.ndarray, span: list[float],
     return out
 
 
+def _split_kinds(g: np.random.Generator, pts: np.ndarray, kinds: list) -> dict[str, np.ndarray]:
+    """Points dealt out to kinds by their shares (``[[kind, share], ...]``, drawn from ``g``)."""
+    if not len(pts):
+        return {}
+    cum = np.cumsum([float(w) for _, w in kinds])
+    idx = np.minimum(np.searchsorted(cum / cum[-1], g.random(len(pts)), side="right"), len(kinds) - 1)
+    return {k: pts[idx == i] for i, (k, _) in enumerate(kinds) if (idx == i).any()}
+
+
 def _zones(g: np.random.Generator, zones: list[tuple[BaseGeometry, float]], spacing: float) -> np.ndarray:
     """Scatter over several zones, each with its own density; zones are made disjoint in the order given."""
     taken: BaseGeometry = Polygon()
@@ -671,16 +680,28 @@ def _garden_clutter(ctx: ParcelContext, cfg: dict, layers: dict[str, BaseGeometr
 
     g = _gen(pid, "tuft")
     pts = scatter(g, open_ground, float(t["spacing_m"]), _region_density([(grass, tuft_lawn), (dirt, 0.04), (open_ground, lambda xs, ys: tuft_lawn(xs, ys) * 0.5)]))
-    out += _emit(g, "tuft", pts, t["scale"], ctx, cfg)
+    # grass nobody mows (beside a fence or a wall) grows tall, the rest of the lawn has some clover among it
+    if len(pts):
+        unmown = np.minimum(d_edge(pts[:, 0], pts[:, 1]), d_wall(pts[:, 0], pts[:, 1])) < float(t["unmown_m"])
+        r = g.random(len(pts))
+        tall = unmown & (r < float(t["tall"]))
+        patch = ~unmown & (r < float(t["clover"]))
+        for kind, sel in (("tall_grass", tall), ("clover", patch), ("tuft", ~tall & ~patch)):
+            out += _emit(g, kind, pts[sel], t["scale"], ctx, cfg)
 
     f = c["flower"]
     g = _gen(pid, "flower")
+    species = f["species"]
+    names = list(species)
+    weights = np.array([float(species[k]["share"]) for k in names])
     for cx, cy in scatter(g, grass.buffer(-0.4), float(f["cluster_spacing_m"]), float(f["cluster_keep"])):
-        k = int(g.integers(int(f["cluster_size"][0]), int(f["cluster_size"][1]) + 1))
+        kind = names[int(np.searchsorted(np.cumsum(weights) / weights.sum(), g.random(), side="right").clip(0, len(names) - 1))]
+        size = species[kind]["size"]
+        k = int(g.integers(int(size[0]), int(size[1]) + 1))
         a, r = g.random(k) * math.tau, float(f["cluster_radius_m"]) * np.sqrt(g.random(k))
         pts = np.stack([cx + r * np.cos(a), cy + r * np.sin(a)], axis=1)
         pts = pts[shapely.contains_xy(grass, pts[:, 0], pts[:, 1])]
-        out += _emit(g, "flower", pts, f["scale"], ctx)
+        out += _emit(g, kind, pts, f["scale"], ctx)
 
     p = c["pebble"]
     wall_m = float(p["wall_m"])
@@ -893,7 +914,8 @@ def road_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
             continue
         g = _gen(pid, kind)
         pts = _zones(g, [(gravel, s.get("gravel", 0.0)), (dirt, s.get("dirt", 0.0)), (grass, s.get("grass", 0.0))], float(s["spacing_m"]))
-        out += _emit(g, kind, pts, s["scale"], ctx, cfg)
+        for k, sub in (_split_kinds(g, pts, s["kinds"]).items() if "kinds" in s else [(kind, pts)]):
+            out += _emit(g, k, sub, s["scale"], ctx, cfg)
     res.clutter = out
     return res
 

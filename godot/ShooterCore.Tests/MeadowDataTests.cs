@@ -228,6 +228,13 @@ public class MeadowDataTests
     }
 
     [Fact]
+    public void SmallGroupsAreMergedAndBigOnesInstanced()
+    {
+        Assert.False(MeadowSettings.UsesMultiMesh(MeadowSettings.MultiMeshMin - 1));
+        Assert.True(MeadowSettings.UsesMultiMesh(MeadowSettings.MultiMeshMin));
+    }
+
+    [Fact]
     public void BadFilesAreRefused()
     {
         Assert.Throws<FormatException>(() => MeadowFile.Parse(new byte[] { 1, 2, 3 }));

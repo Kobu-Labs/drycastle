@@ -85,6 +85,10 @@ public static class ClutterSettings
     /// <summary>Instances are grouped into cells this wide (metres), one MultiMesh per cell and kind, because a visibility range
     /// is measured to the node as a whole: one chunk-sized MultiMesh would vanish while the player stands inside it.</summary>
     public const float CellM = 48f;
+    /// <summary>A stored kind with at least this many instances in a cell is one MultiMesh node; fewer are merged with the cell's other small groups into one mesh
+    /// (about 19 MB of vertices for the village, 1,715 nodes instead of 2,809).</summary>
+    public const int MultiMeshMin = 16;
+
     /// <summary>Distance (metres) from the camera at which a kind is gone, before the cell allowance.</summary>
     public const float DefaultRangeM = 70f;
     /// <summary>The fade zone before the range end (metres).</summary>
@@ -100,6 +104,22 @@ public static class ClutterSettings
         ["stick"] = 40f,
         ["flower"] = 55f,
         ["rock"] = 80f,
+        // grasses: tuft, tall_grass, straw and reed keep the default; a flat mat or a low weed goes sooner
+        ["clover"] = 45f,
+        ["weed"] = 55f,
+        // wild flowers (meadows, verges): small heads go sooner than the tall ones
+        ["dandelion"] = 50f,
+        ["daisy"] = 50f,
+        ["red_clover"] = 50f,
+        ["buttercup"] = 50f,
+        ["poppy"] = 55f,
+        ["cornflower"] = 55f,
+        ["yarrow"] = 55f,
+        // garden flowers: the tall ones show from further
+        ["tulip"] = 60f,
+        ["sunflower"] = 80f,
+        ["spike"] = 70f,
+        ["rose"] = 80f,
     };
 
     public static float RangeOf(string kind) => KindRangeM.TryGetValue(kind, out var r) ? r : DefaultRangeM;

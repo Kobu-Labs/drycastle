@@ -16,11 +16,11 @@ public sealed partial class MapLoader
     /// <summary>Clutter distance scale: 0 = off, 1 = default distances. Initialised from SUCHOHRAD_CLUTTER; set before Load.</summary>
     public static float ClutterScale { get; set; } = ClutterSettings.ParseScale(System.Environment.GetEnvironmentVariable(ClutterSettings.EnvVar));
 
-    readonly List<MultiMeshInstance3D> _clutterNodes = new();
+    readonly List<GeometryInstance3D> _clutterNodes = new();
     readonly HashSet<string> _clutterWarned = new();
 
-    /// <summary>Clutter nodes built by the last load (one per cell and kind).</summary>
-    public IReadOnlyList<MultiMeshInstance3D> ClutterNodes => _clutterNodes;
+    /// <summary>Clutter nodes built by the last load: one MultiMesh per cell and kind with many instances, and one merged mesh per cell for its small groups.</summary>
+    public IReadOnlyList<GeometryInstance3D> ClutterNodes => _clutterNodes;
 
     /// <summary>Frees the clutter nodes (a reload builds them again; the tree owns them, so a double build would duplicate).</summary>
     void FreeClutter()
@@ -72,6 +72,9 @@ public sealed partial class MapLoader
         }
         if (doc.Groups.Count == 0) yield break;
 
+        // a kind with many instances in a cell is one MultiMesh; the small groups of a cell (and chunk) are merged into one mesh, so a rare
+        // species does not cost a node of its own (ClutterSettings.MultiMeshMin)
+        var small = new Dictionary<(Node3D Parent, int Cx, int Cy), List<(Mesh Mesh, string Kind, List<(Vector3 P, float Rot, float Scale, byte Tint)> List)>>();
         var done = 0;
         foreach (var g in doc.Groups)
         {
@@ -84,7 +87,19 @@ public sealed partial class MapLoader
             var parent = _chunkRoots.TryGetValue($"chunk_{g.ChunkX}_{g.ChunkY}", out var cr) ? cr : Root;
             var range = ClutterSettings.RangeOf(g.Kind) * ClutterScale + ClutterSettings.CellAllowanceM;
             foreach (var cell in ClutterSettings.Cells(g.Instances))
-                _clutterNodes.Add(AddClutterCell(parent, g.Kind, mesh, cell, range));
+            {
+                if (cell.Count >= ClutterSettings.MultiMeshMin) { _clutterNodes.Add(AddClutterCell(parent, g.Kind, mesh, cell, range)); continue; }
+                var key = (parent, (int)MathF.Floor(cell[0].X / ClutterSettings.CellM), (int)MathF.Floor(cell[0].Y / ClutterSettings.CellM));
+                if (!small.TryGetValue(key, out var list)) small[key] = list = new();
+                list.Add((mesh, g.Kind, cell.Select(i => (ToGodot(i.X, i.Y, i.Z), i.Rot, i.Scale, i.Tint)).ToList()));
+                Stats.ClutterInstances += cell.Count;
+            }
+        }
+        foreach (var ((parent, cx, cy), groups) in small)
+        {
+            var centre = ToGodot((cx + 0.5f) * ClutterSettings.CellM, (cy + 0.5f) * ClutterSettings.CellM, 0f);
+            var range = groups.Max(g => ClutterSettings.RangeOf(g.Kind)) * ClutterScale + ClutterSettings.CellAllowanceM;
+            if (BuildMergedMesh(groups, centre, ClutterSettings.CellM, range, parent, "clutter_merged") is { } node) _clutterNodes.Add(node);
         }
         if (_clutterNodes.Count > 0)
             GD.Print($"clutter: {Stats.ClutterInstances} instances in {_clutterNodes.Count} nodes, scale {ClutterScale}");

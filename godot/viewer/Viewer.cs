@@ -219,9 +219,10 @@ public partial class Viewer : Node3D
             {
                 for (var i = 0; i < 30; i++) { _map.SetClutterFocus(sp.Position); await Physics(1); }
                 var (tiles, live) = _map.MeadowLive;
-                var pass = tiles > 0;
+                var (multi, merged, mergedVerts) = _map.MeadowNodes;
+                var pass = tiles > 0 && multi + merged > 0 && (merged == 0 || mergedVerts > 0);
                 ok &= pass;
-                GD.Print($"{(pass ? "PASS" : "FAIL")} meadow at {sp.Id} ({sp.Kind}): tiles={tiles} instances={live}");
+                GD.Print($"{(pass ? "PASS" : "FAIL")} meadow at {sp.Id} ({sp.Kind}): tiles={tiles} instances={live} multimesh nodes={multi} merged meshes={merged} ({mergedVerts} vertices)");
             }
         }
 

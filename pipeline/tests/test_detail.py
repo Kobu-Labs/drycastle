@@ -143,13 +143,24 @@ def test_clutter_meshes_are_tiny_and_stand_on_the_ground() -> None:
     assert list(meshes) == list(detail_meshes.KINDS)
     for name, m in meshes.items():
         assert 3 <= m.face_count <= 30, name
-        assert m.tris[:, :, 2].min() >= -1e-9 and m.tris[:, :, 2].max() < 0.5, name
+        assert m.tris[:, :, 2].min() >= -1e-9 and m.tris[:, :, 2].max() < 1.3, name
 
 
-def test_stored_tufts_carry_a_tint_and_flowers_do_not(cfg: dict) -> None:
+def test_stored_grass_carries_a_tint_and_flowers_do_not(cfg: dict) -> None:
     res = garden_detail(yard(), cfg)
-    tufts = [c for c in res.clutter if c["kind"] == "tuft"]
-    assert tufts and all(0 <= c["tint"] <= 255 for c in tufts)
-    assert all("tint" not in c for c in res.clutter if c["kind"] != "tuft")
-    assert len({c["tint"] for c in tufts}) > 5  # not one flat value
+    grass = [c for c in res.clutter if c["kind"] in detail_meshes.TINTABLE]
+    assert grass and all(0 <= c["tint"] <= 255 for c in grass)
+    assert all("tint" not in c for c in res.clutter if c["kind"] not in detail_meshes.TINTABLE)
+    assert len({c["tint"] for c in grass}) > 5  # not one flat value
     assert detail_meshes.tint_rgb(128) == (1.0, 1.0, 1.0)
+
+
+def test_a_yard_has_garden_flowers_only_and_tall_grass_by_the_fence(cfg: dict) -> None:
+    res = garden_detail(yard(), cfg)
+    kinds = {c["kind"] for c in res.clutter}
+    assert not kinds & set(detail_meshes.WILD_FLOWERS)  # the wild species stay on meadows and verges
+    assert kinds & set(detail_meshes.GARDEN_FLOWERS)
+    tall = [c for c in res.clutter if c["kind"] == "tall_grass"]
+    lawn = [c for c in res.clutter if c["kind"] == "tuft"]
+    d = lambda c: min(Point(c["x"], c["y"]).distance(f) for f in yard().fences)  # noqa: E731
+    assert np.mean([d(c) for c in tall]) < np.mean([d(c) for c in lawn])

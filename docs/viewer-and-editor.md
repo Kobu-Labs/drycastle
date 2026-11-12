@@ -106,6 +106,11 @@ layer with the tint flag carry one too. The loader sets it as the MultiMesh inst
 variety costs no extra nodes: `ClutterTint.Rgb` (fresh 0.80/0.97/0.78 at 0, white at 128, dry 1.0/0.80/0.55 at 255). A product cannot add yellow to a green, so "dry" reads
 as olive; real straw is its own kind. The pipeline lays the tint out as a smooth noise over the ground plus a small jitter (`meadow.py` `tone_noise`, `tint_byte`; `MeadowGen.Tint` mirrors it).
 
+**Draw calls (map 0.10.0).** One node per kind and cell would mean a node for every rare species (the village has 23 kinds). A group with at least `ClutterSettings.MultiMeshMin` (16) instances in a 48 m cell
+is a `MultiMeshInstance3D`; the cell's smaller groups are merged into one `MeshInstance3D` (`clutter_merged`: the kinds' triangles transformed into place, the tint multiplied into the vertex colours, the
+visibility range of its farthest kind). The village: 89k stored instances in about 1,700 nodes (about 19 MB of merged vertices), against 1,824 nodes for 79k instances before the variety.
+`MapLoader.ClutterNodes` lists them.
+
 ### Meadow clutter (generated near the player)
 
 Fields, meadows and forests are about 400 ha, too much to store clutter instances for. Maps with `files.meadow` (`meadow.bin`, map 0.9.0) carry a density raster instead
@@ -113,7 +118,8 @@ Fields, meadows and forests are about 400 ha, too much to store clutter instance
 mix, which says per layer which kinds a cell makes and in what shares, its low nibble is a dryness that biases the tint). `MapLoader.Meadow.cs` turns the cells
 near the focus into instances with `MeadowGen` (a hash of the cell and layer, the same on every client, nothing is sent; `MeadowData.cs`, pure, mirrors `meadow.generate`
 and a test pins both). The ground is cut into 24 m tiles, each tile and layer is one `MultiMeshInstance3D` per kind (pooled), built nearest first at most 6 tiles or 2 ms per
-frame, freed 30 m behind its range. Ranges and `SUCHOHRAD_CLUTTER` are those of the stored clutter; live instances per layer are capped (`MeadowSettings.CapOf`).
+frame, freed 30 m behind its range. A tile and layer with a kind of at least `MeadowSettings.MultiMeshMin` (48) instances draws it as a MultiMesh, and its smaller groups (a stray species of the patch mix) as one merged mesh
+(`meadow_merged`, tint baked into the vertex colours), so a layer with seven flower species is about one or two nodes per tile, not seven (`MapLoader.MeadowNodes` counts them). Ranges and `SUCHOHRAD_CLUTTER` are those of the stored clutter; live instances per layer are capped (`MeadowSettings.CapOf`).
 Instances within a tree's trunk reach (from `trees.json`) are dropped; the height comes from `GroundHeight` (the terrain collision mesh, decimated). The focus is the current camera
 unless `MapLoader.SetClutterFocus(position)` is called each frame. A map without `meadow.bin` and the headless server do nothing.
 
