@@ -269,6 +269,14 @@ props:
     trunk_colour: "#6b4a2f"
     canopy_colours: ["#4f8f45", "#5a9a4c", "#468040"]
     forest_canopy_colours: ["#2f6a3a", "#285e33"]
+    # EXPERIMENT, only with DRYCASTLE_TREE_SOURCE=ortho (props.ortho_trees; trees read from the orthophoto, make ortho-trees):
+    # the trees planted inside the detected canopy. A forest seen from above is nearly closed (crowns 5-7 m across), so this
+    # is far denser and bigger than the rule-based forest above: about one tree per 40 m2, 4-5 m apart, crown edge
+    # canopy_m * canopy_crown_scale (4.4-6.5 m). The standalone trees keep the crown radius the detector measured.
+    ortho:
+      canopy_per_1000m2: 25.0
+      canopy_min_spacing_m: 4.0
+      canopy_crown_scale: [1.7, 2.5]
 
 # --- Ground detail (detail stage, `make detail`; docs/pipeline.md "Detail") ----------------------------
 # Patches (flat colour or library texture, draped on the terrain, never overlapping: the first layer in
