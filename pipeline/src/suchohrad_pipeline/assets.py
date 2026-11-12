@@ -12,7 +12,7 @@ from suchohrad_pipeline.config import REPO_ROOT
 ASSETS_DIR = REPO_ROOT / "assets"
 DEFAULT_MANIFEST = ASSETS_DIR / "manifest.json"
 MANIFEST_FORMAT_VERSION = 1
-CATEGORIES = ("car", "slab", "pot", "flower", "bush", "tree", "wall", "fence", "other")
+CATEGORIES = ("car", "slab", "pot", "flower", "bush", "tree", "wall", "fence", "pole", "connector", "other")
 
 
 def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict:

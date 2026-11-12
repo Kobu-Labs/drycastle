@@ -291,10 +291,19 @@ public sealed class KillstreakService
         _send(use.Owner, EventKind.StreakEnded, KillstreakEvents.EncodeEnded(use.StreakId, use.EndReason ?? KillstreakEndReason.Finished));
     }
 
+    /// <summary>Ends every open instance that owns the world entity <paramref name="entityId"/> (its aircraft was shot down). Returns how many ended.</summary>
+    public int EndForEntity(ushort entityId, KillstreakEndReason reason)
+    {
+        var uses = _active.Where(u => u.IsOpen && u.Entity == entityId).ToList();
+        foreach (var use in uses) Finish(use, reason);
+        return uses.Count;
+    }
+
     internal bool TakeControl(KillstreakUse use, ushort entityId, Action<NetInput> onInput, bool freezesBody, bool shieldsBody)
     {
         if (!use.IsOpen) return false;
         if (_control.TryGetValue(use.Owner, out var holder) && !ReferenceEquals(holder, use)) return false;
+        use.Entity = entityId;
         use.Control = new ControlSession(use.Owner, use.StreakId, entityId, onInput, freezesBody, shieldsBody);
         _control[use.Owner] = use;
         return true;

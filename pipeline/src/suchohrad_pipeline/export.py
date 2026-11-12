@@ -16,11 +16,13 @@ import trimesh
 from suchohrad_pipeline.buildings import DEFAULT_OVERRIDES
 from suchohrad_pipeline.config import DEFAULT_AREA, DEFAULT_RAW_DIR, REPO_ROOT, area_paths
 from suchohrad_pipeline.edits import DEFAULT_EDITS
+from suchohrad_pipeline.detail_meshes import clutter_meshes
 from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.primitives import PRIMITIVES, build_primitive
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 from suchohrad_pipeline.scene import build_scene
+from suchohrad_pipeline.textures import TexturedMesh, tex_node_name
 from suchohrad_pipeline.water import build_water
 
 DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
@@ -31,13 +33,27 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # write absolute coordinates) and the manifest lists edit_defaults (the rule values the editor shows as defaults).
 # 0.5.0: lamps.json (street lamp positions, files.lamps). Not in the chunk GLBs: the game builds poles and lights.
 # 0.6.0: trees.json (files.trees): tree records and model numbers, for the trunk and crown collision solids.
-MAP_VERSION_BASE = "0.6.0"
+# 0.7.0: textured nodes "<node>_tex_<texture id>" (UVs and a tint; drawn with that texture of the library in
+# assets/manifest.json), first used for typed fences: "parcel_<ID>_props_tex_<id>". The manifest lists the ids used.
+# (no bump) objects.json may carry "cables": the cables between placed utility poles (id, from, to). The game
+# strings the wires itself from the poles and the wire seats in assets/manifest.json; older loaders ignore the key.
+# 0.8.0: ground detail (detail stage): per chunk a "detail_patches" node (flat colours) and "detail_patches_tex_<id>" nodes
+# (draped patches of dirt, gravel, leaf litter, beds, furrows, tones), and clutter.json (files.clutter: instances per chunk
+# and kind) with clutter_meshes.glb (files.clutter_meshes: one tiny mesh per kind) for instanced rendering near the player.
+# 0.9.0: meadow.bin (files.meadow): the density raster the game turns into near-player clutter on fields and in forests
+# (detail/meadow.py). Optional: a loader that does not know it just draws the stored clutter.
+# 0.10.0: clutter variety. clutter.json entries may carry a sixth number, the tint byte (128 = as drawn), and its kinds a
+# "tint" flag; meadow.bin is format 2 (a tint flag per layer) and then 3 (a species-zone plane and kind mixes); more
+# clutter kinds (grasses, wild and garden flowers) in clutter_meshes.glb. A loader that reads only 0.9.0 clutter would refuse
+# meadow.bin's new format and draw no meadow.
+MAP_VERSION_BASE = "0.10.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 TREES_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
-               "props.json", "spawns.json", "lamps.json")
-NOT_GENERATED_NOTE = "Textures, landmarks, navmesh and water surface meshes are not generated (water.json holds the water bodies)."
+               "props.json", "spawns.json", "lamps.json", "detail.json", "detail_patches.npy",
+               "detail_patches.json", "detail_meadow.bin")
+NOT_GENERATED_NOTE = "Landmarks, navmesh and water surface meshes are not generated (water.json holds the water bodies). Textures are not in the map: textured nodes name a texture of the asset library."
 
 
 def to_gltf_axes(tris: np.ndarray) -> np.ndarray:
@@ -62,13 +78,44 @@ def to_trimesh(mesh: Mesh) -> trimesh.Trimesh:
     )
 
 
-def parcel_props_nodes(items: list[tuple[str, Mesh, Mesh]]) -> dict[str, Mesh]:
-    """``parcel_<ID>_props`` (visual) and ``parcel_<ID>_props_collision`` nodes; empty ones omitted."""
-    out: dict[str, Mesh] = {}
-    for pid, visual, collision in sorted(items, key=lambda t: t[0]):
+def to_trimesh_textured(mesh: TexturedMesh, tid: str) -> trimesh.Trimesh:
+    """Flat-shaded trimesh with UVs (TEXCOORD_0) and the tint as vertex colour (COLOR_0).
+
+    The material only carries the name ``tex:<id>``; no image is embedded (see ``textures.py``).
+    """
+    verts = to_gltf_axes(mesh.tris).reshape(-1, 3)
+    rgba = np.concatenate([mesh.colours, np.full((len(mesh.colours), 1), 255, np.uint8)], axis=1)
+    visual = trimesh.visual.TextureVisuals(
+        uv=mesh.uvs.reshape(-1, 2),
+        material=trimesh.visual.material.PBRMaterial(
+            name=f"tex:{tid}", roughnessFactor=1.0, metallicFactor=0.0
+        ),
+    )
+    visual.vertex_attributes["color"] = np.repeat(rgba, 3, axis=0)
+    return trimesh.Trimesh(
+        vertices=verts, faces=np.arange(len(verts)).reshape(-1, 3), visual=visual, process=False
+    )
+
+
+def node_trimesh(name: str, mesh: Mesh | TexturedMesh) -> trimesh.Trimesh:
+    if isinstance(mesh, TexturedMesh):
+        return to_trimesh_textured(mesh, name.partition("_tex_")[2])
+    return to_trimesh(mesh)
+
+
+def parcel_props_nodes(
+    items: list[tuple[str, Mesh, Mesh, dict[str, TexturedMesh]]],
+) -> dict[str, Mesh | TexturedMesh]:
+    """``parcel_<ID>_props`` (visual), ``parcel_<ID>_props_collision`` and one
+    ``parcel_<ID>_props_tex_<texture id>`` per texture used; empty ones omitted."""
+    out: dict[str, Mesh | TexturedMesh] = {}
+    for pid, visual, collision, textured in sorted(items, key=lambda t: t[0]):
         for suffix, mesh in (("props", visual), ("props_collision", collision)):
             if mesh.face_count:
                 out[f"parcel_{pid}_{suffix}"] = mesh
+        for tid, mesh in sorted(textured.items()):
+            if mesh.face_count:
+                out[tex_node_name(f"parcel_{pid}_props", tid)] = mesh
     return out
 
 
@@ -77,7 +124,8 @@ def chunk_name(ix: int, iy: int) -> str:
 
 
 def build_chunk_scene(
-    parcel_meshes: list[tuple[str, Mesh, Mesh]], extra: dict[str, Mesh] | None = None
+    parcel_meshes: list[tuple[str, Mesh, Mesh]],
+    extra: dict[str, Mesh | TexturedMesh] | None = None,
 ) -> trimesh.Scene:
     """Nodes of one chunk: parcel nodes plus terrain, terrain_collision, roads, props, ..."""
     scene = trimesh.Scene()
@@ -86,8 +134,17 @@ def build_chunk_scene(
             name = f"parcel_{pid}_{suffix}"
             scene.add_geometry(to_trimesh(mesh), node_name=name, geom_name=name)
     for name, mesh in sorted((extra or {}).items()):
-        scene.add_geometry(to_trimesh(mesh), node_name=name, geom_name=name)
+        scene.add_geometry(node_trimesh(name, mesh), node_name=name, geom_name=name)
     return scene
+
+
+def write_clutter_meshes(path: Path) -> str:
+    """``clutter_meshes.glb``: one node per clutter kind, flat colours, glTF axes (Y up), at scale 1 on y = 0."""
+    scene = trimesh.Scene()
+    for kind, mesh in clutter_meshes().items():
+        scene.add_geometry(to_trimesh(mesh), node_name=kind, geom_name=kind)
+    path.write_bytes(scene.export(file_type="glb"))
+    return path.name
 
 
 def write_primitives(out_dir: Path) -> dict[str, dict]:
@@ -237,6 +294,22 @@ def run_export(
         # street lamp positions (props stage); copied verbatim, the game builds the lamps from them
         (out_dir / "lamps.json").write_bytes(lamps_src.read_bytes())
         files["lamps"] = "lamps.json"
+    clutter_src = work_dir / "detail.json"
+    if clutter_src.is_file():
+        # clutter instances (detail stage); copied verbatim, with the one mesh per kind they are drawn with
+        (out_dir / "clutter.json").write_bytes(clutter_src.read_bytes())
+        files["clutter"] = "clutter.json"
+        files["clutter_meshes"] = write_clutter_meshes(out_dir / "clutter_meshes.glb")
+    else:
+        for stale in ("clutter.json", "clutter_meshes.glb"):
+            (out_dir / stale).unlink(missing_ok=True)
+    meadow_src = work_dir / "detail_meadow.bin"
+    if meadow_src.is_file():
+        # density raster of the meadow clutter (detail stage); copied verbatim, the game generates the instances from it
+        (out_dir / "meadow.bin").write_bytes(meadow_src.read_bytes())
+        files["meadow"] = "meadow.bin"
+    else:
+        (out_dir / "meadow.bin").unlink(missing_ok=True)
     stale_windows = out_dir / "windows.json"
     stale_windows.unlink(missing_ok=True)
     if scene.windows:
@@ -256,9 +329,9 @@ def run_export(
     _dump(out_dir / "parcels.json", parcels_file)
     water_file = out_dir / "water.json"
     if scene.terrain is not None:
-        water_doc, water_skipped = build_water(parcels_out, scene.terrain)
+        water_doc, water_skipped = build_water(parcels_out, scene.terrain, scene.regions)
         for pid in water_skipped:
-            print(f"export: warning: water parcel {pid} has no terrain under it; no water body", file=sys.stderr)
+            print(f"export: warning: water parcel/region {pid} has no terrain under it (or none below its surface); no water body", file=sys.stderr)
         _dump(water_file, water_doc)
         files["water"] = "water.json"
     elif water_file.exists():
@@ -266,6 +339,8 @@ def run_export(
     generated = {"buildings"}
     if "lamps" in files:
         generated.add("lamps")
+    if "clutter" in files:
+        generated.add("detail")
     terrain_info = None
     if scene.terrain is not None:
         t = scene.terrain
@@ -309,6 +384,9 @@ def run_export(
         "generated": sorted(generated),
         "files": files,
         "edit_defaults": _edit_defaults(rules_path, area),
+        "textures": sorted(
+            {name.partition("_tex_")[2] for c in chunk_entries for name in c["triangles"] if "_tex_" in name}
+        ),
         "prims": prims,
         "terrain": terrain_info,
         "not_generated": NOT_GENERATED_NOTE,

@@ -14,14 +14,16 @@ import shapely
 
 from suchohrad_pipeline.building_detail import build_detail, load_details
 from suchohrad_pipeline.buildings import hex_to_rgb
+from suchohrad_pipeline.detail import load_patches, patches_by_chunk
 from suchohrad_pipeline.edits import DEFAULT_EDITS, load_edits
 from suchohrad_pipeline.landmarks import build_landmark
 from suchohrad_pipeline.meshes import Mesh, building_mesh, collision_mesh
-from suchohrad_pipeline.propmeshes import fence_mesh, parcel_props_meshes, trees_mesh
+from suchohrad_pipeline.propmeshes import fence_mesh, fence_meshes, parcel_props_meshes, trees_mesh
 from suchohrad_pipeline.regions import node_name, plan_regions, region_meshes
 from suchohrad_pipeline.roads import road_mesh
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 from suchohrad_pipeline.terrain import Terrain, load_terrain
+from suchohrad_pipeline.textures import TexturedMesh, tex_node_name
 
 Chunk = tuple[int, int]
 GREY = (128, 128, 128)
@@ -58,11 +60,16 @@ class ParcelColours:
 @dataclass
 class MapScene:
     terrain: Terrain | None = None
+    regions: dict = field(default_factory=dict)  # planned regions by ID (water.json takes the ones with a water_y)
     building_elevation: dict[str, float] = field(default_factory=dict)
     parcels: dict[Chunk, list[tuple[str, Mesh, Mesh]]] = field(default_factory=dict)
-    nodes: dict[Chunk, dict[str, Mesh]] = field(default_factory=dict)  # terrain, roads, props, ...
-    # fences and trees of one parcel (visual, collision), in the parcel's own chunk
-    parcel_props: dict[Chunk, list[tuple[str, Mesh, Mesh]]] = field(default_factory=dict)
+    # terrain, roads, props, ...; a "<node>_tex_<texture id>" entry is a TexturedMesh (textures.py)
+    nodes: dict[Chunk, dict[str, Mesh | TexturedMesh]] = field(default_factory=dict)
+    # fences and trees of one parcel (visual, collision, textured fence parts by texture id), in the
+    # parcel's own chunk
+    parcel_props: dict[Chunk, list[tuple[str, Mesh, Mesh, dict[str, TexturedMesh]]]] = field(
+        default_factory=dict
+    )
     graph: dict | None = None
     props: dict | None = None
     trees: list[dict] | None = None  # tree records as exported (z with the exaggeration), for trees.json
@@ -171,12 +178,20 @@ def build_scene(
 
     rplan = plan_regions(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), t)
     scene.warnings += rplan.warnings
+    scene.regions = rplan.regions
     if rplan.regions:
         meshes = region_meshes(
             rplan, t, scene.graph, load_section("roads", rules_path), load_section("regions", rules_path)
         )
         for rid, mesh in meshes.items():
             put(node_name(rid), _by_chunk(mesh, chunk_m))
+
+    # ground detail (detail stage): patches draped on the terrain, one flat node and one node per texture in each
+    # chunk; the clutter instances are not meshes, the export copies them as clutter.json
+    patches = load_patches(work_dir)
+    if patches is not None:
+        for key, nodes in patches_by_chunk(patches[0], patches[1], chunk_m, k).items():
+            scene.nodes.setdefault(key, {}).update(nodes)
 
     scene.props = _read(work_dir, "props.json")
     if scene.props:
@@ -192,23 +207,23 @@ def build_scene(
         by_parcel_f = _group([s for s in fences if owned(s)], lambda s: s["parcel"])
         by_parcel_t = _group([t for t in trees if owned(t)], lambda t: t["parcel"])
         for pid in sorted(set(by_parcel_f) | set(by_parcel_t)):
-            visual, collision = parcel_props_meshes(
+            visual, collision, textured = parcel_props_meshes(
                 by_parcel_f.get(pid, []), by_parcel_t.get(pid, []), pcfg
             )
-            if visual.face_count or collision.face_count:
+            if visual.face_count or collision.face_count or textured:
                 scene.parcel_props.setdefault(chunk_of_parcel[pid], []).append(
-                    (pid, visual, collision)
+                    (pid, visual, collision, textured)
                 )
         by_fence = _group([s for s in fences if not owned(s)], lambda s: _chunk(s["a"], chunk_m))
         by_tree = _group(
             [t for t in trees if not owned(t)], lambda t: _chunk((t["x"], t["y"]), chunk_m)
         )
         for key in sorted(set(by_fence) | set(by_tree)):
-            visual = Mesh.concat(
-                [fence_mesh(by_fence.get(key, []), pcfg["fences"]),
-                 trees_mesh(by_tree.get(key, []), pcfg["trees"])]
-            )
+            fence_flat, textured = fence_meshes(by_fence.get(key, []), pcfg["fences"])
+            visual = Mesh.concat([fence_flat, trees_mesh(by_tree.get(key, []), pcfg["trees"])])
             put("props", {key: visual})
+            for tid, mesh in textured.items():
+                put(tex_node_name("props", tid), {key: mesh})
             if pcfg["fences"]["collision"]:
                 put("props_collision", {key: fence_mesh(by_fence.get(key, []), pcfg["fences"], True)})
     scene.spawns = _read(work_dir, "spawns.json")

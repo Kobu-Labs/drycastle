@@ -68,6 +68,15 @@ viewing and headless servers are unaffected):
   until it changes again, a failed `parcel-run` only prints its error. Writers must replace the file atomically
   (temp file, then rename). When only placed `objects` changed (see Objects and undo) there is no subprocess:
   the objects are re-instanced in process.
+- Buildings are not in the edits file: they come from the pipeline (`overrides.yaml`, `config/buildings/`, the
+  model code) and reach the viewer only through the chunk files. So the map folder's `manifest.json` is polled
+  too (`EditsWatcher.Map.cs`). The export writes it last, with a `sha256` per chunk file; when it changes, every
+  chunk whose hash differs from what is loaded gets its building nodes (`parcel_<ID>_visual`,
+  `parcel_<ID>_collision`, `window_*`) swapped with `MapLoader.ReloadChunkBuildings`, one chunk per frame. The
+  viewer prints `map reloaded: buildings of N chunk(s) ...`, the editor shows it in the status line. So after
+  changing a building: `make rules export AREA=...`, no restart. Not reloaded: everything else baked into a chunk
+  (terrain, roads; fences, trees and regions keep following the edits file). A re-export with different parcels
+  or a new chunk is not swapped in; the viewer says to restart.
 - `editor-state.json` (written at most once a second while watching, an ignored build output):
   `{"camera": {"x": east, "y": north, "z": elevation, "yaw_deg": view direction counter-clockwise from east},
   "format_version": 1, "selected": []}`; x and y are in the map frame (local metres). `selected` is the list of
@@ -81,6 +90,38 @@ viewing and headless servers are unaffected):
   split over chunk files is swapped completely), that repeated swaps do not grow the node count and that a broken
   file changes nothing.
   `parcel-run`/`export` take `--work DIR` and `export` takes `--out DIR` for such experiments.
+
+### Ground clutter (near-only)
+
+Maps with `files.clutter` in `manifest.json` (and `files.clutter_meshes`) draw small ground clutter: tufts, flowers, pebbles, rocks, leaves, sticks, ferns.
+`clutter.json` lists instances per chunk and kind (`[x, y, z, rot_rad, scale]`, map metres, `rot` counter-clockwise seen from above); `clutter_meshes.glb` has one
+mesh node per kind (Y-up, on y = 0, unit scale, `COLOR_0` colours). `MapLoader.Clutter.cs` builds one `MultiMeshInstance3D` per 48 m cell and kind (`clutter_<kind>`,
+child of the chunk root): no shadows, no collision, the shared flat material, a visibility range of 70 m (pebble, leaf, stick 40 m, flower 55 m, rock 80 m; all in
+`ClutterSettings`) plus half a cell and an 8 m fade. Cells, not chunks, because a visibility range is measured to the node as a whole.
+A headless load (`CollisionOnly`, the dedicated server) and a map without the files build nothing and print nothing. `SUCHOHRAD_CLUTTER=0` (or `off`) turns it off; a number scales the
+distances (`0.5` = half); `MapLoader.ClutterScale` is the same setting in code (set before `Load`). Old loaders ignore the files.
+
+**Tint (map 0.10.0).** An instance entry may carry a sixth number, a tint byte (128 = the mesh's own colours, lower = fresher, higher = drier); the meadow's generated instances of a
+layer with the tint flag carry one too. The loader sets it as the MultiMesh instance colour (`UseColors`), which multiplies the vertex colours of the shared flat material, so
+variety costs no extra nodes: `ClutterTint.Rgb` (fresh 0.80/0.97/0.78 at 0, white at 128, dry 1.0/0.80/0.55 at 255). A product cannot add yellow to a green, so "dry" reads
+as olive; real straw is its own kind. The pipeline lays the tint out as a smooth noise over the ground plus a small jitter (`meadow.py` `tone_noise`, `tint_byte`; `MeadowGen.Tint` mirrors it).
+
+**Draw calls (map 0.10.0).** One node per kind and cell would mean a node for every rare species (the village has 23 kinds). A group with at least `ClutterSettings.MultiMeshMin` (16) instances in a 48 m cell
+is a `MultiMeshInstance3D`; the cell's smaller groups are merged into one `MeshInstance3D` (`clutter_merged`: the kinds' triangles transformed into place, the tint multiplied into the vertex colours, the
+visibility range of its farthest kind). The village: 89k stored instances in about 1,700 nodes (about 19 MB of merged vertices), against 1,824 nodes for 79k instances before the variety.
+`MapLoader.ClutterNodes` lists them.
+
+### Meadow clutter (generated near the player)
+
+Fields, meadows and forests are about 400 ha, too much to store clutter instances for. Maps with `files.meadow` (`meadow.bin`, map 0.9.0) carry a density raster instead
+(layers tuft, flower, fern, pebble, litter; one byte per 2 m cell per layer plus a zone byte per cell, format 3 in `pipeline/src/suchohrad_pipeline/meadow.py`; the zone byte's high nibble picks the species
+mix, which says per layer which kinds a cell makes and in what shares, its low nibble is a dryness that biases the tint). `MapLoader.Meadow.cs` turns the cells
+near the focus into instances with `MeadowGen` (a hash of the cell and layer, the same on every client, nothing is sent; `MeadowData.cs`, pure, mirrors `meadow.generate`
+and a test pins both). The ground is cut into 24 m tiles, each tile and layer is one `MultiMeshInstance3D` per kind (pooled), built nearest first at most 6 tiles or 2 ms per
+frame, freed 30 m behind its range. A tile and layer with a kind of at least `MeadowSettings.MultiMeshMin` (48) instances draws it as a MultiMesh, and its smaller groups (a stray species of the patch mix) as one merged mesh
+(`meadow_merged`, tint baked into the vertex colours), so a layer with seven flower species is about one or two nodes per tile, not seven (`MapLoader.MeadowNodes` counts them). Ranges and `SUCHOHRAD_CLUTTER` are those of the stored clutter; live instances per layer are capped (`MeadowSettings.CapOf`).
+Instances within a tree's trunk reach (from `trees.json`) are dropped; the height comes from `GroundHeight` (the terrain collision mesh, decimated). The focus is the current camera
+unless `MapLoader.SetClutterFocus(position)` is called each frame. A map without `meadow.bin` and the headless server do nothing.
 
 ## Editor mode
 
@@ -116,8 +157,10 @@ Hovering shows `P-0415 garden` (and `[G-0007]` when grouped) at the cursor. Outl
 outlines only when one of its members is hovered or selected, and then as one shape (edges shared by two members are
 not drawn). The right-hand panel shows the
 selection (ID, kind, area, cadastral reference, group), a collapsible Group section with the buttons Group
-selected, Add selected to group, Remove from group and Dissolve group, the Fence and Trees sections (below) and
+selected, Add selected to group, Remove from group, Merge groups and Dissolve group, the Fence and Trees sections (below) and
 the Objects section (palette, selected object, undo; see Objects and undo). The bottom line shows messages (`saved`, `regenerating P-0004...`, `applied in 480 ms`, errors) and the key hints.
+
+Merge groups (button, or `G` when the marked parcels touch any group) puts all parcels of those groups, plus any marked ungrouped parcels, into one new group (so a group plus a loose parcel also works) (highest id + 1) and removes the old ones. The fence is the one the groups share, else the first group's (by id; the status line says so); parcel-level fence edits stay on the parcels. It is one undo step, and `EditsFile.MergeGroups` follows the same rules as the MCP server's `merge_groups`.
 
 Group operations rewrite `edits.json` atomically (temp file, then rename). The file is reloaded from disk
 right before every save, so a change by another writer (e.g. the MCP server) is kept, and everything not
@@ -135,8 +178,11 @@ property group's members targets the group: Fence goes to the group entry, Trees
 grouped parcel selected, `Edit: whole group | this parcel` chooses (default group); "this parcel" writes the
 parcel's own fence override, which wins field by field over the group's.
 
-* **Fence**: `mode` auto | none | custom; `type` picket | wire | brick_wall (the table lives in `EditSchema`,
-  `EditModel.cs`, and `make viewer-panel-smoke` compares it with `edits.py`); `height`, `thickness` and `colour`
+* **Fence**: `mode` auto | none | custom; `type` picket | wire | brick_red | brick_white | stone_wall | concrete
+  (textured styles, see `docs/pipeline.md`; brick_wall is the old name of brick_red; the table lives in `EditSchema`,
+  `EditModel.cs`, and `make viewer-panel-smoke` compares it with `edits.py`); the `column` key (other posts or
+  piers than the type's own) has no control in the panel yet: set it through MCP or by hand, the panel keeps it
+  when it writes; `height`, `thickness` and `colour` (a tint: the paint of picket, wire and concrete)
   each have a `set` box: unset means the type's default, which is shown greyed. These fields and the gate list are
   custom-only and disabled otherwise; switching to auto or none clears them, so the panel never writes a file the
   Python validator rejects (it also checks what it writes before saving). `Reset` removes the fence entry (rules
@@ -241,9 +287,49 @@ GPU): `godot --path godot/viewer -- --map DIR --edits FILE --state FILE --editor
 parcel". It uses the pipeline's own validator, reads the viewer's `editor-state.json` for the selection, and the
 viewer's `--watch` applies the change. Registration, tool reference and workflow: [mcp.md](mcp.md).
 
+### Poles tool
+
+Rail icon 7 (View moved to 8): utility poles and the cables between them (`docs/utility-poles.md`). Poles are ordinary
+placed objects (`prim:pole_*`), so everything under Objects and undo applies to them; the page shows the poles alone as
+renders (the name is the tooltip), and adds the cables.
+
+* **Planning** (`P`): left click where poles should stand, right click (no drag) a house wall or roof to connect it;
+  a point clicked again is removed, Backspace removes the last, Esc leaves plan mode (the plan is kept in memory).
+  What will be built is drawn while planning (`PolePlanner.cs`): cyan posts with their crossarm, cyan links, red for
+  a span over 70 m or a house more than 40 m from every pole. `Build poles` (Enter) places a pole at every point,
+  strings the cables and connects the houses in one save (one undo step) and says what it skipped. Links follow the
+  roads of `roads.json`: a point is joined to the next point along the road graph, through junctions, loops left out;
+  a point over 25 m from every road joins its nearest neighbours. The pole follows from its place: three links or
+  more a junction pole, a line end or a turn over 30 degrees a twin pole, off-road or on a track or path a field
+  pole, a megaphone pole about every 150 m of plain street, else a lamp or plain pole. Planned poles are turned:
+  crossarm across the line, lamp over the road. Existing poles are ignored.
+* **Placing**: choose a pole, click on the ground; it stays armed, `R` / `Shift+R` turn the ghost. A pole's wires run
+  along its own x axis (the knob of the rotation ring) and its lamp reaches to the right of that.
+* **Connecting**: `C` (or the button) turns connect mode on. The first click picks the pole to start from (the selected
+  pole when there is one); each further click on another pole strings a cable from the last pole and carries on from
+  the clicked one, so a street is a row of clicks. A line from the start pole follows the cursor (cyan over a pole a
+  click would join). Esc or a right click stops. A click on a pair that is already joined only moves the start on.
+* **Houses**: in connect mode, after a pole, a click on a house wall or roof fixes a house connector there (a placed
+  object `prim:connector_*` with a `z`; a wall or a roof kind after the surface, which one picked from the spot) and
+  strings a cable to it, in one save. The start stays on the pole, so the next click can be another house. A click on
+  a connector that exists strings a cable to it. The selected connector has "Another kind of connector".
+* **Cables**: a cable is `cables.<C-NNNN>` in `edits.json` with `from` and `to`, the ids of its two ends (poles, or a
+  pole and a house connector). A click on a
+  cable selects it (yellow), `Del` removes it; the selected pole lists its cables with a Remove button each. Deleting a
+  pole removes its cables in the same save. Each of these is one save and one undo step.
+* **Nothing is turned for you**: a pole keeps the rotation you gave it. The wires are matched left to right across each
+  span (`ShooterCore/Environment/CableWires.cs`), so they keep their spacing and never cross, whichever way a pole
+  faces; turn the pole so that its crossarm stands across the line.
+* **Instant**: cables need no pipeline run. `MapLoader` strings them between the poles as they stand (`SetCables`,
+  `RebuildCables`), the watcher hands it the file's cables on every change, and the cables of a pole follow it while it
+  is dragged. At start the cables of the edits file are shown even when the map was exported before them; a pole placed
+  since the last export, like any placed object, appears only after the next `make props export`.
+
+There is no headless smoke for this tool yet.
+
 ### Regions tool
 
-Rail icon 6 (View moved to 7). `N` starts a shape, LMB or `C` adds corners (0.5 m grid, Ctrl free), Enter closes it, the colour is chosen
+Rail icon 6. `N` starts a shape, LMB or `C` adds corners (0.5 m grid, Ctrl free), Enter closes it, the colour is chosen
 (picker or `#rrggbb`) and Enter creates the region: one save, one undo step. Select a region by clicking it or its row in the panel;
 drag corners, `[` `]` plus arrows, recolour, `Del` (asks first). Invalid shapes are refused before commit with the reason in the panel
 (a red preview outline while drawing or dragging). `Ctrl+P` opens a command palette. Esc steps back one level. Details and the

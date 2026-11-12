@@ -135,11 +135,30 @@ buildings or the carriageway), OSM trees and seeded rule-based trees in gardens,
 collision node. Trees are not in the chunk collision: `trees.json` (map 0.6.0, `files.trees`) lists every tree (position,
 ground height, scale, rotation, broadleaf or conifer, chunk) and the game builds the solids from it (see below).
 
+**Fence types and the texture library.** A fence section with a `type` is drawn in that type's style
+(`fencestyles.py`) instead of the plain box: `picket` and `wire` are one thin two-sided quad with a
+cut-out texture that follows the ground, with wood or metal posts; `brick_red`, `brick_white`,
+`stone_wall` and `concrete` are level-topped walls (they step on a slope) with a repeating texture, a
+flat coping and matching piers. Columns stand at every section joint and run end; `column` swaps them
+(`none`, `wood_post`, `metal_post`, `brick_red`, `brick_white`, `stone`, `concrete`), e.g. picket
+between brick piers. The colour is a tint: picket, wire and concrete are near-white textures, so the
+colour is their paint; brick and stone carry their own colours and default to white. Custom (hand-edited)
+fences always have a type (default `picket`); rule fences stay plain boxes unless `props.fences.type` is
+set in `rules.yaml`. The collision box of a section is unchanged.
+
+The textures are a library, not part of the fences: `assets/manifest.json` `textures` lists each one (id,
+PNG under `assets/`, `tile_m` = the size of one repeat in metres, `alpha`, `tintable`, mean colour), and
+`textures.py` gives any mesh builder `texture(id).uv(...)` and a `TexturedBuilder`. The PNGs are built by
+`python3 -I scripts/make_textures.py` (standard library only, deterministic; `--sheet FILE` writes a contact
+sheet). `uv run python -m suchohrad_pipeline.fence_preview` (in `pipeline/`) draws every fence type from its
+real meshes, UVs and textures into `out/textures/fences.png`, so the look can be checked without the game.
+
 **Hand edits** (`pipeline/config/edits.json`, read by the props stage; `--edits PATH` overrides the
-file): per-parcel fence mode (`auto`, `none`, `custom` with a type, height, colour and gaps),
+file): per-parcel fence mode (`auto`, `none`, `custom` with a type, column, height, colour and gaps),
 property groups (`G-NNNN`: one fence around the members' combined outer edge), tree density or
 count with a seed offset, and placed objects (`pack:` or `prim:` assets, absolute S-JTSK metres).
-Objects go to `work/objects.json`. `regions` (`R-NNNN`: `colour` `#rrggbb`, `polygon` one ring of at
+Objects go to `work/objects.json`, and with them the `cables` (`C-NNNN`: `from` and `to`, the ids of two
+placed utility poles) whose poles are both placed; the game strings the wires (`docs/utility-poles.md`). `regions` (`R-NNNN`: `colour` `#rrggbb`, `polygon` one ring of at
 least 3 `[x, y]` absolute S-JTSK points, no self-intersection) are shapes painted over the ground;
 they are not read by the props stage, only by the export and `region-run` (below). The format and validator are documented in
 `pipeline/src/suchohrad_pipeline/edits.py`. Entries for parcels that no longer exist are skipped
@@ -193,6 +212,103 @@ a mesh), `replaces` (the baked `region_<ID>` nodes to hide: the named IDs, even 
 every region overlapping a named one, whose visible area changes with it), `triangles`, `glb`,
 `timing_s`. Like `parcel-run --glb` it is for hot reload; nothing under `data/` is written.
 
+## Detail (ground patches and clutter)
+
+`make detail` (stage `detail`, in `run-all` between `props` and `export`; `AREA=village` for the village) gives the
+ground something to look at. It reads `parcels`, `buildings`, `roads`, `terrain`, `props` (fences, trees), `objects`
+and `edits.json` (regions), and writes `data/work/detail.json` (clutter), `detail_patches.npy` and
+`detail_patches.json` (patch triangles). `python -m suchohrad_pipeline detail --work DIR` reads and writes another work
+directory (experiments). The module is `detail.py`; every number is in the `detail` section of `rules.yaml`.
+
+**Area types and recipes.** `detail.area_type(parcel)` says what kind of ground a parcel is and so which recipe runs:
+`garden` (parcel kinds `garden` and `building_plot`), `field` (`other`), `forest`, `road`, or nothing (`water`). It is
+the only place that reads the parcel kind; a real area-type layer replaces that one function. Parcels are clipped to
+the terrain coverage first (a parcel part under 4 m2 gets nothing). Water bodies, buildings, fences, trunks, placed
+objects (a circle of half the footprint diagonal plus 0.3 m), hand-drawn regions and the carriageway are kept free.
+
+* **garden**: lawn pieces on tan plots (a green garden gets tones of its own terrain colour instead; `lawn.terrain_mix`),
+  worn dirt along walls and in the open, a gravel path from the gate (the middle of the longest unfenced stretch of the
+  boundary within 4 m of the carriageway) to the nearest building, up to two vegetable beds (`soil_rows` texture, turned
+  with the main building), leaf litter under trees; tufts (thick along walls and fences), flower clusters, pebbles on
+  gravel, dirt and along walls, a few rocks, fallen leaves and sticks under trees.
+* **field** (meadow, field): large tone patches, dirt headlands along the boundary, a furrowed strip in some of the larger
+  parcels, sparse tufts, pebbles, rocks and flowers that thicken towards the edge and on the tones.
+* **forest**: leaf litter under some trees, dark and light forest-floor tones, a few bare spots; leaves, sticks, rocks,
+  pebbles, tufts and ferns in groups round the trunks.
+* **road** (road parcels): a grass shoulder (`road.grass_width_m`) beside the carriageway, tufts along the asphalt edge,
+  pebbles on the gravel.
+* **verges**: along `track`, `residential`, `tertiary` and `service` roads, gravel and dirt blobs lie at the carriageway
+  edge (built once per road edge, every parcel they touch takes its share), whatever the parcel kind.
+
+**Patches** are polygons draped on the terrain (`regions.drape`, so they follow the ground triangle by triangle) 2 cm
+above it. The layers (`detail.PATCH_PRIORITY`: gravel, verge gravel, bed, furrow, dirt, verge dirt, litter, two tones,
+lawn) are clipped in that order, so no two patches overlap and nothing z-fights; parcels are disjoint. Hand-drawn
+regions (3 cm) are cut out of every patch. Patches go into the chunk GLBs as the node `detail_patches` (flat colours)
+and one `detail_patches_tex_<texture id>` node per texture (`dirt`, `gravel`, `leaf_litter`, `soil_rows`), at most five per
+chunk; they have no collision. A patch triangle belongs to the chunk of its centroid (terrain cells never cross a chunk
+border). The village has about 143k patch triangles (garden 76k, forest 33k, field 24k, road 10k), which is why the shapes
+are few, soft and simplified: the terrain mesh cuts every patch at its 4 m cells, so area costs about 0.125 triangles
+per m2 before any outline.
+
+**Clutter** is instances, not triangles. `clutter.json` (map 0.8.0, `files.clutter`; the export copies
+`work/detail.json`):
+
+```
+{"format_version": 1, "axes": "map metres: x east, y north, z up (ground height at the instance)",
+ "chunk_size_m": 250,
+ "kinds": {"tuft": {"mesh": "tuft"}, "flower": {...}, "pebble": {...}, "rock": {...}, "leaf": {...}, "stick": {...}, "fern": {...}},
+ "chunks": {"<ix>_<iy>": {"<kind>": [[x, y, z, rot_rad, scale], ...]}}}
+```
+
+Coordinates have two decimals; `rot` turns about the vertical axis counter-clockwise seen from above; `scale` is uniform;
+`z` is the terrain height at (x, y) (instances are only placed on meshed terrain cells). Chunks and kinds are sorted,
+a chunk with no instance is absent. `clutter_meshes.glb` (`files.clutter_meshes`) has one node per kind named as the kind
+(`mesh`), flat vertex colours (a few shades of the kind's palette across its faces; an instance varies only in turn and
+scale), glTF axes (Y up), at scale 1 in metres, standing on y = 0 with its middle on the origin, 4 to 27 triangles
+(`detail_meshes.py`: tuft 15, flower 27, pebble 8, rock 18, leaf 4, stick 12, fern 18). The game draws them as one
+instanced mesh per chunk and kind, near the player only; the headless server ignores them. Nothing in the clutter is solid.
+
+Budgets: `detail.caps_per_chunk` caps each kind per chunk (surplus instances go by a hash of the position, so the result is
+stable); the village has about 139k instances (`clutter.json` 4.6 MB: tuft 89k, pebble 17k, leaf 11k, flower 8k, fern 8k,
+rock 2.4k, stick 2.2k) and the stage takes about 1 to 1.5 minutes. The densities are low in fields and forest on
+purpose: a stored instance costs about 33 bytes, so the open land (150 ha) cannot hold meadow-like density; if that is
+wanted, generate it near the player at run time from a per-chunk density instead.
+
+All random choices are seeded with `sha256("<parcel id>:detail:<purpose>")` (verges with the road edge ID), so reruns give
+identical files. `uv run python -m suchohrad_pipeline.detail_preview --parcel P-0637 --area village` draws the detail of
+one parcel top-down from the real patches, textures and clutter meshes into `out/detail/`.
+
+**Limits.** `parcel-run` (editor hot reload) does not regenerate detail: patches live in chunk-level nodes, not in a
+parcel's `props` node, so after editing a parcel's fence, trees or objects run `make props detail export` to move the detail
+with them. The stage reads the props work file, so it must run after `make props`. Per-parcel opt-out of detail is not
+implemented.
+
+**Meadow (`meadow.bin`, map 0.9.0).** Field and forest parcels keep no dense clutter in `clutter.json` (only `detail.meadow.stored_kinds`, rocks). Instead the stage writes
+a density raster, `work/detail_meadow.bin`, copied by the export as `meadow.bin` (`files.meadow`): 2 m cells, one byte per cell per layer (tuft, flower, fern, pebble,
+litter), zlib per chunk, about 0.7 MB for the village. A cell is on it only where its whole jitter window is free ground (no buildings, fences, roads, objects, regions)
+and the density comes from the recipe's zones (edge band, tone and litter patches, bare soil, near a trunk) times smooth noise; see `detail.meadow` in `rules.yaml` and
+`meadow.py`. The game generates the instances at run time (`docs/viewer-and-editor.md`, "Meadow clutter"). `detail_preview --meadow` draws what the game would generate for a parcel.
+
+**Clumps and species zones (map 0.10.0, `meadow.bin` format 3).** Growth is patchy, not even: the meadow density is multiplied by a smoothed noise per layer
+(`detail.meadow.layers.<name>.clump`, patches of `clump_m`), and the stored garden tufts likewise (`detail.clutter.tuft.clump`); where nobody mows (within `unmown_m` of a fence, a wall or a
+building edge) tufts are thicker (`unmown`). The raster has a *zone byte* per cell: the high nibble is a *mix* (index into `detail.meadow.mixes`: a patch where one species dominates, a
+Voronoi patch of `patch_m` ≈ 3 to 8 m, picked from the shares in `zones.<type>.mixes`; the wet mix beside water, the unmown mix where nobody mows, the dry mix in half of a field's edge band), the low
+nibble the dryness (8 = neutral, 10 tint units a step: drier at a field's edge, fresher beside water and fences). A layer lists per mix which kinds it makes and in what shares (a mix names only the
+layers it changes), so a patch of one mix grows one set of species with strays. `meadow.bin` has a kind table (with the tint flag), the mixes per layer, and the zone plane after the layers (format in `meadow.py`).
+
+**Kinds (map 0.10.0).** `clutter_meshes.glb` has 23 tiny meshes (3 to 30 triangles, `detail_meshes.py`; `detail_preview --kinds` draws a contact sheet to `out/detail/kinds.png`):
+the grasses `tuft`, `tall_grass` (seed heads), `straw` (dry), `clover` (a flat mat), `reed` (by water) and `weed` (broad leaves), `fern`; the wild flowers `dandelion` (with a puffball), `daisy`,
+`red_clover`, `buttercup`, `poppy`, `cornflower`, `yarrow` (umbels); the garden flowers `tulip`, `sunflower`, `spike` (hollyhock or lupin) and `rose` (a bush); and `pebble`, `rock`, `leaf`, `stick`
+(and `flower`, the first mixed-flower mesh, which no recipe uses any more). Wild and garden flowers are kept apart: a yard (garden and plot recipes) grows garden flowers only, in one-species clusters
+(`detail.clutter.flower.species`), tall grass beside fences and walls (`tuft.unmown_m`, `tall`) and some clover in the lawn; meadows, fields and road verges grow the wild ones. The meadow's
+species mixes (`detail.meadow.mixes`) name which grass profile and which dominant flower each patch has: `meadow` (short grass and clover, daisies), `tall meadow` (red clover, yarrow), `dry` (straw, poppies and
+cornflowers), `weedy` (dandelions), `wet` (reed, buttercups), `woodland`, and three flower meadows (cornflower, yarrow, dandelion). Tintable kinds are `detail_meshes.TINTABLE` (the grasses and ferns).
+
+**Tint (map 0.10.0).** Tufts and ferns (`detail_meshes.TINTABLE`) carry a tint byte: the sixth number of their `clutter.json` entry, and in `meadow.bin` (format 2) a flag per layer.
+128 is the mesh as drawn, lower is fresher (darker, greener), higher drier. The byte is the smooth tone noise over the ground (2 m cells, 12-cell lattice, `meadow.tone_noise`) plus a per-instance
+jitter, shifted by a bias: stored grass within `detail.tint.fresh_m` of a fence or wall is fresher (`fence_fresh`), grass within `water_m` of water likewise (`water_fresh`).
+The game computes the same bytes for generated instances (`MeadowGen.Tint`, pinned by the shared fixture).
+
 ## Export
 
 `make export` writes `out/map/` (gitignored): `chunks/chunk_<ix>_<iy>.glb` (one glTF per 250 m
@@ -202,7 +318,10 @@ and `parcel_<ID>_collision` (extruded footprint, no roof detail) for each parcel
 `terrain` and `terrain_collision` (flat colours by parcel kind; collision is every second grid
 vertex); `roads`; `parcel_<ID>_props` (that parcel's fences and trees, visual) and
 `parcel_<ID>_props_collision` (its fences, only when the `fences.collision` rule is on), placed in
-the parcel's own chunk file so one parcel's props can be swapped at runtime; `region_<ID>` (see Regions); `props` and
+the parcel's own chunk file so one parcel's props can be swapped at runtime; `parcel_<ID>_props_tex_<texture id>`
+(map 0.7.0: the textured parts of that parcel's typed fences, one node per texture; it carries UVs and a tint as
+vertex colour, and no image: the loader draws a node named `<node>_tex_<id>` with texture `<id>` of the asset
+library, and the manifest's `textures` lists the ids the map uses); `region_<ID>` (see Regions); `props` and
 `props_collision` remain only for items without a parcel (OSM trees). The manifest says
 `"props_layout": "per_parcel"`; `map_version` went from `0.1.0` to `0.2.0` for this node-layout
 change (pre-1.0, a node-layout change bumps the minor part). Also

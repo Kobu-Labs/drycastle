@@ -15,6 +15,8 @@ public sealed class AircraftKindDef
     public float MaxBankDeg { get; init; }
     /// <summary>Default lifetime; a streak may pass its own.</summary>
     public float LifetimeS { get; init; }
+    /// <summary>Hit points: at 0 the aircraft is shot down (<see cref="WorldDespawnReason.Destroyed"/>). On the wire as a percentage of this.</summary>
+    public float Hp { get; init; } = 600;
 }
 
 /// <summary>What a gunship weapon's shot is: a hitscan round or a rocket on the projectile sim.</summary>
@@ -92,6 +94,7 @@ public static class AircraftData
         public float? SpeedMps { get; set; }
         public float? MaxBankDeg { get; set; }
         public float? LifetimeS { get; set; }
+        public float? Hp { get; set; }
     }
 
     internal sealed class GunshipRaw
@@ -160,6 +163,7 @@ public static class AircraftData
                 SpeedMps = Need(r.SpeedMps, where, "speed_mps", 0.1f),
                 MaxBankDeg = bank,
                 LifetimeS = Need(r.LifetimeS, where, "lifetime_s", 0.1f),
+                Hp = Need(r.Hp, where, "hp", 1),
             });
         }
         if (kinds.Count > MaxKinds) throw new DataFileException($"{F}: at most {MaxKinds} aircraft kinds (the wire carries the kind in one bit)");

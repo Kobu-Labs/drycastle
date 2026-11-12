@@ -96,7 +96,7 @@ def test_parcels_and_manifest(workspace) -> None:
     assert [p["id"] for p in parcels] == ["P-0001", "P-0002", "P-0003"]
     assert parcels[0]["buildings"] == ["w1"] and parcels[2]["buildings"] == []
     m = json.loads((out / "manifest.json").read_text())
-    assert m["map_version"] == "0.6.0-slice"
+    assert m["map_version"] == "0.10.0-slice"
     assert m["attribution"] == ["A", "B"] and m["inputs"]["raw"] == {"osm.json": "ab"}
     assert m["props_layout"] == "per_parcel"
     pj = json.loads((out / "parcels.json").read_text())
@@ -132,8 +132,8 @@ def test_village_area_manifest_and_lighter_props(tmp_path) -> None:
         return run_export(*args[:1], tmp_path / area, *args[2:], area=area)
 
     slice_m, village = counts("slice"), counts("village")
-    assert village["map_version"] == "0.6.0-village"
-    assert slice_m["map_version"] == "0.6.0-slice"
+    assert village["map_version"] == "0.10.0-village"
+    assert slice_m["map_version"] == "0.10.0-slice"
     def has_collision(m: dict) -> bool:
         return any(n.endswith("props_collision") for c in m["chunks"] for n in c["triangles"])
 
@@ -164,6 +164,11 @@ def test_export_writes_prim_glbs_and_manifest_entries(workspace) -> None:
         # same axes as the chunk files: y up, standing on y = 0, size matches the registry
         lo, hi = geom.bounds
         sx, sy, sz = PRIMITIVES[name].size_m
+        if not PRIMITIVES[name].centred:  # a utility pole or house connector: the origin is where it is fixed
+            assert lo[1] < -0.2 and hi[1] == pytest.approx(sy, abs=0.02)
+            assert 2 * max(-lo[0], hi[0]) == pytest.approx(sx, abs=0.02)
+            assert 2 * max(-lo[2], hi[2]) == pytest.approx(sz, abs=0.02)
+            continue
         assert lo[1] == pytest.approx(0, abs=1e-3)
         assert hi[1] - lo[1] == pytest.approx(sy, abs=0.02)
         assert hi[0] - lo[0] == pytest.approx(sx, abs=0.02)

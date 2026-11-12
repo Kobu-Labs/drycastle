@@ -65,6 +65,13 @@ public partial class IconGlyph : Control
                 Poly(true, (4, 9), (11, 4), (20, 8), (18, 19), (7, 20));
                 foreach (var (cx, cy) in new[] { (4f, 9f), (20f, 8f), (7f, 20f) }) DrawCircle(P(cx, cy), 2.2f * u, col);
                 break;
+            case "poles":
+                Line(12, 4, 12, 21);
+                Line(5, 7.5f, 19, 7.5f);
+                Line(7, 7.5f, 7, 4.5f); Line(17, 7.5f, 17, 4.5f);
+                Poly(false, (5, 7.5f), (2.5f, 10), (0.5f, 10.5f));
+                Poly(false, (19, 7.5f), (21.5f, 10), (23.5f, 10.5f));
+                break;
             case "trees":
                 DrawCircle(P(12, 9), 6.5f * u, col);
                 Line(12, 15, 12, 21);

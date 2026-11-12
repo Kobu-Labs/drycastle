@@ -6,6 +6,23 @@ namespace Suchohrad.ShooterCore.Tests;
 
 public class MatchTests
 {
+    [Fact]
+    public void TheClientSeesTheSpawnAndDeathThatJustArrivedNotTheLastPlayersOnes()
+    {
+        // three players spawn in join order, then the first dies and respawns: the newest event is player 1's each time
+        var m = new ClientMatchState();
+        for (ushort id = 1; id <= 3; id++) m.Apply(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(id, new Vector3(id, 0, 0), 3)), id);
+        Assert.Equal((ushort)3, m.LatestSpawn!.Id);
+        m.Apply(EventKind.Death, MatchCodec.Encode(new DeathMsg(3, 2, 3)), 10);
+        m.Apply(EventKind.Death, MatchCodec.Encode(new DeathMsg(1, 2, 3)), 11);
+        Assert.Equal((ushort)1, m.LatestDeath!.Victim);
+        m.Apply(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(1, new Vector3(50, 0, 0), 3)), 14);
+        Assert.Equal((ushort)1, m.LatestSpawn!.Id);
+        Assert.Equal(new Vector3(50, 0, 0), m.LatestSpawn.Position);
+        m.Apply(EventKind.Death, MatchCodec.Encode(new DeathMsg(1, 3, 3)), 20); // a second death of the same player
+        Assert.Equal((ushort)3, m.LatestDeath!.Killer);
+    }
+
     sealed class Rig
     {
         public double T;

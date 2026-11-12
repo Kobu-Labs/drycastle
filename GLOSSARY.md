@@ -88,12 +88,16 @@ _Avoid_: ship, watercraft
 A four-seat vehicle that drives on land like the war jeep (and runs people over there) and floats at reduced speed on water.
 _Avoid_: APC, amphib
 
+**Seat switch**:
+Moving to another seat of the vehicle you sit in, without getting out: while seated, the number keys (the weapon slot keys) take that seat (key 2 is the second seat of the vehicle's `seats` list), and a small top-down schematic in the bottom right shows each seat with its number (free: outlined; yours: filled, double ring; taken: struck through). A vehicle with no `seats` list has the one driver seat. A free seat is taken at once; a taken one is refused. Leaving the driver seat leaves the vehicle without input, so it coasts to a stop (a utility helicopter in the air holds a hover, then sets itself down); a gunner's turret keeps its aim. One player can drive, go to the turret and drive again.
+_Avoid_: seat change, swap seat
+
 **Hotbar**:
 The weapons a player can select: the primary, the secondary and the knife of the active loadout (keys 1-3 and the next-weapon cycle). A corpse swap changes its primary or secondary position. Smoke arenas and `--debug-cmds` servers hold every weapon.
 _Avoid_: inventory, toolbar, slots
 
 **Streak weapon**:
-A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the turret, the MOAB, the aircraft guns). Kills made with one do not advance the Streak counter. The jeep's roof gun is not a streak weapon.
+A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the turret, the MOAB, the aircraft guns). Kills made with one do not advance the Streak counter. The jeep's roof gun and the utility helicopter's door gun are not streak weapons.
 _Avoid_: killstreak weapon (ambiguous with the streak itself)
 
 **Pellet fan**:
@@ -141,8 +145,28 @@ A value from the day clock that drives street lamp light, headlight and window g
 _Avoid_: darkness, night mode
 
 **Aircraft**:
-A flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper and the AC-130 gunship. It is replicated as one world entity type, and its guns are controlled by the owner.
-_Avoid_: plane (for helicopters), drone
+A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper and the AC-130 gunship. Nobody boards or flies it; its owner only works its guns. It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship) and can be shot down by flak: its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
+_Avoid_: plane (for helicopters), drone, helicopter (alone)
+
+**Utility helicopter**:
+The vehicle a player flies: boarded, left and destroyed like any other vehicle, and flown freely by whoever sits in its pilot seat (the vehicle's driver seat). Its second seat is the door gunner's. Hands off it levels itself, stops and holds a hover; with nobody in the pilot seat it hovers briefly, then sets itself down.
+_Avoid_: helicopter (alone), chopper, Huey, aircraft (that is the circling killstreak entity), flyable helicopter
+
+**Door gun**:
+The utility helicopter's machine gun, on a pintle in its right door and worked from the gunner seat. The gunner's view aims it inside an arc that keeps its rounds off the helicopter itself; its rounds are the jeep's roof gun's, and its kills are ordinary kills. The door gunner sits in the open, like the flak truck's gunner: a shot that reaches the body hits it, while the pilot stays behind the hull.
+_Avoid_: turret (alone), minigun, side gun
+
+**Flak truck**:
+A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every other vehicle.
+_Avoid_: AA gun, anti-air vehicle, SPAAG
+
+**Bus**:
+A 12 m land vehicle modelled on the regional bus that serves the village: a driver seat and three passenger seats, no weapon, slow to turn and heavy to run into. It is boarded, left and destroyed like any other vehicle; its doors do not open, riders are placed on their seats.
+_Avoid_: coach, autobus, transport (that is the amphibious one)
+
+**Airburst**:
+A flak shell's end by an aircraft: the shell flies straight at 700 m/s, and once it passes within 12 m of an aircraft it bursts at the closest approach. An aircraft within 15 m of the burst takes 150 damage out to 4 m, falling to 40 at the edge. The gunner has to lead the aircraft, which flies a known circle. A shell that meets no aircraft ends on the ground with a small blast (4 m, weak), or runs out of range.
+_Avoid_: proximity fuse (the fuse is how it works, the burst is the thing), flak burst
 
 **Sentry turret**:
 The killstreak that places a 500 hp gun on the ground for 15 seconds. It turns to targets within its sight range and shoots them. It is removed when its owner dies or leaves the match, so it never fires or credits kills for an absent owner.
@@ -186,4 +210,16 @@ A hand-written description of one real building's geometry beyond its OSM footpr
 A window, door or garage door in a wall of a building with a detail: a real hole in the wall with recessed reveals, located by footprint edge, distance along it, size and sill height. Each carries a confidence (low/medium/high) for how well the photos pin it down.
 
 **Window pane**:
-The glass of a window opening, exported as its own node `window_<building>_<id>` and listed in `windows.json` (position, size, facade, `breakable`), so the game can make it transparent or breakable later. Doors and garage doors are part of the building and have no pane node.
+The glass of a window opening, exported as its own node `window_<building>_<id>` and listed in `windows.json` (position, size, facade, `breakable`), so the game can make it transparent or breakable. In the shooter it is a glass pane. Doors and garage doors are part of the building and have no pane node.
+
+**Glass pane**:
+A flat piece of breakable glass with hit points that the server owns: a window pane of a building (`windows.json`, unless its `breakable` is false) or a pane of a vehicle type (the `glass` list in `vehicles.json`). It is a rectangle, or, for the generated vehicles (bus, flak truck, helicopter), a convex outline polygon inside its bounding rectangle, and there it is also its own node `glass_N` in the model. Bullets and blasts take its hit points; below full it shows a crack (see Crack stage), at zero it is shattered. It has no collider of its own.
+_Avoid_: window (for a vehicle's), glass (alone), windowpane
+
+**Crack stage**:
+How far the crack of a standing glass pane has spread, from the fraction of its hit points left: 0 at full hit points, 1 as soon as it is damaged, one more at each fraction of `crack_stages` in `glass.json`.
+_Avoid_: damage stage (that is a vehicle's smoke), crack level
+
+**Shattered**:
+The state of a glass pane with no hit points left: its fragments fly out once, and it then shows an opening (the model's own glass node of the pane is hidden). A shot through a shattered pane of a vehicle can hit the riders behind it. It stays shattered until its vehicle returns repaired or a new round starts.
+_Avoid_: broken, destroyed (that is a vehicle or an aircraft)

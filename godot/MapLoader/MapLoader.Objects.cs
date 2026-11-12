@@ -32,7 +32,7 @@ public sealed record FragmentResult(IReadOnlyList<string> Replaced, int Objects,
 // Placed objects, the dynamic per-parcel props swap (parcel-run fragments) and their bookkeeping.
 public sealed partial class MapLoader
 {
-    sealed record AssetEntry(string File, Vector3 Size, string Category, string Name);
+    sealed record AssetEntry(string File, Vector3 Size, string Category, string Name, List<(string kind, int tier, Vector3 local)> Seats, List<Vector3> Lights);
 
     string _mapDir = "";
     Node3D? _objectsRoot;
@@ -77,6 +77,7 @@ public sealed partial class MapLoader
         foreach (var t in _assetTemplates.Values)
             if (t != null && GodotObject.IsInstanceValid(t)) t.Free();
         _assetTemplates.Clear();
+        FreeClutter();
     }
 
     /// <summary>Messages the loader would print as warnings (also written with GD.PushWarning).</summary>
@@ -140,8 +141,12 @@ public sealed partial class MapLoader
     IEnumerable<float> LoadObjectSteps(string path)
     {
         List<PlacedObject> list;
+        List<CableSpec> cables;
         using (var doc = JsonDocument.Parse(File.ReadAllText(path)))
+        {
             list = ParseObjects(doc.RootElement.GetProperty("objects"));
+            cables = ParseCables(doc.RootElement);
+        }
         var n = 0;
         foreach (var o in list)
         {
@@ -150,6 +155,7 @@ public sealed partial class MapLoader
             AddObject(o);
             yield return (float)++n / list.Count;
         }
+        SetCables(cables); // after the poles they hang from
     }
 
     Node3D ObjectsContainer()
@@ -191,6 +197,7 @@ public sealed partial class MapLoader
         node.Scale = Vector3.One * (o.Scale > 0 ? o.Scale : 1f);
         _objectNodes[o.Id] = node;
         _objectGroup[o.Id] = group;
+        _objectAssets[o.Id] = o.Asset;
     }
 
     /// <summary>
@@ -230,6 +237,7 @@ public sealed partial class MapLoader
         foreach (var id in parcels) RemoveGroupObjects(id);
         var n = 0;
         foreach (var o in objects) { AddObject(o); n++; }
+        if (_cables.Count > 0) RebuildCables(); // poles may have moved, come or gone
         return n;
     }
 
@@ -245,6 +253,7 @@ public sealed partial class MapLoader
         if (!_objectNodes.Remove(id, out var node)) return false;
         var group = _objectGroup[id];
         _objectGroup.Remove(id);
+        _objectAssets.Remove(id);
         node.GetParent()?.RemoveChild(node);
         node.QueueFree();
         DropEmptyGroup(group);
@@ -287,7 +296,7 @@ public sealed partial class MapLoader
             var id = a.GetProperty("id").GetString()!;
             var cat = a.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString()! : "other";
             var name = a.TryGetProperty("name", out var nm) && nm.ValueKind == JsonValueKind.String ? nm.GetString()! : id;
-            _assetManifest[id] = new AssetEntry(file, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name);
+            _assetManifest[id] = new AssetEntry(file, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name, ParseSeats(a), ParseLights(a));
         }
     }
 
@@ -378,7 +387,7 @@ public sealed partial class MapLoader
                 var name = mi.Name.ToString();
                 if (mi.Mesh == null || !name.StartsWith("parcel_")) continue;
                 string? id = name.EndsWith("_props_collision") ? name["parcel_".Length..^"_props_collision".Length]
-                    : name.EndsWith("_props") ? name["parcel_".Length..^"_props".Length] : null;
+                    : PropsParcelId(SplitTexNode(name).Base);  // the flat props node or a textured sibling
                 if (id == null) continue;
                 if (!set.Contains(id)) { Warn($"fragment GLB has props for {id}, which is not in 'replaces'; ignored"); continue; }
                 if (!byParcel.TryGetValue(id, out var l)) byParcel[id] = l = new();
@@ -396,13 +405,14 @@ public sealed partial class MapLoader
                     container.AddChild(mi);
                     mi.Transform = Transform3D.Identity;
                     if (name.EndsWith("_collision")) BuildCollider(mi, name, dynamic: true);
-                    else FixMaterials(mi);
+                    else ApplyMaterial(mi, name);
                     propsNodes++;
                 }
             }
             scene.Free();
         }
         foreach (var o in objects) AddObject(o);
+        if (_cables.Count > 0) RebuildCables();
         return new FragmentResult(replaces, objects.Count, propsNodes);
     }
 
@@ -418,6 +428,7 @@ public sealed partial class MapLoader
     {
         GeometryChanged();
         if (_propsVisuals.TryGetValue(id, out var v)) v.Visible = false;
+        if (_propsTexVisuals.TryGetValue(id, out var tex)) foreach (var t in tex) t.Visible = false;
         if (_propsShapes.TryGetValue(id, out var shapes))
             foreach (var s in shapes) s.SetDeferred(CollisionShape3D.PropertyName.Disabled, true);
     }
@@ -429,10 +440,12 @@ public sealed partial class MapLoader
         RemoveDynamic(id);
         _swapped.Remove(id);
         if (_propsVisuals.TryGetValue(id, out var v)) v.Visible = true;
+        if (_propsTexVisuals.TryGetValue(id, out var tex)) foreach (var t in tex) t.Visible = true;
         if (_propsShapes.TryGetValue(id, out var shapes))
             foreach (var s in shapes) s.SetDeferred(CollisionShape3D.PropertyName.Disabled, false);
         RemoveGroupObjects(id);
         if (_bakedObjects.TryGetValue(id, out var baked))
             foreach (var o in baked) AddObject(o);
+        if (_cables.Count > 0) RebuildCables();
     }
 }

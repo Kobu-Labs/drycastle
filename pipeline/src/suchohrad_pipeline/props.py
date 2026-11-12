@@ -27,10 +27,12 @@ from suchohrad_pipeline.buildings import footprint_polygon
 from suchohrad_pipeline.config import DEFAULT_AREA, area_paths
 from suchohrad_pipeline.edits import (
     DEFAULT_EDITS,
+    WIRE_ASSET_PREFIXES,
     Edits,
     EditsError,
     FenceSpec,
     load_edits,
+    region_ring,
     resolve_fence,
 )
 from suchohrad_pipeline.lamps import make_lamps, read_osm_lamps, write_lamps
@@ -112,7 +114,7 @@ def make_fences(
     parcel without a spec gets the rules' ``auto`` fence. ``groups`` maps a group ID to its member
     parcel IDs: the members' outer edge is fenced as one property, each piece with its owner's
     settings and the seeded roll keyed by the group ID. Custom sections carry their own
-    ``height_m``, ``thickness_m`` and ``colour``.
+    ``type``, ``height_m``, ``thickness_m`` and ``colour`` (and ``column`` when the edit names one).
 
     ``road_polys`` replaces the road parcels taken from ``parcels`` for the gate-gap logic (the
     per-parcel run passes only the road parcels near its targets).
@@ -182,7 +184,13 @@ def make_fences(
             boundary = boundary.difference(done)
         pieces = [ln for ln in merged_lines(boundary) if ln.length >= _MIN_PIECE_M]
         style = (
-            {"height_m": spec.height_m, "thickness_m": spec.thickness_m, "colour": spec.colour}
+            {
+                "type": spec.type,
+                "height_m": spec.height_m,
+                "thickness_m": spec.thickness_m,
+                "colour": spec.colour,
+                **({"column": spec.column} if spec.column is not None else {}),
+            }
             if custom and spec is not None
             else {}
         )
@@ -212,6 +220,30 @@ def make_fences(
 # --- trees ----------------------------------------------------------------------------------
 
 
+def shore_candidates(water: BaseGeometry, cfg: dict) -> list[tuple[float, float]]:
+    """Tree positions in rows along the water's edge: ``cfg["rows"]`` (offset from the shore, share kept), ``spacing_m`` apart.
+
+    Seeded per candidate, so the same water gives the same points whichever parcels are generated.
+    """
+    pts: list[tuple[float, float]] = []
+    spacing = float(cfg["spacing_m"])
+    for r, row in enumerate(cfg["rows"]):
+        grown = water.buffer(float(row["offset_m"]))
+        parts = sorted(getattr(grown, "geoms", [grown]), key=lambda g: g.bounds)
+        for k, part in enumerate(parts):
+            for ring in (part.exterior, *part.interiors):
+                n = int(ring.length // spacing)
+                for i in range(n):
+                    rng = seeded(f"shore:{r}:{k}:{i}")
+                    if rng.random() >= float(row["keep"]):
+                        continue
+                    at = ring.interpolate((i + rng.uniform(-0.3, 0.3)) * ring.length / n)
+                    x, y = at.x + rng.uniform(-0.8, 0.8), at.y + rng.uniform(-0.8, 0.8)
+                    if not water.contains(Point(x, y)):
+                        pts.append((x, y))
+    return pts
+
+
 def make_trees(
     parcels: list[dict],
     buildings: list[dict],
@@ -223,6 +255,7 @@ def make_trees(
     objects: list[tuple[float, float]] | None = None,
     only: set[str] | None = None,
     include_osm: bool = True,
+    water: BaseGeometry | None = None,
 ) -> list[dict]:
     """OSM trees plus seeded rule-based trees in parcels (gardens, forests, ...).
 
@@ -231,7 +264,9 @@ def make_trees(
 
     ``overrides`` maps a parcel ID to its edited trees (``density_per_1000m2`` or ``count``, and
     ``seed_offset``). ``objects`` are placed object positions (local metres) that trees keep
-    ``object_clearance_m`` away from.
+    ``object_clearance_m`` away from. ``water`` (local metres) is where the water regions lie: rule-based trees get
+    no trunk in it (their crowns may overhang it from the bank), and ``cfg["shore"]`` adds rows of trees along
+    its edge (see :func:`shore_candidates`).
     """
     bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
     bzone = unary_union(bpolys).buffer(float(cfg["building_clearance_m"])) if bpolys else None
@@ -242,7 +277,7 @@ def make_trees(
         else None
     )
     shapely.prepare(terrain.coverage)
-    for g in (bzone, rzone, ozone):
+    for g in (bzone, rzone, ozone, water):
         if g is not None:
             shapely.prepare(g)
     trees: list[dict] = []
@@ -271,6 +306,12 @@ def make_trees(
 
     density = cfg["density_per_1000m2"]
     spacing = float(cfg["min_spacing_m"])
+    shore_pts = (
+        shore_candidates(water, cfg["shore"]) if water is not None and cfg.get("shore", {}).get("rows") else None
+    )
+    shore_arr = np.array(shore_pts, float).reshape(-1, 2) if shore_pts else None
+    if shore_arr is None:
+        shore_pts = None
     for p in sorted(parcels, key=lambda p: p["id"]):
         if only is not None and p["id"] not in only:
             continue
@@ -284,7 +325,8 @@ def make_trees(
             fixed = ov.get("count")
             if int(ov.get("seed_offset", 0)):
                 seed_key += f":{int(ov['seed_offset'])}"
-        if fixed is None and rate <= 0:
+        shore_here = shore_pts is not None
+        if fixed is None and rate <= 0 and not shore_here:
             continue
         poly = shape(p["polygon"])
         inner = poly.buffer(-float(cfg["parcel_edge_clearance_m"]))
@@ -292,14 +334,16 @@ def make_trees(
             continue
         shapely.prepare(inner)
         rng = seeded(seed_key)
-        if fixed is not None:
+        if fixed is None and rate <= 0:
+            count = 0
+        elif fixed is not None:
             count = int(fixed)
         else:
             expected = rate * poly.area / 1000.0
             count = int(expected) + (rng.random() < expected % 1)
         minx, miny, maxx, maxy = inner.bounds
         placed: list[tuple[float, float]] = []
-        for _ in range(count * 40):
+        for _ in range(count * 40 if count else 0):
             if len(placed) >= count:
                 break
             x, y = rng.uniform(minx, maxx), rng.uniform(miny, maxy)
@@ -313,9 +357,23 @@ def make_trees(
                 continue
             if ozone is not None and shapely.contains_xy(ozone, x, y):
                 continue
+            if water is not None and shapely.contains_xy(water, x, y):
+                continue
             if any(math.hypot(x - a, y - b) < spacing for a, b in placed):
                 continue
             placed.append((x, y))
+        if shore_here:
+            srng = seeded(f"{p['id']}:shore")
+            near = (shore_arr[:, 0] >= minx) & (shore_arr[:, 0] <= maxx) & (shore_arr[:, 1] >= miny) & (shore_arr[:, 1] <= maxy)
+            for x, y in shore_arr[near]:
+                x, y = float(x), float(y)
+                if not shapely.contains_xy(inner, x, y) or not shapely.contains_xy(terrain.coverage, x, y):
+                    continue
+                if any(g is not None and shapely.contains_xy(g, x, y) for g in (bzone, rzone, ozone, water)):
+                    continue
+                if any(math.hypot(x - a, y - b) < spacing for a, b in placed):
+                    continue
+                placed.append((x, y))
         for x, y in placed:
             trees.append(tree(x, y, rng, p["id"], p["kind"] == "forest", "rule"))
     return trees
@@ -461,8 +519,10 @@ class EditPlan:
     groups: dict[str, list[str]] = field(default_factory=dict)  # valid member parcels only
     tree_overrides: dict[str, dict] = field(default_factory=dict)
     objects: list[dict] = field(default_factory=list)  # objects.json entries, sorted by id
+    cables: list[dict] = field(default_factory=list)  # {"id", "from", "to"} between placed poles and connectors, by id
     object_owner: dict[str, str] = field(default_factory=dict)  # object id -> parcel listing it
     warnings: list[str] = field(default_factory=list)
+    water_regions: list[tuple[Polygon, float]] = field(default_factory=list)  # (outline in local metres, water_y)
 
 
 def _local_xy(x: float, y: float, origin: list[float] | None) -> tuple[float, float]:
@@ -478,7 +538,8 @@ def plan_edits(
 
     Entries for parcels that no longer exist (parcel entries, group members, objects) are skipped
     with a warning. An object outside every parcel, or outside the parcel it is listed under, is
-    still placed, with a warning; its ``parcel`` is the parcel containing it, or null.
+    still placed, with a warning; its ``parcel`` is the parcel containing it, or null. A cable is
+    kept when both its ends are placed utility poles or house connectors, else skipped with a warning.
     """
     plan = EditPlan()
     polys = {p["id"]: shape(p["polygon"]) for p in parcels}
@@ -535,7 +596,33 @@ def plan_edits(
                 }
             )
     plan.objects.sort(key=lambda o: o["id"])
+    assets = {o["id"]: o["asset"] for o in plan.objects}
+    for cid in sorted(edits.cables):
+        cable = edits.cables[cid]
+        bad = [
+            f"{end} is not placed" if end not in assets else f"{end} is not a utility pole or a house connector"
+            for end in (cable["from"], cable["to"])
+            if not assets.get(end, "").startswith(WIRE_ASSET_PREFIXES)
+        ]
+        if bad:
+            plan.warnings.append(f"cables.{cid}: {'; '.join(bad)}; cable skipped")
+        else:
+            plan.cables.append({"id": cid, "from": cable["from"], "to": cable["to"]})
+    plan.water_regions = [
+        (Polygon([_local_xy(x, y, origin) for x, y in region_ring(r["polygon"])]), float(r["water_y"]))
+        for _, r in sorted(edits.regions.items())
+        if "water_y" in r
+    ]
     return plan
+
+
+def water_zone(plan: EditPlan, terrain: Terrain) -> BaseGeometry | None:
+    """Where the water regions of the plan really lie (see :func:`water.wet_area`), or None without any."""
+    from suchohrad_pipeline.water import wet_area
+
+    zones = [wet_area(outline, terrain, level) for outline, level in plan.water_regions]
+    zones = [z for z in zones if not z.is_empty]
+    return unary_union(zones) if zones else None
 
 
 def unknown_asset_warnings(objects: list[dict]) -> list[str]:
@@ -585,6 +672,7 @@ def run_props(
         fcfg["trees"],
         overrides=plan.tree_overrides,
         objects=[(o["position"][0], o["position"][1]) for o in plan.objects],
+        water=water_zone(plan, terrain),
     )
     trees = cap_trees(trees, chunk_m, int(fcfg["trees"]["max_per_chunk"]))
     spawns = make_spawns(
@@ -598,6 +686,8 @@ def run_props(
         float(parcels_doc["chunk_size_m"]),
     )
     objects_doc = {"format_version": OBJECTS_FORMAT_VERSION, "objects": plan.objects}
+    if plan.cables:  # the wires between placed utility poles; the game strings them (docs/utility-poles.md)
+        objects_doc["cables"] = plan.cables
     (work_dir / "objects.json").write_text(json.dumps(objects_doc, indent=1, sort_keys=True) + "\n")
     props = {"version": PROPS_FORMAT_VERSION, "fences": fences, "trees": trees}
     spawn_doc = {

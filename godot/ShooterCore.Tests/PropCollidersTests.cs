@@ -159,9 +159,22 @@ public class PropCollidersTests
     }
 
     [Fact]
+    public void OnFootMovementIsStoppedByTheSolidBoxNotTheVehicleBody()
+    {
+        // the vehicle's own body has a collision exception with every player (it drives over them), and an exception works both ways:
+        // a player whose mask named that body would still walk through it on the server, while the client's copy stopped the prediction
+        Assert.Equal(0u, CollisionLayers.OnFoot & CollisionLayers.Vehicles);
+        Assert.NotEqual(0u, CollisionLayers.OnFoot & CollisionLayers.VehicleSolid);
+        Assert.NotEqual(0u, CollisionLayers.OnFoot & CollisionLayers.World);
+        // a shot must come back with the vehicle's body (damage, glass), never with the box beside it; nor do the cars or the world move against it
+        Assert.Equal(0u, CollisionLayers.VehicleSolid & (CollisionLayers.Bullets | CollisionLayers.WorldShots | CollisionLayers.World | CollisionLayers.Vehicles | CollisionLayers.ShotOnly));
+    }
+
+    [Fact]
     public void ObjectSolidsFollowTheCategory()
     {
         Assert.Empty(ObjectColliders.ForCategory("flower", 1, 1, 1));
+        Assert.Empty(ObjectColliders.ForCategory("connector", 0.4f, 1.4f, 0.5f)); // a house connector stops nothing
         var bush = ObjectColliders.ForCategory("bush", 2, 1.5f, 2);
         Assert.Single(bush);
         Assert.Equal(CollisionLayers.ShotOnly, bush[0].Layer);
@@ -173,6 +186,13 @@ public class PropCollidersTests
         Assert.Single(wall);
         Assert.Equal(CollisionLayers.World, wall[0].Layer);
         Assert.Equal(2.5f, wall[0].Z1);
+        // a utility pole is as wide as its lamp arm reaches, but only its column is solid
+        var pole = ObjectColliders.ForCategory("pole", 0.97f, 9.2f, 3.9f);
+        Assert.Single(pole);
+        Assert.Equal(CollisionLayers.World, pole[0].Layer);
+        Assert.Equal(9.2f, pole[0].Z1);
+        Assert.Equal(ObjectColliders.PoleHalf, pole[0].HalfU);
+        Assert.Equal(ObjectColliders.PoleHalf, pole[0].HalfV);
     }
 
     [Fact]

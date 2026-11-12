@@ -14,7 +14,14 @@ public partial class NetServer : Node
 {
     sealed class Client
     {
-        public ENetPacketPeer Peer = null!;
+        /// <summary>The network peer; null for a bot (#214), which has no connection: nothing is sent to it and its inputs come from <see cref="Brain"/>.</summary>
+        public ENetPacketPeer? Peer;
+        /// <summary>The mind of a bot; null for a human player.</summary>
+        public BotBrain? Brain;
+        public bool IsBot => Brain != null;
+        /// <summary>Sequence number of the bot's last input, and whether it was alive last tick (a respawn resets the brain).</summary>
+        public ushort BotSeq;
+        public bool BotWasAlive;
         public ushort Id;
         public string Name = "";
         public bool Joined;
@@ -48,6 +55,8 @@ public partial class NetServer : Node
         public ServerCar? Car;
         /// <summary>Seat of <see cref="Car"/> this player sits in (0 = driver).</summary>
         public int CarSeat;
+        /// <summary>The flak status last sent to this client as the gunner (magazine, reserve, reloading), so only a change is sent; null until the first.</summary>
+        public (int Mag, int Reserve, bool Reloading)? FlakSent;
         public bool UseHeld, LightsHeld, Handbrake, StreakHeld;
         public float Throttle, Steer;
         public PlayerProfile? Profile;
@@ -153,11 +162,12 @@ public partial class NetServer : Node
         BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
         WarmSurfaceIndexes(); // roads.json and the tree grid, so no impact pays for them on a tick (T3-003, T3-004)
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
+        if (Weapons != null) foreach (var v in Vehicles.Vehicles) if (v.Flak is { } fk) FlakWeapon(fk); // a flak naming an unknown weapon fails here, not on the first shot
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");
     }
 
-    public override void _ExitTree() => _host.Destroy();
+    public override void _ExitTree() { _host.Destroy(); _nav?.Free(); }
 
     public override void _Process(double delta)
     {
@@ -172,7 +182,7 @@ public partial class NetServer : Node
         _tick++;
         if (!_spawnsChecked)
         {
-            if (_tick >= 3) { CheckSpawnGround(); SpawnCars(); PlanTargets(); }
+            if (_tick >= 3) { CheckSpawnGround(); SpawnCars(); PlanTargets(); BuildBotNav(); }
             return; // not accepting connections until the spawn list is validated
         }
         _elapsed += delta;
@@ -185,12 +195,16 @@ public partial class NetServer : Node
         if (_tick % Wire.TickRate == 0 && _clients.Count > 0) BroadcastEvent(EventKind.MatchState, MatchCodec.Encode(BuildMatchState())); // about once a second, so the scoreboard ping is not stale
         _match.Entities.Tick((float)delta);
         StreakTick((float)delta);
-        foreach (var c in _clients.Values.ToList()) if (c.Joined) SimulateClient(c, (float)delta);
+        BotsTick((float)delta); // fills the roster and queues each bot's input for this tick (#214)
+        foreach (var car in _cars) car.PlaceSolid(); // the boxes on-foot players are stopped by, where the vehicles stand after the last tick (#217)
+        foreach (var c in _byId.Values.ToList()) SimulateClient(c, (float)delta); // every joined player, bots included
         StepRockets((float)delta);
         StepCorpses((float)delta);
         StepVehicles((float)delta);
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
+        DetonateFlak();    // flak shells that have arrived burst now
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
+        FlushGlass();     // the glass panes that changed this tick (ADR 0007)
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
         if (catchUp && LossTest == 0) _skippedSnapshots++; // the next regular tick sends the current state
         else SendSnapshots();
@@ -199,7 +213,7 @@ public partial class NetServer : Node
         if (_clients.Count > _peakPlayers) _peakPlayers = _clients.Count;
         if (QuitAfter > 0) foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved; // only the smoke verdict reads it; a production server keeps no per-name history
         if (_tick % (Wire.TickRate * 2) == 0 && _clients.Count > 0)
-            GD.Print($"server: tick {_tick}, players {string.Join(", ", _clients.Values.Where(c => c.Joined).Select(c => $"{c.Name}#{c.Id}@({c.Body.GlobalPosition.X:F1},{c.Body.GlobalPosition.Y:F1},{c.Body.GlobalPosition.Z:F1}) ack={c.Ack}"))}");
+            GD.Print($"server: tick {_tick}, players {string.Join(", ", _byId.Values.Select(c => $"{c.Name}#{c.Id}@({c.Body.GlobalPosition.X:F1},{c.Body.GlobalPosition.Y:F1},{c.Body.GlobalPosition.Z:F1}) ack={c.Ack}"))}");
         if (BazookaSmoke)
         {
             if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishBazooka();
@@ -343,6 +357,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.SeatSwitch } sw && c.Joined) OnSeatSwitch(c, sw.Payload);
             else if (c.Joined) OnProfileMessage(c, m);
         }
         else if (c.Joined && d[0] == Wire.TInput)
@@ -390,7 +405,7 @@ public partial class NetServer : Node
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
         c.Joined = true;
-        foreach (var car in _cars) car.AddCollisionExceptionWith(c.Body);
+        foreach (var car in _cars) { car.AddCollisionExceptionWith(c.Body); car.Probe?.Ignore(c.Body); }
         _byId[c.Id] = c;
         _playerRidsDirty = true;
         c.Enc = new SnapshotEncoder(_sentStates);
@@ -398,18 +413,19 @@ public partial class NetServer : Node
         SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick,
             (ushort)(Clock.StartMinute), (uint)Math.Round(Clock.DayLengthSeconds * 1000), Clock.Frozen));
-        foreach (var o in _clients.Values.Where(o => o.Joined))
+        foreach (var o in _byId.Values)
         {
             Send(c, new JoinMsg(o.Id, o.Name));
             if (o != c) Send(o, new JoinMsg(c.Id, c.Name));
         }
         foreach (var w in _match.Entities.Snapshot()) Send(c, new EventMsg((byte)EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State)));
+        SendGlassOnJoin(c); // the glass panes that are not whole (ADR 0007)
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
         _match.AddPlayer(c.Id, c.Name, c.Sandbox); // spawns the player (event) and broadcasts the scoreboard
         SandboxAnnounce(c); // sandbox name tags both ways, and the held streak (#156)
         _host.Flush();
-        GD.Print($"server: {c.Name} joined as #{c.Id} ({_clients.Count(x => x.Value.Joined)} players)");
+        GD.Print($"server: {c.Name} joined as #{c.Id} ({_byId.Count} players)");
     }
 
     /// <summary>Players the server takes; the ENet host has one more slot, so a connection past this is told the server is full.</summary>
@@ -418,14 +434,19 @@ public partial class NetServer : Node
     void Drop(ENetPacketPeer peer)
     {
         if (!_clients.Remove(peer, out var c)) return;
-        if (!c.Joined) return;
+        if (c.Joined) Leave(c);
+    }
+
+    /// <summary>Takes a joined player out of the match: a dropped connection, or a bot that is no longer wanted.</summary>
+    void Leave(Client c)
+    {
         StreakLeave(c.Id);
         if (c.Car != null) { c.Car.Seat.Exit(c.Id); c.Car = null; }
-        foreach (var car in _cars) car.RemoveCollisionExceptionWith(c.Body); // the exception outlives the freed body otherwise (T3-014)
+        foreach (var car in _cars) { car.RemoveCollisionExceptionWith(c.Body); car.Probe?.Unignore(c.Body); } // the exception outlives the freed body otherwise (T3-014)
         c.Body.QueueFree();
         _byId.Remove(c.Id);
         _playerRidsDirty = true;
-        foreach (var o in _clients.Values.Where(o => o.Joined)) Send(o, new LeaveMsg(c.Id));
+        foreach (var o in _byId.Values) Send(o, new LeaveMsg(c.Id));
         _match.RemovePlayer(c.Id);
         GD.Print($"server: {c.Name} #{c.Id} left");
     }
@@ -437,8 +458,8 @@ public partial class NetServer : Node
         foreach (var o in _clients.Values.Where(o => o != keep && o.Token == keep.Token).ToList())
         {
             GD.Print($"server: {o.Name} #{o.Id} replaced by a new session with the same token");
-            Drop(o.Peer);
-            o.Peer.PeerDisconnectLater(0);
+            Drop(o.Peer!);
+            o.Peer!.PeerDisconnectLater(0);
         }
     }
 
@@ -450,8 +471,8 @@ public partial class NetServer : Node
         foreach (var c in _clients.Values.Where(c => c.Id == 0 && _elapsed - c.ConnectedAt > HelloDeadlineSeconds).ToList())
         {
             GD.Print("server: dropping a connection that sent no hello");
-            Drop(c.Peer);
-            c.Peer.PeerDisconnectLater(0);
+            Drop(c.Peer!);
+            c.Peer!.PeerDisconnectLater(0);
         }
     }
 
@@ -461,7 +482,11 @@ public partial class NetServer : Node
         if (Sim != null) Sim.Send(peer, chan, data, flags); else peer.Send(chan, data, flags);
     }
 
-    void Send(Client c, ReliableMsg m) => Tx(c.Peer, Wire.ChanReliable, Wire.Encode(m), (int)ENetPacketPeer.FlagReliable);
+    /// <summary>A reliable message to one player. A bot has no connection: nothing is encoded or sent.</summary>
+    void Send(Client c, ReliableMsg m)
+    {
+        if (c.Peer is { } peer) Tx(peer, Wire.ChanReliable, Wire.Encode(m), (int)ENetPacketPeer.FlagReliable);
+    }
 
     /// <summary>Broadcast an event envelope to every joined client (shot, hit, kill, ... from later issues).</summary>
     public void BroadcastEvent(EventKind kind, byte[] payload)
@@ -469,7 +494,7 @@ public partial class NetServer : Node
         ReliableMsg m = new EventMsg((byte)kind, payload);
         var bytes = Wire.Encode(m); // encoded once: every recipient gets the same bytes (Tx copies them into the packet)
         foreach (var c in _clients.Values)
-            if (c.Joined) Tx(c.Peer, Wire.ChanReliable, bytes, (int)ENetPacketPeer.FlagReliable);
+            if (c.Joined) Tx(c.Peer!, Wire.ChanReliable, bytes, (int)ENetPacketPeer.FlagReliable);
     }
 
     void OnDebug(Client c, byte[] payload)
@@ -531,12 +556,13 @@ public partial class NetServer : Node
             case PlayerKilled k:
                 if (_byId.TryGetValue(k.Victim, out var kv) && kv.Car != null) LeaveSeat(kv, false);
                 _kills += k.Killer != k.Victim ? 1 : 0;
+                BotKillLog(k);
                 if (WeaponsSmoke && _kills >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5;
                 if (BazookaSmoke && _kills >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.5;
                 LossKill(k.Killer, k.Victim);
                 RecordKill(k);
                 var fromStreak = StreakKill(k);
-                if (Scores(k.Killer)) AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause, fromStreak), _elapsed));
+                if (Scores(k.Killer) && Scores(k.Victim)) AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause, fromStreak), _elapsed)); // the death of a bot (#214) or of a sandbox player grants no XP
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon, k.Cause)));
                 break;
             case TargetKilled tk: OnTargetKilled(tk); break;
@@ -551,7 +577,7 @@ public partial class NetServer : Node
     }
 
     ushort Ping(ushort id) =>
-        _byId.TryGetValue(id, out var c) ? (ushort)Math.Clamp(c.Peer.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime), 0, ushort.MaxValue) : (ushort)0;
+        _byId.TryGetValue(id, out var c) && c.Peer is { } peer ? (ushort)Math.Clamp(peer.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime), 0, ushort.MaxValue) : (ushort)0; // a bot has no ping
 
     void SimulateClient(Client c, float dt)
     {
@@ -579,8 +605,14 @@ public partial class NetServer : Node
             {
                 // driving: the car is simulated in StepVehicles from the driver's inputs; no walking or weapon timers.
                 // A gunner's inputs fire the car's gun instead (its aim is the view yaw and pitch).
-                if (c.CarSeat == 0) { c.Throttle = Quant.Axis(i.MoveY); c.Steer = Quant.Axis(i.MoveX); c.Handbrake = (i.Buttons & (ushort)MoveButtons.Jump) != 0; }
-                else if (c.Car.Gun != null) GunnerInput(c, i);
+                // The pilot of a helicopter steps it here, once per input, as the body on foot is: the pilot's client predicts the same steps (ADR 0006).
+                if (c.CarSeat == 0 && c.Car.Flies) c.Car.StepFlight(FlightInput.FromNet(i, handsOff: controlled), dt, _tick);
+                else if (c.CarSeat == 0) { c.Throttle = Quant.Axis(i.MoveY); c.Steer = Quant.Axis(i.MoveX); c.Handbrake = (i.Buttons & (ushort)MoveButtons.Jump) != 0; }
+                else if (c.Car.Gun != null)
+                {
+                    GunnerInput(c, i);
+                    c.Body.Yaw = Quant.Yaw(i.Yaw); c.Body.Pitch = Quant.Pitch(i.Pitch); // a gunner's body faces where they aim, for everyone who sees them at the gun
+                }
                 if (lightsEdge) c.Car.Lights = Headlights.Toggle(c.Car.Lights);
                 if (useEdge) ExitCar(c);
                 continue;
@@ -677,8 +709,10 @@ public partial class NetServer : Node
             var d = HitMath.SpreadDirection(yaw + kick.YawRad + sway.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad + sway.PitchRad), HitMath.ShotSpread(shot.SpreadDegrees, w, c.Body.State, aiming), _rng);
             var dir = new Vector3(d.X, d.Y, d.Z);
             var range = w.Range > 0 ? w.Range : MaxShotRange;
-            var wall = WorldHit(eye, dir, range, out var shotCar);
-            var hit = HitMath.Raycast(N(eye), d, range, wall, targets, c.Id);
+            var crossed = new List<GlassCross>();
+            var wall = BulletHit(eye, dir, range, out var shotCar, crossed);
+            var (exposedGunner, pastHull) = ExposedGunnerBehind(shotCar, eye, dir, range, targets);
+            var hit = GunnerCover.Raycast(N(eye), d, range, wall, targets, c.Id, exposedGunner, pastHull); // a flak gunner in the open is hit through his hull
             if (hit == null && HitMath.Raycast(N(eye), d, range, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
             var end = eye + dir * (hit?.Distance ?? Math.Min(wall, range));
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
@@ -686,6 +720,8 @@ public partial class NetServer : Node
             else if (shotCar != null && Vehicles != null && wall <= range)
                 DamageVehicle(shotCar, HitMath.HitscanDamage(w, wall, false) * Vehicles.BulletDamageMultiplier, c.Id, (byte)shot.WeaponIndex, 0);
             else if (shotCar == null && wall <= range) BulletPuff(N(eye + dir * wall)); // dust where a bullet meets the ground or a wall (ticket #154)
+            if (hit == null && wall <= range) ShotGlass(shotCar, eye, dir, wall, HitMath.HitscanDamage(w, wall, false)); // the pane the bullet crossed where it stopped (ADR 0007)
+            DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, d => HitMath.HitscanDamage(w, d, false));
         }
         else if (w.Kind == WeaponKind.Projectile)
         {
@@ -719,7 +755,8 @@ public partial class NetServer : Node
         if (_streaks.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
-        if (r == DamageResult.Damaged && Scores(attackerId)) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
+        if (r == DamageResult.Damaged && Scores(attackerId) && Scores(victim)) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
+        BotHit(victim, attackerId);
         _hitsLanded++;
         LossHit(attackerId, victim, r == DamageResult.Killed);
         if (head) _headshots++;
@@ -745,7 +782,9 @@ public partial class NetServer : Node
             var life = r.Life > 0 ? r.Life : w.ProjectileLife;
             var len = speed * dt;
             var wall = WorldHit(r.Pos, r.Dir, len, out var hitCar);
-            var step = RocketFlight.Step(N(r.Pos), N(r.Dir), r.Age, speed, life, dt, wall, LiveTargets(), r.Owner);
+            var targets = LiveTargets();
+            var (exposedGunner, pastHull) = ExposedGunnerBehind(hitCar, r.Pos, r.Dir, len, targets);
+            var step = RocketFlight.Step(N(r.Pos), N(r.Dir), r.Age, speed, life, dt, wall, targets, r.Owner, exposedGunner, pastHull);
             switch (step.Outcome)
             {
                 case RocketOutcome.Player:
@@ -774,6 +813,7 @@ public partial class NetServer : Node
         var w = ProjectileMath.WithBlast(weapon, r.Blast); // a gunship's rocket has its own blast (killstreaks.json); the bazooka keeps weapons.json's
         _explosions++;
         if (Vehicles != null) RocketVsVehicles(pos, w, r.Owner, r.Weapon, directCar);
+        BlastGlass(pos, w.Splash?.Radius ?? 0);
         BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(r.Id, r.Owner, r.Weapon, N(pos), w.Splash?.Radius ?? 0)));
         BroadcastImpact(N(pos), ImpactSize.Plume, body: direct != null && directCar == null, vehicle: directCar != null); // rockets throw up a plume (ticket #154)
         foreach (var t in LiveTargets())
@@ -797,11 +837,13 @@ public partial class NetServer : Node
     void SendSnapshots()
     {
         var ents = new List<EntityRecord>();
-        foreach (var c in _clients.Values)
-            if (c.Joined)
+        foreach (var c in _byId.Values) // every joined player, bots included
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot, c.Body.State.Stance));
         foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed, car.Lights));
+        foreach (var car in _cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model
+        foreach (var car in _cars) if (car.Flies) ents.Add(FlightRecord.Make(car.Id, car.Flight)); // a helicopter's velocity, tilt and rotor (ADR 0006)
+        foreach (var car in _cars) if (car.Def.DoorGun != null) ents.Add(DoorGunRecordOf(car)); // a door gun's aim against its airframe, for everyone's model
         ents.AddRange(TargetRecords()); // target dummies (#148)
         foreach (var r in _rockets)
             ents.Add(EntityRecord.Make(r.Id, EntityType.Projectile, N(r.Pos),
@@ -809,11 +851,11 @@ public partial class NetServer : Node
         foreach (var c in _clients.Values)
         {
             if (!c.Joined) continue;
-            foreach (var pkt in c.Enc.Encode(_tick, c.Ack, c.SnapAck, ents)) Tx(c.Peer, Wire.ChanData, pkt, 0);
+            foreach (var pkt in c.Enc.Encode(_tick, c.Ack, c.SnapAck, ents)) Tx(c.Peer!, Wire.ChanData, pkt, 0);
         }
         var world = _match.Entities.Snapshot();
         foreach (var c in _clients.Values)
-            if (c.Joined) foreach (var pkt in c.WEnc.Encode(_tick, world)) Tx(c.Peer, Wire.ChanData, pkt, 0);
+            if (c.Joined) foreach (var pkt in c.WEnc.Encode(_tick, world)) Tx(c.Peer!, Wire.ChanData, pkt, 0);
         LossLogStates(ents);
         _host.Flush();
     }

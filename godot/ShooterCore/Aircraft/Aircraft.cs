@@ -28,8 +28,9 @@ public static class AircraftState
 
 /// <summary>
 /// An aircraft flying a circle over the map (killstreak helicopters and gunships). It is a world entity: its position, yaw
-/// and bank are replicated, and its kind is in the state byte. Aircraft are not shootable in v2 (anti-air is v3), so
-/// <see cref="OnDamage"/> does nothing. The circle centre and phase are chosen by the streak that spawns it.
+/// and bank are replicated, and its kind is in the state byte. It has hit points (<see cref="AircraftKindDef.Hp"/>): the flak truck
+/// shoots it down (ADR 0005), and at 0 it ends as <see cref="WorldDespawnReason.Destroyed"/>. The hp travels as a percentage of the
+/// kind's. The circle centre and phase are chosen by the streak that spawns it.
 /// </summary>
 public sealed class Aircraft : IWorldEntity
 {
@@ -63,12 +64,13 @@ public sealed class Aircraft : IWorldEntity
         _lifetime = lifetimeS ?? def.LifetimeS;
         _bankRad = ComputeBank(def, _direction);
         Owner = owner;
+        Hp = def.Hp;
     }
 
-    /// <summary>Registers the aircraft type once (idempotent). Hp is not sent: aircraft cannot be shot down in v2.</summary>
+    /// <summary>Registers the aircraft type once (idempotent). Hp is sent (as a percentage of the kind's) so clients can show damage.</summary>
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(WireType) == null) registry.Register(new WorldEntityDef(WireType, "aircraft", HasHp: false));
+        if (registry.Find(WireType) == null) registry.Register(new WorldEntityDef(WireType, "aircraft", HasHp: true));
     }
 
     public byte TypeId => WireType;
@@ -82,11 +84,18 @@ public sealed class Aircraft : IWorldEntity
     public Vector3 Centre => _centre;
     /// <summary>Seconds flown since spawn.</summary>
     public float Age => _age;
+    /// <summary>Hit points left (the kind's <see cref="AircraftKindDef.Hp"/> at spawn).</summary>
+    public float Hp { get; private set; }
+    /// <summary>Who dealt the last damage (0 = nobody): credited with the shoot-down.</summary>
+    public ushort LastAttacker { get; private set; }
 
     float Angle => _phase + _direction * _angularRate * _age;
 
     /// <summary>Current position: on the circle, <see cref="AircraftKindDef.AltitudeM"/> above the ground under the centre.</summary>
     public Vector3 Position => PositionAt(Angle);
+
+    /// <summary>Where it will be <paramref name="seconds"/> from now, flying on (the orbit is fixed, so a shell's fuse can lead it).</summary>
+    public Vector3 PositionAfter(float seconds) => PositionAt(Angle + _direction * _angularRate * seconds);
 
     /// <summary>Heading in the engine's yaw convention (forward is -Z at yaw 0, as <see cref="HitMath.Forward"/>): along the circle.</summary>
     public float YawRad => YawAt(Angle);
@@ -117,18 +126,27 @@ public sealed class Aircraft : IWorldEntity
         return MathF.Atan2(-dx, -dz);
     }
 
+    /// <summary>Hit points left as a percentage of the kind's (1 to 100 while alive, so a damaged aircraft never reads 0), as sent on the wire.</summary>
+    public float HpPercent => Hp <= 0 ? 0 : MathF.Max(1f, MathF.Ceiling(100f * Hp / _def.Hp));
+
     public void Tick(float dt)
     {
         _age += dt;
-        if (_age >= _lifetime) Ended = WorldDespawnReason.Expired;
+        if (Ended == null && _age >= _lifetime) Ended = WorldDespawnReason.Expired;
     }
 
-    /// <summary>Aircraft take no damage in v2.</summary>
-    public void OnDamage(float amount, ushort attacker) { }
+    /// <summary>Takes damage; at 0 hp the aircraft ends as <see cref="WorldDespawnReason.Destroyed"/> (the manager then despawns it). Ignored once it has ended.</summary>
+    public void OnDamage(float amount, ushort attacker)
+    {
+        if (Ended != null || amount <= 0) return;
+        if (attacker != 0) LastAttacker = attacker;
+        Hp = MathF.Max(0, Hp - amount);
+        if (Hp <= 0) Ended = WorldDespawnReason.Destroyed;
+    }
 
     public WorldState Serialize()
     {
         var a = Angle; // one angle for position and yaw
-        return WorldState.Make(PositionAt(a), YawAt(a), 0, Owner, AircraftState.Pack(_kind, _bankRad), 0);
+        return WorldState.Make(PositionAt(a), YawAt(a), 0, Owner, AircraftState.Pack(_kind, _bankRad), HpPercent);
     }
 }

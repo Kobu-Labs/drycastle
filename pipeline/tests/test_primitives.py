@@ -34,7 +34,7 @@ def test_primitive_is_deterministic_flat_and_outward(name) -> None:
     assert signed_volume(a) > 0  # counter-clockwise seen from outside
 
 
-@pytest.mark.parametrize("name", sorted(PRIMITIVES))
+@pytest.mark.parametrize("name", sorted(n for n, p in PRIMITIVES.items() if p.centred))
 def test_primitive_matches_declared_size_and_stands_on_ground(name) -> None:
     prim = PRIMITIVES[name]
     lo, hi = bbox(prim.builder(None))

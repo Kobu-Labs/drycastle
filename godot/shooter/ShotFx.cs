@@ -85,7 +85,7 @@ public static class ShotFx
 
     /// <summary>Shot from the muzzle <paramref name="from"/> to <paramref name="to"/>. Melee swings have no effect here.</summary>
     /// <paramref name="speed"/> and <paramref name="length"/> set the tracer's flight (m/s) and streak (m) for a weapon that has its own (the gunship, #160); null keeps the generic ones.</summary>
-    public static void Spawn(Node3D world, Vector3 from, Vector3 to, bool melee, bool impact = true, Vector3? normal = null, float? speed = null, float? length = null)
+    public static void Spawn(Node3D world, Vector3 from, Vector3 to, bool melee, bool impact = true, Vector3? normal = null, float? speed = null, float? length = null, float width = 1f)
     {
         if (!Enabled || melee || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree()) return;
         var dir = to - from;
@@ -95,11 +95,11 @@ public static class ShotFx
         if (!InRange(world, from, to)) return;
         EnsurePools(world);
         dir /= dist;
-        Tracer(from, to, dir, dist, speed ?? TracerSpeed, length ?? TracerLength);
+        Tracer(from, to, dir, dist, speed ?? TracerSpeed, length ?? TracerLength, width);
         if (impact && dist < MaxShotRange - 1f) Burst(to, normal ?? -dir);
     }
 
-    static void Tracer(Vector3 from, Vector3 to, Vector3 dir, float dist, float speed, float length)
+    static void Tracer(Vector3 from, Vector3 to, Vector3 dir, float dist, float speed, float length, float width)
     {
         var len = Mathf.Min(length, dist);
         var k = _tracerNext;
@@ -111,7 +111,7 @@ public static class ShotFx
         var start = from + dir * (len * 0.5f);
         var end = to - dir * (len * 0.5f);
         pivot.LookAtFromPosition(start, start + dir, up);
-        pivot.Scale = new Vector3(1, 1, len); // look_at resets the basis, so the streak's length is set after it
+        pivot.Scale = new Vector3(width, width, len); // look_at resets the basis, so the streak's length (and the width, a multiple of the 3 cm mesh) is set after it
         pivot.Visible = true;
         var tw = pivot.CreateTween();
         _tracerTweens[k] = tw;

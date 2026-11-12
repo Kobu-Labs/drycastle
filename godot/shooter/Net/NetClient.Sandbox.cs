@@ -19,6 +19,19 @@ public partial class NetClient
     /// <summary>The killstreak held in the sandbox slot ("" = none). Set by the server.</summary>
     public string SandboxHeldStreak { get; private set; } = "";
 
+    /// <summary>Sandbox: this player takes damage (the panel's checkbox). Off is godmode. Kept here so it outlives the panel; a new connection starts off, as the server does.</summary>
+    public bool SandboxTakesDamage { get; private set; }
+
+    /// <summary>Sandbox only: switch taking damage on or off for this player.</summary>
+    public void SetSandboxTakesDamage(bool on)
+    {
+        if (!SandboxGranted || SandboxTakesDamage == on) return;
+        SandboxTakesDamage = on;
+        SendSandboxAction(SandboxAction.TakeDamage, (byte)(on ? 1 : 0));
+        _hud?.SetSandbox(SandboxGranted, SandboxHeldStreak, SandboxTakesDamage);
+        SandboxChanged?.Invoke();
+    }
+
     /// <summary>The server's answer to a sandbox request, granted or refused, with the reason to show.</summary>
     public event Action<SandboxAnswer>? SandboxAnswered;
 
@@ -60,7 +73,7 @@ public partial class NetClient
                 SandboxNoticed?.Invoke(text);
                 break;
         }
-        _hud?.SetSandbox(SandboxGranted, SandboxHeldStreak);
+        _hud?.SetSandbox(SandboxGranted, SandboxHeldStreak, SandboxTakesDamage);
     }
 
     /// <summary>Sandbox only: put a killstreak into the held slot (the server ignores it for anyone else).</summary>

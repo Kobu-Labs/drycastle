@@ -12,7 +12,8 @@ namespace Suchohrad.Shooter;
 public partial class NetClient
 {
     /// <summary>A tracer, from a shot event or a gunship tick: the muzzle, the tracer, the hole and the sound (prediction echo skipped).</summary>
-    void OnShot(ShotMsg sh, float? speed = null, float? length = null, bool impact = true)
+    /// <param name="exactMuzzle">The origin is the real muzzle (a flak barrel): the tracer starts there, not at the shooter's hands, and the shooter's own flash and hole are skipped.</param>
+    void OnShot(ShotMsg sh, float? speed = null, float? length = null, bool impact = true, bool exactMuzzle = false, float width = 1f)
     {
         if (KeepEventLogs) _shotLog.Add((Now, sh));
         if (_remotes.TryGetValue(sh.Shooter, out var shooter)) shooter.FireUntil = Now + 0.45;
@@ -21,17 +22,23 @@ public partial class NetClient
         if (EchoOfPredicted(sh.Shooter)) return; // already played and drawn by prediction
         var endV = new Vector3(sh.End.X, sh.End.Y, sh.End.Z);
         SfxShot(sh, melee);
-        if (!melee) { if (sh.Shooter == _myId) _viewmodel?.Flash(0.4f); else if (_remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
+        if (!melee && !exactMuzzle) { if (sh.Shooter == _myId) _viewmodel?.Flash(0.4f); else if (_remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
+        var originV = new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z);
         // a gunship's impact is its own message (OnGunshipImpacts), so its tracer does not draw one too: no 300 m cut-off for a long round
-        ShotFx.Spawn(Owned, MuzzleOf(sh.Shooter, new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV), endV, melee, impact: impact, speed: speed, length: length);
-        if (!melee) ShotHole(new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV);
-        if (!melee) BulletSurfaceHit(new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z), endV);
+        ShotFx.Spawn(Owned, exactMuzzle ? originV : MuzzleOf(sh.Shooter, originV, endV), endV, melee, impact: impact, speed: speed, length: length, width: width);
+        if (!melee && !exactMuzzle) ShotHole(originV, endV);
+        if (!melee && !exactMuzzle) BulletSurfaceHit(originV, endV);
     }
 
     /// <summary>One gunner's tracers this tick: each one drawn as its own shot.</summary>
     void OnGunshipShots(GunshipShotsMsg m)
     {
-        foreach (var t in m.Tracers) OnShot(new ShotMsg(m.Owner, t.Weapon, t.Origin, t.End), t.SpeedMps > 0 ? t.SpeedMps : null, t.LengthM > 0 ? t.LengthM : null, impact: false);
+        var flak = FlakCarOf(m.Owner); // a flak gunner's shells leave the barrels: the tracer starts at the muzzle, and the barrel kicks
+        foreach (var t in m.Tracers)
+        {
+            OnShot(new ShotMsg(m.Owner, t.Weapon, t.Origin, t.End), t.SpeedMps > 0 ? t.SpeedMps : null, t.LengthM > 0 ? t.LengthM : null, impact: false, exactMuzzle: flak != null, width: flak != null ? FlakTracerWidth : 1f);
+            flak?.Flak?.Kick();
+        }
     }
 
     /// <summary>The tick's gunship impacts (kills included): each one drawn as an ImpactFx.</summary>
@@ -51,7 +58,8 @@ public partial class NetClient
             var b = m.Blasts[i];
             var at = new Vector3(b.At.X, b.At.Y, b.At.Z);
             if (i == 0 && Sfx.Enabled) Sfx.Play3D(SoundRules.Event("explosion", "bazooka"), at);
-            RocketFx.Explode(Owned, at, b.Radius);
+            if (Mathf.Abs(b.Radius - FlakPuffRadius) < 0.05f) FlakFx.Burst(Owned, at, b.Radius); // an airburst: black flak smoke, not a fireball
+            else RocketFx.Explode(Owned, at, b.Radius);
             ShakeFor(at, b.Radius);
         }
         if (m.Owner == _myId && m.Hits != GunshipHitFlags.None) OnGunnerHits(m.Hits);

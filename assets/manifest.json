@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "note": "size_m is [x, y, z] in glTF axes (y up), metres, as imported in Godot. file is relative to the assets/ directory. sounds lists the audio files used by godot/shooter (data/sounds.json maps events to them); they are not placeable objects and are not loaded by assets-check. unverified_models lists user-provided files whose source page and licence are NOT confirmed: they are not placeable assets, are not in packs/assets (which are CC0 only, checked by the pipeline tests), and must not ship until the licence and attribution are confirmed.",
+  "note": "size_m is [x, y, z] in glTF axes (y up), metres, as imported in Godot. file is relative to the assets/ directory. sounds lists the audio files used by godot/shooter (data/sounds.json maps events to them); they are not placeable objects and are not loaded by assets-check. unverified_models lists user-provided files whose source page and licence are NOT confirmed: they are not placeable assets, are not in packs/assets (which are CC0 only, checked by the pipeline tests), and must not ship until the licence and attribution are confirmed. textures lists the texture library: tileable images any map mesh can use by id (a node named <node>_tex_<id> is drawn with texture <id>); tile_m is the size of one repeat in metres ([w, h], h = 0: stretched once over the surface height), tintable ones are near-white and take the mesh's vertex colour as paint.",
   "packs": [
     {
       "name": "kenney-car-kit",
@@ -97,6 +97,22 @@
       "download_url": null,
       "licence": "CC0",
       "downloaded": "2026-11-11"
+    },
+    {
+      "name": "suchohrad-generated-models",
+      "title": "Generated models (the project's own scripts, no third-party material)",
+      "url": "https://github.com/Kobu-Labs/drycastle",
+      "download_url": null,
+      "licence": "CC0",
+      "downloaded": "2026-11-11"
+    },
+    {
+      "name": "suchohrad-generated-textures",
+      "title": "Generated tileable textures (the project's own script, no third-party material)",
+      "url": "https://github.com/Kobu-Labs/drycastle",
+      "download_url": null,
+      "licence": "CC0",
+      "downloaded": "2026-11-12"
     }
   ],
   "assets": [
@@ -1394,6 +1410,1812 @@
       "source": "https://opengameart.org/content/low-poly-guns-pack",
       "pack": "quaternius-ultimate-gun-pack",
       "used_for": "held model of weapon id svd (godot/shooter WeaponFx.cs)"
+    },
+    {
+      "id": "pack:suchohrad-generated-models/flak",
+      "category": "other",
+      "name": "Flak (6x6 truck with a twin 35 mm anti-aircraft turret)",
+      "file": "suchohrad-generated-models/flak.glb",
+      "size_m": [
+        2.92,
+        3.17,
+        7.2
+      ],
+      "tags": [
+        "shooter",
+        "vehicle",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_flak_model.py (original geometry written as code; python3 -I scripts/make_flak_model.py rebuilds the file)",
+      "pack": "suchohrad-generated-models",
+      "used_for": "godot/shooter vehicle id flak (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground, metres), separate nodes for turret, gun_cradle, barrels, wheels, outriggers; each breakable glass pane is its own node glass_N (N = its place in the glass list of vehicles.json, which the script rewrites with the pane outlines)"
+    },
+    {
+      "id": "pack:suchohrad-generated-models/bus",
+      "category": "other",
+      "name": "Bus (12 m low-entry regional bus, two doors on the right)",
+      "file": "suchohrad-generated-models/bus.glb",
+      "size_m": [
+        3.2,
+        3.32,
+        12.3
+      ],
+      "tags": [
+        "shooter",
+        "vehicle",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_bus_model.py (original geometry written as code; python3 -I scripts/make_bus_model.py rebuilds the file)",
+      "pack": "suchohrad-generated-models",
+      "used_for": "godot/shooter vehicle id bus (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground at the centre, metres), separate nodes for the four wheels and the four door leaves, modelled interior; each breakable glass pane (18) is its own node glass_N (N = its place in the glass list of vehicles.json, which the script rewrites with the pane outlines; a door leaf's pane is under the leaf)"
+    },
+    {
+      "id": "pack:suchohrad-generated-models/utility_helicopter",
+      "category": "other",
+      "name": "Utility helicopter (open cabin, skids, door gun on the right)",
+      "file": "suchohrad-generated-models/utility_helicopter.glb",
+      "size_m": [
+        3.65,
+        4.33,
+        15.52
+      ],
+      "tags": [
+        "shooter",
+        "vehicle",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_utility_helicopter_model.py (original geometry written as code; python3 -I scripts/make_utility_helicopter_model.py rebuilds the file)",
+      "pack": "suchohrad-generated-models",
+      "used_for": "godot/shooter vehicle id utility_helicopter (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground under the rotor mast, metres), separate nodes for rotor_main, rotor_tail, gun_mount, gun, barrel; each breakable glass pane (two windscreen halves, two cockpit doors) is its own node glass_N (N = its place in the glass list of vehicles.json, which the script rewrites with the pane outlines)"
+    },
+    {
+      "id": "prim:pole_lamp_1",
+      "category": "pole",
+      "name": "Utility pole: single column, crossarm, street lamp (1)",
+      "file": null,
+      "size_m": [
+        0.973,
+        9.225,
+        3.929
+      ],
+      "tags": [
+        "utility-pole",
+        "lamp",
+        "seed-1",
+        "flat-colour",
+        "primitive",
+        "street-lamp"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.193,
+            -0.583,
+            8.924
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.193,
+            -0.323,
+            8.923
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.193,
+            0.357,
+            8.922
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.193,
+            0.617,
+            8.922
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": -1,
+          "pos": [
+            0.065,
+            0.018,
+            9.225
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.354,
+            0.012,
+            6.178
+          ]
+        }
+      ],
+      "lights": [
+        [
+          -0.196,
+          -1.731,
+          8.373
+        ]
+      ]
+    },
+    {
+      "id": "prim:pole_lamp_2",
+      "category": "pole",
+      "name": "Utility pole: single column, crossarm, street lamp (2)",
+      "file": null,
+      "size_m": [
+        0.786,
+        9.6,
+        3.918
+      ],
+      "tags": [
+        "utility-pole",
+        "lamp",
+        "seed-2",
+        "flat-colour",
+        "primitive",
+        "street-lamp"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.119,
+            -0.448,
+            9.459
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.119,
+            -0.013,
+            9.46
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.119,
+            0.422,
+            9.461
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            -0.317,
+            -0.009,
+            6.5
+          ]
+        }
+      ],
+      "lights": [
+        [
+          -0.077,
+          -1.688,
+          9.024
+        ]
+      ]
+    },
+    {
+      "id": "prim:pole_lamp_3",
+      "category": "pole",
+      "name": "Utility pole: single column, crossarm, street lamp (3)",
+      "file": null,
+      "size_m": [
+        0.758,
+        9.303,
+        4.05
+      ],
+      "tags": [
+        "utility-pole",
+        "lamp",
+        "seed-3",
+        "flat-colour",
+        "primitive",
+        "street-lamp"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.285,
+            -0.616,
+            9.289
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.285,
+            -0.29,
+            9.293
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.285,
+            0.037,
+            9.298
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.285,
+            0.364,
+            9.302
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.103,
+            0.229,
+            6.043
+          ]
+        }
+      ],
+      "lights": [
+        [
+          -0.146,
+          -1.757,
+          8.991
+        ]
+      ]
+    },
+    {
+      "id": "prim:pole_plain_1",
+      "category": "pole",
+      "name": "Utility pole: single column and crossarm, no lamp (1)",
+      "file": null,
+      "size_m": [
+        0.675,
+        9.247,
+        1.551
+      ],
+      "tags": [
+        "utility-pole",
+        "plain",
+        "seed-1",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.076,
+            -0.513,
+            9.011
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.076,
+            -0.106,
+            9.006
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.076,
+            0.301,
+            9.002
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.076,
+            0.707,
+            8.997
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": -1,
+          "pos": [
+            -0.211,
+            0.1,
+            9.242
+          ]
+        }
+      ],
+      "lights": []
+    },
+    {
+      "id": "prim:pole_plain_2",
+      "category": "pole",
+      "name": "Utility pole: single column and crossarm, no lamp (2)",
+      "file": null,
+      "size_m": [
+        0.765,
+        8.373,
+        1.585
+      ],
+      "tags": [
+        "utility-pole",
+        "plain",
+        "seed-2",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.031,
+            -0.455,
+            8.014
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.031,
+            0.725,
+            7.994
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": -1,
+          "pos": [
+            -0.101,
+            0.142,
+            8.373
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            -0.374,
+            0.093,
+            5.495
+          ]
+        }
+      ],
+      "lights": []
+    },
+    {
+      "id": "prim:pole_twin_lamp_1",
+      "category": "pole",
+      "name": "Utility pole: two clamped columns, long crossarm, street lamp (1)",
+      "file": null,
+      "size_m": [
+        0.915,
+        9.271,
+        3.812
+      ],
+      "tags": [
+        "utility-pole",
+        "twin_lamp",
+        "seed-1",
+        "flat-colour",
+        "primitive",
+        "street-lamp"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            1.041,
+            9.155
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            0.722,
+            9.158
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            0.404,
+            9.161
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            0.086,
+            9.164
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            -0.233,
+            9.167
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            -0.551,
+            9.17
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.208,
+            -0.869,
+            9.173
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            0.236,
+            -0.336,
+            8.487
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            0.236,
+            0.079,
+            8.483
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            0.236,
+            0.494,
+            8.479
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            -0.411,
+            0.059,
+            6.313
+          ]
+        }
+      ],
+      "lights": [
+        [
+          -0.22,
+          -1.666,
+          8.301
+        ]
+      ]
+    },
+    {
+      "id": "prim:pole_twin_lamp_2",
+      "category": "pole",
+      "name": "Utility pole: two clamped columns, long crossarm, street lamp (2)",
+      "file": null,
+      "size_m": [
+        1.057,
+        9.712,
+        3.893
+      ],
+      "tags": [
+        "utility-pole",
+        "twin_lamp",
+        "seed-2",
+        "flat-colour",
+        "primitive",
+        "street-lamp"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.07,
+            -0.799,
+            9.709
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.07,
+            -0.447,
+            9.706
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.07,
+            -0.095,
+            9.703
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.07,
+            0.257,
+            9.7
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.07,
+            0.609,
+            9.697
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.07,
+            0.961,
+            9.694
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            -0.52,
+            0.055,
+            6.543
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.367,
+            0.041,
+            4.966
+          ]
+        }
+      ],
+      "lights": [
+        [
+          -0.278,
+          -1.703,
+          9.334
+        ]
+      ]
+    },
+    {
+      "id": "prim:pole_junction_1",
+      "category": "pole",
+      "name": "Utility pole: several crossarm tiers, hanging cables, boxes and a cabinet (1)",
+      "file": null,
+      "size_m": [
+        3.304,
+        9.784,
+        1.437
+      ],
+      "tags": [
+        "utility-pole",
+        "junction",
+        "seed-1",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.551,
+            -0.525,
+            9.725
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.551,
+            -0.313,
+            9.725
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.55,
+            -0.101,
+            9.725
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.55,
+            0.111,
+            9.725
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.55,
+            0.323,
+            9.725
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.55,
+            0.535,
+            9.725
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            0.032,
+            -0.121,
+            8.951
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            0.941,
+            -0.121,
+            8.911
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.014,
+            0.003,
+            7.136
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.241,
+            -0.32,
+            5.427
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.242,
+            -0.313,
+            5.445
+          ]
+        }
+      ],
+      "lights": []
+    },
+    {
+      "id": "prim:pole_junction_2",
+      "category": "pole",
+      "name": "Utility pole: several crossarm tiers, hanging cables, boxes and a cabinet (2)",
+      "file": null,
+      "size_m": [
+        3.381,
+        8.967,
+        2.227
+      ],
+      "tags": [
+        "utility-pole",
+        "junction",
+        "seed-2",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.055,
+            -0.46,
+            8.905
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.055,
+            -0.083,
+            8.892
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.055,
+            0.294,
+            8.88
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.055,
+            0.671,
+            8.867
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.055,
+            1.049,
+            8.855
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            -0.295,
+            0.865,
+            8.286
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            -0.295,
+            0.045,
+            8.313
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 2,
+          "pos": [
+            0.359,
+            0.382,
+            7.514
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 2,
+          "pos": [
+            0.019,
+            0.382,
+            7.507
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 2,
+          "pos": [
+            -0.321,
+            0.382,
+            7.501
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            -0.137,
+            -0.075,
+            6.805
+          ]
+        }
+      ],
+      "lights": []
+    },
+    {
+      "id": "prim:pole_junction_3",
+      "category": "pole",
+      "name": "Utility pole: several crossarm tiers, hanging cables, boxes and a cabinet (3)",
+      "file": null,
+      "size_m": [
+        2.287,
+        8.752,
+        2.242
+      ],
+      "tags": [
+        "utility-pole",
+        "junction",
+        "seed-3",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.134,
+            -1.055,
+            8.619
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.134,
+            -0.725,
+            8.628
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.134,
+            -0.395,
+            8.636
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.135,
+            -0.066,
+            8.645
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.135,
+            0.264,
+            8.654
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.135,
+            0.594,
+            8.663
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            0.281,
+            0.008,
+            8.057
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 1,
+          "pos": [
+            -0.439,
+            0.008,
+            8.058
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.01,
+            0.2,
+            7.501
+          ]
+        }
+      ],
+      "lights": []
+    },
+    {
+      "id": "prim:pole_twin_riser_1",
+      "category": "pole",
+      "name": "Utility pole: two columns with a meter box, riser pipe and bundled cable (1)",
+      "file": null,
+      "size_m": [
+        0.826,
+        9.558,
+        2.967
+      ],
+      "tags": [
+        "utility-pole",
+        "twin_riser",
+        "seed-1",
+        "flat-colour",
+        "primitive",
+        "street-lamp"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.154,
+            -0.744,
+            9.004
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.154,
+            -0.484,
+            9.001
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.154,
+            0.726,
+            8.985
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.154,
+            0.986,
+            8.981
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": -1,
+          "pos": [
+            0.035,
+            0.217,
+            9.553
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": -1,
+          "pos": [
+            0.035,
+            0.041,
+            9.555
+          ]
+        },
+        {
+          "kind": "bundle",
+          "tier": -1,
+          "pos": [
+            -0.03,
+            -0.274,
+            8.125
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.333,
+            0.072,
+            5.321
+          ]
+        }
+      ],
+      "lights": [
+        [
+          0.055,
+          -1.231,
+          8.617
+        ]
+      ]
+    },
+    {
+      "id": "prim:pole_field_1",
+      "category": "pole",
+      "name": "Utility pole: thin leaning pole with a braced crossarm (1)",
+      "file": null,
+      "size_m": [
+        2.196,
+        7.079,
+        2.375
+      ],
+      "tags": [
+        "utility-pole",
+        "field",
+        "seed-1",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.916,
+            -1.126,
+            7.013
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.917,
+            -0.762,
+            7.028
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.918,
+            -0.397,
+            7.043
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.92,
+            -0.032,
+            7.059
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.921,
+            0.332,
+            7.074
+          ]
+        }
+      ],
+      "lights": []
+    },
+    {
+      "id": "prim:pole_field_2",
+      "category": "pole",
+      "name": "Utility pole: thin leaning pole with a braced crossarm (2)",
+      "file": null,
+      "size_m": [
+        3.16,
+        7.736,
+        2.178
+      ],
+      "tags": [
+        "utility-pole",
+        "field",
+        "seed-2",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            1.515,
+            -1.028,
+            7.656
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            1.517,
+            -0.628,
+            7.674
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            1.519,
+            -0.229,
+            7.693
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            1.521,
+            0.171,
+            7.711
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            1.522,
+            0.57,
+            7.729
+          ]
+        }
+      ],
+      "lights": []
+    },
+    {
+      "id": "prim:pole_megaphone_1",
+      "category": "pole",
+      "name": "Utility pole: single column with public address horns (1)",
+      "file": null,
+      "size_m": [
+        1.637,
+        8.58,
+        0.832
+      ],
+      "tags": [
+        "utility-pole",
+        "megaphone",
+        "seed-1",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.132,
+            0.324,
+            8.504
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.132,
+            -0.346,
+            8.503
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.028,
+            0.295,
+            6.75
+          ]
+        }
+      ],
+      "lights": []
+    },
+    {
+      "id": "prim:pole_megaphone_2",
+      "category": "pole",
+      "name": "Utility pole: single column with public address horns (2)",
+      "file": null,
+      "size_m": [
+        1.68,
+        9.18,
+        0.832
+      ],
+      "tags": [
+        "utility-pole",
+        "megaphone",
+        "seed-2",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated utility pole, pipeline/src/suchohrad_pipeline/poles.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.189,
+            0.315,
+            9.072
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            -0.189,
+            -0.245,
+            9.074
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            -0.129,
+            0.315,
+            7.178
+          ]
+        },
+        {
+          "kind": "service",
+          "tier": -1,
+          "pos": [
+            0.017,
+            -0.258,
+            7.371
+          ]
+        }
+      ],
+      "lights": []
+    },
+    {
+      "id": "prim:connector_wall_2",
+      "category": "connector",
+      "name": "House connector: two wall hooks with insulators and a conduit",
+      "file": null,
+      "size_m": [
+        0.423,
+        0.163,
+        0.352
+      ],
+      "tags": [
+        "house-connector",
+        "wall",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            -0.14,
+            0.163
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            0.14,
+            0.163
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_wall_4",
+      "category": "connector",
+      "name": "House connector: four wall hooks with insulators and a conduit",
+      "file": null,
+      "size_m": [
+        0.423,
+        0.163,
+        0.912
+      ],
+      "tags": [
+        "house-connector",
+        "wall",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            -0.42,
+            0.163
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            -0.14,
+            0.163
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            0.14,
+            0.163
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.17,
+            0.42,
+            0.163
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_wall_hook",
+      "category": "connector",
+      "name": "House connector: wall hook for a bundled cable, with a box and a conduit",
+      "file": null,
+      "size_m": [
+        0.446,
+        0.04,
+        0.22
+      ],
+      "tags": [
+        "house-connector",
+        "wall",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "bundle",
+          "tier": -1,
+          "pos": [
+            0.22,
+            0.0,
+            -0.03
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_roof_mast_2",
+      "category": "connector",
+      "name": "House connector: roof mast with two insulators",
+      "file": null,
+      "size_m": [
+        0.356,
+        1.357,
+        0.5
+      ],
+      "tags": [
+        "house-connector",
+        "roof",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            -0.18,
+            1.173
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            0.18,
+            1.173
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_roof_mast_4",
+      "category": "connector",
+      "name": "House connector: tall roof mast with four insulators",
+      "file": null,
+      "size_m": [
+        0.356,
+        1.707,
+        0.9
+      ],
+      "tags": [
+        "house-connector",
+        "roof",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            -0.38,
+            1.523
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            -0.127,
+            1.523
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            0.127,
+            1.523
+          ]
+        },
+        {
+          "kind": "line",
+          "tier": 0,
+          "pos": [
+            0.048,
+            0.38,
+            1.523
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prim:connector_roof_mast_hook",
+      "category": "connector",
+      "name": "House connector: roof mast with a hook for a bundled cable",
+      "file": null,
+      "size_m": [
+        0.466,
+        1.407,
+        0.34
+      ],
+      "tags": [
+        "house-connector",
+        "roof",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (generated house connector, pipeline/src/suchohrad_pipeline/connectors.py)",
+      "pack": null,
+      "seats": [
+        {
+          "kind": "bundle",
+          "tier": -1,
+          "pos": [
+            0.23,
+            0.0,
+            1.07
+          ]
+        }
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "id": "brick_red",
+      "name": "Brick red",
+      "file": "suchohrad-generated-textures/brick_red.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.0,
+        0.6
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#a15b47",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "brick_white",
+      "name": "Brick white",
+      "file": "suchohrad-generated-textures/brick_white.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.0,
+        0.6
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#dfdbd0",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "stone",
+      "name": "Stone",
+      "file": "suchohrad-generated-textures/stone.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.2,
+        1.2
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#8b857a",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "concrete",
+      "name": "Concrete",
+      "file": "suchohrad-generated-textures/concrete.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        2.0,
+        2.0
+      ],
+      "alpha": false,
+      "tintable": true,
+      "mean_colour": "#ebebeb",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "picket",
+      "name": "Picket",
+      "file": "suchohrad-generated-textures/picket.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        0.5,
+        0.0
+      ],
+      "alpha": true,
+      "tintable": true,
+      "mean_colour": "#eeeeee",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "wire",
+      "name": "Wire",
+      "file": "suchohrad-generated-textures/wire.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        0.5,
+        0.5
+      ],
+      "alpha": true,
+      "tintable": true,
+      "mean_colour": "#d6d6d6",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "dirt",
+      "name": "Dirt",
+      "file": "suchohrad-generated-textures/dirt.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        2.0,
+        2.0
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#816547",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "gravel",
+      "name": "Gravel",
+      "file": "suchohrad-generated-textures/gravel.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.0,
+        1.0
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#88847a",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "leaf_litter",
+      "name": "Leaf litter",
+      "file": "suchohrad-generated-textures/leaf_litter.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.5,
+        1.5
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#674f32",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
+    },
+    {
+      "id": "soil_rows",
+      "name": "Soil rows",
+      "file": "suchohrad-generated-textures/soil_rows.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.0,
+        1.0
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#674c33",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "suchohrad-generated-textures"
     }
   ],
   "sounds": [

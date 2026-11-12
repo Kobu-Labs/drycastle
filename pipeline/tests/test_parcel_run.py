@@ -192,8 +192,10 @@ def test_glb_nodes_match_the_export_per_parcel_nodes(tmp_path):
         assert frag["glb"] == str(glb) and frag["replaces"] == frag["parcels"]
         scene = trimesh.load(glb, force="scene")
         names = sorted(scene.graph.nodes_geometry)
-        want = sorted(n for n in baked if n in (f"parcel_{p}_props" for p in frag["parcels"])
-                      or n in (f"parcel_{p}_props_collision" for p in frag["parcels"]))
+        # the flat props node, its collision and one "_props_tex_<texture>" node per texture used
+        want = sorted(n for n in baked if any(
+            n in (f"parcel_{p}_props", f"parcel_{p}_props_collision")
+            or n.startswith(f"parcel_{p}_props_tex_") for p in frag["parcels"]))
         assert names == want, pid
         for name in names:
             got = scene.geometry[scene.graph[name][1]]

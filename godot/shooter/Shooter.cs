@@ -15,6 +15,9 @@ namespace Suchohrad.Shooter;
 ///   --unlock-all              server: dev mode, every weapon, perk, killstreak and level-gated item unlocked (also SUCHOHRAD_UNLOCK_ALL=1); nothing is saved (issue #149)
 ///   --targets N               server: plant N stationary target dummies around the spawn area (0-64; default from match.json, 0; make shooter-server uses 24)
 ///   --allow-sandbox           server: grant sandbox mode (godmode, unlimited ammo, every killstreak on demand, no XP or score) to clients that ask (#156); dev only, make SANDBOX=1
+///   --bots N                  server: N bots (0-64) play while at least one human is in the match (#214); they walk to the nearest player and shoot what they see, earn and grant no XP
+///   --nav-cache DIR           server: where the bots' baked navigation tiles are kept (default navcache in the Godot user data folder); baked once per map version
+///   --cluster-spawns          server: keep one dense cluster of spawn points (dev aid: players and bots meet at once instead of crossing the village)
 ///   --sandbox                 client: ask the server for sandbox mode (also SUCHOHRAD_SANDBOX=1); the server may refuse
 ///   --dev-ui                  client: show the dev-only UI (the Advanced section of the connect screen); debug builds always show it
 ///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
@@ -36,6 +39,9 @@ namespace Suchohrad.Shooter;
 ///   --time HH:MM              server: start time of day (overrides environment.json start_time)
 ///   --day-length MIN          server: real minutes for one 24 hour day (overrides environment.json day_length_minutes)
 ///   --freeze-time             server: hold the clock at its start time (or --time)
+///   --nav-spike               server: bot navigation spike (#214): bake a navmesh from the map colliders, report bake time, cache size and path queries, then exit
+///                             (make shooter-nav-spike); --nav-out DIR (report.json and cached tiles in DIR/&lt;timestamp&gt;), --nav-cell 0.25, --nav-threads N, --nav-split 1, --nav-pairs 300,
+///                             --nav-edge-err 1.0, --nav-detail-dist 6, --nav-detail-err 1, --nav-snap 0, --nav-edge-connections 1, --nav-max-polys 0, --nav-skip-trunks
 /// No gameplay yet: this only boots the role on the loaded map.
 /// </summary>
 public partial class Shooter : Node3D
@@ -86,6 +92,7 @@ public partial class Shooter : Node3D
             var data = _data = LoadData();
             GD.Print($"data: {data.Weapons.Weapons.Count} weapons, score goal {data.Match.ScoreGoal}, {data.Vehicles.Vehicles.Count} vehicle types");
             LoadMap(cfg);
+            if (role == "server" && cfg.Flag("nav-spike")) { BuildNavSpike(cfg); return; }
             if (role == "server" && !_smoke)
             {
                 SetReadyMarker(false);
@@ -231,7 +238,7 @@ public partial class Shooter : Node3D
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
-                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
+                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(null),
             };
             client.OnFailed = (why, joined) =>
@@ -292,7 +299,7 @@ public partial class Shooter : Node3D
         static string Read(string f) =>
             Godot.FileAccess.Open($"res://data/{f}", Godot.FileAccess.ModeFlags.Read)?.GetAsText()
             ?? throw new DataFileException($"{f}: cannot open ({Godot.FileAccess.GetOpenError()})");
-        return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"));
+        return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"));
     }
 
     void LoadMap(Config cfg) { foreach (var _ in LoadMapSteps(cfg)) { } }
@@ -309,8 +316,38 @@ public partial class Shooter : Node3D
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
         var s = _map.Stats;
         // Lamps are solid, so the server gets the same pole colliders as the client (map 0.5.0+; none on older maps).
-        if (_map.Lamps.Count > 0) AddChild(new StreetLamps { Bases = _map.Lamps.Select(l => l.Position).ToList(), CollisionOnly = _map.CollisionOnly });
-        GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} load={s.LoadSeconds:F2}s");
+        // The lamps of placed utility poles shine like the street lamps; their pole is the placed object, already solid (client only).
+        var poleLamps = _map.ObjectLights();
+        if (_map.CollisionOnly) poleLamps.Clear();
+        if (_map.Lamps.Count > 0 || poleLamps.Count > 0)
+            AddChild(new StreetLamps
+            {
+                Bases = _map.Lamps.Select(l => l.Position).ToList(),
+                PoleHeads = poleLamps.Select(l => (l.Position, l.YawDeg)).ToList(),
+                CollisionOnly = _map.CollisionOnly,
+            });
+        GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} pole_lamps={poleLamps.Count} load={s.LoadSeconds:F2}s");
+    }
+
+    /// <summary>Bot navigation spike (#214): bakes a navmesh from the loaded colliders, reports and quits. See <see cref="NavSpike"/>.</summary>
+    void BuildNavSpike(Config cfg)
+    {
+        static float F(string s, float d) => float.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : d;
+        static int I(string s, int d) => int.TryParse(s, out var v) ? v : d;
+        var spike = new NavSpike { World = this, Map = _map, MapDir = Path.GetFullPath(GamePaths.Map(cfg.Str("map", ""))) };
+        spike.Cell = F(cfg.Str("nav-cell"), spike.Cell);
+        spike.Threads = Math.Max(1, I(cfg.Str("nav-threads"), spike.Threads));
+        spike.Split = Math.Max(0, I(cfg.Str("nav-split"), spike.Split)); // 0 = one bake of the whole map, the control without tiles
+        spike.Pairs = Math.Max(1, I(cfg.Str("nav-pairs"), spike.Pairs));
+        spike.EdgeMaxError = F(cfg.Str("nav-edge-err"), spike.EdgeMaxError);
+        spike.DetailSampleDistance = F(cfg.Str("nav-detail-dist"), spike.DetailSampleDistance);
+        spike.DetailSampleMaxError = F(cfg.Str("nav-detail-err"), spike.DetailSampleMaxError);
+        spike.Snap = F(cfg.Str("nav-snap"), spike.Snap);
+        spike.MaxPolygons = Math.Max(0, I(cfg.Str("nav-max-polys"), spike.MaxPolygons));
+        spike.SkipTrunks = cfg.Flag("nav-skip-trunks");
+        spike.EdgeConnections = cfg.Str("nav-edge-connections", "1") != "0";
+        if (cfg.Str("nav-out") != "") spike.OutDir = Path.Combine(cfg.Str("nav-out"), DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+        AddChild(spike);
     }
 
     Vector3 RandomSpawn() =>
@@ -328,7 +365,7 @@ public partial class Shooter : Node3D
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var server = new NetServer
         {
-            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, CamoData = _data.Camo, Turret = _data.Turret,
+            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, CamoData = _data.Camo, Turret = _data.Turret,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             MatchConfig = WithTargets(ApplyOverrides(_data.Match, cfg.Str("match-set")), cfg.Str("targets")),
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")),
@@ -346,8 +383,13 @@ public partial class Shooter : Node3D
             LossOut = cfg.Str("loss-out"),
             UnlockAll = DevUnlocks.Enabled(cfg.Flag("unlock-all"), System.Environment.GetEnvironmentVariable(DevUnlocks.EnvVar)),
             AllowSandbox = cfg.Flag("allow-sandbox"),
+            Bots = int.TryParse(cfg.Str("bots", "0"), out var bots) ? Math.Clamp(bots, 0, NetServer.MaxBots) : 0,
+            ClusterSpawns = cfg.Flag("cluster-spawns"),
+            MapDir = Path.GetFullPath(GamePaths.Map(cfg.Str("map", ""))),
+            NavCacheDir = cfg.Str("nav-cache", Path.Combine(OS.GetUserDataDir(), "navcache")),
         };
         if (server.AllowSandbox) GD.Print("server: sandbox mode allowed (--allow-sandbox, #156)");
+        if (server.Bots > 0) GD.Print($"server: {server.Bots} bots join while a player is in the match (--bots, #214)");
         if (server.UnlockAll) GD.Print("server: dev mode, every unlock on (not saved to the database)");
         if (server.Sim != null) GD.Print($"server: net-sim {server.Sim}");
         // The dedicated server idles at the tick rate instead of spinning a core; the test modes release delayed packets at frame rate.
@@ -439,7 +481,7 @@ public partial class Shooter : Node3D
             BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6,
             Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"),
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
-            FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), BazookaBot = cfg.Str("bazooka-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Killstreaks = _data.Killstreaks, Map = _map,
+            FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), BazookaBot = cfg.Str("bazooka-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, Map = _map,
         });
     }
 

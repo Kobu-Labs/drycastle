@@ -1,7 +1,7 @@
 # Release pipeline. Merging a PR into the `release` branch (usually main -> release):
 #   build   tests, Windows + Linux game zips, server export with the map
 #   deploy  rsync + docker compose to the production VPS (environment `production`: secrets, optional required reviewers)
-#   publish GitHub release vX (stable channel): game zips + manifest.json, which the launcher reads (docs/launcher.md)
+#   publish GitHub release vX (stable channel): game zips + launcher zips + manifest.json, which the launcher reads (docs/launcher.md)
 # Clients only see the new release after the server is live. A manual run on any other branch skips deploy and publishes a `dev-<run>` prerelease.
 name: release
 on:
@@ -123,6 +123,11 @@ jobs:
         with:
           name: release-assets
           path: release-assets
+      - name: Fetch the newest launcher build (attached so players find it on the release page)
+        run: |
+          ltag=$(gh release list --limit 100 --json tagName --jq '[.[].tagName | select(startswith("launcher-v"))] | first // empty')
+          if [ -n "$ltag" ]; then gh release download "$ltag" --pattern 'suchohrad-launcher-*.zip' --dir release-assets
+          else echo "::warning::no launcher-v* release found; publishing without launcher zips"; fi
       - name: Publish release
         run: |
           tag="${{ needs.build.outputs.tag }}"

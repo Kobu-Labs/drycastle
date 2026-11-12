@@ -20,6 +20,7 @@ using Godot;
 /// A file that cannot be parsed (half-written) is ignored until it changes again; a failed run only
 /// prints the error. Also writes editor-state.json (camera, selection) at most once a second.
 /// The state at start is assumed to be what the map was built with, so nothing runs at startup.
+/// A re-exported map (its buildings) is reloaded too, see EditsWatcher.Map.cs.
 /// </summary>
 public partial class EditsWatcher : Node
 {
@@ -71,7 +72,8 @@ public partial class EditsWatcher : Node
     sealed record Snapshot(
         string Text, Dictionary<string, string> Parcels, Dictionary<string, string> Groups,
         Dictionary<string, List<string>> Members, Dictionary<string, string> NoObjects,
-        Dictionary<string, string> Regions, Dictionary<string, (double X0, double Y0, double X1, double Y1)> RegionBoxes);
+        Dictionary<string, string> Regions, Dictionary<string, (double X0, double Y0, double X1, double Y1)> RegionBoxes,
+        string CablesText, List<Suchohrad.MapLoader.CableSpec> Cables);
 
     sealed class Run
     {
@@ -84,7 +86,7 @@ public partial class EditsWatcher : Node
         public Process? Process;
     }
 
-    Snapshot _applied = new("", new(), new(), new(), new(), new(), new());
+    Snapshot _applied = new("", new(), new(), new(), new(), new(), new(), "", new());
     (DateTime mtime, long len) _seen, _parsedStat;
     double _pollT, _stateT;
     bool _dirty;
@@ -100,9 +102,15 @@ public partial class EditsWatcher : Node
         Directory.CreateDirectory(_tmpDir);
         _seen = Stat();
         // baseline: the map is assumed to match the file as it is now
-        if (TryParse(out var snap, out var err)) _applied = snap!;
+        if (TryParse(out var snap, out var err))
+        {
+            _applied = snap!;
+            // cables are drawn by the game from the poles that stand: show the file's, even when the map was exported before them
+            if (snap!.CablesText != CablesText(Map.Cables)) Map.SetCables(snap.Cables);
+        }
         else GD.PushWarning($"edits watcher: initial {EditsPath} unreadable ({err}); starting from empty edits");
         GD.Print($"watching {EditsPath} (area {Area})");
+        StartMapWatch();
     }
 
     public override void _ExitTree()
@@ -134,7 +142,9 @@ public partial class EditsWatcher : Node
                 _dirty = true;
                 _dirtySinceMs = (long)Time.GetTicksMsec();
             }
+            PollMap();
         }
+        StepMapReload();
         if (_run != null && _run.Task.IsCompleted) Finish(_run);
         if (_run == null && _dirty) StartIfChanged();
         _stateT += delta;
@@ -219,12 +229,36 @@ public partial class EditsWatcher : Node
                     regions[kv.Name] = Canon(kv.Value);
                     if (RegionBox(kv.Value) is { } box) boxes[kv.Name] = box;
                 }
-            snap = new Snapshot(text, parcels, groups, members, noObjects, regions, boxes);
+            var cables = new List<Suchohrad.MapLoader.CableSpec>();
+            if (doc.RootElement.TryGetProperty("cables", out var cb) && cb.ValueKind == JsonValueKind.Object)
+                foreach (var kv in cb.EnumerateObject().OrderBy(kv => kv.Name, StringComparer.Ordinal))
+                    if (kv.Value.ValueKind == JsonValueKind.Object
+                        && kv.Value.TryGetProperty("from", out var cf) && cf.ValueKind == JsonValueKind.String
+                        && kv.Value.TryGetProperty("to", out var ct) && ct.ValueKind == JsonValueKind.String)
+                        cables.Add(new Suchohrad.MapLoader.CableSpec(kv.Name, cf.GetString()!, ct.GetString()!));
+            snap = new Snapshot(text, parcels, groups, members, noObjects, regions, boxes, CablesText(cables), cables);
             error = "";
             return true;
         }
         catch (JsonException e) { error = e.Message; return false; }
     }
+
+    static string CablesText(IEnumerable<Suchohrad.MapLoader.CableSpec> cables)
+        => string.Join(";", cables.OrderBy(c => c.Id, StringComparer.Ordinal).Select(c => $"{c.Id}:{c.From}>{c.To}"));
+
+    /// <summary>
+    /// Cables need no pipeline run: the game strings them between the poles as they stand. Called with every snapshot
+    /// that becomes the applied state; the poles' own moves are followed by MapLoader when it re-instances objects.
+    /// </summary>
+    void ApplyCables(Snapshot snap)
+    {
+        if (snap.CablesText == _applied.CablesText) return;
+        Map.SetCables(snap.Cables);
+        CablesAppliedCount++;
+    }
+
+    /// <summary>Number of times the cable list changed and was drawn again.</summary>
+    public int CablesAppliedCount { get; private set; }
 
     static (double, double, double, double)? RegionBox(JsonElement entry)
     {
@@ -348,7 +382,7 @@ public partial class EditsWatcher : Node
         if (changed == null) return false;
         var t0 = Stopwatch.StartNew();
         var known = changed.ToList();
-        if (known.Count == 0) { _seen = _parsedStat; _dirty = false; _applied = snap; return true; }
+        if (known.Count == 0) { _seen = _parsedStat; _dirty = false; ApplyCables(snap); _applied = snap; return true; }
         List<Suchohrad.MapLoader.PlacedObject> objects;
         // on failure _applied stays as it was and the caller falls through to the parcel-run path
         try { objects = ReadObjects(snap.Text, known, origin); }
@@ -356,6 +390,7 @@ public partial class EditsWatcher : Node
         _seen = _parsedStat; // the stat taken before the file was read, so a write in between is seen by the poll
         _dirty = false;
         Map.ApplyObjects(known, objects);
+        ApplyCables(snap);
         _applied = snap;
         InstantCount++;
         LastInstantMs = t0.Elapsed.TotalMilliseconds;
@@ -418,6 +453,7 @@ public partial class EditsWatcher : Node
         var regionIds = RegionDiff(_applied, snap!).ToList();
         if (known.Count == 0 && regionIds.Count == 0)
         {
+            ApplyCables(snap!);
             _applied = snap!;
             return;
         }
@@ -543,6 +579,7 @@ public partial class EditsWatcher : Node
                 return;
             }
             LastRegionsReplaced = regions?.Replaced ?? Array.Empty<string>();
+            ApplyCables(run.Snap);
             _applied = run.Snap;
             var ms = Time.GetTicksMsec() - (ulong)run.DetectedMs;
             LastLatencyMs = ms;

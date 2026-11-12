@@ -227,3 +227,30 @@ def test_run_props_cap_via_rules(ws, tmp_path) -> None:
     for t in rule_trees:
         per_chunk[(t["x"] // 250, t["y"] // 250)] = per_chunk.get((t["x"] // 250, t["y"] // 250), 0) + 1
     assert per_chunk and max(per_chunk.values()) <= 1
+
+
+def test_trees_keep_their_trunks_out_of_water(ws) -> None:
+    pid = next(p["id"] for p in ws["parcels"] if p["kind"] == "garden")
+    poly = shape(next(p for p in ws["parcels"] if p["id"] == pid)["polygon"])
+    water = box(*poly.bounds[:2], poly.centroid.x, poly.bounds[3])  # the western half is a pond
+    cfg = {**TREE, "density_per_1000m2": {"garden": 40}}
+    args = (ws["parcels"], ws["buildings"], ws["graph"], [], ws["terrain"], cfg)
+    dry = make_trees(*args, only={pid})
+    wet = make_trees(*args, only={pid}, water=water)
+    assert dry and wet
+    assert any(water.contains(Point(t["x"], t["y"])) for t in dry)
+    assert not any(water.contains(Point(t["x"], t["y"])) for t in wet)
+
+
+def test_shore_rows_follow_the_water_edge_and_are_stable(ws) -> None:
+    pid = next(p["id"] for p in ws["parcels"] if p["kind"] == "garden")
+    poly = shape(next(p for p in ws["parcels"] if p["id"] == pid)["polygon"])
+    water = box(*poly.bounds[:2], poly.centroid.x, poly.bounds[3])
+    shore = {"spacing_m": 4.0, "rows": [{"offset_m": 2.0, "keep": 1.0}, {"offset_m": 6.0, "keep": 1.0}]}
+    cfg = {**TREE, "density_per_1000m2": {"garden": 0.0}, "shore": shore}
+    args = (ws["parcels"], ws["buildings"], ws["graph"], [], ws["terrain"], cfg)
+    a = make_trees(*args, only={pid}, water=water)
+    assert a == make_trees(*args, only={pid}, water=water)
+    assert a and not any(water.contains(Point(t["x"], t["y"])) for t in a)
+    assert all(t["parcel"] == pid and water.distance(Point(t["x"], t["y"])) < 9.0 for t in a)
+    assert make_trees(*args, only={pid}) == []  # no water, no shore trees

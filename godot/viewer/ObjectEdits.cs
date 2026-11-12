@@ -64,6 +64,9 @@ public static class ObjectEdits
         return o;
     }
 
+    /// <summary>Fix the object at an elevation (map metres, the terrain's datum) instead of on the ground: a connector on a wall or roof.</summary>
+    public static void SetZ(Obj o, double z) => o["z"] = N3(z);
+
     public static void Add(Obj root, string pid, Obj o)
     {
         var parcels = Parcels(root);
@@ -161,7 +164,7 @@ public static class ObjectEdits
     {
         var errs = new List<string>();
         if (!(root.GetValueOrDefault("version") is EditsFile.Num v && v.Text == "1")) errs.Add("version: must be 1");
-        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "groups" or "regions")) errs.Add($"{k}: unknown key");
+        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "groups" or "regions" or "cables")) errs.Add($"{k}: unknown key");
         var seen = new Dictionary<string, string>();
         foreach (var (pid, entry) in Parcels(root))
         {
@@ -201,15 +204,50 @@ public static class ObjectEdits
                     errs.AddRange(CheckRegion(entry, path));
                 }
         }
+        if (root.GetValueOrDefault("cables") is { } cables)
+        {
+            if (cables is not Obj co) errs.Add("cables: must be an object");
+            else errs.AddRange(CheckCables(co));
+        }
         return errs;
     }
 
-    /// <summary>Mirror of edits.py `_check_region`: colour, and a simple ring of at least 3 [x, y] points (closing point optional).</summary>
+    static readonly Regex CableRx = new("^C-\\d{4,}$", RegexOptions.Compiled);
+
+    /// <summary>Mirror of edits.py `_check_cables`: two different object ids per cable, and no pair of poles joined twice.</summary>
+    static List<string> CheckCables(Obj cables)
+    {
+        var errs = new List<string>();
+        var seen = new Dictionary<(string, string), string>();
+        foreach (var (cid, entry) in cables)
+        {
+            var path = $"cables.{cid}";
+            if (!CableRx.IsMatch(cid)) errs.Add($"{path}: cable IDs look like C-0001");
+            if (entry is not Obj c) { errs.Add($"{path}: must be an object"); continue; }
+            foreach (var k in c.Keys) if (k is not ("from" or "to")) errs.Add($"{path}.{k}: unknown key");
+            var ok = true;
+            foreach (var key in new[] { "from", "to" })
+            {
+                if (!c.TryGetValue(key, out var v)) { errs.Add($"{path}.{key}: required"); ok = false; }
+                else if (!(v is string s && s != "")) { errs.Add($"{path}.{key}: must be the id of a placed object"); ok = false; }
+            }
+            if (!ok) continue;
+            var a = (string)c["from"]!; var b = (string)c["to"]!;
+            if (a == b) { errs.Add($"{path}: from and to must be two different poles"); continue; }
+            var pair = string.CompareOrdinal(a, b) <= 0 ? (a, b) : (b, a);
+            if (seen.TryGetValue(pair, out var other)) errs.Add($"{path}: {pair.Item1} and {pair.Item2} are already joined by {other}");
+            else seen[pair] = cid;
+        }
+        return errs;
+    }
+
+    /// <summary>Mirror of edits.py `_check_region`: colour, an optional water_y (a water region's surface height), and a simple ring of at least 3 [x, y] points (closing point optional).</summary>
     static List<string> CheckRegion(object? entry, string path)
     {
         var errs = new List<string>();
         if (entry is not Obj r) { errs.Add($"{path}: must be an object"); return errs; }
-        foreach (var k in r.Keys) if (k is not ("colour" or "polygon")) errs.Add($"{path}.{k}: unknown key");
+        foreach (var k in r.Keys) if (k is not ("colour" or "polygon" or "water_y")) errs.Add($"{path}.{k}: unknown key");
+        if (r.TryGetValue("water_y", out var wy) && !(Number(wy) is double w && double.IsFinite(w))) errs.Add($"{path}.water_y: must be a number (metres, terrain datum)");
         if (!r.TryGetValue("colour", out var c)) errs.Add($"{path}.colour: required");
         else if (!(c is string cs && EditSchema.ColourRx.IsMatch(cs))) errs.Add($"{path}.colour: must be a colour like \"#rrggbb\"");
         if (!r.TryGetValue("polygon", out var poly)) { errs.Add($"{path}.polygon: required"); return errs; }

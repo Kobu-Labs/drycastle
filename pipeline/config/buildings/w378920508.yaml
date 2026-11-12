@@ -1,0 +1,34 @@
+# P-0028 (property group G-0001), from one close Street View frame of the street-facing gable (no scale
+# reference but the footprint, so every number is +-0.2 m).
+#
+# Edge 2 (6.82 m) is the street GABLE wall; the ridge runs perpendicular to it (ridge_dir 15 deg). Walking
+# edge 2 from its start is left -> right as seen from the street. at_m = pixels from the left wall corner
+# times 6.82 m / 475 px (wall corners at the foot of the gable, rake overhang not counted); heights are
+# scaled the same way from a ground line estimated at the hidden wall foot (bushes), so the lower sills
+# are the weakest numbers. The eave is 3.0 m, so the two small upper windows sit inside the gable.
+#
+# Not modelled: the satellite dish and rust-coloured disc on the left, the vine on the right rake, the
+# separate hip-roofed look of the rear wing (its walls are part of this footprint), the
+# wooden gate and brick pillar (street fence, not part of the house).
+id: w378920508
+source: "Street View 2022-09, one close frame of the street gable supplied by the author"
+overhang_m: 0.3
+frame_colour: "#4a2f22"
+openings:
+  # ground floor: two dark-brown wooden windows with roller blinds behind the glass
+  - {id: g1, kind: window, edge: 2, at_m: 1.36, width_m: 0.96, height_m: 1.25, sill_m: 0.58, recess_m: 0.15, confidence: medium}
+  - {id: g2, kind: window, edge: 2, at_m: 3.7, width_m: 1.03, height_m: 1.32, sill_m: 0.55, recess_m: 0.15, confidence: medium}
+  # attic: two small windows in the gable
+  - {id: a1, kind: window, edge: 2, at_m: 2.31, width_m: 0.6, height_m: 0.96, sill_m: 3.82, recess_m: 0.12, confidence: medium}
+  - {id: a2, kind: window, edge: 2, at_m: 3.16, width_m: 0.62, height_m: 0.97, sill_m: 3.85, recess_m: 0.12, confidence: medium}
+  # long wall (edge 3, 9.97 m, the side seen from the street to the right of the gable; left -> right is
+  # away from the gable). Read from a second, wider frame; the lower part is hidden behind a wooden gate
+  # and a tree, so these follow the author's markings and are the least certain numbers (+-0.5 m): a
+  # window, the door and a second window, with a dormer above the window and one above the door.
+  - {id: s1, kind: window, edge: 3, at_m: 2.65, width_m: 1.6, height_m: 1.3, sill_m: 0.66, recess_m: 0.15, confidence: low}
+  - {id: sd, kind: door, edge: 3, at_m: 5.57, width_m: 0.95, height_m: 2.1, sill_m: 0.0, recess_m: 0.12, colour: "#6b3a2a", confidence: low}
+  - {id: s2, kind: window, edge: 3, at_m: 7.55, width_m: 1.3, height_m: 1.15, sill_m: 1.0, recess_m: 0.15, confidence: low}
+dormers:
+  # two small dormers on the roof slope above that wall, brown timber cladding, own small gable roof
+  - {id: dm1, edge: 3, at_m: 3.3, bottom_m: 3.85, width_m: 1.4, height_m: 1.35, rise_m: 0.55, window_m: [0.8, 0.95]}
+  - {id: dm2, edge: 3, at_m: 6.05, bottom_m: 3.85, width_m: 1.4, height_m: 1.35, rise_m: 0.55, window_m: [0.8, 0.95]}

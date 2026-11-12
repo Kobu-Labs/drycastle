@@ -276,6 +276,14 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 - Vehicles (`vehicles.json`): car, motorcycle, bicycle (v1), war jeep and quad bike (#131), boat and amphibious transport
   (#132). Handling was reworked in #134 (max speed, turn radius, braking, hp). Headlights and tail lights come from the
   optional `lights` block (#137).
+- Seat switch: while seated in any vehicle the number keys (the `slot_1` to `slot_4` actions, rebindable) take that seat, and a seat
+  schematic shows the seats (bottom right). Client request: event kind 161 (u8 seat index); the server answers the riders with kind 162 (who
+  sits in each seat) whenever that changes; protocol 20. `VehicleSeat.TrySwitch` is the rule, `SeatSchematic` the layout.
+- Bus (`bus`): a 12 m land vehicle with a generated model (`scripts/make_bus_model.py`), one on the map and in the sandbox vehicle list. It is data
+  only: a driver seat and three passenger seats (the seat limit is four), the usual driving model with a wide turn circle (`turn_radius` 9.5), smoke
+  from the rear where its engine is. It is boarded like a car, within 3 m of its centre, so along the middle of either side (the middle door is there),
+  not at the front door. Its doors are separate model nodes that nothing moves yet.
+- Utility helicopter (ADR 0006): the flown vehicle (`utility_helicopter`, medium `air`), see "Utility helicopter" below.
 - Water bodies (#138, #142): the pipeline writes `water.json` into the map artifact; the server and clients swim, submerge
   and hold breath (HUD "AIR"). Surfaces, underwater tint and splashes are client-side and not yet compiled by Godot.
 - Day/night (#135): one server clock, `environment.json` (start time 08:00, day length 24 minutes by default). The sun,
@@ -287,6 +295,76 @@ one match and level 20 after about six good matches. No telemetry exists yet.
   crown, everything else (cars, walls, slabs, pots, the radio tower) solid. Hits on trees are classed wood (trunk) or foliage
   (crown). Still open: fences without collision in the village profile take no shots either (a pipeline choice), a parcel
   replaced at runtime keeps its trees' solids, and an edited tree is not in the game until the map is re-exported.
+
+### Utility helicopter
+
+One spawns on the map (`spawn_count` 1, on flat ground with room for the rotor) and it is in the sandbox vehicle list. The model is generated
+(`scripts/make_utility_helicopter_model.py`). The pilot's client predicts it and the server corrects it (ADR 0006); everyone else sees it
+interpolated, pitching and rolling from the flight record of the snapshot.
+
+**Controls** (the rebindable movement actions; nothing new to bind):
+
+| Input | Does |
+|---|---|
+| W / S (`move_forward`, `move_back`) | Tilt the nose down / up: fly forward / backward |
+| A / D (`move_left`, `move_right`) | Bank: slide sideways |
+| Mouse X | Turns the view at once; the nose swings round to the view (at most `max_yaw_rate_deg` a second) |
+| Mouse Y | Looks up and down around the helicopter; it does not fly |
+| Space (`jump`) | Climb. On the ground with the rotor at speed: take off |
+| Ctrl (`crouch`) | Descend |
+| Hands off | Levels, flares to a stop and holds the hover at its height |
+| E (`interact`), 1-2 (`slot_1`..) , H | Get out, switch seat, landing light, as in every vehicle |
+
+Motion comes from attitude: the keys ask for a tilt (ramped, so a tap is a small correction), the airframe swings to it on a critically
+damped spring, and the tilt accelerates it. In forward flight a turn banks itself and the direction of travel swings round with the nose.
+The chase camera turns with the mouse at once and follows the airframe on a spring; it takes a share of the pitch and roll and widens with
+speed (both off with reduce motion).
+
+**Handling** is all in `vehicles.json` (`top_speed`, `acceleration` and the `flight` block; each key's summary in `VehicleFlightDef` says what
+turning it up does). `dotnet test ShooterCore.Tests --filter The_feel_in_numbers --logger "console;verbosity=detailed"` prints the resulting
+times and distances without the game; `FlightTests` holds the limits.
+
+**Door gun.** The second seat is the door gunner's, behind a pintle-mounted machine gun in the right door (`door_gun` in `vehicles.json`: pivot,
+rest direction, arc; `DoorGunRules`). The gunner's view is what the gun is asked to point at, and it stays world-stable while the helicopter
+turns under it; the gun points there as far as its arc allows (70 degrees either side of straight out, 55 down, 12 up), and the view is held to
+the arc as well. The arc is in the airframe's frame, so it banks with it, and it clears the hull, the skids, the tail and the full sweep of the
+blades (`DoorGunTests` checks every aim). The rounds are the jeep's roof gun's (`gun`: the same damage, interval, spread and range, a 100-round
+belt), hitscan from the muzzle, and its kills are ordinary kills (kill-feed weapon "Mounted MG", special weapon 250). The aim reaches every
+client as a turret record (entity type 4, as the flak's, here the mount's yaw and the gun's pitch against the airframe), so the gun follows the
+aim on everyone's model; the tracer leaves the drawn muzzle, the barrel recoils and the muzzle flashes. The gunner's ammo is event 160.
+
+**What it shows and sounds like** (client only, `NetClient.FlightFx.cs`; nothing but the flight record is on the wire). The rotors turn at the
+record's rotor speed: they spool up when a pilot sits down (`spool_up_time`) and run down on the ground without one, a little faster under load
+(climbing, tilted hard), with a faint disc for the blur of the blades at speed. The rotor sound is generated (`RotorSound`, as the killstreak
+aircraft's) and its blade beat, engine tone and level follow the rotor speed and the load. The body pitches and rolls for everyone. Damage
+smoke comes from the engine exhaust (`hood`). In a hover under 11 m the downwash raises dust on the ground, or spray over a water body (off
+with reduce motion). Riders sit (the crouch pose every rider has) and do not walk.
+
+*Who can be shot in their seat.* The door gunner (`exposed_gunner`): they sit in the open door, so a shot that reaches their body hits them
+and not the hull (`GunnerCover`), and killing them silences the gun. The pilot is behind the nose and the glazing and is covered by the hull,
+as the driver of every other vehicle is: to stop the pilot, destroy the helicopter.
+
+**Decisions on the edges.**
+
+- *Nobody in the pilot seat, in the air.* The stabiliser flies: it levels, flares to a stop and holds the hover. With riders aboard it holds
+  for `pilotless_hover_time` (4 s, time to take seat 1), then sinks at `autorotate_descent` (3 m/s), slowed by the cushion to a touchdown that
+  costs nothing. Taking the pilot seat at any point catches it. With nobody aboard it sinks at once; the usual abandon timer then returns it.
+- *Getting out in the air.* Allowed. The rider leaves through the door on their own side at the cabin floor and falls from there with no
+  speed of their own; the fall damage rules decide what it costs, so a low hover is free and height kills.
+- *Out of hit points in flight.* It blows up where it is, like every vehicle: everyone aboard dies, credited to whoever dealt the last damage
+  (or to nobody, for a crash nobody caused), the blast hurts what is near, and it returns after `destroyed_return_time`.
+- *Ceiling.* `ceiling` (160 m) above the ground under it; the climb fades out over the last `ceiling_fade` metres. Where there is no ground in
+  reach under it, it does not climb.
+- *Map edge.* The flyable area is the box around the map's parcels. Within `edge_margin` (60 m) the speed towards the edge is held down, to
+  nothing at the edge; along it and away from it the helicopter is free. The pilot's prompt says "Edge of the map: turn back".
+- *Buildings and trees.* The hull box (the hit volume) and a rotor disc of `rotor_radius` (4.5 m: well inside the 6.7 m blades, on purpose)
+  collide with the solid world: ground, buildings, tree trunks, placed solids. Shot-only cover (tree crowns, bushes) does not stop it, as it
+  does not stop a car. The helicopter stops against what it hits and slides along it; the speed a surface takes in one tick is the impact,
+  and the crash damage rules apply to it (`crash_min_speed_loss`, `crash_damage_per_speed`: full speed into a wall is about a third of its
+  hit points). A touchdown under power is always under the threshold. The tail boom and the blade tips beyond the disc do not collide, and
+  it does not collide with players or other vehicles (no vehicle does) or run anyone over.
+- *Water.* The surface is a floor: it does not sink. While the skids are in a water body it loses `water_damage_per_second` (60) hit points
+  a second, and it can lift out again. The cushion treats the surface as ground.
 
 ## 8. Known gaps (collected from the closed tickets)
 
@@ -338,8 +416,11 @@ Server and persistence:
 
 ## 9. Wire protocol
 
-Protocol version: **16** (`Wire.ProtocolVersion`). The hello carries it; a mismatch is refused with a message naming both
-versions. Version 16 (gunship rocket flight): a gunship rocket flies at its own `projectile_speed_mps` and lives out its range, and
+Protocol version: **21** (`Wire.ProtocolVersion`, whose summary lists every bump). The hello carries it; a mismatch is refused with a message naming both
+versions. Version 21 (the utility helicopter, ADR 0006): snapshot entity type 5 (Flight: a flying vehicle's velocity, pitch, roll, rotor speed and
+flags, `FlightRecord`, ids from 0x6000), and the pilot's inputs step the helicopter one for one, so the snapshot's input acknowledgement is the
+helicopter's too. Versions 17 to 20: delta snapshots against the acknowledged tick (17), the flak truck's turret record and aircraft hit points
+(19), seat switching (20). Version 16 (gunship rocket flight): a gunship rocket flies at its own `projectile_speed_mps` and lives out its range, and
 clients take its speed from the Launch velocity (no new fields; the bump is the behaviour change). Version 15 (#161) gives the input a flags byte (bit 0: the gunner's aim follows, a ground point as three int32 quantised
 positions, 12 bytes). An input is 12 bytes, or 24 with the aim; the packet is up to 3 inputs. Only a steered turret sends an aim.
 Version 14 grows the camo spec to 33 bytes (codec 2: body, skin tone, headgear; migration 0006). Version 13 (#160) adds each tracer's speed (u16 m/s) and length (u16 cm) to GunshipShots (tracer 29 bytes, was 25).
@@ -396,7 +477,8 @@ Move buttons (`MoveButtons`, bits in the input message): Jump 1, Sprint 2, Crouc
 Switch 128, Headlights 256, Prone 512, Killstreak 1024.
 
 Snapshot entity types (`EntityType`, one byte in a snapshot entry): Player 0, Projectile 1, Vehicle 2, Target 3 (the target
-dummies, #148: planned on the ground, Defeat pose when down).
+dummies, #148: planned on the ground, Defeat pose when down), Turret 4 (the aim of a vehicle's gun, `FlakRecord`), Flight 5 (a flying
+vehicle's velocity and attitude, `FlightRecord`).
 
 Entity state (`EntityState`, one byte): Alive 0, Protected 1, InVehicle 2, Dead 3.
 

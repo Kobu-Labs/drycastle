@@ -182,13 +182,18 @@ public sealed class GameSettings
     }
 
     /// <summary>The player token (ADR 0003): a GUID made on first use and kept in the connect section. It is the player's identity.</summary>
-    public static string PlayerToken()
+    public static string PlayerToken(string profile = "")
     {
         var t = LoadConnect("player_token", "");
-        if (Guid.TryParse(t, out _)) return t;
-        t = Guid.NewGuid().ToString();
-        SaveConnect("player_token", t);
-        return t;
+        if (!Guid.TryParse(t, out _))
+        {
+            t = Guid.NewGuid().ToString();
+            SaveConnect("player_token", t);
+        }
+        // The server keeps one live session per token, so a second client on this machine (--profile 2) gets its own
+        // stable identity derived from the base token instead of kicking the first.
+        if (string.IsNullOrWhiteSpace(profile)) return t;
+        return new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(t + "/" + profile.Trim()))).ToString();
     }
 }
 
@@ -205,6 +210,7 @@ public static class InputBindings
         ("slot_1", Binding.Key((int)Key.Key1)), ("slot_2", Binding.Key((int)Key.Key2)), ("slot_3", Binding.Key((int)Key.Key3)), ("slot_4", Binding.Key((int)Key.Key4)), ("slot_5", Binding.Key((int)Key.Key5)),
         ("zoom", Binding.MouseButton((int)MouseButton.Right)),
         ("headlights", Binding.Key((int)Key.H)),
+        ("vehicle_view", Binding.Key((int)Key.V)),
         ("killstreak", Binding.Key((int)Key.Q)),
         ("sandbox_panel", Binding.Key((int)Key.F4)),
     };

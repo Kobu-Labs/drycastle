@@ -141,7 +141,7 @@ public partial class NetServer
         GD.Print($"server: rejecting {(c.Name == "" ? "a client" : c.Name)}: {reason}");
         Send(c, new ErrorMsg(reason));
         _host.Flush();
-        c.Peer.PeerDisconnectLater(0); // after the error has gone out
+        c.Peer!.PeerDisconnectLater(0); // after the error has gone out
     }
 
     void OnProfileMessage(Client c, ReliableMsg? m)
@@ -177,7 +177,7 @@ public partial class NetServer
             var (write, c, done) = _pendingSaves[i];
             if (!write.IsCompleted) continue;
             _pendingSaves.RemoveAt(i);
-            if (_clients.ContainsKey(c.Peer)) done(write.IsCompletedSuccessfully);
+            if (c.Peer is { } peer && _clients.ContainsKey(peer)) done(write.IsCompletedSuccessfully);
         }
     }
 

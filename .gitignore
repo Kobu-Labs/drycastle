@@ -25,3 +25,4 @@ pipeline/config/slice.local.yaml
 
 # local secrets
 .env
+*.uid

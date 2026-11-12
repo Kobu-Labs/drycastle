@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import fcntl
+import itertools
 import json
 import math
 import re
@@ -48,17 +49,23 @@ from suchohrad_pipeline.assets import DEFAULT_MANIFEST, load_manifest, validate_
 from suchohrad_pipeline.buildings import footprint_polygon
 from suchohrad_pipeline.config import DEFAULT_AREA, REPO_ROOT, area_paths
 from suchohrad_pipeline.edits import (
+    COLUMN_TYPES,
+    CONNECTOR_ASSET_PREFIX,
     CUSTOM_FENCE_KEYS,
     DEFAULT_EDITS,
     FENCE_TYPES,
+    POLE_ASSET_PREFIX,
+    WIRE_ASSET_PREFIXES,
     Edits,
     EditsError,
+    cable_pair,
     dump_edits,
     load_edits,
     region_ring,
     resolve_fence,
     validate,
 )
+from suchohrad_pipeline.fencestyles import FENCE_STYLES
 from suchohrad_pipeline.regions import region_rank
 from suchohrad_pipeline.roads import edge_lines
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
@@ -79,7 +86,7 @@ _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")
 _REGION_ID = re.compile(r"R-\d{4,}")
 _COLOUR = re.compile(r"#[0-9a-fA-F]{6}")
-_GENERATED_ID = re.compile(r"[oGR]-(\d+)")
+_GENERATED_ID = re.compile(r"[oGRC]-(\d+)")
 
 
 def _r3(v: float) -> float:
@@ -351,6 +358,8 @@ def _edits_doc(edits: Edits) -> dict:
     doc: dict = {"version": 1, "parcels": edits.parcels, "groups": edits.groups}
     if edits.regions:
         doc["regions"] = edits.regions
+    if edits.cables:
+        doc["cables"] = edits.cables
     return doc
 
 
@@ -702,6 +711,7 @@ class ParcelEditTools:
             "effective_fence": {
                 "mode": effective.mode,
                 "type": effective.type,
+                "column": effective.column or FENCE_STYLES[effective.type].column,
                 "height_m": effective.height_m,
                 "thickness_m": effective.thickness_m,
                 "colour": effective.colour,
@@ -714,6 +724,7 @@ class ParcelEditTools:
                     "auto_height_m": fcfg["height_m"],
                     "gate_gap_m": fcfg["gate_gap_m"],
                     "custom_types": FENCE_TYPES,
+                    "column_types": list(COLUMN_TYPES),
                 },
                 "trees": {
                     "density_per_1000m2": tcfg["density_per_1000m2"].get(p["kind"], 0.0),
@@ -763,17 +774,18 @@ class ParcelEditTools:
         thickness_m: float | None = None,
         colour: str | None = None,
         gaps: list[dict] | None = None,
+        column: str | None = None,
     ) -> dict:
         """Set the fence of a parcel or property group (see the registered tool description)."""
         kind, tid = self._fence_target(target)
         custom = {
-            "type": type, "height_m": height_m, "thickness_m": thickness_m,
+            "type": type, "column": column, "height_m": height_m, "thickness_m": thickness_m,
             "colour": colour, "gaps": gaps,
         }
         custom = {k: v for k, v in custom.items() if v is not None}
         if mode is None and not custom:
             raise ToolError(
-                "nothing to set: give mode (auto|none|custom) and/or type, height_m, "
+                "nothing to set: give mode (auto|none|custom) and/or type, column, height_m, "
                 "thickness_m, colour, gaps"
             )
         if mode is not None and mode not in ("auto", "none", "custom"):
@@ -785,6 +797,8 @@ class ParcelEditTools:
             )
         if "type" in custom and custom["type"] not in FENCE_TYPES:
             raise ToolError(f"type must be one of {', '.join(FENCE_TYPES)} (got {type!r})")
+        if "column" in custom and custom["column"] not in COLUMN_TYPES:
+            raise ToolError(f"column must be one of {', '.join(COLUMN_TYPES)} (got {column!r})")
         for key in ("height_m", "thickness_m"):
             if key in custom:
                 _check_num(key, custom[key], positive=True)
@@ -1097,7 +1111,8 @@ class ParcelEditTools:
         }
 
     def remove_object(self, id: str) -> dict:
-        """Remove a placed object by ID."""
+        """Remove a placed object by ID; the cables hanging from it (a utility pole) go with it."""
+        dropped: list[str] = []
 
         def change(edits: Edits) -> str:
             for pid, e in edits.parcels.items():
@@ -1107,6 +1122,9 @@ class ParcelEditTools:
                         objs.remove(o)
                         if not objs:
                             del e["objects"]
+                        for cid in [c for c, cb in edits.cables.items() if id in (cb["from"], cb["to"])]:
+                            dropped.append(cid)
+                            del edits.cables[cid]
                         return pid
             known = [o["id"] for _, o in _all_objects(edits)]
             raise ToolError(
@@ -1115,7 +1133,103 @@ class ParcelEditTools:
             )
 
         pid = self._write(change)
-        return {"summary": f"removed {id} from {pid}", "id": id, "parcel": pid, "warnings": []}
+        note = f" and its cable{'s' if len(dropped) > 1 else ''} {', '.join(dropped)}" if dropped else ""
+        return {"summary": f"removed {id} from {pid}{note}", "id": id, "parcel": pid,
+                "cables_removed": dropped, "warnings": []}
+
+    # cables ----------------------------------------------------------------------------------
+    def _pole(self, edits: Edits, oid: object) -> dict:
+        """The placed utility pole or house connector with this id (what a cable can end on)."""
+        for _, o in _all_objects(edits):
+            if o["id"] == oid:
+                if not o["asset"].startswith(WIRE_ASSET_PREFIXES):
+                    raise ToolError(
+                        f"{oid} is {o['asset']}, not a utility pole or a house connector. Cables hang between "
+                        f"objects placed from the pole assets (list_assets category \"pole\") and house "
+                        f"connectors (category \"connector\", placed in the editor's Poles tool)."
+                    )
+                return o
+        poles = [o["id"] for _, o in _all_objects(edits) if o["asset"].startswith(POLE_ASSET_PREFIX)]
+        raise ToolError(f"no placed object {oid!r}. Placed poles: {poles[:30] if poles else 'none'}.")
+
+    @staticmethod
+    def _cable_row(cid: str, cable: dict, edits: Edits) -> dict:
+        pos = {o["id"]: o["position"] for _, o in _all_objects(edits)}
+        a, b = pos.get(cable["from"]), pos.get(cable["to"])
+        length = _r3(math.hypot(a[0] - b[0], a[1] - b[1])) if a and b else None
+        return {"id": cid, "from": cable["from"], "to": cable["to"], "length_m": length}
+
+    def connect_poles(self, poles: list[str]) -> dict:
+        """String cables along a chain of placed poles: each to the next."""
+        if not isinstance(poles, list) or len(poles) < 2:
+            raise ToolError("poles must list two or more placed pole ids, in the order the line runs")
+        made: list[dict] = []
+        skipped: list[str] = []
+
+        def change(edits: Edits) -> None:
+            for oid in poles:
+                self._pole(edits, oid)
+            for a, b in itertools.pairwise(poles):
+                if a == b:
+                    raise ToolError(f"{a} is listed twice in a row; a cable joins two different poles")
+                pair = cable_pair({"from": a, "to": b})
+                old = next((c for c, cb in edits.cables.items() if cable_pair(cb) == pair), None)
+                if old:
+                    skipped.append(f"{a} and {b} are already joined by {old}")
+                    continue
+                cid = _next_id("C", list(edits.cables))
+                edits.cables[cid] = {"from": a, "to": b}
+                made.append(self._cable_row(cid, edits.cables[cid], edits))
+
+        self._write(change)
+        summary = (
+            f"strung {len(made)} cable{'' if len(made) == 1 else 's'}: "
+            + ", ".join(f"{c['id']} {c['from']} to {c['to']}" for c in made)
+            if made else "no new cable"
+        )
+        return {"summary": summary, "cables": made, "warnings": skipped}
+
+    def disconnect_poles(self, cable: str | None = None, poles: list[str] | None = None) -> dict:
+        """Remove one cable, by its id or by the two poles it joins."""
+        if (cable is None) == (poles is None):
+            raise ToolError("give either cable (an id like C-0001) or poles (the two pole ids)")
+
+        def change(edits: Edits) -> tuple[str, dict]:
+            if cable is not None:
+                if cable not in edits.cables:
+                    raise ToolError(f"no cable {cable!r}. Existing: {sorted(edits.cables)[:30] or 'none'}.")
+                return cable, edits.cables.pop(cable)
+            if not isinstance(poles, list) or len(poles) != 2:
+                raise ToolError("poles must be the two pole ids the cable joins")
+            pair = cable_pair({"from": poles[0], "to": poles[1]})
+            cid = next((c for c, cb in edits.cables.items() if cable_pair(cb) == pair), None)
+            if cid is None:
+                raise ToolError(f"{poles[0]} and {poles[1]} are not joined by a cable")
+            return cid, edits.cables.pop(cid)
+
+        cid, entry = self._write(change)
+        return {"summary": f"removed {cid} ({entry['from']} to {entry['to']})", "id": cid, "entry": entry,
+                "warnings": []}
+
+    def list_cables(self, pole: str | None = None) -> dict:
+        """The cables in the file, or those of one pole, and the placed poles."""
+        edits = _read_edits(self.settings.edits_path)
+        rows = [self._cable_row(cid, cb, edits) for cid, cb in sorted(edits.cables.items())
+                if pole is None or pole in (cb["from"], cb["to"])]
+        placed = {o["id"]: o for _, o in _all_objects(edits)}
+        warnings = [f"{r['id']}: {end} is not a placed utility pole (the cable is skipped)"
+                    for r in rows for end in (r["from"], r["to"])
+                    if not placed.get(end, {}).get("asset", "").startswith(WIRE_ASSET_PREFIXES)]
+        poles = [{"id": o["id"], "asset": o["asset"], "position": o["position"],
+                  "rotation_deg": o.get("rotation_deg", 0),
+                  "cables": sum(o["id"] in (cb["from"], cb["to"]) for cb in edits.cables.values())}
+                 for o in placed.values() if o["asset"].startswith(POLE_ASSET_PREFIX)]
+        connectors = [{"id": o["id"], "asset": o["asset"], "position": o["position"], "z": o.get("z")}
+                      for o in placed.values() if o["asset"].startswith(CONNECTOR_ASSET_PREFIX)]
+        return {"summary": f"{len(rows)} cable{'' if len(rows) == 1 else 's'}, {len(poles)} placed poles, "
+                           f"{len(connectors)} house connectors",
+                "cables": rows, "poles": sorted(poles, key=lambda p: p["id"]),
+                "connectors": sorted(connectors, key=lambda c: c["id"]), "warnings": warnings}
 
     def move_object(
         self,
@@ -1194,6 +1308,23 @@ class ParcelEditTools:
         }
 
     # groups --------------------------------------------------------------------------------
+    def _group_fence(self, fence: dict | None) -> dict | None:
+        """Validate a group fence given to a tool call; None when none was given."""
+        if fence is None:
+            return None
+        if not isinstance(fence, dict):
+            raise ToolError("fence must be an object like {mode, type, height_m, ...}")
+        mode = fence.get("mode")
+        custom = {k: v for k, v in fence.items() if k != "mode"}
+        if "gaps" in custom:
+            custom["gaps"] = self._gaps(custom["gaps"], "group", "")
+        if mode in ("auto", "none") and custom:
+            raise ToolError(f"mode {mode!r} cannot be combined with {', '.join(custom)}")
+        unknown = set(custom) - set(CUSTOM_FENCE_KEYS)
+        if unknown:
+            raise ToolError(f"unknown fence keys: {sorted(unknown)}")
+        return {**({"mode": mode} if mode else {}), **custom}
+
     def create_group(self, parcels: list[str], fence: dict | None = None) -> dict:
         """Create a property group (see the registered tool description)."""
         if not isinstance(parcels, list) or len(parcels) < 2:
@@ -1201,20 +1332,7 @@ class ParcelEditTools:
         ids = sorted({self.map.need(p) for p in parcels})
         if len(ids) < 2:
             raise ToolError("a group needs 2 or more different parcels")
-        fence_entry = None
-        if fence is not None:
-            if not isinstance(fence, dict):
-                raise ToolError("fence must be an object like {mode, type, height_m, ...}")
-            mode = fence.get("mode")
-            custom = {k: v for k, v in fence.items() if k != "mode"}
-            if "gaps" in custom:
-                custom["gaps"] = self._gaps(custom["gaps"], "group", "")
-            if mode in ("auto", "none") and custom:
-                raise ToolError(f"mode {mode!r} cannot be combined with {', '.join(custom)}")
-            unknown = set(custom) - set(CUSTOM_FENCE_KEYS)
-            if unknown:
-                raise ToolError(f"unknown fence keys: {sorted(unknown)}")
-            fence_entry = {**({"mode": mode} if mode else {}), **custom}
+        fence_entry = self._group_fence(fence)
         warnings: list[str] = []
         union = unary_union([self.map.polys[p].buffer(0.3) for p in ids])
         if union.geom_type != "Polygon":
@@ -1244,6 +1362,68 @@ class ParcelEditTools:
             "summary": f"created {gid} from {', '.join(ids)}",
             "id": gid,
             "entry": entry,
+            "warnings": warnings,
+        }
+
+    def merge_groups(
+        self, ids: list[str], fence: dict | None = None, parcels: list[str] | None = None
+    ) -> dict:
+        """Merge property groups (and loose parcels) into a new group (see the registered tool description)."""
+        extra = sorted({self.map.need(p) for p in (parcels or [])})
+        if not isinstance(ids, list) or len(ids) < (1 if extra else 2):
+            raise ToolError("merging needs 2 or more group IDs like G-0001 (or 1 plus `parcels`)")
+        for i in ids:
+            if not (isinstance(i, str) and _GROUP_ID.fullmatch(i)):
+                raise ToolError(f"{i!r} is not a group ID like G-0001")
+        if len(set(ids)) < len(ids):
+            raise ToolError("merging needs 2 or more different groups (or 1 plus `parcels`)")
+        given = self._group_fence(fence)
+        warnings: list[str] = []
+
+        def change(edits: Edits) -> tuple[str, dict, list[str]]:
+            missing = [i for i in ids if i not in edits.groups]
+            if missing:
+                raise ToolError(f"no such group: {', '.join(missing)}; groups: {sorted(edits.groups) or 'none'}")
+            taken = {p: self._group_of(edits, p) for p in extra if self._group_of(edits, p) not in (None, *ids)}
+            if taken:
+                raise ToolError(
+                    "already in another group: "
+                    + ", ".join(f"{p} ({g})" for p, g in sorted(taken.items()))
+                )
+            members = sorted({p for i in ids for p in edits.groups[i]["parcels"]} | set(extra))
+            if given is not None:
+                chosen = given
+            else:
+                fences = [edits.groups[i].get("fence") for i in ids]
+                distinct = {json.dumps(f, sort_keys=True) for f in fences if f is not None}
+                chosen = next((f for f in fences if f is not None), None)
+                if len(distinct) > 1:
+                    warnings.append(
+                        f"the groups had different fences; kept the one of "
+                        f"{next(i for i in ids if edits.groups[i].get('fence') is not None)} "
+                        "(pass `fence` to choose)"
+                    )
+            for i in ids:
+                del edits.groups[i]
+            gid = _next_id("G", list(edits.groups))
+            group: dict = {"parcels": members}
+            if chosen is not None:
+                group["fence"] = chosen
+            edits.groups[gid] = group
+            return gid, group, members
+
+        gid, group, members = self._write(change)
+        union = unary_union([self.map.polys[p].buffer(0.3) for p in members])
+        if union.geom_type != "Polygon":
+            warnings.append(
+                "the parcels are not all touching each other; the group fence runs around each "
+                "separate piece"
+            )
+        return {
+            "summary": f"merged {', '.join(ids)} into {gid} ({', '.join(members)})",
+            "id": gid,
+            "entry": group,
+            "merged": ids,
             "warnings": warnings,
         }
 
@@ -1301,6 +1481,7 @@ class ParcelEditTools:
         return {
             "id": rid,
             "colour": entry["colour"],
+            **({"water_y": entry["water_y"]} if "water_y" in entry else {}),
             "area_m2": round(poly.area, 1),
             "points": len(entry["polygon"]),
             "bbox": [_r3(v) for v in poly.bounds],
@@ -1328,8 +1509,10 @@ class ParcelEditTools:
         polygon: list[list[float]] | None = None,
         parcel: str | None = None,
         points: list | None = None,
+        water_y: float | None = None,
     ) -> dict:
         """Create a region (see the registered tool description)."""
+        level = None if water_y is None else _check_num("water_y", water_y)
         col = self._region_colour(colour)
         if (polygon is None) == (points is None):
             raise ToolError(
@@ -1365,11 +1548,11 @@ class ParcelEditTools:
 
         def change(edits: Edits) -> dict:
             rid = _next_id("R", list(edits.regions))
-            edits.regions[rid] = {"colour": col, "polygon": pts}
+            edits.regions[rid] = {"colour": col, "polygon": pts, **({} if level is None else {"water_y": level})}
             return {"id": rid, "warnings": self._overlap_warnings(edits, rid)}
 
         out = self._write(change)
-        row = self._region_row(out["id"], {"colour": col, "polygon": pts})
+        row = self._region_row(out["id"], {"colour": col, "polygon": pts, **({} if level is None else {"water_y": level})})
         return {
             "summary": f"created {out['id']} ({col}, {row['points']} points, {row['area_m2']} m2)"
             + (f", {len(out['warnings'])} warning(s)" if out["warnings"] else ""),
@@ -1377,6 +1560,23 @@ class ParcelEditTools:
             "polygon": pts,
             "warnings": out["warnings"],
         }
+
+    def set_region_water(self, id: str, water_y: float | None) -> dict:
+        """Make a region a body of water at a flat height (terrain datum, metres), or None to make it ground paint again."""
+        rid = self._region_id(id)
+        level = None if water_y is None else _check_num("water_y", water_y)
+
+        def change(edits: Edits) -> object:
+            entry = self._region_entry(edits, rid)
+            old = entry.get("water_y")
+            if level is None:
+                entry.pop("water_y", None)
+            else:
+                entry["water_y"] = level
+            return old
+
+        old = self._write(change)
+        return {"summary": f"{rid} water_y {old} -> {level}", "id": rid, "water_y": level, "warnings": []}
 
     def set_region_colour(self, id: str, colour: str) -> dict:
         """Change a region's colour."""
@@ -1501,8 +1701,10 @@ def build_server(settings: Settings) -> Any:
     )
 
     @server.tool(description=f"List assets that place_object can use. Each has id (use as `asset`), "
-                 f"category (car, slab, pot, flower, bush, tree, wall, fence, other), name, size_m "
-                 f"and tags; primitives (prim:wall, prim:slab, prim:pot, prim:radio_tower, prim:bunker) are included. "
+                 f"category (car, slab, pot, flower, bush, tree, wall, fence, pole, connector, other), name, size_m "
+                 f"and tags; primitives (prim:wall, prim:slab, prim:pot, prim:radio_tower, prim:bunker and the "
+                 f"utility poles prim:pole_*, category pole: origin at the foot, the wires run along the object's "
+                 f"x axis, the lamp reaches to its -y) are included. "
                  f"Optional filter `category`. {_ASSET_NOTE}")
     def list_assets(category: str | None = None) -> dict:
         return tools.list_assets(category)
@@ -1534,8 +1736,12 @@ def build_server(settings: Settings) -> Any:
     @server.tool(description=(
         "Set the fence of a parcel (P-0412) or of a property group (G-0001: one fence around the "
         "group's outer edge). `mode`: auto (the generator's rules), none (no fence) or custom "
-        "(always fenced). `type` (picket | wire | brick_wall), `height_m`, `thickness_m`, `colour` "
-        "(\"#rrggbb\") and `gaps` (gates: list of {\"at\": [x, y] or \"front\", \"width_m\": n}) are "
+        "(always fenced). `type` (picket | wire | brick_red | brick_white | stone_wall | concrete; "
+        "textured, each with its own posts or piers), `column` (none | wood_post | metal_post | "
+        "brick_red | brick_white | stone | concrete: other columns than the type's own, e.g. picket "
+        "between brick_red piers), `height_m`, `thickness_m`, `colour` (\"#rrggbb\": a tint; it is the "
+        "paint of picket, wire and concrete, while brick and stone have their own colours and default "
+        "to white) and `gaps` (gates: list of {\"at\": [x, y] or \"front\", \"width_m\": n}) are "
         "custom-only: giving any of them without a mode means custom; combining them with mode "
         "auto/none is an error. Given keys are merged into the existing fence entry. A parcel that "
         "is in a group gets an override on top of the group's fence (a warning says so)."))
@@ -1547,8 +1753,9 @@ def build_server(settings: Settings) -> Any:
         thickness_m: float | None = None,
         colour: str | None = None,
         gaps: list[dict] | None = None,
+        column: str | None = None,
     ) -> dict:
-        return tools.set_fence(target, mode, type, height_m, thickness_m, colour, gaps)
+        return tools.set_fence(target, mode, type, height_m, thickness_m, colour, gaps, column)
 
     @server.tool(description="Remove the fence edit of a parcel or group so the rules (or the group's fence) apply again.")
     def reset_fence(target: str) -> dict:
@@ -1599,9 +1806,31 @@ def build_server(settings: Settings) -> Any:
             parcel, asset, anchor, offset_m, position, rotation_deg, scale, colour
         )
 
-    @server.tool(description="Remove a placed object by its id (e.g. o-0003).")
+    @server.tool(description="Remove a placed object by its id (e.g. o-0003). The cables hanging from a "
+                 "removed utility pole are removed with it.")
     def remove_object(id: str) -> dict:
         return tools.remove_object(id)
+
+    @server.tool(description=(
+        "String cables between placed utility poles (objects placed from the prim:pole_* assets). `poles` is "
+        "a list of two or more pole object ids in the order the line runs; each pole is joined to the next, "
+        "so a whole street is one call. An id may also be a house connector (prim:connector_*, placed on a "
+        "wall or roof in the editor's Poles tool): [pole, connector] strings the cable to the house. "
+        "A pair that is already joined is left alone (reported in warnings). "
+        "The poles keep their rotation: the wires are matched left to right across each span, so they never "
+        "cross; turn a pole with move_object so its crossarm stands across the line. list_cables shows the poles."))
+    def connect_poles(poles: list[str]) -> dict:
+        return tools.connect_poles(poles)
+
+    @server.tool(description="Remove one cable: `cable` (an id like C-0001) or `poles` (the two pole ids it joins).")
+    def disconnect_poles(cable: str | None = None, poles: list[str] | None = None) -> dict:
+        return tools.disconnect_poles(cable, poles)
+
+    @server.tool(description=(
+        "List the cables (id, from, to, length_m), the placed utility poles (id, asset, position, "
+        "rotation_deg, number of cables) and the house connectors. Optional `pole`: only that object's cables."))
+    def list_cables(pole: str | None = None) -> dict:
+        return tools.list_cables(pole)
 
     @server.tool(description=(
         "Change a placed object: new position (`anchor` + `offset_m` relative to `parcel`, "
@@ -1628,6 +1857,16 @@ def build_server(settings: Settings) -> Any:
     def create_group(parcels: list[str], fence: dict | None = None) -> dict:
         return tools.create_group(parcels, fence)
 
+    @server.tool(description=(
+        "Merge 2 or more property groups (G-0001, G-0002, ...) into one new group (id G-NNNN) "
+        "holding all their parcels; the old groups disappear. With `parcels` (loose parcels that "
+        "are in no other group) one group is enough: group + parcels -> new group. Parcel-level fence edits stay on "
+        "the parcels. The new group keeps the fence of the old ones when they agree; otherwise "
+        "the first listed group's fence is kept and a warning says so. Optional `fence` "
+        "(mode, type, height_m, thickness_m, colour, gaps) replaces it."))
+    def merge_groups(ids: list[str], fence: dict | None = None, parcels: list[str] | None = None) -> dict:
+        return tools.merge_groups(ids, fence, parcels)
+
     @server.tool(description="Dissolve a property group (id G-0001). Parcel ids, boundaries and the members' own fence edits stay.")
     def dissolve_group(id: str) -> dict:
         return tools.dissolve_group(id)
@@ -1640,14 +1879,25 @@ def build_server(settings: Settings) -> Any:
         "as place_object: along grows right, inward grows away from the road; see get_parcel). "
         "Needs 3+ points; edges may not cross or touch each other. Invalid shapes are refused "
         "and nothing is written. Where regions overlap the higher ID wins (reported in "
-        "`warnings`). Returns the id, area, bbox and the final absolute polygon."))
+        "`warnings`). Optional `water_y` makes it a body of water with a flat surface at that height "
+        "(metres, terrain datum): see set_region_water. Returns the id, area, bbox and the final "
+        "absolute polygon."))
     def create_region(
         colour: str,
         polygon: list[list[float]] | None = None,
         parcel: str | None = None,
         points: list[list[float]] | None = None,
+        water_y: float | None = None,
     ) -> dict:
-        return tools.create_region(colour, polygon, parcel, points)
+        return tools.create_region(colour, polygon, parcel, points, water_y)
+
+    @server.tool(description=(
+        "Make a region a real body of water: a flat surface at `water_y` (metres on the terrain's "
+        "datum, e.g. 185.6) that stays level over the terrain, also written to water.json "
+        "(swimming, the shooter's water surface). The region's colour tints it. `water_y` null "
+        "turns it back into ground paint. Raise or lower the level by calling this again."))
+    def set_region_water(id: str, water_y: float | None) -> dict:
+        return tools.set_region_water(id, water_y)
 
     @server.tool(description="Change a region's colour (\"#rrggbb\"). Use list_regions for ids.")
     def set_region_colour(id: str, colour: str) -> dict:

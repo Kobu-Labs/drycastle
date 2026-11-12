@@ -38,6 +38,7 @@ from suchohrad_pipeline.props import (
     make_trees,
     plan_edits,
     unknown_asset_warnings,
+    water_zone,
 )
 from suchohrad_pipeline.roads import edge_lines
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
@@ -202,6 +203,8 @@ def compute_fragment(
     tcfg = fcfg["trees"]
     objects_xy = [(o["position"][0], o["position"][1]) for o in plan.objects]
 
+    water = water_zone(plan, terrain)
+
     def trees_of(ids: set[str], geoms: list[BaseGeometry]) -> list[dict]:
         t_buildings, t_graph = _tree_context(ctx, geoms, tcfg)
         return make_trees(
@@ -215,6 +218,7 @@ def compute_fragment(
             objects=objects_xy,
             only=ids,
             include_osm=False,
+            water=water,
         )
 
     trees = trees_of(target_set, [polys[pid] for pid in targets])

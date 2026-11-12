@@ -396,6 +396,57 @@ def test_groups(tools, env):
         tools.dissolve_group("P-0001")
 
 
+def test_merge_groups(tools, env):
+    settings = env[1]
+    a = tools.create_group(["P-0001", "P-0002"], fence={"mode": "custom", "type": "wire"})["id"]
+    b = tools.create_group(["P-0004", "P-0005"])["id"]
+    c = tools.create_group(["P-0003", "P-0006"], fence={"mode": "custom", "height_m": 2.0})["id"]
+    tools.set_fence("P-0001", mode="custom", colour="#112233")  # parcel override stays put
+    out = tools.merge_groups([a, b])
+    assert out["id"] == "G-0004"
+    assert out["entry"] == {"fence": {"mode": "custom", "type": "wire"},
+                            "parcels": ["P-0001", "P-0002", "P-0004", "P-0005"]}
+    edits = load_edits(settings.edits_path)
+    assert sorted(edits.groups) == [c, "G-0004"]
+    assert edits.parcels["P-0001"]["fence"]["colour"] == "#112233"
+    canonical(settings)
+    out = tools.merge_groups(["G-0004", c], fence={"mode": "none"})
+    last = out["id"]
+    assert out["entry"]["fence"] == {"mode": "none"}
+    assert load_edits(settings.edits_path).groups[out["id"]]["parcels"] == [
+        "P-0001", "P-0002", "P-0003", "P-0004", "P-0005", "P-0006"]
+    with pytest.raises(ToolError, match="2 or more"):
+        tools.merge_groups([last])
+    with pytest.raises(ToolError, match="2 or more different"):
+        tools.merge_groups([last, last])
+    with pytest.raises(ToolError, match="no such group: G-0099"):
+        tools.merge_groups([last, "G-0099"])
+    with pytest.raises(ToolError, match="not a group ID"):
+        tools.merge_groups([last, "P-0001"])
+
+
+def test_merge_group_with_loose_parcels(tools, env):
+    a = tools.create_group(["P-0001", "P-0002"], fence={"mode": "custom", "type": "wire"})["id"]
+    other = tools.create_group(["P-0004", "P-0005"])["id"]
+    out = tools.merge_groups([a], parcels=["P-0003"])
+    assert out["entry"]["parcels"] == ["P-0001", "P-0002", "P-0003"]
+    assert out["entry"]["fence"] == {"mode": "custom", "type": "wire"}
+    assert a not in load_edits(env[1].edits_path).groups
+    with pytest.raises(ToolError, match="already in another group: P-0004"):
+        tools.merge_groups([out["id"]], parcels=["P-0004"])
+    with pytest.raises(ToolError, match="2 or more"):
+        tools.merge_groups([out["id"]])
+    assert other in load_edits(env[1].edits_path).groups
+
+
+def test_merge_groups_fence_conflict_warns(tools):
+    a = tools.create_group(["P-0001", "P-0002"], fence={"mode": "custom", "type": "wire"})["id"]
+    b = tools.create_group(["P-0004", "P-0005"], fence={"mode": "custom", "height_m": 2.0})["id"]
+    out = tools.merge_groups([a, b])
+    assert out["entry"]["fence"] == {"mode": "custom", "type": "wire"}
+    assert "different fences" in out["warnings"][0]
+
+
 # --- file handling ------------------------------------------------------------------------
 
 
@@ -589,9 +640,9 @@ def test_through_mcp_session(env):
             names = {t.name for t in (await client.list_tools()).tools}
             assert names == {
                 "list_assets", "find_parcels", "get_parcel", "set_fence", "reset_fence", "set_trees",
-                "reset_trees", "place_object", "remove_object", "move_object", "create_group",
-                "dissolve_group", "create_region", "set_region_colour", "move_region_point",
-                "delete_region", "list_regions",
+                "reset_trees", "place_object", "remove_object", "move_object", "create_group", "merge_groups",
+                "dissolve_group", "create_region", "set_region_colour", "set_region_water", "move_region_point",
+                "delete_region", "list_regions", "connect_poles", "disconnect_poles", "list_cables",
             }
             tool = next(t for t in (await client.list_tools()).tools if t.name == "place_object")
             assert {"parcel", "asset", "anchor", "offset_m", "position"} <= set(tool.input_schema["properties"])
@@ -627,3 +678,73 @@ def test_region_overlap_winner_is_numeric(env):
     edits.regions["R-9999"] = {"colour": "#111111", "polygon": SQUARE}
     edits.regions["R-10000"] = {"colour": "#222222", "polygon": SQUARE}
     assert "R-10000 wins" in type(tools)._overlap_warnings(edits, "R-9999")[0]
+
+
+def test_set_fence_takes_the_textured_types_and_a_column(tools) -> None:
+    out = tools.set_fence("P-0001", type="picket", column="brick_red", colour="#f2efe6")
+    assert out["fence"] == {"colour": "#f2efe6", "column": "brick_red", "type": "picket"}
+    eff = tools.get_parcel("P-0001")["effective_fence"]
+    assert (eff["type"], eff["column"]) == ("picket", "brick_red")
+    tools.set_fence("P-0001", type="stone_wall")
+    tools.reset_fence("P-0001")
+    tools.set_fence("P-0001", type="concrete")
+    eff = tools.get_parcel("P-0001")
+    assert eff["effective_fence"]["column"] == "concrete"  # the type's own
+    assert "stone" in eff["rule_defaults"]["fence"]["column_types"]
+    with pytest.raises(ToolError, match="column must be one of"):
+        tools.set_fence("P-0001", column="marble")
+    with pytest.raises(ToolError, match="cannot be combined"):
+        tools.set_fence("P-0001", mode="none", column="stone")
+
+
+# --- cables between utility poles ---
+
+POLE = "prim:pole_lamp_1"
+
+
+def test_connect_poles_strings_a_chain_and_refuses_what_is_not_a_pole(tools, env):
+    settings = env[1]
+    a = tools.place_object("P-0001", POLE, anchor="front")["id"]
+    b = tools.place_object("P-0001", POLE, anchor="centre")["id"]
+    c = tools.place_object("P-0001", "prim:pole_plain_1", anchor="back")["id"]
+    car = tools.place_object("P-0001", CAR, anchor="left")["id"]
+    out = tools.connect_poles([a, b, c])
+    assert [(x["id"], x["from"], x["to"]) for x in out["cables"]] == [("C-0001", a, b), ("C-0002", b, c)]
+    assert all(x["length_m"] > 0 for x in out["cables"]) and out["warnings"] == []
+    canonical(settings)
+    assert load_edits(settings.edits_path).cables == {"C-0001": {"from": a, "to": b}, "C-0002": {"from": b, "to": c}}
+    again = tools.connect_poles([b, a])  # the same pair the other way round
+    assert again["cables"] == [] and "already joined by C-0001" in again["warnings"][0]
+    with pytest.raises(ToolError, match="not a utility pole or a house connector"):
+        tools.connect_poles([a, car])
+    wall = tools.place_object("P-0001", "prim:connector_wall_2", anchor="right")["id"]
+    house = tools.connect_poles([c, wall])  # a cable can end on a house connector
+    assert [(x["from"], x["to"]) for x in house["cables"]] == [(c, wall)]
+    assert [x["id"] for x in tools.list_cables()["connectors"]] == [wall]
+    tools.disconnect_poles(poles=[c, wall])
+    tools.remove_object(wall)
+    with pytest.raises(ToolError, match="no placed object"):
+        tools.connect_poles([a, "o-9999"])
+    with pytest.raises(ToolError, match="two or more"):
+        tools.connect_poles([a])
+    listed = tools.list_cables()
+    assert [x["id"] for x in listed["cables"]] == ["C-0001", "C-0002"]
+    assert {p["id"]: p["cables"] for p in listed["poles"]} == {a: 1, b: 2, c: 1}
+    assert [x["id"] for x in tools.list_cables(pole=c)["cables"]] == ["C-0002"]
+
+
+def test_disconnect_poles_and_removing_a_pole_takes_its_cables(tools, env):
+    settings = env[1]
+    ids = [tools.place_object("P-0001", POLE, anchor=a)["id"] for a in ("front", "centre", "back")]
+    tools.connect_poles(ids)
+    with pytest.raises(ToolError, match="either cable"):
+        tools.disconnect_poles()
+    with pytest.raises(ToolError, match="not joined"):
+        tools.disconnect_poles(poles=[ids[0], ids[2]])
+    assert tools.disconnect_poles(poles=[ids[1], ids[0]])["id"] == "C-0001"
+    assert list(load_edits(settings.edits_path).cables) == ["C-0002"]
+    out = tools.remove_object(ids[2])
+    assert out["cables_removed"] == ["C-0002"] and "C-0002" in out["summary"]
+    assert load_edits(settings.edits_path).cables == {}
+    assert '"cables"' not in settings.edits_path.read_text()  # the key goes when the last cable does
+    canonical(settings)

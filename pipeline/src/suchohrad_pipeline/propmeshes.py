@@ -1,4 +1,8 @@
-"""Low-poly prop meshes: fence boxes and blocky trees (counter-clockwise seen from outside)."""
+"""Low-poly prop meshes: fence boxes and blocky trees (counter-clockwise seen from outside).
+
+Fence sections with a type are drawn by ``fencestyles`` (textured panels, columns, caps); the plain
+box here is the look of a section without one, and the collision shape of every section.
+"""
 
 import math
 
@@ -54,10 +58,17 @@ def _mesh(tris: list, colours: list[list[int]]) -> Mesh:
     return Mesh(np.array(tris, float), np.array(colours, np.uint8))
 
 
-def fence_mesh(sections: list[dict], cfg: dict, bottom: bool = False) -> Mesh:
-    """One thin box per fence section (visual: no bottom face; collision: closed)."""
+def fence_mesh(
+    sections: list[dict], cfg: dict, bottom: bool = False, untyped_only: bool = False
+) -> Mesh:
+    """One thin box per fence section (visual: no bottom face; collision: closed).
+
+    ``untyped_only`` leaves out the sections that have a fence type (``fencestyles`` draws those).
+    """
     tris, cols = [], []
     for s in sections:
+        if untyped_only and s.get("type", cfg.get("type")) is not None:
+            continue
         # custom (edited) sections carry their own style; the rest use the rules
         height = float(s.get("height_m", cfg["height_m"]))
         thick = float(s.get("thickness_m", cfg["thickness_m"]))
@@ -111,14 +122,29 @@ def trees_mesh(trees: list[dict], cfg: dict) -> Mesh:
     return Mesh.concat([tree_mesh(t, cfg) for t in trees])
 
 
-def parcel_props_meshes(fences: list[dict], trees: list[dict], pcfg: dict) -> tuple[Mesh, Mesh]:
-    """Visual (fence boxes + trees) and collision (fences, only if the rule is on) of one parcel.
+def fence_meshes(sections: list[dict], cfg: dict) -> tuple[Mesh, dict]:
+    """The visual of some fence sections: flat-colour triangles, and textured ones by texture id.
+
+    Sections without a fence type are plain boxes; typed ones get their style (``fencestyles``).
+    """
+    from suchohrad_pipeline.fencestyles import styled_fence_meshes  # it imports this module
+
+    styled_flat, textured = styled_fence_meshes(sections, cfg)
+    return Mesh.concat([fence_mesh(sections, cfg, untyped_only=True), styled_flat]), textured
+
+
+def parcel_props_meshes(
+    fences: list[dict], trees: list[dict], pcfg: dict
+) -> tuple[Mesh, Mesh, dict]:
+    """Visual (fences + trees), collision (fences, only if the rule is on) and the textured fence
+    parts (``{texture id: TexturedMesh}``) of one parcel.
 
     The one place that builds per-parcel prop meshes: the chunk export and ``parcel-run --glb``
     both call it, so a regenerated parcel matches the baked one triangle for triangle.
     """
-    visual = Mesh.concat([fence_mesh(fences, pcfg["fences"]), trees_mesh(trees, pcfg["trees"])])
+    fence_flat, textured = fence_meshes(fences, pcfg["fences"])
+    visual = Mesh.concat([fence_flat, trees_mesh(trees, pcfg["trees"])])
     collision = (
         fence_mesh(fences, pcfg["fences"], True) if pcfg["fences"]["collision"] else Mesh.empty()
     )
-    return visual, collision
+    return visual, collision, textured

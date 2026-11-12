@@ -31,6 +31,19 @@ File format::
                                # (the recess is a bay set back by its recess_m, e.g. a porch; children
                                # sit in its back wall and their recess_m adds to the parent's)
 
+A building may also list ``dormers`` (small gabled boxes on a roof slope, the roof side of an eave wall)::
+
+    dormers:
+      - id: d1
+        edge: 3                # eave wall whose roof slope carries the dormer
+        at_m: 3.3              # centre of the dormer along the edge
+        width_m: 1.4           # front face width (optional, default 1.4)
+        bottom_m: 3.85         # height of the front face's foot above the ground (it stands on the roof)
+        height_m: 1.35         # front face height up to the dormer's eave (optional)
+        rise_m: 0.55           # rise of the dormer's own gable roof (optional)
+        window_m: [0.8, 0.95]  # window width, height (optional), centred on the front face
+        colour: "#6b4a35"      # cladding colour (optional); the roof uses the building's roof colour
+
 Edges are numbered on ``orient(footprint, 1.0)`` of ``buildings.json``; ``facade_overlay`` prints and
 draws exactly these numbers. Everything is in the map frame of ``meshes.building_mesh``.
 """
@@ -87,12 +100,26 @@ class Opening:
 
 
 @dataclass
+class Dormer:
+    id: str
+    edge: int
+    at_m: float
+    bottom_m: float
+    width_m: float = 1.4
+    height_m: float = 1.35
+    rise_m: float = 0.55
+    window_m: tuple = (0.8, 0.95)
+    colour: str = "#6b4a35"
+
+
+@dataclass
 class Detail:
     id: str
     overhang_m: float = 0.0
     frame_colour: str = DEFAULT_FRAME
     source: str = ""
     openings: list[Opening] = field(default_factory=list)
+    dormers: list[Dormer] = field(default_factory=list)
 
 
 @dataclass
@@ -120,7 +147,7 @@ def _hex(value: str, where: str) -> str:
 def parse_detail(raw: dict, where: str = "detail") -> Detail:
     if not isinstance(raw, dict) or "id" not in raw:
         raise DetailError(f"{where}: needs a mapping with an `id`")
-    known = {"id", "source", "overhang_m", "frame_colour", "openings"}
+    known = {"id", "source", "overhang_m", "frame_colour", "openings", "dormers"}
     extra = set(raw) - known
     if extra:
         raise DetailError(f"{where}: unknown field(s) {sorted(extra)}")
@@ -154,6 +181,20 @@ def parse_detail(raw: dict, where: str = "detail") -> Detail:
             _hex(op.colour, w)
         seen.add(op.id)
         d.openings.append(op)
+    for i, raw_d in enumerate(raw.get("dormers") or []):
+        w = f"{where} dormers[{i}]"
+        missing = {"id", "edge", "at_m", "bottom_m"} - set(raw_d)
+        extra = set(raw_d) - set(Dormer.__dataclass_fields__)
+        if missing or extra:
+            raise DetailError(f"{w}: missing {sorted(missing)}, unknown {sorted(extra)}")
+        dm = Dormer(**{**raw_d, "id": str(raw_d["id"]), "window_m": tuple(raw_d.get("window_m", (0.8, 0.95)))})
+        if dm.id in seen or dm.width_m < 0.5 or dm.height_m < 0.5 or dm.rise_m <= 0:
+            raise DetailError(f"{w}: duplicate id or too small")
+        if dm.window_m[0] >= dm.width_m - 0.1 or dm.window_m[1] >= dm.height_m - 0.1:
+            raise DetailError(f"{w}: window_m must fit inside the front face")
+        _hex(dm.colour, w)
+        seen.add(dm.id)
+        d.dormers.append(dm)
     by_id = {o.id: o for o in d.openings}
     for o in d.openings:
         if o.parent is None:
@@ -372,6 +413,12 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
             if d.overhang_m:  # underside, so the eaves are not see-through
                 under = [(x, y, z - ROOF_THICKNESS_M) for x, y, z in reversed(v3)]
                 out.add(under, SOFFIT_COLOUR)
+    for dm in d.dormers:
+        if flat:
+            raise DetailError(f"{d.id} dormer {dm.id}: the roof is flat")
+        if not 0 <= dm.edge < n_edges:
+            raise DetailError(f"{d.id} dormer {dm.id}: edge {dm.edge} not in 0..{n_edges - 1}")
+        _add_dormer(out, windows, d, dm, ring, roof_z, roof_c)
     for tri in triangulate(poly):
         a0, a1, a2 = tri
         area = (a1[0] - a0[0]) * (a2[1] - a0[1]) - (a1[1] - a0[1]) * (a2[0] - a0[0])
@@ -379,3 +426,84 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
         out.add([(x, y, 0.0) for x, y in order], wall_c)
     return out.mesh(), windows
 
+
+def _add_dormer(out: _Tris, windows: list, d: Detail, dm: Dormer, ring: list, roof_z, roof_c) -> None:
+    """A small gabled dormer on the roof slope above eave wall ``dm.edge``; its window is a pane tag."""
+    p, q = ring[dm.edge], ring[(dm.edge + 1) % len(ring)]
+    length = math.dist(p, q)
+    ux, uy = (q[0] - p[0]) / length, (q[1] - p[1]) / length
+    nx, ny = uy, -ux  # outward
+
+    def xy(s: float, depth: float) -> tuple[float, float]:
+        return p[0] + ux * s - nx * depth, p[1] + uy * s - ny * depth
+
+    def depth_at(z: float) -> float:  # inward distance at which the roof plane (at the centre) reaches z
+        lo, hi = 0.0, max(np.linspace(0.0, 10.0, 201), key=lambda t: roof_z(*xy(dm.at_m, t)))  # up to the ridge
+        if roof_z(*xy(dm.at_m, hi)) < z:
+            raise DetailError(f"{d.id} dormer {dm.id}: {z:.2f} m is above the roof")
+        for _ in range(40):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if roof_z(*xy(dm.at_m, mid)) < z else (lo, mid)
+        return hi
+
+    def to3(s: float, z: float, depth: float) -> tuple[float, float, float]:
+        return (*xy(s, depth), z)
+
+    half = dm.width_m / 2
+    s0, s1 = dm.at_m - half, dm.at_m + half
+    if s0 < 0.3 or s1 > length - 0.3:
+        raise DetailError(f"{d.id} dormer {dm.id}: does not fit edge {dm.edge}")
+    z_top = dm.bottom_m + dm.height_m
+    z_ridge = z_top + dm.rise_m
+    front, back = depth_at(dm.bottom_m), depth_at(z_ridge) + 0.2
+    wood, roof = hex_to_rgb(dm.colour), roof_c
+    frame = hex_to_rgb(d.frame_colour)
+
+    def foot(s: float, depth: float) -> float:  # the front/cheek foot sinks into the roof plane
+        return roof_z(*xy(s, depth)) - 0.1
+
+    zf0, zf1 = foot(s0, front), foot(s1, front)
+    ww, wh = dm.window_m
+    ws0, ws1 = dm.at_m - ww / 2, dm.at_m + ww / 2
+    wz0 = dm.bottom_m + (dm.height_m - wh) / 2
+    wz1 = wz0 + wh
+    shell = [(s0, min(zf0, zf1)), (s1, min(zf0, zf1)), (s1, z_top), (s0, z_top)]
+    face = orient(Polygon(shell, [[(ws0, wz0), (ws1, wz0), (ws1, wz1), (ws0, wz1)]]), 1.0)
+    outside = to3(dm.at_m, dm.bottom_m, front - 3.0)
+    for tri in triangulate(face):
+        pts = [to3(a, b, front) for a, b in tri]
+        n = np.cross(np.subtract(pts[1], pts[0]), np.subtract(pts[2], pts[0]))
+        if n @ (np.asarray(outside) - pts[0]) < 0:
+            pts = [pts[0], pts[2], pts[1]]
+        out.add(pts, wood)
+    r = 0.1  # window reveal and pane
+    mid = to3(dm.at_m, (wz0 + wz1) / 2, front + r / 2)
+    for (a, b), (c, e) in (((ws0, wz0), (ws1, wz0)), ((ws1, wz0), (ws1, wz1)), ((ws1, wz1), (ws0, wz1)), ((ws0, wz1), (ws0, wz0))):
+        out.quad([to3(a, b, front), to3(c, e, front), to3(c, e, front + r), to3(a, b, front + r)], frame, mid)
+    pane = _Tris()
+    pane.quad([to3(ws0, wz0, front + r), to3(ws1, wz0, front + r), to3(ws1, wz1, front + r), to3(ws0, wz1, front + r)], GLASS, outside)
+    centre = to3(dm.at_m, (wz0 + wz1) / 2, front + r)
+    windows.append(WindowTag(d.id, dm.id, pane.mesh(), {
+        "building": d.id, "id": dm.id, "node": f"window_{d.id}_{dm.id}", "kind": "window", "edge": dm.edge,
+        "breakable": True, "confidence": "medium", "width_m": ww, "height_m": wh,
+        "centre": [round(c, 3) for c in centre], "normal": [round(nx, 4), round(ny, 4)],
+    }))
+    # cheeks (vertical sides), foot sunk into the roof
+    for s_, zf in ((s0, zf0), (s1, zf1)):
+        zb = foot(s_, back)
+        out.quad([to3(s_, zf, front), to3(s_, z_top, front), to3(s_, z_top, back), to3(s_, zb, back)], wood, to3(s_ + (-1 if s_ == s0 else 1), z_top, (front + back) / 2))
+    # front gable triangle and the dormer roof (two slopes + overhang along the front)
+    ov = 0.15
+    out.add(_wound([to3(s0, z_top, front), to3(s1, z_top, front), to3(dm.at_m, z_ridge, front)], outside), wood)
+    for sgn, se in ((-1, s0), (1, s1)):
+        sx = se + sgn * ov
+        out.quad(
+            [to3(sx, z_top - 0.08, front - ov), to3(sx, z_top - 0.08, back), to3(dm.at_m, z_ridge, back), to3(dm.at_m, z_ridge, front - ov)],
+            roof, to3(dm.at_m + sgn * 0.0, z_ridge + 2.0, (front + back) / 2),
+        )
+    out.add(_wound([to3(s0 - ov, z_top - 0.08, back), to3(s1 + ov, z_top - 0.08, back), to3(dm.at_m, z_ridge, back)], to3(dm.at_m, z_top, back + 2.0)), wood)
+
+
+def _wound(tri: list, toward) -> list:
+    n = np.cross(np.subtract(tri[1], tri[0]), np.subtract(tri[2], tri[0]))
+    return tri if n @ (np.asarray(toward, float) - np.asarray(tri[0], float)) >= 0 else [tri[0], tri[2], tri[1]]

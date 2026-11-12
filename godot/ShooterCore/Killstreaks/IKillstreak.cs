@@ -17,6 +17,8 @@ public enum KillstreakEndReason : byte
     RoundReset = 4,
     /// <summary>A sandbox owner asked for the same streak again, which replaces the running one (#156).</summary>
     Replaced = 5,
+    /// <summary>The streak's aircraft was shot down (ADR 0005).</summary>
+    Destroyed = 6,
 }
 
 /// <summary>
@@ -90,6 +92,11 @@ public sealed class KillstreakUse
     public KillstreakEndReason? EndReason { get; internal set; }
     /// <summary>The owner's control session when this instance has taken control, else null.</summary>
     public ControlSession? Control { get; internal set; }
+    /// <summary>The world entity this instance flies or places, when it told the service (<see cref="BindEntity"/>) or took control of it. Used to end the instance when the entity is destroyed.</summary>
+    public ushort? Entity { get; internal set; }
+
+    /// <summary>Tells the service which world entity this instance owns (an aircraft with no control session, the helicopter helper's), so its destruction ends the instance.</summary>
+    public void BindEntity(ushort entityId) => Entity = entityId;
 
     /// <summary>Ends this instance (idempotent). Ending during <see cref="IKillstreak.Activate"/> is allowed.</summary>
     public void End(KillstreakEndReason reason = KillstreakEndReason.Finished) => _service.Finish(this, reason);

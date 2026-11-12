@@ -212,6 +212,20 @@ public partial class Viewer : Node3D
                      $"feet_vs_spawn_y={dy2:F2} m");
         }
 
+        // meadow clutter: the streaming builds tiles around a focus (no-op for a map without meadow.bin)
+        if (_map.MeadowLayers.Count > 0)
+        {
+            foreach (var sp in spawns.Where(s => s.Kind is "other" or "forest").Take(2))
+            {
+                for (var i = 0; i < 30; i++) { _map.SetClutterFocus(sp.Position); await Physics(1); }
+                var (tiles, live) = _map.MeadowLive;
+                var (multi, merged, mergedVerts) = _map.MeadowNodes;
+                var pass = tiles > 0 && multi + merged > 0 && (merged == 0 || mergedVerts > 0);
+                ok &= pass;
+                GD.Print($"{(pass ? "PASS" : "FAIL")} meadow at {sp.Id} ({sp.Kind}): tiles={tiles} instances={live} multimesh nodes={multi} merged meshes={merged} ({mergedVerts} vertices)");
+            }
+        }
+
         // parcel replacement
         var id = _map.Parcels.Values.Where(p => p.HasModel && p.BuildingIds.Count > 0)
             .Select(p => p.Id).OrderBy(x => x).FirstOrDefault();

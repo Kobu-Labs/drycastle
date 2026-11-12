@@ -91,13 +91,58 @@ public class AircraftTests
     }
 
     [Fact]
-    public void Aircraft_cannot_be_shot_down()
+    public void Aircraft_take_damage_and_are_shot_down_at_zero_hp()
     {
         var a = Make();
-        var before = a.Serialize();
-        a.OnDamage(10000, 9);
+        Assert.Equal(Heli.Hp, a.Hp);
+        a.OnDamage(Heli.Hp / 2, 9);
         Assert.Null(a.Ended);
-        Assert.Equal(before, a.Serialize());
+        Assert.Equal(Heli.Hp / 2, a.Hp, 3);
+        Assert.Equal((ushort)9, a.LastAttacker);
+        a.OnDamage(Heli.Hp, 7);
+        Assert.Equal(WorldDespawnReason.Destroyed, a.Ended);
+        Assert.Equal(0f, a.Hp);
+        Assert.Equal((ushort)7, a.LastAttacker);
+    }
+
+    [Fact]
+    public void A_shot_down_aircraft_is_not_overwritten_by_its_lifetime_ending()
+    {
+        var a = Make(life: 1);
+        a.OnDamage(1_000_000, 9);
+        a.Tick(5);
+        Assert.Equal(WorldDespawnReason.Destroyed, a.Ended);
+    }
+
+    [Fact]
+    public void Hit_points_travel_as_a_percentage_and_the_type_sends_them()
+    {
+        var reg = new WorldEntityRegistry();
+        Aircraft.Register(reg);
+        Assert.True(reg.Find(Aircraft.WireType)!.HasHp);
+        var a = Make();
+        Assert.Equal(100, a.Serialize().Hp);
+        a.OnDamage(Heli.Hp * 0.5f, 9);
+        Assert.Equal(50, a.Serialize().Hp);
+        a.OnDamage(Heli.Hp * 0.499f, 9);
+        Assert.Equal(1, a.Serialize().Hp); // alive never reads 0
+    }
+
+    [Fact]
+    public void Position_after_follows_the_orbit_ahead_of_the_aircraft()
+    {
+        var a = Make();
+        var ahead = a.PositionAfter(2f);
+        a.Tick(2f);
+        Assert.True(Vector3.Distance(ahead, a.Position) < 0.01f);
+        Assert.True(Vector3.Distance(a.PositionAfter(0), a.Position) < 0.001f);
+    }
+
+    [Fact]
+    public void Shipped_aircraft_kinds_have_hit_points()
+    {
+        Assert.All(Shipping.AircraftKinds, k => Assert.True(k.Hp > 0));
+        Assert.True(Shipping.AircraftKinds.Single(k => k.Id == "gunship").Hp > Shipping.AircraftKinds.Single(k => k.Id == "helicopter").Hp);
     }
 
     [Fact]
@@ -123,7 +168,7 @@ public class AircraftTests
         Assert.NotNull(id);
         Assert.Equal(Aircraft.WireType, seen[0].Type);
         Assert.Equal(7, seen[0].State.Owner);
-        Assert.False(reg.Find(Aircraft.WireType)!.HasHp);
+        Assert.True(reg.Find(Aircraft.WireType)!.HasHp); // aircraft can be shot down now (ADR 0005), so their hp is sent
     }
 
     // The turret aim is ground-stabilised and world-space now (#160): its limits and continuity are in GunshipGroundAimTests.
@@ -248,7 +293,7 @@ public class AircraftTests
     [Fact]
     public void Three_aircraft_kinds_are_rejected()
     {
-        var extra = "{ \"id\": \"third\", \"name\": \"Third\", \"radius_m\": 100, \"altitude_m\": 10, \"speed_mps\": 10, \"max_bank_deg\": 10, \"lifetime_s\": 10 }";
+        var extra = "{ \"id\": \"third\", \"name\": \"Third\", \"radius_m\": 100, \"altitude_m\": 10, \"speed_mps\": 10, \"max_bank_deg\": 10, \"lifetime_s\": 10, \"hp\": 100 }";
         var json = Edited(j => j.Replace("\"aircraft\": [", "\"aircraft\": [" + extra + ","));
         Assert.Throws<DataFileException>(() => KillstreakFile.Parse(json));
     }

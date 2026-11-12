@@ -6,13 +6,24 @@ namespace Suchohrad.ShooterCore;
 /// <summary>
 /// Physics layers of the world. Solid world (players, vehicles and bullets stop on it) is layer 1; vehicles are layer 2 (as
 /// before). Shot-only cover (tree crowns, bushes) is layer 4: bullets, pellets, rockets and sight lines stop on it, while
-/// players and cars move through it.
+/// players and cars move through it. Layer 8 is the box of a vehicle that on-foot players are stopped by: a body of its own
+/// beside the vehicle's (see <see cref="VehicleSolid"/>).
 /// </summary>
 public static class CollisionLayers
 {
     public const uint World = 1;
     public const uint Vehicles = 2;
     public const uint ShotOnly = 4;
+
+    /// <summary>
+    /// The solid box of a vehicle for on-foot movement (#217): a static body with the vehicle's hit volume, on the server and on every client.
+    /// It is not the vehicle's own body (layer <see cref="Vehicles"/>), because that one has a collision exception with every player so that it
+    /// can drive over them, and an exception works both ways: the player's move would pass through it too. Rays never query this layer.
+    /// </summary>
+    public const uint VehicleSolid = 8;
+
+    /// <summary>What an on-foot player's movement collides with: the world and the vehicles' solid boxes (#217). Not while seated, which is the world only.</summary>
+    public const uint OnFoot = World | VehicleSolid;
 
     /// <summary>Server rays for bullets, rockets, splash and turret sight: world, vehicles and shot-only cover.</summary>
     public const uint Bullets = World | Vehicles | ShotOnly;
@@ -299,9 +310,14 @@ public static class SolidShapeKeys
 public static class ObjectColliders
 {
     /// <summary>
-    /// Flowers have none (walk and shoot through). Bushes stop shots only. Trees have a trunk (solid, lower third) and a crown
-    /// box (shot-only). Every other category (car, slab, pot, wall, fence, radio tower, other) is one solid box.
+    /// Flowers and house connectors have none (walk and shoot through). Bushes stop shots only. Trees have a trunk (solid, lower third) and a crown
+    /// box (shot-only). A pole (utility pole) is its column alone: a thin solid box at the origin, as high as the pole, so the
+    /// lamp arm, the crossarm and a cabinet beside it (which make the size wide) stop nothing. Every other category (car, slab,
+    /// pot, wall, fence, radio tower, other) is one solid box.
     /// </summary>
+    /// <summary>Half the side of a utility pole's solid column, metres.</summary>
+    public const float PoleHalf = 0.2f;
+
     public static List<SolidPart> ForCategory(string category, float sx, float sy, float sz)
     {
         var hx = sx / 2;
@@ -309,6 +325,7 @@ public static class ObjectColliders
         switch (category)
         {
             case "flower":
+            case "connector": // a house connector: a small fitting high on a wall or roof
                 return [];
             case "bush":
                 return [new(PartRole.Crown, PartShape.Box, 0, 0, 0, sy, hx, hz, 0)];
@@ -318,6 +335,8 @@ public static class ObjectColliders
                     new(PartRole.Trunk, PartShape.Box, 0, 0, 0, sy * 0.35f, 0.15f, 0.15f, 0),
                     new(PartRole.Crown, PartShape.Box, 0, 0, sy * 0.35f, sy, hx, hz, 0),
                 ];
+            case "pole":
+                return [new(PartRole.Trunk, PartShape.Box, 0, 0, 0, sy, PoleHalf, PoleHalf, 0)];
             default:
                 return [new(PartRole.Trunk, PartShape.Box, 0, 0, 0, sy, hx, hz, 0)];
         }

@@ -107,7 +107,7 @@ def test_export_is_byte_deterministic_across_runs(ws, tmp_path) -> None:
 
 
 def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
-    from suchohrad_pipeline.propmeshes import fence_mesh, trees_mesh
+    from suchohrad_pipeline.propmeshes import fence_mesh, fence_meshes, trees_mesh
     from suchohrad_pipeline.rules import load_section
 
     manifest = export(ws)
@@ -118,7 +118,8 @@ def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
     ids = sorted({x["parcel"] for x in props["fences"] + props["trees"] if x.get("parcel")})
     assert ids and all(f"parcel_{i}_props" in tris for i in ids)
     # triangle totals equal what the merged chunk-level nodes held before
-    want_visual = fence_mesh(props["fences"], pcfg["fences"]).face_count + trees_mesh(
+    # (typed fences add flat posts and caps to the visual; their textured parts are separate nodes)
+    want_visual = fence_meshes(props["fences"], pcfg["fences"])[0].face_count + trees_mesh(
         props["trees"], pcfg["trees"]
     ).face_count
     want_collision = fence_mesh(props["fences"], pcfg["fences"], True).face_count

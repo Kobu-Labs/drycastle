@@ -1,0 +1,14 @@
+# P-0288 (Obecny urad Suchohrad), south-west bar. Front wall = edge 2 (9.8 m), facing the road.
+# Measured from Street View section frames (Fable annotation + line-fit rectification, camera height 2.5 m,
+# wall ends checked against the footprint edge length). Only the two windows were seen reliably; every
+# ground line here was estimated (hedge, boards in front), so treat positions as +-0.5 m.
+# Not modelled: the side and courtyard walls.
+id: w378900312
+source: "Street View 2022-09 section frames, Fable annotation + metric line fit"
+overhang_m: 0.4
+frame_colour: '#f2f0ea'
+openings:
+- {id: m_w1, kind: window, edge: 2, at_m: 5.41, width_m: 1.26, height_m: 1.37, sill_m: 1.26,
+  recess_m: 0.12, confidence: high}
+- {id: m_w2, kind: window, edge: 2, at_m: 7.27, width_m: 1.15, height_m: 1.29, sill_m: 1.29,
+  recess_m: 0.12, confidence: high}

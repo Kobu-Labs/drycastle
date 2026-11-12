@@ -192,6 +192,8 @@ public sealed class WorldReplica
     public uint LastTick { get; private set; }
     public event Action<Entity>? Spawned;
     public event Action<ushort>? Despawned;
+    /// <summary>Raised just before <see cref="Despawned"/> with the server's reason, for a visual that depends on it (a shot-down aircraft explodes, an expired one just leaves).</summary>
+    public event Action<ushort, WorldDespawnReason>? DespawnedFor;
 
     /// <summary>Handles a reliable event envelope. Ignores kinds other than the two world lifecycle kinds.</summary>
     public void OnEvent(EventKind kind, byte[] payload)
@@ -201,7 +203,8 @@ public sealed class WorldReplica
             case EventKind.WorldSpawn when WorldCodec.TryDecodeSpawn(payload, out var id, out var type, out var s):
                 Spawn(id, type, s);
                 break;
-            case EventKind.WorldDespawn when WorldCodec.TryDecodeDespawn(payload, out var gid, out _):
+            case EventKind.WorldDespawn when WorldCodec.TryDecodeDespawn(payload, out var gid, out var why):
+                if (_ents.ContainsKey(gid)) DespawnedFor?.Invoke(gid, why);
                 Despawn(gid);
                 break;
         }

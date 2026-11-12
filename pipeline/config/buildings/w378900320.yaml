@@ -1,0 +1,22 @@
+# P-0288 (Obecny urad Suchohrad), east bar. Front wall = edge 1 (15.0 m), facing south onto the lawn.
+# Measured from Street View section frames (Fable annotation + line-fit rectification, camera height 2.5 m).
+# Left corner of the wall checked against the footprint (0.01 m); the right end was not seen, so positions
+# toward the east end are +-0.5 m. e_w3/e_w4 are small high barred windows.
+# Not modelled: the other walls.
+id: w378900320
+source: "Street View 2022-09 section frames, Fable annotation + metric line fit"
+overhang_m: 0.4
+frame_colour: '#f2f0ea'
+openings:
+- {id: e_d1, kind: door, edge: 1, at_m: 0.65, width_m: 0.84, height_m: 2.11, sill_m: 0.07,
+  recess_m: 0.15, confidence: medium}
+- {id: e_w1, kind: window, edge: 1, at_m: 2.67, width_m: 1.1, height_m: 1.21, sill_m: 1.14,
+  recess_m: 0.15, colour: '#8a5a2b', confidence: high}
+- {id: e_d2, kind: door, edge: 1, at_m: 4.89, width_m: 0.93, height_m: 2.15, sill_m: 0.0,
+  recess_m: 0.15, colour: '#2b2420', confidence: medium}
+- {id: e_w2, kind: window, edge: 1, at_m: 6.57, width_m: 1.31, height_m: 1.32, sill_m: 1.05,
+  recess_m: 0.12, confidence: medium}
+- {id: e_w3, kind: window, edge: 1, at_m: 10.13, width_m: 1.37, height_m: 0.66, sill_m: 1.77,
+  recess_m: 0.12, confidence: high}
+- {id: e_w4, kind: window, edge: 1, at_m: 12.83, width_m: 1.22, height_m: 0.61, sill_m: 1.8,
+  recess_m: 0.12, confidence: medium}

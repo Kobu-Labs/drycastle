@@ -23,12 +23,14 @@ public static class RocketFlight
 
     /// <summary>
     /// One tick. <paramref name="wallDistance"/> is where the world blocks the ray from <paramref name="pos"/> along <paramref name="dir"/>
-    /// (infinity if nothing); <paramref name="targets"/> are the live players (the owner is skipped by the sweep).
+    /// (infinity if nothing); <paramref name="targets"/> are the live players (the owner is skipped by the sweep). A rocket that stopped on a vehicle
+    /// whose gunner sits in the open passes <paramref name="exposedGunner"/> and <paramref name="wallPastHull"/> (see <see cref="GunnerCover"/>).
     /// </summary>
-    public static RocketStep Step(Vector3 pos, Vector3 dir, float age, float speed, float life, float dt, float wallDistance, IEnumerable<HitTarget> targets, ushort owner)
+    public static RocketStep Step(Vector3 pos, Vector3 dir, float age, float speed, float life, float dt, float wallDistance, IEnumerable<HitTarget> targets, ushort owner,
+        HitTarget? exposedGunner = null, float wallPastHull = float.PositiveInfinity)
     {
         var len = speed * dt;
-        var sweep = ProjectileMath.Sweep(pos, dir, len, wallDistance, targets, owner);
+        var sweep = ProjectileMath.Sweep(pos, dir, len, wallDistance, targets, owner, exposedGunner, wallPastHull);
         switch (sweep.Kind)
         {
             case ImpactKind.Player: return new RocketStep(RocketOutcome.Player, sweep.Distance, sweep.Victim);

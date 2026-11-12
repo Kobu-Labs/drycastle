@@ -26,8 +26,8 @@
     { "id": "moab", "name": "MOAB", "kills_required": 24, "unlock_level": 20, "max_active": 1, "duration_seconds": 5, "control": "none" }
   ],
   "aircraft": [
-    { "id": "helicopter", "name": "Helicopter", "radius_m": 220, "altitude_m": 45, "speed_mps": 38, "max_bank_deg": 25, "lifetime_s": 60 },
-    { "id": "gunship", "name": "Gunship", "radius_m": 420, "altitude_m": 120, "speed_mps": 70, "max_bank_deg": 30, "lifetime_s": 60 }
+    { "id": "helicopter", "name": "Helicopter", "radius_m": 220, "altitude_m": 45, "speed_mps": 38, "max_bank_deg": 25, "lifetime_s": 60, "hp": 600 },
+    { "id": "gunship", "name": "Gunship", "radius_m": 420, "altitude_m": 120, "speed_mps": 70, "max_bank_deg": 30, "lifetime_s": 60, "hp": 1500 }
   ],
   "gunship": {
     "pitch_min_deg": -70, "pitch_max_deg": -5, "zoom_levels": [1, 2.5, 5],

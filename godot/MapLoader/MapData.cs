@@ -115,6 +115,8 @@ public sealed class LoadStats
     public int ChunksLoaded;
     public int CollidersBuilt;
     public int Triangles;
+    /// <summary>Ground clutter instances built (0 on a headless load or a map without clutter).</summary>
+    public int ClutterInstances;
     public double LoadSeconds;
 }
 

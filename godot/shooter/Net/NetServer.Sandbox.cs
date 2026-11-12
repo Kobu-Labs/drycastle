@@ -27,12 +27,12 @@ public partial class NetServer
     }
 
     /// <summary>Scores (XP, stats, the score) count for every player except a sandbox one. Unknown ids count as normal.</summary>
-    bool Scores(ushort id) => _match.Get(id) is not { Sandbox: true };
+    bool Scores(ushort id) => _match.Get(id) is not { Sandbox: true } && !IsBot(id); // a bot earns no XP and has no stats (#214)
 
     /// <summary>Join: the sandbox name tags of everyone already in sandbox mode go to the joiner, and the joiner's to everyone.</summary>
     void SandboxAnnounce(Client c)
     {
-        var joined = _clients.Values.Where(o => o.Joined).ToList();
+        var joined = _byId.Values.ToList();
         if (c.Sandbox) foreach (var o in joined) Send(o, new EventMsg((byte)EventKind.SandboxState, SandboxEvents.EncodeState(c.Id, true)));
         foreach (var o in joined.Where(o => o != c && o.Sandbox)) Send(c, new EventMsg((byte)EventKind.SandboxState, SandboxEvents.EncodeState(o.Id, true)));
         if (c.Sandbox) SendSandboxHeld(c);
@@ -59,6 +59,13 @@ public partial class NetServer
     void OnSandboxAction(Client c, byte[] payload)
     {
         if (!c.Sandbox || SandboxEvents.DecodeAction(payload) is not { } a) return;
+        if (a.Action == SandboxAction.TakeDamage)
+        {
+            // a switch, not an act on the body: it works while dead too, so a player who keeps dying can turn it off
+            _match.SetVulnerable(c.Id, a.Arg != 0);
+            GD.Print($"server: {c.Name} #{c.Id} sandbox damage {(a.Arg != 0 ? "on" : "off")}");
+            return;
+        }
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive })
         {
             SandboxNote(c, "Sandbox actions work while alive.");
@@ -133,15 +140,16 @@ public partial class NetServer
         var yaw = c.Body.Yaw;
         var p = c.Body.GlobalPosition;
         var fwd = new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
-        var at = p + fwd * (def.HalfLength + 4f);
+        var at = p + fwd * (def.HalfLength + 4f + (def.Flight?.RotorRadius ?? 0f)); // a helicopter stands further off: its rotor reaches past its nose
         var colour = VehicleColours.Pick(_rng, new List<byte>(), def.Variants);
         var car = new ServerCar
         {
             Name = $"{def.Id}{_cars.Count}", Id = (ushort)(VehicleRecord.FirstId + _cars.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, colour),
             HalfWidth = def.HalfWidth, HalfLength = def.HalfLength, OriginPos = new Vector3(at.X, at.Y + 0.02f, at.Z), OriginYaw = yaw,
+            FlightWater = Water, FlightBounds = MapFlightBounds,
         };
         World.AddChild(car);
-        foreach (var cl in _clients.Values.Where(x => x.Joined)) car.AddCollisionExceptionWith(cl.Body);
+        foreach (var cl in _byId.Values) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); }
         _cars.Add(car);
         GD.Print($"server: {c.Name} #{c.Id} spawned a {def.Id}");
     }

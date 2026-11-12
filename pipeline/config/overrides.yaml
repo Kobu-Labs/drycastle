@@ -67,3 +67,128 @@ buildings:
   w378900330:
     wall_colour: "#d9d4c6"
     roof_colour: "#b4502f"
+
+  # P-0288 (Obecny urad Suchohrad): long single-storey office of three bars, white render, hipped
+  # terracotta roofs, eave about 3.0 m (measured from Street View section frames). The generated defaults
+  # (two storeys, gabled, brown/grey roofs) were wrong. Roof rise 1.8 m is a visual estimate.
+  # Openings of the road-facing walls are in config/buildings/. The south-west bar (w378900312) measured
+  # 3.5 m to the eave from poor frames, but the eave line continues unbroken into the middle bar in the
+  # photos, so it uses 3.0 m too.
+  w378900312:
+    model: office
+    wall_colour: "#f0ece2"
+    roof_colour: "#c86040"
+    levels: 1
+    roof: hipped
+    height_m: 4.8
+    roof_height_m: 1.8
+  w378900355:
+    model: office
+    wall_colour: "#f0ece2"
+    roof_colour: "#c86040"
+    levels: 1
+    roof: hipped
+    height_m: 4.8
+    roof_height_m: 1.8
+  w378900320:
+    model: office
+    wall_colour: "#f0ece2"
+    roof_colour: "#c86040"
+    levels: 1
+    roof: hipped
+    height_m: 4.8
+    roof_height_m: 1.8
+
+  # P-0028 (G-0001): old village house, street gable to the road, grey-white weathered render, orange-red
+  # clay tile, steep (about 47 degrees) roof. Eave about 3.0 m, ridge about 6.6 m, scaled from one Street
+  # View frame. The attic has two small windows in the gable, so it is one storey plus attic. Openings
+  # are in config/buildings/.
+  w378920508:
+    wall_colour: "#d9d7d0"
+    roof_colour: "#b8532f"
+    levels: 1
+    roof: gabled
+    height_m: 6.6
+    roof_height_m: 3.6
+
+  # P-0561 (Suchohrad 295): two-storey house of four flats, pale cream render, one gabled roof with a
+  # deep front overhang, loggias with balconies and a staircase block over the open entrance. Modelled by
+  # hand from four Street View frames (pipeline/src/suchohrad_pipeline/flats.py); the generated default
+  # (four storeys, flat roof, 11.5 m) was wrong. The roof and height here only describe the model.
+  w378900224:
+    model: flats
+    wall_colour: "#ece6cc"
+    roof_colour: "#5f5650"
+    levels: 2
+    roof: gabled
+    height_m: 7.15
+    roof_height_m: 1.7
+
+  # P-0562: the twin of Suchohrad 295 in the same property group (G-0097), the same cadastral outline
+  # (22.35 x 9.13 m, the same stepped front) one row to the north. Not photographed: it reuses the model
+  # of 295 as it is, including that house's door colours and the closet on the west terrace.
+  w378900223:
+    model: flats
+    wall_colour: "#ece6cc"
+    roof_colour: "#5f5650"
+    levels: 2
+    roof: gabled
+    height_m: 7.15
+    roof_height_m: 1.7
+
+  # The six two-storey houses of flats in the east of the village: the row P-0297, P-0296,
+  # P-0295 and the row P-0331 (inside P-0330), P-0332 (G-0070), P-0333 (G-0069). Grey render, flat roof,
+  # corner loggias and a staircase bay set back in the street front. Modelled by hand from two Street View
+  # frames of one of them (pipeline/src/suchohrad_pipeline/loggia_house.py); the generated default (four
+  # storeys, 12 m) was wrong. model_axis is the bearing the loggia front faces: south-west, away from
+  # the access road, which runs along the rear wall with the door. All six use the model as it is;
+  # P-0333 is 23.9 m long with a small projection at the rear, so there the model is stretched by 1.4
+  # along the front and ignores the projection.
+  w378920386:
+    model: loggia_house
+    model_axis: -2.17
+    wall_colour: "#99958b"
+    roof_colour: "#6c6e70"
+    levels: 2
+    roof: flat
+    height_m: 6.3
+  w378920342:
+    model: loggia_house
+    model_axis: -2.17
+    wall_colour: "#99958b"
+    roof_colour: "#6c6e70"
+    levels: 2
+    roof: flat
+    height_m: 6.3
+  w378920432:
+    model: loggia_house
+    model_axis: -2.17
+    wall_colour: "#99958b"
+    roof_colour: "#6c6e70"
+    levels: 2
+    roof: flat
+    height_m: 6.3
+  w378920412:
+    model: loggia_house
+    model_axis: -2.03
+    wall_colour: "#99958b"
+    roof_colour: "#6c6e70"
+    levels: 2
+    roof: flat
+    height_m: 6.3
+  w378920373:
+    model: loggia_house
+    model_axis: -2.03
+    wall_colour: "#99958b"
+    roof_colour: "#6c6e70"
+    levels: 2
+    roof: flat
+    height_m: 6.3
+  w378920521:
+    model: loggia_house
+    model_axis: -2.03
+    wall_colour: "#99958b"
+    roof_colour: "#6c6e70"
+    levels: 2
+    roof: flat
+    height_m: 6.3

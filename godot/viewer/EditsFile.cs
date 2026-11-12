@@ -85,8 +85,8 @@ public static class EditsFile
                 var first = true;
                 foreach (var kv in o)
                 {
-                    // like dump_text: the regions key is only written when there are regions
-                    if (depth == 0 && kv.Key == "regions" && kv.Value is SortedDictionary<string, object?> { Count: 0 }) continue;
+                    // like dump_text: the regions and cables keys are only written when there are any
+                    if (depth == 0 && kv.Key is "regions" or "cables" && kv.Value is SortedDictionary<string, object?> { Count: 0 }) continue;
                     if (!first) sb.Append(",\n");
                     first = false;
                     Indent(sb, depth + 1);
@@ -271,6 +271,114 @@ public static class EditsFile
         return changed ? (true, "removed from group") : (false, "none of the selected parcels is in a group");
     }
 
+    /// <summary>
+    /// Merge groups (two or more, or one plus extra ungrouped parcels) into one new group and drop the old ones.
+    /// The fence is the one the groups share, else the first group's (by id); parcel-level fence edits stay on
+    /// the parcels. Same rules as the MCP server's merge_groups.
+    /// </summary>
+    public static (bool ok, string message, string? groupId) MergeGroups(SortedDictionary<string, object?> root, IReadOnlyCollection<string> groupIds, IReadOnlyCollection<string>? extraParcels = null)
+    {
+        var ids = groupIds.Distinct().OrderBy(x => x, StringComparer.Ordinal).ToList();
+        var extra = extraParcels ?? Array.Empty<string>();
+        if (ids.Count < 2 && !(ids.Count == 1 && extra.Count > 0)) return (false, "mark parcels from 2 or more groups, or a group and a loose parcel, to merge", null);
+        var groups = Groups(root);
+        var gone = ids.FirstOrDefault(i => !groups.ContainsKey(i));
+        if (gone != null) return (false, $"group {gone} no longer exists", null);
+        var member = MembershipOf(root);
+        var taken = extra.FirstOrDefault(p => member.TryGetValue(p, out var g) && !ids.Contains(g));
+        if (taken != null) return (false, $"{taken} is already in {member[taken]}", null);
+
+        var fences = ids.Select(i => (id: i, fence: (groups[i] as SortedDictionary<string, object?>)?.GetValueOrDefault("fence"))).Where(x => x.fence != null).ToList();
+        var distinct = fences.Select(x => Dump(new SortedDictionary<string, object?> { ["fence"] = x.fence })).Distinct().Count();
+        var members = ids.SelectMany(i => Members(groups[i])).Concat(extra).ToList();
+        foreach (var i in ids) groups.Remove(i);
+        var gid = NextGroupId(root);
+        var g2 = NewObject();
+        SetMembers(g2, members);
+        if (fences.Count > 0) g2["fence"] = fences[0].fence;
+        groups[gid] = g2;
+        var note = distinct > 1 ? $"; the groups had different fences, kept {fences[0].id}'s" : "";
+        return (true, $"merged {string.Join(" + ", ids)} into {gid}{note}", gid);
+    }
+
     public static (bool ok, string message) Dissolve(SortedDictionary<string, object?> root, string groupId)
         => Groups(root).Remove(groupId) ? (true, $"dissolved {groupId}") : (false, $"group {groupId} no longer exists");
+
+    // ---- cables (wires between two placed utility poles; same rules as the MCP server's connect_poles) ----
+
+    /// <summary>The asset ids of utility poles and of house connectors start with these (edits.py WIRE_ASSET_PREFIXES): what a cable can end on.</summary>
+    public const string PoleAssetPrefix = "prim:pole_", ConnectorAssetPrefix = "prim:connector_";
+
+    public static bool IsPoleAsset(string asset) => asset.StartsWith(PoleAssetPrefix, StringComparison.Ordinal);
+    public static bool IsConnectorAsset(string asset) => asset.StartsWith(ConnectorAssetPrefix, StringComparison.Ordinal);
+    public static bool IsWireAsset(string asset) => IsPoleAsset(asset) || IsConnectorAsset(asset);
+
+    /// <summary>Every cable of the document as (id, from, to), by id; entries that are not well formed are left out.</summary>
+    public static List<(string id, string from, string to)> Cables(SortedDictionary<string, object?> root)
+    {
+        var list = new List<(string, string, string)>();
+        if (root.GetValueOrDefault("cables") is SortedDictionary<string, object?> map)
+            foreach (var (id, entry) in map)
+                if (entry is SortedDictionary<string, object?> c && c.GetValueOrDefault("from") is string f && c.GetValueOrDefault("to") is string t)
+                    list.Add((id, f, t));
+        return list;
+    }
+
+    /// <summary>Next free cable id: one above the highest C-NNNN in use.</summary>
+    public static string NextCableId(SortedDictionary<string, object?> root)
+    {
+        var max = 0;
+        foreach (var (id, _, _) in Cables(root))
+            if (id.StartsWith("C-") && int.TryParse(id[2..], out var n)) max = Math.Max(max, n);
+        return $"C-{max + 1:0000}";
+    }
+
+    /// <summary>The asset of each placed object of the document, by object id.</summary>
+    public static Dictionary<string, string> ObjectAssets(SortedDictionary<string, object?> root)
+    {
+        var assets = new Dictionary<string, string>();
+        foreach (var (_, entry) in (SortedDictionary<string, object?>)root["parcels"]!)
+            if (entry is SortedDictionary<string, object?> e && e.GetValueOrDefault("objects") is List<object?> objs)
+                foreach (var o in objs)
+                    if (o is SortedDictionary<string, object?> ob && ob.GetValueOrDefault("id") is string id && ob.GetValueOrDefault("asset") is string asset)
+                        assets[id] = asset;
+        return assets;
+    }
+
+    /// <summary>
+    /// String a cable between two placed utility poles, or a pole and a house connector. Fails when either is no
+    /// placed pole or connector, both are the same, or they are joined already.
+    /// </summary>
+    public static (bool ok, string message, string? id) Connect(SortedDictionary<string, object?> root, string from, string to)
+    {
+        if (from == to) return (false, "a cable joins two different poles", null);
+        var assets = ObjectAssets(root);
+        foreach (var end in new[] { from, to })
+        {
+            if (!assets.TryGetValue(end, out var asset)) return (false, $"object {end} no longer exists", null);
+            if (!IsWireAsset(asset)) return (false, $"{end} is not a utility pole or a house connector", null);
+        }
+        var joined = Cables(root).FirstOrDefault(c => (c.from == from && c.to == to) || (c.from == to && c.to == from));
+        if (joined.id != null) return (false, $"{from} and {to} are already joined by {joined.id}", null);
+        if (root.GetValueOrDefault("cables") is not SortedDictionary<string, object?> map) root["cables"] = map = NewObject();
+        var id = NextCableId(root);
+        var cable = NewObject();
+        cable["from"] = from;
+        cable["to"] = to;
+        map[id] = cable;
+        return (true, $"strung {id} from {from} to {to}", id);
+    }
+
+    public static (bool ok, string message) Disconnect(SortedDictionary<string, object?> root, string cableId)
+        => root.GetValueOrDefault("cables") is SortedDictionary<string, object?> map && map.Remove(cableId)
+            ? (true, $"removed {cableId}") : (false, $"cable {cableId} no longer exists");
+
+    /// <summary>Drop every cable that hangs from an object (it is being deleted); returns their ids.</summary>
+    public static List<string> RemoveCablesOf(SortedDictionary<string, object?> root, string objectId)
+    {
+        var gone = Cables(root).Where(c => c.from == objectId || c.to == objectId).Select(c => c.id).ToList();
+        if (gone.Count > 0 && root.GetValueOrDefault("cables") is SortedDictionary<string, object?> map)
+            foreach (var id in gone) map.Remove(id);
+        return gone;
+    }
 }

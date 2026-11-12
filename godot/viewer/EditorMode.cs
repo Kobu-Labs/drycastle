@@ -73,7 +73,7 @@ public partial class EditorMode : Node
     HSlider _speedSlider = null!;
     Label _unsavedLabel = null!, _hudLabel = null!, _hoverLabel = null!, _statusLabel = null!, _hintLabel = null!;
     Label _selLabel = null!, _groupLabel = null!;
-    Button _btnGroup = null!, _btnAdd = null!, _btnRemove = null!, _btnDissolve = null!;
+    Button _btnGroup = null!, _btnMerge = null!, _btnAdd = null!, _btnRemove = null!, _btnDissolve = null!;
     double _statusUntil;
     (DateTime, long) _seenEdits;
     double _pollT;
@@ -94,6 +94,9 @@ public partial class EditorMode : Node
             Watcher.Failed += m => Say("error: " + m, true);
             Watcher.InstantApplied += (_, _) => _panelDirty = true;
             Watcher.ParseFailed += m => Say("edits file is not valid JSON yet: " + m, true);
+            Watcher.MapReloading += n => Say($"map re-exported: loading the buildings of {n} chunk{(n == 1 ? "" : "s")}...");
+            Watcher.MapReloaded += (n, _, ms) => Say($"map reloaded: buildings of {n} chunk{(n == 1 ? "" : "s")} in {ms:F0} ms");
+            Watcher.MapReloadFailed += m => Say("map not reloaded: " + m, true);
         }
         _seenEdits = Stat();
         ReloadGroups();
@@ -144,6 +147,8 @@ public partial class EditorMode : Node
             CancelDrag();
             CancelRegionGesture();
             DisarmPlacement(false);
+            StopConnecting(false);
+            StopPlanning(false);
             if (GateArmed) CancelGate();
             HoverId = null;
             _hoverLabel.Visible = false;
@@ -319,17 +324,25 @@ public partial class EditorMode : Node
             Say($"already one group: {groups[0]}", true);
             return;
         }
-        if (groups.Count > 0)
-        {
-            var p = Selection.First(x => Group(x) != null);
-            Say($"{p} is already in {Group(p)}; remove it first", true);
-            return;
-        }
+        if (groups.Count >= 1) { MergeGroups(); return; } // marked parcels touch a group: grouping them makes one new group of everything
         var sel = Selection.ToList();
         Mutate(root =>
         {
             var (ok, msg, gid) = EditsFile.CreateGroup(root, sel);
             return (ok, ok ? $"created {gid}" : msg);
+        });
+    }
+
+    /// <summary>Merge the groups of the marked parcels, and marked ungrouped parcels, into one new group. Undoable.</summary>
+    public void MergeGroups()
+    {
+        var gids = Selection.Select(Group).Where(g => g != null).Select(g => g!).Distinct().ToList();
+        var extra = Selection.Where(p => Group(p) == null).ToList();
+        if (gids.Count < 2 && !(gids.Count == 1 && extra.Count > 0)) { Say("mark parcels from 2 or more groups, or a group and a loose parcel, to merge", true); return; }
+        Mutate(root =>
+        {
+            var (ok, msg, _) = EditsFile.MergeGroups(root, gids, extra);
+            return (ok, msg);
         });
     }
 
@@ -494,7 +507,8 @@ public partial class EditorMode : Node
                 _pitch = Mathf.Clamp(_pitch - mm.Relative.Y * 0.0025f, -1.5698f, 1.5698f);
                 ApplyCamRotation();
                 break;
-            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right }:
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right } rb:
+                _rmbPressPos = rb.Position;
                 _looking = true;
                 _rmbMoved = false;
                 Input.MouseMode = Input.MouseModeEnum.Captured;
@@ -519,6 +533,10 @@ public partial class EditorMode : Node
                 if (RayToGround(FlyCam.ProjectRayOrigin(mb.Position), FlyCam.ProjectRayNormal(mb.Position), out var pp)) PlaceAt(pp, mb.CtrlPressed);
                 else Say("click on the ground", true);
                 break;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Tool == EditorTool.Poles:
+                GetViewport().GuiReleaseFocus();
+                PolesLeftPress(mb.Position, mb.ShiftPressed);
+                break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking:
                 GetViewport().GuiReleaseFocus();
                 LeftPress(mb.Position, mb.ShiftPressed);
@@ -526,6 +544,7 @@ public partial class EditorMode : Node
             case InputEventKey { Pressed: true, Echo: false } k:
                 if (HandleRegionKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Modal) break;
+                if (HandlePolesKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleObjectKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (!k.CtrlPressed && !k.AltPressed && HandleToolKey(k.Keycode)) { GetViewport().SetInputAsHandled(); break; }
                 switch (k.Keycode)
@@ -542,7 +561,10 @@ public partial class EditorMode : Node
                     case Key.Escape:
                         if (_cheat.Visible) _cheat.Visible = false;
                         else if (PlacementAsset != null) DisarmPlacement();
+                        else if (Planning) StopPlanning();
+                        else if (Connecting) StopConnecting();
                         else if (GateArmed) CancelGate();
+                        else if (SelectedCableId != null) SelectCable(null);
                         else if (SelectedObjectId != null) SelectObject(null);
                         else if (Selection.Count > 0) GuardUnsaved(() => Click(null, false));
                         else if (Tool != EditorTool.None) SelectTool(EditorTool.None);
@@ -559,7 +581,9 @@ public partial class EditorMode : Node
         {
             _looking = false;
             Input.MouseMode = Input.MouseModeEnum.Visible;
-            if (!_rmbMoved && PlacementAsset != null) DisarmPlacement(); // a right click (no look drag) leaves placement mode
+            if (!_rmbMoved && Planning && Tool == EditorTool.Poles) PlanRightClick(_rmbPressPos); // plan mode: a right click marks a house
+            else if (!_rmbMoved && PlacementAsset != null) DisarmPlacement(); // a right click (no look drag) leaves placement mode
+            else if (!_rmbMoved && Connecting) StopConnecting(); // and connect mode
         }
         if (Active && Dragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
             EndDrag();
@@ -578,6 +602,7 @@ public partial class EditorMode : Node
         UpdateHover();
         UpdateGateDrag();
         UpdateObjectTools();
+        UpdatePolesTool();
         UpdateRegionTool();
         _pollT += delta;
         if (_pollT > 0.5)
@@ -808,11 +833,13 @@ public partial class EditorMode : Node
         }
         _groupCount.Text = sel.Count == 0 ? "Nothing marked yet" : $"{sel.Count} parcel{(sel.Count == 1 ? "" : "s")} marked";
         _btnGroup.Disabled = sel.Count < 2;
+        _btnMerge.Disabled = !(gids.Count >= 2 || (gids.Count == 1 && sel.Any(p => p.Group == null)));
         _btnAdd.Disabled = gids.Count != 1 || sel.All(p => p.Group != null);
         _btnRemove.Disabled = gids.Count == 0;
         _btnDissolve.Disabled = gids.Count != 1;
         RefreshEditPanel();
         RefreshObjectsPanel();
+        RefreshPolesPanel();
         RefreshRegionsPanel();
     }
 }

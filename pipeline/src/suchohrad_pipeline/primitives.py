@@ -5,6 +5,12 @@ centred on the origin in plan, wound counter-clockwise seen from outside, like e
 in the pipeline. ``PRIMITIVES`` maps the name to its builder, default parameters and default
 size. ``size_m`` there is ``[x, y, z]`` in glTF axes (y up, the convention of ``assets/manifest.json``):
 a plan footprint of x by z and a height y. Output is deterministic: same parameters, same mesh.
+
+The utility poles (``pole_*``, built by ``poles.py``) are the exception to "centred": their origin is
+the foot of the column, wherever the lamp arm or a cabinet reaches, and the column goes half a metre
+into the ground. Their ``size_m`` is the box centred on the origin that holds them (``centred`` is
+False). The same goes for the house connectors (``connector_*``, ``connectors.py``): their origin is
+on the wall or roof they sit on.
 """
 
 import math
@@ -14,7 +20,10 @@ from dataclasses import dataclass
 import numpy as np
 
 from suchohrad_pipeline.buildings import hex_to_rgb
+from suchohrad_pipeline.connectors import CONNECTORS, build_connector
 from suchohrad_pipeline.meshes import Mesh
+from suchohrad_pipeline.poles import VARIANTS as POLE_VARIANTS
+from suchohrad_pipeline.poles import build_variant
 from suchohrad_pipeline.propmeshes import _mesh, box_tris
 
 
@@ -188,6 +197,7 @@ class Primitive:
     params: dict  # default parameters; the builder accepts overrides for any key
     size_m: tuple[float, float, float]  # default bounding box [x, y (up), z], glTF axes
     colour: str  # default colour, hex
+    centred: bool = True  # False: origin at the foot, not the middle of the plan (utility poles)
 
 
 PRIMITIVES: dict[str, Primitive] = {
@@ -243,6 +253,31 @@ PRIMITIVES: dict[str, Primitive] = {
         "#b9bdc2",
     ),
 }
+
+
+def _pole_primitive(name: str) -> Primitive:
+    archetype, seed = POLE_VARIANTS[name]
+    pole = build_variant(name)
+    return Primitive(
+        lambda params=None: build_variant(name, params).mesh,
+        {"archetype": archetype, "seed": seed},
+        pole.size_m,
+        pole.spec.column.colour,
+        centred=False,
+    )
+
+
+PRIMITIVES.update({name: _pole_primitive(name) for name in POLE_VARIANTS})
+
+
+def _connector_primitive(name: str) -> Primitive:
+    connector = build_connector(name)
+    return Primitive(
+        lambda params=None: build_connector(name).mesh, {}, connector.size_m, connector.colour, centred=False
+    )
+
+
+PRIMITIVES.update({name: _connector_primitive(name) for name in CONNECTORS})
 
 
 def build_primitive(name: str, params: dict | None = None) -> Mesh:
