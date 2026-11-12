@@ -532,6 +532,7 @@ public partial class NetClient : Node
                 r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && CorpseOf(id)); // riders are drawn in their seat (the server puts the body there), seated rather than standing
                 r.View?.SetStance(r.State == EntityState.InVehicle ? Stance.Crouch : r.Stance);
                 AnimateRemote(r, s.Pos);
+                UpdateNameTag(id, r);
             }
     }
 
