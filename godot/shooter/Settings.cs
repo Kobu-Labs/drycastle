@@ -182,13 +182,18 @@ public sealed class GameSettings
     }
 
     /// <summary>The player token (ADR 0003): a GUID made on first use and kept in the connect section. It is the player's identity.</summary>
-    public static string PlayerToken()
+    public static string PlayerToken(string profile = "")
     {
         var t = LoadConnect("player_token", "");
-        if (Guid.TryParse(t, out _)) return t;
-        t = Guid.NewGuid().ToString();
-        SaveConnect("player_token", t);
-        return t;
+        if (!Guid.TryParse(t, out _))
+        {
+            t = Guid.NewGuid().ToString();
+            SaveConnect("player_token", t);
+        }
+        // The server keeps one live session per token, so a second client on this machine (--profile 2) gets its own
+        // stable identity derived from the base token instead of kicking the first.
+        if (string.IsNullOrWhiteSpace(profile)) return t;
+        return new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(t + "/" + profile.Trim()))).ToString();
     }
 }
 
