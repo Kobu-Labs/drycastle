@@ -165,7 +165,7 @@ public sealed partial class MapLoader
         _meadowScratch.Clear();
         MeadowGen.Tile(m, li, tx, ty, MeadowSettings.TileCells, _meadowScratch);
         if (_meadowScratch.Count == 0) return;
-        var byKind = new Dictionary<string, List<(Vector3 P, float Rot, float Scale)>>();
+        var byKind = new Dictionary<string, List<(Vector3 P, float Rot, float Scale, byte Tint)>>();
         foreach (var i in _meadowScratch)
         {
             if (!MeadowSettings.HasRoom(layer.Name, ClutterScale, _meadowLive[li] + tile.Instances)) break;
@@ -173,7 +173,7 @@ public sealed partial class MapLoader
             var z = GroundHeight(i.X, -i.Y);
             if (float.IsNaN(z)) continue;
             if (!byKind.TryGetValue(i.Kind, out var l)) byKind[i.Kind] = l = new();
-            l.Add((new Vector3(i.X, z, -i.Y), i.Rot, i.Scale));
+            l.Add((new Vector3(i.X, z, -i.Y), i.Rot, i.Scale, i.Tint));
             tile.Instances++;
         }
         var centre = new Vector3((tx + 0.5f) * tileM, 0, -(ty + 0.5f) * tileM);
@@ -184,12 +184,13 @@ public sealed partial class MapLoader
             var node = RentMeadowNode(kind, mesh, list.Count);
             var mm = node.Multimesh;
             var y0 = float.MaxValue; var y1 = float.MinValue;
-            foreach (var (p, _, _) in list) { y0 = MathF.Min(y0, p.Y); y1 = MathF.Max(y1, p.Y); }
+            foreach (var (p, _, _, _) in list) { y0 = MathF.Min(y0, p.Y); y1 = MathF.Max(y1, p.Y); }
             var origin = new Vector3(centre.X, (y0 + y1) * 0.5f, centre.Z);
             for (var k = 0; k < list.Count; k++)
             {
-                var (p, rot, scale) = list[k];
+                var (p, rot, scale, tint) = list[k];
                 mm.SetInstanceTransform(k, new Transform3D(Basis.Identity.Rotated(Vector3.Up, rot).Scaled(new Vector3(scale, scale, scale)), p - origin));
+                mm.SetInstanceColor(k, TintColor(tint));
             }
             var half = tileM * 0.5f + 1f;
             var reachY = Mathf.Max(mesh.GetAabb().Size.Length(), 0.1f) * 1.5f;
@@ -212,7 +213,7 @@ public sealed partial class MapLoader
             node = new MultiMeshInstance3D
             {
                 Name = $"meadow_{kind}",
-                Multimesh = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = mesh },
+                Multimesh = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = true, Mesh = mesh },
                 MaterialOverride = FlatMaterial(),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 VisibilityRangeEndMargin = ClutterSettings.FadeMarginM,

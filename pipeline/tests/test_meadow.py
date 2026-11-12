@@ -31,3 +31,21 @@ def test_zero_density_makes_nothing() -> None:
     m = _raster()
     m.chunks[(0, 0)][:] = 0
     assert meadow.generate(m, 0, 4, 0, 4) == []
+
+
+def test_tint_follows_a_smooth_field_and_a_bias() -> None:
+    n = meadow.tone_noise(np.array([10.0, 10.2]), np.array([4.0, 4.0]))
+    assert abs(n[0] - n[1]) < 0.05  # smooth: close points share their mood
+    assert meadow.tint_byte(0.5, 0.5)[()] == meadow.NEUTRAL_TINT
+    assert meadow.tint_byte(0.5, 0.5, -40)[()] == 88
+    assert meadow.tint_byte(1.0, 1.0, 500)[()] == 255  # clipped
+
+
+def test_generated_tint_only_on_tint_layers() -> None:
+    m = _raster()
+    assert all("tint" not in i for i in meadow.generate(m, 0, 4, 0, 4))
+    m.layers[0].tint = True
+    got = meadow.generate(m, 0, 4, 0, 4)
+    assert got and all(0 <= i["tint"] <= 255 for i in got)
+    back = meadow.decode(meadow.encode(m))
+    assert back.layers[0].tint and meadow.generate(back, 0, 4, 0, 4) == got

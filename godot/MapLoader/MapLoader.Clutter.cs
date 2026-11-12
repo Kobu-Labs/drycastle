@@ -50,8 +50,7 @@ public sealed partial class MapLoader
         if (clutterFile == null && meadowFile == null) yield break;
 
         var meshFile = Listed("clutter_meshes");
-        var meshNames = new[] { "tuft", "flower", "pebble", "rock", "leaf", "stick", "fern" };
-        var meshes = meshFile == null ? new Dictionary<string, Mesh>() : LoadClutterMeshes(Path.Combine(mapDir, meshFile), meshNames.ToDictionary(n => n, n => n));
+        var meshes = meshFile == null ? new Dictionary<string, Mesh>() : LoadClutterMeshes(Path.Combine(mapDir, meshFile));
         if (meshes.Count == 0) { ClutterWarn("meshes", "clutter: no meshes (files.clutter_meshes missing or empty); no clutter drawn"); yield break; }
 
         if (clutterFile != null)
@@ -99,7 +98,8 @@ public sealed partial class MapLoader
         foreach (var i in cell) origin += ToGodot(i.X, i.Y, i.Z);
         origin /= cell.Count;
 
-        var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = mesh, InstanceCount = cell.Count };
+        // UseColors before InstanceCount (Godot refuses it after): the tint of each instance multiplies the vertex colours
+        var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = true, Mesh = mesh, InstanceCount = cell.Count };
         var meshBox = mesh.GetAabb();
         var reach = Mathf.Max(meshBox.Size.Length(), 0.1f);
         Vector3 min = new(float.MaxValue, float.MaxValue, float.MaxValue), max = new(float.MinValue, float.MinValue, float.MinValue);
@@ -109,6 +109,7 @@ public sealed partial class MapLoader
             var local = ToGodot(i.X, i.Y, i.Z) - origin;
             var basis = Basis.Identity.Rotated(Vector3.Up, i.Rot).Scaled(new Vector3(i.Scale, i.Scale, i.Scale));
             mm.SetInstanceTransform(k, new Transform3D(basis, local));
+            mm.SetInstanceColor(k, TintColor(i.Tint));
             var r = reach * Mathf.Max(i.Scale, 0.01f);
             min = new Vector3(Mathf.Min(min.X, local.X - r), Mathf.Min(min.Y, local.Y - r), Mathf.Min(min.Z, local.Z - r));
             max = new Vector3(Mathf.Max(max.X, local.X + r), Mathf.Max(max.Y, local.Y + r), Mathf.Max(max.Z, local.Z + r));
@@ -130,9 +131,16 @@ public sealed partial class MapLoader
         return node;
     }
 
-    /// <summary>The kind meshes of clutter_meshes.glb by mesh name: the MeshInstance3D named so (or whose mesh is). Transforms are ignored:
-    /// the contract is Y-up, standing on y = 0, unit scale.</summary>
-    Dictionary<string, Mesh> LoadClutterMeshes(string glbPath, IReadOnlyDictionary<string, string> kindMesh)
+    /// <summary>The instance colour of a tint byte (<see cref="ClutterTint"/>).</summary>
+    static Color TintColor(byte tint)
+    {
+        var (r, g, b) = ClutterTint.Rgb(tint);
+        return new Color(r, g, b);
+    }
+
+    /// <summary>The meshes of clutter_meshes.glb by mesh name: every MeshInstance3D with a mesh, keyed by its node name (or its mesh's name).
+    /// Transforms are ignored: the contract is Y-up, standing on y = 0, unit scale. The kinds of clutter.json and meadow.bin name them.</summary>
+    Dictionary<string, Mesh> LoadClutterMeshes(string glbPath)
     {
         var result = new Dictionary<string, Mesh>();
         if (!File.Exists(glbPath)) return result;
@@ -143,10 +151,12 @@ public sealed partial class MapLoader
         if (scene == null) return result;
         var found = Descendants(scene).OfType<MeshInstance3D>().Where(m => m.Mesh != null).ToList();
         if (scene is MeshInstance3D self && self.Mesh != null) found.Add(self);
-        foreach (var name in kindMesh.Values.Distinct())
+        foreach (var mi in found)
         {
-            var mi = found.FirstOrDefault(m => m.Name.ToString() == name) ?? found.FirstOrDefault(m => m.Mesh.ResourceName == name);
-            if (mi != null) result[name] = mi.Mesh;
+            var name = mi.Name.ToString();
+            if (name.Length == 0) name = mi.Mesh.ResourceName;
+            result.TryAdd(name, mi.Mesh);
+            if (mi.Mesh.ResourceName.Length > 0) result.TryAdd(mi.Mesh.ResourceName, mi.Mesh);
         }
         scene.Free(); // the Mesh resources are reference counted, the nodes are not needed
         return result;

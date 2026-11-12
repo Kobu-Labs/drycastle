@@ -6,15 +6,16 @@ namespace Suchohrad.MapLoader;
 // pipeline/src/suchohrad_pipeline/meadow.py, which has the same hash and the same instance rules (a test pins both).
 
 /// <summary>One generated piece of meadow clutter. Map metres, x east, y north (no height: the loader reads the ground); Rot is counter-clockwise seen from above.</summary>
-public readonly record struct MeadowInstance(string Kind, float X, float Y, float Rot, float Scale);
+public readonly record struct MeadowInstance(string Kind, float X, float Y, float Rot, float Scale, byte Tint = ClutterTint.Neutral);
 
 /// <summary>A layer of the raster: which clutter kind it makes (and which other kind for <see cref="AltShare"/> of the instances), at most <see cref="MaxPerCell"/> per cell.</summary>
-public sealed record MeadowLayer(string Name, string Kind, string AltKind, float AltShare, float MaxPerCell, float ScaleMin, float ScaleMax);
+/// <remarks><paramref name="Tint"/>: the layer's instances carry a tint byte (see <see cref="MeadowGen.Tint"/>).</remarks>
+public sealed record MeadowLayer(string Name, string Kind, string AltKind, float AltShare, float MaxPerCell, float ScaleMin, float ScaleMax, bool Tint = false);
 
 /// <summary>meadow.bin (manifest <c>files.meadow</c>): the density raster of the clutter the game generates near the player on fields and in forests.</summary>
 public sealed class MeadowFile
 {
-    public const int SupportedFormat = 1;
+    public const int SupportedFormat = 2;
     static readonly byte[] Magic = "MEAD"u8.ToArray();
 
     public float CellM { get; private init; }
@@ -53,7 +54,8 @@ public sealed class MeadowFile
             for (var i = 0; i < count; i++)
             {
                 var name = Str(); var kind = Str(); var alt = Str();
-                layers.Add(new MeadowLayer(name, kind, alt, r.ReadSingle(), r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
+                var share = r.ReadSingle(); var max = r.ReadSingle(); var lo = r.ReadSingle(); var hi = r.ReadSingle();
+                layers.Add(new MeadowLayer(name, kind, alt, share, max, lo, hi, (r.ReadByte() & 1) != 0));
             }
             if (cellMm == 0 || cells == 0 || count == 0) throw new FormatException("meadow.bin: empty header");
             var file = new MeadowFile { CellM = cellMm / 1000f, ChunkM = chunkM, CellsPerChunk = cells, JitterM = jitter, TrunkReachM = reach, Layers = layers };
@@ -125,6 +127,31 @@ public static class MeadowGen
         }
     }
 
+    // The tone field of the tint (pipeline meadow.py: TONE_*): a value noise over the ground in 2 m cells plus a small per-instance jitter.
+    const double ToneLattice = 12.0, ToneAmp = 100.0, ToneJitter = 14.0;
+    const int ToneSalt = 2000;
+
+    /// <summary>Smooth noise in [0, 1) at (gx, gy) in cells (floats), bilinear between lattice corners of <paramref name="lattice"/> cells; the same as <c>meadow.value_noise</c>.</summary>
+    public static double ValueNoise(double gx, double gy, double lattice, int salt)
+    {
+        double fx = gx / lattice, fy = gy / lattice;
+        double x0 = Math.Floor(fx), y0 = Math.Floor(fy);
+        double tx = fx - x0, ty = fy - y0;
+        tx = tx * tx * (3 - 2 * tx); ty = ty * ty * (3 - 2 * ty);
+        int ix = (int)x0, iy = (int)y0;
+        double a = Hash01(ix, iy, salt), b = Hash01(ix + 1, iy, salt), c = Hash01(ix, iy + 1, salt), d = Hash01(ix + 1, iy + 1, salt);
+        return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
+    }
+
+    /// <summary>The tint byte of an instance: the tone noise at the cell centre, a per-instance jitter hash (salt 0x10000 + layer * 256 + j) and a bias in tint units.</summary>
+    public static byte Tint(int gx, int gy, int li, int j, double bias = 0)
+    {
+        var noise = ValueNoise(gx + 0.5, gy + 0.5, ToneLattice, ToneSalt);
+        var jitter = Hash01(gx, gy, 0x10000 + li * 256 + j);
+        var t = Math.Floor(ClutterTint.Neutral + (noise - 0.5) * 2 * ToneAmp + (jitter - 0.5) * 2 * ToneJitter + bias + 0.5);
+        return (byte)Math.Clamp(t, 0, 255);
+    }
+
     /// <summary>Appends the instances of one cell and layer (count = floor(e) plus one with probability frac(e), e = density / 255 * max).</summary>
     public static void Cell(MeadowFile f, int li, int gx, int gy, List<MeadowInstance> output)
     {
@@ -143,7 +170,7 @@ public static class MeadowGen
             var rot = Hash01(gx, gy, salt + 3) * (2 * Math.PI);
             var scale = layer.ScaleMin + Hash01(gx, gy, salt + 4) * (layer.ScaleMax - layer.ScaleMin);
             var kind = layer.AltKind.Length > 0 && Hash01(gx, gy, salt + 5) < layer.AltShare ? layer.AltKind : layer.Kind;
-            output.Add(new MeadowInstance(kind, (float)x, (float)y, (float)rot, (float)scale));
+            output.Add(new MeadowInstance(kind, (float)x, (float)y, (float)rot, (float)scale, layer.Tint ? Tint(gx, gy, li, j) : ClutterTint.Neutral));
         }
     }
 

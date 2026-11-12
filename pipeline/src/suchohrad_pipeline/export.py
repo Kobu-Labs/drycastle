@@ -42,7 +42,11 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # and kind) with clutter_meshes.glb (files.clutter_meshes: one tiny mesh per kind) for instanced rendering near the player.
 # 0.9.0: meadow.bin (files.meadow): the density raster the game turns into near-player clutter on fields and in forests
 # (detail/meadow.py). Optional: a loader that does not know it just draws the stored clutter.
-MAP_VERSION_BASE = "0.9.0"
+# 0.10.0: clutter variety. clutter.json entries may carry a sixth number, the tint byte (128 = as drawn), and its kinds a
+# "tint" flag; meadow.bin is format 2 (a tint flag per layer) and then 3 (a species-zone plane and kind mixes); more
+# clutter kinds (grasses, wild and garden flowers) in clutter_meshes.glb. A loader that reads only 0.9.0 clutter would refuse
+# meadow.bin's new format and draw no meadow.
+MAP_VERSION_BASE = "0.10.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 TREES_FORMAT_VERSION = 1

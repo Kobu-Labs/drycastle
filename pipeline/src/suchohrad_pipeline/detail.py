@@ -53,6 +53,7 @@ from suchohrad_pipeline.regions import drape, plan_regions
 from suchohrad_pipeline.roads import edge_lines
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 from suchohrad_pipeline.terrain import Terrain, load_terrain
+from suchohrad_pipeline.detail_meshes import TINTABLE
 from suchohrad_pipeline.textures import TexturedMesh, tex_node_name, texture
 
 DETAIL_FORMAT_VERSION = 1
@@ -70,6 +71,7 @@ _SOFT_LAYERS = ("lawn", "tone_a", "tone_b", "litter")  # big soft shapes: simpli
 _RECT_LAYERS = ("bed", "furrow")  # textured with their own angle and origin
 _NEAR_M = 8.0  # what around a parcel counts as near it
 _TILE_M = 24.0
+CELL_M = 2.0  # the meadow cell: the tone noise is laid out in these (meadow.py), stored clutter reads it at its position
 _MIN_PIECE_M2 = 0.15
 _PATCH_ROW = 19  # x0 y0 z0 x1 y1 z1 x2 y2 z2, r g b, u0 v0 u1 v1 u2 v2, texture index (-1 = flat colour)
 
@@ -113,6 +115,7 @@ class ParcelContext:
     colour: list[int] | None = None  # the parcel's flat terrain colour (the lawn palette follows it)
     blocked: BaseGeometry | None = None  # placed objects and hand-drawn regions
     verge: dict[str, BaseGeometry] | None = None  # "gravel" and "dirt" verge blobs along the roads, clipped
+    water: BaseGeometry | None = None  # water parcels near the parcel (grass beside them stands fresh)
 
 
 # --- tools ----------------------------------------------------------------------------------
@@ -366,8 +369,26 @@ def _trunk_filter(ctx: ParcelContext, pts: np.ndarray, cfg: dict) -> np.ndarray:
     return pts[keep]
 
 
-def _emit(g: np.random.Generator, kind: str, pts: np.ndarray, span: list[float], ctx: ParcelContext) -> list[dict]:
-    """Instances of ``kind`` at ``pts`` with a random turn and a scale in ``span`` (points off the meshed terrain are dropped)."""
+def _tint_bias(ctx: ParcelContext, pts: np.ndarray, cfg: dict) -> np.ndarray:
+    """Tint shift per point (tint units): fresher beside fences, walls and water."""
+    t = cfg["tint"]
+    cache = ctx.__dict__.setdefault("_tint_geoms", {})
+    if "edges" not in cache:
+        cache["edges"] = _union([*ctx.fences, *[b.exterior for b in ctx.buildings]]) if (ctx.fences or ctx.buildings) else None
+    p = shapely.points(pts)
+    bias = np.zeros(len(pts))
+    if cache["edges"] is not None:
+        near = shapely.distance(p, cache["edges"]) < float(t["fresh_m"])
+        bias += np.where(near, float(t["fence_fresh"]), 0.0)
+    if ctx.water is not None and not ctx.water.is_empty:
+        w = float(t["water_m"])
+        bias += float(t["water_fresh"]) * np.clip(1 - shapely.distance(p, ctx.water) / w, 0.0, 1.0)
+    return bias
+
+
+def _emit(g: np.random.Generator, kind: str, pts: np.ndarray, span: list[float], ctx: ParcelContext, cfg: dict | None = None) -> list[dict]:
+    """Instances of ``kind`` at ``pts`` with a random turn and a scale in ``span`` (points off the meshed terrain are dropped).
+    A tintable kind also gets its tint byte (``cfg``: the detail rules, for the bias)."""
     if not len(pts):
         return []
     pts = pts[terrain_ok(ctx.terrain, pts[:, 0], pts[:, 1])]
@@ -376,11 +397,20 @@ def _emit(g: np.random.Generator, kind: str, pts: np.ndarray, span: list[float],
     z = ctx.terrain.surface(pts[:, 0], pts[:, 1])
     rot = g.random(len(pts)) * math.tau
     sc = span[0] + g.random(len(pts)) * (span[1] - span[0])
-    return [
+    tint = None
+    if kind in TINTABLE:
+        cell = float(CELL_M)
+        bias = _tint_bias(ctx, pts, cfg) if cfg is not None else 0.0
+        tint = meadow_mod.tint_byte(meadow_mod.tone_noise(pts[:, 0] / cell, pts[:, 1] / cell), g.random(len(pts)), bias)
+    out = [
         {"kind": kind, "x": round(float(x), 3), "y": round(float(y), 3), "z": round(float(h), 3),
          "rot": round(float(r), 3), "scale": round(float(s), 3)}
         for (x, y), h, r, s in zip(pts, z, rot, sc, strict=True)
     ]
+    if tint is not None:
+        for c, t in zip(out, tint, strict=True):
+            c["tint"] = int(t)
+    return out
 
 
 def _zones(g: np.random.Generator, zones: list[tuple[BaseGeometry, float]], spacing: float) -> np.ndarray:
@@ -639,7 +669,7 @@ def _garden_clutter(ctx: ParcelContext, cfg: dict, layers: dict[str, BaseGeometr
 
     g = _gen(pid, "tuft")
     pts = scatter(g, open_ground, float(t["spacing_m"]), _region_density([(grass, tuft_lawn), (dirt, 0.04), (open_ground, lambda xs, ys: tuft_lawn(xs, ys) * 0.5)]))
-    out += _emit(g, "tuft", pts, t["scale"], ctx)
+    out += _emit(g, "tuft", pts, t["scale"], ctx, cfg)
 
     f = c["flower"]
     g = _gen(pid, "flower")
@@ -773,7 +803,7 @@ def field_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
         g = _gen(pid, kind)
         pts = _zones(g, [(bare.intersection(meadow), s.get("dirt", 0.0)), (edge_band, s.get("edge", 0.0)),
                          (tones.intersection(meadow), s.get("tone", 0.0)), (meadow, s.get("interior", 0.0))], float(s["spacing_m"]))
-        out += _emit(g, kind, _trunk_filter(ctx, pts, cfg), s["scale"], ctx)
+        out += _emit(g, kind, _trunk_filter(ctx, pts, cfg), s["scale"], ctx, cfg)
     res.clutter = out
     return res
 
@@ -821,7 +851,7 @@ def forest_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
             continue
         g = _gen(pid, kind)
         pts = _zones(g, [(bare, s.get("dirt", 0.0)), (litter, s.get("litter", 0.0)), (tones, s.get("tone", 0.0)), (free, s.get("interior", 0.0))], float(s["spacing_m"]))
-        out += _emit(g, kind, _trunk_filter(ctx, pts, cfg), s["scale"], ctx)
+        out += _emit(g, kind, _trunk_filter(ctx, pts, cfg), s["scale"], ctx, cfg)
     f = c["fern"]  # ferns stand in small groups round the trunks
     g = _gen(pid, "fern")
     fp = []
@@ -835,7 +865,7 @@ def forest_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
     pts = np.array(fp) if fp else np.zeros((0, 2))
     if len(pts):
         pts = pts[shapely.contains_xy(free, pts[:, 0], pts[:, 1])]
-    out += _emit(g, "fern", _trunk_filter(ctx, pts, cfg), f["scale"], ctx)
+    out += _emit(g, "fern", _trunk_filter(ctx, pts, cfg), f["scale"], ctx, cfg)
     res.clutter = out
     return res
 
@@ -861,7 +891,7 @@ def road_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
             continue
         g = _gen(pid, kind)
         pts = _zones(g, [(gravel, s.get("gravel", 0.0)), (dirt, s.get("dirt", 0.0)), (grass, s.get("grass", 0.0))], float(s["spacing_m"]))
-        out += _emit(g, kind, pts, s["scale"], ctx)
+        out += _emit(g, kind, pts, s["scale"], ctx, cfg)
     res.clutter = out
     return res
 
@@ -942,6 +972,8 @@ class Village:
         self.warnings = list(plan.warnings)
         self.regions = unary_union([r.polygon for r in plan.regions.values()]) if plan.regions else Polygon()
         shapely.prepare(self.regions)
+        self.water_polys = [shape(p["polygon"]) for p in self.parcels if p["kind"] == "water"]
+        self.w_tree = shapely.STRtree(self.water_polys)
         self.verge_polys = make_verge(graph, self.cfg["verge"])
         self.v_tree = {k: shapely.STRtree(v) for k, v in self.verge_polys.items()}
 
@@ -978,6 +1010,7 @@ class Village:
                 colour=self.colour[parcel["id"]],
                 blocked=_union(blocked) if blocked else None,
                 verge=verge,
+                water=_union(self._near(self.w_tree, self.water_polys, part.buffer(float(self.cfg["tint"]["water_m"])))) if self.water_polys else None,
             )
 
 
@@ -1056,9 +1089,10 @@ def build_village_detail(
             rows.append(patch_rows(flat, tex, textures))
             for c in res.clutter:
                 key = tuple(chunk_of(c["x"], c["y"], v.chunk_m))
-                chunks.setdefault(key, {}).setdefault(c["kind"], []).append(
-                    [round(c["x"], 2), round(c["y"], 2), round(c["z"], 2), round(c["rot"], 2), round(c["scale"], 2)]
-                )
+                row = [round(c["x"], 2), round(c["y"], 2), round(c["z"], 2), round(c["rot"], 2), round(c["scale"], 2)]
+                if "tint" in c:
+                    row.append(c["tint"])
+                chunks.setdefault(key, {}).setdefault(c["kind"], []).append(row)
         if log and n % 200 == 0:
             log(f"{n}/{len(v.parcels)} parcels, {time.time() - t0:.0f} s")
     count = lambda: {k: sum(len(kinds.get(k, [])) for kinds in chunks.values()) for k in CLUTTER_KINDS}  # noqa: E731
@@ -1090,7 +1124,7 @@ def clutter_document(detail: VillageDetail) -> dict:
         "format_version": DETAIL_FORMAT_VERSION,
         "axes": "map metres: x east, y north, z up (ground height at the instance)",
         "chunk_size_m": detail.chunk_m,
-        "kinds": {k: {"mesh": k} for k in CLUTTER_KINDS},
+        "kinds": {k: ({"mesh": k, "tint": True} if k in TINTABLE else {"mesh": k}) for k in CLUTTER_KINDS},
         "chunks": chunks,
     }
 

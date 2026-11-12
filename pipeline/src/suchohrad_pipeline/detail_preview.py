@@ -22,7 +22,7 @@ from suchohrad_pipeline.assets import ASSETS_DIR
 from suchohrad_pipeline.buildings import hex_to_rgb
 from suchohrad_pipeline.config import REPO_ROOT, area_paths
 from suchohrad_pipeline.detail import CLUTTER_KINDS, DetailResult, ParcelContext, run_parcel
-from suchohrad_pipeline.detail_meshes import clutter_meshes
+from suchohrad_pipeline.detail_meshes import clutter_meshes, tint_rgb
 from suchohrad_pipeline.rules import load_section
 from suchohrad_pipeline.textures import texture
 
@@ -121,6 +121,7 @@ def render(ctx: ParcelContext, res: DetailResult, cfg: dict, box: tuple[float, f
         if not inside(c["x"], c["y"]):
             continue
         tris, colours = meshes[c["kind"]], cols[c["kind"]]
+        tf = np.array(tint_rgb(c["tint"])) if "tint" in c else 1.0
         co, si = math.cos(c["rot"]), math.sin(c["rot"])
         x = c["x"] + c["scale"] * (tris[:, :, 0] * co - tris[:, :, 1] * si)
         y = c["y"] + c["scale"] * (tris[:, :, 0] * si + tris[:, :, 1] * co)
@@ -132,7 +133,7 @@ def render(ctx: ParcelContext, res: DetailResult, cfg: dict, box: tuple[float, f
         for i in np.argsort(z.mean(axis=1)):
             if n[i, 2] <= 0 and c["kind"] not in ("leaf",):
                 continue  # facing down: hidden from above
-            d.polygon([cv.pt(x[i, j], y[i, j]) for j in range(3)], fill=tuple(int(v) for v in colours[i] * shade[i]))
+            d.polygon([cv.pt(x[i, j], y[i, j]) for j in range(3)], fill=tuple(int(min(255, v)) for v in colours[i] * shade[i] * tf))
     # buildings, fences, trees
     for b in ctx.buildings:
         for ring in cv.poly(b):

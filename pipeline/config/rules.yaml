@@ -333,6 +333,14 @@ detail:
     # Leaf litter under a tree: blobs of canopy_m * scale * radius_factor around the trunk.
     radius_factor: 0.7
     blobs_per_tree: 1
+  # Tint of the grasses and ferns (the byte after the scale in clutter.json; 128 = as drawn, lower = fresher, higher = drier).
+  # The base is a smooth noise over the ground (meadow.py), so a stretch of grass has one mood; these shift it in tint units:
+  # grass within fresh_m of a fence or a wall stands unmown and fresh, grass within water_m of water likewise.
+  tint:
+    fence_fresh: -40
+    fresh_m: 1.5
+    water_fresh: -45
+    water_m: 6.0
   # Garden and plot clutter. spacing_m: grid of candidates (one per cell, jittered); the other numbers are the
   # share of candidates kept by place.
   clutter:
@@ -402,9 +410,9 @@ detail:
     trunk_reach_m: 0.7
     stored_kinds: [rock]
     layers:
-      tuft:   {kind: tuft,   max_per_cell: 3.0, scale: [0.8, 1.4]}
+      tuft:   {kind: tuft,   max_per_cell: 3.0, scale: [0.8, 1.4], tint: true}
       flower: {kind: flower, max_per_cell: 1.0, scale: [0.8, 1.2]}
-      fern:   {kind: fern,   max_per_cell: 1.5, scale: [0.8, 1.3]}
+      fern:   {kind: fern,   max_per_cell: 1.5, scale: [0.8, 1.3], tint: true}
       pebble: {kind: pebble, max_per_cell: 2.0, scale: [0.6, 1.4]}
       litter: {kind: leaf,   alt_kind: stick, alt_share: 0.2, max_per_cell: 3.0, scale: [0.8, 1.2]}
     field:

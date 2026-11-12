@@ -144,3 +144,12 @@ def test_clutter_meshes_are_tiny_and_stand_on_the_ground() -> None:
     for name, m in meshes.items():
         assert 3 <= m.face_count <= 30, name
         assert m.tris[:, :, 2].min() >= -1e-9 and m.tris[:, :, 2].max() < 0.5, name
+
+
+def test_stored_tufts_carry_a_tint_and_flowers_do_not(cfg: dict) -> None:
+    res = garden_detail(yard(), cfg)
+    tufts = [c for c in res.clutter if c["kind"] == "tuft"]
+    assert tufts and all(0 <= c["tint"] <= 255 for c in tufts)
+    assert all("tint" not in c for c in res.clutter if c["kind"] != "tuft")
+    assert len({c["tint"] for c in tufts}) > 5  # not one flat value
+    assert detail_meshes.tint_rgb(128) == (1.0, 1.0, 1.0)

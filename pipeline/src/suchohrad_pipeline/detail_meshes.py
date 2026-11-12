@@ -17,6 +17,20 @@ from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.propmeshes import box_tris
 
 KINDS = ("tuft", "flower", "pebble", "rock", "leaf", "stick", "fern")
+# Kinds whose instances carry a tint byte (see meadow.py): the grasses and ferns, whose green is the point. Flowers keep their
+# own colours; stones and litter are varied by their faces.
+TINTABLE = frozenset({"tuft", "fern"})
+# The loader multiplies the vertex colours by these (ClutterData.cs, ClutterTint.Rgb): 0 = fresh, 128 = as drawn, 255 = dry.
+# A multiplication cannot add yellow to a green, only take green and blue away, so "dry" reads as olive; real straw is
+# its own kind.
+_FRESH, _DRY = (0.80, 0.97, 0.78), (1.0, 0.80, 0.55)
+
+
+def tint_rgb(t: int) -> tuple[float, float, float]:
+    """The colour factor of a tint byte (piecewise linear: fresh at 0, white at 128, dry at 255)."""
+    t = max(0, min(255, int(t)))
+    end, w = (_FRESH, (128 - t) / 128.0) if t < 128 else (_DRY, (t - 128) / 127.0)
+    return tuple(1.0 + (end[i] - 1.0) * w for i in range(3))
 
 
 class _Tris:

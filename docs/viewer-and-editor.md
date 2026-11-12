@@ -101,6 +101,11 @@ child of the chunk root): no shadows, no collision, the shared flat material, a 
 A headless load (`CollisionOnly`, the dedicated server) and a map without the files build nothing and print nothing. `SUCHOHRAD_CLUTTER=0` (or `off`) turns it off; a number scales the
 distances (`0.5` = half); `MapLoader.ClutterScale` is the same setting in code (set before `Load`). Old loaders ignore the files.
 
+**Tint (map 0.10.0).** An instance entry may carry a sixth number, a tint byte (128 = the mesh's own colours, lower = fresher, higher = drier); the meadow's generated instances of a
+layer with the tint flag carry one too. The loader sets it as the MultiMesh instance colour (`UseColors`), which multiplies the vertex colours of the shared flat material, so
+variety costs no extra nodes: `ClutterTint.Rgb` (fresh 0.80/0.97/0.78 at 0, white at 128, dry 1.0/0.80/0.55 at 255). A product cannot add yellow to a green, so "dry" reads
+as olive; real straw is its own kind. The pipeline lays the tint out as a smooth noise over the ground plus a small jitter (`meadow.py` `tone_noise`, `tint_byte`; `MeadowGen.Tint` mirrors it).
+
 ### Meadow clutter (generated near the player)
 
 Fields, meadows and forests are about 400 ha, too much to store clutter instances for. Maps with `files.meadow` (`meadow.bin`, map 0.9.0) carry a density raster instead

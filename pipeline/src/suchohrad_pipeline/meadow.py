@@ -18,7 +18,7 @@ nothing is sent over the network.
 * **File**: ``MEAD`` magic, little endian. Header: u16 format, u16 cell size in mm, u16 cells per chunk side,
   f32 chunk size, f32 jitter, f32 trunk reach (a generated instance within this many metres times the tree's
   scale of a trunk is dropped), u8 layer count, per layer (u8 length + UTF-8 each) name, kind and alt kind, f32 alt share,
-  f32 max per cell, f32 scale min, f32 scale max; u32 chunk count, per chunk (i32 ix, i32 iy, u32 offset, u32
+  f32 max per cell, f32 scale min, f32 scale max, u8 flags (bit 0: instances carry a tint); u32 chunk count, per chunk (i32 ix, i32 iy, u32 offset, u32
   length) with the offset from the start of the data block; then the data block: per chunk the zlib of the
   layers, layer by layer, each ``cells x cells`` bytes row by row (y from the south edge, x from the west edge).
 """
@@ -34,7 +34,16 @@ from shapely.geometry import Point
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
-MEADOW_FORMAT_VERSION = 1
+MEADOW_FORMAT_VERSION = 2
+# Per-instance tint (clutter.json's optional sixth number, and the instances the game generates): one byte, 128 = the
+# mesh's own colours, below it fresher (darker, greener), above it drier (the loader multiplies the vertex colours
+# by detail_meshes.tint_rgb). It follows a smooth value noise over the ground (TONE_LATTICE_CELLS cells of 2 m) plus
+# a small per-instance jitter, so a stretch of grass has one mood instead of white noise.
+NEUTRAL_TINT = 128
+TONE_LATTICE_CELLS = 12.0
+TONE_SALT = 2000
+TONE_AMP = 100.0
+TONE_JITTER = 14.0
 MEADOW_TYPES = ("field", "forest")
 MAGIC = b"MEAD"
 _BARE_LAYERS = ("dirt", "verge_dirt", "verge_gravel", "gravel")
@@ -66,6 +75,18 @@ def value_noise(gx: np.ndarray, gy: np.ndarray, lattice: float, salt: int) -> np
     return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty
 
 
+def tone_noise(gx, gy) -> np.ndarray:
+    """The smooth tone field at cell coordinates (floats allowed: metres / cell size), in [0, 1)."""
+    return value_noise(np.asarray(gx, float), np.asarray(gy, float), TONE_LATTICE_CELLS, TONE_SALT)
+
+
+def tint_byte(noise, jitter01, bias=0.0) -> np.ndarray:
+    """The tint byte of a point: the tone ``noise`` (0..1), a per-instance ``jitter01`` (0..1) and a ``bias`` in tint units
+    (negative = fresher, positive = drier). floor(x + 0.5) so the game rounds the same way."""
+    t = np.floor(NEUTRAL_TINT + (np.asarray(noise) - 0.5) * 2 * TONE_AMP + (np.asarray(jitter01) - 0.5) * 2 * TONE_JITTER + bias + 0.5)
+    return np.clip(t, 0, 255).astype(np.int64)
+
+
 @dataclass
 class MeadowLayer:
     name: str
@@ -74,6 +95,7 @@ class MeadowLayer:
     alt_share: float
     max_per_cell: float
     scale: tuple[float, float]
+    tint: bool = False  # its instances carry a tint byte
 
 
 @dataclass
@@ -140,7 +162,7 @@ def meadow_layers(cfg: dict) -> list[MeadowLayer]:
     out = []
     for name, s in cfg["layers"].items():
         out.append(MeadowLayer(name, s["kind"], s.get("alt_kind", ""), float(s.get("alt_share", 0.0)),
-                               float(s["max_per_cell"]), (float(s["scale"][0]), float(s["scale"][1]))))
+                               float(s["max_per_cell"]), (float(s["scale"][0]), float(s["scale"][1])), bool(s.get("tint", False))))
     return out
 
 
@@ -226,7 +248,8 @@ def generate(meadow: Meadow, gx0: int, gx1: int, gy0: int, gy1: int) -> list[dic
     and salt ``li * 256 + s`` draw the numbers. The count is floor(e) plus one with probability frac(e), where
     e = value / 255 * max_per_cell (salt 0); instance ``j`` (at most 49) uses salts ``1 + 5j`` (x), ``2 + 5j`` (y),
     ``3 + 5j`` (turn), ``4 + 5j`` (scale), ``5 + 5j`` (alt kind). Position: cell centre plus ``(2h - 1) * jitter``;
-    turn ``h * tau``; scale ``lo + h * (hi - lo)``. No trunk or terrain test here: the game does that."""
+    turn ``h * tau``; scale ``lo + h * (hi - lo)``. A layer with ``tint`` also gives ``"tint"``: :func:`tint_byte` of the tone
+    noise at the cell centre and the jitter hash of salt ``0x10000 + li * 256 + j``. No trunk or terrain test here: the game does that."""
     n, out = meadow.n, []
     for cy in range(math.floor(gy0 / n), math.floor((gy1 - 1) / n) + 1):
         for cx in range(math.floor(gx0 / n), math.floor((gx1 - 1) / n) + 1):
@@ -250,10 +273,14 @@ def generate(meadow: Meadow, gx0: int, gx1: int, gy0: int, gy1: int) -> list[dic
                     h = [hash01(x, y, li * 256 + k + 5 * j) for k in (1, 2, 3, 4, 5)]
                     px = (x + 0.5) * meadow.cell_m + (h[0] * 2 - 1) * meadow.jitter_m
                     py = (y + 0.5) * meadow.cell_m + (h[1] * 2 - 1) * meadow.jitter_m
+                    tint = tint_byte(tone_noise(x + 0.5, y + 0.5), hash01(x, y, 0x10000 + li * 256 + j)) if layer.tint else None
                     for k in range(len(x)):
                         kind = layer.alt_kind if layer.alt_kind and h[4][k] < layer.alt_share else layer.kind
-                        out.append({"kind": kind, "x": float(px[k]), "y": float(py[k]), "rot": float(h[2][k] * math.tau),
-                                    "scale": layer.scale[0] + float(h[3][k]) * (layer.scale[1] - layer.scale[0])})
+                        inst = {"kind": kind, "x": float(px[k]), "y": float(py[k]), "rot": float(h[2][k] * math.tau),
+                                "scale": layer.scale[0] + float(h[3][k]) * (layer.scale[1] - layer.scale[0])}
+                        if tint is not None:
+                            inst["tint"] = int(tint[k])
+                        out.append(inst)
     return out
 
 
@@ -272,7 +299,7 @@ def encode(meadow: Meadow) -> bytes:
                         meadow.jitter_m, meadow.trunk_reach_m, len(meadow.layers))
     for layer in meadow.layers:
         head += _s(layer.name) + _s(layer.kind) + _s(layer.alt_kind)
-        head += struct.pack("<ffff", layer.alt_share, layer.max_per_cell, layer.scale[0], layer.scale[1])
+        head += struct.pack("<ffffB", layer.alt_share, layer.max_per_cell, layer.scale[0], layer.scale[1], int(layer.tint))
     blobs, directory, offset = [], [], 0
     for key in sorted(meadow.chunks):
         arr = meadow.chunks[key]
@@ -305,9 +332,9 @@ def decode(data: bytes) -> Meadow:
     layers = []
     for _ in range(count):
         name, kind, alt = s(), s(), s()
-        share, mx, lo, hi = struct.unpack_from("<ffff", data, pos)
-        pos += 16
-        layers.append(MeadowLayer(name, kind, alt, share, mx, (lo, hi)))
+        share, mx, lo, hi, flags = struct.unpack_from("<ffffB", data, pos)
+        pos += 17
+        layers.append(MeadowLayer(name, kind, alt, share, mx, (lo, hi), bool(flags & 1)))
     (chunks,) = struct.unpack_from("<I", data, pos)
     pos += 4
     entries = [struct.unpack_from("<iiII", data, pos + 16 * i) for i in range(chunks)]

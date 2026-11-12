@@ -55,6 +55,27 @@ public class ClutterDataTests
     public void ParseScale(string? value, float expected) => Assert.Equal(expected, ClutterSettings.ParseScale(value));
 
     [Fact]
+    public void TintIsTheOptionalSixthNumber()
+    {
+        var doc = ClutterDoc.Parse("""{"format_version":1,"kinds":{"tuft":{"mesh":"tuft","tint":true}},"chunks":{"0_0":{"tuft":[[1,2,3,0,1,40],[1,2,3,0,1],[1,2,3,0,1,999]]}}}""");
+        var l = doc.Groups[0].Instances;
+        Assert.Equal(40, l[0].Tint);
+        Assert.Equal(ClutterTint.Neutral, l[1].Tint);
+        Assert.Equal(255, l[2].Tint);
+    }
+
+    [Fact]
+    public void TintFactorsRunFromFreshThroughWhiteToDry()
+    {
+        Assert.Equal((1f, 1f, 1f), ClutterTint.Rgb(ClutterTint.Neutral));
+        var fresh = ClutterTint.Rgb(0);
+        var dry = ClutterTint.Rgb(255);
+        Assert.Equal(0.80f, fresh.R, 4);
+        Assert.Equal(0.55f, dry.B, 4);
+        Assert.True(ClutterTint.Rgb(64).G < 1f && ClutterTint.Rgb(64).G > fresh.G);
+    }
+
+    [Fact]
     public void SmallThingsVanishSoonerThanTufts()
         => Assert.True(ClutterSettings.RangeOf("pebble") < ClutterSettings.RangeOf("tuft"));
 }

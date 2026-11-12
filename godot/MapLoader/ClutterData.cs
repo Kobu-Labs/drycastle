@@ -5,14 +5,15 @@ namespace Suchohrad.MapLoader;
 // Pure (no Godot types): compiled into ShooterCore.Tests by a link, so the parsing and the grouping can be tested.
 
 /// <summary>One placed piece of ground clutter. Map metres, x east, y north, z up; Rot is counter-clockwise seen from above.</summary>
-public readonly record struct ClutterInstance(float X, float Y, float Z, float Rot, float Scale);
+/// <remarks>Tint is the optional sixth number of an entry: 128 (<see cref="ClutterTint.Neutral"/>) = the mesh's own colours, lower = fresher, higher = drier.</remarks>
+public readonly record struct ClutterInstance(float X, float Y, float Z, float Rot, float Scale, byte Tint = ClutterTint.Neutral);
 
 /// <summary>The instances of one kind in one chunk.</summary>
 public sealed record ClutterGroup(int ChunkX, int ChunkY, string Kind, IReadOnlyList<ClutterInstance> Instances);
 
 /// <summary>
 /// clutter.json (map manifest <c>files.clutter</c>): {"format_version":1, "chunk_size_m":250, "kinds":{"tuft":{"mesh":"tuft"}},
-/// "chunks":{"3_-1":{"tuft":[[x,y,z,rot,scale],...]}}}. Kinds not listed under "kinds" are skipped.
+/// "chunks":{"3_-1":{"tuft":[[x,y,z,rot,scale(,tint)],...]}}}. Kinds not listed under "kinds" are skipped.
 /// </summary>
 public sealed class ClutterDoc
 {
@@ -49,12 +50,30 @@ public sealed class ClutterDoc
                     foreach (var e in kind.Value.EnumerateArray())
                     {
                         if (e.GetArrayLength() < 5) throw new FormatException($"clutter.json: chunk {c.Name} {kind.Name}: entry needs x,y,z,rot,scale");
-                        list.Add(new ClutterInstance(e[0].GetSingle(), e[1].GetSingle(), e[2].GetSingle(), e[3].GetSingle(), e[4].GetSingle()));
+                        var tint = e.GetArrayLength() > 5 && e[5].TryGetInt32(out var tv) ? (byte)Math.Clamp(tv, 0, 255) : ClutterTint.Neutral;
+                        list.Add(new ClutterInstance(e[0].GetSingle(), e[1].GetSingle(), e[2].GetSingle(), e[3].GetSingle(), e[4].GetSingle(), tint));
                     }
                     if (list.Count > 0) groups.Add(new ClutterGroup(ix, iy, kind.Name, list));
                 }
             }
         return new ClutterDoc { FormatVersion = version, KindMesh = kinds, Groups = groups };
+    }
+}
+
+/// <summary>
+/// The colour factor of a tint byte (the pipeline's <c>detail_meshes.tint_rgb</c>): the instance colour of a MultiMesh, which multiplies the
+/// vertex colours. Fresh at 0, white at 128, dry at 255, linear between. A product cannot add yellow to a green, only take green and blue
+/// away, so "dry" reads as olive; real straw is its own kind.
+/// </summary>
+public static class ClutterTint
+{
+    public const byte Neutral = 128;
+    static readonly (float R, float G, float B) Fresh = (0.80f, 0.97f, 0.78f), Dry = (1.0f, 0.80f, 0.55f);
+
+    public static (float R, float G, float B) Rgb(byte t)
+    {
+        var (end, w) = t < Neutral ? (Fresh, (Neutral - t) / 128f) : (Dry, (t - Neutral) / 127f);
+        return (1f + (end.R - 1f) * w, 1f + (end.G - 1f) * w, 1f + (end.B - 1f) * w);
     }
 }
 
