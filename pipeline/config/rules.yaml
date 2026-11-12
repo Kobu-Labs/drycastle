@@ -298,6 +298,9 @@ detail:
     clips:
       P-1057: {osm_id: w825140517, within_m: 12}
       P-1021: {osm_id: w825140517, within_m: 12}
+      P-0847: {osm_id: w825140519, within_m: 12}   # the dike's north end: the service road on from P-0073 through H to G
+      P-0089: {osm_id: w825140519, within_m: 12}
+      P-1059: {osm_id: w1148486728, within_m: 12}  # the dike hill reaches over the P-0073 line here (L1)
     track_width_m: 1.5       # the gravel track: this wide plus the wandering of its edges (about 2.2 m on average); the road under it is wider, the lawn covers the rest
     track_wobble_m: 0.7      # how far the edge of the track wanders out beyond that, each side (waves of 1.4 to 16 m)
     track_lift_m: 0.08       # above the terrain: over the road ribbon (roads.lift_m 0.05 plus 3 mm per class rank) so the texture shows
