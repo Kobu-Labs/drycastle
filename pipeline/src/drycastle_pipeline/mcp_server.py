@@ -1793,15 +1793,12 @@ class ParcelEditTools:
         edited = _read_edits(self.settings.edits_path).ground_types
         rows = []
         for name, spec in merge_ground_types(rules, edited).items():
-            trees = spec.get("trees") or {}
             rows.append({
                 "type": name,
                 "source": ground_type_source(name, rules, edited),
                 "colours": spec.get("colours", []),
                 "recipe": spec.get("recipe"),
                 "detail": spec.get("detail") or {},
-                "trees_per_1000m2": float(trees.get("per_1000m2", 0.0)),
-                "forest_trees": bool(trees.get("forest")),
                 "water": bool(spec.get("water")),
                 "spawns": bool(spec.get("spawns")),
                 "osm": spec.get("osm") or {},
@@ -1821,8 +1818,6 @@ class ParcelEditTools:
         name: str,
         colours: list[str] | None = None,
         recipe: str | None = None,
-        trees_per_1000m2: float | None = None,
-        forest_trees: bool | None = None,
         water: bool | None = None,
         spawns: bool | None = None,
         osm: dict | None = None,
@@ -1832,11 +1827,11 @@ class ParcelEditTools:
         if not isinstance(name, str):
             raise ToolError("name must be text, a lower_snake type name like my_meadow")
         change_keys = {
-            "colours": colours, "recipe": recipe, "trees_per_1000m2": trees_per_1000m2, "forest_trees": forest_trees,
+            "colours": colours, "recipe": recipe,
             "water": water, "spawns": spawns, "osm": osm, "detail": detail,
         }
         if all(v is None for v in change_keys.values()):
-            raise ToolError("give at least one of colours, recipe, trees_per_1000m2, forest_trees, water, spawns, osm, detail")
+            raise ToolError("give at least one of colours, recipe, water, spawns, osm, detail")
         rules = rules_ground_types(self.settings.rules_path, self.settings.area)
 
         def change(edits: Edits) -> str:
@@ -1849,12 +1844,6 @@ class ParcelEditTools:
                 entry["colours"] = colours
             if recipe is not None:
                 entry["recipe"] = None if recipe == "none" else recipe
-            if trees_per_1000m2 is not None or forest_trees is not None:
-                trees = entry.setdefault("trees", {})
-                if trees_per_1000m2 is not None:
-                    trees["per_1000m2"] = trees_per_1000m2
-                if forest_trees is not None:
-                    trees["forest"] = forest_trees
             if water is not None:
                 entry["water"] = water
             if spawns is not None:
@@ -2406,7 +2395,7 @@ def build_server(settings: Settings) -> Any:
     @server.tool(description=(
         "List the ground types (rules.yaml ground.types plus your overrides and additions in edits.json): name, "
         "`source` (rules = as in rules.yaml, overridden = rules.yaml plus your override, custom = made by you), "
-        "effective terrain colours, detail recipe and settings, trees per 1000 m2, forest trees, water, spawns, "
+        "effective terrain colours, detail recipe and settings, water, spawns, "
         "the OSM values it takes, and where it comes from on its own (OSM, a rule, or only hand-drawn); `deleted` "
         "names the types of the rules you removed. Use a name as `ground` in create_region or set_region_ground."))
     def list_ground_types() -> dict:
@@ -2415,8 +2404,8 @@ def build_server(settings: Settings) -> Any:
     @server.tool(description=(
         "Create a ground type, or change your override of one that rules.yaml defines. Name: lower_snake, at most 24 "
         "characters, an ID that cannot be renamed. Give any of: `colours` (1-6 \"#rrggbb\" terrain shades), "
-        "`recipe` (field, forest, village, dike or \"none\" for no detail), `trees_per_1000m2` (0-50), `forest_trees` "
-        "(forest-style trees), `water`, `spawns`, `osm` ({\"landuse\": [...], \"natural\": [...]}, the OSM values the "
+        "`recipe` (field, forest, village, dike or \"none\" for no detail), "
+        "`water`, `spawns`, `osm` ({\"landuse\": [...], \"natural\": [...]}, the OSM values the "
         "type takes; each class given replaces its list), `detail` (settings laid over that recipe's section of "
         "rules.yaml `detail`, e.g. {\"furrow\": {\"probability\": 0.0}, \"tone_per_ha\": 8}; merged into your earlier "
         "ones). Only what you give is overridden; the rest stays as in rules.yaml. A new name makes a custom type "
@@ -2425,14 +2414,12 @@ def build_server(settings: Settings) -> Any:
         name: str,
         colours: list[str] | None = None,
         recipe: str | None = None,
-        trees_per_1000m2: float | None = None,
-        forest_trees: bool | None = None,
         water: bool | None = None,
         spawns: bool | None = None,
         osm: dict | None = None,
         detail: dict | None = None,
     ) -> dict:
-        return tools.set_ground_type(name, colours, recipe, trees_per_1000m2, forest_trees, water, spawns, osm, detail)
+        return tools.set_ground_type(name, colours, recipe, water, spawns, osm, detail)
 
     @server.tool(description=(
         "Remove your override of a ground type of rules.yaml, so it is as in rules.yaml again; also brings back one you "

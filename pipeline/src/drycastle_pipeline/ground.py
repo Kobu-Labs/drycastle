@@ -141,7 +141,7 @@ def rules_ground_types(rules_path: Path = DEFAULT_RULES, area: str | None = None
 
 def merge_ground_types(rules: dict[str, dict], edited: dict[str, dict]) -> dict[str, dict]:
     """``rules`` types with the user's ``edited`` types (``ground_types`` of ``edits.json``) laid over them: a key of
-    an edited entry overrides that key of the rules entry (the dicts ``trees``, ``osm`` and ``detail`` key by key,
+    an edited entry overrides that key of the rules entry (the dicts ``osm`` and ``detail`` key by key,
     deeper dicts the same way, lists and values replace); a new name is a new type, appended at the end; an entry
     with ``deleted`` removes the rules type. Neither input is changed."""
     out = {name: copy.deepcopy(spec) for name, spec in rules.items()}
@@ -166,16 +166,13 @@ def ground_types(rules_path: Path = DEFAULT_RULES, area: str | None = None, edit
 
 def ground_type_row(name: str, rules_spec: dict | None, spec: dict) -> dict:
     """One ground type of ``parcels.json`` ``ground_types`` for the editor: ``spec`` is the effective type (summary:
-    colour, recipe, trees, water, spawns, source), ``rules_spec`` the entry of rules.yaml (None: a type of the user,
+    colour, recipe, water, spawns, source), ``rules_spec`` the entry of rules.yaml (None: a type of the user,
     ``custom``), which the editor lays the current edits over."""
-    trees = spec.get("trees") or {}
     row = {
         "name": name,
         "colour": (spec.get("colours") or ["#808080"])[0].lower(),
         "colours": [c.lower() for c in spec.get("colours") or []],
         "recipe": spec.get("recipe"),
-        "trees_per_1000m2": float(trees.get("per_1000m2", 0.0)),
-        "forest": bool(trees.get("forest")),
         "water": bool(spec.get("water")),
         "spawns": bool(spec.get("spawns")),
         "source": "rule" if spec.get("rule") else ("osm" if spec.get("osm") else "drawn"),

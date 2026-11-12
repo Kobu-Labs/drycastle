@@ -23,11 +23,10 @@ def errs(types: dict) -> list[str]:
 
 def test_override_replaces_keys_and_merges_dicts() -> None:
     rules = rules_ground_types()
-    out = merge_ground_types(rules, {"forest": {"trees": {"per_1000m2": 2.0}, "colours": ["#112233"]}})
-    assert out["forest"]["trees"] == {"per_1000m2": 2.0, "forest": True}  # forest key of the rules stays
+    out = merge_ground_types(rules, {"forest": {"osm": {"natural": ["scrub"]}, "colours": ["#112233"]}})
+    assert out["forest"]["osm"] == {"landuse": ["forest"], "natural": ["scrub"]}  # the landuse list of the rules stays
     assert out["forest"]["colours"] == ["#112233"] and out["forest"]["recipe"] == "forest"
-    assert out["forest"]["osm"] == rules["forest"]["osm"]
-    assert rules["forest"]["trees"]["per_1000m2"] == 8.0  # the input is not changed
+    assert rules["forest"]["osm"]["natural"] == ["wood"]  # the input is not changed
     out = merge_ground_types(rules, {"allotments": {"detail": {"furrow": {"probability": 0.5}}}})
     assert out["allotments"]["detail"]["furrow"]["probability"] == 0.5
     assert out["allotments"]["detail"]["furrow"]["min_area_m2"] == 300  # deeper keys stay
@@ -46,17 +45,17 @@ def test_new_types_come_last_and_deleted_types_go() -> None:
 
 def test_ground_types_reads_the_edits_file(tmp_path) -> None:
     path = tmp_path / "edits.json"
-    path.write_text(dump_text(Edits(ground_types={"meadow": {"trees": {"per_1000m2": 3.0}}, "dunes": {"colours": ["#d8c38a"]}})))
-    assert ground_types()["meadow"]["trees"]["per_1000m2"] == 0.1  # without the edits path: the rules
+    path.write_text(dump_text(Edits(ground_types={"meadow": {"spawns": False}, "dunes": {"colours": ["#d8c38a"]}})))
+    assert ground_types()["meadow"]["spawns"] is True  # without the edits path: the rules
     effective = ground_types(edits_path=path)
-    assert effective["meadow"]["trees"]["per_1000m2"] == 3.0 and effective["dunes"]["colours"] == ["#d8c38a"]
+    assert effective["meadow"]["spawns"] is False and effective["dunes"]["colours"] == ["#d8c38a"]
     assert ground_types(edits_path=tmp_path / "missing.json") == ground_types()
 
 
 def test_export_row_summarises_the_effective_type() -> None:
     rules = rules_ground_types()
     row = ground_type_row("forest", rules["forest"], rules["forest"])
-    assert row["colour"] == "#2f5f38" and row["forest"] and row["recipe"] == "forest" and row["source"] == "osm"
+    assert row["colour"] == "#2f5f38" and row["recipe"] == "forest" and row["source"] == "osm"
     assert row["rules"] == rules["forest"] and "custom" not in row
     assert ground_type_row("dunes", None, {"colours": ["#D8C38A"]})["custom"] is True
 
@@ -70,7 +69,7 @@ def test_a_full_override_and_a_custom_type_are_valid_and_round_trip(tmp_path) ->
         "parcels": {},
         "groups": {},
         "ground_types": {
-            "meadow": {"trees": {"per_1000m2": 2, "forest": False}, "spawns": True, "detail": {"furrow": {"probability": 0.0}}},
+            "meadow": {"spawns": True, "detail": {"furrow": {"probability": 0.0}}},
             "dunes": {
                 "colours": ["#d8c38a", "#cfb97e"], "recipe": "field", "water": False,
                 "osm": {"natural": ["sand"], "landuse": []}, "detail": {"tone_per_ha": 8},
@@ -102,10 +101,7 @@ def test_a_full_override_and_a_custom_type_are_valid_and_round_trip(tmp_path) ->
         ({"x": {"detail": {"furrow": {}}}}, "needs a recipe"),
         ({"x": {"recipe": "village", "detail": {"furrow": {}}}}, "not a setting of detail.village"),
         ({"x": {"recipe": "field", "detail": 3}}, "detail: must be an object"),
-        ({"x": {"trees": {"per_1000m2": 51}}}, "0 to 50"),
-        ({"x": {"trees": {"per_1000m2": -1}}}, "0 to 50"),
-        ({"x": {"trees": {"forest": "yes"}}}, "true or false"),
-        ({"x": {"trees": {"density": 1}}}, "trees.density: unknown key"),
+        ({"x": {"trees": {"per_1000m2": 1}}}, "x.trees: unknown key"),
         ({"x": {"water": 1}}, "water: must be true or false"),
         ({"x": {"spawns": "no"}}, "spawns: must be true or false"),
         ({"x": {"osm": {"landcover": ["a"]}}}, "osm.landcover: unknown key"),

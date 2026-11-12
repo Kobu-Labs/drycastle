@@ -279,7 +279,7 @@ def run_parcel_run(
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     graph = json.loads((work_dir / "roads.json").read_text())
-    fcfg = props_rules(rules_path, area, edits_path)
+    fcfg = props_rules(rules_path, area)
     plan = plan_edits(
         load_edits(edits_path),
         parcels_doc["parcels"],

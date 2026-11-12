@@ -9,7 +9,7 @@ formatting is fixed, so git diffs stay small. Version 1::
      "groups":  {"G-0001": {"parcels": ["P-0412", "P-0413"], "fence": {...}}},
      "regions": {"R-0001": {"colour": "#8a7a5c", "polygon": [[x, y], ...]}},
      "cables":  {"C-0001": {"from": "o-0012", "to": "o-0015"}},
-     "ground_types": {"meadow": {"trees": {"per_1000m2": 2.0}}, "my_dunes": {"colours": ["#d8c38a"]}}}
+     "ground_types": {"meadow": {"spawns": false}, "my_dunes": {"colours": ["#d8c38a"]}}}
 
 ``fence`` (all keys optional)
     mode              auto | none | custom. Default auto, or custom when type, height_m,
@@ -87,7 +87,6 @@ ground.py. The key is only written when there are some.)
     recipe              field | forest | village | dike, or null for no detail (replaces the type's recipe).
     detail              object laid over the shipped ``detail.<recipe>`` section of rules.yaml (deep merge); its
                         top-level keys must exist in that section. Needs a recipe, own or the rules type's.
-    trees               {per_1000m2: number 0..50, forest: bool}; keys merge with the rules type's.
     water, spawns       bool.
     osm                 {landuse|natural: [str, ...]}: the OSM values the type takes (a key replaces that class's list).
     deleted             true (and nothing else): removes the type that rules.yaml defines. Not the default type and
@@ -140,13 +139,11 @@ OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour"
 GROUP_KEYS = ("parcels", "fence")
 REGION_KEYS = ("colour", "polygon", "water_y", "ground")
 CABLE_KEYS = ("from", "to")
-GROUND_TYPE_KEYS = ("colours", "recipe", "detail", "trees", "water", "spawns", "osm", "deleted")
-GROUND_TREE_KEYS = ("per_1000m2", "forest")
+GROUND_TYPE_KEYS = ("colours", "recipe", "detail", "water", "spawns", "osm", "deleted")
 GROUND_OSM_CLASSES = ("landuse", "natural")
 GROUND_RECIPES = ("field", "forest", "village", "dike")  # the detail.RECIPES a ground type can use (not garden)
 GROUND_COLOURS_MAX = 6
 GROUND_NAME_MAX = 24
-GROUND_TREES_MAX = 50.0
 POLE_ASSET_PREFIX = "prim:pole_"
 CONNECTOR_ASSET_PREFIX = "prim:connector_"
 WIRE_ASSET_PREFIXES = (POLE_ASSET_PREFIX, CONNECTOR_ASSET_PREFIX)  # the assets a cable can end on
@@ -495,13 +492,6 @@ def _check_ground_type(name: str, entry: object, path: str, errors: list[str]) -
                 for key in detail:
                     if section is not None and key not in section:
                         errors.append(f"{path}.detail.{key}: not a setting of detail.{recipe} (known: {', '.join(section)})")
-    if "trees" in entry and _is_dict(entry["trees"], f"{path}.trees", errors):
-        trees = entry["trees"]
-        _unknown_keys(trees, GROUND_TREE_KEYS, f"{path}.trees", errors)
-        if "per_1000m2" in trees and not (_is_num(trees["per_1000m2"]) and 0 <= trees["per_1000m2"] <= GROUND_TREES_MAX):
-            errors.append(f"{path}.trees.per_1000m2: must be a number from 0 to {GROUND_TREES_MAX:g}")
-        if "forest" in trees and not isinstance(trees["forest"], bool):
-            errors.append(f"{path}.trees.forest: must be true or false")
     for key in ("water", "spawns"):
         if key in entry and not isinstance(entry[key], bool):
             errors.append(f"{path}.{key}: must be true or false")

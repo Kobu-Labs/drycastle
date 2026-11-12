@@ -658,7 +658,7 @@ def test_region_ground_types(env):
     tools, settings, _ = env
     types = {t["type"]: t for t in tools.list_ground_types()["types"]}
     assert {"field", "forest", "meadow", "village", "water"} <= set(types)
-    assert types["water"]["water"] and types["forest"]["trees_per_1000m2"] > 0 and types["meadow"]["recipe"] == "field"
+    assert types["water"]["water"] and types["forest"]["recipe"] == "forest" and types["meadow"]["recipe"] == "field"
     out = tools.create_region(polygon=SQUARE, ground="meadow")  # no colour: the type's first shade tints the preview
     assert (out["ground"], out["colour"]) == ("meadow", types["meadow"]["colours"][0].lower())
     assert load_edits(settings.edits_path).regions["R-0001"]["ground"] == "meadow"
@@ -682,12 +682,12 @@ def test_region_ground_types(env):
 def test_ground_type_tools(env):
     tools, settings, _ = env
     rows = {t["type"]: t for t in tools.list_ground_types()["types"]}
-    assert rows["meadow"]["source"] == "rules" and rows["meadow"]["trees_per_1000m2"] == 0.1 and rows["forest"]["forest_trees"]
-    out = tools.set_ground_type("meadow", trees_per_1000m2=2.5, spawns=False, detail={"tone_per_ha": 9})
+    assert rows["meadow"]["source"] == "rules" and rows["meadow"]["spawns"] and rows["forest"]["osm"]["landuse"] == ["forest"]
+    out = tools.set_ground_type("meadow", colours=["#112233"], spawns=False, detail={"tone_per_ha": 9})
     assert "overridden" in out["summary"] and "make map" in out["summary"]
-    assert out["type"]["source"] == "overridden" and out["type"]["trees_per_1000m2"] == 2.5 and out["type"]["spawns"] is False
+    assert out["type"]["source"] == "overridden" and out["type"]["colours"] == ["#112233"] and out["type"]["spawns"] is False
     assert out["type"]["detail"]["furrow"]["probability"] == 0.0 and out["type"]["detail"]["tone_per_ha"] == 9  # merged
-    assert load_edits(settings.edits_path).ground_types["meadow"] == {"trees": {"per_1000m2": 2.5}, "spawns": False, "detail": {"tone_per_ha": 9}}
+    assert load_edits(settings.edits_path).ground_types["meadow"] == {"colours": ["#112233"], "spawns": False, "detail": {"tone_per_ha": 9}}
     canonical(settings)
 
     out = tools.set_ground_type("dunes", colours=["#d8c38a"], recipe="field", osm={"natural": ["sand"]})
@@ -703,8 +703,8 @@ def test_ground_type_tools(env):
         tools.set_ground_type("meadow", colours=[])
     with pytest.raises(ToolError, match="type names"):
         tools.set_ground_type("Bad Name", spawns=True)
-    with pytest.raises(ToolError, match="0 to 50"):
-        tools.set_ground_type("meadow", trees_per_1000m2=60)
+    with pytest.raises(ToolError, match="#rrggbb"):
+        tools.set_ground_type("meadow", colours=["red"])
     assert "Bad Name" not in settings.edits_path.read_text()  # nothing was written
 
     out = tools.reset_ground_type("meadow")
