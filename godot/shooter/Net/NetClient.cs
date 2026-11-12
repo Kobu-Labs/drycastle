@@ -742,6 +742,7 @@ public partial class NetClient : Node
     {
         if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
         if (HandleSeatInput(e)) return; // a number key while seated takes that seat
+        if (HandleViewInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
         if (Bot || Weapons == null || Dead || ChooserOpen || Input.MouseMode != Input.MouseModeEnum.Captured) return;
         if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {

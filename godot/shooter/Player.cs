@@ -128,9 +128,9 @@ public partial class Player : CharacterBody3D
     /// <summary>Third-person camera on a car (driving): the body sits in the car and the mouse orbits the camera freely around it; the keys alone steer. Starts behind the car.</summary>
     public void Chase(Vector3 carPos, float carYaw, VehicleDef? def = null, float dt = 0.016f)
     {
-        var fresh = !_chase || _flightChase;
-        if (!_chase) { _yaw = carYaw; _pitch = -0.22f; }
-        _chase = true; _flightChase = false; FovBoost = 0;
+        var fresh = !_chase || _flightChase || _cockpit; // from the cockpit view too: the camera starts at its distance, it does not ease out from the seat
+        if (!_chase || _cockpit) { _yaw = carYaw; _pitch = -0.22f; } // from the cockpit view too: the orbit starts behind the car
+        _chase = true; _flightChase = false; _cockpit = false; FovBoost = 0;
         GlobalPosition = carPos;
         _pitch = Mathf.Clamp(_pitch, -1.2f, 0.6f);
         if (!_camera.IsInsideTree()) return; // headless bots have no camera
@@ -167,8 +167,12 @@ public partial class Player : CharacterBody3D
     /// <param name="speedFraction">Its speed over its top speed, 0 to 1.</param>
     public void FlightChase(Vector3 at, float yaw, float pitch, float roll, float speedFraction, FlightCameraDef cam, float dt)
     {
-        if (!_chase || !_flightChase) { _yaw = yaw; _pitch = -0.14f; _chaseFocus = at; _chaseFocusVel = Vector3.Zero; }
-        _chase = true; _flightChase = true;
+        if (!_chase || !_flightChase)
+        {
+            if (!_cockpit) _yaw = yaw; // out of the cockpit view the look is the heading already asked for: it stays
+            _pitch = -0.14f; _chaseFocus = at; _chaseFocusVel = Vector3.Zero;
+        }
+        _chase = true; _flightChase = true; _cockpit = false;
         GlobalPosition = at;
         _pitch = Mathf.Clamp(_pitch, -1.1f, 0.5f);
         if (!_camera.IsInsideTree()) return; // headless bots have no camera
@@ -203,17 +207,54 @@ public partial class Player : CharacterBody3D
     /// <summary>Turret camera (a gunship's owner): the camera sits at the turret and looks along the given world yaw and pitch. The body does not move; <see cref="EndChase"/> ends it.</summary>
     public void Turret(Vector3 at, float yaw, float pitch)
     {
-        _chase = true; _flightChase = false; FovBoost = 0;
+        _chase = true; _flightChase = false; _cockpit = false; FovBoost = 0;
         if (!_camera.IsInsideTree()) return;
         _camera.GlobalPosition = at;
         _camera.GlobalRotation = new Vector3(pitch, yaw, 0);
+    }
+
+    bool _cockpit;
+    float _cockpitYaw;
+    /// <summary>How far the head turns from straight ahead in a road vehicle's cockpit view (pi: all the way round, to see the riders), and how far the look goes down and up in any, radians.</summary>
+    const float CockpitYawLimit = Mathf.Pi, CockpitPitchDown = -0.9f, CockpitPitchUp = 0.7f;
+
+    /// <summary>
+    /// The cockpit view (prototype, ticket #219): the camera sits at <paramref name="eye"/>, a point of the vehicle's cockpit rig, and looks
+    /// where the mouse points inside the vehicle's <paramref name="frame"/>. In a road vehicle the look turns with the vehicle
+    /// (<paramref name="lookTurnsWithVehicle"/>): it starts straight ahead, stays on the same part of the cab through a corner and turns as
+    /// far as <see cref="CockpitYawLimit"/>. In a helicopter the look is the heading the nose swings to, so it stays where the hand put it and the
+    /// airframe turns under it. The keys alone steer, as with the chase camera. <see cref="EndChase"/> ends it.
+    /// </summary>
+    /// <param name="bodyAt">Where the body rides (the vehicle's origin, as with the chase cameras).</param>
+    /// <param name="frame">The basis the look is taken in: the vehicle's own (the view tilts with it), or its heading alone (the view stays level).</param>
+    /// <param name="frameYaw">The vehicle's heading.</param>
+    public void Cockpit(Vector3 bodyAt, Vector3 eye, Basis frame, float frameYaw, bool lookTurnsWithVehicle)
+    {
+        if (!_chase || !_cockpit)
+        {
+            if (lookTurnsWithVehicle || !_chase) _yaw = frameYaw; // a pilot coming from the chase camera keeps the heading asked for
+            _pitch = 0;
+            _cockpitYaw = frameYaw;
+        }
+        if (lookTurnsWithVehicle)
+        {
+            _yaw += Mathf.Wrap(frameYaw - _cockpitYaw, -Mathf.Pi, Mathf.Pi);
+            _yaw = frameYaw + Mathf.Clamp(Mathf.Wrap(_yaw - frameYaw, -Mathf.Pi, Mathf.Pi), -CockpitYawLimit, CockpitYawLimit);
+        }
+        _cockpitYaw = frameYaw;
+        _pitch = Mathf.Clamp(_pitch, CockpitPitchDown, CockpitPitchUp);
+        _chase = true; _cockpit = true; _flightChase = false; FovBoost = 0;
+        GlobalPosition = bodyAt;
+        if (!_camera.IsInsideTree()) return; // headless bots have no camera
+        _camera.GlobalPosition = eye;
+        _camera.GlobalBasis = frame * Basis.FromEuler(new Vector3(_pitch, Mathf.Wrap(_yaw - frameYaw, -Mathf.Pi, Mathf.Pi), 0));
     }
 
     /// <summary>Back to the first-person camera, looking where the car pointed.</summary>
     public void EndChase(float yaw)
     {
         if (!_chase) return;
-        _chase = false; _flightChase = false; FovBoost = 0;
+        _chase = false; _flightChase = false; _cockpit = false; FovBoost = 0;
         _yaw = yaw; _pitch = 0;
         _camera.Rotation = new Vector3(0, _yaw, 0);
         SetStanceShape(_state.Stance);

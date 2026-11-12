@@ -210,6 +210,7 @@ public static class InputBindings
         ("slot_1", Binding.Key((int)Key.Key1)), ("slot_2", Binding.Key((int)Key.Key2)), ("slot_3", Binding.Key((int)Key.Key3)), ("slot_4", Binding.Key((int)Key.Key4)), ("slot_5", Binding.Key((int)Key.Key5)),
         ("zoom", Binding.MouseButton((int)MouseButton.Right)),
         ("headlights", Binding.Key((int)Key.H)),
+        ("vehicle_view", Binding.Key((int)Key.V)),
         ("killstreak", Binding.Key((int)Key.Q)),
         ("sandbox_panel", Binding.Key((int)Key.F4)),
     };

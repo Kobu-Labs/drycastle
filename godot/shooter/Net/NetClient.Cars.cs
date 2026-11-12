@@ -149,7 +149,9 @@ public partial class NetClient
         var flakGunner = false;
         FlightState? flown = null; // the helicopter the local player flies, for the pilot's readout and prompt
         var doorGunner = false;    // the local player is at a door gun: its camera and ammo readout are on
-        var chased = false;        // the local player flies: the helicopter's chase camera is on this frame
+        var chased = false;        // the local player flies: the helicopter's chase camera (or its cockpit view) is on this frame
+        var cockpit = false;       // the local player drives in the cockpit view this frame
+        var hasCockpit = false;    // the local player drives a vehicle that has a cockpit view: the prompt names the view key
         var dt = (float)GetProcessDeltaTime();
         foreach (var v in _cars.Values)
         {
@@ -171,13 +173,20 @@ public partial class NetClient
             if (v.Driver == _myId && _driving && _me != null)
             {
                 _carYaw = rot.Y;
-                if (flies) { ChaseFlight(v, p, rot, dt); flown = FlightOf(v); chased = true; } else _me.Chase(p, s.Yaw, Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null, dt);
+                hasCockpit = CockpitOf(v) != null;
+                if (CockpitFrame(v, p, rot, dt)) cockpit = true; // the view from the seat, in the place of the chase camera
+                else
+                {
+                    if (flies) ChaseFlight(v, p, rot, dt); else _me.Chase(p, s.Yaw, Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null, dt);
+                    ShowSelfInCar(v);
+                }
+                if (flies) { flown = FlightOf(v); chased = true; }
                 kmh = v.Kmh;
-                ShowSelfInCar(v);
             }
             else if (!flakMine && _driving && _me != null && _seats is { Mine: > 0 } st && st.CarId == v.Id) { RideSeat(v, st.Mine); kmh = v.Kmh; } // another seat: first person from it, the speed shown as the driver's is
         }
         if (!_driving) HideSelfInCar();
+        if (!cockpit) EndCockpit();
         if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) _me?.EndChase(_me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
         if (!_driving && _gunship == null) _me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
         _hud?.SetSeats(SeatPanel());
@@ -186,6 +195,7 @@ public partial class NetClient
         else _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
         string? prompt = null;
         if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        if (hasCockpit && prompt != null && _gunship == null && !_controlling) prompt = WithViewHint(prompt);
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
         _hud?.SetPrompt(TurretPrompt() ?? prompt ?? CratePrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
     }
