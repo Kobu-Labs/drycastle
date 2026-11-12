@@ -41,6 +41,13 @@ public partial class NetServer
         BroadcastEvent(EventKind.PelletFan, WeaponCodec.Encode(new PelletFanMsg(c.Id, weaponIdx, N(eye), aim, seed, cone)));
         foreach (var (id, t) in totals) Deal(c.Id, weaponIdx, id, t.Damage, t.Head, false);
 
+        // a pellet that hit no player damages the pane it crossed where it stopped (ADR 0007); the changes of a tick go out as one event per pane
+        for (var i = 0; i < dirs.Length; i++)
+        {
+            if (walls[i] > range || GunnerCover.Raycast(N(eye), dirs[i], range, walls[i], targets, c.Id, exposed[i], pastHull[i]) != null) continue;
+            ShotGlass(cars[i], eye, dirsG[i], walls[i], HitMath.PelletDamage(w, walls[i], false));
+        }
+
         // pellets that stopped on a car (and no player was closer) damage the car, summed per car
         if (Vehicles == null) return;
         var carDamage = new Dictionary<ServerCar, float>();

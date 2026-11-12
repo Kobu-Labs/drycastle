@@ -147,6 +147,7 @@ public partial class NetClient : Node
         _rockets.Clear();
         foreach (var v in _cars.Values) if (GodotObject.IsInstanceValid(v.Node)) v.Node.QueueFree();
         _cars.Clear(); _flights.Clear(); _pilot = null; // the probe is under Owned and goes with it
+        GlassTeardown();
         if (_me != null && GodotObject.IsInstanceValid(_me)) _me.QueueFree();
         _me = null;
         FreeOwned();
@@ -804,6 +805,12 @@ public partial class NetClient : Node
                 break;
             case EventKind.HelperWarning when HelperWarningCodec.Decode(payload) is { } hw:
                 OnHelperWarning(hw);
+                break;
+            case EventKind.GlassPane when GlassCodec.DecodePane(payload) is { } gp:
+                OnGlassPane(gp);
+                break;
+            case EventKind.GlassSync when GlassCodec.DecodeSync(payload) is { } gsync:
+                OnGlassSync(gsync);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 if (KeepEventLogs) _hitLog.Add((Now, h));

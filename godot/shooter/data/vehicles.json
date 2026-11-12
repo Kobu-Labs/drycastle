@@ -16,6 +16,12 @@
   },
   "vehicles": [
     { "id": "car", "top_speed": 44.4, "acceleration": 5.5, "brake": 9.5, "turn_radius": 3.6, "high_speed_radius_factor": 10, "max_lateral_accel": 10, "mass": 1200, "hp": 300, "hood": [0, 0.95, -1.3], "spawn_count": 12, "half_width": 1.28, "half_length": 2.18, "height": 2.2,
+      "glass": [
+        { "id": "windscreen", "centre": [0, 1.72, -0.65], "normal": [0, 0.625, -0.781], "size": [1.46, 0.92] },
+        { "id": "rear", "centre": [0, 1.785, 1.105], "normal": [0, 0.371, 0.928], "size": [1.44, 0.57] },
+        { "id": "side_left", "centre": [-0.867, 1.7, -0.24], "normal": [-0.981, 0.196, 0], "size": [0.96, 0.7] },
+        { "id": "side_right", "centre": [0.867, 1.7, -0.24], "normal": [0.981, 0.196, 0], "size": [0.96, 0.7] }
+      ],
       "lights": { "head": [[-0.75, 0.62, -2.12], [0.75, 0.62, -2.12]], "tail": [[-0.75, 0.66, 2.12], [0.75, 0.66, 2.12]], "beam_range": 40, "beam_angle": 26 } },
     {
       "id": "motorcycle", "top_speed": 36.1, "acceleration": 8.5, "brake": 10, "turn_radius": 2.8, "max_lateral_accel": 11, "mass": 230, "hp": 120, "hood": [0, 0.8, -0.45], "spawn_count": 3, "half_width": 0.42, "half_length": 1.05, "height": 0.9,
@@ -34,6 +40,12 @@
       "model": "kenney-car-kit/suv.glb", "model_scale": 1.7, "model_yaw_deg": 180, "model_offset": [0, 0, 0], "tint": [0.33, 0.36, 0.2],
       "seats": [{ "role": "driver", "offset": [0, 0, 0] }, { "role": "gunner", "offset": [0, 1.25, 0.25] }],
       "gun": { "damage": 14, "fire_interval": 0.1, "range": 220, "spread_degrees": 1.2, "magazine": 60, "reserve": 240, "reload_time": 2.5 },
+      "glass": [
+        { "id": "windscreen", "centre": [0, 1.635, -0.885], "normal": [0, 0.625, -0.781], "size": [1.5, 0.7] },
+        { "id": "rear", "centre": [0, 1.918, 1.731], "normal": [0, 0.371, 0.928], "size": [1.35, 0.29] },
+        { "id": "side_left", "centre": [-0.88, 1.635, -0.41], "normal": [-0.981, 0.196, 0], "size": [0.96, 0.56] },
+        { "id": "side_right", "centre": [0.88, 1.635, -0.41], "normal": [0.981, 0.196, 0], "size": [0.96, 0.56] }
+      ],
       "lights": { "head": [[-0.85, 0.7, -2.1], [0.85, 0.7, -2.1]], "tail": [[-0.85, 0.75, 2.1], [0.85, 0.75, 2.1]], "beam_range": 40, "beam_angle": 26 }
     },
     {
@@ -66,6 +78,12 @@
         "magazine": 40, "reserve": 400, "reload_time": 4, "min_elevation_deg": 5, "max_elevation_deg": 85,
         "tracer_length": 30, "puff_radius": 10
       },
+      "glass": [
+        { "id": "windscreen_left", "centre": [-0.52, 2.036, -1.97], "normal": [0, 0.539, -0.842], "size": [0.93, 0.475] },
+        { "id": "windscreen_right", "centre": [0.52, 2.036, -1.97], "normal": [0, 0.539, -0.842], "size": [0.93, 0.475] },
+        { "id": "side_left", "centre": [-1.113, 2.028, -1.469], "normal": [-0.962, 0.272, 0], "size": [1.09, 0.405] },
+        { "id": "side_right", "centre": [1.113, 2.028, -1.469], "normal": [0.962, 0.272, 0], "size": [1.09, 0.405] }
+      ],
       "lights": { "head": [[-0.98, 1.47, -3.13], [0.98, 1.47, -3.13]], "tail": [[-1.06, 0.97, 3.5], [1.06, 0.97, 3.5]], "beam_range": 45, "beam_angle": 26 }
     },
     {
@@ -73,6 +91,24 @@
       "model": "suchohrad-generated-models/bus.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Red", "paints": ["Red"],
       "seats": [{ "role": "driver", "offset": [-0.7, 0.62, -4.825] }, { "role": "passenger", "offset": [0.53, 0.38, -2.175] }, { "role": "passenger", "offset": [-0.97, 0.86, 1.825] }, { "role": "passenger", "offset": [0, 0.86, 4.905] }],
+      "glass": [
+        { "id": "windscreen", "centre": [0, 1.835, -5.98], "normal": [0, 0.07, -0.9975], "size": [2.07, 1.57] },
+        { "id": "rear", "centre": [0, 2.155, 6.017], "normal": [0, 0, 1], "size": [2.0, 0.81] },
+        { "id": "left_1", "centre": [-1.263, 1.805, -4.838], "normal": [-1, 0, 0], "size": [1.325, 1.51] },
+        { "id": "left_2", "centre": [-1.263, 1.98, -3.235], "normal": [-1, 0, 0], "size": [1.88, 1.16] },
+        { "id": "left_3", "centre": [-1.263, 1.98, -1.52], "normal": [-1, 0, 0], "size": [1.55, 1.16] },
+        { "id": "left_4", "centre": [-1.263, 1.98, 0.035], "normal": [-1, 0, 0], "size": [1.56, 1.16] },
+        { "id": "left_5", "centre": [-1.263, 1.98, 1.595], "normal": [-1, 0, 0], "size": [1.56, 1.16] },
+        { "id": "left_6", "centre": [-1.263, 1.98, 3.225], "normal": [-1, 0, 0], "size": [1.7, 1.16] },
+        { "id": "right_2", "centre": [1.263, 1.98, -3.235], "normal": [1, 0, 0], "size": [1.88, 1.16] },
+        { "id": "right_3", "centre": [1.263, 1.98, -1.52], "normal": [1, 0, 0], "size": [1.55, 1.16] },
+        { "id": "right_5", "centre": [1.263, 1.98, 1.595], "normal": [1, 0, 0], "size": [1.56, 1.16] },
+        { "id": "right_6", "centre": [1.263, 1.98, 3.225], "normal": [1, 0, 0], "size": [1.7, 1.16] },
+        { "id": "door_front_1", "centre": [1.257, 1.298, -5.152], "normal": [1, 0, 0], "size": [0.556, 1.715] },
+        { "id": "door_front_2", "centre": [1.257, 1.298, -4.498], "normal": [1, 0, 0], "size": [0.556, 1.715] },
+        { "id": "door_mid_1", "centre": [1.257, 1.298, -0.292], "normal": [1, 0, 0], "size": [0.556, 1.715] },
+        { "id": "door_mid_2", "centre": [1.257, 1.298, 0.362], "normal": [1, 0, 0], "size": [0.556, 1.715] }
+      ],
       "lights": { "head": [[-0.875, 0.7, -6.045], [0.875, 0.7, -6.045]], "tail": [[-1.04, 1.17, 6.045], [1.04, 1.17, 6.045]], "beam_range": 45, "beam_angle": 26 }
     },
     {
@@ -93,6 +129,12 @@
         "rotor_radius": 4.5, "rotor_height": 3.4, "rotor_thickness": 0.3,
         "camera": { "distance": 13, "height": 3.6, "follow": 9, "max_lag": 3.5, "tilt": 0.4, "fov_boost_deg": 9 }
       },
+      "glass": [
+        { "id": "windscreen_left", "centre": [-0.58, 1.845, -2.379], "normal": [0, 0.761, -0.649], "size": [1.06, 0.986] },
+        { "id": "windscreen_right", "centre": [0.58, 1.845, -2.379], "normal": [0, 0.761, -0.649], "size": [1.06, 0.986] },
+        { "id": "door_left", "centre": [-1.176, 1.76, -1.995], "normal": [-1, 0, 0], "size": [1.39, 0.72] },
+        { "id": "door_right", "centre": [1.176, 1.76, -1.995], "normal": [1, 0, 0], "size": [1.39, 0.72] }
+      ],
       "lights": { "head": [[0, 0.58, -3.1]], "tail": [[0, 3.66, 8.59]], "beam_range": 60, "beam_angle": 30 }
     }
   ]

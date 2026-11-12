@@ -145,7 +145,8 @@ files below is missing.
 | `turret.json` | sentry turret: hp, lifetime, placement, aim and fire numbers | `TurretEntity.cs` |
 | `camo.json` | camouflage presets, patterns, tuft (ghillie) settings and the concealment numbers | `CamoSpec.cs`, `CamoEditor.cs` |
 | `environment.json` | day/night clock start, day length and the minimum ambient light | `EnvironmentConfig.cs` |
-| `vehicles.json` | vehicle types: speed, handling, hp, seats, gun, `lights` blocks | `VehicleData.cs` |
+| `vehicles.json` | vehicle types: speed, handling, hp, seats, gun, `lights` blocks, `glass` panes | `VehicleData.cs` |
+| `glass.json` | glass panes: hit points, crack stages, blast damage, whether a shattered vehicle pane exposes the riders, the shatter animation (see `docs/glass.md`) | `GlassConfig.cs` |
 | `match.json` | round rules (see the match options table above) | `MatchData.cs` |
 | `sounds.json` | sound ids and file names (validated against `assets/` by the server) | `SoundData.cs` |
 
