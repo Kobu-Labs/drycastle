@@ -28,7 +28,7 @@ public partial class NetServer
     public int Bots;
 
     /// <summary>Most bots a server takes (they need no peer slot, so this is apart from <see cref="MaxPeers"/>).</summary>
-    public const int MaxBots = 32;
+    public const int MaxBots = 64;
 
     static readonly string[] BotNames =
     {
