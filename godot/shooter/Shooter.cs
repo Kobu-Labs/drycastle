@@ -58,6 +58,17 @@ public partial class Shooter : Node3D
     GameData _data = null!;
     int _frames;
 
+    // Client frame cap: VSync already limits to the refresh rate; this stops VSync-off from pegging the GPU, and idles in the background.
+    const int FocusedFps = 120, UnfocusedFps = 20;
+    bool _capFps;
+
+    public override void _Notification(int what)
+    {
+        if (!_capFps) return;
+        if (what == NotificationApplicationFocusOut) Engine.MaxFps = UnfocusedFps;
+        else if (what == NotificationApplicationFocusIn) Engine.MaxFps = FocusedFps;
+    }
+
     public override void _Ready()
     {
         var cfg = Config.Parse(OS.GetCmdlineUserArgs());
@@ -72,6 +83,7 @@ public partial class Shooter : Node3D
         if (cfg.Str("menu-shots") != "") { _ = MenuShots.Run(this, cfg.Str("menu-shots")); return; }
         if (role == "client")
         {
+            if (!_smoke && !_smokeMove && DisplayServer.GetName() != "headless") { _capFps = true; Engine.MaxFps = FocusedFps; }
             try { GD.Print($"sounds: {Sfx.Init(this).SoundCount} events, table and files ok"); }
             catch (Exception e)
             {

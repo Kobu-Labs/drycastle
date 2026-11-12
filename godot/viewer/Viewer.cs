@@ -78,7 +78,13 @@ public partial class Viewer : Node3D
             _editor = new EditorMode { Name = "Editor", Map = _map, Player = _player, Watcher = _watcher, EditsPath = _watcher!.EditsPath };
             AddChild(_editor);
             // --editor starts in editor mode; the smoke and screenshot drivers switch it themselves
-            if (_flags.Contains("editor") && !_flags.Contains("editor-smoke")) _editor.SetActive(true);
+            if (_flags.Contains("editor") && !_flags.Contains("editor-smoke"))
+            {
+                _editor.SetActive(true);
+                // Interactive editing: don't render flat out (this pegged the GPU). Smoke/screenshot drivers stay uncapped.
+                DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Enabled);
+                Engine.MaxFps = FocusedFps;
+            }
         }
 
         if (_flags.Contains("editor-smoke")) _ = RunEditorSmoke();
@@ -90,6 +96,15 @@ public partial class Viewer : Node3D
         else if (_flags.Contains("regions-smoke")) _ = RunRegionsSmoke();
         else if (_flags.Contains("smoke")) _ = RunSmoke(rng);
         else if (_opts.ContainsKey("screenshot")) _ = RunScreenshot();
+    }
+
+    const int FocusedFps = 60, UnfocusedFps = 10;
+
+    public override void _Notification(int what)
+    {
+        if (_editor == null || !_flags.Contains("editor") || _flags.Contains("editor-smoke")) return;
+        if (what == NotificationApplicationFocusOut) Engine.MaxFps = UnfocusedFps;
+        else if (what == NotificationApplicationFocusIn) Engine.MaxFps = FocusedFps;
     }
 
     public override void _ExitTree() => _map.FreeCaches();
