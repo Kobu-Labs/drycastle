@@ -40,13 +40,15 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # 0.8.0: ground detail (detail stage): per chunk a "detail_patches" node (flat colours) and "detail_patches_tex_<id>" nodes
 # (draped patches of dirt, gravel, leaf litter, beds, furrows, tones), and clutter.json (files.clutter: instances per chunk
 # and kind) with clutter_meshes.glb (files.clutter_meshes: one tiny mesh per kind) for instanced rendering near the player.
-MAP_VERSION_BASE = "0.8.0"
+# 0.9.0: meadow.bin (files.meadow): the density raster the game turns into near-player clutter on fields and in forests
+# (detail/meadow.py). Optional: a loader that does not know it just draws the stored clutter.
+MAP_VERSION_BASE = "0.9.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 TREES_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
                "props.json", "spawns.json", "lamps.json", "detail.json", "detail_patches.npy",
-               "detail_patches.json")
+               "detail_patches.json", "detail_meadow.bin")
 NOT_GENERATED_NOTE = "Landmarks, navmesh and water surface meshes are not generated (water.json holds the water bodies). Textures are not in the map: textured nodes name a texture of the asset library."
 
 
@@ -297,6 +299,13 @@ def run_export(
     else:
         for stale in ("clutter.json", "clutter_meshes.glb"):
             (out_dir / stale).unlink(missing_ok=True)
+    meadow_src = work_dir / "detail_meadow.bin"
+    if meadow_src.is_file():
+        # density raster of the meadow clutter (detail stage); copied verbatim, the game generates the instances from it
+        (out_dir / "meadow.bin").write_bytes(meadow_src.read_bytes())
+        files["meadow"] = "meadow.bin"
+    else:
+        (out_dir / "meadow.bin").unlink(missing_ok=True)
     stale_windows = out_dir / "windows.json"
     stale_windows.unlink(missing_ok=True)
     if scene.windows:

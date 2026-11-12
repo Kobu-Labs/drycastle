@@ -46,6 +46,7 @@ from suchohrad_pipeline.assets import load_manifest
 from suchohrad_pipeline.buildings import footprint_polygon, hex_to_rgb
 from suchohrad_pipeline.config import DEFAULT_AREA, area_paths
 from suchohrad_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
+from suchohrad_pipeline import meadow as meadow_mod
 from suchohrad_pipeline.meshes import Mesh
 from suchohrad_pipeline.props import chunk_of, seeded
 from suchohrad_pipeline.regions import drape, plan_regions
@@ -324,7 +325,16 @@ def free_area(ctx: ParcelContext, cfg: dict, trunks: bool = True) -> BaseGeometr
     """The parcel without buildings (and a wall margin), fences, trunks, placed objects, regions and the road.
 
     ``trunks=False`` (forest, field) leaves the trunk footprints in the patches (nobody sees the ground under
-    a trunk) and keeps the polygons simple; the clutter then filters its points by :func:`_trunk_filter`."""
+    a trunk) and keeps the polygons simple; the clutter then filters its points by :func:`_trunk_filter`.
+
+    The result is kept on the context (the meadow raster asks for the same ground as the recipe)."""
+    cache = ctx.__dict__.setdefault("_free", {})
+    if trunks not in cache:
+        cache[trunks] = _free_area(ctx, cfg, trunks)
+    return cache[trunks]
+
+
+def _free_area(ctx: ParcelContext, cfg: dict, trunks: bool) -> BaseGeometry:
     # square corners and flat ends: few vertices, so the patches cut against this have few triangles
     blocked = [b.buffer(float(cfg["wall_clearance_m"]), join_style="mitre") for b in ctx.buildings]
     blocked += [f.buffer(float(cfg["fence_clearance_m"]), cap_style="flat", join_style="mitre") for f in ctx.fences]
@@ -978,6 +988,7 @@ class VillageDetail:
     patches: np.ndarray  # (n, _PATCH_ROW)
     textures: list[str]
     stats: dict = field(default_factory=dict)
+    meadow: "meadow_mod.Meadow | None" = None  # density raster of the clutter the game generates (field, forest)
 
 
 def cap_clutter(chunks: dict, caps: dict[str, int]) -> dict:
@@ -1025,6 +1036,10 @@ def build_village_detail(
     chunks: dict[tuple[int, int], dict[str, list[list[float]]]] = {}
     rows = []
     by_type: dict[str, dict[str, int]] = {}
+    mcfg = v.cfg["meadow"]
+    meadow = meadow_mod.new_meadow(mcfg, v.chunk_m)
+    stored = set(mcfg["stored_kinds"])
+    meadow_cells = 0
     t0 = time.time()
     for n, parcel in enumerate(sorted(v.parcels, key=lambda p: p["id"])):
         atype = area_type(parcel)
@@ -1032,6 +1047,11 @@ def build_village_detail(
             continue
         for ctx in v.contexts(parcel):
             res = RECIPES[atype](ctx, v.cfg)
+            if atype in meadow_mod.MEADOW_TYPES:
+                # the game generates the dense kinds from the raster; the recipe's own instances stay only for the rest
+                res.clutter = [c for c in res.clutter if c["kind"] in stored]
+                band = float(v.cfg[atype].get("edge_band_m", 0.0))
+                meadow_cells += meadow_mod.add_parcel(meadow, ctx, res, atype, free_area(ctx, v.cfg, trunks=False), mcfg, band)
             flat, tex = patch_meshes(res, v.terrain, lift, by_type.setdefault(atype, {}))
             rows.append(patch_rows(flat, tex, textures))
             for c in res.clutter:
@@ -1051,9 +1071,12 @@ def build_village_detail(
         "max_per_chunk": {k: max((len(kinds.get(k, [])) for kinds in chunks.values()), default=0) for k in CLUTTER_KINDS},
         "patch_triangles": len(patches),
         "patch_triangles_by_type": {a: dict(sorted(l.items())) | {"total": sum(l.values())} for a, l in sorted(by_type.items())},
+        "meadow_cells": meadow_cells,
+        "meadow_expected": {k: round(x) for k, x in meadow.expected().items()},
+        "meadow_busiest": meadow.busiest({"tuft": 70, "fern": 70, "flower": 55, "pebble": 40, "litter": 40}),
         "seconds": round(time.time() - t0, 1),
     }
-    return VillageDetail(v.chunk_m, chunks, patches, textures, stats)
+    return VillageDetail(v.chunk_m, chunks, patches, textures, stats, meadow)
 
 
 def clutter_document(detail: VillageDetail) -> dict:
@@ -1075,6 +1098,10 @@ def clutter_document(detail: VillageDetail) -> dict:
 def write_detail(work_dir: Path, detail: VillageDetail) -> None:
     (work_dir / "detail.json").write_text(json.dumps(clutter_document(detail), separators=(",", ":")) + "\n")
     np.save(work_dir / "detail_patches.npy", detail.patches)
+    if detail.meadow is not None and detail.meadow.chunks:
+        (work_dir / "detail_meadow.bin").write_bytes(meadow_mod.encode(detail.meadow))
+    else:
+        (work_dir / "detail_meadow.bin").unlink(missing_ok=True)
     (work_dir / "detail_patches.json").write_text(
         json.dumps({"format_version": DETAIL_FORMAT_VERSION, "textures": detail.textures,
                     "row": "x0 y0 z0 x1 y1 z1 x2 y2 z2 r g b u0 v0 u1 v1 u2 v2 texture_index(-1: flat colour)"}, indent=1) + "\n"
@@ -1126,8 +1153,13 @@ def run_parcel(
     rules_path: Path = DEFAULT_RULES,
     area: str | None = None,
     edits_path: Path = DEFAULT_EDITS,
+    with_meadow: bool = False,
+    meadow_window: float = 56.0,
 ) -> tuple[ParcelContext, DetailResult]:
-    """The detail of one parcel, with the same inputs and recipe as the stage."""
+    """The detail of one parcel, with the same inputs and recipe as the stage. ``with_meadow`` (field and forest
+    only) swaps the recipe's dense kinds for what the game would generate from the raster of this parcel (the
+    instances of :func:`meadow.generate`, minus those within a trunk's reach), for the preview, within a
+    ``meadow_window`` metre square round the parcel's representative point (a forest is too big to draw)."""
     v = Village(work_dir, rules_path, area, edits_path)
     parcel = next((p for p in v.parcels if p["id"] == parcel_id), None)
     if parcel is None:
@@ -1136,7 +1168,22 @@ def run_parcel(
     if atype is None:
         raise ValueError(f"parcel {parcel_id} ({parcel['kind']}) has no ground detail")
     ctx = next(v.contexts(parcel))
-    return ctx, RECIPES[atype](ctx, v.cfg)
+    res = RECIPES[atype](ctx, v.cfg)
+    if with_meadow and atype in meadow_mod.MEADOW_TYPES:
+        mcfg = v.cfg["meadow"]
+        m = meadow_mod.new_meadow(mcfg, v.chunk_m)
+        meadow_mod.add_parcel(m, ctx, res, atype, free_area(ctx, v.cfg, trunks=False), mcfg, float(v.cfg[atype].get("edge_band_m", 0.0)))
+        res.clutter = [c for c in res.clutter if c["kind"] in set(mcfg["stored_kinds"])]
+        rp = ctx.polygon.representative_point()
+        h = meadow_window / 2
+        x0, y0, x1, y1 = max(rp.x - h, ctx.polygon.bounds[0]), max(rp.y - h, ctx.polygon.bounds[1]), min(rp.x + h, ctx.polygon.bounds[2]), min(rp.y + h, ctx.polygon.bounds[3])
+        cell = m.cell_m
+        trunks = shapely.points([(x, y) for x, y, _ in ctx.trees]) if ctx.trees else None
+        for c in meadow_mod.generate(m, math.floor(x0 / cell), math.ceil(x1 / cell), math.floor(y0 / cell), math.ceil(y1 / cell)):
+            if trunks is not None and len(shapely.STRtree(trunks).query(Point(c["x"], c["y"]), predicate="dwithin", distance=m.trunk_reach_m)):
+                continue
+            res.clutter.append({**c, "z": 0.0})
+    return ctx, res
 
 
 # --- meshes ---------------------------------------------------------------------------------
@@ -1193,5 +1240,7 @@ def run(force: bool = False, area: str = DEFAULT_AREA, edits: str | None = None,
         + ", ".join(f"{k}: {n}" for k, n in s["clutter"].items())
         + f" ({s['seconds']} s)"
     )
+    print(f"detail: meadow: {s['meadow_cells']} cells; expected instances " + ", ".join(f"{k}: {n}" for k, n in s["meadow_expected"].items())
+          + "; busiest 70 m disc " + ", ".join(f"{k}: {n}" for k, n in s["meadow_busiest"].items()), file=sys.stderr)
     print("detail: patch triangles by area type: " + "; ".join(f"{a} {l['total']}" for a, l in s["patch_triangles_by_type"].items()), file=sys.stderr)
     return 0

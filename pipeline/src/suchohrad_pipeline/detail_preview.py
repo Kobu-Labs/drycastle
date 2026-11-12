@@ -195,9 +195,10 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--window", type=float, default=40.0, help="side of the square shown of a parcel bigger than this, metres")
     ap.add_argument("--px-per-m", type=float, default=28.0)
     ap.add_argument("--zoom", type=float, default=70.0, help="pixels per metre of the close-up")
+    ap.add_argument("--meadow", action="store_true", help="field and forest: draw what the game generates from the meadow raster")
     a = ap.parse_args(argv)
     paths = area_paths(a.area)
-    ctx, res = run_parcel(a.parcel, a.work or paths.work, area=a.area)
+    ctx, res = run_parcel(a.parcel, a.work or paths.work, area=a.area, with_meadow=a.meadow)
     cfg = load_section("detail", area=a.area)
     bcfg, tcfg = {}, load_section("props", area=a.area)["trees"]
     a.out.mkdir(parents=True, exist_ok=True)
@@ -212,11 +213,12 @@ def main(argv: list[str] | None = None) -> None:
     full = Image.new("RGB", (whole.width, whole.height + leg.height))
     full.paste(whole, (0, 0))
     full.paste(leg, (0, whole.height))
-    p1 = a.out / f"detail_{a.parcel}.png"
+    suffix = "_meadow" if a.meadow else ""
+    p1 = a.out / f"detail_{a.parcel}{suffix}.png"
     full.save(p1)
     zbox = densest_box(res, 14.0, (minx, miny, maxx, maxy))
     zoom = render(ctx, res, cfg, zbox, a.zoom, bcfg, tcfg, f"{a.parcel} ({ctx.kind}) close-up, 14 m square")
-    p2 = a.out / f"detail_{a.parcel}_zoom.png"
+    p2 = a.out / f"detail_{a.parcel}{suffix}_zoom.png"
     zoom.save(p2)
     print(json.dumps({"parcel": a.parcel, "counts": counts, "images": [str(p1), str(p2)]}))
 

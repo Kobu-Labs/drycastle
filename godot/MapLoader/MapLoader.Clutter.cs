@@ -36,13 +36,31 @@ public sealed partial class MapLoader
         if (_clutterWarned.Add(key)) Warn(message);
     }
 
-    /// <summary>Builds the clutter, yielding the fraction done after each chunk's worth. <paramref name="manifest"/> is the manifest's root element.</summary>
+    /// <summary>Builds the clutter, yielding the fraction done after each chunk's worth. <paramref name="manifest"/> is the manifest's root element.
+    /// Stored clutter (clutter.json) and the meadow (meadow.bin, generated near the player, see MapLoader.Meadow.cs) are both optional.</summary>
     IEnumerable<float> BuildClutterSteps(string mapDir, JsonElement manifest)
     {
         FreeClutter();
+        FreeMeadow();
         if (CollisionOnly || ClutterScale <= 0f) yield break;
-        if (!manifest.TryGetProperty("files", out var files) || !files.TryGetProperty("clutter", out var cf) || cf.GetString() is not { } clutterFile)
-            yield break;
+        if (!manifest.TryGetProperty("files", out var files)) yield break;
+        string? Listed(string key) => files.TryGetProperty(key, out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() : null;
+        var clutterFile = Listed("clutter");
+        var meadowFile = Listed("meadow");
+        if (clutterFile == null && meadowFile == null) yield break;
+
+        var meshFile = Listed("clutter_meshes");
+        var meshNames = new[] { "tuft", "flower", "pebble", "rock", "leaf", "stick", "fern" };
+        var meshes = meshFile == null ? new Dictionary<string, Mesh>() : LoadClutterMeshes(Path.Combine(mapDir, meshFile), meshNames.ToDictionary(n => n, n => n));
+        if (meshes.Count == 0) { ClutterWarn("meshes", "clutter: no meshes (files.clutter_meshes missing or empty); no clutter drawn"); yield break; }
+
+        if (clutterFile != null)
+            foreach (var f in BuildStoredClutter(mapDir, clutterFile, meshFile, meshes)) yield return 0.9f * f;
+        if (meadowFile != null) InitMeadow(Path.Combine(mapDir, meadowFile), meshes);
+    }
+
+    IEnumerable<float> BuildStoredClutter(string mapDir, string clutterFile, string? meshFile, Dictionary<string, Mesh> meshes)
+    {
         var path = Path.Combine(mapDir, clutterFile);
         if (!File.Exists(path)) { ClutterWarn("file", $"clutter: {clutterFile} is listed in the manifest but missing"); yield break; }
 
@@ -54,10 +72,6 @@ public sealed partial class MapLoader
             yield break;
         }
         if (doc.Groups.Count == 0) yield break;
-
-        var meshFile = files.TryGetProperty("clutter_meshes", out var mf) ? mf.GetString() : null;
-        var meshes = meshFile == null ? new Dictionary<string, Mesh>() : LoadClutterMeshes(Path.Combine(mapDir, meshFile), doc.KindMesh);
-        if (meshes.Count == 0) { ClutterWarn("meshes", "clutter: no meshes (files.clutter_meshes missing or empty); no clutter drawn"); yield break; }
 
         var done = 0;
         foreach (var g in doc.Groups)

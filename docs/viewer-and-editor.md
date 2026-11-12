@@ -101,6 +101,16 @@ child of the chunk root): no shadows, no collision, the shared flat material, a 
 A headless load (`CollisionOnly`, the dedicated server) and a map without the files build nothing and print nothing. `SUCHOHRAD_CLUTTER=0` (or `off`) turns it off; a number scales the
 distances (`0.5` = half); `MapLoader.ClutterScale` is the same setting in code (set before `Load`). Old loaders ignore the files.
 
+### Meadow clutter (generated near the player)
+
+Fields, meadows and forests are about 400 ha, too much to store clutter instances for. Maps with `files.meadow` (`meadow.bin`, map 0.9.0) carry a density raster instead
+(layers tuft, flower, fern, pebble, litter; one byte per 2 m cell per layer, format in `pipeline/src/suchohrad_pipeline/meadow.py`). `MapLoader.Meadow.cs` turns the cells
+near the focus into instances with `MeadowGen` (a hash of the cell and layer, the same on every client, nothing is sent; `MeadowData.cs`, pure, mirrors `meadow.generate`
+and a test pins both). The ground is cut into 24 m tiles, each tile and layer is one `MultiMeshInstance3D` per kind (pooled), built nearest first at most 6 tiles or 2 ms per
+frame, freed 30 m behind its range. Ranges and `SUCHOHRAD_CLUTTER` are those of the stored clutter; live instances per layer are capped (`MeadowSettings.CapOf`).
+Instances within a tree's trunk reach (from `trees.json`) are dropped; the height comes from `GroundHeight` (the terrain collision mesh, decimated). The focus is the current camera
+unless `MapLoader.SetClutterFocus(position)` is called each frame. A map without `meadow.bin` and the headless server do nothing.
+
 ## Editor mode
 
 The first visible part of the world map editor: `--editor` starts the viewer in editor mode (it implies
