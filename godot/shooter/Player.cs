@@ -33,7 +33,7 @@ public partial class Player : CharacterBody3D
     public bool InVehicle
     {
         get => _inVehicle;
-        set { _inVehicle = value; if (value) _state.ProneLatched = false; }
+        set { _inVehicle = value; CollisionMask = value ? CollisionLayers.World : CollisionLayers.OnFoot; if (value) _state.ProneLatched = false; } // seated: inside the vehicle's own box
     }
     public MoveState State => _state;
     public float KillY { get; set; } = float.NegativeInfinity;
@@ -60,6 +60,7 @@ public partial class Player : CharacterBody3D
     public override void _Ready()
     {
         _headless = DisplayServer.GetName() == "headless";
+        CollisionMask = _inVehicle ? CollisionLayers.World : CollisionLayers.OnFoot; // solid vehicles stop on-foot movement (#217)
         AddChild(_shape);
         _shape.Shape = _capsule;
         if (UseCamera) AddChild(_camera);

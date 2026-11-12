@@ -20,6 +20,8 @@ public class VehiclesFile : IVersioned
     public float RocketDamageMultiplier { get; set; } = 1.5f;
     /// <summary>Mass the run-over numbers above are tuned for (the car). A type with <see cref="VehicleDef.RunOverMass"/> scales its run-over damage by its mass over this.</summary>
     public float RunOverReferenceMass { get; set; } = 1200;
+    /// <summary>How far from a vehicle's footprint (metres, measured to its nearest edge, not its centre) an on-foot player can still get in. A type's <see cref="VehicleDef.EnterRadius"/> overrides it.</summary>
+    public float EnterRadius { get; set; } = 1f;
     public VehicleExplosionDef Explosion { get; set; } = new();
     public List<VehicleDef> Vehicles { get; set; } = new();
 
@@ -87,6 +89,7 @@ public class VehiclesFile : IVersioned
                     throw new DataFileException($"vehicles.json: {v.Id}: flak elevation is min_elevation_deg (at least -10) below max_elevation_deg (at most 89)");
             }
             if (v.Height <= 0 || v.HalfWidth <= 0 || v.HalfLength <= 0) throw new DataFileException($"vehicles.json: {v.Id}: height, half_width and half_length must be positive");
+            if (v.EnterRadius is < 0 || f.EnterRadius < 0) throw new DataFileException($"vehicles.json: {v.Id}: enter_radius must not be negative");
             if (v.RunOverMass is { } rm && rm <= 0) throw new DataFileException($"vehicles.json: {v.Id}: run_over_mass must be positive");
             if (!VehicleMedium.All.Contains(v.Medium)) throw new DataFileException($"vehicles.json: {v.Id}: medium {v.Medium} is not land, amphibious, boat or air");
             if (v.CanFloat && (v.WaterTopSpeed <= 0 || v.WaterAcceleration <= 0 || v.LandDecel <= 0 || v.PlaningSpeed < 0))
@@ -116,6 +119,8 @@ public class VehiclesFile : IVersioned
     }
 
     /// <summary>Run-over damage multiplier of a type: its run_over_mass over the reference mass, or 1 when it has none (the v1 numbers).</summary>
+    public float EnterRadiusOf(VehicleDef v) => v.EnterRadius ?? EnterRadius;
+
     public float RunOverScale(VehicleDef v) => v.RunOverMass is { } m ? m / RunOverReferenceMass : 1f;
 }
 
@@ -442,6 +447,8 @@ public class VehicleDef
     /// it misses; one that enters the footprint below it hits. See <see cref="VehicleBox"/>.
     /// </summary>
     public float Height { get; set; } = 1.2f;
+    /// <summary>Override of the file's enter_radius for this type (metres from the footprint). Null: the file's.</summary>
+    public float? EnterRadius { get; set; }
     /// <summary>Seats in order; seat 0 is the driver. Default: one driver seat.</summary>
     public List<VehicleSeatDef> Seats { get; set; } = new() { new VehicleSeatDef { Role = "driver" } };
     /// <summary>The gun a gunner seat fires. Null: no gun.</summary>

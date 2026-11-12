@@ -14,6 +14,9 @@ public static class CollisionLayers
     public const uint Vehicles = 2;
     public const uint ShotOnly = 4;
 
+    /// <summary>What an on-foot player's movement collides with: the world and solid vehicles (#217). Not while seated, which is the world only.</summary>
+    public const uint OnFoot = World | Vehicles;
+
     /// <summary>Server rays for bullets, rockets, splash and turret sight: world, vehicles and shot-only cover.</summary>
     public const uint Bullets = World | Vehicles | ShotOnly;
 
