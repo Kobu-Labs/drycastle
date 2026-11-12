@@ -320,7 +320,7 @@ public partial class NetClient : Node
                 GD.Print($"client {PlayerName}: kill feed: {Match.NameOf(k.Killer)} -> {Match.NameOf(k.Victim)} (weapon {k.Weapon})");
                 break;
             case EventKind.Spawn:
-                var sp = Match.LastSpawn.Values.Last();
+                var sp = Match.LatestSpawn!; // the spawn of this event; the per-player table's last entry is another player's
                 GD.Print($"client {PlayerName}: spawn #{sp.Id} protected {sp.Protection:F1}s");
                 if (sp.Id == _myId && _me != null)
                 {
@@ -332,7 +332,7 @@ public partial class NetClient : Node
                 }
                 break;
             case EventKind.Death:
-                var d = Match.LastDeath.Values.Last();
+                var d = Match.LatestDeath!;
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 SfxDeath(d);
                 if (d.Victim == _myId) { Dead = true; _deaths++; _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay); _hud?.SetProtection(0); OnStreakDeath(); }

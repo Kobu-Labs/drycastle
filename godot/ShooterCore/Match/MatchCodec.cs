@@ -131,6 +131,12 @@ public sealed class ClientMatchState
     public List<KillMsg> KillFeed { get; } = new();
     public Dictionary<ushort, SpawnMsg> LastSpawn { get; } = new();
     public Dictionary<ushort, DeathMsg> LastDeath { get; } = new();
+    /// <summary>
+    /// The spawn and the death of the event applied last, whoever it was for. The tables above are per player and keep the
+    /// order in which players were first seen, so their last entry is not the newest event.
+    /// </summary>
+    public SpawnMsg? LatestSpawn { get; private set; }
+    public DeathMsg? LatestDeath { get; private set; }
     public Dictionary<ushort, double> SpawnedAt { get; } = new();
     public Dictionary<ushort, double> DiedAt { get; } = new();
     public int RoundsEnded { get; private set; }
@@ -154,10 +160,10 @@ public sealed class ClientMatchState
                 if (KillFeed.Count > FeedSize) KillFeed.RemoveAt(0);
                 return true;
             case EventKind.Spawn when MatchCodec.DecodeSpawn(payload) is { } s:
-                LastSpawn[s.Id] = s; SpawnedAt[s.Id] = now;
+                LastSpawn[s.Id] = s; SpawnedAt[s.Id] = now; LatestSpawn = s;
                 return true;
             case EventKind.Death when MatchCodec.DecodeDeath(payload) is { } d:
-                LastDeath[d.Victim] = d; DiedAt[d.Victim] = now;
+                LastDeath[d.Victim] = d; DiedAt[d.Victim] = now; LatestDeath = d;
                 return true;
         }
         return false;
