@@ -6,11 +6,11 @@ import yaml
 from shapely.geometry import LineString, Point, box, shape
 
 from drycastle_pipeline.propmeshes import fence_mesh, tree_mesh
-from drycastle_pipeline.props import make_fences, make_spawns, make_trees, props_rules, run_props, seeded
+from drycastle_pipeline.props import make_fences, make_spawns, make_trees, run_props, seeded
 from drycastle_pipeline.rules import load_section
-from tests.synthetic import make_terrain, make_workspace
+from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace
 
-FENCE, TREE = load_section("props")["fences"], props_rules()["trees"]
+FENCE, TREE = load_section("props")["fences"], load_section("props")["trees"]
 SPAWN, ROADS = load_section("spawns"), load_section("roads")
 
 
@@ -86,46 +86,6 @@ def test_fence_probability_zero_gives_nothing(ws) -> None:
     assert fences(ws, {**FENCE, "probability": 0.0}) == []
 
 
-def test_trees_deterministic_and_respect_rules(ws) -> None:
-    osm = [
-        {
-            "properties": {"osm_id": "n1"},
-            "geometry": {"type": "Point", "coordinates": [150, 150]},
-        },
-        {
-            "properties": {"osm_id": "n2"},
-            "geometry": {"type": "Point", "coordinates": [900, 900]},  # outside coverage
-        },
-    ]
-
-    def make():
-        return make_trees(ws["parcels"], ws["buildings"], ws["graph"], osm, ws["terrain"], TREE)
-
-    a = make()
-    assert a == make() and len(a) > 5
-    assert [t["src"] for t in a if t["src"] == "osm"] == ["osm"]  # the far OSM tree is dropped
-    polys = {p["id"]: shape(p["polygon"]) for p in ws["parcels"]}
-    bpoly = building_poly(ws)
-    road = LineString([[20, 106], [200, 106]])
-    rule = [t for t in a if t["src"] == "rule"]
-    assert {t["parcel"] for t in rule} <= {"P-0001", "P-0002", "P-0004", "P-0005", "P-0006"}  # not the village ground
-    for t in rule:
-        pt = Point(t["x"], t["y"])
-        assert polys[t["parcel"]].contains(pt)
-        assert pt.distance(bpoly) >= TREE["building_clearance_m"] - 1e-6
-        assert pt.distance(road) >= 2.5 + TREE["road_clearance_m"] - 1e-6
-        assert t["z"] == pytest.approx(ws["terrain"].surface(t["x"], t["y"]), abs=2e-3)
-    for i, t in enumerate(rule):
-        for u in rule[:i]:
-            if t["parcel"] == u["parcel"]:
-                assert np.hypot(t["x"] - u["x"], t["y"] - u["y"]) >= TREE["min_spacing_m"] - 1e-6
-    forest = [t for t in rule if t["parcel"] == "P-0005"]
-    assert forest and all(t["colour"] in TREE["forest_canopy_colours"] for t in forest)
-    # density config: no trees at density 0
-    off = {**TREE, "density_per_1000m2": {}}
-    assert [t for t in make_trees(ws["parcels"], ws["buildings"], ws["graph"], [], ws["terrain"], off)] == []
-
-
 def test_prop_meshes_are_small_and_valid(ws) -> None:
     sections = fences(ws, {**FENCE, "probability": 1.0})
     vis = fence_mesh(sections, FENCE)
@@ -144,7 +104,9 @@ def test_prop_meshes_are_small_and_valid(ws) -> None:
 
 
 def test_spawn_constraints_and_determinism(ws) -> None:
-    trees = make_trees(ws["parcels"], ws["buildings"], ws["graph"], [], ws["terrain"], TREE)
+    trees = make_trees(ws["buildings"], ws["graph"], ws["terrain"], {**TREE, "ortho_dir": str(ws["work"].parent / "ortho")},
+                       origin=SYNTHETIC_ORIGIN)
+    assert trees
 
     def make(cfg=SPAWN):
         return make_spawns(
@@ -203,16 +165,16 @@ def test_area_overlay_only_applies_to_that_area(tmp_path) -> None:
     assert load_section("spawns", custom, "slice")["count"] == load_section("spawns")["count"]
 
 
-def test_cap_trees_is_per_chunk_stable_and_keeps_osm_trees() -> None:
+def test_cap_trees_is_per_chunk_stable_and_keeps_detected_trees() -> None:
     from drycastle_pipeline.props import cap_trees
 
-    trees = [{"src": "rule", "x": float(i), "y": 1.0} for i in range(40)]
-    trees += [{"src": "rule", "x": 300.0 + i, "y": 1.0} for i in range(5)]
-    trees += [{"src": "osm", "x": 2.5, "y": 2.0}]
+    trees = [{"src": "ortho-canopy", "x": float(i), "y": 1.0} for i in range(40)]
+    trees += [{"src": "ortho-canopy", "x": 300.0 + i, "y": 1.0} for i in range(5)]
+    trees += [{"src": "ortho", "x": 2.5, "y": 2.0}]
     capped = cap_trees(trees, 250.0, 10)
-    assert sum(1 for t in capped if t["x"] < 250 and t["src"] == "rule") == 10
+    assert sum(1 for t in capped if t["x"] < 250 and t["src"] == "ortho-canopy") == 10
     assert sum(1 for t in capped if t["x"] >= 300) == 5  # under the cap, untouched
-    assert any(t["src"] == "osm" for t in capped)
+    assert any(t["src"] == "ortho" for t in capped)
     assert capped == cap_trees(trees, 250.0, 10)
     assert cap_trees(trees, 250.0, 0) == trees
 
@@ -222,35 +184,8 @@ def test_run_props_cap_via_rules(ws, tmp_path) -> None:
     rules.write_text(yaml.safe_dump({"props": {"trees": {"max_per_chunk": 1}}}))
     run_props(ws["work"], rules)
     rule_trees = [t for t in json.loads((ws["work"] / "props.json").read_text())["trees"]
-                  if t["src"] == "rule"]
+                  if t["src"] == "ortho-canopy"]
     per_chunk = {}
     for t in rule_trees:
         per_chunk[(t["x"] // 250, t["y"] // 250)] = per_chunk.get((t["x"] // 250, t["y"] // 250), 0) + 1
     assert per_chunk and max(per_chunk.values()) <= 1
-
-
-def test_trees_keep_their_trunks_out_of_water(ws) -> None:
-    pid = next(p["id"] for p in ws["parcels"] if p["kind"] == "garden")
-    poly = shape(next(p for p in ws["parcels"] if p["id"] == pid)["polygon"])
-    water = box(*poly.bounds[:2], poly.centroid.x, poly.bounds[3])  # the western half is a pond
-    cfg = {**TREE, "density_per_1000m2": {"garden": 40}}
-    args = (ws["parcels"], ws["buildings"], ws["graph"], [], ws["terrain"], cfg)
-    dry = make_trees(*args, only={pid})
-    wet = make_trees(*args, only={pid}, water=water)
-    assert dry and wet
-    assert any(water.contains(Point(t["x"], t["y"])) for t in dry)
-    assert not any(water.contains(Point(t["x"], t["y"])) for t in wet)
-
-
-def test_shore_rows_follow_the_water_edge_and_are_stable(ws) -> None:
-    pid = next(p["id"] for p in ws["parcels"] if p["kind"] == "garden")
-    poly = shape(next(p for p in ws["parcels"] if p["id"] == pid)["polygon"])
-    water = box(*poly.bounds[:2], poly.centroid.x, poly.bounds[3])
-    shore = {"spacing_m": 4.0, "rows": [{"offset_m": 2.0, "keep": 1.0}, {"offset_m": 6.0, "keep": 1.0}]}
-    cfg = {**TREE, "density_per_1000m2": {"garden": 0.0}, "shore": shore}
-    args = (ws["parcels"], ws["buildings"], ws["graph"], [], ws["terrain"], cfg)
-    a = make_trees(*args, only={pid}, water=water)
-    assert a == make_trees(*args, only={pid}, water=water)
-    assert a and not any(water.contains(Point(t["x"], t["y"])) for t in a)
-    assert all(t["parcel"] == pid and water.distance(Point(t["x"], t["y"])) < 9.0 for t in a)
-    assert make_trees(*args, only={pid}) == []  # no water, no shore trees

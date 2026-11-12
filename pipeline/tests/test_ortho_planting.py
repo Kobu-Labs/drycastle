@@ -1,7 +1,8 @@
-"""EXPERIMENT: every tree from the orthophoto detector (DRYCASTLE_TREE_SOURCE=ortho, props.ortho_trees)."""
+"""Every tree comes from the orthophoto detector (props.ortho_trees); there is no other tree source."""
 
 import json
 import math
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -15,35 +16,20 @@ from shapely.ops import unary_union
 from drycastle_pipeline.buildings import footprint_polygon
 from drycastle_pipeline.props import make_trees, road_zone, run_props
 from drycastle_pipeline.rules import load_section
-from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace
+from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace, write_ortho
 
 TREE = load_section("props")["trees"]
 OCFG = TREE["ortho"]
 RES = 1.0  # metres per pixel of the synthetic canopy mask, 250 x 250 px covering local (0, 0)..(250, 250)
 
 
-def write_ortho(folder: Path, origin: tuple[float, float], canopy_box, standalone: list[dict]) -> None:
-    """A canopy.png (L, 255 inside ``canopy_box`` = local xmin, ymin, xmax, ymax) and a trees.json beside it."""
-    folder.mkdir(parents=True, exist_ok=True)
-    mask = np.zeros((250, 250), np.uint8)
-    x0, y0, x1, y1 = canopy_box
-    mask[250 - int(y1) : 250 - int(y0), int(x0) : int(x1)] = 255  # row 0 is the north edge, y = 250
-    Image.fromarray(mask).save(folder / "canopy.png")
-    (folder / "trees.json").write_text(json.dumps({
-        "canopy": {"file": "canopy.png", "pixel_m": RES,
-                   "bounds_epsg5514": [origin[0], origin[1], origin[0] + 250, origin[1] + 250]},
-        "standalone": standalone,
-    }))
-
-
 def cfg_for(folder: Path) -> dict:
-    return {**TREE, "source": "ortho", "ortho_dir": str(folder)}
+    return {**TREE, "ortho_dir": str(folder)}
 
 
 def test_trees_come_only_from_the_detector(tmp_path: Path) -> None:
     ws = make_workspace(tmp_path)
     work = ws["work"]
-    parcels = json.loads((work / "parcels.json").read_text())["parcels"]
     buildings = json.loads((work / "buildings.json").read_text())["buildings"]
     graph = json.loads((work / "roads.json").read_text())
     standalone = [
@@ -53,15 +39,14 @@ def test_trees_come_only_from_the_detector(tmp_path: Path) -> None:
         {"x": 500.0, "y": 500.0, "radius_m": 3.0, "score": 0.3},   # outside the terrain: dropped
     ]
     write_ortho(tmp_path / "ortho", (0.0, 0.0), (30, 40, 90, 100), standalone)
-    osm = [{"properties": {"osm_id": "n1"}, "geometry": {"coordinates": [100.0, 100.0]}}]  # must be ignored
     terrain = make_terrain()
 
     def make():
-        return make_trees(parcels, buildings, graph, osm, terrain, cfg_for(tmp_path / "ortho"), origin=(0.0, 0.0))
+        return make_trees(buildings, graph, terrain, cfg_for(tmp_path / "ortho"), origin=(0.0, 0.0))
 
     trees = make()
     assert trees == make()  # deterministic
-    assert {t["src"] for t in trees} == {"ortho", "ortho-canopy"}  # no rule-based, no OSM trees
+    assert {t["src"] for t in trees} == {"ortho", "ortho-canopy"}
     assert all(t["parcel"] is None for t in trees)
 
     alone = [t for t in trees if t["src"] == "ortho"]
@@ -85,11 +70,10 @@ def test_trees_come_only_from_the_detector(tmp_path: Path) -> None:
 def test_the_forest_keeps_off_buildings_and_roads(tmp_path: Path) -> None:
     ws = make_workspace(tmp_path)
     work = ws["work"]
-    parcels = json.loads((work / "parcels.json").read_text())["parcels"]
     buildings = json.loads((work / "buildings.json").read_text())["buildings"]
     graph = json.loads((work / "roads.json").read_text())
     write_ortho(tmp_path / "ortho", (0.0, 0.0), (10, 10, 210, 200), [])  # the whole terrain is "forest"
-    trees = make_trees(parcels, buildings, graph, [], make_terrain(), cfg_for(tmp_path / "ortho"), origin=(0.0, 0.0))
+    trees = make_trees(buildings, graph, make_terrain(), cfg_for(tmp_path / "ortho"), origin=(0.0, 0.0))
     assert len(trees) > 100
     bzone = unary_union([footprint_polygon(b["footprint"]) for b in buildings]).buffer(TREE["building_clearance_m"])
     rzone = road_zone(graph, TREE["road_clearance_m"])
@@ -99,19 +83,32 @@ def test_the_forest_keeps_off_buildings_and_roads(tmp_path: Path) -> None:
     assert shapely.contains_xy(box(10, 10, 210, 200), xs, ys).all()  # and inside the terrain
 
 
-def test_run_props_uses_the_detector_only_when_asked(tmp_path: Path, monkeypatch) -> None:
+def test_trees_keep_clear_of_placed_objects_and_out_of_water(tmp_path: Path) -> None:
+    ws = make_workspace(tmp_path)
+    work = ws["work"]
+    buildings = json.loads((work / "buildings.json").read_text())["buildings"]
+    graph = json.loads((work / "roads.json").read_text())
+    write_ortho(tmp_path / "ortho", (0.0, 0.0), (10, 10, 210, 200), [])
+    objects = [(60.0, 130.0), (120.0, 150.0)]
+    pond = box(150, 120, 190, 180)
+    trees = make_trees(buildings, graph, make_terrain(), cfg_for(tmp_path / "ortho"), objects=objects, water=pond, origin=(0.0, 0.0))
+    assert len(trees) > 100
+    for t in trees:
+        assert not pond.contains(shapely.Point(t["x"], t["y"]))
+        for ox, oy in objects:
+            assert math.hypot(t["x"] - ox, t["y"] - oy) >= TREE["object_clearance_m"] - 1e-6
+
+
+def test_run_props_plants_from_the_detector_and_an_area_without_ortho_data_has_no_trees(tmp_path: Path, capsys) -> None:
     ws = make_workspace(tmp_path)
     work = ws["work"]
     rules = tmp_path / "rules.yaml"
     rules.write_text(yaml.safe_dump({"spawns": {"count": 5}}))
-    normal = run_props(work, rules)["trees"]
-    assert normal > 0
-    write_ortho(tmp_path / "ortho", SYNTHETIC_ORIGIN, (30, 40, 90, 100),
-                [{"x": 150.0, "y": 150.0, "radius_m": 3.0, "score": 0.3}])  # origin: the workspace's, absolute
-    monkeypatch.setenv("DRYCASTLE_TREE_SOURCE", "ortho")
-    run_props(work, rules)
+    counts = run_props(work, rules)  # the workspace has an ortho folder beside its work dir
     props = json.loads((work / "props.json").read_text())["trees"]
-    assert {t["src"] for t in props} == {"ortho", "ortho-canopy"}
-    assert sum(t["src"] == "ortho" for t in props) == 1
-    monkeypatch.delenv("DRYCASTLE_TREE_SOURCE")
-    assert run_props(work, rules)["trees"] == normal  # without the switch nothing changed
+    assert counts["trees"] == len(props) > 0
+    assert {t["src"] for t in props} == {"ortho", "ortho-canopy"} and all(t["parcel"] is None for t in props)
+    assert sum(t["src"] == "ortho" for t in props) == 2
+    shutil.rmtree(tmp_path / "ortho")
+    assert run_props(work, rules)["trees"] == 0
+    assert "no orthophoto trees" in capsys.readouterr().err

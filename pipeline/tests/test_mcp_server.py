@@ -274,7 +274,7 @@ def test_get_parcel_front_edge_and_buildings(tools):
     assert p["polygon"]["bounds"] == [OX + 40, OY + 40, OX + 95, OY + 100]
     assert {n["id"] for n in p["neighbours"]} == {"P-0002", "P-0003"}
     assert p["effective_fence"]["mode"] == "auto"
-    assert p["rule_defaults"]["trees"]["density_per_1000m2"] == 0.8
+    assert "trees" not in p["rule_defaults"]
     assert p["rule_defaults"]["fence"]["kind_gets_fence"] is True
     assert p["edits"] == {"fence": None, "objects": [], "group_fence": None}
     with pytest.raises(ToolError, match="unknown parcel"):
@@ -658,7 +658,7 @@ def test_region_ground_types(env):
     tools, settings, _ = env
     types = {t["type"]: t for t in tools.list_ground_types()["types"]}
     assert {"field", "forest", "meadow", "village", "water"} <= set(types)
-    assert types["water"]["water"] and types["forest"]["trees_per_1000m2"] > 0 and types["meadow"]["recipe"] == "field"
+    assert types["water"]["water"] and types["meadow"]["recipe"] == "field"
     out = tools.create_region(polygon=SQUARE, ground="meadow")  # no colour: the type's first shade tints the preview
     assert (out["ground"], out["colour"]) == ("meadow", types["meadow"]["colours"][0].lower())
     assert load_edits(settings.edits_path).regions["R-0001"]["ground"] == "meadow"

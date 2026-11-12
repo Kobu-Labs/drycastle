@@ -27,6 +27,23 @@ def make_terrain(step: float = 4.0):
     return grid_from_samples(250.0, step, COVERAGE, plane)
 
 
+def write_ortho(folder: Path, origin: tuple[float, float], canopy_box, standalone: list[dict]) -> None:
+    """The detector's output beside the work dir: a 250 x 250 px canopy.png (1 m per pixel, local (0, 0)..(250, 250);
+    255 inside ``canopy_box`` = local xmin, ymin, xmax, ymax) and a trees.json."""
+    from PIL import Image
+
+    folder.mkdir(parents=True, exist_ok=True)
+    mask = np.zeros((250, 250), np.uint8)
+    x0, y0, x1, y1 = canopy_box
+    mask[250 - int(y1) : 250 - int(y0), int(x0) : int(x1)] = 255  # row 0 is the north edge, y = 250
+    Image.fromarray(mask).save(folder / "canopy.png")
+    (folder / "trees.json").write_text(json.dumps({
+        "canopy": {"file": "canopy.png", "pixel_m": 1.0,
+                   "bounds_epsg5514": [origin[0], origin[1], origin[0] + 250, origin[1] + 250]},
+        "standalone": standalone,
+    }))
+
+
 def parcel(pid: str, kind: str, geom: Polygon, buildings: list[str] | None = None) -> dict:
     c = geom.representative_point()
     return {
@@ -74,6 +91,11 @@ def make_workspace(tmp: Path) -> dict[str, Path]:
         )
     )
     (work / "buildings.json").write_text(json.dumps({"buildings": [b1]}))
+    # trees come from the orthophoto only: a forest patch on the forest parcel and two single trees
+    write_ortho(tmp / "ortho", SYNTHETIC_ORIGIN, (150, 45, 195, 95), [
+        {"x": 120.0, "y": 60.0, "radius_m": 3.0, "score": 0.3},
+        {"x": 150.0, "y": 150.0, "radius_m": 3.0, "score": 0.3},
+    ])
     highways = [
         line_feature("w10", "residential", [[20, 106], [120, 106], [200, 106]], surface="asphalt"),
         line_feature("w11", "track", [[120, 106], [120, 180]]),

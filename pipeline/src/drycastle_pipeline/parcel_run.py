@@ -1,8 +1,8 @@
-"""Per-parcel run: fences and trees of some parcels only, as a JSON fragment (for the editor).
+"""Per-parcel run: fences and objects of some parcels only, as a JSON fragment (for the editor).
 
 ``python -m drycastle_pipeline parcel-run --area village --parcel P-0412 [--group G-0001]``
 loads the work files, applies ``edits.json`` exactly like the props stage and regenerates only the
-fences and trees of the target parcels. Nothing under ``data/`` is written. The result equals the
+fences and objects of the target parcels. Nothing under ``data/`` is written. The result equals the
 target parcels' share of the full props stage (``props.json`` / ``objects.json``):
 
 * **Fences** are processed in parcel ID order and each parcel skips what neighbours with a lower ID
@@ -10,11 +10,9 @@ target parcels' share of the full props stage (``props.json`` / ``objects.json``
   transitively, every lower-ID parcel whose boundary is within :data:`NEIGHBOUR_M` of one of them,
   and every member of a group a processed parcel belongs to (the perimeter needs all members). Only
   buildings and road edges near that set are given to ``make_fences``.
-* **Trees** of a parcel depend only on its own seed and the buildings, roads and placed objects
-  around it (the whole parcel: a tree rejected or accepted anywhere shifts the seeded stream). The
-  per-chunk cap (:func:`props.cap_trees`) also depends on the rule trees of every
-  other parcel in the same chunk, so when the cap is on, those parcels' trees are generated too,
-  for the chunks that contain target trees.
+* **Trees** are not part of a run: they come from the orthophoto (:func:`props.ortho_trees`), not from
+  parcels, so the fragment's ``trees`` is empty and a full props run places them (and keeps them clear of
+  placed objects).
 """
 
 import json
@@ -32,14 +30,9 @@ from drycastle_pipeline.config import DEFAULT_AREA, area_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
 from drycastle_pipeline.props import (
     EditPlan,
-    cap_trees,
-    chunk_of,
     make_fences,
-    make_trees,
     plan_edits,
-    props_rules,
     unknown_asset_warnings,
-    water_zone,
 )
 from drycastle_pipeline.roads import edge_lines
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
@@ -141,14 +134,6 @@ class _Context:
         )
 
 
-def _tree_context(ctx: _Context, geoms: list[BaseGeometry], tcfg: dict) -> tuple:
-    return ctx.around(
-        geoms,
-        float(tcfg["building_clearance_m"]) + _MARGIN_M,
-        float(tcfg["road_clearance_m"]) + _MARGIN_M,
-    )
-
-
 def compute_fragment(
     parcels_doc: dict,
     buildings: list[dict],
@@ -161,7 +146,6 @@ def compute_fragment(
 ) -> dict:
     """Fences, trees and objects of ``targets`` (already expanded); see the module docstring."""
     parcels = parcels_doc["parcels"]
-    chunk_m = float(parcels_doc["chunk_size_m"])
     order = sorted(p["id"] for p in parcels)
     by_id = {p["id"]: p for p in parcels}
     polys = {pid: shape(by_id[pid]["polygon"]) for pid in order}
@@ -194,42 +178,7 @@ def compute_fragment(
     )
     fences = [s for s in fences if s["parcel"] in target_set]
 
-    # trees
-    tcfg = fcfg["trees"]
-    objects_xy = [(o["position"][0], o["position"][1]) for o in plan.objects]
-
-    water = water_zone(plan, terrain)
-
-    def trees_of(ids: set[str], geoms: list[BaseGeometry]) -> list[dict]:
-        t_buildings, t_graph = _tree_context(ctx, geoms, tcfg)
-        return make_trees(
-            [by_id[pid] for pid in sorted(ids)],
-            t_buildings,
-            t_graph,
-            [],
-            terrain,
-            tcfg,
-            objects=objects_xy,
-            only=ids,
-            include_osm=False,
-            water=water,
-        )
-
-    trees = trees_of(target_set, [polys[pid] for pid in targets])
-    limit = int(tcfg["max_per_chunk"])
-    if limit > 0 and trees:
-        chunks = {tuple(chunk_of(t["x"], t["y"], chunk_m)) for t in trees}
-        rects = [
-            shapely.box(cx * chunk_m, cy * chunk_m, (cx + 1) * chunk_m, (cy + 1) * chunk_m)
-            for cx, cy in sorted(chunks)
-        ]
-        others: set[str] = set()
-        for rect in rects:
-            others |= {order[i] for i in tree.query(rect, predicate="intersects")}
-        others -= target_set
-        trees = trees + trees_of(others, [polys[pid] for pid in sorted(others)])
-        trees = cap_trees(trees, chunk_m, limit)
-    trees = [t for t in trees if t["parcel"] in target_set]
+    trees: list[dict] = []  # trees come from the orthophoto only: not per parcel, a full props run places them
 
     objects = [
         o
@@ -279,7 +228,7 @@ def run_parcel_run(
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     graph = json.loads((work_dir / "roads.json").read_text())
-    fcfg = props_rules(rules_path, area)
+    fcfg = load_section("props", rules_path, area)
     plan = plan_edits(
         load_edits(edits_path),
         parcels_doc["parcels"],

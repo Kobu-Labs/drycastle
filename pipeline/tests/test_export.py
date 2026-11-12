@@ -101,7 +101,7 @@ def test_parcels_and_manifest(workspace) -> None:
     assert m["props_layout"] == "per_parcel"
     pj = json.loads((out / "parcels.json").read_text())
     assert pj["origin_epsg5514"] == json.loads((workspace["work"] / "parcels.json").read_text())["origin_epsg5514"]
-    assert m["edit_defaults"]["fence"]["height_m"] > 0 and "garden" in m["edit_defaults"]["trees"]["density_per_1000m2"]
+    assert m["edit_defaults"]["fence"]["height_m"] > 0 and "trees" not in m["edit_defaults"]
     assert "not generated" in m["not_generated"]
     assert not any("time" in k or "date" in k for k in m)
 

@@ -13,7 +13,7 @@ from drycastle_pipeline.edits import (
     resolve_fence,
     validate,
 )
-from drycastle_pipeline.props import make_fences, make_trees, run_props
+from drycastle_pipeline.props import make_fences, run_props
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace
 
@@ -381,33 +381,6 @@ def test_group_auto_uses_one_seeded_roll_for_all_members(ws) -> None:
     assert all(off_shared_edge(s) for s in got)
 
 
-def trees_for(ws, objects=None):
-    osm: list[dict] = []
-    return make_trees(
-        ws["parcels"],
-        ws["buildings"],
-        ws["graph"],
-        osm,
-        ws["terrain"],
-        TREE,
-        objects=objects,
-    )
-
-
-def parcel_trees(trees, pid):
-    return [t for t in trees if t["src"] == "rule" and t["parcel"] == pid]
-
-
-def test_trees_keep_clear_of_placed_objects(ws) -> None:
-    objects = [(60.0, 60.0), (120.0, 40.0 + 30.0)]
-    got = trees_for(ws, objects=objects)
-    for t in parcel_trees(got, "P-0001") + parcel_trees(got, "P-0002"):
-        for ox, oy in objects:
-            assert (
-                Point(t["x"], t["y"]).distance(Point(ox, oy)) >= TREE["object_clearance_m"] - 1e-6
-            )
-
-
 def write_edits(tmp_path, doc):
     path = tmp_path / "edits.json"
     dump_edits(parse(doc), path)
@@ -563,7 +536,7 @@ def test_run_props_applies_groups_end_to_end(ws, tmp_path) -> None:
     run_props(ws["work"], DEFAULT_RULES, edits_path=edits)
     props = json.loads((ws["work"] / "props.json").read_text())
     assert all(off_shared_edge(s) for s in props["fences"])
-    assert any(t["src"] == "rule" for t in props["trees"])  # the rules still plant the trees
+    assert any(t["src"] == "ortho-canopy" for t in props["trees"])  # the trees still come from the orthophoto
 
 
 def test_empty_edits_leave_props_unchanged(ws, tmp_path) -> None:

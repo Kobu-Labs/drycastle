@@ -128,13 +128,10 @@ public sealed class EditDefaults
     public string FenceColour { get; init; } = "";
     public double FenceProbability { get; init; }
     public IReadOnlyList<string> FenceKinds { get; init; } = Array.Empty<string>();
-    /// <summary>Trees per 1000 m2 by parcel kind (kinds not listed get none).</summary>
-    public IReadOnlyDictionary<string, double> TreeDensity { get; init; } = new Dictionary<string, double>();
 
     internal static EditDefaults Read(System.Text.Json.JsonElement e)
     {
         var f = e.GetProperty("fence");
-        var t = e.GetProperty("trees");
         return new EditDefaults
         {
             FenceHeight = f.GetProperty("height_m").GetDouble(),
@@ -142,7 +139,6 @@ public sealed class EditDefaults
             FenceColour = f.GetProperty("colour").GetString() ?? "",
             FenceProbability = f.GetProperty("probability").GetDouble(),
             FenceKinds = f.GetProperty("kinds").EnumerateArray().Select(k => k.GetString()!).ToList(),
-            TreeDensity = t.GetProperty("density_per_1000m2").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetDouble()),
         };
     }
 }

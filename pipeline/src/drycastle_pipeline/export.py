@@ -182,7 +182,7 @@ def _dump(path: Path, doc: dict) -> None:
 def _edit_defaults(rules_path: Path, area: str) -> dict:
     """Rule values the editor shows as the greyed defaults of fences and trees (area overlay applied)."""
     props = load_section("props", rules_path, area)
-    fences, trees = props["fences"], props["trees"]
+    fences = props["fences"]
     return {
         "fence": {
             "kinds": list(fences["kinds"]),
@@ -190,9 +190,6 @@ def _edit_defaults(rules_path: Path, area: str) -> dict:
             "height_m": fences["height_m"],
             "thickness_m": fences["thickness_m"],
             "colour": fences["colour"],
-        },
-        "trees": {
-            "density_per_1000m2": dict(trees["density_per_1000m2"]),
         },
     }
 

@@ -16,8 +16,8 @@ colour, detail recipes, trees, water) read parcels and ground areas alike throug
 
 **The type is the whole description of the ground** (one entry of ``ground.types``): where it comes from (``osm`` or
 ``rule``), its terrain ``colours``, its detail ``recipe`` (one of ``detail.RECIPES``, none: no detail) with optional
-``detail`` settings laid over that recipe's section of the rules, its ``trees`` (``per_1000m2``, ``forest``: forest
-trees), whether it is ``water`` and whether players may spawn on it (``spawns``). The functions at the end of this
+``detail`` settings laid over that recipe's section of the rules, whether it is ``water`` and whether players may
+spawn on it (``spawns``). (Trees are not a property of a type: they come from the orthophoto only.) The functions at the end of this
 module hand those to the stages. Ground areas have no fence, no edits and no cadastral reference, and their IDs are
 only stable while the inputs are (they are numbered by type and place).
 """
@@ -139,15 +139,6 @@ def ground_types(rules_path: Path = DEFAULT_RULES, area: str | None = None) -> d
 def type_colours(types: dict[str, dict]) -> dict[str, list[str]]:
     """Terrain shades by type, to lay over ``terrain.colours`` (which holds the parcel kinds and the fallback)."""
     return {name: spec["colours"] for name, spec in types.items() if spec.get("colours")}
-
-
-def tree_density(types: dict[str, dict]) -> dict[str, float]:
-    """Rule trees per 1000 m2 by type, to lay over ``props.trees.density_per_1000m2`` (the parcel kinds)."""
-    return {name: float((spec.get("trees") or {}).get("per_1000m2", 0.0)) for name, spec in types.items()}
-
-
-def forest_kinds(types: dict[str, dict]) -> set[str]:
-    return {name for name, spec in types.items() if (spec.get("trees") or {}).get("forest")}
 
 
 def water_kinds(types: dict[str, dict]) -> set[str]:

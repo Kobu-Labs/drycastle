@@ -1,4 +1,4 @@
-"""Props stage: fences, trees and spawn candidates -> ``data/work/props.json`` and ``spawns.json``.
+"""Props stage: fences, trees (from the orthophoto only) and spawn candidates -> ``data/work/props.json`` and ``spawns.json``.
 
 Hand edits (``config/edits.json``, see ``edits.py``) are applied here too: fence modes and groups,
 and placed objects, which are written to ``objects.json``.
@@ -11,7 +11,6 @@ terrain coverage are used.
 import hashlib
 import json
 import math
-import os
 import random
 import sys
 from dataclasses import dataclass, field, replace
@@ -36,7 +35,7 @@ from drycastle_pipeline.edits import (
     region_ring,
     resolve_fence,
 )
-from drycastle_pipeline.ground import forest_kinds, ground_types, ground_units, spawn_kinds, tree_density
+from drycastle_pipeline.ground import ground_types, ground_units, spawn_kinds
 from drycastle_pipeline.lamps import make_lamps, read_osm_lamps, write_lamps
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.roads import edge_lines
@@ -216,35 +215,11 @@ def make_fences(
 # --- trees ----------------------------------------------------------------------------------
 
 
-def shore_candidates(water: BaseGeometry, cfg: dict) -> list[tuple[float, float]]:
-    """Tree positions in rows along the water's edge: ``cfg["rows"]`` (offset from the shore, share kept), ``spacing_m`` apart.
-
-    Seeded per candidate, so the same water gives the same points whichever parcels are generated.
-    """
-    pts: list[tuple[float, float]] = []
-    spacing = float(cfg["spacing_m"])
-    for r, row in enumerate(cfg["rows"]):
-        grown = water.buffer(float(row["offset_m"]))
-        parts = sorted(getattr(grown, "geoms", [grown]), key=lambda g: g.bounds)
-        for k, part in enumerate(parts):
-            for ring in (part.exterior, *part.interiors):
-                n = int(ring.length // spacing)
-                for i in range(n):
-                    rng = seeded(f"shore:{r}:{k}:{i}")
-                    if rng.random() >= float(row["keep"]):
-                        continue
-                    at = ring.interpolate((i + rng.uniform(-0.3, 0.3)) * ring.length / n)
-                    x, y = at.x + rng.uniform(-0.8, 0.8), at.y + rng.uniform(-0.8, 0.8)
-                    if not water.contains(Point(x, y)):
-                        pts.append((x, y))
-    return pts
-
-
 CANOPY_CELL_PX = 42  # the canopy mask is planted cell by cell (about 25 m at the photo's 0.6 m per pixel)
 
 
 def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[float, float] | None) -> list[dict]:
-    """EXPERIMENT: every tree from the orthophoto detector (``make ortho-trees``), none from the rules.
+    """Every tree, planted from the orthophoto detector (``make ortho-trees``).
 
     * each standalone tree of ``trees.json`` is planted where the detector found it, its size following the crown
       radius (``scale = 2 r / canopy_m``, kept within 0.8-3);
@@ -254,7 +229,6 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
       that). Seeded per 25 m cell; never on a building, road, placed object or water.
 
     The photo does not resolve single crowns in a forest, so the canopy trunks are random within the detected extent.
-    OSM trees, the rule-based densities and the shore rows are all left out.
     """
     from PIL import Image
 
@@ -330,31 +304,23 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
 
 
 def make_trees(
-    parcels: list[dict],
     buildings: list[dict],
     graph: dict,
-    osm_trees: list[dict],
     terrain: Terrain,
     cfg: dict,
     objects: list[tuple[float, float]] | None = None,
-    only: set[str] | None = None,
-    include_osm: bool = True,
     water: BaseGeometry | None = None,
     origin: tuple[float, float] | None = None,
 ) -> list[dict]:
-    """OSM trees plus seeded rule-based trees in parcels (gardens, forests, ...).
+    """Every tree of the map: planted from the orthophoto detector (:func:`ortho_trees`, ``make ortho-trees``).
 
-    EXPERIMENT: with ``cfg["source"] == "ortho"`` (``DRYCASTLE_TREE_SOURCE=ortho``, see :func:`ortho_trees`) none of that
-    happens: every tree comes from the orthophoto detector instead (``origin`` is then the frame origin, EPSG:5514).
-
-    ``only`` limits the rule-based trees to those parcel IDs (each parcel's trees depend only on
-    its own seed and the context geometry); ``include_osm=False`` leaves the OSM trees out.
-
-    ``objects`` are placed object positions (local metres) that trees keep
-    ``object_clearance_m`` away from. ``water`` (local metres) is where the water regions lie: rule-based trees get
-    no trunk in it (their crowns may overhang it from the bank), and ``cfg["shore"]`` adds rows of trees along
-    its edge (see :func:`shore_candidates`).
+    There is no other source: no OSM trees, no per-parcel density, no shore rows. ``cfg["ortho_dir"]`` is the folder
+    of the detector's output (``trees.json`` and the canopy mask); an area without it has no trees. ``origin`` is the
+    frame origin (EPSG:5514; without it there are no trees). ``objects`` are placed object positions (local metres) that trees keep
+    ``object_clearance_m`` away from; ``water`` (local metres) is where the water regions lie: no trunk in it.
     """
+    if origin is None or not (Path(cfg["ortho_dir"]) / "trees.json").is_file():
+        return []
     bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
     bzone = unary_union(bpolys).buffer(float(cfg["building_clearance_m"])) if bpolys else None
     rzone = road_zone(graph, float(cfg["road_clearance_m"]))
@@ -367,7 +333,6 @@ def make_trees(
     for g in (bzone, rzone, ozone, water):
         if g is not None:
             shapely.prepare(g)
-    trees: list[dict] = []
 
     def tree(x, y, rng, parcel, forest, src, scale=None):
         shape_ = "cone" if forest and rng.random() < 0.6 else "box"
@@ -384,79 +349,7 @@ def make_trees(
             "colour": palette[rng.randrange(len(palette))],
         }
 
-    if cfg.get("source") == "ortho":
-        return ortho_trees(tree, terrain, (bzone, rzone, ozone, water), cfg, origin)
-
-    for f in sorted(osm_trees if include_osm else [], key=lambda f: f["properties"]["osm_id"]):
-        x, y = f["geometry"]["coordinates"][:2]
-        if terrain.coverage.contains(Point(x, y)):
-            trees.append(
-                tree(x, y, seeded(f"{f['properties']['osm_id']}:tree"), None, False, "osm")
-            )
-
-    density = cfg["density_per_1000m2"]
-    forest = set(cfg.get("forest_kinds", ("forest",)))
-    spacing = float(cfg["min_spacing_m"])
-    shore_pts = (
-        shore_candidates(water, cfg["shore"]) if water is not None and cfg.get("shore", {}).get("rows") else None
-    )
-    shore_arr = np.array(shore_pts, float).reshape(-1, 2) if shore_pts else None
-    if shore_arr is None:
-        shore_pts = None
-    for p in sorted(parcels, key=lambda p: p["id"]):
-        if only is not None and p["id"] not in only:
-            continue
-        rate = float(density.get(p["kind"], 0.0))
-        shore_here = shore_pts is not None
-        if rate <= 0 and not shore_here:
-            continue
-        poly = shape(p["polygon"])
-        inner = poly.buffer(-float(cfg["parcel_edge_clearance_m"]))
-        if inner.is_empty:
-            continue
-        shapely.prepare(inner)
-        rng = seeded(f"{p['id']}:trees")
-        if rate <= 0:
-            count = 0
-        else:
-            expected = rate * poly.area / 1000.0
-            count = int(expected) + (rng.random() < expected % 1)
-        minx, miny, maxx, maxy = inner.bounds
-        placed: list[tuple[float, float]] = []
-        for _ in range(count * 40 if count else 0):
-            if len(placed) >= count:
-                break
-            x, y = rng.uniform(minx, maxx), rng.uniform(miny, maxy)
-            if not shapely.contains_xy(inner, x, y) or not shapely.contains_xy(
-                terrain.coverage, x, y
-            ):
-                continue
-            if bzone is not None and shapely.contains_xy(bzone, x, y):
-                continue
-            if rzone is not None and shapely.contains_xy(rzone, x, y):
-                continue
-            if ozone is not None and shapely.contains_xy(ozone, x, y):
-                continue
-            if water is not None and shapely.contains_xy(water, x, y):
-                continue
-            if any(math.hypot(x - a, y - b) < spacing for a, b in placed):
-                continue
-            placed.append((x, y))
-        if shore_here:
-            srng = seeded(f"{p['id']}:shore")
-            near = (shore_arr[:, 0] >= minx) & (shore_arr[:, 0] <= maxx) & (shore_arr[:, 1] >= miny) & (shore_arr[:, 1] <= maxy)
-            for x, y in shore_arr[near]:
-                x, y = float(x), float(y)
-                if not shapely.contains_xy(inner, x, y) or not shapely.contains_xy(terrain.coverage, x, y):
-                    continue
-                if any(g is not None and shapely.contains_xy(g, x, y) for g in (bzone, rzone, ozone, water)):
-                    continue
-                if any(math.hypot(x - a, y - b) < spacing for a, b in placed):
-                    continue
-                placed.append((x, y))
-        for x, y in placed:
-            trees.append(tree(x, y, rng, p["id"], p["kind"] in forest, "rule"))
-    return trees
+    return ortho_trees(tree, terrain, (bzone, rzone, ozone, water), cfg, origin)
 
 
 # --- spawns ---------------------------------------------------------------------------------
@@ -570,7 +463,7 @@ def make_spawns(
 
 
 def cap_trees(trees: list[dict], chunk_m: float, limit: int) -> list[dict]:
-    """Keep at most ``limit`` rule-based trees per chunk (OSM trees always stay); 0 = no cap.
+    """Keep at most ``limit`` planted canopy trees per chunk (the single trees the detector found always stay); 0 = no cap.
 
     Which trees go is decided by a hash of position, so it is stable and spread over the chunk.
     """
@@ -578,7 +471,7 @@ def cap_trees(trees: list[dict], chunk_m: float, limit: int) -> list[dict]:
         return trees
     by_chunk: dict[tuple[int, int], list[dict]] = {}
     for tr in trees:
-        if tr["src"] == "rule":
+        if tr["src"] == "ortho-canopy":
             by_chunk.setdefault(tuple(chunk_of(tr["x"], tr["y"], chunk_m)), []).append(tr)
     drop: set[int] = set()
     for members in by_chunk.values():
@@ -724,16 +617,6 @@ def unknown_asset_warnings(objects: list[dict]) -> list[str]:
     return out
 
 
-def props_rules(rules_path: Path = DEFAULT_RULES, area: str | None = None) -> dict:
-    """The ``props`` section with the trees of the ground types (``ground.types.<type>.trees``) laid over the tree
-    rules: their densities in ``density_per_1000m2``, and ``forest_kinds`` (the types with forest trees)."""
-    cfg = load_section("props", rules_path, area)
-    types = ground_types(rules_path, area)
-    cfg["trees"]["density_per_1000m2"] = {**cfg["trees"]["density_per_1000m2"], **tree_density(types)}
-    cfg["trees"]["forest_kinds"] = sorted(forest_kinds(types))
-    return cfg
-
-
 def run_props(
     work_dir: Path = DEFAULT_WORK_DIR,
     rules_path: Path = DEFAULT_RULES,
@@ -743,11 +626,10 @@ def run_props(
     terrain, _ = load_terrain(work_dir)
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     parcels = parcels_doc["parcels"]
-    ground = ground_units(parcels_doc)  # trees and spawns are by the kind of ground: parcels and ground areas
+    ground = ground_units(parcels_doc)  # spawns are by the kind of ground: parcels and ground areas
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     graph = json.loads((work_dir / "roads.json").read_text())
-    osm_trees = json.loads((work_dir / "normalised" / "trees.geojson").read_text())["features"]
-    fcfg = props_rules(rules_path, area)
+    fcfg = load_section("props", rules_path, area)
     scfg = load_section("spawns", rules_path, area)
     scfg["ground_kinds"] = sorted(set(scfg["ground_kinds"]) | spawn_kinds(ground_types(rules_path, area)))
     chunk_m = float(parcels_doc["chunk_size_m"])
@@ -757,16 +639,16 @@ def run_props(
     fences = make_fences(
         parcels, buildings, graph, terrain, fcfg["fences"], specs=plan.specs, groups=plan.groups
     )
-    tree_cfg = fcfg["trees"]
-    if os.environ.get("DRYCASTLE_TREE_SOURCE") == "ortho":  # EXPERIMENT, off by default
-        tree_cfg = {**tree_cfg, "source": "ortho", "ortho_dir": str(work_dir.parent / "ortho")}
-        print("props: EXPERIMENT: every tree comes from the orthophoto detector (DRYCASTLE_TREE_SOURCE=ortho)",
+    tree_cfg = {**fcfg["trees"], "ortho_dir": str(work_dir.parent / "ortho")}
+    if not (Path(tree_cfg["ortho_dir"]) / "trees.json").is_file():
+        print(f"props: warning: no orthophoto trees in {tree_cfg['ortho_dir']} (run make ortho-trees); the map has no trees",
+              file=sys.stderr)
+    elif not parcels_doc.get("origin_epsg5514"):
+        print("props: warning: parcels.json has no origin_epsg5514, so the orthophoto trees cannot be placed; the map has no trees",
               file=sys.stderr)
     trees = make_trees(
-        ground,
         buildings,
         graph,
-        osm_trees,
         terrain,
         tree_cfg,
         objects=[(o["position"][0], o["position"][1]) for o in plan.objects],

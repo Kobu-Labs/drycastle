@@ -31,7 +31,6 @@ EDITS = {
     # P-0001 and P-0002 share a boundary: the group fence runs on the outer edge only.
     "groups": {"G-0001": {"parcels": ["P-0001", "P-0002"], "fence": {"mode": "custom"}}},
 }
-RULES_CAP = "props:\n  fences: {probability: 1.0}\n  trees: {max_per_chunk: 12}\n"
 RULES_NOCAP = "props:\n  fences: {probability: 1.0}\n"
 
 
@@ -72,7 +71,7 @@ CASES = [
 
 
 @pytest.mark.parametrize("edits_doc", [NO_EDITS, EDITS], ids=["no-edits", "edits"])
-@pytest.mark.parametrize("rules_text", [RULES_NOCAP, RULES_CAP], ids=["no-cap", "cap"])
+@pytest.mark.parametrize("rules_text", [RULES_NOCAP], ids=["rules"])
 @pytest.mark.parametrize(("parcels", "groups"), CASES)
 def test_fragment_equals_share_of_full_run(ws, tmp_path, edits_doc, rules_text, parcels, groups):
     if groups and not edits_doc.get("groups"):
@@ -83,21 +82,19 @@ def test_fragment_equals_share_of_full_run(ws, tmp_path, edits_doc, rules_text, 
     got = fragment(ws, edits_path, rules_path, parcels, groups)
     ids = set(got["parcels"])
     assert got["fences"] == [s for s in fences if s["parcel"] in ids]
-    assert got["trees"] == [t for t in trees if t["parcel"] in ids]
+    assert got["trees"] == []  # trees come from the orthophoto, not from parcels: only a full props run places them
     assert got["objects"] == [o for o in objects if o["parcel"] in ids]
     assert got["format_version"] == 1
     assert set(got["timing_s"]) == {"load", "compute", "total"}
 
 
 def test_cases_are_not_vacuous(ws, tmp_path):
-    """The fixtures produce fences, trees, a de-duplicated shared boundary and an active cap."""
-    edits_path = write(tmp_path, "edits.json", NO_EDITS)
-    capped = full_run(ws, edits_path, write(tmp_path, "cap.yaml", RULES_CAP))
-    free = full_run(ws, edits_path, write(tmp_path, "free.yaml", RULES_NOCAP))
-    assert capped[0] and free[1]
-    assert len(capped[1]) < len(free[1])  # the cap dropped trees
-    got = fragment(ws, edits_path, write(tmp_path, "cap.yaml", RULES_CAP), ["P-0005"])
-    assert got["trees"] and len(got["trees"]) < len([t for t in free[1] if t["parcel"] == "P-0005"])
+    """The fixtures produce fences and objects, a de-duplicated shared boundary and (from the orthophoto) trees."""
+    edits_path = write(tmp_path, "edits.json", EDITS)
+    fences, trees, objects = full_run(ws, edits_path, write(tmp_path, "free.yaml", RULES_NOCAP))
+    assert fences and trees and objects
+    got = fragment(ws, edits_path, write(tmp_path, "free.yaml", RULES_NOCAP), ["P-0005"])
+    assert got["trees"] == []
 
 
 def test_group_member_pulls_in_the_whole_group(ws, tmp_path):
@@ -206,7 +203,7 @@ def test_glb_nodes_match_the_export_per_parcel_nodes(tmp_path):
 def test_glb_of_a_parcel_without_props_still_names_it_in_replaces(ws, tmp_path):
     import trimesh
 
-    # P-0003 is village ground: the rules plant no trees on it, and its fence is switched off
+    # P-0003 is village ground: its fence is switched off
     edits_path = write(tmp_path, "e.json", {**NO_EDITS, "parcels": {"P-0003": {"fence": {"mode": "none"}}}})
     rules_path = write(tmp_path, "r.yaml", RULES_NOCAP)
     glb = tmp_path / "out" / "x.glb"

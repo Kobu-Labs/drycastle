@@ -1064,9 +1064,6 @@ class ParcelEditTools:
                     "custom_types": FENCE_TYPES,
                     "column_types": list(COLUMN_TYPES),
                 },
-                "trees": {
-                    "density_per_1000m2": tcfg["density_per_1000m2"].get(p["kind"], 0.0),
-                },
             },
             **({"warnings": warnings} if warnings else {}),
         }
@@ -1786,12 +1783,10 @@ class ParcelEditTools:
         """The ground types of the rules (see the registered tool description)."""
         rows = []
         for name, spec in self._ground_types().items():
-            trees = spec.get("trees") or {}
             rows.append({
                 "type": name,
                 "colours": spec.get("colours", []),
                 "recipe": spec.get("recipe"),
-                "trees_per_1000m2": float(trees.get("per_1000m2", 0.0)),
                 "water": bool(spec.get("water")),
                 "from": "rule: " + spec["rule"] if spec.get("rule") else ("osm: " + json.dumps(spec["osm"], sort_keys=True) if spec.get("osm") else "hand-drawn or default only"),
             })

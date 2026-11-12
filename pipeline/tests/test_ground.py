@@ -11,12 +11,10 @@ from drycastle_pipeline.ground import (
     build_ground,
     dike_ground,
     drawn_ground,
-    forest_kinds,
     ground_types,
     ground_units,
     kept_parcels,
     spawn_kinds,
-    tree_density,
     type_colours,
     water_kinds,
 )
@@ -87,22 +85,18 @@ def test_shipped_ground_types_have_a_colour_and_the_default_is_a_type() -> None:
         assert spec.get("recipe") in RECIPES or spec.get("water")
 
 
-def test_the_type_table_hands_out_trees_water_and_spawns() -> None:
+def test_the_type_table_hands_out_water_spawns_and_colours() -> None:
     types = {
         "pond": {"water": True},
-        "wood": {"trees": {"per_1000m2": 5, "forest": True}},
-        "green": {"trees": {"per_1000m2": 0.5}, "spawns": True, "colours": ["#00ff00"]},
+        "wood": {},
+        "green": {"spawns": True, "colours": ["#00ff00"]},
     }
-    assert tree_density(types) == {"pond": 0.0, "wood": 5.0, "green": 0.5}
-    assert (forest_kinds(types), water_kinds(types), spawn_kinds(types)) == ({"wood"}, {"pond"}, {"green"})
+    assert (water_kinds(types), spawn_kinds(types)) == ({"pond"}, {"green"})
     assert type_colours(types) == {"green": ["#00ff00"]}
 
 
-def test_village_overlay_changes_a_type_without_losing_the_rest() -> None:
-    plain, village = ground_types(), ground_types(area="village")
-    assert village["forest"]["trees"]["per_1000m2"] < plain["forest"]["trees"]["per_1000m2"]
-    assert village["forest"]["trees"]["forest"] and village["forest"]["recipe"] == "forest"
-    assert list(village) == list(plain)  # the order of the types is the order of the cut
+def test_ground_types_carry_no_tree_settings() -> None:
+    assert all("trees" not in spec for spec in ground_types().values())  # every tree comes from the orthophoto
 
 
 # --- hand-drawn ground: regions with a ground type --------------------------------------------
