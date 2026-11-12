@@ -1,10 +1,10 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Everything <see cref="DriveModel"/> carries from tick to tick for one driven vehicle (the amphibious transport). The server owns the true one;
-/// the driver's client steps its own copy from the same inputs (ADR 0007). Angles are radians in Godot's sense: yaw 0 faces -Z and positive turns
+/// the driver's client steps its own copy from the same inputs (ADR 0010). Angles are radians in Godot's sense: yaw 0 faces -Z and positive turns
 /// left, positive pitch raises the nose, positive roll drops the left side.
 /// </summary>
 public struct DriveState
@@ -85,7 +85,7 @@ public interface IDriveWorld
 }
 
 /// <summary>
-/// The amphibious transport's driving (ADR 0007): a planar arcade model, pure and stepped at the fixed tick by the server and, from the same
+/// The amphibious transport's driving (ADR 0010): a planar arcade model, pure and stepped at the fixed tick by the server and, from the same
 /// inputs, by the driver's client. Every number is the type's <see cref="VehicleDriveDef"/> and its basic driving numbers.
 ///
 /// The keys are ramped, so a tap is a small correction. On its wheels it pulls hard from a standstill and eases off towards top speed, the key
@@ -409,7 +409,7 @@ public static class DriveRecord
 }
 
 /// <summary>
-/// The driver's client-side prediction (ADR 0007), as the pilot's (<see cref="FlightPrediction"/>): it steps its own <see cref="DriveState"/> with
+/// The driver's client-side prediction (ADR 0010), as the pilot's (<see cref="FlightPrediction"/>): it steps its own <see cref="DriveState"/> with
 /// every input it sends, remembers the state after each, and when a snapshot acknowledges an input it compares what it predicted for that input
 /// with what the server had. A difference beyond the tolerances puts the server's state in place and replays the inputs the server has not yet seen.
 /// </summary>

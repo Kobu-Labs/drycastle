@@ -1,12 +1,12 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>Where an armed seat's rider aims: the view held inside the seat's arc, as a world yaw and pitch (Godot's sense) and a direction.</summary>
 public readonly record struct SeatAim(float ViewYaw, float ViewPitch, Vector3 Direction);
 
 /// <summary>
-/// The rules of an armed seat (<see cref="VehicleSeatDef.Armed"/>, ADR 0008), pure so the server, the rider's client and the tests do the same
+/// The rules of an armed seat (<see cref="VehicleSeatDef.Armed"/>, ADR 0011), pure so the server, the rider's client and the tests do the same
 /// arithmetic. The rider fights with their own loadout from the seat: the view is the aim, held inside the seat's arc
 /// (<see cref="VehicleSeatAimDef"/>) in the vehicle's own frame, so the arc turns and tilts with the vehicle; the shots leave the seated eye; and
 /// the vehicle's speed widens the spread as the rider's own speed does on foot.

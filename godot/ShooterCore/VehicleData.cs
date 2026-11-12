@@ -162,12 +162,12 @@ public class VehicleSeatDef
     public string Role { get; set; } = "passenger";
     public float[] Offset { get; set; } = { 0, 0, 0 };
     /// <summary>
-    /// An armed seat (ADR 0008): its rider keeps their own loadout and fights with it from the seat, in first person, aiming with the view inside
+    /// An armed seat (ADR 0011): its rider keeps their own loadout and fights with it from the seat, in first person, aiming with the view inside
     /// <see cref="Aim"/>. A passenger seat only; false keeps the rider's hands empty, as on the bus.
     /// </summary>
     public bool Armed { get; set; }
     /// <summary>
-    /// The hull does not cover this seat's rider (ADR 0009): a shot that reaches their body hits them and not the hull (<see cref="GunnerCover"/>).
+    /// The hull does not cover this seat's rider (ADR 0012): a shot that reaches their body hits them and not the hull (<see cref="GunnerCover"/>).
     /// False keeps the rider behind the hull, as in every closed vehicle. (The flak truck and the utility helicopter say it for their gunner with the
     /// vehicle's <see cref="VehicleDef.ExposedGunner"/>.)
     /// </summary>
@@ -468,7 +468,7 @@ public class VehicleGlassDef
 }
 
 /// <summary>
-/// The handling of a vehicle its driver's client predicts (vehicles.json "drive", ADR 0007: the amphibious transport): every number
+/// The handling of a vehicle its driver's client predicts (vehicles.json "drive", ADR 0010: the amphibious transport): every number
 /// <see cref="DriveModel"/> reads beyond the type's <see cref="VehicleDef.TopSpeed"/>, <see cref="VehicleDef.Acceleration"/>,
 /// <see cref="VehicleDef.Brake"/>, <see cref="VehicleDef.TurnRadius"/>, <see cref="VehicleDef.HighSpeedRadiusFactor"/>,
 /// <see cref="VehicleDef.WaterTopSpeed"/> and <see cref="VehicleDef.WaterAcceleration"/>. Rates are per second, angles degrees. The summaries say
@@ -775,7 +775,7 @@ public class VehicleDef
     /// <summary>The flight handling of a type with medium "air" (vehicles.json "flight"); null for everything that drives or floats.</summary>
     public VehicleFlightDef? Flight { get; set; }
     /// <summary>
-    /// The handling of a type its driver's client predicts (vehicles.json "drive", the amphibious transport, ADR 0007): it is stepped by
+    /// The handling of a type its driver's client predicts (vehicles.json "drive", the amphibious transport, ADR 0010): it is stepped by
     /// <see cref="DriveModel"/> and never by <see cref="CarModel"/>. Null for every other type.
     /// </summary>
     public VehicleDriveDef? Drive { get; set; }

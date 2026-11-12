@@ -1,7 +1,7 @@
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
-/// Who aboard a vehicle can be shot, and what a rider can do from their seat (ADR 0008, ADR 0009), pure so the server and the tests agree.
+/// Who aboard a vehicle can be shot, and what a rider can do from their seat (ADR 0011, ADR 0012), pure so the server and the tests agree.
 /// A rider is covered by the hull unless their seat is exposed; riders of one vehicle never hit each other; and only an armed seat's rider has
 /// their weapons.
 /// </summary>

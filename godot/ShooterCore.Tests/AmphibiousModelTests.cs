@@ -1,10 +1,10 @@
 using System.Numerics;
 using System.Text;
 using System.Text.Json;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
 /// The amphibious transport's generated model (scripts/make_amphibious_model.py) against its vehicles.json entry: every moving part is a node

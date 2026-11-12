@@ -54,7 +54,7 @@ public partial class NetClient
     }
 
     /// <summary>
-    /// The local player sits in an armed seat (ADR 0008): they keep their own weapons there, so the weapon in the view, its fire and reload
+    /// The local player sits in an armed seat (ADR 0011): they keep their own weapons there, so the weapon in the view, its fire and reload
     /// prediction, the crosshair and the aim are on as they are on foot. The number keys stay the seats'; the mouse wheel changes the weapon.
     /// </summary>
     bool InArmedSeat => _gunship == null && !_controlling && MySeat() is { Seat.Armed: true };

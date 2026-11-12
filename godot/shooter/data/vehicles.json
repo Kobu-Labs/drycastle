@@ -75,7 +75,7 @@
         },
         "camera": { "distance": 7.5, "height": 2.2, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 7, "turn_follow": 1, "turn_response": 5 }
       },
-      "model": "suchohrad-generated-models/amphibious_transport.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
+      "model": "drycastle-generated-models/amphibious_transport.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
       "seats": [
         { "role": "driver", "offset": [-0.45, 0.64, -0.37], "exposed": true },

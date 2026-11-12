@@ -1,12 +1,12 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
-/// The amphibious transport's three riders: the driver, the armed seat beside them (ADR 0008) and the ring gun in the rear. Nothing covers any of
-/// them (ADR 0009): a ray that reaches a rider's body hits that rider and not the hull, a ray that misses them hits the hull as before, and riders
+/// The amphibious transport's three riders: the driver, the armed seat beside them (ADR 0011) and the ring gun in the rear. Nothing covers any of
+/// them (ADR 0012): a ray that reaches a rider's body hits that rider and not the hull, a ray that misses them hits the hull as before, and riders
 /// of one vehicle never hit each other. The flak truck and the utility helicopter keep exactly the one exposed gunner they had.
 /// </summary>
 public class AmphibiousTransportTests

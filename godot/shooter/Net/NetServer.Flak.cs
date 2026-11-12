@@ -48,7 +48,7 @@ public partial class NetServer
     /// </summary>
     /// <remarks>
     /// The riders are every rider of <paramref name="hull"/> in the open (<see cref="RiderRules.Exposed"/>): the one gunner of a flak truck or a
-    /// utility helicopter, or everyone aboard an amphibious transport (ADR 0009). <paramref name="seatsOnly"/> is for the weapons that never
+    /// utility helicopter, or everyone aboard an amphibious transport (ADR 0012). <paramref name="seatsOnly"/> is for the weapons that never
     /// reached a flak or helicopter gunner through the hull (the jeep's roof gun, the killstreak guns): they reach only riders whose seat says it
     /// is exposed. <paramref name="skip"/> is the shooter's own vehicle, which the ray passes through as well.
     /// </remarks>

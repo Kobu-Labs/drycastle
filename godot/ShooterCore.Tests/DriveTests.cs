@@ -1,11 +1,11 @@
 using System.Numerics;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Xunit;
 
-namespace Suchohrad.ShooterCore.Tests;
+namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
-/// The amphibious transport's driving (ADR 0007). Nobody can feel it in a test, so the feel is pinned as numbers on the shipped vehicles.json:
+/// The amphibious transport's driving (ADR 0010). Nobody can feel it in a test, so the feel is pinned as numbers on the shipped vehicles.json:
 /// how long to top speed and how far to stop, on land and afloat, the circle it turns at speed on both, that a tap is a small correction, that the
 /// water checks it going in and the wheels haul it out, and that the driver's prediction and the server step to the same state from the same inputs.
 /// </summary>

@@ -90,7 +90,7 @@ public partial class NetServer
 
     /// <summary>
     /// The live vehicles as the gunship routing sees them: the index is the position in <see cref="_cars"/>. With <paramref name="targets"/> (the
-    /// bodies a round can hit), a vehicle whose seats are in the open (an amphibious transport, ADR 0009) carries its riders, so a round reaches
+    /// bodies a round can hit), a vehicle whose seats are in the open (an amphibious transport, ADR 0012) carries its riders, so a round reaches
     /// them through its hit volume. A flak truck's or a helicopter's gunner stays behind the volume for these rounds, as before.
     /// </summary>
     List<GunshipVehicle> GunshipVehicles(IReadOnlyList<HitTarget>? targets = null)

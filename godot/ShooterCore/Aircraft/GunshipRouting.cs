@@ -4,7 +4,7 @@ namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// A vehicle's hit volume as the gunship routing sees it: its index in the server's car list, its footprint and its height, and the riders its
-/// hull does not cover (an amphibious transport's, ADR 0009; null for none), whom a round reaches through that volume.
+/// hull does not cover (an amphibious transport's, ADR 0012; null for none), whom a round reaches through that volume.
 /// </summary>
 public readonly record struct GunshipVehicle(int Index, Vector3 Feet, float Yaw, float HalfWidth, float HalfLength, float Height, ExposedRiders? Riders = null);
 

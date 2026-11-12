@@ -1,11 +1,11 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
-/// The amphibious transport on the client (ADR 0007), as the utility helicopter is in NetClient.Flight.cs. Every client draws it from the drive
+/// The amphibious transport on the client (ADR 0010), as the utility helicopter is in NetClient.Flight.cs. Every client draws it from the drive
 /// record of the snapshot (<see cref="DriveRecord"/>: its speeds, the slope it stands on, the steering, whether it floats), interpolated like the
 /// vehicle. The driver's own client does not wait for that: it steps the same <see cref="DriveModel"/> with every input it sends
 /// (<see cref="DrivePrediction"/>, against the same colliders through a <see cref="DriveProbe"/>), and when a snapshot acknowledges an input it

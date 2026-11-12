@@ -132,7 +132,7 @@ public class WaterCraftTests
     public void AnAmphibiousTopsOutAtItsWaterSpeedAfloatAndAtItsLandSpeedOnLand()
     {
         // the car model's own rule for an amphibious type without a drive block. The shipped amphibious transport has one and is stepped by
-        // DriveModel instead (ADR 0007): DriveTests holds its numbers.
+        // DriveModel instead (ADR 0010): DriveTests holds its numbers.
         Assert.NotNull(Type("amphibious").Drive);
         var a = new VehicleDef { Id = "duck", TopSpeed = 22, Acceleration = 4, Brake = 8, TurnRadius = 4.2f, MaxLateralAccel = 7.5f, Medium = VehicleMedium.Amphibious, WaterTopSpeed = 7, WaterAcceleration = 1.5f };
         var afloat = new CarState();

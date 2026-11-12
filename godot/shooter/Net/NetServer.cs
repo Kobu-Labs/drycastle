@@ -612,14 +612,14 @@ public partial class NetServer : Node
                 // A gunner's inputs fire the car's gun instead (its aim is the view yaw and pitch).
                 // The pilot of a helicopter steps it here, once per input, as the body on foot is: the pilot's client predicts the same steps (ADR 0006).
                 if (c.CarSeat == 0 && c.Car.Flies) c.Car.StepFlight(FlightInput.FromNet(i, handsOff: controlled), dt, _tick);
-                else if (c.CarSeat == 0 && c.Car.Drives) { c.Car.StepDrive(DriveInput.FromNet(i, handsOff: controlled), dt); c.Car.DriveTick = _tick; } // the same for a driven vehicle (ADR 0007)
+                else if (c.CarSeat == 0 && c.Car.Drives) { c.Car.StepDrive(DriveInput.FromNet(i, handsOff: controlled), dt); c.Car.DriveTick = _tick; } // the same for a driven vehicle (ADR 0010)
                 else if (c.CarSeat == 0) { c.Throttle = Quant.Axis(i.MoveY); c.Steer = Quant.Axis(i.MoveX); c.Handbrake = (i.Buttons & (ushort)MoveButtons.Jump) != 0; }
                 else if (c.Car.Gun != null && c.Car.Def.Seats[c.CarSeat].Role == "gunner")
                 {
                     GunnerInput(c, i);
                     c.Body.Yaw = Quant.Yaw(i.Yaw); c.Body.Pitch = Quant.Pitch(i.Pitch); // a gunner's body faces where they aim, for everyone who sees them at the gun
                 }
-                else if (!controlled && RiderRules.Weapons(c.Car.Def, c.CarSeat, i) is { } seated) SeatWeapons(c, c.Car, i, seated); // an armed seat: the rider's own weapons (ADR 0008)
+                else if (!controlled && RiderRules.Weapons(c.Car.Def, c.CarSeat, i) is { } seated) SeatWeapons(c, c.Car, i, seated); // an armed seat: the rider's own weapons (ADR 0011)
                 if (lightsEdge) c.Car.Lights = Headlights.Toggle(c.Car.Lights);
                 if (useEdge) ExitCar(c);
                 continue;
@@ -652,7 +652,7 @@ public partial class NetServer : Node
     }
 
     /// <summary>
-    /// One input of a rider in an armed seat (ADR 0008): what the weapon half of an input does on foot. The view is the aim, held inside the seat's
+    /// One input of a rider in an armed seat (ADR 0011): what the weapon half of an input does on foot. The view is the aim, held inside the seat's
     /// arc (which turns and tilts with the vehicle), and it is where everyone sees the rider point; recoil and breath run as on foot; the weapon
     /// fires, reloads and switches by its own rules, and a shot is resolved from the seat (<see cref="FireWeapon"/>).
     /// </summary>
@@ -693,7 +693,7 @@ public partial class NetServer : Node
     }
 
     /// <summary>
-    /// A live player as a hit target. A rider in a seat that says it is exposed (the amphibious transport's, ADR 0009) is the figure every client
+    /// A live player as a hit target. A rider in a seat that says it is exposed (the amphibious transport's, ADR 0012) is the figure every client
     /// draws there: as tall as the seat makes them (seated, or standing in the ring), and where the seat is now, since a driven vehicle moves on
     /// its driver's inputs before its riders' bodies are put back on their seats. Everyone else is their body, as before.
     /// </summary>
@@ -735,7 +735,7 @@ public partial class NetServer : Node
 
     /// <summary>
     /// Resolves one shot or swing against the current positions (no lag compensation) and walls, applies damage, sends events.
-    /// <paramref name="seatCar"/> is the vehicle the shooter rides in an armed seat (ADR 0008), null on foot. From a seat the shot leaves the
+    /// <paramref name="seatCar"/> is the vehicle the shooter rides in an armed seat (ADR 0011), null on foot. From a seat the shot leaves the
     /// seated eye, its aim is held inside the seat's arc, the vehicle's speed widens the spread as the shooter's own does on foot, the vehicle's
     /// own hull is not in the way, and its riders are not targets: riders of one vehicle never hit each other. Everything else is the same shot,
     /// so its kills are ordinary kills with that weapon.
@@ -912,7 +912,7 @@ public partial class NetServer : Node
         foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed, car.Lights));
         foreach (var car in _cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model
         foreach (var car in _cars) if (car.Flies) ents.Add(FlightRecord.Make(car.Id, car.Flight)); // a helicopter's velocity, tilt and rotor (ADR 0006)
-        foreach (var car in _cars) if (car.Drives) ents.Add(DriveRecord.Make(car.Id, car.Drive)); // a driven vehicle's speeds, slope, steering and whether it floats (ADR 0007)
+        foreach (var car in _cars) if (car.Drives) ents.Add(DriveRecord.Make(car.Id, car.Drive)); // a driven vehicle's speeds, slope, steering and whether it floats (ADR 0010)
         foreach (var car in _cars) if (car.Def.DoorGun != null) ents.Add(DoorGunRecordOf(car)); // a door gun's aim against its airframe, for everyone's model
         ents.AddRange(TargetRecords()); // target dummies (#148)
         foreach (var r in _rockets)

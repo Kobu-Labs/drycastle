@@ -68,7 +68,7 @@ is alpha-blended. Same vehicle frame, with the origin on the ground under the ro
 `gun` (pitch about X, positive raises the muzzle), `barrel` (recoil along +Z) with the `muzzle` empty; empties mark `gunner_sight`, `seat_pilot`,
 `seat_gunner`, the lights (`light_head`, `light_tail`, `light_nav_l`/`_r`) and `smoke_engine`.
 
-`suchohrad-generated-models/amphibious_transport.glb` (2026-11-12) is the amphibious transport (`godot/shooter` vehicle id `amphibious`): an open-topped
+`drycastle-generated-models/amphibious_transport.glb` (2026-11-12) is the amphibious transport (`godot/shooter` vehicle id `amphibious`): an open-topped
 amphibious car, a boat-shaped hull on four wheels with no roof and no doors, low sides, a propeller under the stern, two seats in front and a machine gun
 on a ring mount over the rear compartment. Nothing covers the riders: the game draws them in their seats, and they can be shot. Original geometry written
 as code in `scripts/make_amphibious_model.py` (standard library only; it loads the flak script's mesh helpers from the file beside it;

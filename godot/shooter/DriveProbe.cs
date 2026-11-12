@@ -1,14 +1,14 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The physics space as <see cref="DriveModel"/> sees it (<see cref="IDriveWorld"/>), as <see cref="FlightProbe"/> is for the helicopter: a hidden
 /// kinematic body with the vehicle's hull box, moved through the solid world (layer 1: ground, buildings, tree trunks, placed solids) to find what
 /// stops it, and a ray for the ground under a wheel. The server has one per driven vehicle (the amphibious transport), the driver's client one for
-/// its prediction, and both ask the same questions of the same colliders (ADR 0007). It is on no layer itself, so nothing hits it: bullets meet the
+/// its prediction, and both ask the same questions of the same colliders (ADR 0010). It is on no layer itself, so nothing hits it: bullets meet the
 /// vehicle's own hit box. Shot-only cover (tree crowns, bushes) does not stop it, as it does not stop a car.
 /// </summary>
 public sealed partial class DriveProbe : CharacterBody3D, IDriveWorld

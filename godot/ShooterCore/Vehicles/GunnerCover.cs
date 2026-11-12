@@ -17,7 +17,7 @@ public sealed class ExposedRiders
 
 /// <summary>
 /// Who a ray reaches on a vehicle with riders in the open (vehicles.json <c>exposed_gunner</c>, the flak truck's turret and the helicopter's
-/// door; a seat's <c>exposed</c>, every seat of the amphibious transport, ADR 0009). The hull's hit box stops a bullet at its surface, and a rider
+/// door; a seat's <c>exposed</c>, every seat of the amphibious transport, ADR 0012). The hull's hit box stops a bullet at its surface, and a rider
 /// sits inside or behind that box, so the hull would always shadow them. Here each exposed rider is a target of their own: a ray that reaches a
 /// rider's body before the world beyond the hull stops it hits that rider, wherever the hull's surface was, and the hull takes nothing from that
 /// ray. Every other target stays blocked by the hull as before, and a ray that misses the riders goes on to hit the hull.

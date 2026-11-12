@@ -374,7 +374,7 @@ public partial class NetClient : Node
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
         }
         UpdatePiloting(h.Ack); // the helicopter this player flies is predicted, and reconciled here (ADR 0006)
-        UpdateDriving(h.Ack);  // and so is the amphibious transport this player drives (ADR 0007)
+        UpdateDriving(h.Ack);  // and so is the amphibious transport this player drives (ADR 0010)
         LossAfterSnapshot(h);
     }
 
@@ -582,7 +582,7 @@ public partial class NetClient : Node
         var slot = Ammo?.Slot ?? _wantSlot;
         var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
         _viewmodel.Show(id);
-        var seated = (_driving || _myState == EntityState.InVehicle) && !InArmedSeat; // an armed seat's rider holds their weapon (ADR 0008)
+        var seated = (_driving || _myState == EntityState.InVehicle) && !InArmedSeat; // an armed seat's rider holds their weapon (ADR 0011)
         _viewmodel.Visible = !Dead && !seated && !_controlling && _gunship == null && _me is not { ZoomFov: > 0 };
     }
 

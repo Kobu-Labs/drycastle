@@ -86,7 +86,7 @@ public partial class ServerCar : CharacterBody3D
     public Water FlightWater = Water.Empty;
     public FlightBounds FlightBounds = FlightBounds.None;
 
-    /// <summary>A type its driver's client predicts (vehicles.json drive, the amphibious transport, ADR 0007): stepped by <see cref="StepDrive"/>, never by <see cref="Step"/>.</summary>
+    /// <summary>A type its driver's client predicts (vehicles.json drive, the amphibious transport, ADR 0010): stepped by <see cref="StepDrive"/>, never by <see cref="Step"/>.</summary>
     public bool Drives => Def.Drive != null;
     /// <summary>The drive state of such a type: the server's is the true one, the driver's client predicts its own.</summary>
     public DriveState Drive;

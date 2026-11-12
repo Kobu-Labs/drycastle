@@ -9,7 +9,7 @@ Decided for the amphibious transport's rework. **Changes** the standing rule tha
 - *How far round.* The seat has an arc in the vehicle's frame (`aim`: the transport's runs from 60 degrees left of the nose round the right side to 150 degrees, 40 down, 70 up). The view is held inside it, so the rider cannot aim where they cannot shoot: not across the driver beside them, not back through the gunner. A full circle would have made the ring gun's seat pointless.
 - *Spread.* The vehicle's speed widens it as the rider's own speed does on foot: none at a standstill, the weapon's whole movement spread at the seat's `spread_full_speed` (16 m/s), in proportion between. A seat is no crouch: no stance bonus, for spread or recoil. Otherwise the transport would be the steadiest gun platform in the game at 80 km/h.
 - *The knife.* It works as on foot, from the seat, against anyone within its reach who is not aboard. It rarely matters; forbidding it would have been one more rule.
-- *The shooter's own vehicle.* Its hull is not in its riders' way and its riders are not their targets (ADR 0009).
+- *The shooter's own vehicle.* Its hull is not in its riders' way and its riders are not their targets (ADR 0012).
 
 **Considered.** A second vehicle gun for that seat (it would not be the player's loadout, which is the point of an open car). A new key for the weapon change (a binding nobody has, for something the wheel already does). Letting every passenger of every vehicle shoot (the bus would become a bunker; closed hulls have no openings to shoot through).
 

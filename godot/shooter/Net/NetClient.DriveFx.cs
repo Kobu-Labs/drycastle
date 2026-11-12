@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// What the amphibious transport shows beyond where it is: the body leans over its wheels (<see cref="DriveBody"/>), the wheels roll with the speed
@@ -13,7 +13,7 @@ namespace Suchohrad.Shooter;
 /// </summary>
 public partial class NetClient
 {
-    /// <summary>The nodes of a driven vehicle's model that move, found by name (the model's own, see assets/suchohrad-generated-models), and its water effects.</summary>
+    /// <summary>The nodes of a driven vehicle's model that move, found by name (the model's own, see assets/drycastle-generated-models), and its water effects.</summary>
     sealed class DriveNodes
     {
         /// <summary>The body (leans over the wheels); riders and the driver's own figure are placed on it.</summary>

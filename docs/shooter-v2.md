@@ -284,7 +284,7 @@ one match and level 20 after about six good matches. No telemetry exists yet.
   from the rear where its engine is. It is boarded like a car, within 3 m of its centre, so along the middle of either side (the middle door is there),
   not at the front door. Its doors are separate model nodes that nothing moves yet.
 - Utility helicopter (ADR 0006): the flown vehicle (`utility_helicopter`, medium `air`), see "Utility helicopter" below.
-- Amphibious transport (ADR 0007, 0008, 0009): an open three-seat vehicle with its own driving model on land and water, an armed seat and a
+- Amphibious transport (ADR 0010, 0011, 0012): an open three-seat vehicle with its own driving model on land and water, an armed seat and a
   ring gun, and riders the hull does not cover (`amphibious`, medium `amphibious`), see "Amphibious transport" below.
 - Water bodies (#138, #142): the pipeline writes `water.json` into the map artifact; the server and clients swim, submerge
   and hold breath (HUD "AIR"). Surfaces, underwater tint and splashes are client-side and not yet compiled by Godot.
@@ -373,7 +373,7 @@ as the driver of every other vehicle is: to stop the pilot, destroy the helicopt
 Two spawn on the map (`spawn_count` 2, near a shore where there is one) and it is in the sandbox vehicle list. The model is generated
 (`scripts/make_amphibious_model.py`): a boat-shaped hull on four wheels, no roof, no doors, low sides, a propeller under the stern. Three seats
 (it had four): the driver front left, an armed seat beside them, and a gunner standing in a ring over the rear. The driver's client predicts it
-and the server corrects it (ADR 0007); everyone else, its riders included, sees it interpolated.
+and the server corrects it (ADR 0010); everyone else, its riders included, sees it interpolated.
 
 **Controls** (the rebindable movement actions; nothing new to bind):
 
@@ -418,7 +418,7 @@ engine in the stern (`hood`). The driver's camera is the helicopter's spring cam
 and stay aboard the vehicle its driver sees in the present; they sit (the crouch pose), the gunner stands, and they do not walk. A rider who
 aims (the armed seat, the ring gun) faces where they aim and their weapon is pitched to it.
 
-**Armed seat** (seat 2, ADR 0008). Its rider keeps their own loadout and fights with it from the seat, in first person: fire, reload, aim and
+**Armed seat** (seat 2, ADR 0011). Its rider keeps their own loadout and fights with it from the seat, in first person: fire, reload, aim and
 scope, recoil and breath as on foot, the weapon in the view, ordinary kills with that weapon. It is a property of the seat (`"armed": true`),
 so the bus's passengers stay unarmed.
 
@@ -437,7 +437,7 @@ against their bodies and the hull). Its camera is at the model's sight, its aim 
 drawn muzzle, the barrel recoils and the muzzle flashes, and the gunner's ammo is event 160: all as the door gun's. Kill-feed weapon
 "Mounted MG".
 
-*Who can be shot in their seat.* All three (ADR 0009): each seat is `"exposed": true`. A bullet, a pellet, a rocket or a killstreak round that
+*Who can be shot in their seat.* All three (ADR 0012): each seat is `"exposed": true`. A bullet, a pellet, a rocket or a killstreak round that
 reaches a rider's body hits that rider and not the hull, and the hull takes nothing from it; one that misses them hits the hull. The hit box
 is the hull only, 1.2 m high, so the riders stand out of it and are the drawn figures: seated ones as tall as a crouch, the gunner standing.
 Riders of one vehicle never hit each other, and their own hull is not in their way. A rider who dies frees their seat; if it was the driver,
@@ -517,7 +517,7 @@ The grammar, completion and history are pure code in `ShooterCore/Chat` (`ChatCo
 ## 9. Wire protocol
 
 Protocol version: **24** (`Wire.ProtocolVersion`, whose summary lists every bump). The hello carries it; a mismatch is refused with a message naming both
-versions. Version 24 (the amphibious transport, ADR 0007 to 0009): snapshot entity type 6 (Drive: a driven vehicle's speeds along and across its
+versions. Version 24 (the amphibious transport, ADR 0010 to 0012): snapshot entity type 6 (Drive: a driven vehicle's speeds along and across its
 heading and vertically, the slope it stands on, its steering, throttle and flags, `DriveRecord`, ids from 0x5000), the driver's inputs step it
 one for one as the pilot's do the helicopter, a turret record for its ring gun, and the server answers a seated player's Fire, Reload and weapon
 change when their seat is armed (no new fields for that; the bump is the behaviour change). Version 23 (chat and admin commands): event kinds 180 (a line or command from a player), 181 (a chat log line), 182 (admin flag and spawnable vehicles for a joiner) and 183 (the day clock changed live). Version 21 (the utility helicopter, ADR 0006): snapshot entity type 5 (Flight: a flying vehicle's velocity, pitch, roll, rotor speed and
