@@ -86,6 +86,7 @@ public class VehiclesFile : IVersioned
                 if (fk.MinElevationDeg < -10 || fk.MaxElevationDeg > 89 || fk.MinElevationDeg >= fk.MaxElevationDeg)
                     throw new DataFileException($"vehicles.json: {v.Id}: flak elevation is min_elevation_deg (at least -10) below max_elevation_deg (at most 89)");
             }
+            if (v.ChaseDistance is <= 0 || v.ChaseHeight is < 0) throw new DataFileException($"vehicles.json: {v.Id}: chase_distance must be positive and chase_height not negative");
             if (v.Height <= 0 || v.HalfWidth <= 0 || v.HalfLength <= 0) throw new DataFileException($"vehicles.json: {v.Id}: height, half_width and half_length must be positive");
             if (v.RunOverMass is { } rm && rm <= 0) throw new DataFileException($"vehicles.json: {v.Id}: run_over_mass must be positive");
             if (!VehicleMedium.All.Contains(v.Medium)) throw new DataFileException($"vehicles.json: {v.Id}: medium {v.Medium} is not land, amphibious, boat or air");
@@ -437,6 +438,10 @@ public class VehicleDef
     /// <summary>Half extents of the footprint (server collision box and run-over test), metres.</summary>
     public float HalfWidth { get; set; } = 1.1f;
     public float HalfLength { get; set; } = 2.15f;
+    /// <summary>Chase camera distance behind the vehicle, metres (#218). Null: derived from the length, see <see cref="ChaseCamera.Wanted"/>.</summary>
+    public float? ChaseDistance { get; set; }
+    /// <summary>Chase camera height above the vehicle's origin, metres. Null: derived from the length.</summary>
+    public float? ChaseHeight { get; set; }
     /// <summary>
     /// Height of the hit volume, metres from the ground: the top of the visible body (roof, cabin, rider's head). A bullet that passes over
     /// it misses; one that enters the footprint below it hits. See <see cref="VehicleBox"/>.
