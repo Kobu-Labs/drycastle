@@ -37,7 +37,7 @@ public partial class NetClient
         /// <summary>Headlights on (the record's bit), braking (speed fell this snapshot) and the lamps (null: the type has none).</summary>
         public bool Lights, Braking;
         public CarLights? Lamps;
-        /// <summary>The solid box predicted on-foot movement collides with (#217).</summary>
+        /// <summary>The solid box predicted on-foot movement collides with (#217), at the last snapshot's place: the server's own box is built from the same numbers.</summary>
         public StaticBody3D? Solid;
     }
 

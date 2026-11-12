@@ -6,7 +6,8 @@ namespace Suchohrad.ShooterCore;
 /// <summary>
 /// Physics layers of the world. Solid world (players, vehicles and bullets stop on it) is layer 1; vehicles are layer 2 (as
 /// before). Shot-only cover (tree crowns, bushes) is layer 4: bullets, pellets, rockets and sight lines stop on it, while
-/// players and cars move through it.
+/// players and cars move through it. Layer 8 is the box of a vehicle that on-foot players are stopped by: a body of its own
+/// beside the vehicle's (see <see cref="VehicleSolid"/>).
 /// </summary>
 public static class CollisionLayers
 {
@@ -14,8 +15,15 @@ public static class CollisionLayers
     public const uint Vehicles = 2;
     public const uint ShotOnly = 4;
 
-    /// <summary>What an on-foot player's movement collides with: the world and solid vehicles (#217). Not while seated, which is the world only.</summary>
-    public const uint OnFoot = World | Vehicles;
+    /// <summary>
+    /// The solid box of a vehicle for on-foot movement (#217): a static body with the vehicle's hit volume, on the server and on every client.
+    /// It is not the vehicle's own body (layer <see cref="Vehicles"/>), because that one has a collision exception with every player so that it
+    /// can drive over them, and an exception works both ways: the player's move would pass through it too. Rays never query this layer.
+    /// </summary>
+    public const uint VehicleSolid = 8;
+
+    /// <summary>What an on-foot player's movement collides with: the world and the vehicles' solid boxes (#217). Not while seated, which is the world only.</summary>
+    public const uint OnFoot = World | VehicleSolid;
 
     /// <summary>Server rays for bullets, rockets, splash and turret sight: world, vehicles and shot-only cover.</summary>
     public const uint Bullets = World | Vehicles | ShotOnly;

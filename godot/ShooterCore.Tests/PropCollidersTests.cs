@@ -159,6 +159,18 @@ public class PropCollidersTests
     }
 
     [Fact]
+    public void OnFootMovementIsStoppedByTheSolidBoxNotTheVehicleBody()
+    {
+        // the vehicle's own body has a collision exception with every player (it drives over them), and an exception works both ways:
+        // a player whose mask named that body would still walk through it on the server, while the client's copy stopped the prediction
+        Assert.Equal(0u, CollisionLayers.OnFoot & CollisionLayers.Vehicles);
+        Assert.NotEqual(0u, CollisionLayers.OnFoot & CollisionLayers.VehicleSolid);
+        Assert.NotEqual(0u, CollisionLayers.OnFoot & CollisionLayers.World);
+        // a shot must come back with the vehicle's body (damage, glass), never with the box beside it; nor do the cars or the world move against it
+        Assert.Equal(0u, CollisionLayers.VehicleSolid & (CollisionLayers.Bullets | CollisionLayers.WorldShots | CollisionLayers.World | CollisionLayers.Vehicles | CollisionLayers.ShotOnly));
+    }
+
+    [Fact]
     public void ObjectSolidsFollowTheCategory()
     {
         Assert.Empty(ObjectColliders.ForCategory("flower", 1, 1, 1));

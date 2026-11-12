@@ -125,7 +125,7 @@ public partial class NetClient
         var muzzle = _me.ZoomFov > 0 ? from + dir * 0.6f : _viewmodel?.MuzzlePosition ?? from + dir * 0.8f; // scoped: the streak leaves the crosshair, the gun is hidden
         _viewmodel?.Flash(projectile ? 0.5f : 0.4f);
         if (projectile) return; // the rocket itself comes from the server
-        var q = PhysicsRayQueryParameters3D.Create(from, from + dir * 300f);
+        var q = PhysicsRayQueryParameters3D.Create(from, from + dir * 300f, CollisionLayers.WorldShots); // not the vehicles' solid boxes: VehicleAlong finds a vehicle
         q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
         var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         var worldDist = hit.Count == 0 ? 300f : from.DistanceTo(hit["position"].AsVector3());

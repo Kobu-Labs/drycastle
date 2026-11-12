@@ -196,6 +196,7 @@ public partial class NetServer : Node
         _match.Entities.Tick((float)delta);
         StreakTick((float)delta);
         BotsTick((float)delta); // fills the roster and queues each bot's input for this tick (#214)
+        foreach (var car in _cars) car.PlaceSolid(); // the boxes on-foot players are stopped by, where the vehicles stand after the last tick (#217)
         foreach (var c in _byId.Values.ToList()) SimulateClient(c, (float)delta); // every joined player, bots included
         StepRockets((float)delta);
         StepCorpses((float)delta);
