@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 from suchohrad_pipeline.buildings import footprint_polygon
 from suchohrad_pipeline.config import DEFAULT_AREA, DEFAULT_RAW_DIR, area_paths
-from suchohrad_pipeline.meshes import Mesh
+from suchohrad_pipeline.meshes import Mesh, triangulate
 from suchohrad_pipeline.normalise import DEFAULT_WORK_DIR
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
 
@@ -147,6 +147,47 @@ class Terrain:
         tris = np.empty((2 * len(cj), 3, 3))
         tris[0::2], tris[1::2] = first, second
         return Mesh(tris, colour_of(tris.mean(axis=1)[:, :2]))
+
+
+def cut_holes(mesh: Mesh, holes: list[Polygon]) -> Mesh:
+    """``mesh`` (an upward-facing surface, such as terrain) with the ``holes`` cut out: a triangle a hole
+    crosses is replaced by the triangles of what is left, on the same plane and with the same colour."""
+    if not holes or not mesh.face_count:
+        return mesh
+    lo = np.min([h.bounds[:2] for h in holes], axis=0)
+    hi = np.max([h.bounds[2:] for h in holes], axis=0)
+    xy = mesh.tris[:, :, :2]
+    near = np.nonzero(
+        (xy.max(axis=1) >= lo).all(axis=1) & (xy.min(axis=1) <= hi).all(axis=1)
+    )[0]
+    keep = np.ones(len(mesh.tris), bool)
+    tris, cols = [], []
+    for n in near:
+        tri = mesh.tris[n]
+        poly = Polygon(tri[:, :2])
+        if not poly.is_valid or poly.area < 1e-9 or not any(poly.intersects(h) for h in holes):
+            continue
+        keep[n] = False
+        left = poly
+        for h in holes:
+            left = left.difference(h)
+        plane = np.linalg.solve(np.c_[tri[:, :2], np.ones(3)], tri[:, 2])  # z = a x + b y + c
+        up = np.cross(tri[1] - tri[0], tri[2] - tri[0])[2] > 0
+        for piece in getattr(left, "geoms", [left]):
+            if not isinstance(piece, Polygon) or piece.is_empty:
+                continue
+            for t3 in triangulate(piece):
+                v = np.array([(x, y, plane[0] * x + plane[1] * y + plane[2]) for x, y in t3])
+                if (np.cross(v[1] - v[0], v[2] - v[0])[2] > 0) != up:
+                    v = v[[0, 2, 1]]
+                tris.append(v)
+                cols.append(mesh.colours[n])
+    if not tris:
+        return mesh
+    return Mesh(
+        np.concatenate([mesh.tris[keep], np.array(tris)]),
+        np.concatenate([mesh.colours[keep], np.array(cols, mesh.colours.dtype)]),
+    )
 
 
 # --- building the grid ----------------------------------------------------------------------

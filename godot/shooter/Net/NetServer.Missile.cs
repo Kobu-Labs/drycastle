@@ -36,6 +36,7 @@ public partial class NetServer
         foreach (var t in LiveTargets())
         {
             var isDirect = i.Victim == t.Id;
+            if (!isDirect && !BlastReaches(N(pos), t)) continue; // a bunker room's walls are between them
             var dist = HitMath.DistanceToBody(N(pos), t);
             var self = t.Id == i.Owner;
             var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, self);

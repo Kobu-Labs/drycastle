@@ -36,6 +36,8 @@ public sealed partial class MapLoader
     public string WaterJson { get; private set; } = "";
     /// <summary>Contents of windows.json, the glass panes of the detailed buildings (empty when the map has none); parsed by the shooter (ShooterCore.MapGlass).</summary>
     public string WindowsJson { get; private set; } = "";
+    /// <summary>Contents of bunkers.json, the rooms of the enterable bunkers (empty when the map has none); parsed by the shooter (ShooterCore.Shelters).</summary>
+    public string BunkersJson { get; private set; } = "";
     /// <summary>Origin of the local frame in S-JTSK (EPSG:5514) metres (east, north), from parcels.json (map 0.4.0+); null for older maps.</summary>
     public (double X, double Y)? OriginEpsg5514 { get; private set; }
     /// <summary>Rule values (fence and tree defaults) from the manifest (map 0.4.0+); null for older maps.</summary>
@@ -99,6 +101,8 @@ public sealed partial class MapLoader
         TreesJson = File.Exists(trees) ? File.ReadAllText(trees) : ""; // map 0.6.0+
         var windows = Path.Combine(mapDir, "windows.json");
         WindowsJson = File.Exists(windows) ? File.ReadAllText(windows) : ""; // only maps with hand-described building detail have it
+        var bunkers = Path.Combine(mapDir, "bunkers.json");
+        BunkersJson = File.Exists(bunkers) ? File.ReadAllText(bunkers) : ""; // only maps with an enterable bunker have it
         yield return 0.03f;
 
         var tPhase = Time.GetTicksMsec();

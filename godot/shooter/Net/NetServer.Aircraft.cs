@@ -213,6 +213,7 @@ public partial class NetServer
                 continue;
             }
             var t = targets.FirstOrDefault(x => x.Id == h.TargetId);
+            if (!h.Direct && !BlastReaches(at, t)) continue; // a bunker room's walls are between them
             var k = ProjectileMath.Knockback(splash.KnockbackSpeed, at, HitMath.Centre(t), h.Fraction);
             PushOnDeath(h.TargetId, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
             var res = Deal(owner, credit, h.TargetId, h.Damage, false, false);

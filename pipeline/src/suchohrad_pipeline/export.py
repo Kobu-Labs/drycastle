@@ -46,6 +46,8 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # "tint" flag; meadow.bin is format 2 (a tint flag per layer) and then 3 (a species-zone plane and kind mixes); more
 # clutter kinds (grasses, wild and garden flowers) in clutter_meshes.glb. A loader that reads only 0.9.0 clutter would refuse
 # meadow.bin's new format and draw no meadow.
+# (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
+# Only maps with a bunker have it; a loader that does not know it gives no shelter from blasts.
 MAP_VERSION_BASE = "0.10.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
@@ -316,6 +318,16 @@ def run_export(
         # tagged window panes (building_detail): node name, position, size, facade, breakable
         _dump(stale_windows, {"version": 1, "windows": sorted(scene.windows, key=lambda w: w["node"])})
         files["windows"] = "windows.json"
+    stale_bunkers = out_dir / "bunkers.json"
+    stale_bunkers.unlink(missing_ok=True)
+    if scene.bunkers:
+        # the rooms of the enterable bunkers (bunker.bunker_rooms): the game shelters a player inside from a blast outside
+        _dump(stale_bunkers, {
+            "version": 1,
+            "axes": "polygon: local metres, x east, y north (as parcels.json); z0, z1: metres, as terrain.json",
+            "bunkers": sorted(scene.bunkers, key=lambda b: b["id"]),
+        })
+        files["bunkers"] = "bunkers.json"
 
     parcels_file = {
         "version": ARTIFACT_FORMAT_VERSION,

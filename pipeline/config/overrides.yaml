@@ -45,15 +45,19 @@ buildings:
     height_m: 9.2
     roof_height_m: 5.6  # measured: steep roof, eave 3.6 m, ridge 9.2 m
 
-  # WW2 pillboxes (P-0876, P-0823): the real footprint with a rounded concrete dome, door and firing
-  # slits (pipeline/src/suchohrad_pipeline/bunker.py). model_axis is the bearing the door faces:
-  # towards the parcel's road side.
+  # WW2 bunkers (P-0876, P-0823): the real footprint with a rounded concrete dome, an open doorway and
+  # firing slits; players can go in (pipeline/src/suchohrad_pipeline/bunker.py). model_axis is the
+  # bearing the door faces: towards the parcel's road side.
   w378900225:
     model: bunker
     model_axis: 0.6905
   w378900206:
     model: bunker
     model_axis: -2.4043
+  # The third bunker (on P-0829): OSM draws it as a plain building. The door is on its long west wall.
+  w825140518:
+    model: bunker
+    model_axis: -3.0850
 
   # P-0675 (Kultúrny dom): flat roof, about 4.4 m, white-grey render. Openings in config/buildings/.
   w378900226:

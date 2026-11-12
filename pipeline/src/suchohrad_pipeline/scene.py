@@ -6,14 +6,17 @@ older work directory still works; a missing terrain means buildings stand at z =
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 import shapely
+from shapely.geometry import Polygon
 
 from suchohrad_pipeline.building_detail import build_detail, load_details
 from suchohrad_pipeline.buildings import hex_to_rgb
+from suchohrad_pipeline.bunker import bunker_rooms
 from suchohrad_pipeline.detail import load_patches, patches_by_chunk
 from suchohrad_pipeline.edits import DEFAULT_EDITS, load_edits
 from suchohrad_pipeline.landmarks import build_landmark
@@ -22,7 +25,7 @@ from suchohrad_pipeline.propmeshes import fence_mesh, fence_meshes, parcel_props
 from suchohrad_pipeline.regions import node_name, plan_regions, region_meshes
 from suchohrad_pipeline.roads import road_mesh
 from suchohrad_pipeline.rules import DEFAULT_RULES, load_section
-from suchohrad_pipeline.terrain import Terrain, load_terrain
+from suchohrad_pipeline.terrain import Terrain, cut_holes, load_terrain
 from suchohrad_pipeline.textures import TexturedMesh, tex_node_name
 
 Chunk = tuple[int, int]
@@ -76,6 +79,7 @@ class MapScene:
     spawns: dict | None = None
     warnings: list[str] = field(default_factory=list)  # stale or unusable edits entries
     windows: list[dict] = field(default_factory=list)  # tagged window panes, see building_detail
+    bunkers: list[dict] = field(default_factory=list)  # rooms of the enterable bunkers, see bunker.bunker_rooms
 
     def chunks(self) -> list[Chunk]:
         return sorted(set(self.parcels) | set(self.nodes) | set(self.parcel_props))
@@ -97,6 +101,11 @@ def _by_chunk(mesh: Mesh, chunk_m: float) -> dict[Chunk, Mesh]:
 def _read(work_dir: Path, name: str) -> dict | None:
     path = work_dir / name
     return json.loads(path.read_text()) if path.is_file() else None
+
+
+def _raised(r: dict, dz: float) -> dict:
+    """A bunker floor or ladder with its heights (relative to the building base) lifted onto the ground."""
+    return {**r, "z0": round(r["z0"] + dz, 3), "z1": round(r["z1"] + dz, 3)}
 
 
 def build_scene(
@@ -145,6 +154,16 @@ def build_scene(
                             )
                 elif b.get("model"):  # hand-modelled landmark: detailed visual, plain-massing collision
                     m = build_landmark(b, detail=fn is building_mesh)
+                    if b["model"] == "bunker" and fn is building_mesh:
+                        a = float(b["model_axis"])
+                        rooms = bunker_rooms(b["footprint"]["exterior"], (math.cos(a), math.sin(a)))
+                        if rooms:
+                            scene.bunkers.append({
+                                "id": bid, "parcel": p["id"],
+                                "floors": [_raised(r, dz) for r in rooms["floors"]],
+                                "ladders": [_raised(r, dz) for r in rooms["ladders"]],
+                                "hatch": rooms["hatch"],
+                            })
                 else:
                     m = fn(b)
                 meshes.append(Mesh(m.tris + [0, 0, dz], m.colours))
@@ -165,11 +184,25 @@ def build_scene(
     colours = ParcelColours(parcels_doc["parcels"], tcfg["colours"])
     dec = int(tcfg["collision_decimate"])
     grey = np.array(GREY, np.uint8)
+    # the hatch of each bunker is a hole in the ground (#224): the terrain, seen and collided with, has it cut out
+    cuts = [Polygon(bk["hatch"]) for bk in scene.bunkers if bk["hatch"]]
+    # ... and the ground a bunker stands on is collided with at the full 4 m grid, not decimated: the decimated surface
+    # sits up to 0.3 m under the flattened floor there, which would put a step in the doorway
+    exact = {
+        (math.floor(x / chunk_m), math.floor(y / chunk_m))
+        for c in cuts
+        for x in (c.centroid.x - 8, c.centroid.x + 8)
+        for y in (c.centroid.y - 8, c.centroid.y + 8)
+    }
     for key in t.chunks():
-        put("terrain", {key: t.chunk_mesh(*key, colours)})
+        put("terrain", {key: cut_holes(t.chunk_mesh(*key, colours), cuts)})
         put(
             "terrain_collision",
-            {key: t.chunk_mesh(*key, lambda pts: np.tile(grey, (len(pts), 1)), dec)},
+            {
+                key: cut_holes(
+                    t.chunk_mesh(*key, lambda pts: np.tile(grey, (len(pts), 1)), 1 if key in exact else dec), cuts
+                )
+            },
         )
 
     scene.graph = _read(work_dir, "roads.json")

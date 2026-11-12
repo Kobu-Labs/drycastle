@@ -331,6 +331,23 @@ y north, chunk, building IDs), `roads.json`, `spawns.json` and `manifest.json` (
 attribution, input hashes including the work files). The output has no timestamp and is
 byte-identical for identical input.
 
+**Bunkers (`bunkers.json`).** The three bunkers are buildings with `model: bunker` in `config/overrides.yaml`
+(`pipeline/src/suchohrad_pipeline/bunker.py`, ADR 0009): one room behind 0.5 m walls, an open doorway on the wall facing
+`model_axis`, firing slits that are real openings, and three more rooms under it (2.4 m floor to floor), one per floor on the
+same footprint. A 1 m square hatch in each floor, in a different place on each, leads down; a ladder hangs on one edge of
+it. The ground floor has no collision (a player stands on the flattened terrain, so the terrain collision round a bunker is
+built at the full grid), and its hatch is cut out of the terrain and `terrain_collision` (`terrain.cut_holes`). The floors,
+ceilings, walls and furniture underneath are the collision of the shell. `bunkers.json` (listed under `files.bunkers`, only
+when the map has a bunker) holds per bunker `{"id", "parcel", "floors": [{"level", "polygon", "z0", "z1"}], "ladders":
+[{"x", "y", "dx", "dy", "z0", "z1"}], "hatch": ring}`: `level` 0 is the ground floor and -1 to -3 the floors under it; the
+polygon is a room ring in local metres (x east, y north) and the heights are as in `terrain.json`. A room is grown 0.15 m into
+its walls, floor and roof, so a blast on a wall's inner face is inside and one on its outer face is outside. A ladder gives
+the spot where the climber stands (`x`, `y`), the way they face (`dx`, `dy`) and the floors it joins (`z0` below, `z1`
+above). The shooter's server uses the rooms for the shelter rule (`ShooterCore/Bunkers/Shelters.cs`: a blast hurts a player
+only when both are in the open or both are in the same room), and the ladders go to every player body (`Ladders.Climb`, the
+shared movement step). The client darkens the rooms and hangs a lamp in each (`shooter/BunkerLights.cs`). The placeable
+`prim:bunker` is the closed form (a placed object collides as one box) and has no room.
+
 **Water bodies (`water.json`).** Written when the terrain exists, listed in `manifest.json` under
 `files.water`. One body per parcel of kind `water`: `{"id", "polygon", "surface_y", "bed_y"}`, with
 the polygon in the same geo-interface form as `parcels.json` (local metres, x east, y north) and the

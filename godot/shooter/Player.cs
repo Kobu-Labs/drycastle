@@ -26,6 +26,9 @@ public partial class Player : CharacterBody3D
     public float LastDrowningDamage { get; private set; }
     /// <summary>The map's water (set by the owner before the first tick); <see cref="Water.Empty"/> on a dry map.</summary>
     public Water Water { get; set; } = Water.Empty;
+
+    /// <summary>The map's ladders (bunkers.json, set by the owner before the first tick); none on a map without bunkers.</summary>
+    public Ladders Ladders { get; set; } = Ladders.Empty;
     /// <summary>True while the eyes are under the water surface (no firing, breath is running).</summary>
     public bool HeadUnder => _state.HeadUnder;
     bool _inVehicle;
@@ -310,7 +313,7 @@ public partial class Player : CharacterBody3D
         if (Input.IsActionPressed("interact")) b |= MoveButtons.Use;
         if (Input.IsActionPressed("headlights")) b |= MoveButtons.Headlights;
         if (Input.IsActionPressed("killstreak")) b |= MoveButtons.Killstreak;
-        if (_state.HeadUnder) b &= ~MoveButtons.Fire; // no firing with the head under water
+        if (_state.HeadUnder || _state.OnLadder) b &= ~MoveButtons.Fire; // no firing with the head under water, nor with both hands on a ladder
         var captured = Input.MouseMode == Input.MouseModeEnum.Captured;
         return new MoveInput
         {
@@ -338,6 +341,15 @@ public partial class Player : CharacterBody3D
         LastDrowningDamage = Breath.Tick(ref _state, dt);
         _state.FloorTooSteep = IsOnFloor() && GetFloorNormal().Y < Mathf.Cos(Mathf.DegToRad(MoveConsts.ProneMaxSlopeDegrees));
         _state.ProneBlocked = _inVehicle;
+        if (Ladders.Count > 0 && Ladders.Climb(ref _state, input, dt))
+        {
+            // on a ladder the step moves the body, not the physics: no gravity, no collision, no fall damage
+            GlobalPosition = ToG(_state.Position);
+            Velocity = Vector3.Zero;
+            LastFallDamage = 0;
+            SetStanceShape(_state.Stance);
+            return;
+        }
         MovementStep.Step(ref _state, input, dt);
         SetStanceShape(_state.Stance);
 

@@ -182,7 +182,8 @@ def radio_tower_mesh(params: dict | None = None) -> Mesh:
 
 def bunker_prim_mesh(params: dict | None = None) -> Mesh:
     """WW2 pillbox: rounded concrete dome on a chamfered rectangle, door facing -y (the object's
-    front), firing slits, weathering streaks. Long axis along x."""
+    front), firing slits, weathering streaks. Long axis along x. The closed form: a placed object
+    collides as one box, so nobody can go in (the bunkers of the map are buildings, see ``bunker.py``)."""
     from suchohrad_pipeline.bunker import bunker_mesh
 
     p = {**PRIMITIVES["bunker"].params, **(params or {})}
@@ -191,7 +192,7 @@ def bunker_prim_mesh(params: dict | None = None) -> Mesh:
         (-hl + ch, -hw), (hl - ch, -hw), (hl, -hw + ch), (hl, hw - ch),
         (hl - ch, hw), (-hl + ch, hw), (-hl, hw - ch), (-hl, -hw + ch),
     ]
-    return bunker_mesh(ring, (0.0, -1.0))
+    return bunker_mesh(ring, (0.0, -1.0), enterable=False)
 
 
 @dataclass(frozen=True)
@@ -283,7 +284,6 @@ def _connector_primitive(name: str) -> Primitive:
 PRIMITIVES.update({name: _connector_primitive(name) for name in CONNECTORS})
 
 
-def build_primitive(name: str, params: dict | None = None) -> Mesh:
 def _floodwall_primitive(name: str) -> Primitive:
     piece = build_piece(name)
     return Primitive(lambda params=None: build_piece(name).mesh, {}, piece.size_m, piece.colour, centred=False)
@@ -292,5 +292,6 @@ def _floodwall_primitive(name: str) -> Primitive:
 PRIMITIVES.update({name: _floodwall_primitive(name) for name in FLOODWALL_PIECES})
 
 
+def build_primitive(name: str, params: dict | None = None) -> Mesh:
     """Mesh of ``prim:<name>`` with optional parameter overrides; KeyError for an unknown name."""
     return PRIMITIVES[name].builder(params)

@@ -232,6 +232,18 @@ _Avoid_: damage stage (that is a vehicle's smoke), crack level
 The state of a glass pane with no hit points left: its fragments fly out once, and it then shows an opening (the model's own glass node of the pane is hidden). A bullet goes through a vehicle's pane whether it is shattered or not. It stays shattered until its vehicle returns repaired or a new round starts.
 _Avoid_: broken, destroyed (that is a vehicle or an aircraft)
 
+**Bunker**:
+One of the village's three concrete WW2 fortifications: a building of the base map, and the only kind of building a player can go inside. It has a ground floor and three floors under it.
+_Avoid_: pillbox, fortification
+
 **Flood wall**:
 The concrete wall between the river and the village, built from placed pieces (`prim:floodwall_*`): a ledge on the village side that players walk on, an upper wall with a railing behind it, access points and road gates. Its village side is the piece's `-y`.
 _Avoid_: levee, dike, river wall
+
+**Ladder**:
+How a player moves between the floors of a bunker: they get on with the interact key, climb with forward and back, and step off at either end. They cannot fire on it.
+_Avoid_: stairs, climbing (that is the verb)
+
+**Shelter**:
+What a bunker's room gives the players in it: a blast outside the room does not hurt them, and a blast inside it hurts nobody outside. The MOAB is not stopped.
+_Avoid_: blast cover, shot-only cover (that stops shots, not blasts), protection (that is spawn protection)

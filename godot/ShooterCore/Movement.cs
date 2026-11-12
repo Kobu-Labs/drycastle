@@ -108,6 +108,14 @@ public struct MoveState
     public float WaterSurfaceY;
     /// <summary>Eyes below the water surface; set by <see cref="Water.Sample"/>, drives breath and the weapon lock.</summary>
     public bool HeadUnder;
+    /// <summary>On a ladder (see <see cref="Ladders.Climb"/>): the body is moved along it by the step, not by the physics.</summary>
+    public bool OnLadder;
+    /// <summary>Index of the ladder in <see cref="Ladders"/> while <see cref="OnLadder"/>.</summary>
+    public int LadderIndex;
+    /// <summary>The movement keys were let go once since getting on; climbing waits for it.</summary>
+    public bool LadderArmed;
+    /// <summary>The Use key was down last tick (edge detection for the ladder).</summary>
+    public bool UseKeyDown;
     /// <summary>Seconds of breath used since the head last surfaced (0 = full breath); see <see cref="Breath"/>.</summary>
     public float AirSpent;
 

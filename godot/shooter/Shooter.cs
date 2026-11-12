@@ -200,6 +200,7 @@ public partial class Shooter : Node3D
             var model = v.Model;
             steps.Add(() => CarFx.Warm(model));
         }
+        steps.Add(GlassFx.Load);
         foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, UnderwaterView.ShaderPath, DayNightCycle.SkyShaderPath })
         {
             var path = sh;
@@ -314,6 +315,11 @@ public partial class Shooter : Node3D
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Suchohrad.ShooterCore.Water.Empty : Suchohrad.ShooterCore.Water.Parse(_map.WaterJson);
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
+        if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
+        {
+            var bunkers = Suchohrad.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));
+            if (bunkers.Rooms.Count > 0) AddChild(new BunkerLights { Shelters = bunkers });
+        }
         var s = _map.Stats;
         // Lamps are solid, so the server gets the same pole colliders as the client (map 0.5.0+; none on older maps).
         // The lamps of placed utility poles shine like the street lamps; their pole is the placed object, already solid (client only).
@@ -497,7 +503,7 @@ public partial class Shooter : Node3D
     {
         AddLightAndSky();
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
-        var player = new Player { Name = "Player", KillY = killY, Water = _water, PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
+        var player = new Player { Name = "Player", KillY = killY, Water = _water, Ladders = Suchohrad.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; no ladders")).Ladders, PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
         AddChild(player);
         var spawn = RandomSpawn();
         player.Teleport(spawn + Vector3.Up * 0.1f);
