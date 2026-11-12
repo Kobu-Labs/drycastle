@@ -30,7 +30,8 @@ impl RPoly {
         let mut edges = vec![];
         for ring in std::iter::once(&p.ext).chain(p.holes.iter()) {
             for w in ring.windows(2) {
-                if w[0][1] != w[1][1] {
+                // horizontal edges stay: they never cross a ray, but a tile they pass through touches the polygon
+                if w[0] != w[1] {
                     edges.push([w[0][0], w[0][1], w[1][0], w[1][1]]);
                 }
             }

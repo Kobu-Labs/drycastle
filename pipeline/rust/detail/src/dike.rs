@@ -4,7 +4,6 @@
 use crate::cfg::Cfg;
 use crate::ctx::{hex_rgb, Ctx};
 use crate::emit::{r3, Emitter, Res, Tint};
-use crate::garden::rotated_rect;
 use crate::geom::{self, Pt, G};
 use crate::index::{DistIdx, Region};
 use crate::patches::{assemble, clean, Flat, Patch, Rect};
@@ -145,9 +144,6 @@ impl Img<'_> {
 
 /// The track as patches: per road stretch of ``piece_m``, a rectangle along it clipped to the track.
 fn track_pieces(ctx: &Ctx, rc: Cfg, rng: &mut Rng, tile: (f64, f64)) -> Vec<Patch> {
-    let tr = std::env::var("DETAIL_TRACE").is_ok();
-    let t0 = std::time::Instant::now();
-    let lap = |what: &str| if tr { eprintln!("  track {} {what}: {:.2}", ctx.id, t0.elapsed().as_secs_f64()) };
     let mut track_parts = vec![];
     let mut pieces: Vec<(Pt, Pt)> = vec![];
     let (tw, th) = tile;
@@ -165,13 +161,11 @@ fn track_pieces(ctx: &Ctx, rc: Cfg, rng: &mut Rng, tile: (f64, f64)) -> Vec<Patc
             }
         }
     }
-    lap("ribbons");
     if track_parts.is_empty() {
         return vec![];
     }
     let walls = if ctx.buildings.is_empty() { geom::empty() } else { geom::union_all(ctx.buildings.iter().map(geom::dup).collect()) };
     let track = clean(&geom::diff(&geom::inter(&geom::union_all(track_parts), &ctx.polygon), &walls), 0.04);
-    lap("track clean");
     let mut patches: Vec<Patch> = vec![];
     let mut done: Vec<([f64; 4], G)> = vec![]; // the pieces laid so far, to keep a piece off the ones beside it
     let lift = rc.at("track_lift_m").f();
@@ -200,7 +194,6 @@ fn track_pieces(ctx: &Ctx, rc: Cfg, rng: &mut Rng, tile: (f64, f64)) -> Vec<Patc
         let origin = [a[0] - ux * shift + uy * 0.5 * th, a[1] - uy * shift - ux * 0.5 * th];
         patches.push(Patch { layer: "dike_track", geom: g, colour: None, texture: Some("dike_gravel"), angle: ang, origin, lift: Some(lift) });
     }
-    lap("pieces");
     let taken = geom::union_all(done.into_iter().map(|(_, g)| g).collect());
     let rest = clean(&geom::diff(&track, &taken), 0.0);
     if !geom::is_empty(&rest) && !patches.is_empty() {
@@ -212,20 +205,15 @@ fn track_pieces(ctx: &Ctx, rc: Cfg, rng: &mut Rng, tile: (f64, f64)) -> Vec<Patc
 }
 
 pub fn dike(ctx: &Ctx, cfg: Cfg, image: (usize, usize, &[u8]), tile: (f64, f64)) -> Res {
-    let tr = std::env::var("DETAIL_TRACE").is_ok();
-    let t0 = std::time::Instant::now();
-    let lap = |what: &str| if tr { eprintln!("dike {} {what}: {:.2}", ctx.id, t0.elapsed().as_secs_f64()) };
     let pid = ctx.id.as_str();
     let rc = cfg.at("dike");
     let mut res = Res::default();
     let mut rng = Rng::keyed(&format!("{pid}:detail:dike"));
     let track_patches = track_pieces(ctx, rc, &mut rng, tile);
-    lap("track_pieces");
     let track = geom::union_all(track_patches.iter().map(|p| geom::dup(&p.geom)).collect());
 
     let bc = rc.at("border");
     let rg = ragged(&ctx.polygon, &mut rng, bc.at("inward_m").f(), bc.at("outward_m").f());
-    lap("ragged");
     let hull = &rg.hull;
     // the ground rules (buildings, fences, ...) on the ragged outline; the lawn covers the road inside the parcel (the track is
     // narrower than the carriageway under it), not beyond the parcel line
@@ -245,7 +233,6 @@ pub fn dike(ctx: &Ctx, cfg: Cfg, image: (usize, usize, &[u8]), tile: (f64, f64))
     for p in res.patches[before..].iter_mut() {
         p.lift = Some(lawn_lift); // over the neighbours' own patches, which lie at lift_m
     }
-    lap("lawn assemble");
     let covered = got.get("lawn").map_or_else(geom::empty, geom::dup);
     // loose blobs of lawn beyond the border, smaller the further out, so the green frays into what lies there
     let reach_poly = geom::buffer(hull, bc.at("blob_reach_m").f() + 2.0, 16);
@@ -269,12 +256,10 @@ pub fn dike(ctx: &Ctx, cfg: Cfg, image: (usize, usize, &[u8]), tile: (f64, f64))
         let c = cols[rng.below(cols.len())];
         res.patches.push(Patch { layer: "lawn", geom: poly, colour: Some(c), texture: None, angle: 0.0, origin: [0.0, 0.0], lift: Some(lawn_lift) });
     }
-    lap("spill");
     // the grass grows on the lawn and its loose blobs but not on the track (5 cm beyond it): the track is cut out point by point
     // (a distance to the track's edges) instead of buffering and subtracting its big outline
     let grass = geom::union2(&covered, &spill);
     let d_track = if geom::is_empty(&track) { DistIdx::empty() } else { DistIdx::new(&[], &geom::polys(&track)) };
-    lap("grass union");
 
     let gc = rc.at("grass");
     let seed = seed_of(&format!("{pid}:detail:dike_grass"));
@@ -291,7 +276,6 @@ pub fn dike(ctx: &Ctx, cfg: Cfg, image: (usize, usize, &[u8]), tile: (f64, f64))
         let signed = if poly_r.contains(x, y) { dist } else { -dist };
         u < (0.5 + signed / (2.0 * fade)).clamp(0.0, 1.0)
     });
-    lap("grass pts");
     let tint = Tint::new(ctx, cfg);
     let mut em = Emitter::new(ctx.sh);
     for (k, sub) in crate::village::split_kinds(seed, &pts, &gc.at("kinds").shares()) {
@@ -306,7 +290,6 @@ pub fn dike(ctx: &Ctx, cfg: Cfg, image: (usize, usize, &[u8]), tile: (f64, f64))
     }
     let mut out = em.out;
 
-    lap("grass emit");
     res.patches.extend(track_patches);
     // tufts on the drawn grass patches of the track (read from the texture, so they sit on the drawn patches)
     let pt = rc.at("patch_tuft");
@@ -330,8 +313,6 @@ pub fn dike(ctx: &Ctx, cfg: Cfg, image: (usize, usize, &[u8]), tile: (f64, f64))
         em2.emit("tuft", tseed, &on, pt.at("scale").f2(), Some(&tint));
     }
     out.extend(em2.out);
-    lap("patch tufts");
     res.clutter = out;
-    let _ = rotated_rect;
     res
 }

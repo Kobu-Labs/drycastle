@@ -334,4 +334,55 @@ mod tests {
         let c = clean(&geom::union_all(vec![a, b]), 0.1);
         assert!((geom::area(&c) - 9.0).abs() < 1e-9);
     }
+
+    #[test]
+    fn earlier_layers_win_and_patches_never_overlap() {
+        let free = geom::rect(0.0, 0.0, 20.0, 20.0);
+        let mut layers: BTreeMap<&'static str, G> = BTreeMap::new();
+        layers.insert("gravel", geom::rect(0.0, 0.0, 10.0, 10.0));
+        layers.insert("dirt", geom::rect(5.0, 5.0, 15.0, 15.0));
+        layers.insert("lawn", geom::rect(-5.0, -5.0, 25.0, 25.0)); // reaches beyond the free ground
+        let cols = [[1u8, 2, 3]];
+        let flat = Flat { lawn: &cols, tone_a: None, tone_b: None };
+        let mut patches = vec![];
+        let got = assemble(&mut patches, &free, &layers, &flat, &BTreeMap::new(), &mut Rng::new(1));
+        let area = |l: &str| got.get(l).map_or(0.0, geom::area);
+        assert!((area("gravel") - 100.0).abs() < 1e-6);
+        assert!((area("dirt") - 75.0).abs() < 1e-6); // what gravel took is not dirt
+        assert!((area("lawn") - 225.0).abs() < 1e-6); // the rest of the free ground, nothing beyond it
+        for (i, a) in patches.iter().enumerate() {
+            for b in &patches[i + 1..] {
+                assert!(geom::area(&geom::inter(&a.geom, &b.geom)) < 1e-9, "{} overlaps {}", a.layer, b.layer);
+            }
+        }
+        assert!(patches.iter().any(|p| p.layer == "gravel" && p.texture == Some("gravel")));
+        assert!(patches.iter().any(|p| p.layer == "lawn" && p.colour == Some([1, 2, 3])));
+    }
+
+    #[test]
+    fn rows_have_the_layout_of_the_patch_file() {
+        let t = flat_terrain();
+        let g = geom::rect(2.0, 2.0, 18.0, 8.0);
+        let patches = vec![
+            Patch { layer: "tone_a", geom: geom::dup(&g), colour: Some([10, 20, 30]), texture: None, angle: 0.0, origin: [0.0, 0.0], lift: None },
+            Patch { layer: "dirt", geom: g, colour: None, texture: Some("dirt"), angle: 0.0, origin: [2.0, 2.0], lift: Some(0.05) },
+        ];
+        let (tile, index) = (|_: &str| (4.0, 2.0), |_: &str| 3.0);
+        let tex = Textures { tile: &tile, index: &index };
+        let (mut rows, mut tally) = (vec![], BTreeMap::new());
+        patch_rows(&patches, &t, 0.02, &tex, &mut rows, &mut tally);
+        assert_eq!(rows.len() % PATCH_ROW, 0);
+        let n = rows.len() / PATCH_ROW;
+        assert_eq!(tally["tone_a"].0 + tally["dirt"].0, n);
+        let first = &rows[..PATCH_ROW]; // a flat-colour triangle: colour, no uvs, texture -1
+        assert_eq!(&first[9..12], &[10.0, 20.0, 30.0]);
+        assert_eq!(first[18], -1.0);
+        let last = &rows[rows.len() - PATCH_ROW..]; // a textured one: white, uvs in tile repeats, the texture index
+        assert_eq!(&last[9..12], &[255.0, 255.0, 255.0]);
+        assert_eq!(last[18], 3.0);
+        let (x, y) = (last[0], last[1]);
+        assert!((last[12] - (x - 2.0) / 4.0).abs() < 1e-9 && (last[13] - (y - 2.0) / 2.0).abs() < 1e-9);
+        assert!((last[2] - (x / 10.0 + 0.05)).abs() < 1e-9); // z = terrain (x / 10) + the patch's own lift
+        assert!((tally["tone_a"].1 - 96.0).abs() < 1e-9);
+    }
 }

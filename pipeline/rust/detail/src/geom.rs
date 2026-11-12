@@ -11,6 +11,18 @@ pub type G = Geometry;
 pub type Pt = [f64; 2];
 
 pub static GEOS_ERRORS: AtomicUsize = AtomicUsize::new(0);
+/// The first few distinct GEOS error messages (diagnostics for the statistics).
+pub static GEOS_MESSAGES: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+fn note_error(op: &str, e: &geos::Error) {
+    GEOS_ERRORS.fetch_add(1, Ordering::Relaxed);
+    if let Ok(mut m) = GEOS_MESSAGES.lock() {
+        let msg = format!("{op}: {e}");
+        if m.len() < 8 && !m.contains(&msg) {
+            m.push(msg);
+        }
+    }
+}
 
 /// A polygon as plain coordinates: closed rings (first point repeated at the end).
 #[derive(Clone, Debug, Default)]
@@ -35,8 +47,8 @@ impl PolyC {
 fn err_count<T>(r: geos::GResult<T>) -> Option<T> {
     match r {
         Ok(v) => Some(v),
-        Err(_) => {
-            GEOS_ERRORS.fetch_add(1, Ordering::Relaxed);
+        Err(e) => {
+            note_error("op", &e);
             None
         }
     }
@@ -133,8 +145,8 @@ fn repaired(g: &G) -> G {
 fn op2(a: &G, b: &G, f: impl Fn(&G, &G) -> geos::GResult<G>) -> G {
     match f(a, b) {
         Ok(r) => r,
-        Err(_) => {
-            GEOS_ERRORS.fetch_add(1, Ordering::Relaxed);
+        Err(e) => {
+            note_error("overlay", &e);
             f(&repaired(a), &repaired(b)).unwrap_or_else(|_| empty())
         }
     }
@@ -348,27 +360,10 @@ pub fn lines_g<T: Geom>(g: &T) -> Vec<G> {
     out
 }
 
-/// A multipolygon (or empty polygon) from polygon geometries, without dissolving overlaps.
-pub fn multi(parts: Vec<G>) -> G {
-    let parts: Vec<G> = parts.into_iter().filter(|p| !is_empty(p)).collect();
-    if parts.is_empty() {
-        return empty();
-    }
-    Geometry::create_multipolygon(parts).unwrap_or_else(|_| empty())
-}
-
 pub fn exterior_line(p: &G) -> G {
     match p.get_exterior_ring() {
         Ok(r) => line(&seq_pts(&r)),
         Err(_) => line(&[]),
-    }
-}
-
-/// ``geom.interpolate(d)`` of a line: the point at distance ``d`` along it.
-pub fn interpolate(l: &G, d: f64) -> Pt {
-    match l.interpolate(d) {
-        Ok(p) => [p.get_x().unwrap_or(0.0), p.get_y().unwrap_or(0.0)],
-        Err(_) => [0.0, 0.0],
     }
 }
 
@@ -388,15 +383,6 @@ pub fn min_rotated_rect(g: &G) -> Vec<Pt> {
 
 pub fn distance(a: &G, b: &G) -> f64 {
     a.distance(b).unwrap_or(f64::INFINITY)
-}
-
-pub fn is_polygonal(g: &G) -> bool {
-    matches!(g.geometry_type(), Ok(GeometryTypes::Polygon) | Ok(GeometryTypes::MultiPolygon))
-}
-
-/// Total number of vertices (for diagnostics).
-pub fn npoints(g: &G) -> usize {
-    g.get_num_coordinates().unwrap_or(0)
 }
 
 #[cfg(test)]

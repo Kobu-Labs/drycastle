@@ -329,6 +329,36 @@ All random choices are seeded with `sha256("<parcel id>:detail:<purpose>")` (ver
 identical files. `uv run python -m drycastle_pipeline.detail_preview --parcel P-0637 --area village` draws the detail of
 one parcel top-down from the real patches, textures and clutter meshes into `out/detail/`.
 
+**Rust engine** (`pipeline/rust/detail`, `detail_rust.py`). The Python stage takes about 250 s on the full village map (the big
+ground areas and the dike are most of it: shapely calls on 100 ha polygons, a Poisson-disc sweep and point-in-polygon tests per
+point); the Rust engine does the same work on all cores in 7 to 8 s (26 s on one core) and writes the same four files
+(`detail.json`, `detail_patches.npy`, `detail_patches.json`, `detail_meadow.bin`, formats unchanged, so the export and the game read
+them as before). The Python stage stays the reference and the default.
+
+* **Build**: `make detail-rust-build` (maturin into the pipeline venv; needs `cargo`, `cmake` and a C++ compiler, because the
+  geometry engine is GEOS 3.15, the library shapely wraps, built from source and linked in statically through the `geos` crate).
+  The first build takes about a minute, later ones seconds. `make setup` (`uv sync`) removes the module again: build it again after.
+  `cd pipeline/rust/detail && cargo test --release` runs the Rust tests.
+* **Switch**: `python -m drycastle_pipeline detail --area village --engine rust`, `make detail AREA=village ENGINE=rust`, or
+  `DRYCASTLE_DETAIL_ENGINE=rust` (also for `run-all`). Without any of them the Python stage runs. `DRYCASTLE_DETAIL_THREADS=N` caps the
+  threads (default: all cores); the result is byte-identical for any thread count. Nothing in `rules.yaml` changed: the engine reads the
+  same `detail` section (including the `ground.types.<type>.detail` overlays, which Python lays over the recipe section and hands over).
+* **What runs where**: Python reads the work files, the rules, the ground types and `edits.json` (regions, placed-object clearance
+  discs, terrain colours, recipes per unit) and passes them as one JSON document plus the terrain arrays; Rust does everything per
+  unit: parts and dike clips, free ground, the five recipes (garden, field, forest, village, dike), the patch layers, draping,
+  clutter, the meadow raster, the per-chunk caps, and the files. Ported completely; nothing falls back to Python.
+* **Parallelism and determinism**: every unit (part of a unit) is a work item on a rayon pool; field and forest parts wider than 160 m
+  (the 534 ha field, the big forests, the meadows) are cut into 125 m tiles that are items of their own, so no single area dominates.
+  Every random choice is a pure function of its key: `sha256("<id>:detail:<purpose>")` seeds a unit's streams, and everything laid
+  out on a lattice (tone blobs, clutter candidates, bare spots) draws from one small stream per lattice cell, derived from the seed and
+  the cell, so neighbouring tiles agree along their seam and the result does not depend on how the area was cut. A tile is computed on
+  its box plus a halo and its patches are clipped to the exact box (patches of different tiles never overlap); the items are merged
+  in (unit id, part, tile) order, and the clutter caps use the same position hash as the Python stage.
+* **Not identical to Python**: the draws are not numpy's, so individual instances and blobs differ; densities, counts and layers match
+  to within a few percent on the whole map (see the report of the change). Two deliberate differences: the furrow strip of a big field is
+  decided once per unit (as in Python) from the unit outline, not from the free ground, and a forest's bare spots follow the rules'
+  `per_ha` through a keep share that reproduces what the Python rejection sampling gives a ragged outline.
+
 **Limits.** `parcel-run` (editor hot reload) does not regenerate detail: patches live in chunk-level nodes, not in a
 parcel's `props` node, so after editing a parcel's fence, trees or objects run `make props detail export` to move the detail
 with them. The stage reads the props work file, so it must run after `make props`. Per-parcel opt-out of detail is not

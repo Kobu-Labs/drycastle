@@ -73,11 +73,6 @@ impl Rng {
         (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64
     }
 
-    #[inline]
-    pub fn range(&mut self, lo: f64, hi: f64) -> f64 {
-        lo + self.f() * (hi - lo)
-    }
-
     /// Uniform integer in [0, n).
     #[inline]
     pub fn below(&mut self, n: usize) -> usize {

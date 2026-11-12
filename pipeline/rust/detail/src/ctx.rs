@@ -62,7 +62,6 @@ pub struct Shared {
     pub v_idx: [BoxIndex; 2],
     pub coverage: PolyC,
     pub osm_lines: HashMap<String, Vec<usize>>,
-    pub warnings: Vec<String>,
 }
 
 fn pt(v: &Value) -> Pt {
@@ -195,7 +194,6 @@ impl Shared {
             reg_idx: boxes(&regions, polyc_box),
             w_idx: boxes(&water, polyc_box),
             v_idx: [boxes(&verge[0], polyc_box), boxes(&verge[1], polyc_box)],
-            warnings: vec![],
             cfg,
             cfgs,
             terrain,
@@ -248,14 +246,13 @@ pub struct Ctx<'a> {
     pub water: Option<G>,
     pub road_lines: Vec<(G, f64)>,
     pub colour: Option<[u8; 3]>,
-    pub dike: bool,
     free: [OnceCell<G>; 2],
 }
 
 impl<'a> Ctx<'a> {
     /// A context over ``polygon`` (the unit, or a tile of it): ``bbox`` is the box the neighbour search covers
     /// (the polygon's own box for a unit, the tile's for a tile).
-    pub fn build(sh: &'a Shared, id: &str, kind: &str, polygon: G, near: Near, colour: Option<[u8; 3]>, dike: bool) -> Ctx<'a> {
+    pub fn build(sh: &'a Shared, id: &str, kind: &str, polygon: G, near: Near, colour: Option<[u8; 3]>) -> Ctx<'a> {
         let cfg = Cfg(&sh.cfg);
         let pb = geom::bounds(&polygon);
         let near_g: Option<G> = match near {
@@ -335,7 +332,6 @@ impl<'a> Ctx<'a> {
             water,
             road_lines,
             colour,
-            dike,
             free: [OnceCell::new(), OnceCell::new()],
         }
     }

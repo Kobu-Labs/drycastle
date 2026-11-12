@@ -25,7 +25,6 @@ pub struct Part {
     pub recipe: String,
     pub poly: PolyC,
     pub colour: Option<[u8; 3]>,
-    pub dike: bool,
     pub cfg_kind: String,
 }
 
@@ -211,7 +210,7 @@ pub fn run(sh: &Shared, part: &Part, cfg: Cfg, pre: &Pre, tile: Option<[f64; 4]>
     if geom::is_empty(&poly) {
         return (res, Cells::default());
     }
-    let ctx = Ctx::build(sh, &part.cid, &part.kind, poly, near, part.colour, false);
+    let ctx = Ctx::build(sh, &part.cid, &part.kind, poly, near, part.colour);
     let free = ctx.free_area(cfg, false);
     if geom::is_empty(free) {
         return (res, Cells::default());

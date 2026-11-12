@@ -53,10 +53,6 @@ impl<'a> Cfg<'a> {
         }
     }
 
-    pub fn b(&self) -> bool {
-        self.0.as_bool().unwrap_or(false)
-    }
-
     pub fn s(&self) -> &'a str {
         self.0.as_str().unwrap_or("")
     }

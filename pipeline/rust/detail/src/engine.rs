@@ -87,7 +87,6 @@ fn parts_of(sh: &Shared, unit: &crate::ctx::Unit) -> Vec<Part> {
                 recipe: if dike { "dike".to_string() } else { unit.recipe.clone() },
                 poly: piece,
                 colour: unit.colour,
-                dike,
                 cfg_kind: unit.kind.clone(),
             });
             k += 1;
@@ -102,7 +101,7 @@ fn run_item(sh: &Shared, part: &Part, pre: &Pre, tile: Option<[f64; 4]>) -> Out 
     let (res, cells): (Res, Cells) = match part.recipe.as_str() {
         "field" | "forest" => field::run(sh, part, cfg, pre, tile, part.recipe == "forest"),
         other => {
-            let ctx = Ctx::build(sh, &part.cid, &part.kind, geom::from_polyc(&part.poly), Near::Exact, part.colour, part.dike);
+            let ctx = Ctx::build(sh, &part.cid, &part.kind, geom::from_polyc(&part.poly), Near::Exact, part.colour);
             let res = match other {
                 "garden" => crate::garden::garden(&ctx, cfg),
                 "village" => crate::village::village(&ctx, cfg),
@@ -115,14 +114,10 @@ fn run_item(sh: &Shared, part: &Part, pre: &Pre, tile: Option<[f64; 4]>) -> Out 
             (res, Cells::default())
         }
     };
-    let t_rec = Instant::now();
     let tile_of = |n: &str| sh.textures.get(n).copied().unwrap_or((1.0, 1.0));
     let index_of = |n: &str| sh.tex_list.iter().position(|t| t == n).map_or(-1.0, |i| i as f64);
     let tex = Textures { tile: &tile_of, index: &index_of };
     patches::patch_rows(&res.patches, &sh.terrain, cfg.at("lift_m").f(), &tex, &mut out.rows, &mut out.tally);
-    if std::env::var("DETAIL_TRACE").is_ok() {
-        eprintln!("item {} {}: drape+rows {:.2} s, {} patches", part.recipe, part.cid, t_rec.elapsed().as_secs_f64(), res.patches.len());
-    }
     out.clutter = res.clutter;
     out.cells = cells;
     out
@@ -420,6 +415,7 @@ pub fn run(inp: Inputs) -> Result<Value, String> {
         "parts": parts.len(),
         "failed": failed,
         "geos_errors": geom::GEOS_ERRORS.load(Ordering::Relaxed),
+        "geos_messages": geom::GEOS_MESSAGES.lock().map(|m| m.clone()).unwrap_or_default(),
         "timing_s": timing,
         "seconds": t_all.elapsed().as_secs_f64(),
         "threads": rayon::current_num_threads(),
@@ -428,4 +424,49 @@ pub fn run(inp: Inputs) -> Result<Value, String> {
     });
     let _ = HashMap::<u8, u8>::new();
     Ok(stats)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn npy_file_is_a_valid_version_1_array() {
+        let dir = std::env::temp_dir().join(format!("dd_npy_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let outs = vec![Out { rows: (0..38).map(|v| v as f64).collect(), ..Default::default() }, Out::default()];
+        write_npy(&dir.join("a.npy"), &outs, 2).unwrap();
+        let b = std::fs::read(dir.join("a.npy")).unwrap();
+        assert_eq!(&b[..8], b"\x93NUMPY\x01\x00");
+        let hl = u16::from_le_bytes([b[8], b[9]]) as usize;
+        assert_eq!((10 + hl) % 64, 0);
+        let header = std::str::from_utf8(&b[10..10 + hl]).unwrap();
+        assert!(header.contains("'<f8'") && header.contains("(2, 19)") && header.ends_with('\n'));
+        assert_eq!(b.len(), 10 + hl + 38 * 8);
+        assert_eq!(f64::from_le_bytes(b[10 + hl + 8..10 + hl + 16].try_into().unwrap()), 1.0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn cap_keeps_the_same_rows_whatever_their_order() {
+        let rows: Vec<Row> = (0..50).map(|i| Row { v: [i as f64 * 0.5, 3.25, 100.0, 1.0, 1.0], tint: -1 }).collect();
+        let pick = |mut r: Vec<Row>| {
+            let mut keyed: Vec<_> = r.drain(..).map(|x| (cap_hash(&x, "tuft"), x)).collect();
+            keyed.sort_by(|a, b| a.0.cmp(&b.0));
+            keyed.truncate(10);
+            let mut kept: Vec<Row> = keyed.into_iter().map(|(_, r)| r).collect();
+            kept.sort_by(row_cmp);
+            kept.iter().map(|r| r.v[0]).collect::<Vec<_>>()
+        };
+        let mut shuffled = rows.clone();
+        shuffled.reverse();
+        assert_eq!(pick(rows), pick(shuffled));
+    }
+
+    #[test]
+    fn rows_print_like_python_floats() {
+        let mut s = String::new();
+        fmt_row(&Row { v: [12.0, -0.5, 100.25, 0.0, 1.1], tint: 130 }, &mut s);
+        assert_eq!(s, "[12.0,-0.5,100.25,0.0,1.1,130]");
+    }
 }

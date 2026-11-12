@@ -191,4 +191,37 @@ mod tests {
         assert!(a > 6.0 && a < 20.0, "{a}");
         assert!(b.is_valid().unwrap());
     }
+
+    #[test]
+    fn skipping_empty_tiles_loses_no_point() {
+        use crate::geom::PolyC;
+        use crate::index::Region;
+        let mut ext = vec![[0.0, 0.0], [100.0, 0.0], [100.0, 10.0], [10.0, 10.0], [10.0, 90.0], [0.0, 90.0]];
+        ext.push(ext[0]);
+        let region = Region::from_polycs(&[PolyC { ext, holes: vec![] }]); // an L: most of its box is outside
+        let bbox = [-5.0, -5.0, 120.0, 100.0];
+        let plain = lattice(3, 0.8, bbox, 0.5, |x, y, _| region.contains(x, y));
+        let skipped = lattice_in(3, 0.8, bbox, 0.5, Some(&region), |x, y, _| region.contains(x, y));
+        let key = |p: &Pt| (p[0].to_bits(), p[1].to_bits());
+        let mut a: Vec<_> = plain.iter().map(key).collect();
+        let mut b: Vec<_> = skipped.iter().map(key).collect();
+        a.sort();
+        b.sort();
+        assert_eq!(a, b);
+        // one candidate per cell, kept with the density: the points estimate the area of the L
+        let area = 100.0 * 10.0 + 10.0 * 80.0;
+        let estimate = plain.len() as f64 * 0.8 * 0.8 / 0.5;
+        assert!((estimate / area - 1.0).abs() < 0.08, "{estimate} vs {area}");
+        assert!(plain.iter().all(|p| region.contains(p[0], p[1])));
+    }
+
+    #[test]
+    fn thinning_by_the_cell_draw_gives_each_zone_its_density() {
+        let pts = lattice(5, 1.0, [0.0, 0.0, 200.0, 200.0], 0.5, |x, _, u| u < if x < 100.0 { 0.1 } else { 0.4 });
+        let left = pts.iter().filter(|p| p[0] < 100.0).count() as f64;
+        let right = pts.len() as f64 - left;
+        let cells = 100.0 * 200.0;
+        assert!((left / cells - 0.1).abs() < 0.01, "{}", left / cells);
+        assert!((right / cells - 0.4).abs() < 0.015, "{}", right / cells);
+    }
 }

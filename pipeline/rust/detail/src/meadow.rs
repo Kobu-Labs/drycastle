@@ -7,7 +7,6 @@ use crate::geom::{self, Pt, G};
 use crate::index::{DistIdx, Region};
 use crate::noise::{clump, hash01, value_noise, voronoi01};
 use crate::patches::Patch;
-use crate::util;
 use flate2::{write::ZlibEncoder, Compression};
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -15,7 +14,6 @@ use std::io::Write;
 pub const MEADOW_FORMAT_VERSION: u16 = 3;
 pub const MEADOW_TYPES: [&str; 2] = ["field", "forest"];
 const BARE_LAYERS: [&str; 4] = ["dirt", "verge_dirt", "verge_gravel", "gravel"];
-pub const DRY_STEP: f64 = 10.0;
 
 /// The raster cells one context (or tile) contributes: global cell indices and ``layers + 1`` bytes each (zone byte last).
 #[derive(Default)]
@@ -222,7 +220,6 @@ pub fn add_cells(ctx: &Ctx, patches: &[Patch], atype: &str, free: &G, mcfg: Cfg,
             out.vals.extend_from_slice(&v);
         }
     }
-    let _ = util::in_box;
     out
 }
 

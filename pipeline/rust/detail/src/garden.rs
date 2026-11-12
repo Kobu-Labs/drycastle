@@ -10,7 +10,7 @@ use crate::noise;
 use crate::patches::{assemble, Flat, Rect};
 use crate::rng::{seed_of, Rng};
 use geos::Geom;
-use crate::util::{blob, cell_u, lattice, point_rng, rad, Polyline};
+use crate::util::{blob, lattice, point_rng, rad, Polyline};
 use std::collections::BTreeMap;
 use std::f64::consts::TAU;
 
@@ -298,15 +298,6 @@ fn layer_g<'a>(got: &'a BTreeMap<&'static str, G>, name: &str) -> Option<&'a G> 
     got.get(name)
 }
 
-/// The regions of several layers together (they are disjoint patches, so no union is needed).
-fn region_of(parts: &[Option<&G>]) -> Region {
-    let mut ps = vec![];
-    for g in parts.iter().flatten() {
-        ps.extend(geom::polys(*g));
-    }
-    Region::from_polycs(&ps)
-}
-
 fn clutter(ctx: &Ctx, cfg: Cfg, got: &BTreeMap<&'static str, G>, free: &G, canopy: f64) -> Vec<crate::emit::Clutter> {
     let pid = ctx.id.as_str();
     let c = cfg.at("clutter");
@@ -494,6 +485,5 @@ fn clutter(ctx: &Ctx, cfg: Cfg, got: &BTreeMap<&'static str, G>, free: &G, canop
     let s_stick = seed("stick");
     let pts = lattice(s_stick, s_.at("spacing_m").f(), geom::bounds(&zone), s_.at("litter").f(), |x, y, _| zone_r.contains(x, y));
     em.emit("stick", s_stick, &pts, s_.at("scale").f2(), None);
-    let _ = cell_u;
     em.out
 }
