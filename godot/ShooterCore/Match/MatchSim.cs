@@ -45,11 +45,22 @@ public sealed record TargetKilled(ushort Killer, TargetDummies.Dummy Target, byt
 
 public enum PlayerLife : byte { Unspawned, Alive, Dead }
 
+/// <summary>Team ids (the wire byte too). Two teams only; 0 means no team.</summary>
+public static class Teams
+{
+    public const byte None = 0, A = 1, B = 2;
+    public static byte Other(byte team) => team == A ? B : team == B ? A : None;
+    /// <summary>Short label that is not a colour: "A" / "B" (empty for none). The HUD shows it next to names.</summary>
+    public static string Tag(byte team) => team == A ? "A" : team == B ? "B" : "";
+}
+
 public sealed class MatchPlayer
 {
     public ushort Id;
     public string Name = "";
     public int Kills, Deaths;
+    /// <summary>Team deathmatch: <see cref="Teams.A"/> or <see cref="Teams.B"/>. <see cref="Teams.None"/> (0) in free-for-all and for sandbox players.</summary>
+    public byte Team;
     /// <summary>Sandbox mode (#156): godmode, and no kills, score or round end. Ranked after everyone else.</summary>
     public bool Sandbox;
     public PlayerLife Life;
@@ -59,7 +70,7 @@ public sealed class MatchPlayer
 }
 
 /// <summary>
-/// Free-for-all match state machine (waiting, running, ending). Godot-free and deterministic: time comes from the
+/// Match state machine (waiting, running, ending), free-for-all or team deathmatch (<see cref="MatchConfig.Mode"/>). Godot-free and deterministic: time comes from the
 /// injected clock (seconds), spawn randomness from the injected <see cref="Random"/>. The host calls
 /// <see cref="Update"/> every tick and reacts to <see cref="Event"/>.
 /// </summary>
@@ -74,15 +85,27 @@ public sealed class MatchSim
 
     public MatchSim(MatchConfig cfg, Func<double> clock, IReadOnlyList<Vector3> spawnCandidates, Random? rng = null, WorldEntityRegistry? worldTypes = null)
     {
-        _cfg = cfg; _now = clock; _spawns = spawnCandidates; _rng = rng ?? new Random();
+        _cfg = cfg; Mode = cfg.ParsedMode(); _now = clock; _spawns = spawnCandidates; _rng = rng ?? new Random();
         Entities = new WorldEntityManager(worldTypes);
     }
 
     /// <summary>World entities (turrets, missiles, ...) of this match. Cleared at each round start. The server ticks it.</summary>
     public WorldEntityManager Entities { get; }
 
+    public MatchMode Mode { get; }
+    public bool IsTeamMode => Mode == MatchMode.TeamDeathmatch;
+    readonly int[] _teamScore = new int[3];
+    /// <summary>Team deathmatch: kills of the team's members this round (team kills and suicides do not count). 0 for no team.</summary>
+    public int TeamScore(byte team) => team is Teams.A or Teams.B ? _teamScore[team] : 0;
+
+    /// <summary>Both on the same real team (never in free-for-all, never for the teamless).</summary>
+    public bool AreFriends(ushort a, ushort b) =>
+        IsTeamMode && a != b && _players.TryGetValue(a, out var pa) && _players.TryGetValue(b, out var pb) && pa.Team != Teams.None && pa.Team == pb.Team;
+
     public MatchPhase Phase { get; private set; } = MatchPhase.Waiting;
     public IReadOnlyList<ushort> Winners { get; private set; } = Array.Empty<ushort>();
+    /// <summary>Team deathmatch: the team that won the finished round, <see cref="Teams.None"/> for a tie, in free-for-all and while no round has ended.</summary>
+    public byte WinningTeam { get; private set; }
     public IReadOnlyCollection<MatchPlayer> Players => _players.Values;
     public MatchConfig Config => _cfg;
     /// <summary>The target dummies of this match (#148); empty until <see cref="SetTargets"/>. Not in <see cref="Players"/>.</summary>
@@ -109,9 +132,35 @@ public sealed class MatchSim
         return IsProtected(id) ? EntityState.Protected : EntityState.Alive;
     }
 
-    /// <summary>Scoreboard order: kills descending, then deaths ascending, then id.</summary>
-    public List<MatchPlayer> Ranking() =>
-        _players.Values.OrderBy(p => p.Sandbox).ThenByDescending(p => p.Kills).ThenBy(p => p.Deaths).ThenBy(p => p.Id).ToList();
+    /// <summary>
+    /// Scoreboard order: kills descending, then deaths ascending, then id. In team deathmatch the leading team's block comes
+    /// first (ties by team id), and the same order applies inside each team. Sandbox players are last either way.
+    /// </summary>
+    public List<MatchPlayer> Ranking() => IsTeamMode
+        ? _players.Values.OrderBy(p => p.Sandbox).ThenByDescending(p => TeamScore(p.Team)).ThenBy(p => p.Team).ThenByDescending(p => p.Kills).ThenBy(p => p.Deaths).ThenBy(p => p.Id).ToList()
+        : _players.Values.OrderBy(p => p.Sandbox).ThenByDescending(p => p.Kills).ThenBy(p => p.Deaths).ThenBy(p => p.Id).ToList();
+
+    /// <summary>Team of the next joiner: the team with fewer (non-sandbox) players, then the lower score, then team A.</summary>
+    byte SmallerTeam()
+    {
+        int a = 0, b = 0;
+        foreach (var p in _players.Values) { if (p.Team == Teams.A) a++; else if (p.Team == Teams.B) b++; }
+        if (a != b) return a < b ? Teams.A : Teams.B;
+        return _teamScore[Teams.B] < _teamScore[Teams.A] ? Teams.B : Teams.A;
+    }
+
+    /// <summary>Round start: if the teams differ by two or more, the most recent joiners of the bigger team move over until they differ by at most one.</summary>
+    void Rebalance()
+    {
+        while (true)
+        {
+            var a = _players.Values.Where(p => p.Team == Teams.A).ToList();
+            var b = _players.Values.Where(p => p.Team == Teams.B).ToList();
+            if (Math.Abs(a.Count - b.Count) < 2) return;
+            var big = a.Count > b.Count ? a : b;
+            big.OrderByDescending(p => p.Id).First().Team = Teams.Other(big[0].Team);
+        }
+    }
 
     /// <summary>Sandbox (#156): full health for a living player. False when the player is not alive.</summary>
     public bool Heal(ushort id)
@@ -126,6 +175,7 @@ public sealed class MatchSim
     public void AddPlayer(ushort id, string name, bool sandbox = false)
     {
         _players[id] = new MatchPlayer { Id = id, Name = name, Sandbox = sandbox };
+        if (IsTeamMode && !sandbox) _players[id].Team = SmallerTeam(); // auto-balance on join
         if (Phase == MatchPhase.Waiting) { StartIfReady(); }
         else if (Phase == MatchPhase.Running) Spawn(_players[id]);
         // while ending the newcomer waits for the restart
@@ -158,6 +208,7 @@ public sealed class MatchSim
         if (Phase != MatchPhase.Running || amount <= 0) return DamageResult.Ignored;
         if (!_players.TryGetValue(victim, out var v) || v.Life != PlayerLife.Alive) return DamageResult.Ignored;
         if (v.Sandbox) return DamageResult.Ignored; // godmode (#156): nothing hurts a sandbox player
+        if (!_cfg.FriendlyFire && AreFriends(victim, attacker)) return DamageResult.Ignored; // teammates cannot hurt each other (self damage is not friendly fire)
         if (!ignoreProtection && IsProtected(victim)) return DamageResult.Ignored;
         v.Health -= amount;
         if (v.Health > 0) return DamageResult.Damaged;
@@ -166,11 +217,14 @@ public sealed class MatchSim
         v.RespawnAt = _now() + _cfg.RespawnDelay;
         var credited = attacker != victim && _players.TryGetValue(attacker, out var a) ? a : null;
         // a sandbox shooter's kill is shown but counts for nothing: no score, no score goal (#156)
-        if (credited is { Sandbox: false }) credited.Kills++;
+        // a team kill (friendly fire on) scores nothing for the shooter or the team; the death still counts
+        var teamKill = credited != null && AreFriends(credited.Id, victim);
+        if (credited is { Sandbox: false } && !teamKill) { credited.Kills++; if (IsTeamMode && credited.Team != Teams.None) _teamScore[credited.Team]++; }
         var killer = credited?.Id ?? victim;
         Emit(new PlayerKilled(killer, victim, weapon, cause));
         Emit(new PlayerDied(victim, killer, _cfg.RespawnDelay));
-        if (credited is { Sandbox: false } && credited.Kills >= _cfg.ScoreGoal) End();
+        if (IsTeamMode ? credited is { Sandbox: false, Team: not Teams.None } && !teamKill && _teamScore[credited.Team] >= _cfg.TeamScoreGoal
+                       : credited is { Sandbox: false } && credited.Kills >= _cfg.ScoreGoal) End();
         Emit(new ScoreboardChanged());
         return DamageResult.Killed;
     }
@@ -218,6 +272,8 @@ public sealed class MatchSim
 
     void StartRound()
     {
+        if (IsTeamMode) Rebalance();
+        Array.Clear(_teamScore); WinningTeam = Teams.None;
         foreach (var p in _players.Values) { p.Kills = 0; p.Deaths = 0; p.Life = PlayerLife.Unspawned; }
         Entities.Clear();
         Targets.ResetAll();
@@ -230,6 +286,7 @@ public sealed class MatchSim
 
     void ToWaiting()
     {
+        Array.Clear(_teamScore); WinningTeam = Teams.None;
         foreach (var p in _players.Values) { p.Kills = 0; p.Deaths = 0; p.Life = PlayerLife.Unspawned; }
         Winners = Array.Empty<ushort>();
         Phase = MatchPhase.Waiting;
@@ -240,7 +297,15 @@ public sealed class MatchSim
     {
         var top = Ranking().Where(p => !p.Sandbox).ToList(); // sandbox players never win (#156)
         var winners = new List<ushort>();
-        if (top.Count > 0 && top[0].Kills > 0) // nobody wins a round without a kill
+        WinningTeam = Teams.None;
+        if (IsTeamMode)
+        {
+            // the team with the higher score wins and all its members with it; a tie or a scoreless round has no winner
+            var win = _teamScore[Teams.A] > _teamScore[Teams.B] ? Teams.A : _teamScore[Teams.B] > _teamScore[Teams.A] ? Teams.B : Teams.None;
+            WinningTeam = win;
+            if (win != Teams.None) winners = top.Where(p => p.Team == win).Select(p => p.Id).ToList();
+        }
+        else if (top.Count > 0 && top[0].Kills > 0) // nobody wins a round without a kill
             winners = top.Where(p => p.Kills == top[0].Kills && p.Deaths == top[0].Deaths).Select(p => p.Id).ToList();
         Winners = winners;
         Phase = MatchPhase.Ending;
@@ -250,7 +315,8 @@ public sealed class MatchSim
 
     void Spawn(MatchPlayer p)
     {
-        var others = _players.Values.Where(o => o.Id != p.Id && o.Life == PlayerLife.Alive).Select(o => o.Position);
+        // team deathmatch: only enemies count, so a team may spawn together and never next to the other side
+        var others = _players.Values.Where(o => o.Id != p.Id && o.Life == PlayerLife.Alive && (!IsTeamMode || p.Team == Teams.None || o.Team != p.Team)).Select(o => o.Position);
         p.Position = SpawnChooser.Choose(_spawns, others, _cfg.MinSpawnDistance, _rng);
         p.Life = PlayerLife.Alive;
         p.Health = MoveConsts.MaxHealth;

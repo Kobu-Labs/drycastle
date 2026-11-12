@@ -310,6 +310,7 @@ public partial class NetClient : Node
             case EventKind.MatchState:
                 SfxPhase(Match.Phase);
                 if (Match.Restarts != _hudRestarts) { _hudRestarts = Match.Restarts; _hud?.ClearKills(); }
+                _hud?.SetTeams(Match);
                 _hud?.SetMatch(Match.Phase, Match.TimeRemaining(Now), Match.Rows, Match.Winners, Match.NameOf);
                 break;
             case EventKind.Kill:

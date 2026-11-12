@@ -4,9 +4,11 @@ using System.Text;
 
 namespace Suchohrad.ShooterCore;
 
-public readonly record struct ScoreRow(ushort Id, string Name, int Kills, int Deaths, ushort Ping);
+public readonly record struct ScoreRow(ushort Id, string Name, int Kills, int Deaths, ushort Ping, byte Team = Teams.None);
 
-public sealed record MatchStateMsg(MatchPhase Phase, float TimeRemaining, IReadOnlyList<ushort> Winners, IReadOnlyList<ScoreRow> Rows);
+/// <param name="Mode">Free-for-all or team deathmatch; in team deathmatch <paramref name="ScoreA"/> and <paramref name="ScoreB"/> are the team totals and each row carries its team.</param>
+public sealed record MatchStateMsg(MatchPhase Phase, float TimeRemaining, IReadOnlyList<ushort> Winners, IReadOnlyList<ScoreRow> Rows,
+    MatchMode Mode = MatchMode.FreeForAll, int ScoreA = 0, int ScoreB = 0);
 /// <summary>A kill for the feed. <paramref name="Cause"/> travels as an optional sixth byte (old 5-byte messages decode as Standard).</summary>
 public sealed record KillMsg(ushort Killer, ushort Victim, byte Weapon, KillCause Cause = KillCause.Standard);
 public sealed record SpawnMsg(ushort Id, Vector3 Position, float Protection);
@@ -15,6 +17,7 @@ public sealed record DeathMsg(ushort Victim, ushort Killer, float RespawnDelay);
 /// <summary>
 /// Payload codecs for the match event kinds (little-endian), carried in the reliable event envelope.
 ///   MatchState: u8 phase, f32 timeRemaining, u8 nWinners, u16*n ids, u8 nRows, rows (u16 id, u8 nameLen, name, u16 kills, u16 deaths, u16 ping)
+///     then an optional team tail (older messages end after the rows): u8 mode, u16 scoreA, u16 scoreB, u8 team per row in row order
 ///   Kill: u16 killer, u16 victim, u8 weapon          (killer == victim: suicide)
 ///   Spawn: u16 id, f32 x, y, z, f32 protectionSeconds
 ///   Death: u16 victim, u16 killer, f32 respawnDelay
@@ -39,6 +42,8 @@ public static class MatchCodec
             w.Write(r.Id); w.Write((byte)nb.Length); w.Write(nb);
             w.Write((ushort)r.Kills); w.Write((ushort)r.Deaths); w.Write(r.Ping);
         }
+        w.Write((byte)m.Mode); w.Write((ushort)m.ScoreA); w.Write((ushort)m.ScoreB);
+        foreach (var r in m.Rows) w.Write(r.Team);
         return ms.ToArray();
     }
 
@@ -58,7 +63,14 @@ public static class MatchCodec
                 var name = Encoding.UTF8.GetString(r.ReadBytes(r.ReadByte()));
                 rows.Add(new ScoreRow(id, name, r.ReadUInt16(), r.ReadUInt16(), r.ReadUInt16()));
             }
-            return new MatchStateMsg(phase, t, winners, rows);
+            var mode = MatchMode.FreeForAll; int scoreA = 0, scoreB = 0;
+            if (r.BaseStream.Position < r.BaseStream.Length) // the team tail; absent from older servers
+            {
+                mode = r.ReadByte() == (byte)MatchMode.TeamDeathmatch ? MatchMode.TeamDeathmatch : MatchMode.FreeForAll;
+                scoreA = r.ReadUInt16(); scoreB = r.ReadUInt16();
+                for (var i = 0; i < rows.Count; i++) rows[i] = rows[i] with { Team = r.ReadByte() is var tm and (Teams.A or Teams.B) ? tm : Teams.None };
+            }
+            return new MatchStateMsg(phase, t, winners, rows, mode, scoreA, scoreB);
         }
         catch (Exception e) when (e is EndOfStreamException or ArgumentException) { return null; }
     }
@@ -128,6 +140,19 @@ public sealed class ClientMatchState
     public MatchPhase Phase { get; private set; } = MatchPhase.Waiting;
     public IReadOnlyList<ScoreRow> Rows { get; private set; } = Array.Empty<ScoreRow>();
     public IReadOnlyList<ushort> Winners { get; private set; } = Array.Empty<ushort>();
+    public MatchMode Mode { get; private set; } = MatchMode.FreeForAll;
+    public bool IsTeamMode => Mode == MatchMode.TeamDeathmatch;
+    public int ScoreA { get; private set; }
+    public int ScoreB { get; private set; }
+    public int TeamScore(byte team) => team == Teams.A ? ScoreA : team == Teams.B ? ScoreB : 0;
+    /// <summary>Team of a player on the scoreboard; <see cref="Teams.None"/> in free-for-all or for an unknown id.</summary>
+    public byte TeamOf(ushort id)
+    {
+        foreach (var r in Rows) if (r.Id == id) return r.Team;
+        return Teams.None;
+    }
+    /// <summary>Two different players on the same real team (never in free-for-all).</summary>
+    public bool AreFriends(ushort a, ushort b) => IsTeamMode && a != b && TeamOf(a) is var t && t != Teams.None && t == TeamOf(b);
     public List<KillMsg> KillFeed { get; } = new();
     public Dictionary<ushort, SpawnMsg> LastSpawn { get; } = new();
     public Dictionary<ushort, DeathMsg> LastDeath { get; } = new();
@@ -147,7 +172,7 @@ public sealed class ClientMatchState
             case EventKind.MatchState when MatchCodec.DecodeMatchState(payload) is { } m:
                 if (Phase == MatchPhase.Ending && m.Phase == MatchPhase.Running) { Restarts++; KillFeed.Clear(); }
                 if (Phase != MatchPhase.Ending && m.Phase == MatchPhase.Ending) RoundsEnded++;
-                Phase = m.Phase; Rows = m.Rows; Winners = m.Winners; _timeLeft = m.TimeRemaining; _timeAt = now;
+                Phase = m.Phase; Rows = m.Rows; Winners = m.Winners; Mode = m.Mode; ScoreA = m.ScoreA; ScoreB = m.ScoreB; _timeLeft = m.TimeRemaining; _timeAt = now;
                 return true;
             case EventKind.Kill when MatchCodec.DecodeKill(payload) is { } k:
                 KillFeed.Add(k);
