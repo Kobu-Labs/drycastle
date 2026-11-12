@@ -73,7 +73,7 @@ public class FlightTests
         Assert.Equal(VehicleMedium.Air, v.Medium);
         Assert.NotNull(v.Flight);
         Assert.False(v.CanFloat);
-        Assert.False(v.RunOver);
+        Assert.True(v.RunOver);   // runs people over only while skimming the ground (flight.run_over_agl)
         Assert.True(v.CrashDamage);
         Assert.Equal("driver", v.Seats[0].Role);   // the pilot's seat is the driver seat of the seat framework
         Assert.Equal("suchohrad-generated-models/utility_helicopter.glb", v.Model);
