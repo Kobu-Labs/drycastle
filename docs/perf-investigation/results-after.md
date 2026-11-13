@@ -43,6 +43,25 @@ Machine: i7-11850H, powersave governor, shared with other agents' builds (all me
 5. **Client**: the iGPU is GPU-bound; MSAA 2x does not help; MSAA off does (+18 %); a decision on the default (and a Mobile renderer test) is open.
 6. **D-02** (ground-vehicle driver prediction), **E-01/E-03** (heightfield terrain, collision-only server artifact) were deliberately not attempted: no measured need (boot 2.7-4.9 s).
 
+## 3a. Second round (same day): tickets #256, #257, #258 and the rubber-banding pass
+
+Same machine, map and harness. All merged into `perf-merged`; build clean, **1,746 unit tests** (was 1,710), loss test PASS on clean, rtt100 and rtt200 with 0.00 % wrong decoded states. Protocol 25 -> 26.
+
+| # | Change | Before | After | Verdict |
+|---|---|---|---|---|
+| 14 | **#256 world channel acked baseline** (A-01, G-03): inputs carry a world ack, world packets a baseline tick, ticks commit only when complete, no 30-tick keyframes, baseline kept across idle gaps | idle world entity 24 B/s per client each; lost world packet stale up to 1 s | idle cost 0 B (unit-tested: no packets for an idle world, one delta after 200 idle ticks); lost packet heals next tick (unit-tested); loss test and `run_wire.py --loss 0.03 --rtt 100` PASS | **Done.** Not measured live at 0/64/256 entities; no world-staleness check in the loss test |
+| 15 | **#257 vehicle rewind** (B-02): per-vehicle pose ring, hitscan/pellets/rockets test an analytic oriented box at the rewound pose, walls stay a present-pose ray, panes and exposed riders use the rewound frame | car at 44 m/s is 6.7-8.9 m off at 50-100 ms RTT (arithmetic) | pose lookup and box test unit-tested (11 tests); car and blast smokes PASS | **Done, hit rate not measured** (the car-target harness was not built) |
+| 16 | **#258 driver predicts the standard car** (D-02): `drive` block on `car`, drive reconcile replayed in the physics tick, driver input wakes a parked car, ADR 0014 | driver sees own car about 100 ms interp delay + RTT/2 late (derived) | car bot, 733 m at 50 ms one-way sim: **0 reconciles**, max prediction error 0.8 mm, input-to-drawn median 1 ms; handling within 5 % of `CarModel` on speed, braking, coast, turn rate | **Done for the car only**; 28 other ground types unchanged; feel not judged by a human |
+| 17 | **Rubber-banding pass** (`I-rubber-banding.md`) | render clock re-anchored on every arrival: **206 / 444 / 595 backsteps** per run (clean / rtt100 / rtt200), up to 33 ms; own body snapped on every reconcile (1-3 /s per client); predicted vehicle angles snapped | **0 backsteps** in every run (filtered `RenderClock`, never backwards); eye glides over about 100 ms; vehicle yaw/pitch/roll faded; replay starts with the state's floor flag: parity probe divergence over 5 mm **34-67 of 794 -> 0** (worst 4.3 m -> 0.7 mm) | **Display snaps removed; replay fixed.** Live count of corrections over 20 cm unchanged (2x run-to-run noise), 83-94 % still vertical: a second vertical source is open |
+| 18 | Input starvation (A-08) | 0.5-0.8 % of player steps with an empty queue | pure model test: a starved tick delays a step, it does not make it wrong (reconcile is by sequence); repeat-last-input would diverge | **No fix needed**; round-1 claim withdrawn |
+
+Loss-test gate change: the final-state check compares each client with the server's record at that client's own last tick (tick-exact), instead of a server dump that a later knockback could invalidate. The comparison stays exact. The rtt200 scenario can still fail on "server state still changing at the end" when a late-respawned bot is still walking in the quiet phase (seen once, 0 mismatches, rerun passed).
+
+Open after the second round, in addition to items 1, 2, 4 and 5 above (item 3 and item 6's D-02 part are done):
+7. Second vertical reconcile source (knockback impulses or landing snaps are the hypothesis; measurement plan in `I-rubber-banding.md` section 5).
+8. Adaptive interpolation delay: remote freezes at rtt200 rose from 75 to 120 draws (0.028 %) as the price of no backsteps.
+9. Hit-rate A/B on a moving car for #257; the other 28 ground types for #258; a human feel check of the car and the reconcile glide.
+
 ## 4. How this was measured
 
 Commands are in `perf/run_after_batch.sh` (every experiment of the baseline batches with the same parameters) and `docs/perf-investigation/measurement-plan.md`. Raw output: `out/perf/20261113T012920Z/` (before) and `out/perf/after1/` (after), gitignored. One batch per state, so differences under about 10 % are inside the noise; the large effects (reconciles, vehicle phase, collateral reliable delay, explosion nodes) are far outside it. Lock-queue contention with the fixing agents' own builds ran during the after batch only for builds and unit tests, not for the measured runs.

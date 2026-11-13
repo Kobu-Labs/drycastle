@@ -1,8 +1,11 @@
 # Performance and architecture-fit investigation
 
-> **Update 2026-11-13:** the measurement phase and a first round of fixes are done. Baseline numbers: `results-baseline.md`; before/after of the fixes
-> (branch `perf-merged`): `results-after.md`; plan and harness: `measurement-plan.md`, `perf/`. Where those disagree with the specialist reports
-> below, the measured numbers win (examples: ray cost was 5x lower than assumed, C-01 was rejected, the reconcile floor had a different root cause).
+> **Update 2026-11-13:** the measurement phase and two rounds of fixes are done. Baseline numbers: `results-baseline.md`; before/after of both
+> rounds (branch `perf-merged`): `results-after.md` (sections 1 and 3a); plan and harness: `measurement-plan.md`, `perf/`. The second round added
+> tickets #256 (world channel acked baseline), #257 (vehicle rewind), #258 (predicted car) and a ninth report, `I-rubber-banding.md`
+> (lag-back and misprediction: render-clock backsteps, reconcile snaps, replay floor flag, input starvation). Where measured numbers disagree
+> with the specialist reports below, the measured numbers win (examples: ray cost was 5x lower than assumed, C-01 was rejected, the reconcile
+> floor had a different root cause, the A-08 starvation claim was withdrawn).
 
 
 Branch `areas-not-parcels`, 2026-11-13. Read-only: nothing was built, run or measured. Eight specialist reports sit beside
