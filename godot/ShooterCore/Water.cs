@@ -3,19 +3,29 @@ using System.Text.Json;
 
 namespace Drycastle.ShooterCore;
 
-/// <summary>Water constants from the "swimming and submerging" ticket (starting values, to be playtested).</summary>
+/// <summary>Water constants (starting values, to be playtested). Swimming is at the surface only (ADR 0010).</summary>
 public static class WaterConsts
 {
     /// <summary>Column depth above which the player swims (below it: wading).</summary>
     public const float SwimDepth = 1.1f;
-    /// <summary>Wading (shallow water, feet in water) walks at this share of normal speed.</summary>
-    public const float WadeSpeedScale = 0.6f;
+    /// <summary>Swim speed (m/s). Sprint is off in deep water; the speed is the only swim penalty.</summary>
     public const float SwimSpeed = 3f;
-    public const float SwimSprintSpeed = 4.5f;
-    /// <summary>Vertical swim speed: jump rises, crouch dives (m/s).</summary>
-    public const float SwimVerticalSpeed = 2f;
-    /// <summary>How fast the vertical swim speed eases toward its target (m/s per s).</summary>
-    public const float SwimVerticalAccel = 20f;
+    /// <summary>Depth at the ankles: wading is full speed up to here (the ease starts above it).</summary>
+    public const float AnkleDepth = 0.2f;
+    /// <summary>Depth at which the wading speed scale reaches <see cref="WadeSpeedFloor"/>; it blends into the swim speed by <see cref="SwimDepth"/>.</summary>
+    public const float WadeDepth = 0.9f;
+    /// <summary>Wading speed share of the land speed at <see cref="WadeDepth"/>.</summary>
+    public const float WadeSpeedFloor = 0.6f;
+    /// <summary>Eyes this far above the surface while swimming (m). The feet hang <c>MoveConsts.EyeHeight - this</c> under it.</summary>
+    public const float SwimEyesAboveSurface = 0.4f;
+    /// <summary>Eases the feet to their swim height: vertical speed per metre off the height (1/s).</summary>
+    public const float SwimSettleRate = 8f;
+    /// <summary>Cap on the vertical speed that eases the feet to the swim height (m/s).</summary>
+    public const float SwimSettleMaxSpeed = 4f;
+    /// <summary>Jump within this distance (m) of the shoreline of a deep body hops out onto the bank.</summary>
+    public const float ShoreHopDistance = 1.5f;
+    /// <summary>Upward speed of the hop out of the water (m/s): peaks about 1.5 m above the float height.</summary>
+    public const float SwimHopSpeed = 7.9f;
 }
 
 /// <summary>
@@ -151,8 +161,8 @@ public sealed class Water
 
     /// <summary>
     /// Fill the water fields of a movement state for the feet at <c>s.Position</c> (call before the step).
-    /// <see cref="MoveState.WaterDepth"/> is the depth at the feet; <see cref="MoveState.HeadUnder"/> is set when the
-    /// eyes are below the surface.
+    /// <see cref="MoveState.WaterDepth"/> is the depth at the feet; <see cref="MoveState.ShoreDistance"/> is the distance
+    /// to the body's shoreline, filled only in deep water (it decides whether a jump hops out).
     /// </summary>
     public void Sample(ref MoveState s)
     {
@@ -162,12 +172,12 @@ public sealed class Water
         {
             s.WaterDepth = 0f;
             s.WaterSurfaceY = float.NaN;
-            s.HeadUnder = false;
+            s.ShoreDistance = float.MaxValue;
             return;
         }
         s.WaterDepth = b.Depth;
         s.WaterSurfaceY = b.SurfaceY;
-        s.HeadUnder = feet.Y + MovementStep.EyeHeight(s.Stance) < b.SurfaceY;
+        s.ShoreDistance = b.Depth >= WaterConsts.SwimDepth ? b.ShoreDistance(feet.X, feet.Z) : float.MaxValue;
     }
 
     /// <summary>
@@ -207,36 +217,6 @@ public sealed class Water
             }
             return new Water(list);
         }
-    }
-}
-
-/// <summary>Breath (air) and drowning. Air is tracked as seconds spent since the head last surfaced.</summary>
-public static class Breath
-{
-    /// <summary>Seconds of air with the head under water.</summary>
-    public const float Capacity = 20f;
-    /// <summary>Surfacing takes air back this many times faster than it is spent (a full refill takes Capacity / this, 4 s).</summary>
-    public const float RefillRate = 5f;
-    /// <summary>Drowning damage per second once the air is gone.</summary>
-    public const float DrowningDamagePerSecond = 12f;
-
-    /// <summary>Seconds of air left (Capacity while dry).</summary>
-    public static float AirLeft(in MoveState s) => Math.Max(0f, Capacity - s.AirSpent);
-
-    /// <summary>
-    /// Advance the air by one tick using <see cref="MoveState.HeadUnder"/> (set by <see cref="Water.Sample"/> this tick).
-    /// Returns the drowning damage for the tick (0 while air is left).
-    /// </summary>
-    public static float Tick(ref MoveState s, float dt)
-    {
-        if (!s.HeadUnder)
-        {
-            s.AirSpent = Math.Max(0f, s.AirSpent - RefillRate * dt);
-            return 0f;
-        }
-        var hadAir = s.AirSpent < Capacity;
-        s.AirSpent = Math.Min(Capacity, s.AirSpent + dt);
-        return hadAir ? 0f : DrowningDamagePerSecond * dt;
     }
 }
 

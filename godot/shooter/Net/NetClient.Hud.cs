@@ -75,7 +75,6 @@ public partial class NetClient
         _hud?.SetControlMode(_gunship != null || _controlling); // one mode switch: a turret or the missile owns the screen (ticket #152)
         _hud?.SetHealth(Mathf.CeilToInt(_me?.Health ?? 100));
         UavTick();
-        if (_me != null) _hud?.SetBreath(Breath.AirLeft(_me.State), _me.HeadUnder);
         if (_me != null && _hud != null)
         {
             var g = _me.GlobalPosition;

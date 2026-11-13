@@ -34,7 +34,7 @@ public partial class NetClient
             var inWater = depth > 0f;
             if (_remoteInWater.TryGetValue(id, out var was)) { if (UnderwaterFx.WaterCrossing(was, inWater) != UnderwaterFx.Crossing.None) SplashAt(feet); }
             _remoteInWater[id] = inWater;
-            // swimming (deep enough to swim): lowered into the water, leaned forward, the slow walk; wading stays upright
+            // swimming (deep enough to swim): floating at the surface, leaned forward, the slow walk; wading stays upright
             r.View?.SetSwim(depth >= WaterConsts.SwimDepth);
         }
         if (_remoteInWater.Count > 0)
