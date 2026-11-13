@@ -103,6 +103,7 @@ public partial class Hud : CanvasLayer
         BuildCrosshair();
         BuildBreath();
         BuildHealth();
+        BuildHeadgear();
         BuildAir();
         BuildAmmo();
         BuildSeats(); // the vehicle seat schematic above the vehicle readout

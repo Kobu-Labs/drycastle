@@ -20,14 +20,20 @@ public partial class NetServer
 
     void ClearPush(ushort victim, DamageResult result) { if (result != DamageResult.Killed) _deathPush.Remove(victim); }
 
-    /// <summary>Called at a player's death, before the respawn: the corpse keeps the weapon the player had in the primary position.</summary>
+    /// <summary>
+    /// Called at a player's death, before the respawn: the corpse keeps the weapon the player had in the primary position, and the item they wore
+    /// (headgear, with the pickups already counted), which leaves the player: they respawn bare headed.
+    /// </summary>
     void SpawnCorpse(ushort victim)
     {
         if (!_byId.TryGetValue(victim, out var c) || c.W == null) return;
         var weapon = c.W.HotbarWeapon(CorpseRules.PrimaryPos);
-        var corpse = new Corpse(victim, N(c.Body.GlobalPosition), c.Body.Yaw, weapon, c.W.RoundsOf(weapon));
+        var item = c.Worn.TakeOff(EquipSlot.Headgear);
+        var corpse = new Corpse(victim, N(c.Body.GlobalPosition), c.Body.Yaw, weapon, c.W.RoundsOf(weapon), item);
         if (_deathPush.Remove(victim, out var push)) corpse.Launch(push);
-        _corpses.Add(corpse);
+        var id = _corpses.Add(corpse);
+        if (id is { } corpseId && item != null) BroadcastCorpseItem(corpseId); // after the corpse's own spawn event, on the same ordered channel
+        if (c.Worn.Changed) SendEquipment(c);
     }
 
     /// <summary>Flies the thrown corpses one tick; they stop against the world (not the cars: a run-over body starts inside one).</summary>

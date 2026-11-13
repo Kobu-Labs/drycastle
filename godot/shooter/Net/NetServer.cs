@@ -41,6 +41,8 @@ public partial class NetServer : Node
         public bool HasSeq;
         public byte Slot;
         public PlayerWeapons W = null!;
+        /// <summary>What the player wears (items.json): set at join, taken off onto the corpse at death, never stored in the profile.</summary>
+        public Equipment Worn = null!;
         /// <summary>The player's perk values. Neutral until the loadout ticket sets them from the player's loadout.</summary>
         public PerkModifiers Perks = PerkModifiers.None;
         /// <summary>XP granted to this player since the round began (the end-of-round summary).</summary>
@@ -389,6 +391,7 @@ public partial class NetServer : Node
             if (m is HelloMsg h && c.Id == 0) OnHello(c, h);
             else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || ArenaMode)) OnDebug(c, e.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpse } pu) OnPickUpCorpse(c, pu.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpseItem } pi) OnPickUpCorpseItem(c, pi.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
@@ -444,6 +447,7 @@ public partial class NetServer : Node
         ApplyLoadout(c);
         c.Recoil = new RecoilState(c.Id);
         c.Breath = new BreathState(c.Id);
+        c.Worn = new Equipment(Items);
         c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = MapLadders };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
@@ -464,6 +468,7 @@ public partial class NetServer : Node
             if (o != c) Send(o, new JoinMsg(c.Id, c.Name));
         }
         foreach (var w in _match.Entities.Snapshot()) Send(c, new EventMsg((byte)EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State)));
+        SendCorpseItemsOnJoin(c); // the items the corpses carry, after the corpses themselves
         SendGlassOnJoin(c); // the glass panes that are not whole (ADR 0007)
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
@@ -778,8 +783,8 @@ public partial class NetServer : Node
     HitTarget HitTargetOf(Client o)
     {
         if (o.Car is { } car && car.Def.Seats[o.CarSeat].Exposed) // the seat where the car stood at the shot's view (B-02), or now
-            return new HitTarget(o.Id, N(SeatPosAt(car, o.CarSeat, PoseOf(car))), RiderRules.HitStance(car.Def, o.CarSeat, o.Body.State.Stance), o.Body.Yaw);
-        return new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw);
+            return new HitTarget(o.Id, N(SeatPosAt(car, o.CarSeat, PoseOf(car))), RiderRules.HitStance(car.Def, o.CarSeat, o.Body.State.Stance), o.Body.Yaw, o.Worn.HeadGuarded);
+        return new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw, o.Worn.HeadGuarded);
     }
 
     /// <summary>The player bodies' RIDs for ray exclusion, rebuilt only after a join or a drop (T2-02) instead of per ray.</summary>

@@ -20,7 +20,7 @@ public partial class NetServer
 
     bool IsAdmin(Client c) => !c.IsBot && (AdminAll || (c.Token.Length > 0 && AdminTokens.Contains(c.Token)));
 
-    ChatContext ChatCtx(Client c) => new(IsAdmin(c), Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>());
+    ChatContext ChatCtx(Client c) => new(IsAdmin(c), Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList());
 
     /// <summary>Join: tells the client if it is an admin and which vehicles it may name.</summary>
     void SendChatStatus(Client c)
@@ -61,6 +61,7 @@ public partial class NetServer
             case "bots": ChatBots(c, args); break;
             case "spawn": ChatSpawn(c, args[0]); break;
             case "sandbox": ChatSandbox(c, args); break;
+            case "give": ChatGive(c, args); break;
             case "time": ChatTimeCommand(c, args); break;
             case "restart": ChatRestart(c, args); break;
             case "event": ChatEvent(c, args[0]); break;
@@ -111,15 +112,36 @@ public partial class NetServer
         ChatTo(c, ChatLineKind.Info, $"Spawned a {id} in front of you.");
     }
 
+    /// <summary>A human player by name (spaces ignored) or "#id", or null.</summary>
+    Client? FindHuman(string who)
+    {
+        var humans = _byId.Values.Where(o => !o.IsBot && o.Joined).ToList();
+        return who.StartsWith('#') && ushort.TryParse(who.AsSpan(1), out var id)
+            ? humans.FirstOrDefault(o => o.Id == id)
+            : humans.FirstOrDefault(o => o.Name.Replace(" ", "").Equals(who, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>"/give item [player]": the item goes on the player (the admin without a name), a new one with no pickups counted, and replaces what they wore in its slot. A living player only.</summary>
+    void ChatGive(Client c, IReadOnlyList<string> args)
+    {
+        var index = Items.IndexOf(args[0]);
+        if (index < 0) { ChatTo(c, ChatLineKind.Error, $"Unknown item '{args[0]}'."); return; }
+        var target = args.Count > 1 ? FindHuman(args[1]) : c;
+        if (target == null) { ChatTo(c, ChatLineKind.Error, $"No player '{args[1]}'. Use the name without spaces, or #id."); return; }
+        if (_match.Get(target.Id)?.Life != PlayerLife.Alive) { ChatTo(c, ChatLineKind.Error, $"{target.Name} is not alive."); return; }
+        var def = Items.Items[index];
+        target.Worn.Wear(def.Slot, new ItemStack(index));
+        SendEquipment(target);
+        ChatTo(c, ChatLineKind.Info, target == c ? $"You wear the {def.Name} now." : $"{target.Name} wears the {def.Name} now.");
+        if (target != c) ChatTo(target, ChatLineKind.Info, $"{c.Name} gave you the {def.Name}.");
+    }
+
     /// <summary>"/sandbox player [on|off]": a human by name (spaces ignored) or "#id". Without a state it flips.</summary>
     void ChatSandbox(Client c, IReadOnlyList<string> args)
     {
         if (!AllowSandbox) { ChatTo(c, ChatLineKind.Error, "Sandbox mode is not allowed on this server (--allow-sandbox is off)."); return; }
         var who = args[0];
-        var humans = _byId.Values.Where(o => !o.IsBot && o.Joined).ToList();
-        var target = who.StartsWith('#') && ushort.TryParse(who.AsSpan(1), out var id)
-            ? humans.FirstOrDefault(o => o.Id == id)
-            : humans.FirstOrDefault(o => o.Name.Replace(" ", "").Equals(who, StringComparison.OrdinalIgnoreCase));
+        var target = FindHuman(who);
         if (target == null) { ChatTo(c, ChatLineKind.Error, $"No player '{who}'. Use the name without spaces, or #id."); return; }
         var on = args.Count > 1 ? args[1] == "on" : !target.Sandbox;
         if (target.Sandbox == on) { ChatTo(c, ChatLineKind.Info, $"{target.Name} is already {(on ? "in" : "out of")} sandbox mode."); return; }
