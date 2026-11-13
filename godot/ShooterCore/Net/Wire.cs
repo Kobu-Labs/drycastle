@@ -192,6 +192,8 @@ public static class Wire
     /// </summary>
     public static bool IsEffect(EventKind kind) => kind is EventKind.Shot or EventKind.PelletFan or EventKind.ImpactFx or EventKind.GunshipShots or EventKind.GunshipImpacts;
     public const int KeyEvery = 30;
+    /// <summary>An entity tick with nothing to say sends no packet, except every this many ticks: the heartbeat carries the input ack (A-05).</summary>
+    public const int EmptyTickHeartbeat = 3;
     public const int MaxInputsPerPacket = 3;
     public const int MaxNameBytes = 24;
     public const int MaxTokenBytes = 64;
