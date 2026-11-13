@@ -2,8 +2,11 @@ using System.Numerics;
 
 namespace Drycastle.ShooterCore;
 
-/// <summary>A player as a hit target: feet position, stance (sets the capsule height) and the yaw they face.</summary>
-public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw);
+/// <summary>
+/// A player as a hit target: feet position, stance (sets the capsule height) and the yaw they face. <paramref name="HeadGuarded"/>: the target wears
+/// an item that makes a headshot a body hit (<see cref="Equipment.HeadGuarded"/>); it is a state of the player, not of the pose, so a rewound target takes the present one.
+/// </summary>
+public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw, bool HeadGuarded = false);
 
 public readonly record struct RayHit(ushort Id, float Distance, bool Head);
 public readonly record struct MeleeHit(ushort Id, bool Backstab, float Distance);
@@ -195,7 +198,8 @@ public static class HitMath
 
     /// <summary>
     /// Nearest target hit by the ray, or null. <paramref name="wallDistance"/> is where the world blocks the ray
-    /// (infinity if nothing); targets behind it are not hit. A hit is a headshot when the ray also passes through the head sphere, no more than one body radius behind the point it entered the body.
+    /// (infinity if nothing); targets behind it are not hit. A hit is a headshot when the ray also passes through the head sphere, no more than one body radius behind the point it entered the body,
+    /// unless the target is <see cref="HitTarget.HeadGuarded"/>: then it is the body hit it entered as, with the body's damage.
     /// </summary>
     public static RayHit? Raycast(Vector3 origin, Vector3 dir, float maxDistance, float wallDistance, IEnumerable<HitTarget> targets, ushort shooter)
     {
@@ -209,7 +213,7 @@ public static class HitMath
             if (best is { } b && b.Distance <= d) continue;
             // the head sphere only counts when the ray reaches it soon after entering the body: a shot into the feet or back of
             // a prone player passes the whole body first (an upright head sits inside the capsule, so its entry is within one radius)
-            var head = RaySphere(origin, dir, HeadCenter(t), HeadRadius) is { } hd && hd - d <= PlayerHitBox.Radius;
+            var head = !t.HeadGuarded && RaySphere(origin, dir, HeadCenter(t), HeadRadius) is { } hd && hd - d <= PlayerHitBox.Radius;
             best = new RayHit(t.Id, d, head);
         }
         return best;

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  // Equippable items (headgear and, later, other slots). An item is a thing a player wears or carries that is not a weapon, perk or
+  // killstreak: event rewards come here. The wire names an item by its position in this list (u8, 0 = none, so item n is sent as n + 1),
+  // so append new items at the end and do not reorder or remove them (the same rule as the species in animals.json).
+  //   slot            the equipment slot it goes into: "headgear" (instead of the camouflage helmet; one item per slot)
+  //   pickup_limit    how many times it can be taken from a corpse over its whole life; the next attempt makes it crumble. Leave out for no limit
+  //   headshot_immune a headshot on its wearer is resolved as a body hit: no headshot multiplier, no headshot marker, no headshot bonus XP
+  "items": [
+    { "id": "bigfoot_head", "name": "Bigfoot head", "slot": "headgear", "pickup_limit": 3, "headshot_immune": true }
+  ]
+}
