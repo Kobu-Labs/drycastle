@@ -81,6 +81,7 @@ class MapScene:
     warnings: list[str] = field(default_factory=list)  # stale or unusable edits entries
     windows: list[dict] = field(default_factory=list)  # tagged window panes, see building_detail
     bunkers: list[dict] = field(default_factory=list)  # rooms of the enterable bunkers, see bunker.bunker_rooms
+    church: dict | None = None  # the inside of the church, see church_interior.church_info
 
     def chunks(self) -> list[Chunk]:
         return sorted(set(self.parcels) | set(self.nodes) | set(self.parcel_props))
@@ -155,6 +156,10 @@ def build_scene(
                             )
                 elif b.get("model"):  # hand-modelled landmark: detailed visual, plain-massing collision
                     m = build_landmark(b, detail=fn is building_mesh)
+                    if b["model"] == "church" and fn is building_mesh:
+                        from drycastle_pipeline.church_interior import church_info
+
+                        scene.church = {"id": bid, "parcel": p["id"], **church_info(b, dz)}
                     if b["model"] == "bunker" and fn is building_mesh:
                         a = float(b["model_axis"])
                         rooms = bunker_rooms(b["footprint"]["exterior"], (math.cos(a), math.sin(a)))

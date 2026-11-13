@@ -187,7 +187,7 @@ GLASS, DOOR, STONE, IRON = "#2b2f38", "#3a2a22", "#8a8680", "#3d3d44"
 def church_solids(detail: bool = True) -> _Solids:
     S = _Solids()
     y, w, rf, sp = (hex_to_rgb(c) for c in (YELLOW, WHITE, ROOF, SPIRE))
-    pl, gl, dr, st, ir = (hex_to_rgb(c) for c in (PLINTH, GLASS, DOOR, STONE, IRON))
+    pl, gl, st, ir = (hex_to_rgb(c) for c in (PLINTH, GLASS, STONE, IRON))
     cu = 0.985  # centre line of the nave, tower and porch
     nx0, nx1 = -2.88, 4.86  # nave
     z_eave, z_ridge = 7.4, 10.9
@@ -196,8 +196,10 @@ def church_solids(detail: bool = True) -> _Solids:
         S.box(x0, x1, y0, y1, 0.0, z1, y)
         S.box(x0 - 0.03, x1 + 0.03, y0 - 0.03, y1 + 0.03, 0.0, 0.6, pl)
 
-    # nave and its gabled roof
-    block(nx0, nx1, -7.3, 14.0, z_eave)
+    # nave (hollow: walls, floor, gallery, pews, see church_interior) and its gabled roof
+    from drycastle_pipeline.church_interior import build_shell
+
+    build_shell(S, detail, y, pl)
     S.gable(nx0, nx1, -7.3, 14.0, z_eave, z_ridge, rf, y, oh=0.35)
     # side aisles with lean-to roofs, rear apse and sacristy
     for x0, x1, y0, y1, inner_left in (
@@ -209,10 +211,12 @@ def church_solids(detail: bool = True) -> _Solids:
             S.shed(x0, x1 + 0.35, y0 - 0.2, y1 + 0.2, 5.2, 4.2, 0.2, rf)
         else:
             S.shed(x0 - 0.35, x1, y0 - 0.2, y1 + 0.2, 4.2, 5.2, 0.2, rf)
-    block(-1.28, 4.96, -14.25, -7.3, 5.2)
     S.gable(-1.28, 4.96, -14.25, -7.3, 5.2, 7.6, rf, y, oh=0.3)
-    block(-8.17, -1.28, -12.08, -5.13, 3.8)
-    S.gable(-8.17, -1.28, -12.08, -5.13, 3.8, 5.6, rf, y, oh=0.3)
+    # sacristy: stops at the nave wall, with a flat-roofed link to the apse
+    block(-8.17, nx0, -12.08, -5.13, 3.8)
+    S.gable(-8.17, nx0, -12.08, -5.13, 3.8, 5.6, rf, y, oh=0.3)
+    block(nx0, -1.28, -12.08, -7.3, 3.8)
+    S.box(nx0, -1.28, -12.08, -7.3, 3.8, 4.0, rf)
     # porch: floor slab, four white columns, roof slab on a white entablature
     S.box(nx0 - 0.1, nx1 + 0.1, 14.0, 16.6, 0.0, 0.25, st)
     for dx in (-3.5, -1.2, 1.2, 3.5):
@@ -250,7 +254,6 @@ def church_solids(detail: bool = True) -> _Solids:
         return S
 
     # windows, doors and louvres (flat decals on the walls)
-    S.plate("front", 14.0, cu, _rect(1.5, 0.25, 2.5), 0.06, dr)  # double door
     S.plate(
         "front", 14.0, cu, _arch(1.3, 4.5, 6.2, 0.7), 0.04, w
     )  # arched window with a white frame
