@@ -52,6 +52,7 @@ public partial class NetClient
     {
         if (_citizens.Count == 0 || _lastTick == 0) return;
         var rt = RenderTickNow();
+        var hideIn = ChurchInterior.Visible ? null : ChurchDoorNode.Current?.Shell; // doors shut, camera outside: whoever is in the church is not drawn
         foreach (var (id, c) in _citizens)
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
@@ -60,6 +61,8 @@ public partial class NetClient
                 c.View.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 c.View.Rotation = new Vector3(0, s.Yaw, 0);
             }
+            var gp = c.View.GlobalPosition;
+            c.View.Visible = hideIn == null || !hideIn.InRooms(new System.Numerics.Vector3(gp.X, gp.Y, gp.Z));
             c.View.Show(CitizenRules.StateOf(e.State.State));
             c.View.SetMass(_massNow.Chanting, _massNow.PastorKills, new Vector3(_massNow.ChantAt.X, _massNow.ChantAt.Y, _massNow.ChantAt.Z));
         }
