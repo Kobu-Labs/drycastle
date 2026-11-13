@@ -42,11 +42,11 @@ public static class LagComp
 
     /// <summary>
     /// How many ticks back the shooter's screen is: half the round trip in ticks (rounded) plus the interpolation delay, capped at
-    /// <see cref="CapTicks"/>. A shooter with no round trip yet (a bot) sees the present: 0.
+    /// <see cref="CapTicks"/>. A shooter with no connection (a bot) is resolved at the present by the caller, not here.
     /// </summary>
     public static int BackTicks(float rttMs, int tickRate, int interpDelayTicks)
     {
-        if (rttMs <= 0) return 0;
+        if (rttMs < 0) rttMs = 0;
         var oneWayTicks = rttMs / 2f * tickRate / 1000f;
         var back = (int)MathF.Round(oneWayTicks) + interpDelayTicks;
         return Math.Min(back, CapTicks(tickRate));

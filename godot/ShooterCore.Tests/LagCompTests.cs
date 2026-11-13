@@ -19,7 +19,7 @@ public class LagCompTests
     }
 
     [Theory]
-    [InlineData(0f, 3)]      // no round trip yet (a bot): the interpolation delay alone
+    [InlineData(0f, 3)]      // a LAN round trip: the interpolation delay alone
     [InlineData(27f, 3)]     // RTT/2 = 13.5 ms, 0.4 ticks, rounds to 0
     [InlineData(72f, 4)]     // 36 ms, 1.08 ticks
     [InlineData(130f, 5)]    // 65 ms, 1.95 ticks
@@ -31,9 +31,9 @@ public class LagCompTests
     }
 
     [Fact]
-    public void NegativeRoundTripIsThePresent()
+    public void NegativeRoundTripCountsAsZero()
     {
-        Assert.Equal(0, LagComp.BackTicks(-5f, Rate, 0));
+        Assert.Equal(3, LagComp.BackTicks(-5f, Rate, 3));
     }
 
     [Fact]
