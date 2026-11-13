@@ -50,6 +50,16 @@ from drycastle_pipeline.assets import DEFAULT_MANIFEST, load_manifest, validate_
 from drycastle_pipeline.buildings import footprint_polygon
 from drycastle_pipeline.config import DEFAULT_AREA, REPO_ROOT, area_paths
 from drycastle_pipeline.ground import ground_type_source, ground_types, merge_ground_types, rules_ground_types
+from drycastle_pipeline.ground_attributes import (
+    ATTRIBUTES,
+    EVENTS,
+    GROUPS,
+    RECIPES,
+    attributes_of,
+    carries_terrain,
+    default_tint,
+    terrain_index,
+)
 from drycastle_pipeline.edits import (
     COLUMN_TYPES,
     CONNECTOR_ASSET_PREFIX,
@@ -1792,8 +1802,60 @@ class ParcelEditTools:
             raise ToolError(f"unknown ground type {name!r}; choose one of {', '.join(types)} (see list_ground_types)")
         return name
 
+    def _ground_stack(self, ground: object) -> list[str] | None:
+        """A ``ground`` argument as the stack of type names (lowest first): a name is a stack of one, None is no stack."""
+        if ground is None:
+            return None
+        names = [ground] if isinstance(ground, str) else ground
+        if not (isinstance(names, list) and names):
+            raise ToolError("ground must be a type name or a non-empty list of type names, lowest first (see list_ground_types)")
+        stack = [self._ground_type(n) for n in names]
+        if len(set(stack)) != len(stack):
+            raise ToolError(f"ground lists a type twice: {stack}")
+        return stack
+
+    def _stack_colour(self, stack: list[str]) -> str:
+        """The preview colour of a stack: the first shade of the type that decides its terrain, else the overlay tint."""
+        types = self._ground_types()
+        top = terrain_index([types[n] for n in stack])
+        if top is not None:
+            return (attributes_of(types[stack[top]]).get("colours") or ["#808080"])[0]
+        keys = {k for n in stack for k in attributes_of(types[n])}
+        return default_tint(keys) or "#808080"
+
+    @staticmethod
+    def _catalog() -> dict:
+        """The attribute catalog for the model: the groups, how each attribute stacks and what values it takes."""
+        values = {
+            "colours": "list of 1-6 \"#rrggbb\"",
+            "recipe": " | ".join(RECIPES),
+            "detail": "object laid over the recipe's section of rules.yaml detail",
+            "water": "true",
+            "spawns": "true",
+            "event_spawn": "list of events: " + ", ".join(EVENTS),
+        }
+        return {
+            "groups": [
+                {
+                    "group": g.key,
+                    "note": g.note,
+                    "attributes": [
+                        {"attribute": a.key, "label": a.label, "stacking": a.stacking, "value": values[a.key]}
+                        for a in ATTRIBUTES.values()
+                        if a.group == g.key
+                    ],
+                }
+                for g in GROUPS
+            ],
+            "stacking": {
+                "terrain": "the topmost stacked type with any terrain attribute decides all of them",
+                "any": "every stacked type counts; one that carries it is enough",
+                "union": "every stacked type counts; the values add up",
+            },
+        }
+
     def list_ground_types(self) -> dict:
-        """The ground types, effective values and where each comes from (see the registered tool description)."""
+        """The ground types, effective attributes and where each comes from (see the registered tool description)."""
         rules = rules_ground_types(self.settings.rules_path, self.settings.area)
         edited = _read_edits(self.settings.edits_path).ground_types
         rows = []
@@ -1801,42 +1863,40 @@ class ParcelEditTools:
             rows.append({
                 "type": name,
                 "source": ground_type_source(name, rules, edited),
-                "colours": spec.get("colours", []),
-                "recipe": spec.get("recipe"),
-                "detail": spec.get("detail") or {},
-                "water": bool(spec.get("water")),
-                "spawns": bool(spec.get("spawns")),
+                "attributes": attributes_of(spec),
                 "osm": spec.get("osm") or {},
                 "from": "rule: " + spec["rule"] if spec.get("rule") else ("osm: " + json.dumps(spec["osm"], sort_keys=True) if spec.get("osm") else "hand-drawn or default only"),
             })
         deleted = sorted(n for n in edited if ground_type_source(n, rules, edited) == "deleted")
-        out: dict = {"summary": f"{len(rows)} ground types" + (f" ({len(deleted)} deleted by you)" if deleted else ""), "types": rows}
+        out: dict = {
+            "summary": f"{len(rows)} ground types" + (f" ({len(deleted)} deleted by you)" if deleted else ""),
+            "types": rows,
+            "catalog": self._catalog(),
+        }
         if deleted:
             out["deleted"] = deleted
         return out
 
     def _ground_type_regions(self, name: str, edits: Edits) -> list[str]:
-        return sorted(rid for rid, r in edits.regions.items() if r.get("ground") == name)
+        return sorted(rid for rid, r in edits.regions.items() if name in (r.get("ground") or []))
 
     def set_ground_type(
         self,
         name: str,
-        colours: list[str] | None = None,
-        recipe: str | None = None,
-        water: bool | None = None,
-        spawns: bool | None = None,
+        attributes: dict | None = None,
         osm: dict | None = None,
-        detail: dict | None = None,
     ) -> dict:
         """Create a ground type or change the user's override of one (see the registered tool description)."""
         if not isinstance(name, str):
             raise ToolError("name must be text, a lower_snake type name like my_meadow")
-        change_keys = {
-            "colours": colours, "recipe": recipe,
-            "water": water, "spawns": spawns, "osm": osm, "detail": detail,
-        }
-        if all(v is None for v in change_keys.values()):
-            raise ToolError("give at least one of colours, recipe, water, spawns, osm, detail")
+        if attributes is None and osm is None:
+            raise ToolError("give attributes (the attributes to set, null removes one) and/or osm")
+        if attributes is not None:
+            if not isinstance(attributes, dict) or not attributes:
+                raise ToolError("attributes must be an object like {\"spawns\": true, \"event_spawn\": [\"bigfoot\"]} (see list_ground_types catalog)")
+            unknown = [k for k in attributes if k not in ATTRIBUTES]
+            if unknown:
+                raise ToolError(f"unknown attribute {', '.join(unknown)}; the catalog has {', '.join(ATTRIBUTES)} (see list_ground_types)")
         rules = rules_ground_types(self.settings.rules_path, self.settings.area)
 
         def change(edits: Edits) -> str:
@@ -1845,20 +1905,25 @@ class ParcelEditTools:
                 raise ToolError(f"{name} is deleted by you; reset_ground_type it first to bring it back. Nothing was changed.")
             existed = name in edits.ground_types
             entry = edits.ground_types.setdefault(name, {})
-            if colours is not None:
-                entry["colours"] = colours
-            if recipe is not None:
-                entry["recipe"] = None if recipe == "none" else recipe
-            if water is not None:
-                entry["water"] = water
-            if spawns is not None:
-                entry["spawns"] = spawns
+            if attributes is not None:
+                own = entry.setdefault("attributes", {})
+                carried_by_rules = attributes_of(rules.get(name))
+                for key, value in attributes.items():
+                    if value is None:  # remove: a null only where the rules carry it, else just drop what was set
+                        if key in carried_by_rules:
+                            own[key] = None
+                        else:
+                            own.pop(key, None)
+                    elif key == "detail":
+                        if not isinstance(value, dict):
+                            raise ToolError("detail must be an object, e.g. {\"furrow\": {\"probability\": 0.0}}")
+                        own[key] = _merge(own.get(key) or {}, value)
+                    else:
+                        own[key] = value
+                if not own:
+                    del entry["attributes"]
             if osm is not None:
                 entry["osm"] = osm
-            if detail is not None:
-                if not isinstance(detail, dict):
-                    raise ToolError("detail must be an object, e.g. {\"furrow\": {\"probability\": 0.0}}")
-                entry["detail"] = _merge(entry.get("detail") or {}, detail)
             return "updated" if existed else ("created" if name not in rules else "overridden")
 
         what = self._write(change)
@@ -1920,31 +1985,34 @@ class ParcelEditTools:
             + "; the map shows it after the next full run (make map)",
             "type": name,
             "warnings": [
-                f"regions {', '.join(used)} still use {name}: they are skipped with a warning until you give them another ground type"
+                f"regions {', '.join(used)} still use {name}: it is skipped (with a warning) in their stack until you change it"
             ] if used else [],
         }
 
-    def set_region_ground(self, id: str, ground: str | None) -> dict:
-        """Make a region a hand-drawn ground area of a type, or None to make it ground paint again."""
+    def set_region_ground(self, id: str, ground: list[str] | str | None) -> dict:
+        """Give a region a stack of ground types (a hand-drawn ground area, or a layer of attributes), or None to make it ground paint again."""
         rid = self._region_id(id)
-        name = None if ground is None else self._ground_type(ground)
+        stack = self._ground_stack(ground)
 
         def change(edits: Edits) -> object:
             entry = self._region_entry(edits, rid)
-            if name is not None and "water_y" in entry:
+            if stack is not None and "water_y" in entry:
                 raise ToolError(f"{rid} is a body of water (water_y {entry['water_y']}); set_region_water null first. Nothing was changed.")
             old = entry.get("ground")
-            if name is None:
+            if stack is None:
                 entry.pop("ground", None)
             else:
-                entry["ground"] = name
+                entry["ground"] = stack
+                types = self._ground_types()
+                if terrain_index([types[n] for n in stack]) is not None:
+                    entry["colour"] = self._region_colour(self._stack_colour(stack))  # the preview looks like the ground it will be
             return old
 
         old = self._write(change)
         return {
-            "summary": f"{rid} ground {old} -> {name}; the map shows it after the next full run (make map)",
+            "summary": f"{rid} ground {old} -> {stack}; the map shows it after the next full run (make map)",
             "id": rid,
-            "ground": name,
+            "ground": stack,
             "warnings": [],
         }
 
@@ -1955,17 +2023,17 @@ class ParcelEditTools:
         parcel: str | None = None,
         points: list | None = None,
         water_y: float | None = None,
-        ground: str | None = None,
+        ground: list[str] | str | None = None,
     ) -> dict:
         """Create a region (see the registered tool description)."""
         level = None if water_y is None else _check_num("water_y", water_y)
-        kind = None if ground is None else self._ground_type(ground)
+        kind = self._ground_stack(ground)
         if kind is not None and level is not None:
             raise ToolError("give ground or water_y, not both: a water region is its own body of water")
         if colour is None:
             if kind is None:
                 raise ToolError('colour is required ("#rrggbb"); only a region with a ground type may leave it out')
-            colour = (self._ground_types()[kind].get("colours") or ["#808080"])[0]
+            colour = self._stack_colour(kind)
         col = self._region_colour(colour)
         extra = {**({} if level is None else {"water_y": level}), **({} if kind is None else {"ground": kind})}
         if (polygon is None) == (points is None):
@@ -2377,8 +2445,9 @@ def build_server(settings: Settings) -> Any:
         "and nothing is written. Where regions overlap the higher ID wins (reported in "
         "`warnings`). Optional `water_y` makes it a body of water with a flat surface at that height "
         "(metres, terrain datum): see set_region_water. Optional `ground` (a type of "
-        "list_ground_types, e.g. \"meadow\") makes it a hand-drawn ground area instead of paint: see "
-        "set_region_ground; `colour` may then be left out (the type's colour is used for the preview). "
+        "list_ground_types, e.g. \"meadow\", or a stack of them) makes it a hand-drawn ground area instead of "
+        "paint: see set_region_ground; `colour` may then be left out (the colour of the terrain type is used for "
+        "the preview, or an overlay tint when the stack carries no terrain). "
         "Returns the id, area, bbox and the final absolute polygon."))
     def create_region(
         colour: str | None = None,
@@ -2386,48 +2455,52 @@ def build_server(settings: Settings) -> Any:
         parcel: str | None = None,
         points: list[list[float]] | None = None,
         water_y: float | None = None,
-        ground: str | None = None,
+        ground: list[str] | str | None = None,
     ) -> dict:
         return tools.create_region(colour, polygon, parcel, points, water_y, ground)
 
     @server.tool(description=(
-        "Make a region a hand-drawn ground area: its shape (outside the parcels) becomes ground of the type "
-        "`ground` (see list_ground_types: field, meadow, orchard, forest, village, ...), with that type's "
-        "terrain colour, grass and clutter, and trees, overriding what the rules put there. Unlike paint this "
-        "is not hot-reloaded: the viewer shows the region in its colour as a preview, the real ground appears "
-        "after the next full pipeline run (make map). `ground` null turns it back into ground paint. Not for "
-        "water regions (water_y)."))
-    def set_region_ground(id: str, ground: str | None) -> dict:
+        "Give a region a stack of ground types, so its shape is a hand-drawn ground area. `ground` is a type name or a "
+        "list of names, lowest first (the later is on top; between regions the higher ID is on top). The topmost type "
+        "that carries terrain attributes (colours, recipe, detail, water) decides the terrain colour, detail and trees "
+        "of the shape, outside the parcels, overriding what the rules put there; the attributes that add up (spawns, "
+        "event_spawn) of every type in the stack apply too, so [\"forest\", \"bigfoot_zone\"] is forest that is also "
+        "an event area. A stack with no terrain type only adds attributes: the ground stays as it is. Unlike paint this "
+        "is not hot-reloaded: the viewer shows a terrain stack in its colour as a preview (an attribute-only stack as a "
+        "translucent overlay), the real ground appears after the next full pipeline run (make map). `ground` null "
+        "turns it back into ground paint. Not for water regions (water_y)."))
+    def set_region_ground(id: str, ground: list[str] | str | None) -> dict:
         return tools.set_region_ground(id, ground)
 
     @server.tool(description=(
         "List the ground types (rules.yaml ground.types plus your overrides and additions in edits.json): name, "
         "`source` (rules = as in rules.yaml, overridden = rules.yaml plus your override, custom = made by you), "
-        "effective terrain colours, detail recipe and settings, water, spawns, "
-        "the OSM values it takes, and where it comes from on its own (OSM, a rule, or only hand-drawn); `deleted` "
-        "names the types of the rules you removed. Use a name as `ground` in create_region or set_region_ground."))
+        "the `attributes` it carries (a type is a named bundle of attributes: terrain colours, detail recipe and "
+        "settings, water, spawns, event_spawn), the OSM values it takes, and where it comes from on its own (OSM, a "
+        "rule, or only hand-drawn); `deleted` names the types of the rules you removed. `catalog` lists every "
+        "attribute that exists, grouped (Appearance, Spawning, Water, Events), how stacked types combine it and what "
+        "values it takes. Use a name in the `ground` of create_region or set_region_ground."))
     def list_ground_types() -> dict:
         return tools.list_ground_types()
 
     @server.tool(description=(
         "Create a ground type, or change your override of one that rules.yaml defines. Name: lower_snake, at most 24 "
-        "characters, an ID that cannot be renamed. Give any of: `colours` (1-6 \"#rrggbb\" terrain shades), "
-        "`recipe` (field, forest, village, dike or \"none\" for no detail), "
-        "`water`, `spawns`, `osm` ({\"landuse\": [...], \"natural\": [...]}, the OSM values the "
-        "type takes; each class given replaces its list), `detail` (settings laid over that recipe's section of "
-        "rules.yaml `detail`, e.g. {\"furrow\": {\"probability\": 0.0}, \"tone_per_ha\": 8}; merged into your earlier "
-        "ones). Only what you give is overridden; the rest stays as in rules.yaml. A new name makes a custom type "
-        "(usable as `ground` of a region). Needs the next full run to show on the map (make map)."))
+        "characters, an ID that cannot be renamed. A type is a named bundle of attributes; `attributes` sets the ones "
+        "you give (see the `catalog` of list_ground_types): `colours` (1-6 \"#rrggbb\" terrain shades), `recipe` (field, "
+        "forest, village or dike), `detail` (settings laid over that recipe's section of rules.yaml `detail`, e.g. "
+        "{\"furrow\": {\"probability\": 0.0}, \"tone_per_ha\": 8}; merged into your earlier ones), `water` (true), "
+        "`spawns` (true), `event_spawn` (events that may spawn there, e.g. [\"bigfoot\"]). A value null removes that "
+        "attribute (the type stops carrying it). A type with only spawns and event_spawn can be stacked over any "
+        "ground without changing how it looks. `osm` ({\"landuse\": [...], \"natural\": [...]}, the OSM values the type "
+        "takes; each class given replaces its list; such a type needs terrain attributes). Only what you give is "
+        "overridden; the rest stays as in rules.yaml. A new name makes a custom type (usable in the `ground` of a "
+        "region). Needs the next full run to show on the map (make map)."))
     def set_ground_type(
         name: str,
-        colours: list[str] | None = None,
-        recipe: str | None = None,
-        water: bool | None = None,
-        spawns: bool | None = None,
+        attributes: dict | None = None,
         osm: dict | None = None,
-        detail: dict | None = None,
     ) -> dict:
-        return tools.set_ground_type(name, colours, recipe, water, spawns, osm, detail)
+        return tools.set_ground_type(name, attributes, osm)
 
     @server.tool(description=(
         "Remove your override of a ground type of rules.yaml, so it is as in rules.yaml again; also brings back one you "

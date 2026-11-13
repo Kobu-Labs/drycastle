@@ -658,13 +658,13 @@ def test_region_ground_types(env):
     tools, settings, _ = env
     types = {t["type"]: t for t in tools.list_ground_types()["types"]}
     assert {"field", "forest", "meadow", "village", "water"} <= set(types)
-    assert types["water"]["water"] and types["meadow"]["recipe"] == "field"
-    out = tools.create_region(polygon=SQUARE, ground="meadow")  # no colour: the type's first shade tints the preview
-    assert (out["ground"], out["colour"]) == ("meadow", types["meadow"]["colours"][0].lower())
-    assert load_edits(settings.edits_path).regions["R-0001"]["ground"] == "meadow"
-    assert tools.list_regions()["regions"][0]["ground"] == "meadow"
+    assert types["water"]["attributes"]["water"] and types["meadow"]["attributes"]["recipe"] == "field"
+    out = tools.create_region(polygon=SQUARE, ground="meadow")  # no colour: the type's first shade tints the preview; a name is a stack of one
+    assert (out["ground"], out["colour"]) == (["meadow"], types["meadow"]["attributes"]["colours"][0].lower())
+    assert load_edits(settings.edits_path).regions["R-0001"]["ground"] == ["meadow"]
+    assert tools.list_regions()["regions"][0]["ground"] == ["meadow"]
     tools.set_region_ground("R-0001", "orchard")
-    assert load_edits(settings.edits_path).regions["R-0001"]["ground"] == "orchard"
+    assert load_edits(settings.edits_path).regions["R-0001"]["ground"] == ["orchard"]
     tools.set_region_ground("R-0001", None)
     assert "ground" not in load_edits(settings.edits_path).regions["R-0001"]
     canonical(settings)
@@ -674,37 +674,67 @@ def test_region_ground_types(env):
         tools.create_region(polygon=SQUARE)
     with pytest.raises(ToolError, match="not both"):
         tools.create_region(polygon=SQUARE, ground="meadow", water_y=100.0)
+    with pytest.raises(ToolError, match="twice"):
+        tools.set_region_ground("R-0001", ["meadow", "meadow"])
     tools.set_region_water("R-0001", 100.0)
     with pytest.raises(ToolError, match="body of water"):
         tools.set_region_ground("R-0001", "meadow")
 
 
+def test_a_region_can_stack_an_event_type_on_forest(env):
+    tools, settings, _ = env
+    out = tools.set_ground_type("bigfoot_zone", attributes={"event_spawn": ["bigfoot"]})
+    assert out["type"]["attributes"] == {"event_spawn": ["bigfoot"]} and out["type"]["from"] == "hand-drawn or default only"
+    catalog = tools.list_ground_types()["catalog"]
+    assert [g["group"] for g in catalog["groups"]] == ["appearance", "spawning", "water", "events"]
+    events = next(g for g in catalog["groups"] if g["group"] == "events")["attributes"][0]
+    assert (events["attribute"], events["stacking"]) == ("event_spawn", "union") and "bigfoot" in events["value"]
+
+    out = tools.create_region(polygon=SQUARE, ground=["forest", "bigfoot_zone"])  # forest decides the terrain colour
+    assert out["ground"] == ["forest", "bigfoot_zone"]
+    assert out["colour"] == next(t for t in tools.list_ground_types()["types"] if t["type"] == "forest")["attributes"]["colours"][0].lower()
+    only = tools.create_region(polygon=SQUARE, ground="bigfoot_zone")  # no terrain type: the overlay tint
+    assert only["colour"] == "#c46be0"
+    assert load_edits(settings.edits_path).regions["R-0002"]["ground"] == ["bigfoot_zone"]
+    colour = load_edits(settings.edits_path).regions["R-0001"]["colour"]
+    tools.set_region_ground("R-0001", ["bigfoot_zone"])  # no terrain type any more: the colour stays what it was
+    assert load_edits(settings.edits_path).regions["R-0001"]["colour"] == colour
+    out = tools.delete_ground_type("bigfoot_zone")
+    assert "R-0001" in out["warnings"][0] and "R-0002" in out["warnings"][0]
+    canonical(settings)
+
+
 def test_ground_type_tools(env):
     tools, settings, _ = env
     rows = {t["type"]: t for t in tools.list_ground_types()["types"]}
-    assert rows["meadow"]["source"] == "rules" and rows["meadow"]["spawns"] and rows["forest"]["osm"]["landuse"] == ["forest"]
-    out = tools.set_ground_type("meadow", colours=["#112233"], spawns=False, detail={"tone_per_ha": 9})
+    assert rows["meadow"]["source"] == "rules" and rows["meadow"]["attributes"]["spawns"] and rows["forest"]["osm"]["landuse"] == ["forest"]
+    out = tools.set_ground_type("meadow", attributes={"colours": ["#112233"], "spawns": None, "detail": {"tone_per_ha": 9}})
     assert "overridden" in out["summary"] and "make map" in out["summary"]
-    assert out["type"]["source"] == "overridden" and out["type"]["colours"] == ["#112233"] and out["type"]["spawns"] is False
-    assert out["type"]["detail"]["furrow"]["probability"] == 0.0 and out["type"]["detail"]["tone_per_ha"] == 9  # merged
-    assert load_edits(settings.edits_path).ground_types["meadow"] == {"colours": ["#112233"], "spawns": False, "detail": {"tone_per_ha": 9}}
+    attrs = out["type"]["attributes"]
+    assert out["type"]["source"] == "overridden" and attrs["colours"] == ["#112233"] and "spawns" not in attrs  # null: no longer carried
+    assert attrs["detail"]["furrow"]["probability"] == 0.0 and attrs["detail"]["tone_per_ha"] == 9  # merged
+    assert load_edits(settings.edits_path).ground_types["meadow"] == {"attributes": {"colours": ["#112233"], "spawns": None, "detail": {"tone_per_ha": 9}}}
     canonical(settings)
 
-    out = tools.set_ground_type("dunes", colours=["#d8c38a"], recipe="field", osm={"natural": ["sand"]})
+    out = tools.set_ground_type("dunes", attributes={"colours": ["#d8c38a"], "recipe": "field"}, osm={"natural": ["sand"]})
     assert "created" in out["summary"] and out["type"]["source"] == "custom"
     assert [r["type"] for r in tools.list_ground_types()["types"]][-1] == "dunes"
-    assert tools.create_region(polygon=SQUARE, ground="dunes")["ground"] == "dunes"  # a custom type is usable
-    assert "updated" in tools.set_ground_type("dunes", recipe="none")["summary"]
-    assert load_edits(settings.edits_path).ground_types["dunes"]["recipe"] is None
+    assert tools.create_region(polygon=SQUARE, ground="dunes")["ground"] == ["dunes"]  # a custom type is usable
+    assert "updated" in tools.set_ground_type("dunes", attributes={"recipe": None})["summary"]  # a custom type just drops it
+    assert load_edits(settings.edits_path).ground_types["dunes"]["attributes"] == {"colours": ["#d8c38a"]}
 
-    with pytest.raises(ToolError, match="at least one"):
+    with pytest.raises(ToolError, match="give attributes"):
         tools.set_ground_type("meadow")
     with pytest.raises(ToolError, match="1 to 6"):
-        tools.set_ground_type("meadow", colours=[])
+        tools.set_ground_type("meadow", attributes={"colours": []})
     with pytest.raises(ToolError, match="type names"):
-        tools.set_ground_type("Bad Name", spawns=True)
+        tools.set_ground_type("Bad Name", attributes={"spawns": True})
     with pytest.raises(ToolError, match="#rrggbb"):
-        tools.set_ground_type("meadow", colours=["red"])
+        tools.set_ground_type("meadow", attributes={"colours": ["red"]})
+    with pytest.raises(ToolError, match="unknown attribute"):
+        tools.set_ground_type("meadow", attributes={"trees": {}})
+    with pytest.raises(ToolError, match="non-empty list of events"):
+        tools.set_ground_type("meadow", attributes={"event_spawn": ["yeti"]})
     assert "Bad Name" not in settings.edits_path.read_text()  # nothing was written
 
     out = tools.reset_ground_type("meadow")
@@ -723,7 +753,7 @@ def test_delete_ground_type(env):
             tools.delete_ground_type(protected)
     with pytest.raises(ToolError, match="unknown ground type"):
         tools.delete_ground_type("swamp")
-    tools.set_ground_type("dunes", colours=["#d8c38a"])
+    tools.set_ground_type("dunes", attributes={"colours": ["#d8c38a"]})
     assert tools.delete_ground_type("dunes")["type"] == "dunes"
     assert load_edits(settings.edits_path).ground_types == {}  # a custom type is just removed
 
@@ -738,7 +768,7 @@ def test_delete_ground_type(env):
     with pytest.raises(ToolError, match="already deleted"):
         tools.delete_ground_type("orchard")
     with pytest.raises(ToolError, match="reset_ground_type it first"):
-        tools.set_ground_type("orchard", spawns=True)
+        tools.set_ground_type("orchard", attributes={"event_spawn": ["bigfoot"]})
     assert "it was deleted" in tools.reset_ground_type("orchard")["summary"]
     assert load_edits(settings.edits_path).ground_types == {}
     assert '"ground_types"' not in settings.edits_path.read_text()
