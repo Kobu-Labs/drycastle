@@ -55,6 +55,7 @@ from drycastle_pipeline.edits import (
     CUSTOM_FENCE_KEYS,
     DEFAULT_EDITS,
     FENCE_TYPES,
+    MAX_DEPTH_LIMIT_M,
     POLE_ASSET_PREFIX,
     WIRE_ASSET_PREFIXES,
     Edits,
@@ -1751,6 +1752,7 @@ class ParcelEditTools:
             "id": rid,
             "colour": entry["colour"],
             **({"water_y": entry["water_y"]} if "water_y" in entry else {}),
+            **({"max_depth": entry["max_depth"]} if "max_depth" in entry else {}),
             "area_m2": round(poly.area, 1),
             "points": len(entry["polygon"]),
             "bbox": [_r3(v) for v in poly.bounds],
@@ -1830,22 +1832,38 @@ class ParcelEditTools:
             "warnings": out["warnings"],
         }
 
-    def set_region_water(self, id: str, water_y: float | None) -> dict:
-        """Make a region a body of water at a flat height (terrain datum, metres), or None to make it ground paint again."""
+    def set_region_water(self, id: str, water_y: float | None, max_depth: float | None = None) -> dict:
+        """Make a region a body of water at a flat height (terrain datum, metres), or None to make it ground paint again.
+
+        ``max_depth`` (metres, optional) is the body's deepest point; left out it keeps the current one (the class
+        default when there is none). Ground paint has no depth, so ``water_y`` None drops it too.
+        """
         rid = self._region_id(id)
         level = None if water_y is None else _check_num("water_y", water_y)
+        depth = None if max_depth is None else _check_num("max_depth", max_depth)
+        if depth is not None and not (0 < depth <= MAX_DEPTH_LIMIT_M):
+            raise ToolError(f"max_depth must be in metres, between 0 and {MAX_DEPTH_LIMIT_M:g}, got {max_depth!r}")
+        if depth is not None and level is None:
+            raise ToolError("max_depth goes with a water_y: a region without water has no depth")
 
         def change(edits: Edits) -> object:
             entry = self._region_entry(edits, rid)
             old = entry.get("water_y")
             if level is None:
                 entry.pop("water_y", None)
+                entry.pop("max_depth", None)
             else:
                 entry["water_y"] = level
+                if depth is not None:
+                    entry["max_depth"] = depth
             return old
 
         old = self._write(change)
-        return {"summary": f"{rid} water_y {old} -> {level}", "id": rid, "water_y": level, "warnings": []}
+        out = {"summary": f"{rid} water_y {old} -> {level}", "id": rid, "water_y": level, "warnings": []}
+        if level is not None and depth is not None:
+            out["max_depth"] = depth
+            out["summary"] += f", max_depth {depth}"
+        return out
 
     def set_region_colour(self, id: str, colour: str) -> dict:
         """Change a region's colour."""
@@ -2203,9 +2221,10 @@ def build_server(settings: Settings) -> Any:
         "Make a region a real body of water: a flat surface at `water_y` (metres on the terrain's "
         "datum, e.g. 185.6) that stays level over the terrain, also written to water.json "
         "(swimming, the shooter's water surface). The region's colour tints it. `water_y` null "
-        "turns it back into ground paint. Raise or lower the level by calling this again."))
-    def set_region_water(id: str, water_y: float | None) -> dict:
-        return tools.set_region_water(id, water_y)
+        "turns it back into ground paint. `max_depth` (metres, optional, 0 to 20) sets the body's deepest "
+        "point: its bed is scaled to it. Raise or lower the level by calling this again."))
+    def set_region_water(id: str, water_y: float | None, max_depth: float | None = None) -> dict:
+        return tools.set_region_water(id, water_y, max_depth)
 
     @server.tool(description="Change a region's colour (\"#rrggbb\"). Use list_regions for ids.")
     def set_region_colour(id: str, colour: str) -> dict:

@@ -449,12 +449,13 @@ def test_water_mesh_is_flat_under_the_level_and_follows_the_shore() -> None:
 
 
 def test_water_region_becomes_water_bodies_and_dry_levels_are_skipped() -> None:
-    from drycastle_pipeline.water import build_water
+    from drycastle_pipeline.water import plan_water, water_rules
 
+    rules = water_rules()
     terrain, plan = _wet_setup(1.0)
-    docw, skipped = build_water([], terrain, plan.regions)
-    assert skipped == [] and docw["bodies"]
-    assert all(b["bed_y"] < b["surface_y"] for b in docw["bodies"])
+    water = plan_water([], terrain, plan.regions, rules)
+    assert water.skipped == [] and water.bodies
+    assert all(b.bed_y < b.surface_y for b in water.bodies)
     terrain, plan = _wet_setup(-50.0)
-    docw, skipped = build_water([], terrain, plan.regions)
-    assert docw["bodies"] == [] and skipped == ["R-0001"]
+    water = plan_water([], terrain, plan.regions, rules)
+    assert water.bodies == [] and water.skipped == ["R-0001"]

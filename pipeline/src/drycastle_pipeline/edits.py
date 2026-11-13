@@ -61,7 +61,11 @@ formatting is fixed, so git diffs stay small. Version 1::
                         height, in metres on the terrain's datum (as terrain.json, e.g. 185.6). The
                         colour then tints the surface in the editor view; the body is also written
                         to water.json (swimming, drowning, the shooter's water surface) with its bed
-                        at the lowest terrain inside the polygon. Without it the region is ground paint.
+                        at the natural bed (bed.py: banks shelve, pools and riffles on a river, the
+                        terrain under it carved to that bed). Without it the region is ground paint.
+    max_depth           optional number of metres (0 < x <= 20), only with water_y: the body's deepest
+                        point. Its bed is scaled so the deepest point is this deep. Default: the class
+                        depth in rules.yaml (water.river.pool_depth_m, water.pond.max_depth_m).
 
 ``cables`` (the wires strung between two placed utility poles, or from a pole to a house connector;
 drawn by the game, see docs/utility-poles.md)
@@ -116,7 +120,8 @@ CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "gap
 GAP_KEYS = ("at", "width_m")
 OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour")
 GROUP_KEYS = ("parcels", "fence")
-REGION_KEYS = ("colour", "polygon", "water_y")
+REGION_KEYS = ("colour", "polygon", "water_y", "max_depth")
+MAX_DEPTH_LIMIT_M = 20.0  # a water body's deepest point may be set up to this (metres)
 CABLE_KEYS = ("from", "to")
 POLE_ASSET_PREFIX = "prim:pole_"
 CONNECTOR_ASSET_PREFIX = "prim:connector_"
@@ -340,6 +345,12 @@ def _check_region(entry: object, path: str, errors: list[str]) -> None:
         _check_colour(entry["colour"], f"{path}.colour", errors)
     if "water_y" in entry and not (_is_num(entry["water_y"]) and math.isfinite(entry["water_y"])):
         errors.append(f"{path}.water_y: must be a number (metres, terrain datum)")
+    if "max_depth" in entry:
+        md = entry["max_depth"]
+        if "water_y" not in entry:
+            errors.append(f"{path}.max_depth: only a body of water (with water_y) has a depth")
+        elif not (_is_num(md) and math.isfinite(md) and 0 < md <= MAX_DEPTH_LIMIT_M):
+            errors.append(f"{path}.max_depth: must be a number of metres in (0, {MAX_DEPTH_LIMIT_M:g}]")
     if "polygon" not in entry:
         errors.append(f"{path}.polygon: required")
         return
