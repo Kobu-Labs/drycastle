@@ -63,7 +63,7 @@ public partial class NetServer
             case "sandbox": ChatSandbox(c, args); break;
             case "time": ChatTimeCommand(c, args); break;
             case "restart": ChatRestart(c, args); break;
-            case "event": ChatEvent(c, args[0]); break;
+            case "event": ChatEvent(c, args); break;
         }
         GD.Print($"server: {c.Name} #{c.Id} ran {text}");
     }
@@ -138,13 +138,20 @@ public partial class NetServer
         GD.Print($"server: round restarted by {c.Name} #{c.Id}, mode {name}");
     }
 
-    /// <summary>"/event rozhlas": starts the village loudspeaker broadcast on every client now. Everyone is told who did.</summary>
-    void ChatEvent(Client c, string name)
+    /// <summary>"/event rozhlas": starts the village loudspeaker broadcast on every client now. "/event intel [clear]": the test announcement (<see cref="ChatIntel"/>). Everyone is told who did.</summary>
+    void ChatEvent(Client c, IReadOnlyList<string> args)
     {
-        if (name != "rozhlas") return; // the parser only lets known events through
-        BroadcastEvent(EventKind.RozhlasStart, Array.Empty<byte>());
-        ChatToAll(ChatLineKind.System, "", $"{c.Name} started the rozhlas.");
-        GD.Print($"server: rozhlas started by {c.Name} #{c.Id}");
+        var clear = args.Count > 1 && args[1] == "clear";
+        if (args.Count > 1 && args[0] != "intel") { ChatTo(c, ChatLineKind.Error, $"/event {args[0]} takes no action. Only /event intel takes clear."); return; }
+        switch (args[0]) // the parser only lets known events through
+        {
+            case "rozhlas":
+                BroadcastEvent(EventKind.RozhlasStart, Array.Empty<byte>());
+                ChatToAll(ChatLineKind.System, "", $"{c.Name} started the rozhlas.");
+                GD.Print($"server: rozhlas started by {c.Name} #{c.Id}");
+                break;
+            case "intel": ChatIntel(c, clear); break;
+        }
     }
 
     void ChatTimeCommand(Client c, IReadOnlyList<string> args)

@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "_note": "The intel room: the command post (third floor down) of the bunker named here, the base. Its screen shows every announced event (when, what, risks, where). With several events the screen shows one at a time, rotate_seconds each. It is drawn only within view_range_m of the screen. The bunker is one of the ids in the map's bunkers.json (w825140518 stands nearest the middle of the village); a map or bunker without a screen anchor has no intel room, and the announcement still reaches everyone.",
+  "base_bunker": "w825140518",
+  "rotate_seconds": 10,
+  "view_range_m": 14
+}
