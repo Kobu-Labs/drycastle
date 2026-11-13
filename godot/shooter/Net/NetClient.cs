@@ -463,7 +463,13 @@ public partial class NetClient : Node
         LossOnPredictionError(err);
         TelemetryPredictionError(err);
         _pending.RemoveRange(0, idx + 1);
-        if (err <= ReconcileEpsilon) return;
+        if (err <= ReconcileEpsilon)
+        {
+            // a newer ack agrees with the prediction: a reconcile still waiting for the next physics tick (from an older snapshot) is stale, and replaying it
+            // would restart from that older server position while the inputs after this ack are already gone (code review finding)
+            _reconcile = null;
+            return;
+        }
         _recon++;
         // server position wins; our own velocity/floor state for that tick is the best available guess for the rest
         var s = predicted;
