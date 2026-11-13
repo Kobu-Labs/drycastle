@@ -36,6 +36,15 @@ public sealed class BunkerRoom
 }
 
 /// <summary>
+/// Where the intel screen of one bunker hangs (bunkers.json, <c>intel</c>): the middle of the screen on the wall of the command
+/// post, the way it faces and its size. Ground axes (x east, y = -north) like <see cref="BunkerRoom"/>, heights in Godot Y.
+/// </summary>
+public sealed record IntelAnchor(string BunkerId, Vector2 At, Vector2 Facing, float Y0, float Y1, float Width)
+{
+    public float Height => Y1 - Y0;
+}
+
+/// <summary>
 /// The bunker rooms of the current map (bunkers.json) and the shelter rule (#224, ADR 0009): a blast hurts a body only when
 /// both are in the open or both are in the same room. Walls of other buildings do not shelter: splash goes through them as
 /// before. Godot-free; points are in Godot axes (x east, y up, z = -north).
@@ -47,11 +56,14 @@ public sealed class Shelters
     public IReadOnlyList<BunkerRoom> Rooms { get; }
     /// <summary>The ladders between the floors of the bunkers.</summary>
     public Ladders Ladders { get; }
+    /// <summary>The walls reserved for an intel screen, one per bunker that has a wall for it.</summary>
+    public IReadOnlyList<IntelAnchor> IntelScreens { get; }
 
-    public Shelters(IReadOnlyList<BunkerRoom> rooms, Ladders? ladders = null)
+    public Shelters(IReadOnlyList<BunkerRoom> rooms, Ladders? ladders = null, IReadOnlyList<IntelAnchor>? intelScreens = null)
     {
         Rooms = rooms;
         Ladders = ladders ?? Ladders.Empty;
+        IntelScreens = intelScreens ?? Array.Empty<IntelAnchor>();
     }
 
     /// <summary>The bunkers of a map's bunkers.json text; none for an absent (empty) file.</summary>
@@ -77,8 +89,9 @@ public sealed class Shelters
 
     /// <summary>
     /// Parse bunkers.json: <c>{"version": 1, "bunkers": [{"id", "parcel", "floors": [{"level", "polygon": ring, "z0", "z1"}],
-    /// "ladders": [{"x", "y", "dx", "dy", "z0", "z1"}]}]}</c>. Points and directions are local map metres (x east, y north) and are
-    /// converted to Godot ground axes here; z0 and z1 are heights.
+    /// "ladders": [{"x", "y", "dx", "dy", "z0", "z1"}], "intel": {"x", "y", "dx", "dy", "z0", "z1", "width"}}]}</c> (<c>intel</c> is
+    /// optional). Points and directions are local map metres (x east, y north) and are converted to Godot ground axes here; z0 and z1
+    /// are heights.
     /// </summary>
     public static Shelters Parse(string json, string name = "bunkers.json")
     {
@@ -94,6 +107,7 @@ public sealed class Shelters
                 throw new DataFileException($"{name}: missing bunkers array");
             var rooms = new List<BunkerRoom>();
             var ladders = new List<Ladder>();
+            var screens = new List<IntelAnchor>();
             foreach (var b in bunkers.EnumerateArray())
             {
                 var id = b.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
@@ -110,6 +124,15 @@ public sealed class Shelters
                             throw new DataFileException($"{name}: a ladder of bunker {id} has z1 <= z0 or a facing that is not a unit vector");
                         ladders.Add(new Ladder(new Vector2(x, -y), new Vector2(dx, -dy), z0, z1));
                     }
+                if (b.TryGetProperty("intel", out var sc) && sc.ValueKind == JsonValueKind.Object)
+                {
+                    float x = sc.GetProperty("x").GetSingle(), y = sc.GetProperty("y").GetSingle();
+                    float dx = sc.GetProperty("dx").GetSingle(), dy = sc.GetProperty("dy").GetSingle();
+                    float z0 = sc.GetProperty("z0").GetSingle(), z1 = sc.GetProperty("z1").GetSingle(), w = sc.GetProperty("width").GetSingle();
+                    if (z1 <= z0 || w <= 0 || MathF.Abs(dx * dx + dy * dy - 1f) > 0.05f)
+                        throw new DataFileException($"{name}: the intel screen of bunker {id} has z1 <= z0, no width or a facing that is not a unit vector");
+                    screens.Add(new IntelAnchor(id!, new Vector2(x, -y), new Vector2(dx, -dy), z0, z1, w));
+                }
                 foreach (var f in floors.EnumerateArray())
                 {
                     if (!f.TryGetProperty("polygon", out var poly) || poly.ValueKind != JsonValueKind.Array || poly.GetArrayLength() < 3)
@@ -127,7 +150,7 @@ public sealed class Shelters
                     });
                 }
             }
-            return new Shelters(rooms, new Ladders(ladders));
+            return new Shelters(rooms, new Ladders(ladders), screens);
         }
     }
 }

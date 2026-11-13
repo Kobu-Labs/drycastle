@@ -513,7 +513,10 @@ it. The ground floor has no collision (a player stands on the flattened terrain,
 built at the full grid), and its hatch is cut out of the terrain and `terrain_collision` (`terrain.cut_holes`). The floors,
 ceilings, walls and furniture underneath are the collision of the shell. `bunkers.json` (listed under `files.bunkers`, only
 when the map has a bunker) holds per bunker `{"id", "parcel", "floors": [{"level", "polygon", "z0", "z1"}], "ladders":
-[{"x", "y", "dx", "dy", "z0", "z1"}], "hatch": ring}`: `level` 0 is the ground floor and -1 to -3 the floors under it; the
+[{"x", "y", "dx", "dy", "z0", "z1"}], "hatch": ring, "intel": {"x", "y", "dx", "dy", "z0", "z1", "width"}}` (`intel` is the wall
+of the lowest floor, the command post, that the intel screen hangs on: the middle of the screen on the wall, the way it
+faces, its lower and upper edge and its width, 1.6 to 3.0 m; the pipeline keeps furniture off the strip in front of it and
+leaves the key out when no wall takes a screen; ADR 0017): `level` 0 is the ground floor and -1 to -3 the floors under it; the
 polygon is a room ring in local metres (x east, y north) and the heights are as in `terrain.json`. A room is grown 0.15 m into
 its walls, floor and roof, so a blast on a wall's inner face is inside and one on its outer face is outside. A ladder gives
 the spot where the climber stands (`x`, `y`), the way they face (`dx`, `dy`) and the floors it joins (`z0` below, `z1`

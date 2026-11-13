@@ -84,7 +84,7 @@ public static class ChatCommands
         new("sandbox", "Turn sandbox mode on or off for a player (name or #id), or flip it", new[] { new ChatArg("player", ChatArgKind.Player), new ChatArg("state", ChatArgKind.Choice, false) }),
         new("give", "Put an item on a player (name or #id), or on yourself. It replaces what they wear in that slot", new[] { new ChatArg("item", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
         new("restart", "Restart the round now, optionally in another mode (ffa or tdm)", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
-        new("event", "Trigger a village event now", new[] { new ChatArg("event", ChatArgKind.Choice) }),
+        new("event", "Trigger a village event now", new[] { new ChatArg("event", ChatArgKind.Choice), new ChatArg("action", ChatArgKind.Choice, false) }),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
     };
 
@@ -105,7 +105,12 @@ public static class ChatCommands
             ChatArgKind.Choice when cmd.Name == "give" => ctx.Items.Select(i => (i, "")).ToList(),
             ChatArgKind.Choice when cmd.Name == "sandbox" => new[] { ("on", "godmode, unlimited ammo, no score"), ("off", "back to normal play") },
             ChatArgKind.Choice when cmd.Name == "restart" => new[] { ("ffa", "free-for-all, everyone alone"), ("tdm", "team deathmatch, two teams") },
-            ChatArgKind.Choice when cmd.Name == "event" => new[] { ("rozhlas", "the village loudspeaker broadcast, for everyone, now") },
+            ChatArgKind.Choice when cmd.Name == "event" && argIndex == 0 => new[]
+            {
+                ("rozhlas", "the village loudspeaker broadcast, for everyone, now"),
+                ("intel", "TEST: announce a made-up event and put it on the intel screen at the base"),
+            },
+            ChatArgKind.Choice when cmd.Name == "event" => new[] { ("clear", "take the test event off the intel screen again (with intel)") },
             ChatArgKind.Choice when cmd.Name == "help" => Visible(ctx).Select(c => (c.Name, c.Summary)).ToList(),
             _ => Array.Empty<(string, string)>(),
         };

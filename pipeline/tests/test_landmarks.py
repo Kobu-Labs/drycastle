@@ -298,3 +298,46 @@ def test_bunker_hatch_is_open_in_every_floor_and_the_ladder_is_not_collided_with
     # but the solid floor under the lowest ladder is there
     last = info["ladders"][-1]
     assert _crosses(col, (last["x"], last["y"], last["z0"] + 1.0), (last["x"], last["y"], last["z0"] - 1.0))
+
+
+def test_bunker_command_post_has_a_clear_wall_for_the_intel_screen() -> None:
+    from shapely.geometry import Point, Polygon
+
+    from drycastle_pipeline import bunker as bk
+
+    info = bk.bunker_rooms(BUNKER_RING, (-1.0, 0.0))
+    s = info["intel"]
+    floor = -bk.STOREY * bk.UNDER
+    assert (s["z0"], s["z1"]) == (pytest.approx(floor + bk.SCREEN_Z0), pytest.approx(floor + bk.SCREEN_Z0 + bk.SCREEN_H))
+    assert s["z1"] < floor + bk.CLEAR_H  # under the ceiling of the command post
+    assert bk.SCREEN_W_MIN <= s["width"] <= bk.SCREEN_W_MAX
+    assert np.hypot(s["dx"], s["dy"]) == pytest.approx(1.0, abs=1e-3)
+    room = Polygon(info["floors"][-1]["polygon"])
+    middle = Point(s["x"], s["y"])
+    assert room.exterior.distance(middle) == pytest.approx(bk.SHELTER_GROW, abs=0.01)  # on the wall
+    assert room.contains(Point(s["x"] + s["dx"], s["y"] + s["dy"]))  # facing into the room
+    # nobody climbs out of the ladder into the screen
+    top = info["ladders"][-1]
+    assert Point(top["x"], top["y"]).distance(middle) > bk.SCREEN_W_MIN / 2
+
+
+def test_bunker_intel_wall_has_no_furniture_in_front_of_it() -> None:
+    from drycastle_pipeline import bunker as bk
+
+    s = bk.bunker_rooms(BUNKER_RING, (-1.0, 0.0))["intel"]
+    mesh = build_landmark(BUNKER)
+    t = np.array([-s["dy"], s["dx"]])  # along the wall
+    mid = (s["z0"] + s["z1"]) / 2
+    for along in np.linspace(-s["width"] / 2 + 0.1, s["width"] / 2 - 0.1, 7):
+        for z in (s["z0"] + 0.05, mid, s["z1"] - 0.05):
+            at = np.array([s["x"], s["y"]]) + t * along
+            start, end = at + np.array([s["dx"], s["dy"]]) * bk.SCREEN_ZONE, at + np.array([s["dx"], s["dy"]]) * 0.03
+            assert not _crosses(mesh, (*start, z), (*end, z))
+
+
+def test_bunker_without_a_wall_for_a_screen_has_no_intel_entry(monkeypatch) -> None:
+    from drycastle_pipeline import bunker as bk
+
+    monkeypatch.setattr(bk, "SCREEN_W_MIN", 50.0)
+    info = bk.bunker_rooms(BUNKER_RING, (-1.0, 0.0))
+    assert "intel" not in info and info["ladders"]  # still enterable, just no intel room

@@ -3,7 +3,7 @@ AREA ?= village
 # MAP: the map folder the viewer, editor and shooter targets load; follows AREA (override with MAP=<dir>).
 MAP ?= $(if $(filter slice,$(AREA)),out/map,out/village/map)
 
-.PHONY: rozhlas editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run region-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: rozhlas editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run region-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -287,6 +287,11 @@ shooter-hud-shots:
 shooter-menu-shots:
 	dotnet build godot/shooter/shooter.csproj
 	godot --path godot/shooter -- --menu-shots $(abspath $(or $(DIR),out/menu))
+
+# The intel screen's content (the base's wall screen) with made-up events, at its two texture sizes (needs a display): make shooter-intel-shots DIR=out/intel
+shooter-intel-shots:
+	dotnet build godot/shooter/shooter.csproj
+	godot --path godot/shooter -- --intel-shots $(abspath $(or $(DIR),out/intel))
 
 # Export presets (godot/shooter/export_presets.cfg) into out/shooter/. Needs the Godot 4.7.2 mono export templates
 # (Editor > Manage Export Templates); not downloaded here. assets/ and map/ (SHOOTER_PKG_MAP) are copied next to each binary.

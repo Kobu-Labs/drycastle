@@ -60,6 +60,14 @@ public static class ShooterTheme
     public const int MapGutter = 28;
     public const float MapFadeSeconds = 0.15f;
 
+    // the intel screen at the base (a world-space screen, see IntelScreen): near-black olive glass, pale green ink, hazard amber is the Warn token.
+    // Ink on glass is about 9:1, the borders about 4:1
+    public static readonly Color IntelGlass = new(0.035f, 0.05f, 0.04f);
+    public static readonly Color IntelCard = new(0.07f, 0.10f, 0.07f);
+    public static readonly Color IntelInk = new(0.82f, 0.93f, 0.76f);
+    public static readonly Color IntelDim = new(0.60f, 0.72f, 0.56f);
+    public static readonly Color IntelLine = new(0.38f, 0.50f, 0.34f);
+
     public static StyleBoxFlat Box(Color bg, int pad = Space, Color? border = null, int borderWidth = Border, int radius = Radius)
     {
         var s = new StyleBoxFlat { BgColor = bg };
@@ -139,6 +147,21 @@ public static class ShooterTheme
         foreach (var st in new[] { "normal", "focus", "read_only" }) t.SetStylebox(st, "ChatInput", Box(Colors.Transparent, Space / 2, null, 0));
         t.SetColor("font_outline_color", "ChatInput", Outline);
         t.SetConstant("outline_size", "ChatInput", 4);
+
+        // the intel screen: no outline on the text (it sits on opaque glass), the same five sizes
+        IntelVariation(t, "IntelSmall", FontSmall, IntelDim);
+        IntelVariation(t, "IntelBody", FontBody, IntelInk);
+        IntelVariation(t, "IntelHead", FontHead, IntelInk);
+        IntelVariation(t, "IntelBig", FontBig, IntelInk);
+        IntelVariation(t, "IntelWarn", FontHead, Warn);
+        PanelVariation(t, "IntelGlass", Box(IntelGlass, Space, IntelLine, BorderStrong, 0));
+        PanelVariation(t, "IntelChip", Box(IntelCard, Space / 2, IntelLine, Border, 0));
+        PanelVariation(t, "IntelTab", Box(Colors.Transparent, Space / 4, null, 0, 0));
+        PanelVariation(t, "IntelTabActive", Box(IntelCard, Space / 4, IntelInk, 2, 0));
+        PanelVariation(t, "IntelTag", Box(new Color(Warn, 0.16f), Space / 2, Warn, 2, 0));
+        t.SetTypeVariation("IntelFlow", "HFlowContainer");
+        t.SetConstant("h_separation", "IntelFlow", Space);
+        t.SetConstant("v_separation", "IntelFlow", Space);
 
         t.SetStylebox("background", "ProgressBar", Box(new Color(0, 0, 0, 0.55f), 0, Line));
         Bar(t, "HealthBar", Good);
@@ -254,6 +277,12 @@ public static class ShooterTheme
         t.SetTypeVariation(name, "Label");
         t.SetFontSize("font_size", name, size);
         t.SetColor("font_color", name, color);
+    }
+
+    static void IntelVariation(Theme t, string name, int size, Color color)
+    {
+        Variation(t, name, size, color);
+        t.SetConstant("outline_size", name, 0);
     }
 
     static void PanelVariation(Theme t, string name, StyleBox box)

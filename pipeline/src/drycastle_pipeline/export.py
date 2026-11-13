@@ -49,7 +49,8 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # clutter kinds (grasses, wild and garden flowers) in clutter_meshes.glb. A loader that reads only 0.9.0 clutter would refuse
 # meadow.bin's new format and draw no meadow.
 # (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
-# Only maps with a bunker have it; a loader that does not know it gives no shelter from blasts.
+# Only maps with a bunker have it; a loader that does not know it gives no shelter from blasts. A bunker may carry "intel", the
+# wall of its command post the intel screen hangs on (ADR 0017); a loader that does not know it has no intel room.
 MAP_VERSION_BASE = "0.10.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1

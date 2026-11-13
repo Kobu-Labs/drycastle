@@ -105,6 +105,15 @@ public class TacticalMapMathTests
     }
 
     [Fact]
+    public void ReferenceOfNamesTheCellOfAGroundPointOnTheSheet()
+    {
+        // 1000 m sheet, west edge x = -500, south edge z = 500 (north is -z): 50 m cells, so ground (-250, 100) is 250 m east and 400 m north of the corner
+        Assert.Equal(50f, TacticalMapMath.CellSize(1000f));
+        Assert.Equal("F9", TacticalMapMath.ReferenceOf(new Vector2(-250f, 100f), -500f, 500f, 1000f));
+        Assert.Equal("A1", TacticalMapMath.ReferenceOf(new Vector2(-500f, 500f), -500f, 500f, 1000f)); // the south-west corner
+    }
+
+    [Fact]
     public void ThePartialLastCellStillHasAReference()
     {
         // 1050 m with 100 m cells: eleven columns, the last one 50 m wide
