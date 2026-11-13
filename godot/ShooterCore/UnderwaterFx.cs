@@ -3,20 +3,12 @@ using System.Numerics;
 namespace Drycastle.ShooterCore;
 
 /// <summary>
-/// Pure numbers for the water look (the "water visuals and audio" ticket, #142) that the shooter still uses: the shore fade
-/// of the surface, splashes on entering and leaving the water, and the swim pose. No Godot here.
+/// Pure numbers for the water look (the "water visuals and audio" ticket, #142) that the shooter still uses: splashes on entering and leaving the water, and the swim pose. No Godot here.
 /// </summary>
 public static class UnderwaterFx
 {
-    /// <summary>Scene-depth distance over which the water surface fades out at the shore (metres).</summary>
-    public const float ShoreFadeMetres = 1.2f;
     /// <summary>Body lean while swimming, degrees forward (the remote swim pose).</summary>
     public const float SwimLeanDegrees = 65f;
-
-    static float Clamp01(float v) => v < 0f ? 0f : v > 1f ? 1f : v;
-
-    /// <summary>Alpha of the surface at a point: 0 where the water is as thin as the shore, 1 once it is <see cref="ShoreFadeMetres"/> out.</summary>
-    public static float ShoreFade(float waterDistance) => Clamp01(waterDistance / ShoreFadeMetres);
 
     /// <summary>Entering or leaving the water between two ticks (or frames). Splashes play on the change only.</summary>
     public enum Crossing { None, Enter, Leave }

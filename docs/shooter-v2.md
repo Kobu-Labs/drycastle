@@ -378,7 +378,8 @@ Not built:
 - Scope zoom levels above 1 (#113). Sniper sway reduction (#139): `sway_amount` is read but never applied.
 - Concealment wired into the tick, name tags and kill cam; suit visible in first person; tufts do not follow limbs (#140, #141).
 - Water: water surface mesh, bubbles, light shafts, remote swim animation, splash on entry for predicted shots (#138, #142).
-  Holes in water bodies are not cut out of the surface (an island in a lake is covered). The full-screen underwater view and
+  The surface is one-sided and flat (waves are per pixel); it takes depth from the `water.json` depth grid, so a
+  version 1 map (no grid) has no fade at the bank. The full-screen underwater view and
   the SFX muffling were removed with diving (ADR 0010).
 - Boats and amphibious vehicles are server-only visually (primitive boxes, no CC0 model in `assets/manifest.json`).
 - Turret: the knife can hit a turret through a wall; the owner leaving leaves the turret firing (kills still credit the
@@ -393,8 +394,7 @@ Not built:
   not checked in the running game (the brief forbade it).
 
 Not verified (compiled, not run; the brief for these tickets forbade running the game):
-- Shaders: `water_surface.gdshader` (shore fade uses `hint_depth_texture`, which needs the Forward+
-  or Mobile renderer; the project uses the default renderer), `sky_daynight.gdshader`, `camo_suit.gdshader`,
+- Shaders: `water_surface.gdshader` (compiles on Forward+; its look is not checked in the game), `sky_daynight.gdshader`, `camo_suit.gdshader`,
   `camo_tuft.gdshader`, `gunship_thermal.gdshader`. The first real compile is the first check.
 - Layout, scenes and HUD positions: streak panel, minimap texture size, XP strip, breath bar, care package prompt, gunship
   overlay, the aircraft overlays. Visual fit of the jeep and quad models.

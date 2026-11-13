@@ -12,14 +12,6 @@ public class UnderwaterFxTests
         """);
 
     [Theory]
-    [InlineData(0f, 0f)]
-    [InlineData(-2f, 0f)]
-    [InlineData(0.6f, 0.5f)]
-    [InlineData(5f, 1f)]
-    public void ShoreFadeIsClampedAndFullOutFromTheShore(float distance, float expected) =>
-        Assert.Equal(expected, UnderwaterFx.ShoreFade(distance), 4);
-
-    [Theory]
     [InlineData(false, true, UnderwaterFx.Crossing.Enter)]
     [InlineData(true, false, UnderwaterFx.Crossing.Leave)]
     [InlineData(true, true, UnderwaterFx.Crossing.None)]

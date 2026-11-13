@@ -21,8 +21,8 @@ export and by ``region-run``, with the same code, so a hot-reloaded region equal
   (:func:`water.wet_area`: the outline is only a hint, the shore is where the ground rises above the level;
   overlaps with other regions are not resolved for water), and the export also writes it to ``water.json``
   (see :func:`water.plan_water`; the terrain under it is carved to its bed). There is no flat mesh at the
-  surface: the shooter draws the water itself and reads the bed from the depth buffer, so anything sitting
-  just under the surface would pass for the bed.
+  surface: the shooter draws the water itself from the depth grid in ``water.json``, and a second flat mesh
+  just under it would only show through the shallows.
 * Entries that fail the drape (no terrain, polygon outside the terrain coverage) are warned about
   and skipped; a schema error fails the file as for every other edit kind (see ``edits.py``).
 """
@@ -277,8 +277,8 @@ def region_meshes(
                 area = wet[rid]
             else:
                 area = wet_area(plan.regions[rid].polygon, terrain, water_y)
-            # painted on the carved bed, like any region: a flat mesh just under the surface would be the nearest
-            # "ground" the shooter's water shader sees, so the depth would read as zero and the water would vanish
+            # painted on the carved bed, like any region: the shooter draws the surface itself, and a flat mesh just
+            # under it would show through the shallows as a second, hard-edged surface
             mesh = drape(area, plan.regions[rid].colour, terrain, [], float(rcfg["lift_m"]), float(rcfg["road_lift_m"]))
             if mesh.face_count:
                 out[rid] = mesh
