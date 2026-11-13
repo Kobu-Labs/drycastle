@@ -239,6 +239,39 @@ public class WorldEntityTests
     }
 
     [Fact]
+    public void AnIdleBaselineOlderThanTheHistoryStillGivesOneDeltaWhenAnEntityMoves()
+    {
+        var types = Types();
+        var m = new WorldEntityManager(types);
+        var rep = new WorldReplica();
+        Relay(m, rep);
+        var enc = new WorldSnapshotEncoder(types);
+        var moving = new Dummy { Pos = new Vector3(5, 0, 5) };
+        var still = new Dummy { Pos = new Vector3(9, 0, 9) };
+        var idm = m.Spawn(moving)!.Value;
+        var ids = m.Spawn(still)!.Value;
+        Send(enc, rep, 0, m);
+        Assert.Equal(0u, rep.AckTick);
+
+        // 200 idle ticks: nothing is sent, and the client's ack (tick 0) falls out of the 64-tick history
+        for (uint tick = 1; tick <= 200; tick++) Assert.Empty(enc.Encode(tick, rep.AckTick, Entries(m)));
+        Assert.True(200 > WorldHistory.Depth);
+        Assert.Equal(0u, rep.AckTick); // the client still holds tick 0: it committed nothing since
+
+        // one entity moves: one delta record against tick 0, no keyframe, and no full set
+        moving.Pos += new Vector3(1, 0, 0);
+        var packets = Send(enc, rep, 201, m);
+        Assert.Single(packets);
+        Assert.Equal(0u, BaseOf(packets[0]));
+        Assert.Equal(1, packets[0][11]); // count: exactly one record
+        Assert.Equal(Wire.FPosDelta, FirstFlags(packets[0]));
+        Assert.Equal(0, FirstFlags(packets[0]) & Wire.FKey);
+        Assert.Equal(201u, rep.AckTick);
+        AssertMatches(rep.Entities[idm].State, StateOf(m, idm));
+        AssertMatches(rep.Entities[ids].State, StateOf(m, ids));
+    }
+
+    [Fact]
     public void BaselineThatFellOutOfTheHistoryFallsBackToKeyframes()
     {
         var types = Types();

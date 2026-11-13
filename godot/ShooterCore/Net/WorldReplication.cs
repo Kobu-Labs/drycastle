@@ -125,8 +125,11 @@ public sealed class WorldSnapshotEncoder
 
     readonly WorldHistory _history;
     readonly WorldEntityRegistry _types;
-    // the baseline last diffed against, kept while the client's ack does not move: an idle world sends nothing, so the ack can
-    // outlive the history, and the state it names is still the one to diff against (no full set every 64 idle ticks)
+    // the states of the baseline this client last diffed against. They are held by reference (a history dictionary never changes
+    // once stored) and replaced from the history only when the client's ack moves to a tick the history has. While the ack does not
+    // move, the stored states are used even after the history has dropped the tick: an idle world sends nothing, so the ack outlives
+    // the 64-tick history, and a full set every so often would be wasted. Only a new client or a baseline the server does not have
+    // (a reconnect) gets a full set.
     uint _keptTick = Wire.NoTick;
     IReadOnlyDictionary<ushort, WorldEntry>? _kept;
     // scratch reused every tick (T2-03), see SnapshotEncoder
