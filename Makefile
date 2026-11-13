@@ -2,7 +2,7 @@
 # MAP: the map folder the viewer, editor and shooter targets load (override with MAP=<dir>).
 MAP ?= out/village/map
 
-.PHONY: rozhlas editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run region-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: rozhlas editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run region-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -96,6 +96,14 @@ floodwall-manifest:
 
 map: detail-rust-build
 	cd pipeline && uv run python -m drycastle_pipeline run-all
+
+# Re-export after edits.json changed (placed objects, regions, fences): props, detail, export into out/village/map.
+# Skips fetch, normalise, ortho, ortho-trees, parcels, rules, terrain and roads (needs one full `make map` before);
+# the trees are planted again from the cached ortho/trees.json, the detector does not run. Sub-makes keep the order under -j.
+map-update:
+	$(MAKE) props
+	$(MAKE) detail
+	$(MAKE) export
 
 MAP_ARG = $(if $(MAP),--map $(abspath $(MAP)),)
 SEED ?= 1

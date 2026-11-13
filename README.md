@@ -34,6 +34,7 @@ make lint     # ruff check
 
 ```sh
 make map        # run every pipeline stage in order (fetch ... export); needs pipeline/config/map.local.yaml
+make map-update # after edits.json changes (objects, regions, fences): props + detail + export only; needs a prior make map
 make fetch      # run only the fetch stage (downloads raw data into data/village/raw/)
 make normalise  # raw data -> local metres in data/village/work/normalised/
 make parcels    # parcel registry, kinds, building assignment; prints a report

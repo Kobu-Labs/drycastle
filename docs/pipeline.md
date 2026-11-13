@@ -33,6 +33,8 @@ One map is built: the village inside its outline (`polygon`, see below). Its pat
 | raw data | `data/village/raw/` |
 | work files | `data/village/work/` |
 | export, previews | `out/village/map/`, `out/village/preview/` |
+
+`make map-update` re-runs only `props`, `detail` and `export` (after `edits.json` changed: placed objects, regions, fences). It needs one full `make map` first, does not fetch, run the orthophoto stages or rebuild terrain/roads, and plants the trees again from the cached `ortho/trees.json`. Same output folder as `make map`. Only regions changed: `make detail export` is enough.
 | `map_version` | `<MAP_VERSION_BASE>-village` (`export.py`) |
 
 The committed registry `registry/parcels.registry.json` is the one
