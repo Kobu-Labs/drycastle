@@ -30,3 +30,6 @@ pipeline/config/slice.local.yaml
 # rozhlas source recordings (large; only the baked ogg is kept)
 assets/drycastle-rozhlas/source/
 assets/drycastle-rozhlas/parts/
+
+# paid Synty assets (private; never commit)
+assets-private
