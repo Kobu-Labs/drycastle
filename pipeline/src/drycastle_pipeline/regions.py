@@ -16,13 +16,13 @@ export and by ``region-run``, with the same code, so a hot-reloaded region equal
 * **Overlaps: the higher ID wins.** The visible area of a region is its polygon minus the polygons
   of all regions with a higher ID, cut in 2D before draping. There is never more than one region
   on a point, so nothing z-fights and the order needs no per-ID lift.
-* **Water.** A region with ``water_y`` is a body of water: its mesh is flat at that height instead
-  of draped, and covers the terrain below that level reached from the drawn outline (:func:`water.wet_area`:
-  the outline is only a hint, the shore is where the ground rises above the level; overlaps with other
-  regions are not resolved for water), and the export
-  also writes it to ``water.json`` (see :func:`water.plan_water`; the terrain under it is carved to its bed). The flat mesh sits
-  ``WATER_VISUAL_DROP_M`` under the surface, so the shooter's own water surface, drawn at
-  ``water_y``, always wins and nothing z-fights.
+* **Water.** A region with ``water_y`` is a body of water: its colour is painted on the bed (draped on the
+  carved terrain, like any region) over the terrain below that level reached from the drawn outline
+  (:func:`water.wet_area`: the outline is only a hint, the shore is where the ground rises above the level;
+  overlaps with other regions are not resolved for water), and the export also writes it to ``water.json``
+  (see :func:`water.plan_water`; the terrain under it is carved to its bed). There is no flat mesh at the
+  surface: the shooter draws the water itself and reads the bed from the depth buffer, so anything sitting
+  just under the surface would pass for the bed.
 * Entries that fail the drape (no terrain, polygon outside the terrain coverage) are warned about
   and skipped; a schema error fails the file as for every other edit kind (see ``edits.py``).
 """
@@ -45,7 +45,6 @@ from drycastle_pipeline.water import wet_area
 _MIN_AREA_M2 = 1e-6
 _RANK_STEP_M = 0.003  # roads.py lifts each higher road class by this much
 _ROAD_MARGIN_M = 1.0
-WATER_VISUAL_DROP_M = 0.02
 
 
 @dataclass
@@ -252,20 +251,6 @@ def drape(
     return Mesh(tris, np.tile(np.array(colour, np.uint8), (len(tris), 1)))
 
 
-def flat_mesh(geom: BaseGeometry, colour: list[int], z: float) -> Mesh:
-    """Flat-coloured triangles covering ``geom`` at height ``z``, counter-clockwise from above."""
-    tris = []
-    for poly in _polygons(geom):
-        for tri in triangulate(poly):
-            a, b, c = (np.array([x, y, z], float) for x, y in tri)
-            if np.cross(b - a, c - a)[2] < 0:
-                b, c = c, b
-            tris.append([a, b, c])
-    if not tris:
-        return Mesh.empty()
-    return Mesh(np.array(tris), np.tile(np.array(colour, np.uint8), (len(tris), 1)))
-
-
 def region_meshes(
     plan: RegionPlan,
     terrain: Terrain,
@@ -292,7 +277,9 @@ def region_meshes(
                 area = wet[rid]
             else:
                 area = wet_area(plan.regions[rid].polygon, terrain, water_y)
-            mesh = flat_mesh(area, plan.regions[rid].colour, water_y - WATER_VISUAL_DROP_M)
+            # painted on the carved bed, like any region: a flat mesh just under the surface would be the nearest
+            # "ground" the shooter's water shader sees, so the depth would read as zero and the water would vanish
+            mesh = drape(area, plan.regions[rid].colour, terrain, [], float(rcfg["lift_m"]), float(rcfg["road_lift_m"]))
             if mesh.face_count:
                 out[rid] = mesh
             continue

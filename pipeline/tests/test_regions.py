@@ -438,14 +438,17 @@ def test_water_y_is_validated() -> None:
         assert validate(doc(**{"R-0001": {**region(), "water_y": bad}})), bad
 
 
-def test_water_mesh_is_flat_under_the_level_and_follows_the_shore() -> None:
+def test_water_mesh_lies_on_the_bed_and_follows_the_shore() -> None:
     terrain, plan = _wet_setup(1.0)
     level = plan.regions["R-0001"].water_y
     mesh = region_meshes(plan, terrain, None, ROADS, RCFG)["R-0001"]
-    assert np.allclose(mesh.tris[:, :, 2], level - 0.02)
     assert (np.cross(mesh.tris[:, 1] - mesh.tris[:, 0], mesh.tris[:, 2] - mesh.tris[:, 0])[:, 2] > 0).all()
     xy = mesh.tris[:, :, :2].reshape(-1, 2)
     assert (terrain.surface(xy[:, 0], xy[:, 1]) <= level + 0.4).all()  # nowhere on ground well above the level
+    # painted on the ground (a hair above it), not hanging at the surface where the water shader would take it for the bed
+    ground = terrain.surface(xy[:, 0], xy[:, 1])
+    assert np.allclose(mesh.tris[:, :, 2].ravel(), ground + RCFG["lift_m"], atol=0.02)
+    assert (mesh.tris[:, :, 2] < level - 0.1).any()
 
 
 def test_water_region_becomes_water_bodies_and_dry_levels_are_skipped() -> None:
