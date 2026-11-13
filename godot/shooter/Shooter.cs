@@ -343,6 +343,7 @@ public partial class Shooter : Node3D
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Water.Empty : Drycastle.ShooterCore.Water.Parse(_map.WaterJson);
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
+        if (ChurchProps.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } churchProps) AddChild(churchProps); // pews, altar: Synty models, boxes on the server too
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {
             var bunkers = Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));

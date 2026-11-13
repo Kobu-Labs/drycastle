@@ -22,8 +22,8 @@ Z_SPRING, VAULT_RISE = 4.9, 2.05  # the vault stays under the eave
 GV0, GZ = 9.6, 3.6  # gallery: front edge, floor
 STAIR_W, STAIR_V0, STEPS = 0.9, 3.6, 17  # along the left wall, up towards the gallery
 BAYS = (-2.8, 1.3, 5.4, 9.5)  # pilasters and ribs
-PEW_W, PEW_PITCH, PEW_V0, AISLE_W = 2.0, 1.1, -4.5, 1.8
-ROWS_RIGHT, ROWS_LEFT = 12, 7  # the stairs take the rear of the left block
+PEW_W, PEW_PITCH, PEW_V0, AISLE_W = 2.0, 1.25, -4.5, 1.8  # the Synty pew is 2.0 x 0.76 m
+ROWS_RIGHT, ROWS_LEFT = 11, 6  # the stairs take the rear of the left block
 GALLERY_PEWS = ((0.2, 10.9), (2.6, 10.9))  # centre u, v
 SEAT_H, SEATS_PER_PEW, SEAT_GAP = 0.45, 3, 0.6
 
@@ -191,7 +191,7 @@ def church_info(b: dict, dz: float = 0.0) -> dict:
     stair_u = IU0 + STAIR_W / 2
     up = aisle + [
         pt(CU, 3.1, F), pt(stair_u, 3.1, F), pt(stair_u, STAIR_V0, F), pt(stair_u, GV0, GZ),
-        pt(stair_u, 10.3, GZ),
+        pt(stair_u, 10.15, GZ),
     ]  # fmt: skip
     seats, props = [], []
     for u, v, fl in pews():
@@ -199,14 +199,14 @@ def church_info(b: dict, dz: float = 0.0) -> dict:
         props.append({"kind": "pew", "pos": pt(u, v, z), "yaw": into})
         for s in range(SEATS_PER_PEW):
             su = u + SEAT_GAP * (s - (SEATS_PER_PEW - 1) / 2)
-            path = up + [pt(su, 10.3, GZ)] if fl else aisle + [pt(CU, v - 0.5, F), pt(su, v - 0.5, F)]
+            path = up + [pt(su, 10.15, GZ)] if fl else aisle + [pt(CU, v - 0.62, F), pt(su, v - 0.62, F)]
             seats.append({
                 "id": len(seats), "pos": pt(su, v, z + SEAT_H), "yaw": into, "path": path, "floor": fl,
             })  # fmt: skip
     props += [
         {"kind": "altar", "pos": pt(CU, -11.9, F), "yaw": out},
         {"kind": "lectern", "pos": pt(CU + 1.4, -8.3, F), "yaw": out},
-        {"kind": "holy_water", "pos": pt(CU + 1.45, 13.1, F), "yaw": into},
+        {"kind": "holy_water", "pos": pt(CU + 2.3, 12.9, F), "yaw": into},
     ]
     # demon anchors: per bay low wall, high wall, vault, high wall, low wall; linked round the bay and along the nave
     slots = (
