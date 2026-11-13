@@ -49,7 +49,10 @@ public partial class NetServer : Node
         public SnapshotEncoder Enc = null!;
         /// <summary>The newest snapshot tick this client has committed (from its inputs), the baseline for its deltas; NoTick until then.</summary>
         public uint SnapAck = Wire.NoTick;
-        public readonly WorldSnapshotEncoder WEnc = new();
+        /// <summary>World entities for this client, against the world states the server kept (set in Join).</summary>
+        public WorldSnapshotEncoder WEnc = null!;
+        /// <summary>The newest world tick this client has committed (from its inputs), the baseline for its world deltas; NoTick until then.</summary>
+        public uint WAck = Wire.NoTick;
         public Vector3 Start;
         public float MaxMoved;
         /// <summary>Lag compensation (ADR 0013): this player's poses at the end of recent ticks, and the tick the current life (since the last teleport) began.</summary>
@@ -120,6 +123,8 @@ public partial class NetServer : Node
     readonly Dictionary<ushort, Client> _byId = new();
     /// <summary>The entity states of the recent ticks, shared by every client's encoder (the baselines of their deltas).</summary>
     readonly SnapshotHistory _sentStates = new();
+    /// <summary>The world states of recent ticks the server sent (the world channel's baselines, shared by every client).</summary>
+    readonly WorldHistory _sentWorld = new();
     Godot.Collections.Array<Rid> _playerRids = new();
     bool _playerRidsDirty = true;
     MatchSim _match = null!;
@@ -391,8 +396,9 @@ public partial class NetServer : Node
         else if (c.Joined && d[0] == Wire.TInput)
         {
             _scratch.Clear();
-            if (!Wire.TryDecodeInputs(d, _scratch, out var snapTick)) return;
+            if (!Wire.TryDecodeInputs(d, _scratch, out var snapTick, out var worldTick)) return;
             if (snapTick != Wire.NoTick && snapTick <= _tick && _sentStates.Has(snapTick) && (c.SnapAck == Wire.NoTick || snapTick > c.SnapAck)) c.SnapAck = snapTick; // an older input's ack arriving late changes nothing
+            if (worldTick != Wire.NoTick && worldTick <= _tick && _sentWorld.Has(worldTick) && (c.WAck == Wire.NoTick || worldTick > c.WAck)) c.WAck = worldTick; // the world channel's ack, the same rule
             foreach (var i in _scratch)
             {
                 // redundant copies of already-seen inputs are skipped
@@ -443,6 +449,7 @@ public partial class NetServer : Node
         _byId[c.Id] = c;
         _playerRidsDirty = true;
         c.Enc = new SnapshotEncoder(_sentStates);
+        c.WEnc = new WorldSnapshotEncoder(history: _sentWorld);
         SendProfile(c);
         SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
         SendChatStatus(c); // admin or not, and the vehicles /spawn takes
@@ -1006,7 +1013,7 @@ public partial class NetServer : Node
         }
         var world = _match.Entities.Snapshot();
         foreach (var c in _clients.Values)
-            if (c.Joined) foreach (var pkt in c.WEnc.Encode(_tick, world)) Tx(c.Peer!, Wire.ChanData, pkt, 0);
+            if (c.Joined) foreach (var pkt in c.WEnc.Encode(_tick, c.WAck, world)) Tx(c.Peer!, Wire.ChanData, pkt, 0);
         LossLogStates(ents);
         _host.Flush();
     }

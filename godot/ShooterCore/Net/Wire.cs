@@ -161,7 +161,7 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 ///   Profile(6) also ends with: u8 camoCount, camoCount * CamoSpec (one per slot, #141)
 ///   Strings are u8 length + utf8 (clamped to 255 bytes). Hello also carries u8 tokenLen, token after the name.
 /// ch1 client to server, Input(11): u8 count (1..3, newest last), u32 snapTick (the newest snapshot tick the client has
-///   committed, or NoTick; the server's baseline for the next deltas), then count inputs of 12 bytes:
+///   committed, or NoTick; the server's baseline for the next deltas), u32 worldTick (the same for the world channel), then count inputs of 12 bytes:
 ///   u16 seq, i8 mx, i8 my, u16 yaw, i16 pitch, u16 buttons, u8 slot, u8 flags (bit 0: aim)
 ///   when bit 0 is set, 12 more bytes follow the input: i32 aimX, i32 aimY, i32 aimZ (Quant.Pos units, #161)
 /// ch1 server to client, Snapshot(20): u32 tick, u16 ackSeq, u32 baseTick (NoTick: the packet is part of a full set),
@@ -174,12 +174,15 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 ///     Status(8):   u8 health, u8 state, u8 weapon
 ///     Remove(128): no fields; the entity left since the baseline
 ///   Unchanged entities are omitted; a keyframe (all of the above, absolute) is sent for entities new to the baseline.
-/// ch1 server to client, WorldSnapshot(21): world entities (turrets, missiles, ...), see <see cref="WorldReplica"/> and <see cref="WorldCodec"/>.
+/// ch1 server to client, WorldSnapshot(21): u32 tick, u32 baseTick (the world tick the client acknowledged, NoTick: a full set),
+///   u8 index, u8 total, u8 count, then count records, see <see cref="WorldSnapshotEncoder"/>. Same rules as Snapshot: every packet
+///   of a tick has the same baseline, and the client commits the tick only when all of its packets have arrived. Unchanged world
+///   entities are omitted; there are no periodic keyframes.
 /// </summary>
 public static class Wire
 {
-    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-155 (sandbox status, grant, action, state, held streak and notice, #156); v11: GunshipStatus is weapon and zoom only (2 bytes; ammo and heat are gone, #157); v12: the gunship FX is coalesced per tick (event kinds 121-123 replace the per-round Shot, ImpactFx and Ac130Blast of the gunships, #159), and the Explosion carries its blast radius (a gunship rocket's is 8 m); v13: GunshipShots carries each tracer's speed and length (#160); v14: the camo spec grows from 30 to 33 bytes (codec 2: body, skin tone, headgear); v15: an input carries the gunner's aim, a ground point (flags byte, 12 more bytes when set), so the rounds land on the reticle (#161); v16: a gunship rocket flies at its own speed (killstreaks.json projectile_speed_mps) and lives out its range, so clients animate it at its Launch velocity's speed, not the bazooka's 40 m/s; v17: entity snapshots are deltas against the client's acknowledged tick (the inputs carry the snapshot tick, the snapshot carries its baseline and set position, removals are records), so a lost packet no longer leaves an entity wrong until a keyframe; v19: the flak truck, entity type 4 (a turret's aim record, <see cref="FlakRecord"/>), event kind 160 (the gunner's ammo), and aircraft carry their hit points (world state hp, percent) and can be destroyed; v20: seat switching in vehicles, event kinds 161 (a rider asks for another seat) and 162 (who sits in each seat, to the riders); v21: the utility helicopter (ADR 0006), entity type 5 (a flying vehicle's velocity, pitch, roll and rotor, <see cref="FlightRecord"/>), a turret aim record for its door gun, and the pilot's inputs step the helicopter one for one (the snapshot's ack is the helicopter's too); v22: glass panes (ADR 0007), event kinds 170 (a pane's hit points) and 171 (the panes of a scope, for a joiner, a new round and a returned vehicle); v23: chat and admin commands, event kinds 180 (a line or command from a player), 181 (a chat log line), 182 (admin flag and spawnable vehicles for a joiner) and 183 (the day clock changed live).; v24: the amphibious transport (ADR 0010, 0011, 0012), entity type 6 (a driven vehicle's speeds, the slope it stands on, its steering and whether it floats, <see cref="DriveRecord"/>), the driver's inputs step it one for one as the pilot's do the helicopter, a turret aim record for its ring gun, and a rider in an armed seat fires their own weapons, so the server answers a seated player's Fire, Reload and weapon switch; v25: the lossy effects (Shot, PelletFan, ImpactFx, gunship tracers and impacts) ride channel 2 unreliable, so a lost one cannot stall Hit, Kill or Death (A-03), the hello carries the map build hash and a different build is refused by name (E-06), and an empty tick sends no packet except every third tick, the heartbeat that carries the input ack (A-05).</summary>
-    public const byte ProtocolVersion = 25;
+    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-155 (sandbox status, grant, action, state, held streak and notice, #156); v11: GunshipStatus is weapon and zoom only (2 bytes; ammo and heat are gone, #157); v12: the gunship FX is coalesced per tick (event kinds 121-123 replace the per-round Shot, ImpactFx and Ac130Blast of the gunships, #159), and the Explosion carries its blast radius (a gunship rocket's is 8 m); v13: GunshipShots carries each tracer's speed and length (#160); v14: the camo spec grows from 30 to 33 bytes (codec 2: body, skin tone, headgear); v15: an input carries the gunner's aim, a ground point (flags byte, 12 more bytes when set), so the rounds land on the reticle (#161); v16: a gunship rocket flies at its own speed (killstreaks.json projectile_speed_mps) and lives out its range, so clients animate it at its Launch velocity's speed, not the bazooka's 40 m/s; v17: entity snapshots are deltas against the client's acknowledged tick (the inputs carry the snapshot tick, the snapshot carries its baseline and set position, removals are records), so a lost packet no longer leaves an entity wrong until a keyframe; v19: the flak truck, entity type 4 (a turret's aim record, <see cref="FlakRecord"/>), event kind 160 (the gunner's ammo), and aircraft carry their hit points (world state hp, percent) and can be destroyed; v20: seat switching in vehicles, event kinds 161 (a rider asks for another seat) and 162 (who sits in each seat, to the riders); v21: the utility helicopter (ADR 0006), entity type 5 (a flying vehicle's velocity, pitch, roll and rotor, <see cref="FlightRecord"/>), a turret aim record for its door gun, and the pilot's inputs step the helicopter one for one (the snapshot's ack is the helicopter's too); v22: glass panes (ADR 0007), event kinds 170 (a pane's hit points) and 171 (the panes of a scope, for a joiner, a new round and a returned vehicle); v23: chat and admin commands, event kinds 180 (a line or command from a player), 181 (a chat log line), 182 (admin flag and spawnable vehicles for a joiner) and 183 (the day clock changed live).; v24: the amphibious transport (ADR 0010, 0011, 0012), entity type 6 (a driven vehicle's speeds, the slope it stands on, its steering and whether it floats, <see cref="DriveRecord"/>), the driver's inputs step it one for one as the pilot's do the helicopter, a turret aim record for its ring gun, and a rider in an armed seat fires their own weapons, so the server answers a seated player's Fire, Reload and weapon switch; v25: the lossy effects (Shot, PelletFan, ImpactFx, gunship tracers and impacts) ride channel 2 unreliable, so a lost one cannot stall Hit, Kill or Death (A-03), the hello carries the map build hash and a different build is refused by name (E-06), and an empty tick sends no packet except every third tick, the heartbeat that carries the input ack (A-05); v26: the world channel is acknowledged too (A-01): inputs carry a world ack (u32 worldTick after the snapshot tick), world snapshots carry their baseline tick, index and total, unchanged world entities are omitted and the 30-tick keyframe is gone, and a world tick commits only when all of its packets have arrived.</summary>
+    public const byte ProtocolVersion = 26;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {
@@ -199,7 +202,6 @@ public static class Wire
     /// gunship blasts (their hit markers) and every other event stay reliable. The client dispatches by the first byte, not the channel.
     /// </summary>
     public static bool IsEffect(EventKind kind) => kind is EventKind.Shot or EventKind.PelletFan or EventKind.ImpactFx or EventKind.GunshipShots or EventKind.GunshipImpacts;
-    public const int KeyEvery = 30;
     /// <summary>An entity tick with nothing to say sends no packet, except every this many ticks: the heartbeat carries the input ack (A-05).</summary>
     public const int EmptyTickHeartbeat = 3;
     public const int MaxInputsPerPacket = 3;
@@ -404,7 +406,7 @@ public static class Wire
     }
 
     /// <summary>Encode the newest inputs (up to 3, oldest first) as one packet. An input with an aim adds <see cref="AimBytes"/>.</summary>
-    public static byte[] EncodeInputs(ReadOnlySpan<NetInput> inputs, uint snapTick = NoTick)
+    public static byte[] EncodeInputs(ReadOnlySpan<NetInput> inputs, uint snapTick = NoTick, uint worldTick = NoTick)
     {
         var n = Math.Min(inputs.Length, MaxInputsPerPacket);
         var size = InputHeaderBytes;
@@ -412,6 +414,7 @@ public static class Wire
         var b = new byte[size];
         b[0] = TInput; b[1] = (byte)n;
         BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(2), snapTick);
+        BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(6), worldTick);
         var at = InputHeaderBytes;
         for (var i = 0; i < n; i++)
         {
@@ -438,20 +441,21 @@ public static class Wire
 
     static int InputSize(in NetInput x) => InputBytes + (x.HasAim ? AimBytes : 0);
 
-    /// <summary>type, count, snapshot tick u32.</summary>
-    public const int InputHeaderBytes = 6;
+    /// <summary>type, count, snapshot tick u32, world tick u32.</summary>
+    public const int InputHeaderBytes = 10;
 
     /// <summary>
-    /// Decodes a packet of inputs (the newest up to 3 in order) and the snapshot tick it acknowledges. False when the packet
+    /// Decodes a packet of inputs (the newest up to 3 in order) and the entity and world ticks it acknowledges. False when the packet
     /// is malformed or truncated.
     /// </summary>
-    public static bool TryDecodeInputs(ReadOnlySpan<byte> d, List<NetInput> into, out uint snapTick)
+    public static bool TryDecodeInputs(ReadOnlySpan<byte> d, List<NetInput> into, out uint snapTick, out uint worldTick)
     {
-        snapTick = NoTick;
+        snapTick = NoTick; worldTick = NoTick;
         if (d.Length < InputHeaderBytes || d[0] != TInput) return false;
         int n = d[1];
         if (n < 1 || n > MaxInputsPerPacket) return false;
         snapTick = BinaryPrimitives.ReadUInt32LittleEndian(d[2..]);
+        worldTick = BinaryPrimitives.ReadUInt32LittleEndian(d[6..]);
         var at = InputHeaderBytes;
         for (var i = 0; i < n; i++)
         {
