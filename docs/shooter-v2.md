@@ -482,8 +482,8 @@ items, ADR 0018 (#267, protocol 31).
   `RequestDropBagged` put an item on the ground. None of them counts a pickup; the server validates each and answers with an `Equipment` event.
   `ItemRules` (pure, `ShooterCore/Items/Equipment.cs`) holds the rules and `BagTests` the tests.
 - **Ground items.** A dropped item lands at the terrain height under the player's feet (no throw), or under the vehicle they ride, any seat, a
-  helicopter in the air too. It is a world entity (type 2, `GroundItem`: state byte = item, hp byte = pickups) shown as a placeholder marker
-  (`NetClient.MakeGroundItemVisual`, to be replaced by the item's model). Tap the interact key within reach: "E  Pick up X". It goes into its empty
+  helicopter in the air too. It is a world entity (type 2, `GroundItem`: state byte = item, hp byte = pickups) drawn as the item's own model
+  (`NetClient.MakeGroundItemVisual`: `items.json` `model`, laid on the ground by its lowest point; an item with no model keeps a small gold placeholder block). Tap the interact key within reach: "E  Pick up X". It goes into its empty
   slot, else the bag; with both full nothing is taken or counted ("Your bag is full"). Each take counts one pickup (the dropper's too); an item at its
   limit crumbles. It expires after 120 s and shares the corpse cap.
 - **The pickup limit.** The Bigfoot head has `pickup_limit` 3. Every take counts on the item, which keeps its count when it drops again on the next

@@ -4,8 +4,8 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// Items on the ground on the client (issue #267, ADR 0018): the marker where a dropped item lies, the pickup prompt within reach, and the interact
-/// key. A ground item is a world entity (type <see cref="GroundItemRules.TypeId"/>; its item and pickup count are in the replicated state), so it
+/// Items on the ground on the client (issue #267, ADR 0018): the item's own model where a dropped item lies (a placeholder block for an item without
+/// one), the pickup prompt within reach, and the interact key. A ground item is a world entity (type <see cref="GroundItemRules.TypeId"/>; its item and pickup count are in the replicated state), so it
 /// appears, vanishes and reaches a joiner with the world channel. A tap of the interact key takes the nearest one in reach
 /// (<see cref="RequestTakeGroundItem"/>); it owns the key when it is nearer than a corpse, and a care package in reach owns it before both. The
 /// server validates reach and room and tells the result with the next Equipment event.
@@ -32,28 +32,53 @@ public partial class NetClient
         WorldEntities.Despawned += OnGroundItemDespawned;
     }
 
+    /// <summary>How far above the ground an item's lowest point rests, so its mesh does not z-fight the terrain.</summary>
+    const float GroundLift = 0.02f;
+
     /// <summary>
-    /// What marks an item on the ground: a small gold block standing on a corner, for now. The real item model replaces the body of this method
-    /// (the node is placed at the item's feet, so a model sits on y = 0).
+    /// What an item on the ground looks like (the node is placed at the item's feet, so a model sits on y = 0): the item's own model (<see cref="ItemDef.Model"/>,
+    /// the one a character wears), laid on the ground by its lowest point and centred on its footprint. The model is authored in the slot's frame (for headgear
+    /// the origin is the middle of the head), so it is not placed by its origin. An item with no model, a model file that is missing and a headless run keep the
+    /// placeholder: a small gold block standing on a corner.
     /// </summary>
     static Node3D MakeGroundItemVisual(ItemDef? item)
     {
         var node = new Node3D();
-        var gem = new MeshInstance3D
+        if (item is { Model: not "" } && ModelLib.Instance(item.Model) is { } model && ModelBounds(model, Transform3D.Identity, true) is { } box)
         {
-            Mesh = new BoxMesh { Size = new Vector3(0.28f, 0.28f, 0.28f) },
-            MaterialOverride = new StandardMaterial3D
-            {
-                AlbedoColor = new Color(0.95f, 0.78f, 0.25f),
-                EmissionEnabled = true,
-                Emission = new Color(0.95f, 0.78f, 0.25f),
-                EmissionEnergyMultiplier = 0.6f,
-            },
-            Position = new Vector3(0, 0.3f, 0),
-            RotationDegrees = new Vector3(45, 45, 0), // stands on a corner
-        };
-        node.AddChild(gem);
+            model.Position = new Vector3(-(box.Position.X + box.Size.X / 2f), GroundLift - box.Position.Y, -(box.Position.Z + box.Size.Z / 2f));
+            node.AddChild(model);
+            return node;
+        }
+        node.AddChild(PlaceholderBlock());
         return node;
+    }
+
+    static MeshInstance3D PlaceholderBlock() => new()
+    {
+        Mesh = new BoxMesh { Size = new Vector3(0.28f, 0.28f, 0.28f) },
+        MaterialOverride = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.95f, 0.78f, 0.25f),
+            EmissionEnabled = true,
+            Emission = new Color(0.95f, 0.78f, 0.25f),
+            EmissionEnergyMultiplier = 0.6f,
+        },
+        Position = new Vector3(0, 0.3f, 0),
+        RotationDegrees = new Vector3(45, 45, 0), // stands on a corner
+    };
+
+    /// <summary>The box round every mesh under <paramref name="n"/> in the frame of the model's root (the root's own transform is left out when <paramref name="root"/>), or null when there is no mesh.</summary>
+    static Aabb? ModelBounds(Node3D n, Transform3D parent, bool root)
+    {
+        var here = root ? Transform3D.Identity : parent * n.Transform;
+        Aabb? box = n is MeshInstance3D { Mesh: not null } mi ? here * mi.GetAabb() : null;
+        foreach (var c in n.GetChildren())
+        {
+            if (c is not Node3D child || ModelBounds(child, here, false) is not { } b) continue;
+            box = box is { } have ? have.Merge(b) : b;
+        }
+        return box;
     }
 
     void OnGroundItemSpawned(WorldReplica.Entity e)
