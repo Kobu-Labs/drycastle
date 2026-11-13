@@ -1,4 +1,4 @@
-"""Fetch stage: download raw source data for the slice into ``data/raw/`` with a disk cache."""
+"""Fetch stage: download raw source data for the map into ``data/village/raw/`` with a disk cache."""
 
 import json
 import math
@@ -12,20 +12,18 @@ from rasterio.merge import merge
 
 from drycastle_pipeline.cache import Source, fetch_cached, write_manifest
 from drycastle_pipeline.config import (
-    DEFAULT_AREA,
     DEFAULT_CONFIG,
     DEFAULT_RAW_DIR,
     ConfigError,
-    SliceConfig,
-    area_paths,
-    load_slice_config,
+    MapConfig,
+    load_map_config,
+    map_paths,
 )
 from drycastle_pipeline.geo import (
     METRIC_CRS,
     Bbox,
     bbox_of_polygon,
     centroid_of_geometry,
-    compute_bbox,
 )
 from drycastle_pipeline.http import HttpError, PoliteClient
 
@@ -241,9 +239,9 @@ def _parcels_paged(client: PoliteClient, params: dict) -> tuple[bytes, str]:
 
 
 def _resolve_centre(
-    client: PoliteClient, raw_dir: Path, cfg: SliceConfig, force: bool
+    client: PoliteClient, raw_dir: Path, cfg: MapConfig, force: bool
 ) -> tuple[float, float]:
-    path = raw_dir / "slice_centre.json"
+    path = raw_dir / "centre.json"
     query = way_query(cfg.osm_way)
 
     def fetch() -> tuple[bytes, str]:
@@ -263,19 +261,15 @@ def _wcs(client: PoliteClient, params: dict) -> tuple[bytes, str]:
     return resp.content, url
 
 
-def write_area(
-    raw_dir: Path, area: str, cfg: SliceConfig, lon: float, lat: float, bbox: Bbox
-) -> None:
+def write_area(raw_dir: Path, cfg: MapConfig, lon: float, lat: float, bbox: Bbox) -> None:
     """Record the fetched area (used later to tell which registry entries it covers)."""
     doc = {
-        "area": area,
         "lon": lon,
         "lat": lat,
-        "radius_m": cfg.radius_m,
         "margin_m": cfg.margin_m,
         "bbox_wgs84": [bbox.west, bbox.south, bbox.east, bbox.north],
-        # null for a square area; else the outline everything is clipped to (absolute EPSG:5514)
-        "polygon_epsg5514": [[x, y] for x, y in cfg.polygon] if cfg.polygon else None,
+        # the outline everything is clipped to (absolute EPSG:5514)
+        "polygon_epsg5514": [[x, y] for x, y in cfg.polygon],
     }
     (raw_dir / "area.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 
@@ -286,23 +280,19 @@ def _record(result: FetchResult, path: Path, downloaded: bool) -> None:
 
 
 def run_fetch(
-    cfg: SliceConfig,
+    cfg: MapConfig,
     raw_dir: Path = DEFAULT_RAW_DIR,
     *,
     force: bool = False,
     client: PoliteClient | None = None,
-    area: str = DEFAULT_AREA,
 ) -> FetchResult:
     client = client or PoliteClient()
     raw_dir.mkdir(parents=True, exist_ok=True)
     result = FetchResult()
 
     lon, lat = _resolve_centre(client, raw_dir, cfg, force)
-    if cfg.polygon:
-        bbox = bbox_of_polygon(cfg.polygon, cfg.margin_m)
-    else:
-        bbox = compute_bbox(lon, lat, cfg.radius_m, cfg.margin_m)
-    write_area(raw_dir, area, cfg, lon, lat, bbox)
+    bbox = bbox_of_polygon(cfg.polygon, cfg.margin_m)
+    write_area(raw_dir, cfg, lon, lat, bbox)
 
     boxes = osm_boxes(bbox)
     path = raw_dir / "osm.json"
@@ -380,13 +370,12 @@ def run(
     force: bool = False,
     config_path: Path = DEFAULT_CONFIG,
     raw_dir: Path | None = None,
-    area: str = DEFAULT_AREA,
     **_options: object,
 ) -> int:
-    raw_dir = raw_dir or area_paths(area).raw
+    raw_dir = raw_dir or map_paths().raw
     try:
-        cfg = load_slice_config(config_path, area)
-        result = run_fetch(cfg, raw_dir, force=force, area=area)
+        cfg = load_map_config(config_path)
+        result = run_fetch(cfg, raw_dir, force=force)
     except (ConfigError, HttpError) as exc:
         print(f"fetch: error: {exc}")
         return 1

@@ -15,10 +15,7 @@ Nothing registers it for you. Pick one (replace `/path/to/drycastle` with your c
 
 ```sh
 # user-local, just for this checkout
-claude mcp add drycastle-edits -- uv run --directory /path/to/drycastle/pipeline python -m drycastle_pipeline.mcp_server
-
-# the village area instead of the slice
-claude mcp add drycastle-edits-village -- uv run --directory /path/to/drycastle/pipeline python -m drycastle_pipeline.mcp_server --area village
+claude mcp add drycastle-edits-village -- uv run --directory /path/to/drycastle/pipeline python -m drycastle_pipeline.mcp_server
 ```
 
 or check a `.mcp.json` into your own working copy (project scope):
@@ -26,18 +23,18 @@ or check a `.mcp.json` into your own working copy (project scope):
 ```json
 {
   "mcpServers": {
-    "drycastle-edits": {
+    "drycastle-edits-village": {
       "command": "uv",
       "args": [
         "run", "--directory", "/path/to/drycastle/pipeline",
-        "python", "-m", "drycastle_pipeline.mcp_server", "--area", "slice"
+        "python", "-m", "drycastle_pipeline.mcp_server"
       ]
     }
   }
 }
 ```
 
-Then `/mcp` in Claude Code should list `drycastle-edits` with 23 tools. `make mcp` runs the same thing in a
+Then `/mcp` in Claude Code should list `drycastle-edits-village` with 23 tools. `make mcp` runs the same thing in a
 terminal (it waits for JSON-RPC on stdin, so it is only useful for debugging); the repo does not ship a
 `.mcp.json`.
 
@@ -45,19 +42,18 @@ Options (`python -m drycastle_pipeline.mcp_server --help`):
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--area slice\|village` | `slice` | which map's work files (`data/work` or `data/village/work`) it reads |
 | `--edits PATH` | `pipeline/config/edits.json` | the file it reads and writes; must be the one the viewer watches |
 | `--state PATH` | `out/editor-state.json` | the viewer's selection and camera, for "the selected parcel" |
 | `--sketch PATH` | `sketch.json` next to `--state` | the sketches the viewer and this server share, for "this line", "at A", "sketch ROAD" |
 | `--assets PATH` | `assets/manifest.json` | asset manifest |
-| `--work DIR` | from `--area` | work directory override (for experiments) |
+| `--work DIR` | `data/village/work` | work directory override (for experiments) |
 
 It needs the work files `parcels.json` (map 0.4.0+, with `origin_epsg5514`), `buildings.json` and `roads.json`, so run
-`make map` (or at least `normalise parcels rules terrain roads`) for the area first.
+`make map` (or at least `normalise parcels rules terrain roads`) first.
 
 ## Workflow with the viewer
 
-1. Start the viewer in editor mode with hot reload: `godot --path godot/viewer -- --editor --map out/map --area slice`
+1. Start the viewer in editor mode with hot reload: `godot --path godot/viewer -- --editor --map out/village/map`
    (editor mode implies `--watch`; see README "Editor mode").
 2. Click a parcel (Shift+click for more). The viewer writes the selection to `out/editor-state.json`.
 3. In Claude Code beside the viewer, ask for changes. Claude looks up the parcel (`find_parcels` with
@@ -200,7 +196,7 @@ absolute S-JTSK metres, so they go straight into `place_object` `position`, `cre
 
 Errors say what to do: no sketch file, an empty sketch, an
 unknown mark or sketch (the existing names are listed), a bad sketch name. Warnings: a state file older than 10 minutes, a closed line that
-crosses itself (returned without parcels), no mark on any parcel of this map (wrong `--area` or `--state`).
+crosses itself (returned without parcels), no mark on any parcel of this map (wrong `--state`).
 What is still missing for "plant trees inside L1": trees are no longer set per parcel (the rules or the orthophoto detector plant
 them), so today that means placed tree objects at computed positions; a tree edit bound to a drawn shape is a separate piece of work.
 

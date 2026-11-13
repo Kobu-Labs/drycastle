@@ -6,11 +6,19 @@ import requests
 
 from drycastle_pipeline import fetch
 from drycastle_pipeline.cache import Source, fetch_cached, sidecar_path, write_manifest
-from drycastle_pipeline.config import SliceConfig
+from drycastle_pipeline.config import MapConfig
+from drycastle_pipeline.geo import bbox_of_polygon
 from drycastle_pipeline.http import HttpError, PoliteClient
 
 SRC = Source("Test source", "CC0", "https://example.invalid/licence", "Test attribution")
 TIFF = b"II*\x00" + b"\x00" * 16
+
+
+def _rect(w: float, h: float | None = None) -> tuple[tuple[float, float], ...]:
+    """A w x h metre outline in absolute S-JTSK, the map polygon of these tests."""
+    h = w if h is None else h
+    x0, y0 = -589500.0, -1250500.0
+    return ((x0, y0), (x0 + w, y0), (x0 + w, y0 + h), (x0, y0 + h))
 
 
 def test_cache_miss_hit_force_and_param_change(tmp_path: Path) -> None:
@@ -174,7 +182,7 @@ class RouterClient(PoliteClient):
 
 
 def test_stage_downloads_then_skips_then_forces(tmp_path: Path) -> None:
-    cfg = SliceConfig(osm_way=1, radius_m=50, margin_m=10)
+    cfg = MapConfig(osm_way=1, polygon=_rect(100), margin_m=10)
     client = RouterClient()
     first = fetch.run_fetch(cfg, tmp_path, client=client)
     assert sorted(first.downloaded) == ["dmr5.tif", "osm.json", "parcels.geojson"]
@@ -197,14 +205,12 @@ def test_stage_downloads_then_skips_then_forces(tmp_path: Path) -> None:
     assert len(client.calls) == 4
 
     client.calls.clear()
-    fetch.run_fetch(SliceConfig(osm_way=1, radius_m=80, margin_m=10), tmp_path, client=client)
-    assert len(client.calls) == 3  # centre cached; the three data files refetched for new bbox
+    fetch.run_fetch(MapConfig(osm_way=1, polygon=_rect(160), margin_m=10), tmp_path, client=client)
+    assert len(client.calls) == 3  # centre cached; the three data files refetched for the new outline
 
 
 def test_dmr_params_snap_outwards_and_osm_query_covers_layers() -> None:
-    from drycastle_pipeline.geo import compute_bbox
-
-    bbox = compute_bbox(17.0, 48.5, 100, 25)
+    bbox = bbox_of_polygon(_rect(100), 25)
     params = fetch.dmr_params(bbox)
     assert params["coverageId"] == "el__EL.GridCoverage"
     e0, e1 = (int(v) for v in params["subset"][0][2:-1].split(","))
@@ -223,7 +229,7 @@ def test_bad_dmr_response_is_rejected(tmp_path: Path) -> None:
             return super().request(method, urls, params=params, data=data)
 
     with pytest.raises(HttpError, match="GeoTIFF"):
-        fetch.run_fetch(SliceConfig(osm_way=1), tmp_path, client=Bad())
+        fetch.run_fetch(MapConfig(osm_way=1, polygon=_rect(100)), tmp_path, client=Bad())
     assert not (tmp_path / "dmr5.tif").exists()
 
 
@@ -231,11 +237,9 @@ def test_bad_dmr_response_is_rejected(tmp_path: Path) -> None:
 
 
 def test_dmr_tiles_single_when_small_and_cover_box_when_large() -> None:
-    from drycastle_pipeline.geo import compute_bbox
-
-    small = compute_bbox(17.0, 48.5, 100, 25)
+    small = bbox_of_polygon(_rect(100), 25)
     assert fetch.dmr_tiles(small) == [fetch.dmr_params(small)]
-    big = compute_bbox(17.0, 48.5, 1400, 25)
+    big = bbox_of_polygon(_rect(2800), 25)
     tiles = fetch.dmr_tiles(big)
     assert len(tiles) > 1
 
@@ -288,7 +292,7 @@ def test_large_dmr_is_fetched_per_tile_cached_and_mosaicked(tmp_path: Path, monk
             return super().request(method, urls, params=params, data=data)
 
     monkeypatch.setattr(fetch, "DMR_TILE_M", 800)
-    cfg = SliceConfig(osm_way=1, radius_m=700, margin_m=10)
+    cfg = MapConfig(osm_way=1, polygon=_rect(1400), margin_m=10)
     client = Tiled()
     fetch.run_fetch(cfg, tmp_path, client=client)
     n = len(tile_calls)

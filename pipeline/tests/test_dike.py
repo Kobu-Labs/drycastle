@@ -110,17 +110,17 @@ def test_the_border_is_ragged_the_green_spills_over_it_and_the_grass_thins_out(c
 
 
 def test_a_regular_road_beside_the_dike_gets_no_track(cfg) -> None:
-    from drycastle_pipeline.config import area_paths
+    from drycastle_pipeline.config import map_paths
     from drycastle_pipeline.detail import Village
     from drycastle_pipeline.edits import DEFAULT_EDITS
     from drycastle_pipeline.rules import DEFAULT_RULES
 
-    work = area_paths("village").work
+    work = map_paths().work
     if not (work / "roads.json").exists():
         pytest.skip("no village work data")
     skip = set(cfg["dike"]["not_track"])
     assert skip
-    v = Village(work, DEFAULT_RULES, "village", DEFAULT_EDITS)
+    v = Village(work, DEFAULT_RULES, DEFAULT_EDITS)
     skipped = {ln.wkb for w in skip for ln in v.road_osm.get(w, [])}
     assert skipped  # the ways exist in the roads
     assert not skipped & {ln.wkb for ln, _ in v.road_lines}

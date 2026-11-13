@@ -51,7 +51,7 @@ Rollback: re-run the workflow on an older commit of `release`, or restore a back
 ## Cutting a release (manual path)
 
 1. Make sure `main` is green: `make shooter-test` (and `make test` for the pipeline if the map changed).
-2. Build the full map if it changed: `make map AREA=village`. Every export bundles `out/village/map` as `map/` next to the binary (override with `SHOOTER_PKG_MAP=<dir>`), and `make shooter-export` stops if it is missing. The server and the clients must run the **same map build**, which the bundling guarantees as long as you deploy the server from the same export.
+2. Build the full map if it changed: `make map`. Every export bundles `out/village/map` as `map/` next to the binary (override with `SHOOTER_PKG_MAP=<dir>`), and `make shooter-export` stops if it is missing. The server and the clients must run the **same map build**, which the bundling guarantees as long as you deploy the server from the same export.
 3. Build the client package: `make shooter-package`.
    Output: `out/shooter/drycastle-windows.zip`, containing the exe, `.pck`, .NET data, `assets/`, `map/`, `README.txt`
    (from `docs/player-readme.txt`). `make shooter-export` also produces the Linux client and server in `out/shooter/`.

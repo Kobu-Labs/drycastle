@@ -46,7 +46,7 @@ def write(tmp_path, name, text):
 
 
 def full_run(work, edits_path, rules_path):
-    run_props(work, rules_path, area="slice", edits_path=edits_path)
+    run_props(work, rules_path, edits_path=edits_path)
     props = json.loads((work / "props.json").read_text())
     objects = json.loads((work / "objects.json").read_text())["objects"]
     return props["fences"], props["trees"], objects
@@ -54,7 +54,7 @@ def full_run(work, edits_path, rules_path):
 
 def fragment(work, edits_path, rules_path, parcels=(), groups=()):
     return parcel_run.run_parcel_run(
-        work, "slice", list(parcels), list(groups), edits_path, rules_path
+        work, list(parcels), list(groups), edits_path, rules_path
     )
 
 
@@ -123,7 +123,7 @@ def test_unknown_targets_are_rejected(ws, tmp_path):
 
 
 def test_cli_writes_json_and_leaves_work_files_alone(ws, tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(parcel_run, "area_paths", lambda area: SimpleNamespace(work=ws))
+    monkeypatch.setattr(parcel_run, "map_paths", lambda *_a, **_k: SimpleNamespace(work=ws))
     edits_path = write(tmp_path, "edits.json", EDITS)
 
     def digests():
@@ -143,7 +143,7 @@ def test_cli_writes_json_and_leaves_work_files_alone(ws, tmp_path, monkeypatch, 
 
 
 def test_cli_errors(ws, tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(parcel_run, "area_paths", lambda area: SimpleNamespace(work=ws))
+    monkeypatch.setattr(parcel_run, "map_paths", lambda *_a, **_k: SimpleNamespace(work=ws))
     assert cli.main(["parcel-run"]) == 2
     assert cli.main(["parcel-run", "--parcel", "P-9999"]) == 1
     assert "P-9999" in capsys.readouterr().err
@@ -166,7 +166,7 @@ def test_glb_nodes_match_the_export_per_parcel_nodes(tmp_path):
     work = full["work"]
     edits_path = write(tmp_path, "edits.json", EDITS)
     rules_path = write(tmp_path, "rules.yaml", RULES_NOCAP)
-    run_props(work, rules_path, area="slice", edits_path=edits_path)
+    run_props(work, rules_path, edits_path=edits_path)
     manifest = run_export(work, tmp_path / "map", full["raw"], rules_path, full["overrides"])
     exported = {
         c["file"]: trimesh.load(tmp_path / "map" / c["file"], force="scene")
@@ -182,7 +182,7 @@ def test_glb_nodes_match_the_export_per_parcel_nodes(tmp_path):
     for pid in targets:
         glb = tmp_path / f"{pid}.glb"
         frag = parcel_run.run_parcel_run(
-            work, "slice", [pid], [], edits_path, rules_path, glb_path=glb
+            work, [pid], [], edits_path, rules_path, glb_path=glb
         )
         assert frag["glb"] == str(glb) and frag["replaces"] == frag["parcels"]
         scene = trimesh.load(glb, force="scene")
@@ -207,7 +207,7 @@ def test_glb_of_a_parcel_without_props_still_names_it_in_replaces(ws, tmp_path):
     edits_path = write(tmp_path, "e.json", {**NO_EDITS, "parcels": {"P-0003": {"fence": {"mode": "none"}}}})
     rules_path = write(tmp_path, "r.yaml", RULES_NOCAP)
     glb = tmp_path / "out" / "x.glb"
-    frag = parcel_run.run_parcel_run(ws, "slice", ["P-0003"], [], edits_path, rules_path, glb_path=glb)
+    frag = parcel_run.run_parcel_run(ws, ["P-0003"], [], edits_path, rules_path, glb_path=glb)
     assert frag["replaces"] == ["P-0003"] and frag["fences"] == [] and frag["trees"] == []
     assert not trimesh.load(glb, force="scene").graph.nodes_geometry
 
@@ -215,7 +215,7 @@ def test_glb_of_a_parcel_without_props_still_names_it_in_replaces(ws, tmp_path):
 def test_cli_glb_option_and_group_expansion(ws, tmp_path, monkeypatch, capsys):
     import trimesh
 
-    monkeypatch.setattr(parcel_run, "area_paths", lambda area: SimpleNamespace(work=ws))
+    monkeypatch.setattr(parcel_run, "map_paths", lambda *_a, **_k: SimpleNamespace(work=ws))
     edits_path = write(tmp_path, "edits.json", EDITS)
     glb = tmp_path / "g.glb"
     argv = ["parcel-run", "--group", "G-0001", "--edits", str(edits_path), "--glb", str(glb)]

@@ -174,7 +174,8 @@ def test_textured_nodes_carry_uvs_and_tint_but_no_image() -> None:
     import trimesh
 
     sections = run("brick_white", colour="#ffeedd")
-    visual, collision, textured = parcel_props_meshes(sections, [], PROPS)
+    props = {**PROPS, "fences": {**FENCE, "collision": True}}
+    visual, collision, textured = parcel_props_meshes(sections, [], props)
     assert visual.face_count and collision.face_count == 12 * len(sections) and textured
     nodes = parcel_props_nodes([("P-0001", visual, collision, textured)])
     assert sorted(nodes) == [

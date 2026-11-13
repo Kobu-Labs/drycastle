@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Regions hot reload smoke test (`make viewer-regions-smoke`).
 
-Exports a fresh slice map with a few regions into a scratch directory (nothing under data/ or out/ is
+Exports a fresh map with a few regions into a scratch directory (nothing under data/ or out/ is
 touched), prepares a series of edits files (colour change, reshape, add, remove, a region and a parcel edit in
 one file change, a broken file) and starts the viewer headless with `--watch --edits <scratch edits.json>`;
 the viewer drives and asserts the run (`--regions-smoke`, see ViewerRegionsSmoke.cs). Exits with the viewer's
@@ -39,12 +39,12 @@ def main() -> int:
     scratch.mkdir(parents=True, exist_ok=True)
     print(f"regions smoke: scratch directory {scratch}")
 
-    parcels_doc = json.loads((REPO / "data" / "work" / "parcels.json").read_text())
+    parcels_doc = json.loads((REPO / "data" / "village" / "work" / "parcels.json").read_text())
     ox, oy = parcels_doc["origin_epsg5514"]
     parcels = sorted(parcels_doc["parcels"], key=lambda p: p["id"])
     plots = [p for p in parcels if p["kind"] == "building_plot"]
     if len(plots) < 2:
-        sys.exit("regions smoke: the slice has too few building plots")
+        sys.exit("regions smoke: the map has too few building plots")
 
     def box(cx: float, cy: float, w: float = 24.0, h: float = 18.0) -> list[list[float]]:
         """Absolute S-JTSK rectangle around a local point."""
@@ -104,7 +104,7 @@ def main() -> int:
 
     edits = scratch / "edits.json"
     edits.write_text(doc(reg(ids)))
-    r = uv("export", "--area", "slice", "--out", str(scratch / "map"), "--edits", str(edits))
+    r = uv("export", "--out", str(scratch / "map"), "--edits", str(edits))
     print(r.stdout.strip())
     if r.returncode != 0:
         print(r.stderr)
@@ -123,7 +123,7 @@ def main() -> int:
         print(build.stdout[-2000:])
         return 1
     cmd = [args.godot, "--headless", "--path", str(REPO / "godot/viewer"), "--",
-           "--map", str(scratch / "map"), "--seed", args.seed, "--area", "slice",
+           "--map", str(scratch / "map"), "--seed", args.seed,
            "--edits", str(edits), "--state", str(scratch / "editor-state.json"),
            "--regions-smoke", "--regions-smoke-plan", str(scratch / "plan.json")]
     return subprocess.run(cmd).returncode

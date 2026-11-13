@@ -7,14 +7,14 @@ Status: the export presets and Makefile targets are written but the actual expor
 
 ## 1. Build a map
 
-The shooter loads a map folder produced by the pipeline (default `out/map`):
+The shooter loads a map folder produced by the pipeline (default `out/village/map`):
 
 ```
-make map AREA=<area>        # see docs/pipeline.md; produces out/map
+make map                     # see docs/pipeline.md; produces out/village/map
 ```
 
 Exports bundle the full village map (`out/village/map`, see `docs/release.md`) as `map/` next to the binary. Server and clients pick the folder with
-`--map DIR`, else `DRYCASTLE_MAP`, else `map/` next to an exported binary (`../../out/map` when run from source). Server and clients must use the same map build.
+`--map DIR`, else `DRYCASTLE_MAP`, else `map/` next to an exported binary (`../../out/village/map` when run from source). Server and clients must use the same map build.
 
 ## 2. Export
 
@@ -47,7 +47,7 @@ export DRYCASTLE_ASSETS=$PWD/assets
 ./drycastle-server.x86_64 --headless -- --role server --port 27015 --map /srv/drycastle/map
 ```
 
-During development, `make shooter-server MAP=out/map` does the same from source.
+During development, `make shooter-server MAP=out/village/map` does the same from source.
 
 Flags (after `--`):
 

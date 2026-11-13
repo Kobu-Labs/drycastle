@@ -1,4 +1,4 @@
-"""Roads stage: OSM highways -> ``data/work/roads.json`` (graph) and ribbon meshes draped on terrain.
+"""Roads stage: OSM highways -> ``data/village/work/roads.json`` (graph) and ribbon meshes draped on terrain.
 
 Graph: nodes are way ends and vertices shared by two ways; a way is split into edges at nodes.
 Coordinates are local metres (x east, y north). Ribbons are built at export from the graph and
@@ -15,7 +15,7 @@ import shapely
 from shapely.geometry import LineString, Polygon
 
 from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.config import DEFAULT_AREA, area_paths
+from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.meshes import Mesh, _polygons, triangulate
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.terrain import Terrain
@@ -385,8 +385,8 @@ def read_highways(work_dir: Path) -> list[dict]:
     return json.loads((work_dir / "normalised" / "highways.geojson").read_text())["features"]
 
 
-def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
-    work_dir = area_paths(area).work
+def run(force: bool = False, **_options: object) -> int:
+    work_dir = map_paths().work
     try:
         graph = build_graph(read_highways(work_dir), load_section("roads", DEFAULT_RULES))
     except FileNotFoundError as exc:

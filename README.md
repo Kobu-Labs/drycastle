@@ -33,22 +33,21 @@ make lint     # ruff check
 ## Running
 
 ```sh
-make map        # run every pipeline stage in order (fetch ... export)
-make fetch      # run only the fetch stage (downloads raw data into data/raw/)
-make normalise  # raw data -> local metres in data/work/normalised/
+make map        # run every pipeline stage in order (fetch ... export); needs pipeline/config/map.local.yaml
+make fetch      # run only the fetch stage (downloads raw data into data/village/raw/)
+make normalise  # raw data -> local metres in data/village/work/normalised/
 make parcels    # parcel registry, kinds, building assignment; prints a report
-make rules      # building heights, roofs, colours -> data/work/buildings.json
-make terrain    # DMR 5.0 -> height grid, ground flattened under buildings (data/work/terrain*)
-make roads      # OSM highways -> road graph (data/work/roads.json)
-make props      # fences, trees, spawn candidates (data/work/props.json, spawns.json)
-make export     # chunk glTFs, parcels.json, roads.json, spawns.json, manifest.json -> out/map/
-make preview    # out/preview/topdown.png, iso.png, iso_close.png (matplotlib; EXAG=3 relief factor)
-make map AREA=village   # the same for the whole village (any target takes AREA=slice|village; the default is village)
+make rules      # building heights, roofs, colours -> data/village/work/buildings.json
+make terrain    # DMR 5.0 -> height grid, ground flattened under buildings (data/village/work/terrain*)
+make roads      # OSM highways -> road graph (data/village/work/roads.json)
+make props      # fences, trees, spawn candidates (data/village/work/props.json, spawns.json)
+make export     # chunk glTFs, parcels.json, roads.json, spawns.json, manifest.json -> out/village/map/
+make preview    # out/village/preview/topdown.png, iso.png, iso_close.png (matplotlib; EXAG=3 relief factor)
 make viewer         # build and run the Godot viewer (see docs/viewer-and-editor.md)
 make viewer-smoke   # headless smoke test of the viewer and the loader
 make viewer-edit-smoke  # hot reload end to end (scratch export, headless viewer, edits written during the run)
 make viewer-shot    # windowed run, writes PNGs to out/screens/
-make netspike-quick # netcode spike, N=8, 15 s (needs a map: MAP=/path/to/out/map)
+make netspike-quick # netcode spike, N=8, 15 s (needs a map: MAP=/path/to/out/village/map)
 make netspike       # netcode spike, N=16/32/64, 60 s per variant (about 30 minutes)
 ```
 
@@ -61,7 +60,7 @@ dotnet build godot/viewer/viewer.csproj
 
 ## More
 
-- Pipeline stages, config, areas, registry: [docs/pipeline.md](docs/pipeline.md)
+- Pipeline stages, config, map outline, registry: [docs/pipeline.md](docs/pipeline.md)
 - Viewer, editor mode, hot reload, MCP: [docs/viewer-and-editor.md](docs/viewer-and-editor.md), [docs/mcp.md](docs/mcp.md)
 - Netcode spike (headless 64-client test; `make netspike`): [docs/spikes/netcode-spike.md](docs/spikes/netcode-spike.md)
 - Launcher, CI releases, how players get and update the game: [docs/launcher.md](docs/launcher.md)

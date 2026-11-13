@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from drycastle_pipeline import fetch
-from drycastle_pipeline.config import SliceConfig
+from drycastle_pipeline.config import MapConfig
 from drycastle_pipeline.geo import bbox_of_polygon
 from drycastle_pipeline.http import HttpError
 from tests.test_cache_fetch import FakeResponse, RouterClient, _geotiff
@@ -65,7 +65,7 @@ class Pieces(RouterClient):
 
 
 def test_pieces_are_merged_and_a_failed_run_resumes(tmp_path: Path) -> None:
-    cfg = SliceConfig(osm_way=1, margin_m=25, polygon=tuple(RING))
+    cfg = MapConfig(osm_way=1, margin_m=25, polygon=tuple(RING))
     client = Pieces(fail_on_call=3)
     with pytest.raises(HttpError):
         fetch.run_fetch(cfg, tmp_path, client=client)

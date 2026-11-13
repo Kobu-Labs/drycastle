@@ -4,8 +4,6 @@ import argparse
 import time
 from collections.abc import Sequence
 
-from drycastle_pipeline.config import AREAS, DEFAULT_AREA
-
 # Heavy modules (matplotlib, rasterio, trimesh, ...) are imported only by the command that needs
 # them, so that ``parcel-run`` starts fast. ``STAGE_NAMES`` must equal ``list(stages.STAGES)``
 # (checked in tests).
@@ -36,13 +34,6 @@ def build_parser() -> argparse.ArgumentParser:
         choices=choices,
         metavar="stage",
         help="one of: " + ", ".join(choices),
-    )
-    parser.add_argument(
-        "--area",
-        choices=AREAS,
-        default=DEFAULT_AREA,
-        help="slice (default): data/raw, data/work, out/map; "
-        "village: data/village/..., out/village/map",
     )
     parser.add_argument(
         "--force",
@@ -92,13 +83,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         default=None,
         help="parcel-run: write the JSON fragment here instead of stdout; "
-        "export: write the map folder here instead of out/map",
+        "export: write the map folder here instead of out/village/map",
     )
     parser.add_argument(
         "--work",
         metavar="DIR",
         default=None,
-        help="detail, export, parcel-run: read this work directory instead of data/work (experiments; detail also writes its files there)",
+        help="detail, export, parcel-run: read this work directory instead of data/village/work (experiments; detail also writes its files there)",
     )
     parser.add_argument(
         "--glb",
@@ -118,7 +109,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         return parcel_run.run(
             parcels=args.parcel,
             groups=args.group,
-            area=args.area,
             edits=args.edits,
             out=args.out,
             glb=args.glb,
@@ -129,7 +119,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         return region_run.run(
             regions=args.region,
-            area=args.area,
             edits=args.edits,
             out=args.out,
             glb=args.glb,
@@ -141,7 +130,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         timings: list[tuple[str, float]] = []
         for name, run in STAGES.items():
             started = time.perf_counter()
-            status = run(force=args.force, report=args.report, area=args.area, edits=args.edits)
+            status = run(force=args.force, report=args.report, edits=args.edits)
             timings.append((name, time.perf_counter() - started))
             if status != 0:
                 print(f"{name}: failed")
@@ -151,11 +140,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage == PREVIEW:
         from drycastle_pipeline import preview
 
-        return preview.run(exaggeration=args.exaggeration, area=args.area)
+        return preview.run(exaggeration=args.exaggeration)
     return STAGES[args.stage](
         force=args.force,
         report=args.report,
-        area=args.area,
         edits=args.edits,
         out=args.out,
         work=args.work,

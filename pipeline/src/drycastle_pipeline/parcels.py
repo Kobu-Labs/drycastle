@@ -14,7 +14,7 @@ from shapely.geometry import Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
-from drycastle_pipeline.config import DEFAULT_AREA, area_paths
+from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits
 from drycastle_pipeline.ground import ID_PREFIX as GROUND_PREFIX
 from drycastle_pipeline.ground import (
@@ -152,11 +152,10 @@ def build_parcels(
         f["properties"]["osm_id"]: shape(f["geometry"]) for f in _read(norm / "buildings.geojson")
     }
 
-    # Registry works in absolute EPSG:5514 metres, independent of the slice centre. Every cadastral parcel keeps its
+    # Registry works in absolute EPSG:5514 metres, independent of the map centre. Every cadastral parcel keeps its
     # entry and ID there, also the ones whose land becomes ground below.
     absolute = {r: translate(g, ox, oy) for r, g in zip(refs, parcels, strict=True)}
-    ring = frame.get("fetched_bounds_epsg5514")
-    bounds = Polygon(ring) if ring else None
+    bounds = Polygon(frame["area_polygon_epsg5514"])
     match = match_parcels(load_registry(registry_path), absolute, rules.min_iou, bounds)
     save_registry(match.registry, registry_path)
 
@@ -248,10 +247,10 @@ def build_parcels(
 
 
 def run(
-    force: bool = False, report: bool = False, area: str = DEFAULT_AREA, **_options: object
+    force: bool = False, report: bool = False, **_options: object
 ) -> int:
     try:
-        result = build_parcels(area_paths(area).work)
+        result = build_parcels(map_paths().work)
     except FileNotFoundError as exc:
         print(f"parcels: error: missing input {Path(str(exc.filename)).name}; run normalise first")
         return 1

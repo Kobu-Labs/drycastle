@@ -31,7 +31,7 @@ public sealed record FragmentResult(IReadOnlyList<string> Replaced, int Objects,
 // Placed objects, the dynamic per-parcel props swap (parcel-run fragments) and their bookkeeping.
 public sealed partial class MapLoader
 {
-    sealed record AssetEntry(string File, Vector3 Size, string Category, string Name, List<(string kind, int tier, Vector3 local)> Seats, List<Vector3> Lights,
+    sealed record AssetEntry(string File, string Scene, Vector3 Size, string Category, string Name, List<(string kind, int tier, Vector3 local)> Seats, List<Vector3> Lights,
         List<Drycastle.ShooterCore.AssetSolid> Solids);
 
     string _mapDir = "";
@@ -287,18 +287,33 @@ public sealed partial class MapLoader
             Warn($"assets manifest not found (assets dir: {dir ?? "none"}); pack: objects use placeholders");
             return;
         }
+        ReadAssetEntries(path);
+        // private (paid) packs: a manifest beside assets/, written by scripts/private_pack_index.gd; absent on a machine without them
+        var priv = System.Environment.GetEnvironmentVariable("DRYCASTLE_ASSETS_PRIVATE") is { Length: > 0 } env
+            ? Path.Combine(env, "manifest.json")
+            : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(dir!)) ?? "", "assets-private", "manifest.json");
+        if (File.Exists(priv)) ReadAssetEntries(priv);
+    }
+
+    void ReadAssetEntries(string path)
+    {
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
         foreach (var a in doc.RootElement.GetProperty("assets").EnumerateArray())
         {
             var file = a.TryGetProperty("file", out var f) && f.ValueKind == JsonValueKind.String ? f.GetString()! : "";
+            var scene = a.TryGetProperty("scene", out var sc) && sc.ValueKind == JsonValueKind.String ? sc.GetString()! : "";
             var sz = a.GetProperty("size_m");
             var id = a.GetProperty("id").GetString()!;
+            if (_assetManifest!.ContainsKey(id)) continue; // the public library wins
             var cat = a.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString()! : "other";
             var name = a.TryGetProperty("name", out var nm) && nm.ValueKind == JsonValueKind.String ? nm.GetString()! : id;
-            _assetManifest[id] = new AssetEntry(file, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name, ParseSeats(a), ParseLights(a),
+            _assetManifest[id] = new AssetEntry(file, scene, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name, ParseSeats(a), ParseLights(a),
                 Drycastle.ShooterCore.ObjectColliders.ParseSolids(a));
         }
     }
+
+    /// <summary>The asset is a prefab scene of a private pack (res://, instanced directly with its own collision), not a glTF file.</summary>
+    bool IsSceneAsset(string asset) => _assetManifest != null && _assetManifest.TryGetValue(asset, out var e) && e.Scene != "";
 
     /// <summary>Template scene of an asset (cached, never in the tree); null = unknown or unloadable (placeholder).</summary>
     Node3D? GetAssetTemplate(string asset, out Vector3? size)
@@ -310,6 +325,20 @@ public sealed partial class MapLoader
 
         Node3D? scene = null;
         string? path = null;
+        if (entry is { Scene.Length: > 0 })
+        {
+            // a private pack prefab: loaded as it is, with its materials and its own collision bodies
+            if (ResourceLoader.Exists(entry.Scene) && ResourceLoader.Load<PackedScene>(entry.Scene) is { } packed)
+            {
+                scene = packed.Instantiate<Node3D>();
+                foreach (var d in Descendants(scene))
+                    if (d is CollisionObject3D body) { body.CollisionLayer = Drycastle.ShooterCore.CollisionLayers.World; body.SetMeta("surface", "metal"); }
+            }
+            else
+                Warn($"object asset '{asset}': the private pack is not installed ({entry.Scene}); using a placeholder box");
+            _assetTemplates[asset] = scene;
+            return scene;
+        }
         if (asset.StartsWith("prim:"))
             path = Path.Combine(_mapDir, "prims", asset["prim:".Length..] + ".glb");
         else if (asset.StartsWith("pack:") && entry != null && entry.File != "" && AssetsDir != null)

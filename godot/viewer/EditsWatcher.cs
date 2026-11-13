@@ -30,7 +30,6 @@ public partial class EditsWatcher : Node
     public const int RunTimeoutSeconds = 120;
 
     public string EditsPath { get; init; } = "";
-    public string Area { get; init; } = "slice";
     public string PipelineDir { get; init; } = "";
     public string StatePath { get; init; } = "";
     public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
@@ -112,7 +111,7 @@ public partial class EditsWatcher : Node
             if (snap!.CablesText != CablesText(Map.Cables)) Map.SetCables(snap.Cables);
         }
         else GD.PushWarning($"edits watcher: initial {EditsPath} unreadable ({err}); starting from empty edits");
-        GD.Print($"watching {EditsPath} (area {Area})");
+        GD.Print($"watching {EditsPath}");
         StartMapWatch();
     }
 
@@ -552,7 +551,7 @@ public partial class EditsWatcher : Node
         if (ids.Count > 0)
         {
             ParcelRunCount++;
-            var a = new List<string> { "parcel-run", "--area", Area };
+            var a = new List<string> { "parcel-run" };
             foreach (var id in ids) { a.Add("--parcel"); a.Add(id); }
             a.AddRange(new[] { "--edits", run.Edits, "--glb", run.Glb, "--out", run.Fragment });
             parcelPsi = UvStart(a.ToArray());
@@ -560,7 +559,7 @@ public partial class EditsWatcher : Node
         if (regionIds.Count > 0)
         {
             _regionRunCounter++;
-            var a = new List<string> { "region-run", "--area", Area };
+            var a = new List<string> { "region-run" };
             foreach (var id in regionIds) { a.Add("--region"); a.Add(id); }
             a.AddRange(new[] { "--edits", run.Edits, "--glb", run.RegionGlb, "--out", run.RegionSummary });
             regionPsi = UvStart(a.ToArray());

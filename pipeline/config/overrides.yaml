@@ -1,4 +1,4 @@
-# Manual corrections applied at the end of the rules stage (data/work/buildings.json).
+# Manual corrections applied at the end of the rules stage (data/village/work/buildings.json).
 #
 # Keep this file small: it is for cases the automatic rules get wrong. The map is still
 # regenerated from scratch, so overrides must stay valid across regenerations.

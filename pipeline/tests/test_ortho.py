@@ -57,15 +57,12 @@ def test_tiles_for_counts_whole_tiles() -> None:
     assert len(ortho.tiles_for((10, 10, 600, 300))) == 3 * 2
 
 
-def test_area_extent_uses_the_polygon_else_the_box(tmp_path: Path) -> None:
+def test_map_extent_is_the_polygon_padded(tmp_path: Path) -> None:
     (tmp_path / "area.json").write_text(json.dumps({
         "bbox_wgs84": [16.85, 48.39, 16.87, 48.41],
         "polygon_epsg5514": [[0, 0], [100, 0], [100, 50], [0, 50]],
     }))
-    assert ortho.area_extent(tmp_path, pad_m=10) == (-10, -10, 110, 60)
-    (tmp_path / "area.json").write_text(json.dumps({"bbox_wgs84": [16.85, 48.39, 16.87, 48.41]}))
-    minx, miny, maxx, maxy = ortho.area_extent(tmp_path, pad_m=0)
-    assert 1000 < maxx - minx < 2500 and 1000 < maxy - miny < 2500
+    assert ortho.map_extent(tmp_path, pad_m=10) == (-10, -10, 110, 60)
 
 
 def test_build_downloads_once_and_places_tiles_in_the_mosaic(tmp_path: Path) -> None:

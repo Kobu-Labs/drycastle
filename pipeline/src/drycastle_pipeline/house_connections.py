@@ -4,8 +4,8 @@ The map editor connects a house with one click each; this does a whole street at
 (``objects`` and ``cables``), so the result is hand-editable like anything else the editor placed::
 
     cd pipeline
-    uv run python -m drycastle_pipeline.house_connections --area village --dry-run   # what it would do
-    uv run python -m drycastle_pipeline.house_connections --area village
+    uv run python -m drycastle_pipeline.house_connections --dry-run   # what it would do
+    uv run python -m drycastle_pipeline.house_connections
 
 Which houses: the dwellings (``area:house``, ``area:large``, ``type:commercial``; not sheds, garages, the church or the
 hand-made overrides) that stand within ``--service-m`` of a pole and have no connector within a few metres already.
@@ -30,7 +30,7 @@ from shapely.geometry import LineString, Point
 from shapely.geometry.polygon import orient
 
 from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import DEFAULT_AREA, area_paths
+from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.edits import POLE_ASSET_PREFIX, load_edits
 
 HOUSE_CLASSES = ("area:house", "area:large", "type:commercial")
@@ -146,11 +146,11 @@ def plan_drops(
     return [done[h] for h in sorted(done)]
 
 
-def apply(area: str, service_m: float, per_pole: int, dry_run: bool) -> int:
+def apply(service_m: float, per_pole: int, dry_run: bool) -> int:
     from drycastle_pipeline.edits import DEFAULT_EDITS, dump_edits, validate
     from drycastle_pipeline.mcp_server import _edits_doc, edits_lock
 
-    paths = area_paths(area)
+    paths = map_paths()
     work = paths.work
     origin = json.loads((work / "parcels.json").read_text())["origin_epsg5514"]
     buildings = json.loads((work / "buildings.json").read_text())["buildings"]
@@ -198,12 +198,11 @@ def apply(area: str, service_m: float, per_pole: int, dry_run: bool) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--area", default=DEFAULT_AREA)
     ap.add_argument("--service-m", type=float, default=SERVICE_M, help=f"furthest pole a house is connected to (default {SERVICE_M:g})")
     ap.add_argument("--per-pole", type=int, default=PER_POLE, help=f"most drops from one pole (default {PER_POLE})")
     ap.add_argument("--dry-run", action="store_true", help="say what would be placed, write nothing")
     args = ap.parse_args(argv)
-    return apply(args.area, args.service_m, args.per_pole, args.dry_run)
+    return apply(args.service_m, args.per_pole, args.dry_run)
 
 
 if __name__ == "__main__":

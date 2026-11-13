@@ -1,16 +1,16 @@
-"""Orthophoto of the area -> ``data/<area>/ortho/`` (reference only, never part of the map).
+"""Orthophoto of the map -> ``data/village/ortho/`` (reference only, never part of the map).
 
 Not a map stage: the aerial photo is something to look at while editing (the map editor can lay it
 under the map), not an input of the generated map and never exported or shipped. The licence of the
 source (GKU Bratislava, NLC) forbids redistributing it and altering it, so nothing here may reach
 ``out/``; the files stay in the gitignored ``data/``. See docs/ortho.md.
 
-    python -m drycastle_pipeline.ortho --area village             # level 11, about 0.6 m per pixel
-    python -m drycastle_pipeline.ortho --area village --level 12  # 0.3 m per pixel, 4x the tiles
+    python -m drycastle_pipeline.ortho            # level 11, about 0.6 m per pixel
+    python -m drycastle_pipeline.ortho --level 12 # 0.3 m per pixel, 4x the tiles
 
 Reads the box (and polygon) ``fetch`` recorded in ``area.json``, downloads the WMTS tiles that cover
 it (EPSG:5514, so no reprojection) into ``tiles/`` and joins them into ``ortho.jpg`` cropped to the
-area, with ``ortho.json`` giving its absolute S-JTSK bounds.
+map, with ``ortho.json`` giving its absolute S-JTSK bounds.
 """
 
 import argparse
@@ -19,7 +19,7 @@ import math
 from collections.abc import Sequence
 from pathlib import Path
 
-from drycastle_pipeline.config import AREAS, DEFAULT_AREA, area_paths
+from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.frame import box_to_sjtsk
 from drycastle_pipeline.http import HttpError, PoliteClient
 
@@ -81,7 +81,7 @@ def tiles_for(box: tuple[int, int, int, int]) -> list[tuple[int, int]]:
     ]
 
 
-def area_extent(raw_dir: Path, pad_m: float = DEFAULT_PAD_M) -> tuple[float, float, float, float]:
+def map_extent(raw_dir: Path, pad_m: float = DEFAULT_PAD_M) -> tuple[float, float, float, float]:
     """Absolute S-JTSK bounds of what ``fetch`` covered (the polygon's, else the fetched box), padded."""
     doc = json.loads((raw_dir / "area.json").read_text())
     ring = doc.get("polygon_epsg5514")
@@ -145,7 +145,7 @@ def build(
     """Download and join the tiles; returns the ``ortho.json`` document."""
     if not 0 <= level <= MAX_LEVEL:
         raise ValueError(f"level must be 0..{MAX_LEVEL}")
-    box = pixel_box(area_extent(raw_dir, pad_m), level)
+    box = pixel_box(map_extent(raw_dir, pad_m), level)
     tiles = tiles_for(box)
     if len(tiles) > MAX_TILES:
         raise ValueError(f"{len(tiles)} tiles is over the {MAX_TILES} limit; use a lower --level")
@@ -171,9 +171,9 @@ def build(
     return doc
 
 
-def run_ortho(area: str, level: int = DEFAULT_LEVEL, force: bool = False) -> int:
-    """Download the photo of ``area``; prints one line and returns the exit status."""
-    paths = area_paths(area)
+def run_ortho(level: int = DEFAULT_LEVEL, force: bool = False) -> int:
+    """Download the photo of the map; prints one line and returns the exit status."""
+    paths = map_paths()
     try:
         doc = build(paths.raw, paths.raw.parent / "ortho", level, PoliteClient(min_interval=0.2), force=force)
     except FileNotFoundError:
@@ -190,18 +190,17 @@ def run_ortho(area: str, level: int = DEFAULT_LEVEL, force: bool = False) -> int
     return 0
 
 
-def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
+def run(force: bool = False, **_options: object) -> int:
     """The ``ortho`` pipeline stage (after ``normalise``): tiles already on disk are not fetched again."""
-    return run_ortho(area, force=force)
+    return run_ortho(force=force)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="drycastle_pipeline.ortho", description=__doc__.split("\n")[0])
-    p.add_argument("--area", choices=AREAS, default=DEFAULT_AREA)
     p.add_argument("--level", type=int, default=DEFAULT_LEVEL, help=f"zoom 0..{MAX_LEVEL} (default {DEFAULT_LEVEL})")
     p.add_argument("--force", action="store_true", help="download the tiles again")
     args = p.parse_args(argv)
-    return run_ortho(args.area, args.level, args.force)
+    return run_ortho(args.level, args.force)
 
 
 if __name__ == "__main__":

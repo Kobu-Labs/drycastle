@@ -40,7 +40,7 @@ def py_result(ws):
 def run_rust(ws, out, threads):
     work, tmp = ws
     out.mkdir(exist_ok=True)
-    stats, _ = R.run_engine(work, area=None, edits_path=tmp / "no-edits.json", threads=threads, out_dir=out)
+    stats, _ = R.run_engine(work, edits_path=tmp / "no-edits.json", threads=threads, out_dir=out)
     return stats
 
 
@@ -110,7 +110,7 @@ def test_stage_runs_rust_only(monkeypatch) -> None:
     from drycastle_pipeline import detail_rust
 
     called = {}
-    monkeypatch.setattr(detail_rust, "run", lambda **kw: called.update(kw) or 0)
+    monkeypatch.setattr(detail_rust, "run", lambda **kw: called.update(kw, ran=True) or 0)
     monkeypatch.setenv("DRYCASTLE_DETAIL_ENGINE", "python")  # the old switch is gone: it changes nothing
-    assert D.run(area="slice") == 0
-    assert called["area"] == "slice"
+    assert D.run() == 0
+    assert called["ran"]

@@ -10,7 +10,7 @@ using Drycastle.MapLoader;
 /// Map viewer root. Loads the map, adds light and sky, spawns the player.
 /// Options (after "--"): --map DIR, --seed N, --smoke, --screenshot PATH,
 /// --view overview|oblique|street|player, --frames N, --assets DIR, --watch, --edits PATH,
-/// --area slice|village, --state PATH, --edit-smoke --edit-smoke-plan FILE, --regions-smoke --regions-smoke-plan FILE,
+/// --state PATH, --edit-smoke --edit-smoke-plan FILE, --regions-smoke --regions-smoke-plan FILE,
 /// --editor (editor mode, implies --watch; F2 toggles walk/editor), --editor-smoke --editor-smoke-plan FILE,
 /// --panel-smoke --panel-smoke-plan FILE (Fence panel), --objects-smoke --objects-smoke-plan FILE (objects, gizmo, undo), --region-editor-smoke --region-editor-smoke-plan FILE (Region tool),
 /// --editor-shot PNG [--select P-0001,P-0002] [--shot-at P-0001] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-tool Select|Group|Fence|Objects|View]
@@ -37,7 +37,7 @@ public partial class Viewer : Node3D
         var mapDir = _opts.GetValueOrDefault("map")
             ?? OS.GetEnvironment("DRYCASTLE_MAP");
         if (string.IsNullOrEmpty(mapDir))
-            mapDir = ProjectSettings.GlobalizePath("res://") + "../../out/map";
+            mapDir = ProjectSettings.GlobalizePath("res://") + "../../out/village/map";
         mapDir = Path.GetFullPath(mapDir);
 
         var repo = Path.GetFullPath(ProjectSettings.GlobalizePath("res://") + "../..");
@@ -118,15 +118,10 @@ public partial class Viewer : Node3D
     void StartWatcher(string repo)
     {
         var edits = _opts.GetValueOrDefault("edits") ?? Path.Combine(repo, "pipeline", "config", "edits.json");
-        // the map folder name carries the area: "0.4.0-slice" / "0.4.0-village"
-        var fromMap = _map.MapVersion.Contains('-') ? _map.MapVersion[(_map.MapVersion.LastIndexOf('-') + 1)..] : "";
-        var area = _opts.GetValueOrDefault("area") ?? (fromMap is "slice" or "village" ? fromMap : "slice");
-        if (area is not ("slice" or "village")) { GD.PrintErr($"--area must be slice or village, got '{area}'"); area = "slice"; }
         _watcher = new EditsWatcher
         {
             Name = "EditsWatcher",
             EditsPath = Path.GetFullPath(edits),
-            Area = area,
             PipelineDir = Path.Combine(repo, "pipeline"),
             StatePath = Path.GetFullPath(_opts.GetValueOrDefault("state") ?? Path.Combine(repo, "out", "editor-state.json")),
             Map = _map,

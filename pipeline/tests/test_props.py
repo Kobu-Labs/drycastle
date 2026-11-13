@@ -151,18 +151,16 @@ def test_run_props_writes_files_deterministically(ws, tmp_path) -> None:
     assert box(0, 0, 250, 250).contains(Point(doc["spawns"][0]["x"], doc["spawns"][0]["y"]))
 
 
-def test_area_overlay_only_applies_to_that_area(tmp_path) -> None:
-    slice_props = load_section("props", area="slice")
-    village = load_section("props", area="village")
-    assert slice_props == load_section("props")
-    assert slice_props["fences"]["collision"] is True and slice_props["trees"]["max_per_chunk"] == 0
-    assert village["fences"]["collision"] is False and village["trees"]["max_per_chunk"] == 0
-    # keys the overlay does not mention keep their value
-    assert village["fences"]["height_m"] == slice_props["fences"]["height_m"]
+def test_map_props_defaults_are_the_village_values() -> None:
+    props = load_section("props")
+    assert props["fences"]["collision"] is False and props["trees"]["max_per_chunk"] == 0
+
+
+def test_custom_rules_file_is_merged_over_the_shipped_defaults(tmp_path) -> None:
     custom = tmp_path / "r.yaml"
-    custom.write_text(yaml.safe_dump({"areas": {"village": {"spawns": {"count": 7}}}}))
-    assert load_section("spawns", custom, "village")["count"] == 7
-    assert load_section("spawns", custom, "slice")["count"] == load_section("spawns")["count"]
+    custom.write_text(yaml.safe_dump({"spawns": {"count": 7}}))
+    assert load_section("spawns", custom)["count"] == 7
+    assert load_section("spawns", custom).keys() == load_section("spawns").keys()
 
 
 def test_cap_trees_is_per_chunk_stable_and_keeps_detected_trees() -> None:

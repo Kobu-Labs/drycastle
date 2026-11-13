@@ -6,7 +6,7 @@ namespace Drycastle.Shooter;
 /// <summary>
 /// Shooter entry point. Args after "--":
 ///   --role server|client      (default client; the server is for --headless)
-///   --map DIR                 map folder (else DRYCASTLE_MAP, else ../../out/map relative to the project)
+///   --map DIR                 map folder (else DRYCASTLE_MAP, else ../../out/village/map relative to the project)
 ///   --connect HOST[:PORT] --name NAME   join a server (default port 27015); --headless-bot [--bot-seconds N] scripts a walk
 ///   --port N                  server listen port (default 27015); --quit-after SECONDS ends the server with a verdict
 ///   --net-sim latency_ms=50,jitter_ms=5,loss=0.03   server and client: delay every outgoing packet, drop that share of the unreliable ones (see NetSim.cs)
@@ -201,11 +201,22 @@ public partial class Shooter : Node3D
     /// <summary>The camouflage customiser for one loadout slot (-1: the active one), from the main menu or the loadout editor (#141).</summary>
     CustomizationScreen NewCustomization(int slot) => new(() => _client, () => _data ??= LoadData(), slot);
 
+    ulong _lastStepFrameMs;
+
+    /// <summary>
+    /// Sets the bar, and lets two frames draw only when the work since the last drawn frame has used up a frame's budget.
+    /// Waiting two frames after every step made the load frame-bound (718 steps x 2 frames x 16.7 ms = 24 s of a 26 s join at 60 Hz)
+    /// while the work itself is about 5 s.
+    /// </summary>
     async Task Step(LoadingScreen ld, string key, float f)
     {
         ld.Set(key, f);
+        if (Time.GetTicksMsec() - _lastStepFrameMs < StepBudgetMs) return;
         for (var i = 0; i < 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        _lastStepFrameMs = Time.GetTicksMsec();
     }
+
+    const ulong StepBudgetMs = 12;
 
     /// <summary>
     /// Parses the held-weapon, character and vehicle models and loads the shaders a match would otherwise load on first use

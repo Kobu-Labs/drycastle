@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fence panel smoke test (`make viewer-panel-smoke`).
 
-Exports a fresh slice map into a scratch directory (a copy of data/work, so nothing under data/ or out/ is
+Exports a fresh map into a scratch directory (a copy of data/village/work, so nothing under data/ or out/ is
 touched), seeds a scratch edits.json, starts the viewer headless with `--panel-smoke` (ViewerPanelSmoke.cs:
 drives the panel's controller API, applies, waits for the watcher round trip, copies the edits file after every
 Apply into <scratch>/steps) and then checks those files with the Python validator (`edits.validate`), the
@@ -70,7 +70,7 @@ def fence_sections(parcel_id: str, work: Path, scratch: Path) -> list[dict]:
     probe_edits = scratch / "probe_edits.json"
     probe_edits.write_text(text({parcel_id: {"fence": CUSTOM_C}}, {}))
     out = scratch / "probe_fragment.json"
-    r = es.uv("-m", "drycastle_pipeline", "parcel-run", "--area", "slice", "--parcel", parcel_id,
+    r = es.uv("-m", "drycastle_pipeline", "parcel-run", "--parcel", parcel_id,
               "--edits", str(probe_edits), "--work", str(work), "--out", str(out))
     if r.returncode != 0:
         return []
@@ -103,7 +103,7 @@ def main() -> int:
     work = scratch / "work"
     if work.exists():
         shutil.rmtree(work)
-    shutil.copytree(REPO / "data" / "work", work)
+    shutil.copytree(REPO / "data" / "village" / "work", work)
     pdoc = json.loads((work / "parcels.json").read_text())
     origin = pdoc["origin_epsg5514"]
     parcels = pdoc["parcels"]
@@ -193,7 +193,7 @@ def main() -> int:
     }
     (scratch / "plan.json").write_text(json.dumps(plan, indent=1))
 
-    r = es.uv("-m", "drycastle_pipeline", "export", "--area", "slice", "--out", str(scratch / "map"), "--work", str(work))
+    r = es.uv("-m", "drycastle_pipeline", "export", "--out", str(scratch / "map"), "--work", str(work))
     print(r.stdout.strip())
     if r.returncode != 0:
         print(r.stderr)
@@ -210,7 +210,7 @@ def main() -> int:
     code = 0
     if not args.skip_smoke:
         cmd = [args.godot, "--headless", "--path", str(REPO / "godot/viewer"), "--",
-               "--map", str(scratch / "map"), "--seed", args.seed, "--area", "slice",
+               "--map", str(scratch / "map"), "--seed", args.seed,
                "--edits", str(edits), "--state", str(scratch / "editor-state.json"),
                "--panel-smoke", "--panel-smoke-plan", str(scratch / "plan.json")]
         code = subprocess.run(cmd).returncode
@@ -299,7 +299,7 @@ def shots(args, scratch: Path, origin, c_id: str, probe1: dict) -> int:
         shot_edits.write_text(text(parcels, {}))
         edits = scratch / "edits_shot.json"
         edits.write_text(text({}, {}))
-        cmd = [args.godot, "--path", str(REPO / "godot/viewer"), "--", "--map", str(scratch / "map"), "--area", "slice",
+        cmd = [args.godot, "--path", str(REPO / "godot/viewer"), "--", "--map", str(scratch / "map"),
                "--edits", str(edits), "--state", str(scratch / "editor-state-shot.json"),
                "--editor-shot", str(out / name), "--select", c_id, "--shot-at", c_id, "--shot-edits", str(shot_edits),
                "--shot-focus", f"{probe1['x']:.2f},{probe1['y']:.2f}", "--shot-dist", "40", *extra]

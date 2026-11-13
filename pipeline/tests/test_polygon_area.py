@@ -1,4 +1,4 @@
-"""The map outline: an arbitrary polygon instead of the square around the centre."""
+"""The map outline: the polygon is the only map outline."""
 
 import json
 from pathlib import Path
@@ -6,35 +6,34 @@ from pathlib import Path
 import numpy as np
 import pytest
 from pyproj import Transformer
-from shapely.geometry import box
+from shapely.geometry import Polygon, box
 
-from drycastle_pipeline.config import ConfigError, load_slice_config
+from drycastle_pipeline.config import ConfigError, load_map_config
 from drycastle_pipeline.frame import Frame
 from drycastle_pipeline.geo import METRIC_CRS, bbox_of_polygon
-from drycastle_pipeline.normalise import area_polygon, fetched_bounds, run_normalise
+from drycastle_pipeline.normalise import area_polygon, run_normalise
 from drycastle_pipeline.terrain import clip_to_outline, grid_from_samples
 
 RING = [[-589500, -1250500], [-588000, -1250500], [-588000, -1249000], [-589500, -1249500]]
 
 
-def test_village_polygon_is_read_and_a_closing_point_is_dropped(tmp_path: Path) -> None:
-    f = tmp_path / "s.yaml"
-    f.write_text(f"osm_way: 1\nvillage:\n  margin_m: 10\n  polygon: {RING + [RING[0]]}\n")
-    cfg = load_slice_config(f, "village")
+def test_polygon_is_read_and_a_closing_point_is_dropped(tmp_path: Path) -> None:
+    f = tmp_path / "m.yaml"
+    f.write_text(f"osm_way: 1\nmargin_m: 10\npolygon: {RING + [RING[0]]}\n")
+    cfg = load_map_config(f)
     assert cfg.polygon == tuple(tuple(map(float, p)) for p in RING)
     assert cfg.margin_m == 10.0
-    assert load_slice_config(f).polygon is None  # the slice never has one
 
 
 @pytest.mark.parametrize(
     "polygon",
     ["[[0, 0], [1, 1]]", "[[0, 0], [10, 10], [10, 0], [0, 10]]", "[[0, 0, 1], [1, 1], [2, 0]]", "5"],
 )
-def test_bad_village_polygon_is_rejected(tmp_path: Path, polygon: str) -> None:
+def test_bad_polygon_is_rejected(tmp_path: Path, polygon: str) -> None:
     f = tmp_path / "s.yaml"
-    f.write_text(f"osm_way: 1\nvillage:\n  polygon: {polygon}\n")
+    f.write_text(f"osm_way: 1\npolygon: {polygon}\n")
     with pytest.raises(ConfigError):
-        load_slice_config(f, "village")
+        load_map_config(f)
 
 
 def test_bbox_of_polygon_covers_the_polygon_plus_margin() -> None:
@@ -51,34 +50,34 @@ def test_bbox_of_polygon_covers_the_polygon_plus_margin() -> None:
         bbox_of_polygon([tuple(p) for p in RING], -1)
 
 
-def test_fetched_bounds_is_the_polygon_when_there_is_one(tmp_path: Path) -> None:
+def test_area_polygon_is_read_from_area_json(tmp_path: Path) -> None:
     raw = tmp_path / "raw"
     raw.mkdir()
-    assert area_polygon(raw) is None
+    with pytest.raises(FileNotFoundError):
+        area_polygon(raw)
     (raw / "area.json").write_text(
         json.dumps({"bbox_wgs84": [16.85, 48.39, 16.87, 48.41], "polygon_epsg5514": RING})
     )
-    bounds = fetched_bounds(raw, "village")
-    assert bounds[0] == bounds[-1] and len(bounds) == len(RING) + 1
-    assert [-589500.0, -1250500.0] in bounds
+    poly = area_polygon(raw)
+    assert poly.equals(Polygon(RING))
 
 
 def test_normalise_keeps_only_what_touches_the_polygon(tmp_path: Path) -> None:
     lon, lat = 16.86, 48.40
     frame0 = Frame.at(lon, lat)
     ox, oy = frame0.origin_x, frame0.origin_y
-    # polygon: a 200 m square 100..300 m east of the origin (absolute S-JTSK)
+    # polygon: a 200 x 200 m rectangle 100..300 m east of the origin (absolute S-JTSK)
     ring = [[ox + 100, oy - 100], [ox + 300, oy - 100], [ox + 300, oy + 100], [ox + 100, oy + 100]]
     raw, work = tmp_path / "raw", tmp_path / "work"
     raw.mkdir()
     work.mkdir()
-    (raw / "slice_centre.json").write_text(json.dumps({"lon": lon, "lat": lat}))
+    (raw / "centre.json").write_text(json.dumps({"lon": lon, "lat": lat}))
     (raw / "area.json").write_text(
         json.dumps({"bbox_wgs84": [0, 0, 1, 1], "polygon_epsg5514": ring})
     )
     back = Transformer.from_crs("EPSG:5514", "EPSG:4326", always_xy=True)
 
-    def way(i: int, x: float, y: float) -> dict:  # 10 m square building at local (x, y)
+    def way(i: int, x: float, y: float) -> dict:  # 10 x 10 m building at local (x, y)
         corners = ((0, 0), (10, 0), (10, 10), (0, 10), (0, 0))
         pts = [back.transform(ox + x + dx, oy + y + dy) for dx, dy in corners]
         return {
@@ -90,7 +89,7 @@ def test_normalise_keeps_only_what_touches_the_polygon(tmp_path: Path) -> None:
     elements = [way(1, 150, 0), way(2, -50, 0), way(3, 400, 0), way(4, 295, 0)]
     (raw / "osm.json").write_text(json.dumps({"elements": elements}))
     (raw / "parcels.geojson").write_text(json.dumps({"features": []}))
-    counts = run_normalise(raw, work, "village")
+    counts = run_normalise(raw, work)
     assert counts["buildings"] == 2
     feats = json.loads((work / "normalised/buildings.geojson").read_text())["features"]
     assert {ft["properties"]["osm_id"] for ft in feats} == {"w1", "w4"}
@@ -99,16 +98,16 @@ def test_normalise_keeps_only_what_touches_the_polygon(tmp_path: Path) -> None:
     assert frame["area_polygon_epsg5514"][0] == [round(ox + 100, 2), round(oy - 100, 2)]
 
 
-def test_square_area_has_no_outline(tmp_path: Path) -> None:
+def test_normalise_without_an_outline_is_an_error(tmp_path: Path) -> None:
     raw, work = tmp_path / "raw", tmp_path / "work"
     raw.mkdir()
     work.mkdir()
-    (raw / "slice_centre.json").write_text(json.dumps({"lon": 16.86, "lat": 48.40}))
+    (raw / "centre.json").write_text(json.dumps({"lon": 16.86, "lat": 48.40}))
     (raw / "area.json").write_text(json.dumps({"bbox_wgs84": [16.85, 48.39, 16.87, 48.41]}))
     (raw / "osm.json").write_text(json.dumps({"elements": []}))
     (raw / "parcels.geojson").write_text(json.dumps({"features": []}))
-    run_normalise(raw, work, "village")
-    assert json.loads((work / "frame.json").read_text())["area_polygon_epsg5514"] is None
+    with pytest.raises(FileNotFoundError):
+        run_normalise(raw, work)
 
 
 def test_clip_to_outline_cuts_coverage_and_mesh_but_keeps_a_cell_margin() -> None:

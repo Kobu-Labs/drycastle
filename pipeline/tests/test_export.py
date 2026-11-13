@@ -96,7 +96,7 @@ def test_parcels_and_manifest(workspace) -> None:
     assert [p["id"] for p in parcels] == ["P-0001", "P-0002", "P-0003"]
     assert parcels[0]["buildings"] == ["w1"] and parcels[2]["buildings"] == []
     m = json.loads((out / "manifest.json").read_text())
-    assert m["map_version"] == "0.10.0-slice"
+    assert m["map_version"] == "0.10.0-village"
     assert m["attribution"] == ["A", "B"] and m["inputs"]["raw"] == {"osm.json": "ab"}
     assert m["props_layout"] == "per_parcel"
     pj = json.loads((out / "parcels.json").read_text())
@@ -120,31 +120,22 @@ def test_export_is_byte_deterministic(workspace, tmp_path) -> None:
     shutil.rmtree(second)
 
 
-def test_village_area_manifest_and_lighter_props(tmp_path) -> None:
+def test_map_manifest_and_lighter_props(tmp_path) -> None:
     from drycastle_pipeline.props import run_props
     from tests.synthetic import make_workspace
 
     ws = make_workspace(tmp_path)
-    args = (ws["work"], tmp_path / "v", ws["raw"], DEFAULT_RULES, ws["overrides"])
-
-    def counts(area: str) -> dict:
-        run_props(ws["work"], DEFAULT_RULES, area=area)
-        return run_export(*args[:1], tmp_path / area, *args[2:], area=area)
-
-    slice_m, village = counts("slice"), counts("village")
-    assert village["map_version"] == "0.10.0-village"
-    assert slice_m["map_version"] == "0.10.0-slice"
-    def has_collision(m: dict) -> bool:
-        return any(n.endswith("props_collision") for c in m["chunks"] for n in c["triangles"])
-
-    assert has_collision(slice_m)
-    assert not has_collision(village)
-    # the village export is byte-deterministic too
-    run_export(*args[:1], tmp_path / "again", *args[2:], area="village")
-    files = [p for p in (tmp_path / "village").rglob("*") if p.is_file()]
+    run_props(ws["work"], DEFAULT_RULES)
+    m = run_export(ws["work"], tmp_path / "map", ws["raw"], DEFAULT_RULES, ws["overrides"])
+    assert m["map_version"] == "0.10.0-village"
+    # the map's props carry no collision: fences and trees are lighter than a full build
+    assert not any(n.endswith("props_collision") for c in m["chunks"] for n in c["triangles"])
+    # the export is byte-deterministic too
+    run_export(ws["work"], tmp_path / "again", ws["raw"], DEFAULT_RULES, ws["overrides"])
+    files = [p for p in (tmp_path / "map").rglob("*") if p.is_file()]
     assert files
     for p in files:
-        assert p.read_bytes() == (tmp_path / "again" / p.relative_to(tmp_path / "village")).read_bytes()
+        assert p.read_bytes() == (tmp_path / "again" / p.relative_to(tmp_path / "map")).read_bytes()
 
 
 def test_export_writes_prim_glbs_and_manifest_entries(workspace) -> None:
@@ -193,10 +184,10 @@ def test_export_run_honours_out_and_work(workspace, tmp_path, monkeypatch) -> No
     from dataclasses import replace
 
     from drycastle_pipeline import export as export_mod
-    from drycastle_pipeline.config import area_paths
+    from drycastle_pipeline.config import map_paths
 
-    paths = replace(area_paths("slice"), raw=workspace["raw"])
-    monkeypatch.setattr(export_mod, "area_paths", lambda area: paths)
+    paths = replace(map_paths(), raw=workspace["raw"])
+    monkeypatch.setattr(export_mod, "map_paths", lambda *_a, **_k: paths)
     target = tmp_path / "custom_out"
     assert export_mod.run(out=str(target), work=str(workspace["work"])) == 0
     assert (target / "manifest.json").is_file()

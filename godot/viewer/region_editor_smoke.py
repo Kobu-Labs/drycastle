@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Region tool smoke test (`make viewer-region-editor-smoke`).
 
-Exports a fresh slice map (with one seeded region R-0001) into a scratch directory (nothing under data/ or out/ is
+Exports a fresh map (with one seeded region R-0001) into a scratch directory (nothing under data/ or out/ is
 touched), computes the exact edits.json text the Python writer (`edits.dump_text`) produces after every step of the
 scenario, then starts the viewer headless with `--region-editor-smoke` (ViewerRegionEditorSmoke.cs): it draws, closes,
 colours, recolours, drags a corner (valid and self-crossing), deletes with confirm, undoes and redoes every step and
@@ -43,11 +43,11 @@ def main() -> int:
     scratch.mkdir(parents=True, exist_ok=True)
     print(f"region editor smoke: scratch directory {scratch}")
 
-    doc = json.loads((REPO / "data" / "work" / "parcels.json").read_text())
+    doc = json.loads((REPO / "data" / "village" / "work" / "parcels.json").read_text())
     ox, oy = doc["origin_epsg5514"]
     plots = sorted((p for p in doc["parcels"] if p["kind"] == "building_plot"), key=lambda p: p["id"])
     if len(plots) < 2:
-        sys.exit("region editor smoke: the slice has too few building plots")
+        sys.exit("region editor smoke: the map has too few building plots")
 
     def half(v: float) -> float:
         return round(v * 2) / 2
@@ -87,7 +87,7 @@ def main() -> int:
     }
     (scratch / "plan.json").write_text(json.dumps(plan, indent=1))
 
-    r = es.uv("-m", "drycastle_pipeline", "export", "--area", "slice", "--out", str(scratch / "map"), "--edits", str(edits))
+    r = es.uv("-m", "drycastle_pipeline", "export", "--out", str(scratch / "map"), "--edits", str(edits))
     print(r.stdout.strip())
     if r.returncode != 0:
         print(r.stderr)
@@ -97,7 +97,7 @@ def main() -> int:
         print(build.stdout[-2000:])
         return 1
     cmd = [args.godot, "--headless", "--path", str(REPO / "godot/viewer"), "--",
-           "--map", str(scratch / "map"), "--seed", args.seed, "--area", "slice",
+           "--map", str(scratch / "map"), "--seed", args.seed,
            "--edits", str(edits), "--state", str(scratch / "editor-state.json"),
            "--region-editor-smoke", "--region-editor-smoke-plan", str(scratch / "plan.json")]
     code = subprocess.run(cmd).returncode

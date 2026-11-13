@@ -1,6 +1,6 @@
 """Per-region run: the meshes of some regions only, as a GLB (for the editor's hot reload).
 
-``python -m drycastle_pipeline region-run --area village --region R-0001 --glb r.glb`` loads the
+``python -m drycastle_pipeline region-run --region R-0001 --glb r.glb`` loads the
 work files, applies ``edits.json`` exactly like the export and rebuilds only the named regions
 (none named: all). The GLB holds one node ``region_<ID>`` per region in the chunk files' frame (add
 it at the map root); unlike the chunk files, a region that spans chunks is one node here. A JSON
@@ -20,7 +20,7 @@ import sys
 import time
 from pathlib import Path
 
-from drycastle_pipeline.config import DEFAULT_AREA, area_paths
+from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
 from drycastle_pipeline.ground import ground_types
 from drycastle_pipeline.parcel_run import _EMPTY_GLB
@@ -46,7 +46,6 @@ def run_region_run(
     edits_path: Path = DEFAULT_EDITS,
     rules_path: Path = DEFAULT_RULES,
     glb_path: Path | None = None,
-    area: str | None = None,
 ) -> dict:
     t0 = time.perf_counter()
     terrain, _ = load_terrain(work_dir, mmap=True)
@@ -54,7 +53,7 @@ def run_region_run(
     graph_path = work_dir / "roads.json"
     graph = json.loads(graph_path.read_text()) if graph_path.is_file() else None
     edits = load_edits(edits_path)
-    plan = plan_regions(edits, parcels_doc.get("origin_epsg5514"), terrain, types=ground_types(rules_path, area, edits_path))
+    plan = plan_regions(edits, parcels_doc.get("origin_epsg5514"), terrain, types=ground_types(rules_path, edits_path))
     for warning in plan.warnings:
         print(f"region-run: warning: {warning}", file=sys.stderr)
     named = set(regions) if regions else set(plan.regions)
@@ -87,7 +86,6 @@ def run_region_run(
 
 def run(
     regions: list[str] | None = None,
-    area: str = DEFAULT_AREA,
     edits: str | None = None,
     out: str | None = None,
     glb: str | None = None,
@@ -96,11 +94,10 @@ def run(
     edits_path = Path(edits) if edits else DEFAULT_EDITS
     try:
         summary = run_region_run(
-            Path(work) if work else area_paths(area).work,
+            Path(work) if work else map_paths().work,
             regions or [],
             edits_path,
             glb_path=Path(glb) if glb else None,
-            area=area,
         )
     except FileNotFoundError as exc:
         print(

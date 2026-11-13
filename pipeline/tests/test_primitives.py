@@ -12,7 +12,7 @@ from drycastle_pipeline.assets import (
 from drycastle_pipeline.buildings import hex_to_rgb
 from drycastle_pipeline.primitives import PRIMITIVES, build_primitive
 
-MANIFEST = load_manifest()
+MANIFEST = load_manifest(private=False)  # the public library: the private packs have their own rules
 # Packs whose terms the owner has not confirmed yet: listed and placeable, but flagged UNVERIFIED with a NOTICE.txt instead of CC0 + LICENSE.txt.
 # Everything else must stay CC0. Remove a pack from here once its terms are confirmed.
 UNVERIFIED_PACKS = {"welcome-sign"}

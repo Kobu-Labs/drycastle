@@ -60,12 +60,10 @@ def _document(path: Path) -> dict:
     return _parsed(str(path), st.st_mtime_ns, st.st_size)
 
 
-def load_section(name: str, path: Path = DEFAULT_RULES, area: str | None = None) -> dict:
+def load_section(name: str, path: Path = DEFAULT_RULES) -> dict:
     """A top-level section of rules.yaml, merged over the same section of the shipped rules.yaml.
 
-    The shipped file is the single source of defaults, so a custom file may be partial. With
-    ``area`` the section is further overlaid by ``areas.<area>.<name>`` (shipped file first, then
-    the custom one), so the village can use lighter settings than the slice.
+    The shipped file is the single source of defaults, so a custom file may be partial.
     """
     shipped = _document(DEFAULT_RULES)
     docs = [shipped]
@@ -74,8 +72,5 @@ def load_section(name: str, path: Path = DEFAULT_RULES, area: str | None = None)
     out: dict = {}
     for doc in docs:
         out = _merge(out, doc.get(name) or {})
-    if area:
-        for doc in docs:
-            out = _merge(out, ((doc.get("areas") or {}).get(area) or {}).get(name) or {})
     # _merge shares the leaf values with the cached documents: hand out a copy
     return copy.deepcopy(out)

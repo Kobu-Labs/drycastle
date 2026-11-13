@@ -17,7 +17,7 @@ from drycastle_pipeline.roads import edge_lines
 from drycastle_pipeline.rules import load_section
 from tests.synthetic import make_terrain, make_workspace
 
-LAMPS = load_section("lamps")
+LAMPS = {**load_section("lamps"), "enabled": True}  # the map keeps its lamps on for these tests
 
 
 @pytest.fixture
@@ -95,15 +95,14 @@ def test_osm_lamps_kept_unless_under_a_building_or_off_coverage(ws) -> None:
     assert kept[0]["x"] == 120.0 and kept[0]["parcel"] == "P-0002"
 
 
-def test_lamps_can_be_switched_off_and_the_village_has_them_off(ws) -> None:
+def test_lamps_can_be_switched_off(ws) -> None:
     assert lamps_for(ws, [osm_lamp("n1", 120.0, 60.0)])  # on by default
     off = make_lamps(
         ws["parcels"], ws["buildings"], ws["graph"], [osm_lamp("n1", 120.0, 60.0)], ws["terrain"],
         {**LAMPS, "enabled": False}, 250.0,
     )
     assert off == []  # rule lamps and OSM lamps alike
-    assert load_section("lamps")["enabled"] is True
-    assert load_section("lamps", area="village")["enabled"] is False
+    assert load_section("lamps")["enabled"] is False  # the map ships with its lamps off
 
 
 def test_rule_lamps_yield_to_nearby_osm_lamps(ws) -> None:
@@ -127,7 +126,7 @@ def test_lamp_records_have_the_fields_the_game_reads(ws) -> None:
 
 def test_run_props_writes_lamps_json_and_export_copies_it(ws) -> None:
     rules = ws["work"].parent / "rules.yaml"
-    rules.write_text(yaml.safe_dump({"spawns": {"count": 4}}))
+    rules.write_text(yaml.safe_dump({"spawns": {"count": 4}, "lamps": {"enabled": True}}))
     counts = run_props(ws["work"], rules)
     assert counts["lamps"] > 0
     doc = json.loads((ws["work"] / "lamps.json").read_text())

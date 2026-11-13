@@ -21,14 +21,14 @@ generated from them automatically. They are for human eyes only.
 
 ```
 cd pipeline
-uv run python -m drycastle_pipeline.streetview --area village                 # coverage report, free
-uv run python -m drycastle_pipeline.streetview --area village --building w378920327 --download
-uv run python -m drycastle_pipeline.streetview --area village --download --max-images 200
+uv run python -m drycastle_pipeline.streetview                 # coverage report, free
+uv run python -m drycastle_pipeline.streetview --building w378920327 --download
+uv run python -m drycastle_pipeline.streetview --download --max-images 200
 ```
 
 For each building it probes 8 points around it (free metadata calls), keeps panoramas that look at
 the building from different sides (up to `--views`, default 3), and with `--download` saves 640x640
-frames to `data/<area>/streetview/<building id>/<n>.jpg`. `index.json` records pano id, capture
+frames to `data/village/streetview/<building id>/<n>.jpg`. `index.json` records pano id, capture
 date, distance, heading and copyright. Each downloaded image costs about $0.007; `--max-images`
 (default 100) caps a run and existing files are skipped.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Editor mode smoke test (`make viewer-editor-smoke`).
 
-Exports a fresh slice map into a scratch directory (a copy of data/work, so nothing under data/ or out/
+Exports a fresh map into a scratch directory (a copy of data/village/work, so nothing under data/ or out/
 is touched), seeds a scratch edits.json (an existing group, a stale parcel entry), starts the viewer
 headless with `--editor-smoke` (see ViewerEditorSmoke.cs: drives the editor APIs, checks the saved files,
 outlines, editor-state.json and the walk-mode round trip) and then checks the files the viewer saved
@@ -103,7 +103,7 @@ def main() -> int:
     work = scratch / "work"
     if work.exists():
         shutil.rmtree(work)
-    shutil.copytree(REPO / "data" / "work", work)
+    shutil.copytree(REPO / "data" / "village" / "work", work)
     parcels = json.loads((work / "parcels.json").read_text())["parcels"]
     by_id = {p["id"]: p for p in parcels}
 
@@ -153,7 +153,7 @@ def main() -> int:
     print(f"editor smoke: group {a_id}+{b_id} ({n_shared} shared edges), existing group {c_id}+{d_id}")
     (scratch / "plan.json").write_text(json.dumps(plan, indent=1))
 
-    r = uv("-m", "drycastle_pipeline", "export", "--area", "slice", "--out", str(scratch / "map"), "--work", str(work))
+    r = uv("-m", "drycastle_pipeline", "export", "--out", str(scratch / "map"), "--work", str(work))
     print(r.stdout.strip())
     if r.returncode != 0:
         print(r.stderr)
@@ -163,7 +163,7 @@ def main() -> int:
         print(build.stdout[-2000:])
         return 1
     cmd = [args.godot, "--headless", "--path", str(REPO / "godot/viewer"), "--",
-           "--map", str(scratch / "map"), "--seed", args.seed, "--area", "slice",
+           "--map", str(scratch / "map"), "--seed", args.seed,
            "--edits", str(edits), "--state", str(scratch / "editor-state.json"),
            "--editor-smoke", "--editor-smoke-plan", str(scratch / "plan.json")]
     code = subprocess.run(cmd).returncode

@@ -120,6 +120,7 @@ public sealed partial class MapLoader
         WindowsJson = File.Exists(windows) ? File.ReadAllText(windows) : ""; // only maps with hand-described building detail have it
         var bunkers = Path.Combine(mapDir, "bunkers.json");
         BunkersJson = File.Exists(bunkers) ? File.ReadAllText(bunkers) : ""; // only maps with an enterable bunker have it
+        ReadAttributePoints(mapDir, manifest.RootElement); // only maps with an area that carries a runtime attribute have it
         yield return 0.03f;
 
         var tPhase = Time.GetTicksMsec();

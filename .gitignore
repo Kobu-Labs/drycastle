@@ -21,7 +21,7 @@ obj/
 answers.md
 .claude/worktrees/
 .claude/settings.local.json
-pipeline/config/slice.local.yaml
+pipeline/config/map.local.yaml
 
 # local secrets
 .env
@@ -32,4 +32,6 @@ assets/drycastle-rozhlas/source/
 assets/drycastle-rozhlas/parts/
 
 # paid Synty assets (private; never commit)
-assets-private
+assets-private/
+# linked private packs (res://Assets/Synty/<Pack> -> assets-private/...)
+godot/*/Assets/
