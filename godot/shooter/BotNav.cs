@@ -69,7 +69,9 @@ public sealed class BotNav
             nav._meshes.Add(m);
             nav.Polygons += m.GetPolygonCount();
         }
-        // the map takes the regions in at the next physics frame; players (and so bots) join later than that
+        // take the regions in now: citizens build this map on first use and ask for routes in the same frame, before the next
+        // physics frame would have synchronised it (the query then fails: "made before first map synchronization")
+        NavigationServer3D.MapForceUpdate(nav._map);
         nav._query = new NavigationPathQueryParameters3D { Map = nav._map, PathSearchMaxPolygons = 0 };
         nav.BuildSeconds = sw.Elapsed.TotalSeconds;
         return nav;
