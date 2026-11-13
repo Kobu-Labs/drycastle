@@ -6,9 +6,13 @@ changes the position is written to ``out/streetview-position.json``; the viewer 
 file, puts the character there and, in the top-down view (T), draws a red point under it
 (``godot/viewer/StreetViewFollow.cs``). No model and no MCP server is involved.
 
-With ``--sketch`` the same position is also kept as a point and a short view line in the sketch
-``STREETVIEW`` of ``out/sketch.json`` (what Claude reads for "pole here"); each move is then one undo step
-in the editor, so it is off by default.
+Points (only with ``--points``): when you stop and look at something (the view stays put for ``--dwell``
+seconds), a permanent point is dropped in the sketch ``POLES`` of ``out/sketch.json``, at the spot you are
+looking at (``--ahead`` metres along the view; ``--at camera`` puts it where you stand instead). Place the poles
+on them later (the editor's Sketch tool shows them, Claude reads them with get_sketch).
+
+With ``--sketch`` the position is also kept as one moving point and a short view line in the sketch
+``STREETVIEW`` (each move is then one undo step in the editor, so it is off by default).
 
 Needs a Chrome with its debugging port open (the script can start one with its own throw-away profile):
 
@@ -38,6 +42,7 @@ from pyproj import Transformer
 from drycastle_pipeline import sketchfile
 
 SKETCH_NAME = "STREETVIEW"
+POINTS_SKETCH = "POLES"
 OUT_DIR = Path(__file__).resolve().parents[3] / "out"
 DEFAULT_SKETCH_FILE = OUT_DIR / "sketch.json"
 DEFAULT_POSITION_FILE = OUT_DIR / "streetview-position.json"
@@ -63,19 +68,21 @@ def parse_maps_url(url: str) -> tuple[float, float, float | None] | None:
     return float(m.group(1)), float(m.group(2)), heading
 
 
-def to_sketch(lat: float, lon: float, heading: float | None) -> tuple[list[float], list[list[float]] | None]:
+def to_sketch(
+    lat: float, lon: float, heading: float | None, ahead_m: float = VIEW_LINE_M
+) -> tuple[list[float], list[list[float]] | None]:
     """The S-JTSK point and, when the heading is known, the two ends of the view line.
 
-    The view line is made on the globe (a few metres along the bearing) and projected, so it points where the
-    camera does whatever the grid convergence of the projection.
+    The view line is made on the globe (``ahead_m`` metres along the bearing) and projected, so it points where
+    the camera does whatever the grid convergence of the projection.
     """
     x, y = _TO_JTSK.transform(lon, lat)
     here = [round(x, 3), round(y, 3)]
     if heading is None:
         return here, None
     brg = math.radians(heading)
-    dlat = VIEW_LINE_M * math.cos(brg) / 111_320.0
-    dlon = VIEW_LINE_M * math.sin(brg) / (111_320.0 * math.cos(math.radians(lat)))
+    dlat = ahead_m * math.cos(brg) / 111_320.0
+    dlon = ahead_m * math.sin(brg) / (111_320.0 * math.cos(math.radians(lat)))
     fx, fy = _TO_JTSK.transform(lon + dlon, lat + dlat)
     return here, [here, [round(fx, 3), round(fy, 3)]]
 
@@ -137,6 +144,56 @@ def update_sketch(path: Path, point: list[float], view: list[list[float]] | None
         sketchfile.write(path, doc)
 
 
+def add_point(path: Path, point: list[float], sketch: str = POINTS_SKETCH) -> str:
+    """Append a permanent point to ``sketch`` (made when new) of the sketch file; its id (A, B, ...)."""
+    with sketchfile.lock(path):
+        try:
+            doc = sketchfile.read(path) or sketchfile.empty_doc()
+        except sketchfile.SketchFileError:
+            doc = sketchfile.empty_doc()
+        name = sketchfile.sketch_of(doc, sketch)
+        if name is None:
+            name = sketch
+            doc["sketches"].append(name)
+        pid = sketchfile.new_point_id(doc)
+        doc["points"].append({"id": pid, "x": point[0], "y": point[1], "sketch": name})
+        sketchfile.write(path, doc)
+    return pid
+
+
+class PointDropper:
+    """Decides when a view is a point: it has stayed put for ``dwell_s`` and is not where the last point went.
+
+    ``feed`` is called every poll with the current address of the tab (parsed) and the time; it returns the S-JTSK
+    point to drop, or None. A view that changes starts the wait again, so walking or turning drops nothing; stopping
+    and looking at a pole does. ``at`` is "aim" (``ahead_m`` along the view, needs a heading) or "camera".
+    """
+
+    def __init__(self, dwell_s: float = 2.0, min_gap_m: float = 1.5, at: str = "aim", ahead_m: float = VIEW_LINE_M) -> None:
+        self.dwell_s, self.min_gap_m, self.at, self.ahead_m = dwell_s, min_gap_m, at, ahead_m
+        self._cur: tuple[float, float, float | None] | None = None
+        self._since = 0.0
+        self._done = False
+        self._last: list[float] | None = None
+
+    def feed(self, parsed: tuple[float, float, float | None] | None, now: float) -> list[float] | None:
+        if parsed != self._cur:
+            self._cur, self._since, self._done = parsed, now, False
+            return None
+        if parsed is None or self._done or now - self._since < self.dwell_s:
+            return None
+        self._done = True
+        lat, lon, heading = parsed
+        if self.at == "aim" and heading is None:
+            return None  # not in Street View: there is no direction to look along
+        point, view = to_sketch(lat, lon, heading, self.ahead_m)
+        target = view[1] if self.at == "aim" and view is not None else point
+        if self._last is not None and math.hypot(target[0] - self._last[0], target[1] - self._last[1]) < self.min_gap_m:
+            return None
+        self._last = target
+        return target
+
+
 def tab_urls(port: int) -> list[str]:
     """Addresses of the page tabs of the Chrome on ``port`` (its DevTools HTTP endpoint)."""
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=2) as resp:
@@ -156,7 +213,10 @@ def launch_chrome(port: int, lat: float, lon: float) -> subprocess.Popen:
     )
 
 
-def follow(port: int, position_path: Path, sketch_path: Path | None, interval: float) -> None:
+def follow(
+    port: int, position_path: Path, sketch_path: Path | None, interval: float,
+    points_path: Path | None = None, dropper: PointDropper | None = None, points_sketch: str = POINTS_SKETCH,
+) -> None:
     last: tuple[float, float, float | None] | None = None
     warned = False
     while True:
@@ -169,6 +229,12 @@ def follow(port: int, position_path: Path, sketch_path: Path | None, interval: f
                 warned = True
             time.sleep(interval)
             continue
+        current = next((p for p in (parse_maps_url(u) for u in urls) if p), None)
+        if dropper is not None and points_path is not None:
+            spot = dropper.feed(current, time.monotonic())
+            if spot is not None:
+                pid = add_point(points_path, spot, points_sketch)
+                print(f"point {pid} in {points_sketch} at S-JTSK {spot[0]}, {spot[1]}", flush=True)
         for url in urls:
             parsed = parse_maps_url(url)
             if parsed and parsed != last:
@@ -191,6 +257,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sketch", nargs="?", type=Path, const=DEFAULT_SKETCH_FILE, default=None,
                     help="also keep the position as a point and a view line in this sketch.json (default out/sketch.json)")
     ap.add_argument("--interval", type=float, default=0.5, help="seconds between looks at the tab (default 0.5)")
+    ap.add_argument("--points", action="store_true", help="drop a permanent point when the view stays put (off by default)")
+    ap.add_argument("--points-sketch", default=POINTS_SKETCH, help=f"the sketch the points go to (default {POINTS_SKETCH})")
+    ap.add_argument("--dwell", type=float, default=2.0, help="seconds the view must stay put to drop a point (default 2)")
+    ap.add_argument("--ahead", type=float, default=VIEW_LINE_M, help=f"metres along the view where the point goes (default {VIEW_LINE_M:g})")
+    ap.add_argument("--at", choices=("aim", "camera"), default="aim", help="a point where you look (aim) or where you stand (camera)")
+    ap.add_argument("--min-gap", type=float, default=1.5, help="no new point within this many metres of the last one (default 1.5)")
     ap.add_argument("--launch", action="store_true", help="start a Chrome with its own profile on the village")
     ap.add_argument("--start", default="48.4024653,16.8607311", help="lat,lon the launched Chrome opens at")
     args = ap.parse_args(argv)
@@ -200,8 +272,14 @@ def main(argv: list[str] | None = None) -> int:
         chrome = launch_chrome(args.port, lat, lon)
     print(f"following Street View tabs on port {args.port} into {args.position_file}"
           + (f" and {args.sketch}" if args.sketch else "") + " (Ctrl-C stops)")
+    if not sketchfile.SKETCH_NAME.fullmatch(args.points_sketch):
+        sys.exit(f"{args.points_sketch!r} is not a sketch name: 1 to 24 letters, digits, _ or -")
+    dropper = PointDropper(args.dwell, args.min_gap, args.at, args.ahead) if args.points else None
+    points_path = args.sketch or DEFAULT_SKETCH_FILE
+    if dropper is not None:
+        print(f"points: stop and look for {args.dwell:g} s to drop one in sketch {args.points_sketch} ({args.at}) of {points_path}")
     try:
-        follow(args.port, args.position_file, args.sketch, args.interval)
+        follow(args.port, args.position_file, args.sketch, args.interval, points_path, dropper, args.points_sketch)
     except KeyboardInterrupt:
         pass
     finally:

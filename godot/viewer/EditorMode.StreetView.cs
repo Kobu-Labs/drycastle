@@ -3,7 +3,10 @@ using Godot;
 /// <summary>
 /// The character as the editor sees it. <see cref="StreetViewFollow"/> moves it (the editor keeps the walk-mode
 /// player frozen and hidden, so the move has to reach what F2 restores as well); in the top-down view (T) a red
-/// point marks the spot straight below it, drawn over everything so a roof or a tree does not hide it.
+/// point marks the spot straight below it, drawn over everything so a roof or a tree does not hide it. The editor's
+/// camera follows the character: the first position takes it to the top-down view above the character, then in the
+/// top-down view it stays centred on the character (at the height it has), and in any other view it moves by the
+/// same step as the character, so the view of the character does not change.
 /// </summary>
 public partial class EditorMode
 {
@@ -16,12 +19,31 @@ public partial class EditorMode
     public void PlacePlayer(Vector3 feet, float? yawDeg)
     {
         var yaw = yawDeg ?? Player.RotationDegrees.Y;
+        var before = Player.GlobalPosition;
+        var first = !_youPlaced;
         Player.GlobalPosition = feet;
         Player.RotationDegrees = new Vector3(0, yaw, 0);
         Player.Velocity = Vector3.Zero;
         // while the editor is open the player is parked: F2 puts it back where it was parked, so park it here
         if (Active) _savedPlayer = (feet, new Vector3(0, yaw, 0), 0f, _savedPlayer?.input ?? true);
         _youPlaced = true;
+        if (Active) FollowWithCamera(before, feet, first);
+    }
+
+    /// <summary>Bring the fly camera along with the character (see the class comment).</summary>
+    void FollowWithCamera(Vector3 before, Vector3 feet, bool first)
+    {
+        var cam = FlyCam.GlobalPosition;
+        if (TopDown) FlyCam.GlobalPosition = new Vector3(feet.X, cam.Y, feet.Z); // centred on the character, same height
+        else if (first)
+        {
+            // the first position: look straight down on the character (T takes the camera back to where it was)
+            _savedCam = (cam, _yaw, _pitch);
+            _pitch = -Mathf.Pi / 2;
+            FlyCam.GlobalPosition = new Vector3(feet.X, Map.GroundHeightOrMean(feet.X, feet.Z) + TopDownHeight, feet.Z);
+            ApplyCamRotation();
+        }
+        else FlyCam.GlobalPosition = cam + new Vector3(feet.X - before.X, 0, feet.Z - before.Z);
     }
 
     void UpdateYouDot()
