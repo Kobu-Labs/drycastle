@@ -120,11 +120,11 @@ public partial class NetServer
         if (_perf == null) return;
         var joined = _clients.Values.Count(c => c.Joined);
         var moving = _cars.Count(c => c.Velocity.LengthSquared() > 0.01f || c.Seat.Occupied);
-        var asleep = 0; var parkedAwake = 0; // parked = driverless, not a flyer or a driven type: the only cars the sleep rule covers
+        var asleep = 0; var parkedAwake = 0; // asleep covers every type (ground, flying, driven); parked-awake = driverless and not destroyed, yet still stepped
         foreach (var c in _cars)
         {
             if (c.Asleep) asleep++;
-            else if (!c.Destroyed && !c.Seat.Occupied && !c.Flies && !c.Drives) parkedAwake++;
+            else if (!c.Destroyed && !c.Seat.Occupied) parkedAwake++;
         }
         _perf.End(_tick, joined, _byId.Count - joined, moving, _cars.Count, _match.Entities.Snapshot().Count + joined + _cars.Count + _rockets.Count, _elapsed, asleep, parkedAwake);
     }
