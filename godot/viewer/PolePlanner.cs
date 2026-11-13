@@ -7,23 +7,30 @@ using System.Text.Json;
 /// Turns a plan (points for utility poles, points on houses) into poles and their links. No Godot types: map metres,
 /// x east, y north, like roads.json.
 ///
-/// Links follow the roads: each point belongs to its nearest road and is a neighbour of the next point along the road
-/// graph in each direction, through junctions. A point further than <see cref="OffRoadM"/> from every road is off-road
-/// and takes its two nearest points as neighbours. Of those neighbour pairs the shortest are kept that close no loop
-/// (so three poles round a junction become a star, not a triangle); a pair further apart than <see cref="MaxSpanM"/>
-/// along the road is refused. A house goes to its nearest pole within <see cref="MaxDropM"/>.
+/// Links follow the roads: each point belongs to its nearest road and to one side of it. The poles of one road on one
+/// side are a **stream**: each is linked to the next along the road (a street with poles on both sides has two streams,
+/// and the wires run along each side, they do not zigzag across). The two ends of a stream are linked to the nearest
+/// stream of the next road through the junction. A point further than <see cref="OffRoadM"/> from every road is off-road
+/// and takes its two nearest points as neighbours. Of all these neighbour pairs the shortest are kept that close no loop
+/// (so three poles round a junction become a star, not a triangle); there is no limit on how far apart two poles may be.
+/// Where the two streams of one road face each other, a wire now and then crosses the road (a crossing, one per
+/// <see cref="CrossEveryM"/> of road at most, between poles that stand across from each other); the nearest pair across
+/// the road also joins two streams that nothing else joins, and the end of a stream that would otherwise stop dead
+/// continues across the road to the nearest pole there. A house goes to its nearest pole.
 /// The pole at each point follows from its place in the line (see <see cref="Solve"/>), and it is turned so that its
 /// crossarm stands across the line and its lamp is over its road.
 /// </summary>
 public static class PolePlanner
 {
-    public const double OffRoadM = 25, MaxSpanM = 70, MaxOffRoadSpanM = 80, MaxDropM = 40, SearchM = 150, MegaphoneEveryM = 150, CornerDeg = 30;
+    public const double OffRoadM = 25, MegaphoneEveryM = 150, CornerDeg = 30, CrossEveryM = 80;
+    /// <summary>Ordering weight (metres) that puts a crossing of the road after every link along the roads, so a crossing is used only when nothing else joins the two streams.</summary>
+    const double CrossPenalty = 1e6;
 
     public sealed record Road(string From, string To, (double x, double y)[] Line, string Highway, double Length);
     public sealed record Graph(List<Road> Roads, Dictionary<string, List<int>> At);
     public sealed record Pole(double X, double Y, string Asset, double RotationDeg, int Degree);
-    /// <summary>Links and Refused are pairs of pole indexes; HouseTo is the pole of each house, -1 when none is near enough.</summary>
-    public sealed record Result(List<Pole> Poles, List<(int a, int b)> Links, List<(int a, int b)> Refused, int[] HouseTo);
+    /// <summary>Links and Crossings (the links that cross a road between its two streams) are pairs of pole indexes; HouseTo is the pole of each house, -1 when there is no pole at all.</summary>
+    public sealed record Result(List<Pole> Poles, List<(int a, int b)> Links, List<(int a, int b)> Crossings, int[] HouseTo);
 
     public static Graph Parse(string roadsJson)
     {
@@ -80,8 +87,9 @@ public static class PolePlanner
     public static Result Solve(Graph g, IReadOnlyList<(double x, double y)> poles, IReadOnlyList<(double x, double y)> houses)
     {
         var n = poles.Count;
-        // each pole's road
+        // each pole's road, and the side of it the pole stands on (+1 left of the road's direction, -1 right)
         var road = new int[n]; var s = new double[n]; var foot = new (double x, double y)[n]; var dir = new (double x, double y)[n]; var onRoad = new bool[n];
+        var side = new int[n];
         for (var i = 0; i < n; i++)
         {
             road[i] = -1;
@@ -92,58 +100,119 @@ public static class PolePlanner
                 if (pr.dist < bd) { bd = pr.dist; road[i] = r; s[i] = pr.s; foot[i] = pr.foot; dir[i] = pr.dir; }
             }
             onRoad[i] = road[i] >= 0 && bd <= OffRoadM;
+            if (onRoad[i]) side[i] = dir[i].x * (poles[i].y - foot[i].y) - dir[i].y * (poles[i].x - foot[i].x) >= 0 ? 1 : -1;
         }
-        var byRoad = Enumerable.Range(0, n).Where(i => onRoad[i]).GroupBy(i => road[i]).ToDictionary(x => x.Key, x => x.OrderBy(i => s[i]).ToList());
+        // a stream: the poles of one road on one side of it, in order along it
+        var streams = Enumerable.Range(0, n).Where(i => onRoad[i]).GroupBy(i => (road: road[i], side: side[i]))
+            .ToDictionary(x => x.Key, x => x.OrderBy(i => s[i]).ToList());
+        var byRoad = streams.GroupBy(kv => kv.Key.road).ToDictionary(x => x.Key, x => x.Select(kv => kv.Value).ToList());
 
-        // neighbour pairs with their length along the road
-        var cand = new Dictionary<(int, int), double>();
-        void Add(int a, int b, double len)
+        // neighbour pairs: an ordering cost (the length along the road, plus a penalty for a crossing) and the length
+        var cand = new Dictionary<(int, int), (double cost, double len)>();
+        void Add(int a, int b, double len, double penalty = 0)
         {
             if (a == b) return;
             var key = a < b ? (a, b) : (b, a);
-            if (!cand.TryGetValue(key, out var old) || len < old) cand[key] = len;
+            if (!cand.TryGetValue(key, out var old) || len + penalty < old.cost) cand[key] = (len + penalty, len);
         }
+        // from the end of a stream through the junctions, over roads without poles, to the nearest stream of the next road with some
         void Walk(int from, string node, int came, double dist, HashSet<string> seen)
         {
-            if (dist > SearchM || !seen.Add(node) || !g.At.TryGetValue(node, out var roads)) return;
+            if (!seen.Add(node) || !g.At.TryGetValue(node, out var roads)) return;
             foreach (var e in roads)
             {
                 if (e == came) continue;
                 var r = g.Roads[e];
                 if (r.From == r.To) continue;
-                if (byRoad.TryGetValue(e, out var pts))
-                {
-                    var j = r.From == node ? pts[0] : pts[^1];
-                    Add(from, j, dist + (r.From == node ? s[j] : r.Length - s[j]));
-                }
+                if (byRoad.TryGetValue(e, out var lists))
+                    foreach (var pts in lists)
+                    {
+                        var j = r.From == node ? pts[0] : pts[^1];
+                        Add(from, j, dist + (r.From == node ? s[j] : r.Length - s[j]));
+                    }
                 else Walk(from, r.From == node ? r.To : r.From, e, dist + r.Length, seen);
             }
         }
-        foreach (var (r, pts) in byRoad)
+        foreach (var (key, pts) in streams)
         {
             for (var k = 1; k < pts.Count; k++) Add(pts[k - 1], pts[k], s[pts[k]] - s[pts[k - 1]]);
-            Walk(pts[0], g.Roads[r].From, r, s[pts[0]], new HashSet<string>());
-            Walk(pts[^1], g.Roads[r].To, r, g.Roads[r].Length - s[pts[^1]], new HashSet<string>());
+            Walk(pts[0], g.Roads[key.road].From, key.road, s[pts[0]], new HashSet<string>());
+            Walk(pts[^1], g.Roads[key.road].To, key.road, g.Roads[key.road].Length - s[pts[^1]], new HashSet<string>());
         }
+        // the two streams of one road: each pole's nearest across the road, a candidate of last resort
+        foreach (var lists in byRoad.Values.Where(l => l.Count > 1))
+            foreach (var mine in lists)
+                foreach (var a in mine)
+                    foreach (var other in lists.Where(o => o != mine))
+                    {
+                        var b = other.MinBy(j => Dist(poles[a], poles[j]));
+                        Add(a, b, Dist(poles[a], poles[b]), CrossPenalty);
+                    }
         for (var i = 0; i < n; i++)
             if (!onRoad[i])
                 foreach (var j in Enumerable.Range(0, n).Where(j => j != i).OrderBy(j => Dist(poles[i], poles[j])).Take(2))
-                    if (Dist(poles[i], poles[j]) <= MaxOffRoadSpanM) Add(i, j, Dist(poles[i], poles[j]));
+                    Add(i, j, Dist(poles[i], poles[j]));
 
-        // the shortest pairs that close no loop
+        // the shortest pairs that close no loop, however far apart
         var set = Enumerable.Range(0, n).ToArray();
         int Find(int x) { while (set[x] != x) x = set[x] = set[set[x]]; return x; }
         var links = new List<(int a, int b)>();
+        var crossings = new List<(int a, int b)>();
         var length = new Dictionary<(int, int), double>();
-        foreach (var (pair, len) in cand.OrderBy(c => c.Value).ThenBy(c => c.Key))
+        foreach (var (pair, c) in cand.OrderBy(c => c.Value.cost).ThenBy(c => c.Key))
         {
             var (a, b) = pair;
-            if (len > (onRoad[a] && onRoad[b] ? MaxSpanM : MaxOffRoadSpanM) || Find(a) == Find(b)) continue;
+            if (Find(a) == Find(b)) continue;
             set[Find(a)] = Find(b);
             links.Add(pair);
-            length[pair] = len;
+            if (c.cost >= CrossPenalty) crossings.Add(pair);
+            length[pair] = c.len;
         }
-        var refused = cand.Keys.Where(p => Find(p.Item1) != Find(p.Item2)).ToList();
+        // where the two streams of a road face each other, a wire now and then crosses it: mutually nearest poles that
+        // stand across from each other (not further along the road than across it), at most one per CrossEveryM of road
+        var have = new HashSet<(int, int)>(links);
+        foreach (var lists in byRoad.Values.Where(l => l.Count == 2))
+        {
+            var (plus, minus) = (lists[0], lists[1]);
+            var facing = new List<(int a, int b, double d)>();
+            foreach (var a in plus)
+            {
+                var b = minus.MinBy(j => Dist(poles[a], poles[j]));
+                var d = Dist(poles[a], poles[b]);
+                if (plus.MinBy(j => Dist(poles[j], poles[b])) == a && Math.Abs(s[a] - s[b]) <= d) facing.Add((a, b, d));
+            }
+            var at = new List<double>();
+            foreach (var (a, b, d) in facing.OrderBy(f => f.d))
+            {
+                var here = (s[a] + s[b]) / 2;
+                if (at.Any(x => Math.Abs(x - here) < CrossEveryM)) continue;
+                var key = a < b ? (a, b) : (b, a);
+                if (!have.Add(key)) { at.Add(here); continue; } // joined already (by the last-resort crossing above)
+                at.Add(here);
+                links.Add(key);
+                crossings.Add(key);
+                length[key] = d;
+            }
+        }
+        // the end of a stream that stops dead (one wire at most) goes on across the road, to the nearest pole of the other stream
+        var wires = new int[n];
+        foreach (var (a, b) in links) { wires[a]++; wires[b]++; }
+        foreach (var lists in byRoad.Values.Where(l => l.Count == 2))
+            for (var k = 0; k < 2; k++)
+            {
+                var (mine, other) = (lists[k], lists[1 - k]);
+                foreach (var a in mine.Count == 1 ? mine : new List<int> { mine[0], mine[^1] })
+                {
+                    if (wires[a] > 1) continue;
+                    var b = other.MinBy(j => Dist(poles[a], poles[j]));
+                    var key = a < b ? (a, b) : (b, a);
+                    if (!have.Add(key)) continue;
+                    links.Add(key);
+                    crossings.Add(key);
+                    length[key] = Dist(poles[a], poles[b]);
+                    wires[a]++; wires[b]++;
+                }
+            }
 
         var next = Enumerable.Range(0, n).Select(_ => new List<int>()).ToArray();
         foreach (var (a, b) in links) { next[a].Add(b); next[b].Add(a); }
@@ -219,9 +288,8 @@ public static class PolePlanner
 
         var houseTo = houses.Select(h =>
         {
-            var j = n == 0 ? -1 : Enumerable.Range(0, n).MinBy(i => Dist(poles[i], h));
-            return j >= 0 && Dist(poles[j], h) <= MaxDropM ? j : -1;
+            return n == 0 ? -1 : Enumerable.Range(0, n).MinBy(i => Dist(poles[i], h));
         }).ToArray();
-        return new Result(built, links, refused, houseTo);
+        return new Result(built, links, crossings, houseTo);
     }
 }

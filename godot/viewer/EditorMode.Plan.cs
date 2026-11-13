@@ -8,7 +8,7 @@ using Drycastle.MapLoader;
 /// Plan mode of the Poles tool (P): click where poles should stand (left click) and where houses are to be connected
 /// (right click on a wall or roof), then Build poles (Enter) places a pole at every point, strings the cables along the
 /// roads and connects the houses, in one save. What gets built is PolePlanner's answer, drawn while planning: cyan for
-/// what will be built, red for a span or a house that is too far. The plan is kept in memory only.
+/// what will be built, red for a house with no pole to go to. The plan is kept in memory only.
 /// </summary>
 public partial class EditorMode
 {
@@ -177,7 +177,6 @@ public partial class EditorMode
             ok.Add(tops[i] - across); ok.Add(tops[i] + across);
         }
         foreach (var (a, b) in res.Links) { ok.Add(tops[a]); ok.Add(tops[b]); }
-        foreach (var (a, b) in res.Refused) { bad.Add(tops[a]); bad.Add(tops[b]); }
         var houses = _plan.Where(p => p.House).ToList();
         for (var h = 0; h < houses.Count; h++)
         {
@@ -197,7 +196,6 @@ public partial class EditorMode
         var res = _planDirty || _planResult == null ? PlanSolve() : _planResult;
         var far = res.HouseTo.Count(t => t < 0);
         return $"{res.Poles.Count} poles, {res.Links.Count} cables, {res.HouseTo.Length - far} houses"
-            + (res.Refused.Count > 0 ? $"\n{res.Refused.Count} span{(res.Refused.Count == 1 ? "" : "s")} too long (red)" : "")
             + (far > 0 ? $"\n{far} house{(far == 1 ? "" : "s")} out of reach (red)" : "");
     }
 }

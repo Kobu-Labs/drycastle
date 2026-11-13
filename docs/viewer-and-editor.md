@@ -307,10 +307,15 @@ renders (the name is the tooltip), and adds the cables.
 * **Planning** (`P`): left click where poles should stand, right click (no drag) a house wall or roof to connect it;
   a point clicked again is removed, Backspace removes the last, Esc leaves plan mode (the plan is kept in memory).
   What will be built is drawn while planning (`PolePlanner.cs`): cyan posts with their crossarm, cyan links, red for
-  a span over 70 m or a house more than 40 m from every pole. `Build poles` (Enter) places a pole at every point,
+  a house with no pole to go to. There is no limit on how far apart two poles may be (the planner is flat, height plays
+  no part). `Build poles` (Enter) places a pole at every point,
   strings the cables and connects the houses in one save (one undo step) and says what it skipped. Links follow the
-  roads of `roads.json`: a point is joined to the next point along the road graph, through junctions, loops left out;
-  a point over 25 m from every road joins its nearest neighbours. The pole follows from its place: three links or
+  roads of `roads.json`: each point belongs to its nearest road and to one side of it, and the poles of one side are a
+  **stream**: each is joined to the next along the road, so a street with poles on both sides gets two lines that run
+  along each side, not a zigzag. The ends of a stream are joined, through junctions, to the nearest stream of the next
+  road, loops left out. Where the two streams of a road face each other a wire also crosses the road (between poles
+  that stand across from each other, at most one per 80 m of road, `PolePlanner.CrossEveryM`). A point over 25 m from
+  every road joins its nearest neighbours; a house connects to its nearest pole. The pole follows from its place: three links or
   more a junction pole, a line end or a turn over 30 degrees a twin pole, off-road or on a track or path a field
   pole, a megaphone pole about every 150 m of plain street, else a lamp or plain pole. Planned poles are turned:
   crossarm across the line, lamp over the road. Existing poles are ignored.
