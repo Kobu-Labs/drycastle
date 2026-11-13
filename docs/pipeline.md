@@ -123,8 +123,9 @@ code (`ground_attributes.py`, mirrored in `godot/viewer/GroundTypeEdits.cs`); th
   region, types, polygon}` over the region's whole polygon (not cut by the parcels), and only when there are some. A
   point carries the types of the ground area under it plus those of every layer over it.
 * **Where the layers are used.** The editor draws them as a translucent, toggleable overlay (`docs/viewer-and-editor.md`).
-  Nothing in the build or the game reads them yet: baking event points from them and exporting the attributes at runtime
-  is issue #263, and the props stage still reads `spawns` of the type of the ground area only.
+  The export stage bakes the `event_spawn` of the layers (and of the ground areas of a type that carries it) into candidate
+  points for the server, see "Runtime attributes (`attribute_points.json`)" under Export. The props stage still reads
+  `spawns` of the type of the ground area only: a `spawns` carried by a layer is stored but adds no player spawn points yet.
 * A type with an OSM source (`osm`) or a `rule` has to carry a terrain attribute: the land it takes has to look like
   something. (A type with only events that should follow OSM land would need its own overlay of that land.)
 
@@ -533,6 +534,43 @@ depth is one value per body (an approximation). The file is absent for a map wit
 
 **Water craft placement (#132).** The amphibious transport spawns on land within 40 m of water when it can (`NetServer.Vehicles`,
 using `Water.ShoreDistance`); it is the only vehicle that floats, and nothing is placed on the water itself.
+
+**Runtime attributes (`attribute_points.json`, issue #263).** The game never sees ground areas (the pipeline bakes them into
+terrain colours and detail), so a ground attribute the server needs while it runs is exported as a pool of **candidate
+points** instead of polygons. `runtime_points` in `rules.yaml` is the explicit allowlist, `<attribute>: {<value>: rule}`; the
+first and only entry is `event_spawn: bigfoot`, and an attribute that is not listed stays in the build (`spawns` included).
+Only the list attributes of the catalog can be listed (`ground_attributes.LIST_VALUES`); a mistake is an error of the export
+stage, never a silent skip. For each entry `attribute_points.build_attribute_points` (called by the export stage, after the
+water, which it needs) takes every area that carries it, across stacked types (ADR 0015): the ground areas whose type carries
+it (a type that ticks `event_spawn: [bigfoot]`) and the attribute layers of `parcels.json` `ground_layers` with a stacked
+type that carries it. Their union, cut to the terrain coverage and with the clearances taken off, is the usable ground, and the
+points are drawn in it the way `props.make_spawns` does (seeded by `attribute_points:<attribute>:<value>`, uniformly
+distributed by area: a triangle of the constrained Delaunay triangulation is picked in proportion to its area, a point inside
+it, rounded to a millimetre and kept only if still inside). Rules per entry:
+
+| Key | Meaning |
+|---|---|
+| `m2_per_point` | density: one point per this many m2 of usable ground |
+| `min_points`, `max_points` | the count is `round(usable_m2 / m2_per_point)` kept between them; no usable ground, no points |
+| `building_clearance_m`, `water_clearance_m` | metres kept clear of buildings and of the water bodies of `water.json` (shore included) |
+
+There is no clearance from trees (the Bigfoot walks through and tramples them) and none from fences, roads or placed objects.
+Today `event_spawn: bigfoot` has 1000 m2 per point, 30 to 300 points, 10 m from buildings and 5 m from water.
+
+The file is listed under `files.attribute_points` in `manifest.json` and written **only when some area carries a listed
+attribute**; otherwise it is absent (and a stale one from an earlier build is deleted), which the loader reads as "no points".
+Format (`version` 1, compact, sorted keys):
+`{"version": 1, "axes": "...", "attributes": [{"attribute": "event_spawn", "value": "bigfoot", "areas": ["A-0003", "L-0001"],
+"area_m2": 52000.5, "points": [[x, y, z], ...]}]}`. `areas` are the ids of the ground areas and layers that carried it,
+`area_m2` the usable ground the points were drawn in, a point is local metres (x east, y north, as `parcels.json`) and `z`
+the terrain height there (as `terrain.json`). An allowlisted attribute with areas but no usable ground is listed with `points: []`
+and the export warns. The map version is not bumped (like `bunkers.json`, an optional file that a loader may ignore); an older
+loader ignores the key. No terrain, no file (the points need the coverage and the heights).
+
+The server reads it as `ShooterCore.AttributePoints` (`Parse`, format version 1; the map loader keeps the text as
+`MapLoader.AttributePointsJson`, empty without the file): `NetServer.PickEventSpawn("bigfoot")` returns a random point in Godot
+ground axes (x east, y the terrain height, z = -north), or `null` when there is none (the map has no file, no area carries the
+event, or nothing usable was left): the caller must handle it. A broken or newer file is logged and counts as no points.
 
 `make preview` renders `out/village/preview/topdown.png` (parcels by kind, buildings in wall colour),
 `iso.png` (isometric view from the mesh data: terrain relief, roads, buildings, fences, trees;

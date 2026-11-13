@@ -24,6 +24,9 @@ UNION = "union"
 #: The events an ``event_spawn`` attribute can name (docs/events/README.md). Only a ground area that carries the event can spawn it.
 EVENTS = ("bigfoot",)
 
+#: The values each list attribute (stacking ``union``) can hold; a runtime attribute (``attribute_points.py``) is one of these values.
+LIST_VALUES = {"event_spawn": EVENTS}
+
 #: The recipes a ground type can name (``detail.RECIPES`` without the parcel recipe ``garden``).
 RECIPES = ("field", "forest", "village", "dike")
 
@@ -91,6 +94,11 @@ def carries_layer(spec: dict | None) -> bool:
     """True when the type has any attribute that adds up (spawning, events) instead of deciding the terrain."""
     attrs = attributes_of(spec)
     return any(k in attrs for k in LAYER_KEYS)
+
+
+def carries_value(spec: dict | None, attribute: str, value: str) -> bool:
+    """True when the type carries the list attribute ``attribute`` with ``value`` in it (``event_spawn`` with ``bigfoot``)."""
+    return value in (attributes_of(spec).get(attribute) or [])
 
 
 def terrain_index(stack: list[dict]) -> int | None:

@@ -559,6 +559,25 @@ spawns:
   # Parcel kinds with spawns in the open ground; ground types: the `spawns` attribute of ground.types.
   ground_kinds: [garden]
 
+# --- Runtime attributes (export stage, attribute_points.json) --------------------------------
+# Ground attributes the game server needs while it runs, as "a random spot inside an area that carries this attribute" (the
+# first user is the Bigfoot event). The areas are not exported: for each entry below, the export stage draws candidate points
+# inside every area that carries it (ground areas of a type with the attribute, and the attribute layers stacked over ground,
+# ADR 0015) and writes them to attribute_points.json; the server picks one. This list is an explicit allowlist: an attribute
+# that is not here stays in the build (spawns included). Only list attributes of the catalog (ground_attributes.py LIST_VALUES)
+# can be listed, as <attribute>: {<value>: rule}; every rule has all the keys below.
+runtime_points:
+  event_spawn:
+    bigfoot:
+      # One point per this many m2 of usable ground (the areas inside the terrain, minus the clearances), but at least
+      # min_points and at most max_points. No usable ground: no points.
+      m2_per_point: 1000
+      min_points: 30
+      max_points: 300
+      # Clear of buildings (solid for it) and of water (and its shore), in metres. Not of trees: it walks through them.
+      building_clearance_m: 10
+      water_clearance_m: 5
+
 # --- Street lamps (props stage, data/village/work/lamps.json) ----------------------------------------
 # OSM street_lamp nodes are kept where they stand. Where a road has no lamp nearby, rule lamps are
 # placed along it every spacing_m, staggered left and right, just beyond the carriageway edge.

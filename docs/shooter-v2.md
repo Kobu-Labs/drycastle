@@ -288,6 +288,9 @@ one match and level 20 after about six good matches. No telemetry exists yet.
   ring gun, and riders the hull does not cover (`amphibious`, medium `amphibious`), see "Amphibious transport" below.
 - Water bodies (#138, #142): the pipeline writes `water.json` into the map artifact; the server and clients swim, submerge
   and hold breath (HUD "AIR"). Surfaces, underwater tint and splashes are client-side and not yet compiled by Godot.
+- Runtime attribute points (#263): `attribute_points.json` holds baked candidate points inside the areas that carry an allowlisted
+  ground attribute (today the Bigfoot event spawn). The server asks `NetServer.PickEventSpawn("bigfoot")` for a random one, or gets
+  `null` when none exists (`docs/pipeline.md`, "Runtime attributes"). No client use.
 - Day/night (#135): one server clock, `environment.json` (start time 08:00, day length 24 minutes by default). The sun,
   moon, sky shader and ambient light follow it. Street lamps (#136) light up at night from `lamps.json`.
 - Sentry turret, attack missile, MOAB, care packages and aircraft are world entities (section 9).

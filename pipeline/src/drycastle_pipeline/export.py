@@ -13,6 +13,11 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
+from drycastle_pipeline.attribute_points import (
+    FILE_NAME as ATTRIBUTE_POINTS_FILE,
+    AttributePointsError,
+    build_attribute_points,
+)
 from drycastle_pipeline.buildings import DEFAULT_OVERRIDES
 from drycastle_pipeline.config import DEFAULT_RAW_DIR, REPO_ROOT, map_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, GROUND_RECIPES
@@ -51,6 +56,9 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
 # Only maps with a bunker have it; a loader that does not know it gives no shelter from blasts. A bunker may carry "intel", the
 # wall of its command post the intel screen hangs on (ADR 0017); a loader that does not know it has no intel room.
+# (no bump) attribute_points.json (files.attribute_points): candidate points per runtime attribute (rules.yaml runtime_points,
+# first: event_spawn bigfoot) that the server picks from. Only maps where some area carries one have it; a loader that does not
+# know it, or a map without it, means "no points".
 MAP_VERSION_BASE = "0.10.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
@@ -362,8 +370,22 @@ def run_export(
             print(f"export: warning: water parcel/region {pid} has no terrain under it (or none below its surface); no water body", file=sys.stderr)
         _dump(water_file, water_doc)
         files["water"] = "water.json"
-    elif water_file.exists():
-        water_file.unlink()  # no terrain: a water file from an earlier run would be stale
+        # candidate points of the runtime attributes, drawn clear of the buildings and of the water just built
+        points_doc, points_warnings = build_attribute_points(
+            parcels_doc, list(buildings.values()), scene.terrain, water_doc, effective, load_section("runtime_points", rules_path)
+        )
+        for warning in points_warnings:
+            print(f"export: warning: attribute points: {warning}", file=sys.stderr)
+    else:
+        points_doc = None
+        if water_file.exists():
+            water_file.unlink()  # no terrain: a water file from an earlier run would be stale
+    points_file = out_dir / ATTRIBUTE_POINTS_FILE
+    if points_doc is not None:
+        _dump(points_file, points_doc)
+        files["attribute_points"] = ATTRIBUTE_POINTS_FILE
+    else:
+        points_file.unlink(missing_ok=True)  # no area carries a runtime attribute (any more): no file, "no points"
     regions_file = out_dir / "regions.json"
     if scene.regions:
         # ground paint for the minimap: local metres (x east, y north), drawn in ID order so the higher ID wins
@@ -449,6 +471,9 @@ def run(
                               edits_path=Path(edits) if edits else DEFAULT_EDITS)
     except FileNotFoundError as exc:
         print(f"export: error: missing input {Path(str(exc.filename)).name}; run earlier stages")
+        return 1
+    except AttributePointsError as exc:
+        print(f"export: error: {exc}", file=sys.stderr)
         return 1
     print(f"export: {len(manifest['chunks'])} chunk file(s) written to {out_dir}/")
     return 0

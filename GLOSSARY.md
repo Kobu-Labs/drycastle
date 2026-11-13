@@ -34,6 +34,10 @@ _Avoid_: property, flag, tag
 The ground types of one hand-drawn region, lowest first; between regions the higher ID is on top. The topmost type with appearance or water attributes decides the terrain of the area, exactly as a single type would; the attributes that add up are taken from every type in the stack. A stack of only such types is an **attribute layer**: it changes nothing about how the ground looks, and the editor draws it as a translucent overlay.
 _Avoid_: layer stack, z-order
 
+**Runtime attribute**:
+A ground attribute the game server needs while it runs, from an explicit allowlist in `rules.yaml` (`runtime_points`; the first is "event spawn: bigfoot"). The game never sees ground areas, so the build exports not the areas but **candidate points**: seeded points inside every area that carries the attribute (ground areas of a type with it, and attribute layers stacked over ground), one per N m² between a minimum and a maximum, clear of buildings and water, in `attribute_points.json` of the map. The server picks one at random; an attribute no area carries has no point. Attributes off the allowlist are not exported.
+_Avoid_: exported attribute, spawn area (an area is not exported)
+
 **Replacement scene**:
 What a mod supplies to replace a parcel's base contents.
 
