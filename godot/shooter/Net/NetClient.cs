@@ -13,7 +13,7 @@ namespace Drycastle.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
+    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc, WadeAcc; public double RippleDue; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;

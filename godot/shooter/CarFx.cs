@@ -35,6 +35,9 @@ public static class CarFx
     {
         var root = new Node3D { Name = def.Id };
         world.AddChild(root);
+        // the visible parts sit under a "Visual" node, so a boat's wave bob and tilt (WaterWaves) move the hull, not the hit-tested root
+        var visual = new Node3D { Name = VisualName };
+        root.AddChild(visual);
         if (!ShotFx.Enabled) return root;
         if (def.Model != "")
         {
@@ -44,7 +47,7 @@ public static class CarFx
                 m.Position = new Vector3(def.ModelOffset[0], def.ModelOffset[1], def.ModelOffset[2]);
                 var fit = new Node3D { Scale = Vector3.One * def.ModelScale, RotationDegrees = new Vector3(0, def.ModelYawDeg, 0) };
                 fit.AddChild(m);
-                root.AddChild(fit);
+                visual.AddChild(fit);
                 if (def.Tint is { } fixedTint)
                 {
                     var c = new Color(fixedTint[0], fixedTint[1], fixedTint[2]);
@@ -52,20 +55,20 @@ public static class CarFx
                 }
                 else PaintVariant(m, def, colour);
             }
-            else root.AddChild(Box(def, new Color(0.6f, 0.6f, 0.6f)));
+            else visual.AddChild(Box(def, new Color(0.6f, 0.6f, 0.6f)));
             return root;
         }
         if (def.Medium == VehicleMedium.Boat)
         {
             // no model file for a boat: a primitive hull and cabin (no licence involved)
             var hull = def.Tint is { } ht ? new Color(ht[0], ht[1], ht[2]) : new Color(0.32f, 0.36f, 0.28f);
-            root.AddChild(Hull(def, hull));
+            visual.AddChild(Hull(def, hull));
             return root;
         }
         if (def.Tint is { } tint0)
         {
             // no model for this type: primitive meshes (a body and four wheels), in its one fixed colour
-            root.AddChild(Primitive(def, new Color(tint0[0], tint0[1], tint0[2])));
+            visual.AddChild(Primitive(def, new Color(tint0[0], tint0[1], tint0[2])));
             return root;
         }
         var pal = VehicleColours.Palette[colour % VehicleColours.Palette.Length];
@@ -75,12 +78,15 @@ public static class CarFx
             var m = (Node3D)t.Duplicate();
             m.Scale = Vector3.One * Scale;
             m.RotationDegrees = new Vector3(0, 180, 0); // glTF cars face +Z, the game's forward is -Z
-            root.AddChild(m);
+            visual.AddChild(m);
             foreach (var n in m.FindChildren("body", "Node3D", true, false)) Paint(n, tint);
         }
-        else root.AddChild(Box(def, tint));
+        else visual.AddChild(Box(def, tint));
         return root;
     }
+
+    /// <summary>Name of the node that holds a vehicle's visible parts (see <see cref="Make"/>).</summary>
+    public const string VisualName = "Visual";
 
     /// <summary>A vehicle with no model file (the quad bike): the body box with four wheel cylinders at its sides.</summary>
     static Node3D Primitive(VehicleDef def, Color tint)
