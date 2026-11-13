@@ -14,6 +14,7 @@ Branch `events` = `main` + `rozhlas` (fast-forwarded, they are the same commit `
 | #262 Intel room and NPC announcements | implemented, merged | `intel-room` | ADR 0017, protocol 29, `/event intel`. Needs `make export`; game **never run**. No NPC built |
 | #263 Runtime attribute areas: baked candidate points | not started | | blocked by #260 (now done) |
 | #264 Bigfoot event | not started | | blocked by #263 and #261 (#261 done) |
+| #266 to #269 Worn items drawn, bag, ground items, Equipment screen (F), corpse chooser list | implemented, merged | `items-worn-render`, `items-bag-ground`, `equipment-screen` | ADR 0018, protocol 31. Game **never run** |
 | #265 Private asset pack (VPS download, launcher password) | not started | | independent |
 
 The merge renumbered the ADRs (0015 ground attributes, 0016 worn items, 0017 intel room) and moved the intel work to protocol 29.
@@ -27,7 +28,7 @@ Bigfoot (first event, ticket #264):
 - Damage model is a **hit count**, not HP: dies after N hits, N scales with participating players, tuned for about 1 minute. Every bullet hit counts 1, no headshot bonus; explosive and vehicle-weapon hits count a configurable larger weight. Ramming it does nothing. Numbers live in a JSON data file.
 - Three phases at hit-count thresholds plus an enrage near the end: (1) trunk throws and chase, (2) adds stomp shockwave (jump avoids it) and vehicle throws (scripted arc, no damage), (3) adds grab, flail, launch at another player.
 - All damage Bigfoot deals to players is 2 to 5.
-- Movement: ignores the navmesh, straight-line chase snapped to terrain, tramples trees, nearest-player target with a sticky target. Open: are trees and buildings solid for it?
+- Movement: ignores the navmesh, straight-line chase snapped to terrain, tramples trees, nearest-player target with a sticky target. Decided 2026-11-13: trees are ignored (it walks through and tramples them), buildings are solid.
 - Wipe: if every participant dies it heals and waits. Despawns after X minutes with no player nearby, no reward.
 - Started with `/event bigfoot`, ended with `/event current end`. **No scheduler and no announcement in this ticket** (both postponed). Reward is the footsteps to a corpse carrying the Bigfoot head, plus XP. The event waits for the head (#261), which is done.
 
@@ -50,7 +51,6 @@ Private assets (ticket #265):
 ## Not built yet
 
 - The event lifecycle, the Bigfoot entity and fight, the footsteps and corpse reward (#264).
-- A Bigfoot head model; other players still see the helmet.
 - An NPC announcement, intel-screen browsing, a base marker on the minimap, new rozhlas audio saying "suspicious activity" (re-record `announcement.*`, run `make rozhlas`).
 - The event scheduler, and the other events in `README.md`.
 
