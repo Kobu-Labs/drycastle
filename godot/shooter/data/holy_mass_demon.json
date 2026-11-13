@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "hits": { "base": 24, "per_extra_player": 8, "min": 12, "max": 150 },
+  "hit_weights": { "bullet": 1, "explosive": 8, "vehicle": 8 },
+  "crawl": {
+    "speed_mps": 4.5,
+    "dwell_s": [1.5, 4.0],
+    "preferred_range_m": 14,
+    "max_hops": 3,
+    "los_bonus": 8,
+    "hop_cost": 0.5,
+    "revisit_penalty": 5,
+    "jitter": 3,
+    "retarget_s": 4,
+    "rearm_delay_s": 5
+  },
+  "fireball": {
+    "speed_mps": 24,
+    "gravity_mps2": 9.8,
+    "life_s": 6,
+    "cooldown_s": 3.5,
+    "telegraph_s": 1.0,
+    "min_range_m": 4,
+    "max_range_m": 45,
+    "muzzle_offset_m": 1.0,
+    "aim_height_m": 1.0,
+    "lead_factor": 0.7,
+    "damage": 18,
+    "splash": { "radius_m": 3.0, "full_damage_radius_m": 1.0, "edge_damage": 6, "knockback_speed": 2.5 },
+    "ignites": true
+  },
+  "burn": { "dps": 0.5, "duration_s": 10, "tick_interval_s": 1 }
+}

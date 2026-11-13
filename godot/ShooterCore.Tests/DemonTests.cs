@@ -1,0 +1,384 @@
+using System.Numerics;
+using Drycastle.ShooterCore;
+using Xunit;
+
+namespace Drycastle.ShooterCore.Tests;
+
+/// <summary>The Holy Mass demon: data, anchor graph, hit count, crawl, fireball, wipe.</summary>
+public class DemonTests
+{
+    static string DataDir => Path.Combine(AppContext.BaseDirectory, "data");
+    static DemonFile Def => DemonFile.Load(Path.Combine(DataDir, "holy_mass_demon.json"));
+
+    /// <summary>A hand-written room, 20 x 30 x 10 m about the origin: three anchors on the west wall, two on the ceiling, three on the east wall.</summary>
+    public const string ChurchJson = """
+        { "anchors": [
+          { "id": 0, "pos": [-10, 3, -10], "normal": [1, 0, 0],  "links": [1, 3] },
+          { "id": 1, "pos": [-10, 3, 0],   "normal": [1, 0, 0],  "links": [2, 3] },
+          { "id": 2, "pos": [-10, 3, 10],  "normal": [1, 0, 0],  "links": [] },
+          { "id": 3, "pos": [-5, 10, 0],   "normal": [0, -1, 0], "links": [4] },
+          { "id": 4, "pos": [5, 10, 0],    "normal": [0, -1, 0], "links": [5] },
+          { "id": 5, "pos": [10, 3, 0],    "normal": [-1, 0, 0], "links": [6, 7] },
+          { "id": 6, "pos": [10, 3, -10],  "normal": [-1, 0, 0], "links": [] },
+          { "id": 7, "pos": [10, 3, 10],   "normal": [-1, 0, 0], "links": [] }
+        ] }
+        """;
+
+    static AnchorGraph Graph => AnchorGraph.FromJson(ChurchJson);
+    static DemonPlayer P(ushort id, float x, float z, bool alive = true) => new(id, new Vector3(x, 0, z), alive);
+
+    static DemonBrain Brain(int seed = 1, Func<Vector3, Vector3, bool>? sight = null, int start = 5) => new(Def, Graph, new Random(seed), sight, start);
+
+    /// <summary>Steps at 30 Hz until <paramref name="stop"/> or <paramref name="seconds"/> pass; returns every event.</summary>
+    static List<DemonEvent> Run(DemonBrain b, IReadOnlyList<DemonPlayer> players, float seconds, Func<DemonBrain, bool>? stop = null)
+    {
+        var ev = new List<DemonEvent>();
+        for (var i = 0; i < (int)(seconds * 30); i++)
+        {
+            b.Step(1f / 30, players, ev);
+            if (stop != null && stop(b)) break;
+        }
+        return ev;
+    }
+
+    // ---- data ----
+
+    [Fact]
+    public void The_shipped_file_loads()
+    {
+        var d = Def;
+        Assert.True(d.Burn.Dps > 0 && d.Fireball.Damage > 0 && d.Crawl.DwellS.Length == 2);
+        Assert.True(d.HitWeights.Explosive > d.HitWeights.Bullet);
+    }
+
+    [Fact]
+    public void Hits_needed_scale_with_players_inside_and_are_clamped()
+    {
+        var d = Def;
+        Assert.Equal(d.Hits.Min <= d.HitsNeeded(1) ? d.HitsNeeded(1) : d.Hits.Min, d.HitsNeeded(0));
+        Assert.True(d.HitsNeeded(4) > d.HitsNeeded(2) && d.HitsNeeded(2) > d.HitsNeeded(1));
+        Assert.Equal(d.Hits.Max, d.HitsNeeded(10_000));
+        Assert.Equal((int)MathF.Round(d.Hits.Base + 2 * d.Hits.PerExtraPlayer), d.HitsNeeded(3));
+    }
+
+    [Fact]
+    public void A_file_with_a_missing_section_is_refused()
+    {
+        var json = File.ReadAllText(Path.Combine(DataDir, "holy_mass_demon.json"));
+        var e = Assert.Throws<DataFileException>(() => DemonFile.Parse(json.Replace("\"burn\"", "\"burnt\"")));
+        Assert.Contains("burn.dps", e.Message);
+        Assert.Throws<DataFileException>(() => DemonFile.Parse(json.Replace("[1.5, 4.0]", "[4.0, 1.5]")));
+        Assert.Throws<DataFileException>(() => DemonFile.Parse(json.Replace("\"version\": 1", "\"version\": 99")));
+    }
+
+    // ---- anchors ----
+
+    [Fact]
+    public void Links_count_both_ways_and_normals_are_unit()
+    {
+        var g = Graph;
+        Assert.Equal(8, g.Count);
+        Assert.Equal(new[] { 0, 2, 3 }, g.Neighbours(1));
+        Assert.Contains(4, g.Neighbours(5));
+        Assert.All(g.Anchors, a => Assert.Equal(1f, a.Normal.Length(), 1e-5f));
+    }
+
+    [Fact]
+    public void A_broken_graph_is_refused()
+    {
+        Assert.Throws<DataFileException>(() => AnchorGraph.FromJson("""{"anchors":[{"id":0,"pos":[0,0,0],"normal":[0,1,0],"links":[9]}]}"""));
+        Assert.Throws<DataFileException>(() => AnchorGraph.FromJson("""{"anchors":[{"id":0,"pos":[0,0,0],"normal":[0,1,0],"links":[]},{"id":1,"pos":[1,0,0],"normal":[0,1,0],"links":[]}]}""")); // two islands
+        Assert.Throws<DataFileException>(() => AnchorGraph.FromJson("""{"anchors":[{"id":0,"pos":[0,0,0],"normal":[0,0,0],"links":[]}]}"""));
+        Assert.Throws<DataFileException>(() => AnchorGraph.FromJson("""{"anchors":[{"id":0,"pos":[0,0,0],"normal":[0,1,0]},{"id":0,"pos":[0,0,0],"normal":[0,1,0]}]}"""));
+        Assert.Throws<DataFileException>(() => AnchorGraph.FromJson("""{"anchors":[]}"""));
+    }
+
+    // ---- hit count ----
+
+    [Fact]
+    public void It_dies_at_the_hits_needed_and_credits_everyone_who_hit_it()
+    {
+        var b = Brain();
+        var ev = new List<DemonEvent>();
+        var need = b.HitsNeeded;
+        b.RegisterHit(1, DemonHitKind.Bullet, ev);
+        b.RegisterHit(2, DemonHitKind.Bullet, ev);
+        b.RegisterHit(1, DemonHitKind.Bullet, ev);
+        Assert.Equal(3, b.HitsTaken);
+        var last = DemonHitResult.Hit;
+        while (b.Phase != DemonPhase.Dead) last = b.RegisterHit(1, DemonHitKind.Bullet, ev);
+        Assert.Equal(DemonHitResult.Killed, last);
+        Assert.Equal(need, b.HitsTaken);
+        var died = Assert.Single(ev.OfType<DemonDied>());
+        Assert.Equal(new ushort[] { 1, 2 }, died.Credited); // player 3 never hit it
+        Assert.Equal(DemonHitResult.Ignored, b.RegisterHit(3, DemonHitKind.Bullet, ev));
+        Assert.DoesNotContain((ushort)3, b.Credited);
+    }
+
+    [Fact]
+    public void Explosive_and_vehicle_hits_weigh_more_than_a_bullet()
+    {
+        var b = Brain();
+        var ev = new List<DemonEvent>();
+        b.RegisterHit(1, DemonHitKind.Bullet, ev);
+        b.RegisterHit(1, DemonHitKind.Explosive, ev);
+        b.RegisterHit(1, DemonHitKind.Vehicle, ev);
+        var d = Def;
+        Assert.Equal(d.HitWeights.Bullet + d.HitWeights.Explosive + d.HitWeights.Vehicle, b.HitsTaken);
+        Assert.Equal(d.HitWeights.Explosive, ev.OfType<DemonHurt>().ElementAt(1).Weight);
+    }
+
+    [Fact]
+    public void More_players_inside_make_it_tougher_and_never_softer()
+    {
+        var b = Brain();
+        var solo = b.HitsNeeded;
+        Run(b, new[] { P(1, 0, 0), P(2, 1, 0), P(3, 2, 0) }, 0.1f);
+        Assert.Equal(Def.HitsNeeded(3), b.HitsNeeded);
+        Assert.True(b.HitsNeeded > solo);
+        Run(b, new[] { P(1, 0, 0) }, 0.1f);
+        Assert.Equal(Def.HitsNeeded(3), b.HitsNeeded);
+    }
+
+    // ---- wipe ----
+
+    [Fact]
+    public void A_wipe_heals_it_and_it_waits_then_wakes_for_the_next_player()
+    {
+        var b = Brain();
+        var ev = new List<DemonEvent>();
+        Run(b, new[] { P(1, 0, 0) }, 0.5f);
+        Assert.NotEqual(DemonPhase.Waiting, b.Phase);
+        b.RegisterHit(1, DemonHitKind.Explosive, ev);
+        Assert.True(b.HitsTaken > 0);
+
+        ev = Run(b, new[] { P(1, 0, 0, alive: false) }, 0.1f);
+        Assert.Single(ev.OfType<DemonWiped>());
+        Assert.Equal(0, b.HitsTaken);
+        Assert.Empty(b.Credited);
+
+        // someone walks in at once, but it keeps still (bar the end of a crawl) for the rearm delay
+        var fire = Run(b, new[] { P(2, 0, 0) }, Def.Crawl.RearmDelayS - 1);
+        Assert.Empty(fire.OfType<DemonTelegraph>());
+        Assert.True(b.Phase is DemonPhase.Waiting);
+        Run(b, new[] { P(2, 0, 0) }, 3);
+        Assert.True(b.Phase is DemonPhase.Dwelling or DemonPhase.Crawling or DemonPhase.Telegraphing);
+    }
+
+    [Fact]
+    public void Nobody_inside_is_not_a_wipe()
+    {
+        var b = Brain();
+        var ev = Run(b, Array.Empty<DemonPlayer>(), 5);
+        Assert.Empty(ev);
+        Assert.Equal(DemonPhase.Waiting, b.Phase);
+    }
+
+    // ---- crawl ----
+
+    [Fact]
+    public void It_crawls_along_links_at_the_crawl_speed_and_stays_on_the_surface()
+    {
+        var g = Graph;
+        var b = Brain();
+        var players = new[] { P(1, -8, 8) };
+        var prev = b.Pose.Position;
+        var crawled = false;
+        for (var i = 0; i < 30 * 40; i++)
+        {
+            b.Step(1f / 30, players, new List<DemonEvent>());
+            var pose = b.Pose;
+            Assert.True(Vector3.Distance(prev, pose.Position) <= Def.Crawl.SpeedMps / 30 + 1e-3f, "faster than the crawl speed");
+            Assert.Equal(1f, pose.Normal.Length(), 1e-4f);
+            Assert.Equal(1f, pose.Forward.Length(), 1e-4f);
+            Assert.True(MathF.Abs(Vector3.Dot(pose.Forward, pose.Normal)) < 1e-3f, "forward lies in the surface");
+            if (b.Phase == DemonPhase.Crawling)
+            {
+                crawled = true;
+                Assert.True(b.Path.Count > 0 && g.Contains(b.Path[^1]));
+                for (var k = 1; k < b.Path.Count; k++) Assert.Contains(b.Path[k], g.Neighbours(b.Path[k - 1]));
+            }
+            prev = pose.Position;
+        }
+        Assert.True(crawled);
+    }
+
+    [Fact]
+    public void It_turns_to_its_target_at_rest_and_blends_normals_round_a_corner()
+    {
+        var b = Brain(start: 3); // ceiling
+        var players = new[] { P(1, -5, 8) };
+        Run(b, players, 3, x => x.Phase == DemonPhase.Dwelling);
+        Assert.Equal(DemonPhase.Dwelling, b.Phase);
+        Assert.Equal(new Vector3(0, -1, 0), b.Pose.Normal);
+        var toTarget = Vector3.Normalize(new Vector3(0, 0, 8)); // straight to +z from (-5, 10, 0), in the ceiling plane
+        Assert.True(Vector3.Dot(b.Pose.Forward, toTarget) > 0.99f);
+
+        // crawling off the ceiling onto a wall turns its normal between the two
+        var seen = new List<Vector3>();
+        for (var i = 0; i < 30 * 30; i++) { b.Step(1f / 30, players, new List<DemonEvent>()); seen.Add(b.Pose.Normal); }
+        Assert.Contains(seen, n => n.Y < -0.1f && n.Y > -0.99f && MathF.Abs(n.X) > 0.1f);
+    }
+
+    [Fact]
+    public void It_keeps_to_goals_that_see_the_target_when_it_can()
+    {
+        // the target stands on the west side; only the west wall anchors (0 to 2) see it
+        bool Sight(Vector3 a, Vector3 b) => a.X < 0 && b.X < 0;
+        var b = Brain(sight: Sight, start: 5);
+        var players = new[] { P(1, -8, 0) };
+        var goals = new HashSet<int>();
+        for (var i = 0; i < 30 * 60; i++)
+        {
+            b.Step(1f / 30, players, new List<DemonEvent>());
+            if (b.Phase == DemonPhase.Crawling && b.Path.Count > 0) goals.Add(b.Path[^1]);
+        }
+        Assert.NotEmpty(goals);
+        Assert.All(goals, g => Assert.True(Graph[g].Pos.X < 0 || g == 4, $"goal {g} cannot see the target")); // 4 is the way across
+    }
+
+    [Fact]
+    public void The_same_seed_gives_the_same_demon()
+    {
+        List<(Vector3, DemonPhase)> Trace(int seed)
+        {
+            var b = Brain(seed);
+            var players = new[] { P(1, -8, 8), P(2, 6, -6) };
+            var t = new List<(Vector3, DemonPhase)>();
+            for (var i = 0; i < 30 * 30; i++) { b.Step(1f / 30, players, new List<DemonEvent>()); t.Add((b.Pose.Position, b.Phase)); }
+            return t;
+        }
+        Assert.Equal(Trace(7), Trace(7));
+    }
+
+    // ---- fireball ----
+
+    [Fact]
+    public void It_telegraphs_then_throws_a_fireball_that_lands_on_the_target()
+    {
+        var def = Def;
+        var b = Brain(start: 3);
+        var players = new[] { P(1, -5, 12) }; // standing still, 12 m from the ceiling anchor, in range
+        var ev = new List<DemonEvent>();
+        var fireAt = -1; var teleAt = -1;
+        for (var i = 0; i < 30 * 8 && fireAt < 0; i++)
+        {
+            b.Step(1f / 30, players, ev);
+            if (teleAt < 0 && ev.OfType<DemonTelegraph>().Any()) teleAt = i;
+            if (ev.OfType<DemonFireballLaunched>().Any()) fireAt = i;
+        }
+        Assert.True(teleAt >= 0 && fireAt > teleAt);
+        Assert.InRange((fireAt - teleAt) / 30f, def.Fireball.TelegraphS - 0.1f, def.Fireball.TelegraphS + 0.1f);
+        Assert.Equal((ushort)1, ev.OfType<DemonTelegraph>().First().Target);
+
+        // fly it on a flat floor and into the target's body
+        var ball = ev.OfType<DemonFireballLaunched>().First().Ball;
+        var hit = Fly(ball, def.Fireball, players, out var impact);
+        Assert.Equal(FireballOutcome.Player, hit.Outcome);
+        Assert.Equal((ushort)1, hit.Victim);
+        Assert.True(Vector3.Distance(impact, new Vector3(-5, 1, 12)) < 1.5f);
+    }
+
+    static FireballStep Fly(Fireball ball, FireballDef def, IReadOnlyList<DemonPlayer> players, out Vector3 impact)
+    {
+        var targets = players.Where(p => p.Alive).Select(p => new HitTarget(p.Id, p.Feet, Stance.Stand, 0)).ToList();
+        FireballStep step = default;
+        for (var i = 0; i < 30 * 10; i++)
+        {
+            step = FireballFlight.Step(ball, def, 1f / 30, (from, dir, len) =>
+            {
+                if (dir.Y >= -1e-6f) return float.PositiveInfinity; // the floor at y = 0
+                var t = -from.Y / dir.Y;
+                return t <= len ? t : float.PositiveInfinity;
+            }, targets);
+            if (step.Outcome != FireballOutcome.Flying) break;
+            ball = step.Ball;
+        }
+        impact = step.Impact;
+        return step;
+    }
+
+    [Fact]
+    public void It_does_not_throw_out_of_range_or_without_a_line_of_sight()
+    {
+        var far = Run(Brain(start: 3), new[] { P(1, 0, 400) }, 10);
+        Assert.Empty(far.OfType<DemonTelegraph>());
+        var blind = Run(Brain(sight: (_, _) => false, start: 3), new[] { P(1, -5, 12) }, 10);
+        Assert.Empty(blind.OfType<DemonTelegraph>());
+    }
+
+    [Fact]
+    public void A_throw_leaves_the_cooldown_before_the_next()
+    {
+        var b = Brain(start: 3);
+        var ev = Run(b, new[] { P(1, -5, 12) }, 12);
+        var times = new List<int>();
+        var ev2 = new List<DemonEvent>();
+        var b2 = Brain(start: 3);
+        for (var i = 0; i < 30 * 12; i++)
+        {
+            ev2.Clear(); b2.Step(1f / 30, new[] { P(1, -5, 12) }, ev2);
+            if (ev2.OfType<DemonFireballLaunched>().Any()) times.Add(i);
+        }
+        Assert.True(times.Count >= 2);
+        for (var i = 1; i < times.Count; i++) Assert.True((times[i] - times[i - 1]) / 30f >= Def.Fireball.CooldownS - 0.05f);
+        Assert.NotEmpty(ev);
+    }
+
+    // ---- ballistics and blast ----
+
+    [Theory]
+    [InlineData(0, 0, 0, 20, 0, 0, false)]
+    [InlineData(0, 10, 0, 30, 2, -5, false)]
+    [InlineData(0, 5, 0, 8, 1, 30, true)]
+    [InlineData(0, 10, 0, 0, -6, 12, false)]
+    public void The_solved_arc_reaches_the_target(float fx, float fy, float fz, float tx, float ty, float tz, bool lob)
+    {
+        var from = new Vector3(fx, fy, fz); var to = new Vector3(tx, ty, tz);
+        Assert.True(Ballistics.Solve(from, to, 24, 9.8f, lob, out var v, out var t));
+        Assert.Equal(24f, v.Length(), 1e-3f);
+        var at = from + v * t + new Vector3(0, -0.5f * 9.8f * t * t, 0);
+        Assert.True(Vector3.Distance(at, to) < 1e-2f, $"landed {at}");
+    }
+
+    [Fact]
+    public void A_target_beyond_the_reach_has_no_arc()
+    {
+        Assert.False(Ballistics.Solve(Vector3.Zero, new Vector3(500, 0, 0), 24, 9.8f, false, out _, out _));
+    }
+
+    [Fact]
+    public void The_blast_follows_the_shelter_rule_and_ignites_the_hurt()
+    {
+        var def = Def;
+        var burns = new BurnSet();
+        HitTarget T(ushort id, float x, float z) => new(id, new Vector3(x, 0, z), Stance.Stand, 0);
+        var targets = new[] { T(1, 0, 0), T(2, 2, 0), T(3, 30, 0) };
+
+        var open = FireballBlast.Detonate(new Vector3(0, 0.5f, 0), 1, targets, def.Fireball, null, burns, def.Burn);
+        Assert.Equal(2, open.Count); // 3 is far outside the splash
+        Assert.Equal(def.Fireball.Damage, open.First(v => v.Id == 1).Damage); // the direct hit takes the full damage
+        var splash = open.First(v => v.Id == 2).Damage;
+        Assert.True(splash > 0 && splash < def.Fireball.Damage);
+        Assert.True(burns.IsBurning(1) && burns.IsBurning(2) && !burns.IsBurning(3));
+        Assert.All(open, v => Assert.True(v.Ignited));
+
+        // a room round the blast: the player standing beside it, outside the room, is spared; the direct hit does not ask
+        var ring = new[] { new Vector2(-1, -1), new Vector2(1, -1), new Vector2(1, 1), new Vector2(-1, 1) };
+        var room = new BunkerRoom { BunkerId = "church", Level = 0, Ring = ring, Y0 = -1, Y1 = 5, MinX = -1, MaxX = 1, MinZ = -1, MaxZ = 1 };
+        var sheltered = FireballBlast.Detonate(new Vector3(0, 0.5f, 0), null, targets, def.Fireball, new Shelters(new[] { room }));
+        Assert.Equal(new ushort[] { 1 }, sheltered.Select(v => v.Id));
+        var direct = FireballBlast.Detonate(new Vector3(0, 0.5f, 0), 2, targets, def.Fireball, new Shelters(new[] { room }));
+        Assert.Contains(direct, v => v.Id == 2 && v.Damage == def.Fireball.Damage);
+    }
+
+    [Fact]
+    public void A_fireball_stops_at_a_wall_and_expires()
+    {
+        var def = Def.Fireball;
+        var wall = FireballFlight.Step(new Fireball(0, Vector3.Zero, new Vector3(24, 0, 0), 0), def, 0.5f, (_, _, len) => len > 5 ? 5f : float.PositiveInfinity, Array.Empty<HitTarget>());
+        Assert.Equal(FireballOutcome.World, wall.Outcome);
+        var old = FireballFlight.Step(new Fireball(0, new Vector3(0, 50, 0), Vector3.Zero, def.LifeS - 0.01f), def, 0.1f, (_, _, _) => float.PositiveInfinity, Array.Empty<HitTarget>());
+        Assert.Equal(FireballOutcome.Expired, old.Outcome);
+    }
+}

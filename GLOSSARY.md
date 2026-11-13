@@ -374,3 +374,15 @@ _Avoid_: event list, schedule
 **Event announcement**:
 What tells players that something was detected: a toast and a chat line ("Suspicious activity detected. Report to the base for more information.", with the base's grid reference when the map has a sheet) and the **Rozhlas** broadcast. It never says what the event is: that is for the intel screen.
 _Avoid_: alert, notification, warning (the HUD's helicopter warning is another thing)
+
+**Status**:
+A condition a player carries that is not an Item: no slot, no bag cell, no drop, no corpse. Server session state beside the Equipment, never in the profile. Two kinds: the devil's curse (the player's hits set victims ablaze) and the divine blessing (one lethal hit is negated). A new round keeps it; the player's death ends it.
+_Avoid_: buff, effect, power-up, item (an Item is worn or carried)
+
+**Burn**:
+Damage over time on a player who was set ablaze, by a cursed player's hit or by a demon's fireball: 0.5 hp/s for 10 s (`burn` in `holy_mass_demon.json`). A new ignition refreshes it and never stacks; a kill is credited to the cursed shooter, and a fireball's burn to nobody. It ends with the victim's death.
+_Avoid_: fire damage, DoT, poison
+
+**Demon**:
+The boss the priest turns into in the Holy Mass event: it crawls on the walls and ceiling of the church between baked anchor points (no physics, no navmesh) and throws telegraphed fireballs. It has no hit points but a hit count (bullet 1, explosive and vehicle weapons more, no headshot bonus) that scales with the players inside. If everyone inside dies it heals and waits. Every player who hit it at least once when it dies gets the devil's curse (a Status).
+_Avoid_: boss (alone), monster, priest (that is its first form)
