@@ -18,10 +18,11 @@ MANIFEST_FORMAT_VERSION = 1
 CATEGORIES = ("car", "slab", "pot", "flower", "bush", "tree", "wall", "fence", "pole", "connector", "other")
 
 
-def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict:
-    """The manifest at ``path``; the repository manifest also gets the assets of the private packs when they are installed."""
+def load_manifest(path: Path = DEFAULT_MANIFEST, private: bool = True) -> dict:
+    """The manifest at ``path``; the repository manifest also gets the assets of the private packs when they are installed
+    (``private=False`` reads the public library alone)."""
     manifest = json.loads(Path(path).read_text(encoding="utf-8"))
-    if Path(path).resolve() == DEFAULT_MANIFEST.resolve() and PRIVATE_MANIFEST.is_file():
+    if private and Path(path).resolve() == DEFAULT_MANIFEST.resolve() and PRIVATE_MANIFEST.is_file():
         private = json.loads(PRIVATE_MANIFEST.read_text(encoding="utf-8"))
         known = asset_ids(manifest)
         manifest["assets"] = [*manifest.get("assets", []), *(a for a in private.get("assets", []) if a["id"] not in known)]
