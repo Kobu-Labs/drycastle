@@ -25,6 +25,7 @@
     <ProjectReference Include="../ShooterServer.Persistence/ShooterServer.Persistence.csproj" />
     <!-- the real data files are tested in place -->
     <Content Include="../shooter/data/*.json" Link="data/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="fixtures/*.json" Link="fixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

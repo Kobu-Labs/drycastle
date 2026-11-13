@@ -136,6 +136,7 @@ public partial class NetServer
             var d = dummies[i];
             if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
         }
+        _crowd?.AddTargets(list); // citizens walk slowly: not rewound
         return list;
     }
 

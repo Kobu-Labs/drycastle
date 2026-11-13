@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  // The Holy Mass event. Only the citizens exist so far. Times in seconds, lengths in metres, speeds in metres per second.
+  "citizens": {
+    // Most citizens alive or waiting to leave their houses at once (the church's seats limit it further).
+    "max_count": 60,
+    "walk_speed": 1.4,
+    // Each citizen walks at walk_speed times a random factor within this share either way.
+    "speed_jitter": 0.12,
+    "turn_rate_deg_per_s": 360,
+    // Defaults of a batch (the server's spawn call takes its own): the time over which a batch leaves its houses, the radius
+    // around the church door in which houses send citizens, and the nearest house that sends one (not the church's own plot).
+    "stagger_seconds": 30,
+    "house_radius_m": 150,
+    "house_min_m": 20,
+    // How long a killed citizen lies before it is removed.
+    "corpse_seconds": 15,
+    // Height of the pews' seats: church.json gives the seat point on the seat; a sitter is hit as a crouching body standing under it.
+    "seat_height_m": 0.45,
+    // Civilian clothing and skin, picked per citizen from its look number.
+    "palette": ["#4a4038", "#5b4a36", "#3d4654", "#554a5e", "#6b3f3a", "#4b5543", "#2f2f33", "#7a6a55"],
+    "skin_tones": ["#f0c8a4", "#e0ac84", "#c68e5f"],
+    // The bodies (the swap point: a model of another pack is another entry here). The character pack is one 23-bone rig, 3.147 units tall as imported,
+    // that faces +Z; its sit clip ends with the pelvis 0.647 units above the origin and 0.389 units behind it (measured in the clip).
+    // Surfaces are the material names of the model.
+    "models": [
+      { "file": "animated-characters/soldier-male.glb", "import_height": 3.147, "height_m": 1.78, "yaw_deg": 180,
+        "clothes": ["Main", "DarkGreen"], "dark": ["Black"], "skin": ["Skin", "Face"], "hide": ["Helmet"],
+        "walk_clip": "Walk", "death_clip": "Death", "sit_clip": "SitDown", "sit_pelvis_m": 0.366, "sit_back_m": 0.22 },
+      { "file": "animated-characters/soldier-female.glb", "import_height": 3.147, "height_m": 1.66, "yaw_deg": 180,
+        "clothes": ["Main", "DarkGreen"], "dark": ["Black"], "skin": ["Skin", "Face"], "hide": [],
+        "walk_clip": "Walk", "death_clip": "Death", "sit_clip": "SitDown", "sit_pelvis_m": 0.34, "sit_back_m": 0.2 },
+      { "file": "animated-characters/rifleman-male.glb", "import_height": 3.147, "height_m": 1.74, "yaw_deg": 180,
+        "clothes": ["Main"], "dark": ["Black", "Grey"], "skin": ["Skin", "Face"], "hide": ["Helmet"],
+        "walk_clip": "Walk", "death_clip": "Death", "sit_clip": "SitDown", "sit_pelvis_m": 0.36, "sit_back_m": 0.22 }
+    ]
+  }
+}

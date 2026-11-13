@@ -113,6 +113,9 @@ public sealed class MatchSim
     /// <summary>The target dummies of this match (#148); empty until <see cref="SetTargets"/>. Not in <see cref="Players"/>.</summary>
     public TargetDummies Targets { get; private set; } = new(Array.Empty<TargetSpot>(), TargetDummies.RespawnDelay);
 
+    /// <summary>The citizens of the Holy Mass, set by the server; a hit on a victim id in their range goes to them (no score, no kill feed).</summary>
+    public ICitizenHits? Citizens { get; set; }
+
     public void SetTargets(IReadOnlyList<TargetSpot> spots) => Targets = new TargetDummies(spots, TargetDummies.RespawnDelay);
     public event Action<MatchEvent>? Event;
 
@@ -228,6 +231,7 @@ public sealed class MatchSim
     /// </summary>
     public DamageResult ApplyDamage(ushort victim, ushort attacker, byte weapon, float amount, bool ignoreProtection = false, KillCause cause = KillCause.Standard)
     {
+        if (CitizenRules.IsHitId(victim)) return Phase == MatchPhase.Running && Citizens != null ? Citizens.Hit(victim, attacker, amount) : DamageResult.Ignored;
         if (TargetDummies.IsDummyId(victim)) return ApplyTargetDamage(victim, attacker, weapon, amount, cause);
         if (Phase != MatchPhase.Running || amount <= 0) return DamageResult.Ignored;
         if (!_players.TryGetValue(victim, out var v) || v.Life != PlayerLife.Alive) return DamageResult.Ignored;

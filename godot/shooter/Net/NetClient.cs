@@ -122,6 +122,7 @@ public partial class NetClient : Node
         InitMissile();
         InitTurrets();
         InitAnimals();
+        InitCitizens();
         InitAircraft();
         InitFlak();
         InitSeats();
@@ -170,6 +171,7 @@ public partial class NetClient : Node
         _owned = null;
         _missiles.Clear();
         _animals.Clear(); // the nodes are under Owned
+        _citizens.Clear();
         _impacts = null; Array.Clear(_impactNext);
         _rings = null; _ringNext = 0; _ringMesh = null;
         _dust = null; _dustNext = 0;
@@ -228,6 +230,7 @@ public partial class NetClient : Node
         RenderCarePackages();
         RenderTurrets();
         RenderAnimals();
+        RenderCitizens();
         RenderCars();
         RenderAircraft(delta);
         RenderRockets();

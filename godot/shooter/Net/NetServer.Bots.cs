@@ -14,7 +14,7 @@ namespace Drycastle.Shooter;
 /// Rules: bots are in the match only while a human is (an empty server runs no bot rounds). They count as players for
 /// <c>min_players</c>, the score and the round end. They earn no XP and have no stats, and killing one grants no XP and
 /// writes no kill stat; the streak counter does advance. They do not use vehicles or killstreaks, and they ignore target
-/// dummies.
+/// dummies and the citizens.
 /// </para>
 /// <para>
 /// Moving: each bot heads for the nearest other living player (<see cref="BotGoal"/>) along a route from
@@ -65,9 +65,9 @@ public partial class NetServer
     /// Once the colliders are in (at start, or when an admin first asks for bots): the mesh the bots walk on. Only when bots are
     /// wanted, and not in the smoke arenas (far from the map). Tried once; it blocks for the bake, so a live call warns first.
     /// </summary>
-    void BuildBotNav()
+    void BuildBotNav(bool force = false)
     {
-        if (_navTried || Bots <= 0 || ArenaMode || MapDir == "") return;
+        if (_navTried || (Bots <= 0 && !force) || ArenaMode || MapDir == "") return;
         _navTried = true;
         try
         {
