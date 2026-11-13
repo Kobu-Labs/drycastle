@@ -82,7 +82,7 @@ public static class ChatCommands
         new("bots", "Set how many bots play, or show the count. Takes effect at once", new[] { new ChatArg("count", ChatArgKind.Int, false, 0, MaxBots) }),
         new("spawn", "Spawn a vehicle in front of you", new[] { new ChatArg("vehicle", ChatArgKind.Choice) }),
         new("sandbox", "Turn sandbox mode on or off for a player (name or #id), or flip it", new[] { new ChatArg("player", ChatArgKind.Player), new ChatArg("state", ChatArgKind.Choice, false) }),
-        new("give", "Put an item on a player (name or #id), or on yourself. It replaces what they wear in that slot", new[] { new ChatArg("item", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
+        new("give", "Give an item to a player (name or #id), or to yourself. It is worn if the slot is empty, else it goes in the bag", new[] { new ChatArg("item", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
         new("restart", "Restart the round now, optionally in another mode (ffa or tdm)", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
         new("event", "Trigger a village event now", new[] { new ChatArg("event", ChatArgKind.Choice), new ChatArg("action", ChatArgKind.Choice, false) }),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),

@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Drycastle.ShooterCore.Tests;
 
-/// <summary>Issue #261: the item a corpse carries, the pickup limit that makes it crumble, the item events and the admin's /give.</summary>
+/// <summary>Issue #261: the items a corpse carries, the pickup limit that makes it crumble, the item events and the admin's /give. The bag, the corpse's several items and the ground items are in <see cref="BagTests"/>.</summary>
 public class CorpseItemTests
 {
     static string DataDir => Path.Combine(AppContext.BaseDirectory, "data");
@@ -22,7 +22,10 @@ public class CorpseItemTests
         return (world, new CorpseBook(world));
     }
 
-    static Corpse CorpseWith(ItemStack? item, Vector3? at = null) => new(7, at ?? Vector3.Zero, 0f, 0, 60, item);
+    static Corpse CorpseWith(ItemStack? item, Vector3? at = null) => new(7, at ?? Vector3.Zero, 0f, 0, 60, item is { } i ? new[] { i } : null);
+
+    static ItemPickUp TakeFirst(CorpseBook book, ushort id, Equipment worn, Bag? bag = null, Vector3? from = null) =>
+        book.TryPickUpItem(id, 0, from ?? Vector3.Zero, worn, bag ?? new Bag(), Items, out _);
 
     [Fact]
     public void TheItemCanBeTakenThreeTimesAndTheFourthAttemptCrumblesIt()
@@ -34,18 +37,18 @@ public class CorpseItemTests
 
         for (var taken = 1; taken <= 3; taken++)
         {
-            Assert.Equal(ItemPickUp.Ok, book.TryPickUpItem(id, Vector3.Zero, player, Items));
+            Assert.Equal(ItemPickUp.Ok, TakeFirst(book, id, player));
             Assert.Equal(new ItemStack(Bigfoot, taken), player.Get(EquipSlot.Headgear)); // the count travels with the item
             Assert.Null(corpse.Item);
-            corpse.CarryItem(player.TakeOff(EquipSlot.Headgear)); // the wearer dies: it drops again, count kept
+            corpse.AddItem(player.TakeOff(EquipSlot.Headgear)!.Value); // the wearer dies: it drops again, count kept
             Assert.Equal(taken, corpse.Item!.Value.Pickups);
         }
 
-        Assert.Equal(ItemPickUp.Crumbled, book.TryPickUpItem(id, Vector3.Zero, player, Items));
+        Assert.Equal(ItemPickUp.Crumbled, TakeFirst(book, id, player));
         Assert.Null(corpse.Item);
         Assert.Null(player.Get(EquipSlot.Headgear));
         Assert.False(player.HeadGuarded);
-        Assert.Equal(ItemPickUp.NoItem, book.TryPickUpItem(id, Vector3.Zero, player, Items)); // it is gone for good
+        Assert.Equal(ItemPickUp.NoItem, TakeFirst(book, id, player)); // it is gone for good
     }
 
     [Fact]
@@ -54,14 +57,14 @@ public class CorpseItemTests
         var (_, book) = Setup();
         var first = book.Add(CorpseWith(new ItemStack(Bigfoot, 2)))!.Value;
         var player = new Equipment(Items);
-        Assert.Equal(ItemPickUp.Ok, book.TryPickUpItem(first, Vector3.Zero, player, Items)); // the third and last pickup
+        Assert.Equal(ItemPickUp.Ok, TakeFirst(book, first, player)); // the third and last pickup
         // it drops on a brand new corpse with its count of three: that one crumbles it at once
         var second = book.Add(CorpseWith(player.TakeOff(EquipSlot.Headgear)))!.Value;
-        Assert.Equal(ItemPickUp.Crumbled, book.TryPickUpItem(second, Vector3.Zero, new Equipment(Items), Items));
+        Assert.Equal(ItemPickUp.Crumbled, TakeFirst(book, second, new Equipment(Items)));
     }
 
     [Fact]
-    public void TakingAnItemLeavesWhatWasWornOnTheCorpse()
+    public void TakingAnItemWithTheSlotTakenAndTheBagFullLeavesWhatWasWornOnTheCorpse()
     {
         var items = ItemsFile.Parse("""{"version":1,"items":[{"id":"hat","name":"Hat"},{"id":"mask","name":"Mask","pickup_limit":2}]}""");
         var (_, book) = Setup();
@@ -69,8 +72,11 @@ public class CorpseItemTests
         var id = book.Add(corpse)!.Value;
         var player = new Equipment(items);
         player.Wear(EquipSlot.Headgear, new ItemStack(0, 5));
+        var bag = new Bag();
+        for (var i = 0; i < Bag.Cells; i++) bag.Add(new ItemStack(0, i));
 
-        Assert.Equal(ItemPickUp.Ok, book.TryPickUpItem(id, Vector3.Zero, player, items));
+        Assert.Equal(ItemPickUp.Ok, book.TryPickUpItem(id, 0, Vector3.Zero, player, bag, items, out var placed));
+        Assert.Equal(ItemPlace.Swapped, placed);
         Assert.Equal(new ItemStack(1, 1), player.Get(EquipSlot.Headgear));
         Assert.Equal(new ItemStack(0, 5), corpse.Item); // the hat, with its own count, can be taken back
     }
@@ -84,9 +90,10 @@ public class CorpseItemTests
         var empty = book.Add(CorpseWith(null, new Vector3(50, 0, 0)))!.Value;
         var player = new Equipment(Items);
 
-        Assert.Equal(ItemPickUp.OutOfReach, book.TryPickUpItem(id, new Vector3(10, 0, 0), player, Items));
-        Assert.Equal(ItemPickUp.Gone, book.TryPickUpItem(9999, Vector3.Zero, player, Items));
-        Assert.Equal(ItemPickUp.NoItem, book.TryPickUpItem(empty, new Vector3(50, 0, 0), player, Items));
+        Assert.Equal(ItemPickUp.OutOfReach, TakeFirst(book, id, player, from: new Vector3(10, 0, 0)));
+        Assert.Equal(ItemPickUp.Gone, TakeFirst(book, 9999, player));
+        Assert.Equal(ItemPickUp.NoItem, TakeFirst(book, empty, player, from: new Vector3(50, 0, 0)));
+        Assert.Equal(ItemPickUp.NoItem, book.TryPickUpItem(id, 1, Vector3.Zero, player, new Bag(), Items, out _)); // no second item
         Assert.Equal(new ItemStack(Bigfoot), corpse.Item);
         Assert.Null(player.Get(EquipSlot.Headgear));
     }
@@ -112,33 +119,45 @@ public class CorpseItemTests
     [Fact]
     public void ItemEventsSurviveTheWire()
     {
-        Assert.True(ItemEvents.TryDecodePickUp(ItemEvents.EncodePickUp(513), out var corpse));
+        Assert.True(ItemEvents.TryDecodePickUp(ItemEvents.EncodePickUp(513, 4), out var corpse, out var at));
         Assert.Equal(513, corpse);
+        Assert.Equal(4, at);
 
-        Assert.True(ItemEvents.TryDecodeCorpseItem(ItemEvents.EncodeCorpseItem(7, Bigfoot), out var c, out var item));
+        var list = new[] { new ItemStack(Bigfoot, 2), new ItemStack(0, 300) };
+        Assert.True(ItemEvents.TryDecodeCorpseItems(ItemEvents.EncodeCorpseItems(7, list), out var c, out var items));
         Assert.Equal(7, c);
-        Assert.Equal(Bigfoot, item);
-        Assert.True(ItemEvents.TryDecodeCorpseItem(ItemEvents.EncodeCorpseItem(7, null), out _, out var none));
-        Assert.Null(none);
+        Assert.Equal(new[] { new ItemStack(Bigfoot, 2), new ItemStack(0, 255) }, items); // the count is clamped to its byte
+        Assert.True(ItemEvents.TryDecodeCorpseItems(ItemEvents.EncodeCorpseItems(7, Array.Empty<ItemStack>()), out _, out var none));
+        Assert.Empty(none);
 
         var worn = new Equipment(Items);
         worn.Wear(EquipSlot.Headgear, new ItemStack(Bigfoot, 2));
-        Assert.True(ItemEvents.TryDecodeEquipment(ItemEvents.EncodeEquipment(worn), out var slots));
-        Assert.Equal(new int?[] { Bigfoot }, slots); // the pickup count stays on the server
-        Assert.True(ItemEvents.TryDecodeEquipment(ItemEvents.EncodeEquipment(new Equipment(Items)), out var bare));
-        Assert.Equal(new int?[] { null }, bare);
+        var bag = new Bag();
+        bag.Set(3, new ItemStack(0, 1));
+        Assert.True(ItemEvents.TryDecodeEquipment(ItemEvents.EncodeEquipment(worn, bag), out var slots, out var cells));
+        Assert.Equal(new ItemStack?[] { new ItemStack(Bigfoot, 2) }, slots); // the pickup counts travel now: the screens show them
+        Assert.Equal(Bag.Cells, cells.Length);
+        Assert.Equal(new ItemStack(0, 1), cells[3]);
+        Assert.Equal(1, cells.Count(x => x != null));
+        Assert.True(ItemEvents.TryDecodeEquipment(ItemEvents.EncodeEquipment(new Equipment(Items), new Bag()), out var bare, out var empty));
+        Assert.Equal(new ItemStack?[] { null }, bare);
+        Assert.All(empty, x => Assert.Null(x));
 
         Assert.True(ItemEvents.TryDecodeNotice(ItemEvents.EncodeNotice(ItemNoticeKind.Crumbled), out var notice));
         Assert.Equal(ItemNoticeKind.Crumbled, notice);
+        Assert.True(ItemEvents.TryDecodeNotice(ItemEvents.EncodeNotice(ItemNoticeKind.BagFull), out notice));
+        Assert.Equal(ItemNoticeKind.BagFull, notice);
         Assert.False(ItemEvents.TryDecodeNotice(new byte[] { 0 }, out _));
-        Assert.False(ItemEvents.TryDecodePickUp(new byte[1], out _));
+        Assert.False(ItemEvents.TryDecodeNotice(new byte[] { 9 }, out _));
+        Assert.False(ItemEvents.TryDecodePickUp(new byte[2], out _, out _));
     }
 
     [Fact]
     public void ItemEventKindsAreTheirOwnBlockAndTheProtocolMovedOn()
     {
-        Assert.Equal(new[] { 190, 191, 192, 193 }, new[] { EventKind.PickUpCorpseItem, EventKind.CorpseItem, EventKind.Equipment, EventKind.ItemNotice }.Select(k => (int)k));
-        Assert.True(Wire.ProtocolVersion >= 28);
+        Assert.Equal(new[] { 190, 191, 192, 193 }, new[] { EventKind.PickUpCorpseItem, EventKind.CorpseItems, EventKind.Equipment, EventKind.ItemNotice }.Select(k => (int)k));
+        Assert.Equal(new[] { 200, 201, 202, 203 }, new[] { EventKind.EquipItem, EventKind.UnequipItem, EventKind.DropItem, EventKind.TakeGroundItem }.Select(k => (int)k));
+        Assert.True(Wire.ProtocolVersion >= 31);
     }
 
     // ---- the admin's way to get it ----

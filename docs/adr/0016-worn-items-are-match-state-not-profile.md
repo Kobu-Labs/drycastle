@@ -13,3 +13,5 @@ An item is announced by its own reliable events (a corpse's item, the wearer's e
 - **Persisting worn items in the profile.** Rejected: nothing else in the profile is event state, and a persistent Bigfoot head defeats the three-pickups rule.
 - **Headshots deal no damage.** Rejected as the simplest reading of "prevents headshot damage": a wearer would take no damage from the most common aimed hit. Body damage removes the bonus and keeps the wearer killable. Reversible in `HitMath.Raycast` if the event wants it.
 - **The count on the corpse.** Rejected: the item would reset on each new corpse and the limit would never be reached.
+
+**Amended by ADR 0018** (issue #267): the bag, a corpse that carries several items, and ground items. Everything above stands except "a corpse carries one item" and "a corpse's item is its own event" (now a list), and the swap rule of a pickup (it goes into the empty slot, else the bag, and swaps only when both are full).

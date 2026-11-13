@@ -43,6 +43,8 @@ public partial class NetServer : Node
         public PlayerWeapons W = null!;
         /// <summary>What the player wears (items.json): set at join, taken off onto the corpse at death, never stored in the profile.</summary>
         public Equipment Worn = null!;
+        /// <summary>What the player carries unworn: set at join, emptied onto the corpse at death, never stored in the profile (ADR 0018).</summary>
+        public Bag Bag = null!;
         /// <summary>The player's perk values. Neutral until the loadout ticket sets them from the player's loadout.</summary>
         public PerkModifiers Perks = PerkModifiers.None;
         /// <summary>XP granted to this player since the round began (the end-of-round summary).</summary>
@@ -172,6 +174,7 @@ public partial class NetServer : Node
         _match.Entities.Spawned += w => BroadcastEvent(EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State));
         _match.Entities.Despawned += w => BroadcastEvent(EventKind.WorldDespawn, WorldCodec.EncodeDespawn(w.Id, w.Reason));
         CorpseRules.Register(WorldEntityRegistry.Shared);
+        GroundItemRules.Register(WorldEntityRegistry.Shared);
         TurretRules.Register(WorldEntityRegistry.Shared);
         _corpses = new CorpseBook(_match.Entities);
         InitAircraft();
@@ -393,6 +396,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || ArenaMode)) OnDebug(c, e.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpse } pu) OnPickUpCorpse(c, pu.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpseItem } pi) OnPickUpCorpseItem(c, pi.Payload);
+            else if (m is EventMsg { Kind: >= (byte)EventKind.EquipItem and <= (byte)EventKind.TakeGroundItem } ir) OnItemRequest(c, (EventKind)ir.Kind, ir.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
@@ -449,6 +453,7 @@ public partial class NetServer : Node
         c.Recoil = new RecoilState(c.Id);
         c.Breath = new BreathState(c.Id);
         c.Worn = new Equipment(Items);
+        c.Bag = new Bag();
         c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = MapLadders };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);

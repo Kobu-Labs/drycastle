@@ -230,7 +230,7 @@ public partial class NetClient
         if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         if (hasCockpit && prompt != null && _gunship == null && !_controlling) prompt = WithViewHint(prompt);
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
-        _hud?.SetPrompt(TurretPrompt() ?? prompt ?? CratePrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
+        _hud?.SetPrompt(TurretPrompt() ?? prompt ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
     }
 
     CharacterView? _selfView;
@@ -247,7 +247,7 @@ public partial class NetClient
             _selfView?.QueueFree();
             _selfView = CharacterView.Make();
             if (Appearances.TryGetValue(_myId, out var look)) _selfView.SetCamo(look, CamoData);
-            Dress(_selfView, _wornItems); // the headgear shows in the seat too (#266)
+            DressPlayer(_selfView, _myId); // the headgear shows in the seat too (#266)
             _selfView.SetStance(Stance.Crouch); // seated: there is no sitting animation, the crouch squash is the closest pose
             anchor.AddChild(_selfView);
         }

@@ -47,7 +47,7 @@ public enum WorldDespawnReason : byte
     Expired = 1,
     /// <summary>Removed by the server (round end, clear).</summary>
     Removed = 2,
-    /// <summary>Opened by a player (a care package).</summary>
+    /// <summary>Opened or taken by a player (a care package, a ground item).</summary>
     Opened = 3,
 }
 
