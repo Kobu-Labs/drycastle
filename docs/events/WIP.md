@@ -12,7 +12,7 @@ Branch `events` = `main` + `rozhlas` (fast-forwarded, they are the same commit `
 | #260 Layered ground types with attributes | implemented, merged into `events` | `ground-attributes` | ADR 0015. Pipeline output verified byte-identical. Editor UI compiles, **never run** |
 | #261 Inventory: headgear slot, Bigfoot head, pickup limit | implemented, merged | `inventory-headgear` | ADR 0016, protocol 28, `/give`. Game **never run** |
 | #262 Intel room and NPC announcements | implemented, merged | `intel-room` | ADR 0017, protocol 29, `/event intel`. Needs `make export`; game **never run**. No NPC built |
-| #263 Runtime attribute areas: baked candidate points | not started | | blocked by #260 (now done) |
+| #263 Runtime attribute areas: baked candidate points | implemented, branch not merged | `event-spawn-points` | option B: `attribute_points.json`, `NetServer.PickEventSpawn("bigfoot")`. Game **never run** |
 | #264 Bigfoot event | not started | | blocked by #263 and #261 (#261 done) |
 | #266 to #269 Worn items drawn, bag, ground items, Equipment screen (F), corpse chooser list | implemented, merged | `items-worn-render`, `items-bag-ground`, `equipment-screen` | ADR 0018, protocol 31. Game **never run** |
 | #265 Private asset pack (VPS download, launcher password) | not started | | independent |
@@ -34,8 +34,8 @@ Bigfoot (first event, ticket #264):
 
 Spawn areas (tickets #260, #263):
 - A ground type is a bundle of attributes (Appearance, Spawning, Water, Events). Areas stack; the topmost type with a terrain attribute decides the look, other attributes add up. First events attribute: `event_spawn: bigfoot`.
-- **Open:** how the game gets a spawn point. Option B (recommended so far): the pipeline bakes candidate points per attribute into a new file and the server picks one. Option A: export the polygons and sample at runtime. The count should be a density rule (one point per N m², with a minimum and a maximum, in data), not a fixed 200. Bigfoot tramples trees, so only buildings and water need clearance. Check what the server already has loaded (building and water footprints) before choosing.
-- #260 stores `spawns` and `event_spawn` of stacked layers (`ground_layers` in `parcels.json`) but uses neither; #263 should resolve both together.
+- **Decided (#263):** option B. The pipeline bakes candidate points per runtime attribute (allowlist `runtime_points` in `rules.yaml`, first `event_spawn: bigfoot`) into `attribute_points.json`; the server picks one with `NetServer.PickEventSpawn`. Count is a density rule in data; only buildings and water need clearance (Bigfoot tramples trees). See `docs/pipeline.md`, "Runtime attributes".
+- #260 stores `spawns` and `event_spawn` of stacked layers (`ground_layers` in `parcels.json`). #263 resolves `event_spawn`; a `spawns` carried by a layer is still stored and unused (the props stage reads the ground area's type only).
 
 Private assets (ticket #265):
 - Paid packs (Synty) must never enter this **public** repo or public GitHub Releases. Plan: gitignored `assets-private/`, a CI guard against tracking it, a pack published to the VPS and downloaded by the launcher with a password, a fallback to the CC0 placeholder models.
