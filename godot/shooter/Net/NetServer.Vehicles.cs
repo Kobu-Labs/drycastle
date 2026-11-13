@@ -372,8 +372,9 @@ public partial class NetServer
             else if (car.Drives) StepDrivenVehicle(car, driver, dt);
             else if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt, Water);
             else if (!car.Asleep || occupied) car.StepParked(dt, Water); // a parked car at rest is not stepped until disturbed (ParkedRules, T2-04)
-            car.TickEndPos = car.GlobalPosition;
-            if (car.GlobalPosition.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); continue; }
+            var here = car.GlobalPosition; // read once: nothing below moves the car before the abandon test (a native read each time, every car every tick)
+            car.TickEndPos = here;
+            if (here.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); continue; }
             // a wall takes speed from a driven car; a helicopter is hurt by what it hits whoever flies it, or nobody
             if ((driver != null || car.Flies) && car.Def.CrashDamage && car.LastImpact > Vehicles.CrashMinSpeedLoss)
                 DamageVehicle(car, (car.LastImpact - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, 0, SpecialWeapons.Vehicle, 0);
@@ -386,13 +387,14 @@ public partial class NetServer
                 _match.SetPosition(o.Id, N(at));
             }
             if (driver != null && car.Def.RunOver && !car.Afloat && (!car.Flies || car.Flight.Agl <= car.Def.Flight!.RunOverAgl)) RunOverCheck(car, driver); // road kill: on land only; a helicopter only skimming the ground
-            if (!occupied && car.Abandon.Update(false, car.AtOrigin, dt, Vehicles.AbandonReturnTime))
+            var atOrigin = here.DistanceTo(car.OriginPos) < 0.5f; // ServerCar.AtOrigin, from the position read above
+            if (!occupied && car.Abandon.Update(false, atOrigin, dt, Vehicles.AbandonReturnTime))
             {
                 car.Reset(false); _carReturns++;
                 GD.Print($"server: {car.Def.Id} {car.Id} abandoned, returned to its origin");
             }
-            else if (!occupied && !car.AtOrigin && car.GlobalPosition.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
-            if (occupied && car.GlobalPosition.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
+            else if (!occupied && !atOrigin && here.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
+            if (occupied && here.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
         }
     }
 
@@ -405,6 +407,10 @@ public partial class NetServer
     /// </summary>
     void ResolveVehicleContacts()
     {
+        // each origin is read once here (a native call per read, and every pair asks): only a bump moves a vehicle inside this pass, so only those are read again
+        if (_contactAt.Length < _cars.Count) _contactAt = new Vector3[_cars.Count];
+        for (var i = 0; i < _cars.Count; i++) _contactAt[i] = _cars[i].GlobalPosition;
+        const float range2 = ContactBroadRange * ContactBroadRange;
         for (var i = 0; i < _cars.Count; i++)
         {
             var a = _cars[i];
@@ -413,17 +419,21 @@ public partial class NetServer
             {
                 var b = _cars[j];
                 if (b.Destroyed) continue;
-                if (a.GlobalPosition.DistanceSquaredTo(b.GlobalPosition) > ContactBroadRange * ContactBroadRange) continue;
+                if (_contactAt[i].DistanceSquaredTo(_contactAt[j]) > range2) continue;
                 var shapeA = a.ContactShape(); var shapeB = b.ContactShape();
                 if (VehicleContact.Test(shapeA, shapeB, a.Flies || b.Flies) is not { } hit) continue;
                 var bump = VehicleContact.Bump(hit, a.BumpBody(), b.BumpBody(), Vehicles!.BumpRestitution);
                 a.ApplyBump(bump.MoveA, bump.DeltaVA);
                 b.ApplyBump(bump.MoveB, bump.DeltaVB);
+                _contactAt[i] = a.GlobalPosition; _contactAt[j] = b.GlobalPosition;
                 BumpDamage(a, bump.SpeedLossA, b);
                 BumpDamage(b, bump.SpeedLossB, a);
             }
         }
     }
+
+    /// <summary>Each live vehicle's origin for the broad test of <see cref="ResolveVehicleContacts"/> (reused every tick).</summary>
+    Vector3[] _contactAt = Array.Empty<Vector3>();
 
     /// <summary>Beyond this distance between two origins no pair of vehicles can touch (the bus is 12 m long, a rotor disc 9 m across).</summary>
     const float ContactBroadRange = 20f;
