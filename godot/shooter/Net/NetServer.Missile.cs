@@ -33,7 +33,8 @@ public partial class NetServer
         BlastGlass(pos, radius);
         BroadcastEvent(EventKind.MissileBlast, MissileCodec.EncodeBlast(i.Id, i.Owner, i.Position, radius));
         BroadcastImpact(N(pos), ImpactSize.Plume, vehicle: i.Car != null); // ticket #154: the missile's plume
-        foreach (var t in LiveTargets())
+        var targets = LiveTargets();
+        foreach (var t in targets)
         {
             var isDirect = i.Victim == t.Id;
             if (!isDirect && !BlastReaches(N(pos), t)) continue; // a bunker room's walls are between them
@@ -49,6 +50,7 @@ public partial class NetServer
             if (res == DamageResult.Ignored) continue; // spawn protected: neither damage nor knockback
             if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
         }
+        ReturnTargets(targets);
     }
 
     /// <summary>The streak's view of the server: the match's entities, the sweeps and the blast.</summary>

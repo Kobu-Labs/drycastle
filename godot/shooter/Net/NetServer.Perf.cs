@@ -35,7 +35,8 @@ public sealed class ServerPerf
     readonly string _path;
     readonly StringBuilder _sb = new();
     readonly long[] _us = new long[(int)Ph.Count];
-    long _t0, _last, _allocAtStart;
+    readonly long[] _alloc = new long[(int)Ph.Count];
+    long _t0, _last, _allocAtStart, _allocLast;
     int _gc0, _gc1, _gc2;
     long _rays0, _lt0, _lte0;
     double _flushAt;
@@ -52,8 +53,9 @@ public sealed class ServerPerf
     public void Begin()
     {
         System.Array.Clear(_us);
+        System.Array.Clear(_alloc);
         _t0 = _last = Stopwatch.GetTimestamp();
-        _allocAtStart = GC.GetAllocatedBytesForCurrentThread();
+        _allocAtStart = _allocLast = GC.GetAllocatedBytesForCurrentThread();
         _gc0 = GC.CollectionCount(0); _gc1 = GC.CollectionCount(1); _gc2 = GC.CollectionCount(2);
         _rays0 = PerfCounters.Rays; _lt0 = PerfCounters.LiveTargetsCalls; _lte0 = PerfCounters.LiveTargetsElems;
     }
@@ -64,6 +66,9 @@ public sealed class ServerPerf
         var now = Stopwatch.GetTimestamp();
         _us[(int)p] += (now - _last) * 1_000_000 / Stopwatch.Frequency;
         _last = now;
+        var alloc = GC.GetAllocatedBytesForCurrentThread();
+        _alloc[(int)p] += alloc - _allocLast; // bytes the phase allocated (the CSV's <phase>_alloc columns)
+        _allocLast = alloc;
     }
 
     /// <summary>End of a tick: one row. <paramref name="extra"/> are the tick's counts (players, bots, moving cars, entities, parked cars).</summary>
@@ -71,13 +76,14 @@ public sealed class ServerPerf
     {
         if (!_headerDone)
         {
-            _sb.Append("tick,total_us,").Append(string.Join(',', Names.Select(n => n + "_us")))
+            _sb.Append("tick,total_us,").Append(string.Join(',', Names.Select(n => n + "_us"))).Append(',').Append(string.Join(',', Names.Select(n => n + "_alloc")))
                .Append(",alloc_bytes,gc0,gc1,gc2,rays,live_targets_calls,live_targets_elems,players,bots,cars_moving,cars_total,entities\n");
             _headerDone = true;
         }
         var total = (Stopwatch.GetTimestamp() - _t0) * 1_000_000 / Stopwatch.Frequency;
         _sb.Append(tick).Append(',').Append(total);
         for (var i = 0; i < _us.Length; i++) _sb.Append(',').Append(_us[i]);
+        for (var i = 0; i < _alloc.Length; i++) _sb.Append(',').Append(_alloc[i]);
         _sb.Append(',').Append(GC.GetAllocatedBytesForCurrentThread() - _allocAtStart)
            .Append(',').Append(GC.CollectionCount(0) - _gc0).Append(',').Append(GC.CollectionCount(1) - _gc1).Append(',').Append(GC.CollectionCount(2) - _gc2)
            .Append(',').Append(PerfCounters.Rays - _rays0).Append(',').Append(PerfCounters.LiveTargetsCalls - _lt0).Append(',').Append(PerfCounters.LiveTargetsElems - _lte0)

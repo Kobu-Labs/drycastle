@@ -60,9 +60,18 @@ public partial class NetServer
     NVec3? HelicopterPosition(ushort entityId) => _match.Entities.StateOf(entityId)?.Position;
 
     /// <summary>Every live player except the owner, aimed at chest height, with the stance that sets their exposure.</summary>
-    IReadOnlyList<HelperCandidate> HelperEnemies(ushort owner) =>
-        LiveTargets().Where(t => t.Id != owner)
-            .Select(t => new HelperCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM, t.Stance)).ToList();
+    IReadOnlyList<HelperCandidate> HelperEnemies(ushort owner)
+    {
+        // one buffer for every helper: its gunner reads the enemies inside its own tick and keeps none (HelicopterGunner)
+        _helperEnemies.Clear();
+        var targets = LiveTargets();
+        foreach (var t in targets)
+            if (t.Id != owner) _helperEnemies.Add(new HelperCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM, t.Stance));
+        ReturnTargets(targets);
+        return _helperEnemies;
+    }
+
+    readonly List<HelperCandidate> _helperEnemies = new();
 
     /// <summary>True when no world surface lies between the two points (the same test as a turret's sight line).</summary>
     bool HelperClear(NVec3 from, NVec3 to)

@@ -49,9 +49,18 @@ public partial class NetServer
     }
 
     /// <summary>Every live player except the owner, aimed at chest height.</summary>
-    IReadOnlyList<TurretCandidate> TurretEnemies(ushort owner) =>
-        LiveTargets().Where(t => t.Id != owner)
-            .Select(t => new TurretCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM)).ToList();
+    IReadOnlyList<TurretCandidate> TurretEnemies(ushort owner)
+    {
+        // one buffer for every turret: a turret reads its enemies inside its own tick and keeps none (TurretEntity)
+        _turretEnemies.Clear();
+        var targets = LiveTargets();
+        foreach (var t in targets)
+            if (t.Id != owner) _turretEnemies.Add(new TurretCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM));
+        ReturnTargets(targets);
+        return _turretEnemies;
+    }
+
+    readonly List<TurretCandidate> _turretEnemies = new();
 
     /// <summary>The armed turret a knife swing reaches (the nearest in the swing's cone), or null.</summary>
     ushort? TurretMelee(NVec3 feet, float yaw, float reach)

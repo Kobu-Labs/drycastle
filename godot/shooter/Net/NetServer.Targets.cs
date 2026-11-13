@@ -40,10 +40,6 @@ public partial class NetServer
         GD.Print($"server: planted {spots.Count}/{n} target dummies (rings {string.Join("/", TargetPlacement.RingsMetres)} m; cover and wall spots not generated)");
     }
 
-    /// <summary>Living dummies as hit targets (hitscan, pellets, explosions, the vehicle gun and the turret all read these).</summary>
-    IEnumerable<HitTarget> TargetHitTargets() =>
-        _match.Targets.All.Where(d => d.Alive).Select(d => new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
-
     /// <summary>Dummies for the UAV: visible to the enemy pings like anyone, with the default visibility.</summary>
     IEnumerable<UavContact> TargetUavContacts() =>
         _match.Targets.All.Where(d => d.Alive).Select(d => new UavContact(d.Id, d.Spot.Feet.X, d.Spot.Feet.Z, PerkModifiers.None.UavVisibility));

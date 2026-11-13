@@ -208,7 +208,8 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Bots);
         foreach (var car in _cars) car.PlaceSolid(); // the boxes on-foot players are stopped by, where the vehicles stand after the last tick (#217)
         PerfLap(ServerPerf.Ph.PlaceSolids);
-        foreach (var c in _byId.Values.ToList()) SimulateClient(c, (float)delta); // every joined player, bots included
+        _simClients.Clear(); _simClients.AddRange(_byId.Values); // a copy: a client may leave while the others are simulated
+        foreach (var c in _simClients) SimulateClient(c, (float)delta); // every joined player, bots included
         PerfLap(ServerPerf.Ph.SimClients);
         StepRockets((float)delta);
         PerfLap(ServerPerf.Ph.Rockets);
@@ -698,16 +699,34 @@ public partial class NetServer : Node
 
     static NVec3 N(Vector3 v) => new(v.X, v.Y, v.Z);
 
+    /// <summary>Lists that <see cref="LiveTargets"/> handed out and their callers gave back (<see cref="ReturnTargets"/>), for the next call to reuse.</summary>
+    readonly Stack<List<HitTarget>> _targetLists = new();
+
+    /// <summary>
+    /// The live targets now, in a list the caller owns until it gives it back with <see cref="ReturnTargets"/>. Each call gets its own list on purpose:
+    /// callers nest (an explosion can detonate a car, which explodes again) and each holds its list while it iterates, so one shared buffer would be
+    /// cleared under them. A list that is not given back only costs an allocation.
+    /// </summary>
     List<HitTarget> LiveTargets()
     {
-        // A fresh list each call on purpose: callers nest (an explosion can detonate a car, which explodes again) and each
-        // holds its list while it iterates, so one shared buffer would be cleared under them.
-        var list = new List<HitTarget>(_byId.Count);
+        var list = _targetLists.Count > 0 ? _targetLists.Pop() : new List<HitTarget>(_byId.Count + 4);
         foreach (var o in _byId.Values)
             if (_match.Get(o.Id)?.Life == PlayerLife.Alive) list.Add(HitTargetOf(o));
-        list.AddRange(TargetHitTargets());
+        var dummies = _match.Targets.All; // living target dummies: an index loop, no enumerator object
+        for (var i = 0; i < dummies.Count; i++)
+        {
+            var d = dummies[i];
+            if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
+        }
         PerfCounters.LiveTargetsCalls++; PerfCounters.LiveTargetsElems += list.Count;
         return list;
+    }
+
+    /// <summary>Gives a list from <see cref="LiveTargets"/> back, once nothing iterates it any more.</summary>
+    void ReturnTargets(List<HitTarget> list)
+    {
+        list.Clear();
+        _targetLists.Push(list);
     }
 
     /// <summary>
@@ -861,9 +880,11 @@ public partial class NetServer : Node
             // a rocket fired from an armed seat passes its own vehicle's hull and riders for as long as its owner still rides it
             var own = RocketCar(r);
             var wall = WorldHit(r.Pos, r.Dir, len, out var hitCar, own);
-            var targets = own != null ? RiderRules.NotAboard(LiveTargets(), own.Seat) : LiveTargets();
+            var all = LiveTargets();
+            var targets = own != null ? RiderRules.NotAboard(all, own.Seat) : all;
             var (exposedGunner, pastHull) = ExposedGunnerBehind(hitCar, r.Pos, r.Dir, len, targets, skip: own);
             var step = RocketFlight.Step(N(r.Pos), N(r.Dir), r.Age, speed, life, dt, wall, targets, r.Owner, exposedGunner, pastHull);
+            ReturnTargets(all); // the step is done with the targets (NotAboard copied its own)
             switch (step.Outcome)
             {
                 case RocketOutcome.Player:
@@ -901,7 +922,8 @@ public partial class NetServer : Node
         BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(r.Id, r.Owner, r.Weapon, N(pos), w.Splash?.Radius ?? 0)));
         BroadcastImpact(N(pos), ImpactSize.Plume, body: direct != null && directCar == null, vehicle: directCar != null); // rockets throw up a plume (ticket #154)
         var own = RocketCar(r);
-        foreach (var t in LiveTargets())
+        var targets = LiveTargets();
+        foreach (var t in targets)
         {
             var isDirect = direct == t.Id;
             if (!isDirect && !BlastReaches(N(pos), t)) continue; // a bunker room's walls are between them
@@ -919,11 +941,19 @@ public partial class NetServer : Node
             if (isDirect) _directHits++; else if (self) _selfHits++; else _splashHits++;
             if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) { v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z)); _knocked++; }
         }
+        ReturnTargets(targets);
     }
+
+    /// <summary>The clients simulated in this tick (reused every tick).</summary>
+    readonly List<Client> _simClients = new();
+
+    /// <summary>The entity records of the snapshot being sent (reused every tick; <see cref="SendSnapshots"/>).</summary>
+    readonly List<EntityRecord> _snapEnts = new();
 
     void SendSnapshots()
     {
-        var ents = new List<EntityRecord>();
+        var ents = _snapEnts; // one list for every tick (the encoders read it inside this call only)
+        ents.Clear();
         foreach (var c in _byId.Values) // every joined player, bots included
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot,
