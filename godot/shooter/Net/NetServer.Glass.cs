@@ -90,7 +90,7 @@ public partial class NetServer
             var q = PhysicsRayQueryParameters3D.Create(from + dir * off, from + dir * max);
             q.CollisionMask = CollisionLayers.Bullets;
             q.Exclude = exclude ?? PlayerRids();
-            var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+            var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
             if (r.Count == 0) { car = null; return float.PositiveInfinity; }
             car = r["collider"].As<GodotObject>() as ServerCar;
             var wall = from.DistanceTo(r["position"].AsVector3());

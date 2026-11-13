@@ -142,6 +142,7 @@ public partial class NetServer : Node
 
     public override void _Ready()
     {
+        PerfInit();
         // one peer slot more than the players allowed: the connection past the limit is seen and told the server is full (T3-020)
         var err = _host.CreateHostBound("*", Port, MaxPeers + 1, Wire.Channels, 0, 0);
         if (err != Error.Ok)
@@ -170,7 +171,7 @@ public partial class NetServer : Node
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");
     }
 
-    public override void _ExitTree() { _host.Destroy(); _nav?.Free(); }
+    public override void _ExitTree() { _perf?.Flush(); _host.Destroy(); _nav?.Free(); }
 
     public override void _Process(double delta)
     {
@@ -189,30 +190,45 @@ public partial class NetServer : Node
             return; // not accepting connections until the spawn list is validated
         }
         _elapsed += delta;
+        _perf?.Begin();
         foreach (var cl in _clients.Values) cl.PacketsThisTick = 0;
         Poll();
+        PerfLap(ServerPerf.Ph.Poll);
         CompleteProfileLoads();
         CompleteSaves();
         DropSilentPeers();
+        PerfLap(ServerPerf.Ph.Housekeeping);
         _match.Update();
         if (_tick % Wire.TickRate == 0 && _clients.Count > 0) BroadcastEvent(EventKind.MatchState, MatchCodec.Encode(BuildMatchState())); // about once a second, so the scoreboard ping is not stale
         _match.Entities.Tick((float)delta);
+        PerfLap(ServerPerf.Ph.Match);
         StreakTick((float)delta);
+        PerfLap(ServerPerf.Ph.Streaks);
         BotsTick((float)delta); // fills the roster and queues each bot's input for this tick (#214)
+        PerfLap(ServerPerf.Ph.Bots);
         foreach (var car in _cars) car.PlaceSolid(); // the boxes on-foot players are stopped by, where the vehicles stand after the last tick (#217)
+        PerfLap(ServerPerf.Ph.PlaceSolids);
         foreach (var c in _byId.Values.ToList()) SimulateClient(c, (float)delta); // every joined player, bots included
+        PerfLap(ServerPerf.Ph.SimClients);
         StepRockets((float)delta);
+        PerfLap(ServerPerf.Ph.Rockets);
         StepCorpses((float)delta);
+        PerfLap(ServerPerf.Ph.Corpses);
         StepVehicles((float)delta);
+        PerfLap(ServerPerf.Ph.Vehicles);
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
         DetonateFlak();    // flak shells that have arrived burst now
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
+        PerfLap(ServerPerf.Ph.Detonate);
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
         if (catchUp && LossTest == 0) _skippedSnapshots++; // the next regular tick sends the current state
         else SendSnapshots();
+        PerfLap(ServerPerf.Ph.Snapshots);
         TickTelemetry(tickStartUs, delta);
         LossTickEnd(tickStartUs);
+        PerfLap(ServerPerf.Ph.Telemetry);
+        PerfEnd();
         if (_clients.Count > _peakPlayers) _peakPlayers = _clients.Count;
         if (QuitAfter > 0) foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved; // only the smoke verdict reads it; a production server keeps no per-name history
         if (_tick % (Wire.TickRate * 2) == 0 && _clients.Count > 0)
@@ -253,7 +269,7 @@ public partial class NetServer : Node
         Spawns.RemoveAll(sp =>
         {
             var q = PhysicsRayQueryParameters3D.Create(new Vector3(sp.X, sp.Y + 2f, sp.Z), new Vector3(sp.X, sp.Y - 5f, sp.Z), CollisionLayers.World);
-            return space.IntersectRay(q).Count == 0;
+            return space.PerfRay(q).Count == 0;
         });
         GD.Print($"server: {Spawns.Count}/{before} spawn candidates have ground");
         LossClusterSpawns();
@@ -497,6 +513,7 @@ public partial class NetServer : Node
     public void BroadcastEvent(EventKind kind, byte[] payload)
     {
         ReliableMsg m = new EventMsg((byte)kind, payload);
+        PerfEventSent(kind, payload);
         var bytes = Wire.Encode(m); // encoded once: every recipient gets the same bytes (Tx copies them into the packet)
         foreach (var c in _clients.Values)
             if (c.Joined) Tx(c.Peer!, Wire.ChanReliable, bytes, (int)ENetPacketPeer.FlagReliable);
@@ -689,6 +706,7 @@ public partial class NetServer : Node
         foreach (var o in _byId.Values)
             if (_match.Get(o.Id)?.Life == PlayerLife.Alive) list.Add(HitTargetOf(o));
         list.AddRange(TargetHitTargets());
+        PerfCounters.LiveTargetsCalls++; PerfCounters.LiveTargetsElems += list.Count;
         return list;
     }
 
@@ -725,7 +743,7 @@ public partial class NetServer : Node
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
         q.CollisionMask = CollisionLayers.Bullets; // world (1), vehicles (2) and shot-only cover (tree crowns): bullets and rockets stop on them
         q.Exclude = skip == null ? PlayerRids() : new Godot.Collections.Array<Rid>(PlayerRids()) { skip.GetRid() };
-        var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
         if (r.Count == 0) return float.PositiveInfinity;
         car = r["collider"].As<GodotObject>() as ServerCar;
         return from.DistanceTo(r["position"].AsVector3());
@@ -772,6 +790,7 @@ public partial class NetServer : Node
             var (exposedGunner, pastHull) = ExposedGunnerBehind(shotCar, eye, dir, range, targets, skip: seatCar);
             var hit = GunnerCover.Raycast(N(eye), d, range, wall, targets, c.Id, exposedGunner, pastHull); // a flak gunner in the open is hit through his hull
             if (hit == null && HitMath.Raycast(N(eye), d, range, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
+            PerfShot(c, eye, dir, range, hit?.Id);
             var end = eye + dir * (hit?.Distance ?? Math.Min(wall, range));
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
             if (hit is { } h) Deal(c.Id, (byte)shot.WeaponIndex, h.Id, HitMath.HitscanDamage(w, h.Distance, h.Head), h.Head, false);

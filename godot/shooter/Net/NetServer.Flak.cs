@@ -61,7 +61,7 @@ public partial class NetServer
         var exclude = new Godot.Collections.Array<Rid>(PlayerRids()) { hull.GetRid() };
         if (skip != null) exclude.Add(skip.GetRid());
         q.Exclude = exclude;
-        var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
         return (riders, r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3()));
     }
 

@@ -43,7 +43,7 @@ public partial class NetServer
         var q = PhysicsRayQueryParameters3D.Create(new Vector3(from.X, from.Y, from.Z), new Vector3(to.X, to.Y, to.Z));
         q.CollisionMask = CollisionLayers.Bullets; // as for bullets
         q.Exclude = PlayerRids();
-        var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
         if (r.Count == 0) return null;
         return new GroundHit(N(r["position"].AsVector3()), N(r["normal"].AsVector3()));
     }

@@ -84,7 +84,7 @@ public partial class NetServer
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
         q.CollisionMask = 1;
         q.Exclude = PlayerRids();
-        var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
         return r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3());
     }
 

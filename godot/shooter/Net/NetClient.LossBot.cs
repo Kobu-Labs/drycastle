@@ -157,6 +157,9 @@ public partial class NetClient
         var quiet = t >= tWin1;
         if (Dead || quiet) return new MoveInput { SpeedScale = 1, Yaw = _me!.Yaw };
         if (LossBot == "shooter") return ShooterStep(t);
+        if (LossBot is "idle" or "straight" or "jumper" or "turner") return PatternStep();
+        if (LossBot == "streaker") return StreakerStep();
+        if (LossBot == "aimer") return AimerStep();
         var phase = (int)(_elapsed / 1.5);
         var yaw = (float)(phase * Math.PI / 2 + (PlayerName.GetHashCode() & 3) * Math.PI / 2);
         var jump = ((int)(_elapsed * 30) % 45) == 0 ? MoveButtons.Jump : MoveButtons.None;
@@ -190,5 +193,69 @@ public partial class NetClient
         if (cycle < 27) btn |= MoveButtons.Fire;
         else if (cycle == 28) btn |= MoveButtons.Reload;
         return new MoveInput { MoveY = bestD > 8f ? 1 : 0, Yaw = yaw, Buttons = btn, SpeedScale = 1 };
+    }
+
+    /// <summary>Perf-harness role: a sandbox client that keeps killstreaks (and vehicles) coming, while it walks like a walker. Load only; asserts nothing.</summary>
+    public string PerfStreaks = "", PerfVehicles = "";
+    public double PerfStreakPeriod = 2;
+    int _psIdx, _pvIdx; double _psNext = 4;
+
+    MoveInput StreakerStep()
+    {
+        if (SandboxGranted && _elapsed >= _psNext)
+        {
+            _psNext = _elapsed + PerfStreakPeriod;
+            var streaks = PerfStreaks.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (streaks.Length > 0)
+            {
+                SendSandboxGrant(streaks[_psIdx++ % streaks.Length]);
+                SendSandboxAction(SandboxAction.Activate);
+            }
+            SendSandboxAction(SandboxAction.Heal);
+            var vehicles = PerfVehicles.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (vehicles.Length > 0 && _psIdx % 5 == 0 && byte.TryParse(vehicles[_pvIdx++ % vehicles.Length], out var vi)) SendSandboxAction(SandboxAction.SpawnVehicle, vi);
+        }
+        var phase = (int)(_elapsed / 1.5);
+        var yaw = (float)(phase * Math.PI / 2 + (PlayerName.GetHashCode() & 3) * Math.PI / 2);
+        return new MoveInput { MoveY = 1, Yaw = yaw, SpeedScale = 1, Buttons = MoveButtons.Fire }; // fire: a pilot streak (attack helicopter) shoots on the pilot's fire input
+    }
+
+    /// <summary>
+    /// Perf-harness role: stands still and shoots the nearest remote where the screen shows it (the interpolated position), as a perfect-aim human
+    /// would. Against a server that resolves at present positions, the hit rate of this bot is the cost of the missing lag compensation.
+    /// </summary>
+    MoveInput AimerStep()
+    {
+        _wantSlot = 2; // ak47
+        var me = _me!.State.Position;
+        Remote? best = null; var bestD = 40f;
+        foreach (var r in _remotes.Values)
+        {
+            if (r.State is EntityState.Dead or EntityState.InVehicle) continue;
+            var d = (r.LastPos - new Vector3(me.X, me.Y, me.Z)).Length();
+            if (d < bestD) { bestD = d; best = r; }
+        }
+        var stand = new MoveInput { SpeedScale = 1, Yaw = _me.Yaw };
+        if (best == null) return stand;
+        var dx = best.LastPos.X - me.X; var dz = best.LastPos.Z - me.Z;
+        var yaw = MathF.Atan2(-dx, -dz);
+        var horiz = MathF.Sqrt(dx * dx + dz * dz);
+        _me.Pitch = Math.Clamp(MathF.Atan2(best.LastPos.Y + 1.2f - (me.Y + 1.6f), MathF.Max(0.1f, horiz)), -1.4f, 1.4f);
+        var cycle = (int)(_elapsed * 10) % 60;
+        var btn = cycle < 27 ? MoveButtons.Fire : cycle == 28 ? MoveButtons.Reload : MoveButtons.None;
+        return new MoveInput { Yaw = yaw, Buttons = btn, SpeedScale = 1 };
+    }
+
+    /// <summary>Perf-harness roles for finding what makes the client's prediction disagree with the server (C-02): one movement behaviour each.</summary>
+    MoveInput PatternStep()
+    {
+        var yaw = 0.3f;
+        switch (LossBot)
+        {
+            case "idle": return new MoveInput { SpeedScale = 1, Yaw = yaw };
+            case "straight": return new MoveInput { MoveY = 1, Yaw = yaw, SpeedScale = 1 };
+            case "jumper": return new MoveInput { MoveY = 1, Yaw = yaw, SpeedScale = 1, Buttons = ((int)(_elapsed * 30) % 45) == 0 ? MoveButtons.Jump : MoveButtons.None };
+            default: return new MoveInput { MoveY = 1, Yaw = (float)((int)(_elapsed / 1.5) * Math.PI / 2), SpeedScale = 1 }; // turner
+        }
     }
 }

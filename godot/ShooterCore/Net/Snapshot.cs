@@ -198,6 +198,8 @@ public sealed class SnapshotDecoder
     /// <summary>The tick to acknowledge with the inputs, or <see cref="Wire.NoTick"/> before the first commit.</summary>
     public uint AckTick => HasState ? LastTick : Wire.NoTick;
 
+    /// <summary>Perf counters: ticks whose first packet was seen, and ticks that committed (all packets arrived). The difference is what the all-or-nothing tick loses.</summary>
+    public int TicksStarted, TicksCompleted;
     // the tick being assembled from its packets
     bool _assembling;
     uint _asmTick;
@@ -230,7 +232,7 @@ public sealed class SnapshotDecoder
             if (baseTick == Wire.NoTick) start = new Dictionary<ushort, EntityRecord>();
             else if (_history.Get(baseTick) is { } b) start = new Dictionary<ushort, EntityRecord>(b); // a copy: the history keeps its own
             else return false; // the baseline is gone: wait for a full set
-            _asm = start; _asmTick = tick; _asmTotal = total; _asmGot = 0; _assembling = true;
+            _asm = start; _asmTick = tick; _asmTotal = total; _asmGot = 0; _assembling = true; TicksStarted++;
         }
         else if (tick < _asmTick) return false; // older than the tick being assembled
         if (total != _asmTotal || (_asmGot & (1UL << index)) != 0) return false;
@@ -282,6 +284,7 @@ public sealed class SnapshotDecoder
         _asmGot |= 1UL << index;
         if (_asmGot != (ulong.MaxValue >> (64 - _asmTotal))) return false;
         Commit(tick);
+        TicksCompleted++;
         return true;
     }
 

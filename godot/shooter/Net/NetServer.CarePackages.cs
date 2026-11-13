@@ -35,7 +35,7 @@ public partial class NetServer
         var space = World.GetWorld3D().DirectSpaceState;
         var q = PhysicsRayQueryParameters3D.Create(new Vector3(p.X, p.Y + CarePackageRules.StartHeightMetres, p.Z),
             new Vector3(p.X, p.Y - CarePackageRules.StartHeightMetres, p.Z), CollisionLayers.World);
-        var hit = space.IntersectRay(q);
+        var hit = space.PerfRay(q);
         return hit.Count == 0 ? null : hit["position"].AsVector3().Y;
     }
 

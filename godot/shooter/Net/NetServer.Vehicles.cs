@@ -336,7 +336,7 @@ public partial class NetServer
             var p = car.GlobalPosition + off;
             var q = PhysicsRayQueryParameters3D.Create(p + Vector3.Up * 1.5f, p + Vector3.Down * 2.5f);
             q.CollisionMask = 1;
-            var r = space.IntersectRay(q);
+            var r = space.PerfRay(q);
             if (r.Count == 0) continue;
             var g = r["position"].AsVector3() + Vector3.Up * 0.1f;
             if (!c.Body.TestMove(new Transform3D(Basis.Identity, g), Vector3.Zero)) return g;

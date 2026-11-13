@@ -118,7 +118,8 @@ def run_scenario(name, sim, a, outdir, godot, port):
 
     deadline = a.measure + 60 + 12 + 160
     srv = start("server", ["--role", "server", "--port", str(port), "--loss-test", str(a.bots), "--loss-measure", str(a.measure), "--loss-out", str(d),
-                           "--match-set", ms, "--quit-after", str(deadline)] + simarg, sc)
+                           "--match-set", ms, "--quit-after", str(deadline)] + simarg
+                           + (["--perf-out", str(d / "perf")] if os.environ.get("PERF_PHASES") else []), sc)  # perf-harness: per-phase tick CSV
     t0 = time.time()
     while time.time() - t0 < 90 and "SHOOTER_NET_LISTENING" not in (d / "server.log").read_text(errors="replace"):
         time.sleep(0.5)

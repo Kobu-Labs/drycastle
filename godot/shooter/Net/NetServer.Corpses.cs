@@ -38,7 +38,7 @@ public partial class NetServer
             var a = new Vector3(from.X, from.Y, from.Z);
             var q = PhysicsRayQueryParameters3D.Create(a, a + new Vector3(dir.X, dir.Y, dir.Z) * len);
             q.CollisionMask = CollisionLayers.World;
-            var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+            var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
             return r.Count == 0 ? null : a.DistanceTo(r["position"].AsVector3());
         }
         foreach (var body in _corpses.Bodies) body.Fly(dt, Cast);

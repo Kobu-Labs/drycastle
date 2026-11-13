@@ -205,6 +205,7 @@ public partial class NetClient : Node
     public override void _Process(double delta)
     {
         TelemetryFrame(delta);
+        PerfClientFrame(delta);
         if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
         if (_done) return;
         Poll();
@@ -305,6 +306,7 @@ public partial class NetClient : Node
                 UavEvent((EventKind)e.Kind, e.Payload);
                 OnAppearanceEvent((EventKind)e.Kind, e.Payload);
                 WorldEntities.OnEvent((EventKind)e.Kind, e.Payload);
+                PerfClientEvent((EventKind)e.Kind, e.Payload);
                 EventReceived?.Invoke((EventKind)e.Kind, e.Payload);
                 break;
         }
@@ -358,6 +360,7 @@ public partial class NetClient : Node
         if (_me == null || !_dec.Apply(d, out var h)) return;
         if (_lastTick != 0 && h.Tick < _lastTick) return;
         LossOnSnapshot(h);
+        PerfClientSnapshot();
         TelemetrySnapshot(h.Tick);
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         DayNightCycle.Current?.SetServerTick(h.Tick);
@@ -456,6 +459,7 @@ public partial class NetClient : Node
         var predicted = _pending[idx].After;
         var err = (predicted.Position - sp).Length();
         _maxErr = MathF.Max(_maxErr, err);
+        PerfPredErr(err, predicted.Position - sp);
         LossOnPredictionError(err);
         TelemetryPredictionError(err);
         _pending.RemoveRange(0, idx + 1);

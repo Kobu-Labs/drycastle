@@ -19,6 +19,9 @@ namespace Drycastle.Shooter;
 ///   --admin-token T[,T...]    server: player tokens (the player_token in the client's settings file) whose owners may use chat commands: /bots, /spawn, /time
 ///   --bots N                  server: N bots (0-64) play while at least one human is in the match (#214); they walk to the nearest player and shoot what they see, earn and grant no XP
 ///   --nav-cache DIR           server: where the bots' baked navigation tiles are kept (default navcache in the Godot user data folder); baked once per map version
+///   --perf-out DIR            server: write per-phase tick timings and counters to DIR/server-ticks.csv (perf investigation, measurement only)
+///   --loss-bot streaker       client (perf investigation): with --sandbox, grants and activates the killstreaks of --perf-streaks a,b,c every --perf-streak-period s, and spawns the vehicle indices of --perf-vehicles i,j every 5 periods
+///   --perf-lagcomp            server: with --perf-out, log every hitscan shot against present and rewound positions (shadow mode, nothing changes)
 ///   --cluster-spawns          server: keep one dense cluster of spawn points (dev aid: players and bots meet at once instead of crossing the village)
 ///   --sandbox                 client: ask the server for sandbox mode (also DRYCASTLE_SANDBOX=1); the server may refuse
 ///   --dev-ui                  client: show the dev-only UI (the Advanced section of the connect screen); debug builds always show it
@@ -107,6 +110,7 @@ public partial class Shooter : Node3D
             GD.Print($"data: {data.Weapons.Weapons.Count} weapons, score goal {data.Match.ScoreGoal}, {data.Vehicles.Vehicles.Count} vehicle types");
             LoadMap(cfg);
             if (role == "server" && cfg.Flag("nav-spike")) { BuildNavSpike(cfg); return; }
+            if (role == "server" && cfg.Flag("perf-micro")) { BuildPerfMicro(cfg); return; } // perf investigation: micro-benchmarks on the real map, then quit
             if (role == "server" && !_smoke)
             {
                 SetReadyMarker(false);
@@ -408,6 +412,7 @@ public partial class Shooter : Node3D
             AdminTokens = new HashSet<string>(cfg.Str("admin-token").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.OrdinalIgnoreCase),
             Bots = int.TryParse(cfg.Str("bots", "0"), out var bots) ? Math.Clamp(bots, 0, NetServer.MaxBots) : 0,
             ClusterSpawns = cfg.Flag("cluster-spawns"),
+            PerfOut = cfg.Str("perf-out"), PerfLagComp = cfg.Flag("perf-lagcomp"),
             MapDir = Path.GetFullPath(GamePaths.Map(cfg.Str("map", ""))),
             NavCacheDir = cfg.Str("nav-cache", Path.Combine(OS.GetUserDataDir(), "navcache")),
         };
@@ -504,7 +509,7 @@ public partial class Shooter : Node3D
         {
             World = this, Host = host, Port = port, PlayerName = cfg.Str("name", "player"), Bot = bot, KillY = killY, SandboxRequested = SandboxAsked(cfg),
             BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6,
-            Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"),
+            Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"), PerfStreaks = cfg.Str("perf-streaks"), PerfOut = cfg.Str("perf-out"), PerfStreakPeriod = double.TryParse(cfg.Str("perf-streak-period", "2"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var psp) ? psp : 2, PerfVehicles = cfg.Str("perf-vehicles"),
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
             FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), BazookaBot = cfg.Str("bazooka-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, Map = _map,
         });
@@ -527,6 +532,7 @@ public partial class Shooter : Node3D
         var spawn = RandomSpawn();
         player.Teleport(spawn + Vector3.Up * 0.1f);
         if (_smokeMove) AddChild(new SmokeMove { Player = player, Spawn = spawn });
+        if (_cfg.Flag("perf-route")) BuildPerfRoute(_cfg, player); // perf investigation: scripted camera route, frame stats, quit
     }
 }
 
