@@ -381,6 +381,8 @@ public sealed partial class TacticalMap : Control
             return new Vector2(Math.Clamp(p.X, Gutter + 8, Gutter + _o._side - 8), Math.Clamp(p.Y, Gutter + 8, Gutter + _o._side - 8));
         }
 
+        readonly List<GunfireBlip> _blipScratch = new();
+
         public override void _Draw()
         {
             if (_o._base is not { } b || !_o._m.HasPlayer || _o._side <= 0) return;
@@ -390,6 +392,12 @@ public sealed partial class TacticalMap : Control
                 for (var i = 0; i < m.Friends.Count; i++) MapGlyphs.Friend(this, At(m.Friends[i], b));
             var pings = m.Pings.Positions(Time.GetTicksMsec() / 1000.0); // empty once the UAV's pings expire, as on the minimap
             for (var i = 0; i < pings.Count; i++) MapGlyphs.Ping(this, At(pings[i], b), m.TeamColours);
+            if (m.Blips is { } blips)
+            {
+                blips.Collect(Time.GetTicksMsec() / 1000.0, _blipScratch);
+                var still = GameSettings.Current.ReduceMotion;
+                foreach (var bl in _blipScratch) MapGlyphs.Blip(this, At(bl.Position, b), bl, still, 1.3f);
+            }
             var me = At(new System.Numerics.Vector2(m.Player.X, m.Player.Y), b);
             MapGlyphs.Player(this, me, TacticalMapMath.HeadingRadians(m.Yaw));
         }
@@ -559,6 +567,21 @@ static class MapGlyphs
     {
         c.DrawCircle(p, 9f, ShooterTheme.Outline);
         c.DrawCircle(p, 7f, teamColours ? ShooterTheme.Enemy : ShooterTheme.Danger);
+    }
+
+    /// <summary>
+    /// A gunfire blip: a hollow diamond that swells and fades (a ring-like outline, so it is not the UAV's filled disc or the friends' ring;
+    /// never colour only). Reduce-motion: fixed size, full opacity until it ends.
+    /// </summary>
+    public static void Blip(CanvasItem c, Vector2 p, GunfireBlip blip, bool reduceMotion, float scale)
+    {
+        var a = blip.Alpha(reduceMotion);
+        var r = (5f + 5f * blip.Growth(reduceMotion)) * scale;
+        var pts = new[] { p + new Vector2(0, -r), p + new Vector2(r, 0), p + new Vector2(0, r), p + new Vector2(-r, 0), p + new Vector2(0, -r) };
+        var shell = ShooterTheme.Outline; shell.A *= a;
+        var ink = ShooterTheme.Enemy; ink.A = a;
+        c.DrawPolyline(pts, shell, 4f * scale, true);
+        c.DrawPolyline(pts, ink, 2f * scale, true);
     }
 
     /// <summary>The player: an arrow pointing along the view, <paramref name="rotation"/> radians clockwise from up (north on the sheet), in a ring so nothing else on the map looks like it.</summary>

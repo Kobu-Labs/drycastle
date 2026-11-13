@@ -208,6 +208,10 @@ _Avoid_: turret (alone, ambiguous with the vehicle gun), gun emplacement
 The 4-kill killstreak: for 60 seconds the owner receives enemy pings on the minimap, one every second. Enemies with Ghost are not shown.
 _Avoid_: drone, radar
 
+**Gunfire blip**:
+A short-lived mark on the minimap and the tactical map at the spot an enemy fired from, shown when the shot is within 150 m of the local player (match.json `gunfire_blip_radius`), for 1.5 seconds with a fade, at most one per shooter every 0.25 seconds. Only enemies' gun shots blip (in team deathmatch teammates never do, in free-for-all everyone else does); the knife, streak weapons and vehicle guns do not, and Ghost does not hide it. Shown out of sight too. It is a hollow diamond, not the UAV's filled ping.
+_Avoid_: radar ping, UAV ping, shot marker
+
 **Attack missile**:
 The 5-kill killstreak: a rocket dropped high above the owner that the owner steers from an infrared point of view. It can only dive (never level, never straight down), so it reaches the ground within about 7 to 13 seconds and detonates there.
 _Avoid_: rocket (alone), missile strike
@@ -300,7 +304,7 @@ _Avoid_: squad, clan, faction
 The blue (friend) and orange (enemy) the HUD uses, seen from the local player's team, for names in the kill feed and scoreboard and for the minimap dots. A team tag ("A"/"B") always accompanies the colour, and both colours have a colour-blind set (`TeamPalette`).
 
 **Tactical map**:
-The full-screen, north-up map sheet of the whole base map that the M key (rebindable, `map`) opens and closes; Esc also closes it. It is view only and does not pause anything. Terrain, parcels and roads come from the same data as the minimap; a square grid labels columns A, B, C... from the west and rows 1, 2, 3... from the south, so a square has a short reference such as "C7" (the cell is 50, 100 or 200 m, chosen so there are about 10 to 20 a side; these are not S-JTSK coordinates). The margin shows a compass rose, the player's heading in degrees, the grid reference and position in metres from the south-west corner, a scale bar and a legend. Markers (the player's arrow, vehicles, friends in team deathmatch, UAV pings) are the minimap's, drawn from the same data. It closes on the respawn screen, at the end of a match and in a missile or turret view.
+The full-screen, north-up map sheet of the whole base map that the M key (rebindable, `map`) opens and closes; Esc also closes it. It is view only and does not pause anything. Terrain, parcels and roads come from the same data as the minimap; a square grid labels columns A, B, C... from the west and rows 1, 2, 3... from the south, so a square has a short reference such as "C7" (the cell is 50, 100 or 200 m, chosen so there are about 10 to 20 a side; these are not S-JTSK coordinates). The margin shows a compass rose, the player's heading in degrees, the grid reference and position in metres from the south-west corner, a scale bar and a legend. Markers (the player's arrow, vehicles, friends in team deathmatch, UAV pings, gunfire blips) are the minimap's, drawn from the same data. It closes on the respawn screen, at the end of a match and in a missile or turret view.
 _Avoid_: world map, big map, full map
 
 **Animal**:

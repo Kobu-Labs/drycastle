@@ -460,12 +460,11 @@ Not built:
 - XP gain toasts (kill, headshot, roadkill, streak kill). The server sends only `LevelUp` and the round summary; a per-kill
   XP event is needed (#143). Left open here (not trivial: a new wire event).
 - Perk icon. The HUD shows the perk as a text label (#143); there is no icon asset.
-- HUD XP bar; minimap size, opacity and zoom as settings (#119, #143). Enemy minimap dots are fed only by UAV pings (#121).
+- HUD XP bar; minimap size, opacity and zoom as settings (#119, #143). Enemy minimap dots are fed by UAV pings (#121) and gunfire blips: an enemy's gun shot within `gunfire_blip_radius` (match.json, 150 m) shows a fading diamond for `gunfire_blip_seconds` (1.5 s), one per shooter per `gunfire_blip_interval` (0.25 s). No wire event of its own: every client already receives each Shot and PelletFan with the shooter and origin (rules in `GunfireBlipRules`, tracker `GunfireBlips`). Knife, streak weapons and vehicle guns do not blip; Ghost does not hide it; no protocol bump.
 - Scope zoom levels above 1 (#113). Sniper sway reduction (#139): `sway_amount` is read but never applied.
 - Concealment wired into the tick, name tags and kill cam; suit visible in first person; tufts do not follow limbs (#140, #141).
 - Water: water surface mesh, underwater fog and muffling, bubbles, light shafts, remote swim animation, splash on entry
   for predicted shots (#138, #142). Holes in water bodies are not cut out of the surface (an island in a lake is covered).
-- Boats and amphibious vehicles are server-only visually (primitive boxes, no CC0 model in `assets/manifest.json`).
 - Turret: the knife can hit a turret through a wall; the owner leaving leaves the turret firing (kills still credit the
   departed id) (#123).
 - Aircraft: no way out of a turret or gunship except the streak's own end (#125, #126); the owner's body stays shootable
