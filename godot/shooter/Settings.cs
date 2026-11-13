@@ -37,6 +37,8 @@ public sealed class GameSettings
     public BindingMap Keys = InputBindings.NewMap();
 
     public static readonly string[] MsaaNames = { "Off", "2x", "4x", "8x" };
+    /// <summary>The MSAA of a new install (no settings file yet): 2x. An existing file keeps its saved value, or the old 4x default when it has none.</summary>
+    public const int NewInstallMsaa = 1;
 
     static GameSettings? _cur;
     public static GameSettings Current => _cur ??= Load();
@@ -81,6 +83,7 @@ public sealed class GameSettings
             s.ColorBlind = (bool)cf.GetValue("accessibility", "colour_blind", false);
             s.Keys.LoadAll(s.Keys.Actions.ToDictionary(a => a, a => cf.GetValue("controls", a, "").AsString()));
         }
+        else s.Msaa = NewInstallMsaa;
         return s;
     }
 
