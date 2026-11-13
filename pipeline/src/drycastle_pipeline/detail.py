@@ -430,12 +430,24 @@ def _split_kinds(g: np.random.Generator, pts: np.ndarray, kinds: list) -> dict[s
     return {k: pts[idx == i] for i, (k, _) in enumerate(kinds) if (idx == i).any()}
 
 
+def _difference(geom: BaseGeometry, taken: BaseGeometry) -> BaseGeometry:
+    """``geom`` minus ``taken``. An intersection can bring stray lines or points along, and GEOS then fails the
+    overlay ("Unable to determine overlay result geometry dimension"); only the polygonal parts matter for scattering
+    (a line or a point has no area to scatter over), so that case is retried on those."""
+    if taken.is_empty:
+        return geom
+    try:
+        return geom.difference(taken)
+    except shapely.errors.GEOSException:
+        return _union(_polys(geom)).difference(_union(_polys(taken)))
+
+
 def _zones(g: np.random.Generator, zones: list[tuple[BaseGeometry, float]], spacing: float) -> np.ndarray:
     """Scatter over several zones, each with its own density; zones are made disjoint in the order given."""
     taken: BaseGeometry = Polygon()
     parts = [np.zeros((0, 2))]
     for geom, v in zones:
-        zone = geom.difference(taken) if not taken.is_empty else geom
+        zone = _difference(geom, taken)
         if float(v) > 0 and not zone.is_empty:
             parts.append(scatter(g, zone, spacing, float(v)))
         if not geom.is_empty:
