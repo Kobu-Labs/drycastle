@@ -7,8 +7,10 @@ using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 /// <summary>
 /// The Region tool: hand-drawn colour shapes (GLOSSARY "Region"), stored in edits.json `regions` as
 /// {R-NNNN: {colour "#rrggbb", polygon [[x, y], ...]}} in absolute S-JTSK metres. A region may also carry `ground`
-/// (a ground type of the map, e.g. "meadow"): it is then a hand-drawn ground area, which the pipeline turns into real
-/// ground of that type on the next full map build; until then the editor shows it as paint in the type's colour.
+/// (a stack of ground types of the map, lowest first, e.g. ["forest", "bigfoot_zone"]; ADR 0015): it is then a hand-drawn
+/// ground area, which the pipeline turns into real ground of the topmost type that carries terrain attributes on the next
+/// full map build; until then the editor shows it as paint in that type's colour. A stack with no such type is a layer
+/// of attributes only (spawning, events): no paint, the editor draws it as a translucent overlay (EditorMode.Layers.cs).
 ///
 /// States (the hint bar names each): Idle, Drawing (corners placed, nothing saved), Colouring (shape closed, choose the colour,
 /// still nothing saved), Selected, Dragging (a corner follows the cursor; the file changes on release). Every completed gesture
@@ -20,10 +22,13 @@ public partial class EditorMode
 {
     public enum RegionState { Idle, Drawing, Colouring, Selected, Dragging }
 
-    public sealed record RegionInfo(string Id, string Colour, List<(double x, double y)> Points, string? Ground = null, bool Water = false)
+    public sealed record RegionInfo(string Id, string Colour, List<(double x, double y)> Points, IReadOnlyList<string>? GroundStack = null, bool Water = false)
     {
-        /// <summary>What the region is, in words (never colour alone): paint, water, or ground of a type.</summary>
-        public string KindText => Ground != null ? "ground: " + Ground : Water ? "water" : "paint";
+        /// <summary>The ground types of the region, lowest first; empty for paint and water.</summary>
+        public IReadOnlyList<string> Ground => GroundStack ?? Array.Empty<string>();
+
+        /// <summary>What the region is, in words (never colour alone): paint, water, or ground of a stack of types (topmost last).</summary>
+        public string KindText => Ground.Count > 0 ? "ground: " + string.Join(" + ", Ground) : Water ? "water" : "paint";
 
         public double AreaM2
         {
@@ -102,7 +107,7 @@ public partial class EditorMode
         if (RegionsOf(disk) is { } ro)
             foreach (var (id, e) in ro)
                 if (e is Obj r && r.GetValueOrDefault("colour") is string c && ParsePolygon(r.GetValueOrDefault("polygon")) is { } ring)
-                    list.Add(new RegionInfo(id, c, ring, r.GetValueOrDefault("ground") as string, r.ContainsKey("water_y")));
+                    list.Add(new RegionInfo(id, c, ring, r.GetValueOrDefault("ground") is List<object?> g ? g.OfType<string>().ToList() : null, r.ContainsKey("water_y")));
         return list;
     }
     Obj? _regionsFor;
@@ -303,31 +308,83 @@ public partial class EditorMode
         });
     }
 
+    /// <summary>The known, not deleted types of a stack, in order: the build skips the others.</summary>
+    List<(string Name, GroundTypeEdits.Spec Spec)> StackSpecs(IReadOnlyList<string> stack)
+    {
+        var rows = GroundRows();
+        var list = new List<(string, GroundTypeEdits.Spec)>();
+        foreach (var n in stack)
+            if (rows.FirstOrDefault(x => x.Name == n) is { Deleted: false } r) list.Add((n, r.Effective));
+        return list;
+    }
+
+    /// <summary>What a stack does (pipeline `drawn_ground`): the type that decides its terrain (null: none does) and the types that add a layer over it.</summary>
+    public (string? Deciding, List<string> Layers) StackRoles(IReadOnlyList<string> stack)
+    {
+        var specs = StackSpecs(stack);
+        var plain = specs.Select(x => x.Spec).ToList();
+        var top = GroundTypeEdits.TerrainIndex(plain);
+        return (top >= 0 ? specs[top].Name : null, GroundTypeEdits.LayerIndexes(plain).Select(i => specs[i].Name).ToList());
+    }
+
     /// <summary>
-    /// Make a region a hand-drawn ground area of a type of the map (null: plain paint again): one save. The colour becomes
-    /// the type's terrain colour, so the preview looks like the ground it will be. Refused for a water region and for a
-    /// type the map does not have.
+    /// Give a region a stack of ground types of the map, lowest first (empty or null: plain paint again): one save. A region with a
+    /// stack is a hand-drawn ground area; when a type of it carries terrain attributes, the region's colour becomes that type's
+    /// terrain colour (the topmost such type), so the preview looks like the ground it will be; a stack with none keeps the colour
+    /// (it tints the overlay). Refused for a water region, for a type the map does not have, and for one that is listed twice.
+    /// Types the region already has are not asked again (a deleted type stays in a stack until it is taken out).
     /// </summary>
-    public bool SetRegionGround(string id, string? ground)
+    public bool SetRegionGround(string id, IReadOnlyList<string>? stack)
     {
         if (Region(id) is not { } r) { Say($"region {id} does not exist", true); return false; }
-        if (r.Ground == ground) return true;
+        var next = stack?.ToList() ?? new List<string>();
+        if (r.Ground.SequenceEqual(next)) return true;
         string? colour = null;
-        if (ground != null)
+        if (next.Count > 0)
         {
             if (r.Water) { Say($"{id} is a body of water and cannot also be ground", true); return false; }
-            var match = GroundChoices().Where(t => t.Name == ground).ToList();
-            if (match.Count == 0) { Say($"this map has no ground type {ground}", true); return false; }
-            colour = ParseColour(match[0].Colour);
+            if (GroundTypeEdits.StackProblem(next) is { } bad) { Say($"{id}: {bad}", true); return false; }
+            foreach (var n in next.Where(n => !r.Ground.Contains(n)))
+                if (GroundChoices().All(c => c.Name != n)) { Say($"this map has no ground type {n} to put on a region", true); return false; }
+            if (StackRoles(next).Deciding is { } deciding) colour = ParseColour(GroundRow(deciding)!.Effective.Colour);
         }
         return Mutate(root =>
         {
             if (RegionsOf(root)?.GetValueOrDefault(id) is not Obj e) return (false, $"region {id} no longer exists");
-            if (ground == null) { e.Remove("ground"); return (true, $"{id} is paint again"); }
-            e["ground"] = ground;
+            if (next.Count == 0) { e.Remove("ground"); return (true, $"{id} is paint again"); }
+            e["ground"] = next.Cast<object?>().ToList();
             if (colour != null) e["colour"] = colour;
-            return (true, $"{id} is {ground} ground: the map shows it after the next full build (make map)");
+            return (true, $"{id} ground: {string.Join(" + ", next)}; the map shows it after the next full build (make map)");
         });
+    }
+
+    /// <summary>Put a ground type on top of the region's stack.</summary>
+    public bool AddRegionGround(string id, string name)
+    {
+        if (Region(id) is not { } r) { Say($"region {id} does not exist", true); return false; }
+        if (r.Ground.Contains(name)) { Say($"{name} is already in the stack of {id}", true); return false; }
+        return SetRegionGround(id, r.Ground.Append(name).ToList());
+    }
+
+    /// <summary>Move a type of the stack up (+1, toward the top) or down (-1): the later in the list, the higher the priority.</summary>
+    public bool MoveRegionGround(string id, string name, int delta)
+    {
+        if (Region(id) is not { } r) { Say($"region {id} does not exist", true); return false; }
+        var list = r.Ground.ToList();
+        var i = list.IndexOf(name);
+        var j = i + delta;
+        if (i < 0 || j < 0 || j >= list.Count) return false;
+        (list[i], list[j]) = (list[j], list[i]);
+        return SetRegionGround(id, list);
+    }
+
+    /// <summary>Take a type out of the stack; the last one out makes the region paint again.</summary>
+    public bool RemoveRegionGround(string id, string name)
+    {
+        if (Region(id) is not { } r) { Say($"region {id} does not exist", true); return false; }
+        var list = r.Ground.Where(n => n != name).ToList();
+        if (list.Count == r.Ground.Count) return false;
+        return SetRegionGround(id, list);
     }
 
     /// <summary>Move one corner (absolute metres): one save. Refused (and nothing saved) when the shape would cross itself.</summary>
@@ -700,13 +757,15 @@ public partial class EditorMode
     Label _rgState = null!, _rgValid = null!, _rgNoOrigin = null!, _rgEmpty = null!, _rgListHead = null!, _rgColourLabel = null!;
     ColorPickerButton _rgPicker = null!;
     LineEdit _rgHex = null!;
-    HBoxContainer _rgColourRow = null!, _rgGroundRow = null!;
+    HBoxContainer _rgColourRow = null!;
+    VBoxContainer _rgGroundBox = null!, _rgStack = null!;
     OptionButton _rgGround = null!;
     Label _rgGroundNote = null!;
+    CheckBox _rgLayersCheck = null!;
     VBoxContainer _rgList = null!;
     bool _rgSync;
-    string _rgGroundSig = "\0";
-    List<(string Name, string Colour)> _rgGroundChoices = new();
+    string _rgGroundSig = "\0", _rgStackSig = "\0";
+    List<(string Name, string Colour, bool Terrain)> _rgGroundChoices = new();
     readonly Dictionary<string, Button> _rgRows = new();
 
     Button FocusBtn(string text, Action onPress, string? variation = null)
@@ -723,7 +782,7 @@ public partial class EditorMode
     void BuildRegionPage(VBoxContainer page)
     {
         page.AddChild(new Label { Text = "Regions", ThemeTypeVariation = "Header" });
-        page.AddChild(Note("A hand-drawn shape on the ground, independent of parcel boundaries. As paint only its colour changes; with a ground type it becomes real ground of that type."));
+        page.AddChild(Note("A hand-drawn shape on the ground, independent of parcel boundaries. As paint only its colour changes; with ground types it becomes real ground, and types that only add spawning or events lie over it without changing how it looks."));
         _rgNoOrigin = Note("This map has no origin_epsg5514, so regions cannot be placed. Export it again (map 0.4.0+).", "Danger");
         page.AddChild(_rgNoOrigin);
         _rgNew = FocusBtn("New region  (N)", StartRegion, "PrimaryButton");
@@ -753,19 +812,26 @@ public partial class EditorMode
         _rgColourRow.AddChild(_rgHex);
         page.AddChild(_rgColourRow);
 
-        _rgGroundRow = new HBoxContainer();
-        _rgGroundRow.AddChild(new Label { Text = "Ground" });
+        _rgGroundBox = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _rgGroundBox.AddChild(new Label { Text = "Ground stack", ThemeTypeVariation = "Header" });
+        _rgStack = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _rgGroundBox.AddChild(_rgStack);
         _rgGround = new OptionButton { FocusMode = Control.FocusModeEnum.All, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         FillRegionGround();
         _rgGround.ItemSelected += i =>
         {
-            if (!_rgSync && SelectedRegionId != null) SetRegionGround(SelectedRegionId, i <= 0 || i > _rgGroundChoices.Count ? null : _rgGroundChoices[(int)i - 1].Name);
+            if (!_rgSync && SelectedRegionId != null && i > 0 && i <= _rgGroundChoices.Count) AddRegionGround(SelectedRegionId, _rgGroundChoices[(int)i - 1].Name);
+            _rgSync = true; _rgGround.Selected = 0; _rgSync = false; // the item is added to the stack; the box shows its prompt again
             _rgGround.ReleaseFocus();
         };
-        _rgGroundRow.AddChild(_rgGround);
-        page.AddChild(_rgGroundRow);
+        _rgGroundBox.AddChild(FieldRow("Add", _rgGround, "Put a ground type on top of the stack"));
         _rgGroundNote = Note("");
-        page.AddChild(_rgGroundNote);
+        _rgGroundBox.AddChild(_rgGroundNote);
+        page.AddChild(_rgGroundBox);
+        _rgLayersCheck = new CheckBox { Text = "Attribute layers  (V)", FocusMode = Control.FocusModeEnum.All, ButtonPressed = _layersOn,
+            TooltipText = "Draw the regions that add spawning or events as a translucent overlay (V). The same switch as View > Layers." };
+        _rgLayersCheck.Toggled += on => { if (!_rgSync) SetLayers(on); };
+        page.AddChild(_rgLayersCheck);
 
         _rgClose = FocusBtn("Close the shape  (Enter)", () => CloseRegion(), "PrimaryButton");
         _rgCreate = FocusBtn("Create the region  (Enter)", () => CommitRegion(), "PrimaryButton");
@@ -784,7 +850,7 @@ public partial class EditorMode
         page.AddChild(Note("Where regions overlap the higher ID wins. Esc steps back: cancel drawing, deselect, leave the tool."));
     }
 
-    /// <summary>The Ground dropdown lists the types as they are now (your edits included); rebuilt only when they change and the list is closed.</summary>
+    /// <summary>The Add dropdown lists the types as they are now (your edits included); rebuilt only when they change and the list is closed.</summary>
     void FillRegionGround()
     {
         var choices = GroundChoices();
@@ -795,9 +861,42 @@ public partial class EditorMode
         var was = _rgSync;
         _rgSync = true;
         _rgGround.Clear();
-        _rgGround.AddItem("Paint only");
-        foreach (var t in choices) _rgGround.AddIconItem(Swatch(t.Colour), t.Name);
+        _rgGround.AddItem("Add a ground type...");
+        foreach (var t in choices) _rgGround.AddIconItem(Swatch(t.Colour), t.Terrain ? t.Name : t.Name + "  (adds only)");
+        _rgGround.Selected = 0;
         _rgSync = was;
+    }
+
+    /// <summary>The rows of the selected region's stack, topmost first: swatch, name, what it does, Up / Down / Remove. Rebuilt when the stack or the types change.</summary>
+    void RebuildRegionStack(RegionInfo sel)
+    {
+        foreach (var c in _rgStack.GetChildren()) { _rgStack.RemoveChild(c); c.QueueFree(); }
+        var rows = GroundRows();
+        var stack = sel.Ground;
+        var specs = stack.Select(n => rows.FirstOrDefault(x => x.Name == n)).ToList();
+        var (deciding, layers) = StackRoles(stack);
+        if (stack.Count == 0) { _rgStack.AddChild(Note("Paint only: the region only colours the ground. Add a ground type to make it real ground.")); return; }
+        for (var i = stack.Count - 1; i >= 0; i--)
+        {
+            var name = stack[i];
+            var row = specs[i];
+            var line = new HBoxContainer();
+            line.AddChild(new TextureRect { Texture = Swatch(row?.Effective.Colour ?? "#808080"), StretchMode = TextureRect.StretchModeEnum.KeepCentered, CustomMinimumSize = new Vector2(EditorTheme.Space * 4, 0) });
+            var role = row == null ? "unknown type: skipped by the build" : row.Deleted ? "deleted: skipped by the build" : name == deciding ? "decides the terrain" : layers.Contains(name) ? "adds " + string.Join(", ", new[] { row.Effective.Spawns ? "spawning" : null, row.Effective.EventSpawn.Count > 0 ? "events" : null }.Where(x => x != null)) : "shadowed by the type above";
+            var label = new Label { Text = $"{name}   {role}", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, ClipText = true, TooltipText = $"{name}: {role}. {(i == stack.Count - 1 ? "Top of the stack." : "")}" };
+            if (row == null || row.Deleted) label.ThemeTypeVariation = "Warn";
+            line.AddChild(label);
+            var up = FocusBtn("Up", () => MoveRegionGround(sel.Id, name, +1));
+            up.Disabled = i == stack.Count - 1;
+            up.TooltipText = up.Disabled ? $"{name} is the top of the stack" : $"Move {name} up: it wins over the types below";
+            var down = FocusBtn("Down", () => MoveRegionGround(sel.Id, name, -1));
+            down.Disabled = i == 0;
+            down.TooltipText = down.Disabled ? $"{name} is the bottom of the stack" : $"Move {name} down: the types above win over it";
+            var remove = FocusBtn("Remove", () => RemoveRegionGround(sel.Id, name));
+            remove.TooltipText = stack.Count == 1 ? $"Take {name} out: the region is paint again" : $"Take {name} out of the stack";
+            foreach (var b in new[] { up, down, remove }) line.AddChild(b);
+            _rgStack.AddChild(line);
+        }
     }
 
     void OnPickerColour(Color c)
@@ -899,25 +998,34 @@ public partial class EditorMode
         if (!_rgPicker.GetPopup().Visible) _rgPicker.Color = Color.FromHtml(shown);
         if (!_rgHex.HasFocus()) _rgHex.Text = shown;
         _rgSync = false;
-        _rgGroundRow.Visible = mode == RegionState.Selected;
-        _rgGroundNote.Visible = mode == RegionState.Selected;
+        _rgGroundBox.Visible = mode == RegionState.Selected;
+        _rgSync = true;
+        _rgLayersCheck.SetPressedNoSignal(_layersOn);
+        _rgSync = false;
         if (sel != null)
         {
             FillRegionGround();
-            var at = sel.Ground == null ? 0 : _rgGroundChoices.FindIndex(t => t.Name == sel.Ground) + 1;
-            _rgSync = true;
-            if (!_rgGround.GetPopup().Visible) _rgGround.Selected = at;
-            _rgSync = false;
+            var rows = GroundRows();
+            var specs = sel.Ground.Select(n => rows.FirstOrDefault(x => x.Name == n)).ToList();
+            var stackSig = sel.Id + "|" + string.Join(",", sel.Ground) + "|" + string.Join(",", specs.Select(x => x == null ? "?" : RowText(x) + x.Effective.Colour)) + "|" + _rgGroundSig;
+            if (stackSig != _rgStackSig) { _rgStackSig = stackSig; RebuildRegionStack(sel); }
             _rgGround.Disabled = sel.Water || _rgGroundChoices.Count == 0;
             _rgGround.TooltipText = sel.Water ? "A body of water cannot also be ground"
                 : _rgGroundChoices.Count == 0 ? "This map lists no ground types: build it again (make map)"
-                : "Paint only changes the colour. A ground type makes this shape real ground of that type: its colour, grass and trees";
+                : "Put a ground type on top of the stack. The topmost type with terrain attributes decides the colour, grass and trees; types that only add spawning or events lie over it.";
+            var (deciding, layers) = StackRoles(sel.Ground);
+            var terrain = deciding != null ? 0 : -1;
+            var missing = sel.Ground.Where((n, i) => specs[i] == null || specs[i]!.Deleted).ToList();
             (_rgGroundNote.Text, _rgGroundNote.ThemeTypeVariation) =
-                sel.Ground != null && at == 0 ? ($"Ground type {sel.Ground} does not exist (deleted, or not in this map); the map build will skip it.", "Warn")
-                : sel.Ground != null ? ($"Shown as paint for now. The {sel.Ground} ground (grass, trees) appears after the next full map build (make map).", "Dim")
+                missing.Count > 0 ? ($"Ground type {string.Join(", ", missing)} does not exist (deleted, or not in this map); the map build skips it.", "Warn")
+                : deciding != null ? ($"Shown as paint for now. The {deciding} ground (grass, trees) appears after the next full map build (make map)."
+                    + (layers.Count > 0 ? " The types that only add attributes are drawn as an overlay (V)." : ""), "Dim")
+                : sel.Ground.Count > 0 ? ("No type of the stack carries terrain: the ground stays as it is. The region is drawn as a translucent overlay (V), in its colour.", "Dim")
                 : sel.Water ? ("A body of water (set through the prompt).", "Dim")
                 : ("Paint: only the colour changes.", "Dim");
+            _rgColourLabel.Text = sel.Ground.Count > 0 && terrain < 0 ? "Overlay colour" : "Colour";
         }
+        else _rgColourLabel.Text = "Colour";
         _rgClose.Visible = mode == RegionState.Drawing && _draft.Count > 0;
         _rgClose.Disabled = RegionDraftProblem() != null;
         _rgCreate.Visible = colouring;
@@ -1051,6 +1159,7 @@ public partial class EditorMode
         foreach (var (tool, _, name, key) in Tools) { var t = tool; yield return ($"Tool: {name}  ({OS.GetKeycodeString(key)})", () => SelectTool(t)); }
         foreach (var g in GroundRows()) { var gn = g.Name; yield return ($"{g.Name}  ground type  {RecipeWord(g)}  {StateWord(g.State)}", () => { SelectTool(EditorTool.Ground); SelectGroundType(gn); }); }
         yield return ("Region: new  (N)", () => { SelectTool(EditorTool.Region); StartRegion(); });
+        yield return (_layersOn ? "View: hide the attribute layers  (V)" : "View: show the attribute layers  (V)", ToggleLayers);
         yield return ("Sketch: mark points  (P)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Point); });
         yield return ("Sketch: draw a line  (L)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Line); });
         if (_sketch.Count > 0) yield return ("Sketch: clear the active sketch", () => { SelectTool(EditorTool.Sketch); RequestClearSketch(); });

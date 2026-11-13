@@ -251,7 +251,20 @@ public static class ObjectEdits
     {
         var errs = new List<string>();
         if (entry is not Obj r) { errs.Add($"{path}: must be an object"); return errs; }
-        foreach (var k in r.Keys) if (k is not ("colour" or "polygon" or "water_y")) errs.Add($"{path}.{k}: unknown key");
+        foreach (var k in r.Keys) if (k is not ("colour" or "polygon" or "water_y" or "ground")) errs.Add($"{path}.{k}: unknown key");
+        if (r.TryGetValue("ground", out var gv))
+        {
+            if (!(gv is List<object?> stack && stack.Count > 0)) errs.Add($"{path}.ground: must be a non-empty list of ground type names, lowest first");
+            else
+            {
+                for (var i = 0; i < stack.Count; i++)
+                {
+                    if (!(stack[i] is string gs && System.Text.RegularExpressions.Regex.IsMatch(gs, "^[a-z][a-z0-9_]*$"))) errs.Add($"{path}.ground.{i}: must be a ground type name (lower case letters, digits, _)");
+                    else if (stack.IndexOf(stack[i]) != i) errs.Add($"{path}.ground.{i}: {gs} is in the stack twice");
+                }
+                if (r.ContainsKey("water_y")) errs.Add($"{path}.ground: not together with water_y (a water region is its own body of water)");
+            }
+        }
         if (r.TryGetValue("water_y", out var wy) && !(Number(wy) is double w && double.IsFinite(w))) errs.Add($"{path}.water_y: must be a number (metres, terrain datum)");
         if (!r.TryGetValue("colour", out var c)) errs.Add($"{path}.colour: required");
         else if (!(c is string cs && EditSchema.ColourRx.IsMatch(cs))) errs.Add($"{path}.colour: must be a colour like \"#rrggbb\"");

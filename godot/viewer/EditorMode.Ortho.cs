@@ -159,6 +159,7 @@ public partial class EditorMode
     {
         page.AddChild(new HSeparator());
         page.AddChild(new Label { Text = "Layers", ThemeTypeVariation = "Header" });
+        BuildLayersToggle(page);
         _orthoCheck = new CheckBox
         {
             Text = "Aerial photo  (O)", FocusMode = Control.FocusModeEnum.None,
@@ -166,7 +167,7 @@ public partial class EditorMode
         };
         _orthoCheck.Toggled += on => SetOrtho(on);
         page.AddChild(_orthoCheck);
-        page.AddChild(new Label { Text = "Opacity", ThemeTypeVariation = "Dim" });
+        page.AddChild(new Label { Text = "Aerial photo opacity", ThemeTypeVariation = "Dim" });
         _orthoSlider = new HSlider
         {
             MinValue = 10, MaxValue = 100, Step = 5, Value = _orthoOpacity * 100f, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,

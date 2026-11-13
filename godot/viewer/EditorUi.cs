@@ -268,8 +268,8 @@ public partial class EditorMode
         "Group\tG group the selection (marked groups merge)\n" +
         "Edit\tEnter apply, Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo\n" +
         "Objects\tLMB place, R / Shift+R rotate, Ctrl free position, Ctrl+D duplicate, Del delete, arrows nudge\n" +
-        "Ground types\tpick one in the list (Tab reaches it), edit colours, recipe, flags and OSM values: each change saves and Ctrl+Z undoes; N new type, Del delete (asks); changes show after make map\n" +
-        "Region\tN new region, LMB or C adds a corner, Enter closes, then choose the colour and Enter creates\n" +
+        "Ground types\tpick one in the list (Tab reaches it), tick the attributes it carries (appearance, spawning, water, events) and edit colours, recipe and OSM values: each change saves and Ctrl+Z undoes; N new type, Del delete (asks); changes show after make map\n" +
+        "Region\tN new region, LMB or C adds a corner, Enter closes, then choose the colour and Enter creates; a selected region has a ground stack (Add, Up, Down, Remove)\n" +
         "Region edit\tdrag a corner, [ ] pick one, arrows move it, Backspace last corner, Del delete (asks), Ctrl+Z undo\n" +
         "Poles plan\tP plans a line: LMB a pole point, RMB a house, Backspace removes the last, Enter builds poles, cables and house connections\n" +
         "Poles\tchoose a pole and LMB places it, C connects: LMB on a pole, then on the next poles or on a house, Esc stops\n" +
@@ -278,7 +278,7 @@ public partial class EditorMode
         "Sketch edit\tLMB on a mark or [ ] selects it, Del deletes it, Backspace last corner, Ctrl+Z undo; marks are temporary and named in prompts\n" +
         "Sketches\tpick, New, Rename, Delete in the Sketch panel: marks go into the active sketch, prompts can name a whole sketch (\"sketch ROAD\")\n" +
         "Commands\tCtrl+P: tools, undo, region, sketch and parcel IDs\n" +
-        "View\tT top-down, O aerial photo (reference), F1 this sheet, F2 walk mode\n" +
+        "View\tT top-down, O aerial photo (reference), V attribute layers (spawning and events of the ground stacks, translucent), F1 this sheet, F2 walk mode\n" +
         "Esc\tgoes one level back: drawing, colour, region or sketch selection, placement, planning, connecting, gate, cable, object, selection, sidebar";
 
     void BuildCheatSheet(Control root)
@@ -359,6 +359,7 @@ public partial class EditorMode
             SetSpeed((float)(double)cfg.GetValue("ui", "speed", (double)Speed));
             SetOrthoOpacity((float)(double)cfg.GetValue("ui", "ortho_opacity", (double)_orthoOpacity), save: false);
             _orthoRestore = (bool)cfg.GetValue("ui", "ortho_on", false); // applied when the editor first opens, the map is not up yet
+            _layersOn = (bool)cfg.GetValue("ui", "layers_on", true);
             if (ParseColour((string)cfg.GetValue("ui", "region_colour", _newColour)) is { } rc) _newColour = rc;
             var gsel = (string)cfg.GetValue("ui", "ground_type", "");
             if (gsel != "") _restoreGround = gsel;
@@ -378,6 +379,7 @@ public partial class EditorMode
             cfg.SetValue("ui", "speed", (double)Speed);
             cfg.SetValue("ui", "ortho_on", _orthoOn || _orthoRestore);
             cfg.SetValue("ui", "ortho_opacity", (double)_orthoOpacity);
+            cfg.SetValue("ui", "layers_on", _layersOn);
             cfg.SetValue("ui", "region_colour", _newColour);
             cfg.SetValue("ui", "region", SelectedRegionId ?? "");
             cfg.SetValue("ui", "ground_type", SelectedGroundType ?? "");
