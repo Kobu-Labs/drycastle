@@ -97,6 +97,8 @@ public partial class NetClient : Node
     readonly Dictionary<ushort, Remote> _remotes = new();
     uint _lastTick;
     double _lastArrival;
+    /// <summary>The render clock of the remote entities (A-06): a filtered estimate of the server's tick, which never runs backwards.</summary>
+    readonly RenderClock _clock = new();
     double _elapsed, _connectElapsed;
     int _recon, _snaps;
     float _maxErr;
@@ -230,6 +232,7 @@ public partial class NetClient : Node
         RenderWater();
         UpdateViewmodel();
         UpdateShake(delta);
+        FadeOwnCorrection(delta);
         UpdateHud();
     }
 
@@ -338,7 +341,7 @@ public partial class NetClient : Node
                 {
                     ApplySpawnLoadout(); // the hotbar and perk the server applied at this spawn
                     _wantSlot = StartSlot();
-                    Dead = false; _gotSelf = false; _pending.Clear(); // the next snapshot carries the spawn position
+                    Dead = false; _gotSelf = false; _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
                     _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
                     _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId);
                 }
@@ -363,6 +366,7 @@ public partial class NetClient : Node
         PerfClientSnapshot();
         TelemetrySnapshot(h.Tick);
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
+        _clock.OnSnapshot(h.Tick, _lastArrival);
         DayNightCycle.Current?.SetServerTick(h.Tick);
         foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); cg.Solid?.QueueFree(); _flights.Remove(id); _drives.Remove(id); } }
         foreach (var (id, rec) in _dec.States)
@@ -439,6 +443,7 @@ public partial class NetClient : Node
         {
             _gotSelf = true;
             _me!.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y });
+            _viewFix = Vector3.Zero;
             return;
         }
         _me!.Health = rec.Health;
@@ -448,7 +453,7 @@ public partial class NetClient : Node
         {
             // entering or leaving a car: no prediction while driving; on exit take the server's position (the free side) as is
             _driving = inCar; _pending.Clear(); _reconcile = null; _me.InVehicle = inCar;
-            if (!inCar) { _reconcile = null; _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); _me.EndChase(_carYaw); ClearSeats(); }
+            if (!inCar) { _reconcile = null; _viewFix = Vector3.Zero; _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); _me.EndChase(_carYaw); ClearSeats(); }
             return;
         }
         if (_driving || _controlling || _gunship != null) { _pending.Clear(); return; }
@@ -460,6 +465,8 @@ public partial class NetClient : Node
         var err = (predicted.Position - sp).Length();
         _maxErr = MathF.Max(_maxErr, err);
         PerfPredErr(err, predicted.Position - sp);
+        LastNearRemote = NearRemotePlayer(sp);
+        LastVertical = MathF.Abs(predicted.Position.Y - sp.Y) > 0.5f * err; // the error is mostly up or down (steps, slopes, jumps, landings)
         LossOnPredictionError(err);
         TelemetryPredictionError(err);
         _pending.RemoveRange(0, idx + 1);
@@ -481,6 +488,20 @@ public partial class NetClient : Node
         _reconcile = s;
     }
 
+    /// <summary>Set by the last acked comparison: whether another living player stood within 1 m of the body then (I-rubber-banding telemetry).</summary>
+    bool LastNearRemote, LastVertical;
+
+    bool NearRemotePlayer(NVec3 at)
+    {
+        foreach (var r in _remotes.Values)
+        {
+            if (r.State == EntityState.Dead || r.Node == null) continue;
+            var d = new Vector2(r.LastPos.X - at.X, r.LastPos.Z - at.Z);
+            if (d.LengthSquared() < 1f) return true;
+        }
+        return false;
+    }
+
     /// <summary>A reconcile from a snapshot, waiting for the next physics tick (see <see cref="OnSelf"/>).</summary>
     MoveState? _reconcile;
 
@@ -489,12 +510,31 @@ public partial class NetClient : Node
     {
         if (_reconcile is not { } s) return;
         _reconcile = null;
-        _me!.SetState(s);
+        var before = _me!.State.Position; // where the eye was drawn: the predicted present
+        _me.SetState(s);
         for (var i = 0; i < _pending.Count; i++)
         {
             _me.Simulate(_pending[i].Input.ToMove(SpeedFor(_pending[i].Input.Slot)), 1f / Wire.TickRate);
             _pending[i].After = _me.State;
         }
+        // I-rubber-banding: the state moved by the correction; the eye keeps drawing the old place and glides over (FadeOwnCorrection).
+        // A respawn or teleport (beyond SnapDistance) is not a correction to glide over.
+        var moved = before - _me.State.Position;
+        _viewFix = moved.Length() <= SnapDistance ? _viewFix + ToVec(moved) : Vector3.Zero;
+    }
+
+    /// <summary>The part of an on-foot correction still to be drawn (metres, world), faded out over a few frames (see <see cref="ReplayReconcile"/>).</summary>
+    Vector3 _viewFix;
+
+    static Vector3 ToVec(System.Numerics.Vector3 v) => new(v.X, v.Y, v.Z);
+
+    /// <summary>Fades the drawn part of the last on-foot correction, once per frame, at the same rate as the vehicles' corrections.</summary>
+    void FadeOwnCorrection(double delta)
+    {
+        if (_me == null) return;
+        _viewFix *= Mathf.Exp(-CorrectionFade * (float)delta);
+        if (_viewFix.LengthSquared() < 1e-6f) _viewFix = Vector3.Zero; // under a millimetre: done
+        _me.ViewOffset = _viewFix;
     }
 
     public override void _PhysicsProcess(double delta)
@@ -558,14 +598,19 @@ public partial class NetClient : Node
         _meMin = NVec3.Min(_meMin, p); _meMax = NVec3.Max(_meMax, p);
     }
 
+    /// <summary>The fractional server tick the remote entities are drawn at this frame (see <see cref="RenderClock"/>).</summary>
+    double RenderTickNow() => _clock.RenderTick(Time.GetTicksMsec() / 1000.0, InterpDelayTicks);
+
     void RenderRemotes()
     {
         if (_lastTick == 0) return;
-        var rt = _lastTick + (Time.GetTicksMsec() / 1000.0 - _lastArrival) * Wire.TickRate - InterpDelayTicks;
+        var rt = RenderTickNow();
         var dt = (float)GetProcessDeltaTime();
+        var drawn = 0;
         foreach (var (id, r) in _remotes)
             if (r.Buf.At(rt) is { } s)
             {
+                drawn++;
                 var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 var dead = r.State == EntityState.Dead;
                 r.ShownYaw = s.Yaw; r.ShownPitch = s.Pitch;
@@ -576,6 +621,7 @@ public partial class NetClient : Node
                 AnimateRemote(r, s.Pos);
                 UpdateNameTag(id, r);
             }
+        _rub.AddRender(rt, _lastTick, drawn);
     }
 
     /// <summary>

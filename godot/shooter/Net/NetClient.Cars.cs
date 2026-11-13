@@ -164,7 +164,7 @@ public partial class NetClient
     void RenderCars()
     {
         if (_lastTick == 0) return;
-        var rt = _lastTick + (Time.GetTicksMsec() / 1000.0 - _lastArrival) * Wire.TickRate - InterpDelayTicks;
+        var rt = RenderTickNow();
         float? kmh = null;
         // real spot lights go to the nearest lit vehicles only (CarLights.MaxBeams); the others show their cones and lenses
         var beams = PickBeams();

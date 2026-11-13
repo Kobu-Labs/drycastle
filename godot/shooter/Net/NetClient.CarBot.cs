@@ -174,6 +174,7 @@ public partial class NetClient
         }
         _clMoveX = 0; _clMoveY = 0;
         GD.Print($"client {PlayerName}: car loop: drove {driven:F0} m in {Now - t0:F0} s, stuck {stops} times, still driving {_driving}, reconciles {_recon} (drive {_driveCorrections})");
+        GD.Print($"client {PlayerName}: car loop rubber: {string.Join(" ", _rub.ToDict().Select(kv => $"{kv.Key}={kv.Value}"))}");
         FinishBot();
         yield break;
     }
