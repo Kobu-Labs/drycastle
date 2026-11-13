@@ -36,10 +36,11 @@ public sealed class BunkerRoom
 }
 
 /// <summary>
-/// Where the intel screen of one bunker hangs (bunkers.json, <c>intel</c>): the middle of the screen on the wall of the command
-/// post, the way it faces and its size. Ground axes (x east, y = -north) like <see cref="BunkerRoom"/>, heights in Godot Y.
+/// Where the intel screen hangs: the middle of the screen on its wall, the way it faces and its size. Ground axes (x east,
+/// y = -north) like <see cref="BunkerRoom"/>, heights in Godot Y. <c>HostId</c> names what carries it: a placed object
+/// (<see cref="IntelRoom.Place"/>) or a bunker (bunkers.json, <c>intel</c>: the wall of its command post, the fallback).
 /// </summary>
-public sealed record IntelAnchor(string BunkerId, Vector2 At, Vector2 Facing, float Y0, float Y1, float Width)
+public sealed record IntelAnchor(string HostId, Vector2 At, Vector2 Facing, float Y0, float Y1, float Width)
 {
     public float Height => Y1 - Y0;
 }

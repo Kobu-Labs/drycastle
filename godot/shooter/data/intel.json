@@ -1,7 +1,17 @@
 {
   "version": 1,
-  "_note": "The intel room: the command post (third floor down) of the bunker named here, the base. Its screen shows every announced event (when, what, risks, where). With several events the screen shows one at a time, rotate_seconds each. It is drawn only within view_range_m of the screen. The bunker is one of the ids in the map's bunkers.json (w378900206 stands nearest the church, about 230 m from it; w378900225 is 300 m and w825140518 590 m away); a map or bunker without a screen anchor has no intel room, and the announcement still reaches everyone.",
+  "_note": "The intel room: the floor of the first placed object of base_asset (the military hangar), with the screen on the wall of its far end, facing the entrance. Its screen shows every announced event (when, what, risks, where); with several it shows one at a time, rotate_seconds each, and only within view_range_m of the camera. room is in the object's own frame (before its rotation and scale): floor_m = floor top above its origin, at = [x, z] of the screen's middle on the wall, facing = [x, z] unit vector into the room, bottom_m = lower edge above the floor; width_m x height_m is the screen's size. Nothing reads the model, so it is the same for a player without the pack. open_parts = node names of the prefab that are hidden and stop colliding so players can walk in (the small door of the entrance end; the big doors are solid). The prefab SM_Bld_Hangar_01 (30.6 x 36.3 m, doors on both ends, end walls inside at z = -16.28 and z = +16.14) has the screen on the -z end on the door panel x = 0 to 4.56 (its inner face is z = -16.006) and the entrance at the small door of the +z end. A map without the object falls back to the command post of base_bunker (an id of the map's bunkers.json; w378900206 stands nearest the church); with neither there is no intel room, and the announcement still reaches everyone.",
+  "base_asset": "pack:synty-military/SM_Bld_Hangar_01",
+  "room": {
+    "floor_m": 0.114,
+    "at": [2.27, -16.0],
+    "facing": [0, 1],
+    "bottom_m": 1.0,
+    "width_m": 3.0,
+    "height_m": 1.1,
+    "open_parts": ["SM_Bld_Hangar_Door_Small_01"]
+  },
   "base_bunker": "w378900206",
   "rotate_seconds": 10,
-  "view_range_m": 14
+  "view_range_m": 24
 }

@@ -512,7 +512,7 @@ when the map has a bunker) holds per bunker `{"id", "parcel", "floors": [{"level
 [{"x", "y", "dx", "dy", "z0", "z1"}], "hatch": ring, "intel": {"x", "y", "dx", "dy", "z0", "z1", "width"}}` (`intel` is the wall
 of the lowest floor, the command post, that the intel screen hangs on: the middle of the screen on the wall, the way it
 faces, its lower and upper edge and its width, 1.6 to 3.0 m; the pipeline keeps furniture off the strip in front of it and
-leaves the key out when no wall takes a screen; ADR 0017): `level` 0 is the ground floor and -1 to -3 the floors under it; the
+leaves the key out when no wall takes a screen; ADR 0017; since the amendment it is only the game's fallback, used when the map has no hangar object): `level` 0 is the ground floor and -1 to -3 the floors under it; the
 polygon is a room ring in local metres (x east, y north) and the heights are as in `terrain.json`. A room is grown 0.15 m into
 its walls, floor and roof, so a blast on a wall's inner face is inside and one on its outer face is outside. A ladder gives
 the spot where the climber stands (`x`, `y`), the way they face (`dx`, `dy`) and the floors it joins (`z0` below, `z1`
