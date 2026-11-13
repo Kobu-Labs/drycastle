@@ -110,10 +110,9 @@ public class VehiclesFile : IVersioned
             if (v.Height <= 0 || v.HalfWidth <= 0 || v.HalfLength <= 0) throw new DataFileException($"vehicles.json: {v.Id}: height, half_width and half_length must be positive");
             if (v.EnterRadius is < 0 || f.EnterRadius < 0) throw new DataFileException($"vehicles.json: {v.Id}: enter_radius must not be negative");
             if (v.RunOverMass is { } rm && rm <= 0) throw new DataFileException($"vehicles.json: {v.Id}: run_over_mass must be positive");
-            if (!VehicleMedium.All.Contains(v.Medium)) throw new DataFileException($"vehicles.json: {v.Id}: medium {v.Medium} is not land, amphibious, boat or air");
-            if (v.CanFloat && (v.WaterTopSpeed <= 0 || v.WaterAcceleration <= 0 || v.LandDecel <= 0 || v.PlaningSpeed < 0))
-                throw new DataFileException($"vehicles.json: {v.Id}: water_top_speed, water_acceleration and land_decel must be positive, planing_speed not negative");
-            if (v.Medium == VehicleMedium.Boat && v.Gun != null) throw new DataFileException($"vehicles.json: {v.Id}: a boat carries no gun");
+            if (!VehicleMedium.All.Contains(v.Medium)) throw new DataFileException($"vehicles.json: {v.Id}: medium {v.Medium} is not land, amphibious or air");
+            if (v.CanFloat && (v.WaterTopSpeed <= 0 || v.WaterAcceleration <= 0))
+                throw new DataFileException($"vehicles.json: {v.Id}: water_top_speed and water_acceleration must be positive");
             if (v.DoorGun is { } dg)
             {
                 if (v.Gun == null) throw new DataFileException($"vehicles.json: {v.Id}: a door_gun fires by the gun rules: it needs a gun block");
@@ -154,8 +153,8 @@ public class VehiclesFile : IVersioned
 /// <summary>vehicles.json "medium" values (see <see cref="VehicleDef.Medium"/>).</summary>
 public static class VehicleMedium
 {
-    public const string Land = "land", Amphibious = "amphibious", Boat = "boat", Air = "air";
-    public static readonly string[] All = { Land, Amphibious, Boat, Air };
+    public const string Land = "land", Amphibious = "amphibious", Air = "air";
+    public static readonly string[] All = { Land, Amphibious, Air };
 }
 
 /// <summary>One seat of a vehicle (vehicles.json "seats"). Seat 0 is always the driver. Offset is in the vehicle's frame, metres: x right, y up, z back (forward is -Z), origin on the ground at the car's centre.</summary>
@@ -646,7 +645,7 @@ public class DriveCameraDef : FlightCameraDef
 
 /// <summary>
 /// vehicles.json "lights" per type: lamp positions [x, y, z] in the vehicle frame (forward -Z, origin on the ground, as the hood).
-/// A boat's bow light is just another "head" point. Client and server only read it; the rules are in <see cref="Headlights"/>.
+/// Client and server only read it; the rules are in <see cref="Headlights"/>.
 /// </summary>
 public class VehicleLights
 {
@@ -676,7 +675,7 @@ public class VehicleExplosionDef
 
 /// <summary>
 /// The reusable driving parameter set (vehicles.json "handling" per type; defaults here are the shared feel). A later type
-/// (jeep, quad, boat) reuses the model by data: only the keys it changes need to be written.
+/// (jeep, quad) reuses the model by data: only the keys it changes need to be written.
 /// </summary>
 public class VehicleHandling
 {
@@ -758,7 +757,7 @@ public class VehicleDef
     public float? RunOverMass { get; set; }
     /// <summary>
     /// Where the type travels (<see cref="VehicleMedium"/>): "land" (default), "amphibious" (drives on land, floats on water at
-    /// <see cref="WaterTopSpeed"/>), "boat" (water only: on land it coasts to a stop at <see cref="LandDecel"/>) or "air" (it flies:
+    /// <see cref="WaterTopSpeed"/>) or "air" (it flies:
     /// the utility helicopter, stepped by <see cref="FlightModel"/> with the numbers of <see cref="Flight"/>).
     /// </summary>
     public string Medium { get; set; } = VehicleMedium.Land;
@@ -766,16 +765,12 @@ public class VehicleDef
     public float WaterTopSpeed { get; set; } = 7;
     /// <summary>Amphibious only: forward acceleration afloat, m/s².</summary>
     public float WaterAcceleration { get; set; } = 1.5f;
-    /// <summary>Boat only: below this speed (m/s) the hull is still pushing water aside and the boat accelerates at half rate; above it it planes. 0: no planing.</summary>
-    public float PlaningSpeed { get; set; }
-    /// <summary>Boat only: deceleration on land, m/s², while it coasts to a stop (it has no drive there).</summary>
-    public float LandDecel { get; set; } = 5;
-    /// <summary>Whether a driver running someone over hurts them. Land types, and an amphibious only on land; a boat never runs anyone over.</summary>
+    /// <summary>Whether a driver running someone over hurts them. Land types, and an amphibious only on land.</summary>
     public bool RunOver { get; set; } = true;
-    /// <summary>Whether a wall impact hurts the vehicle. False for a boat: running aground is not damage.</summary>
+    /// <summary>Whether a wall impact hurts the vehicle.</summary>
     public bool CrashDamage { get; set; } = true;
-    /// <summary>True for a type that can float (amphibious or boat): its origin rides the water surface when it is over a water body.</summary>
-    public bool CanFloat => Medium is VehicleMedium.Amphibious or VehicleMedium.Boat;
+    /// <summary>True for a type that can float (the amphibious transport): its origin rides the water surface when it is over a water body.</summary>
+    public bool CanFloat => Medium == VehicleMedium.Amphibious;
     /// <summary>The flight handling of a type with medium "air" (vehicles.json "flight"); null for everything that drives or floats.</summary>
     public VehicleFlightDef? Flight { get; set; }
     /// <summary>

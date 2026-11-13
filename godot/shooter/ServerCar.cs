@@ -288,7 +288,7 @@ public partial class ServerCar : CharacterBody3D
         FollowDrive();
     }
 
-    /// <summary>Over a water body (amphibious or boat): the origin rides its surface and gravity does not apply.</summary>
+    /// <summary>Over a water body (the amphibious transport): the origin rides its surface and gravity does not apply.</summary>
     public bool Afloat;
 
     /// <summary>

@@ -334,8 +334,7 @@ public static class CarModel
     /// Longitudinal: acceleration to top speed, boosted near a standstill (<see cref="VehicleHandling.LaunchBoost"/>) (reverse capped by the handling), brake against travel, coast when idle.
     /// Lateral: yaw rate is speed / <see cref="TurnRadiusAt"/>, so it is zero when standing still, tight at walking pace and
     /// only moderately wider at top speed; the actual yaw rate chases that target at a limited slew rate.
-    /// <paramref name="onWater"/> is set while the vehicle floats: an amphibious then drives at its water speed, and a boat has its drive
-    /// (with planing); a boat not on water has none and coasts to a stop at its land deceleration.
+    /// <paramref name="onWater"/> is set while the vehicle floats: an amphibious then drives at its water speed.
     /// </summary>
     public static void Step(ref CarState s, VehicleDef def, float throttle, float steer, bool handbrake, float dt, bool onWater = false)
     {
@@ -344,18 +343,9 @@ public static class CarModel
         var top = def.TopSpeed;
         var accel = def.Acceleration;
         var coast = h.CoastDecel;
-        if (def.Medium == VehicleMedium.Boat && !onWater)
-        {
-            // a boat has no drive on land: it coasts to a stop at its land deceleration
-            throttle = 0; handbrake = false; coast = def.LandDecel;
-        }
-        else if (onWater && def.Medium == VehicleMedium.Amphibious)
+        if (onWater && def.Medium == VehicleMedium.Amphibious)
         {
             top = def.WaterTopSpeed; accel = def.WaterAcceleration;
-        }
-        else if (onWater && def.Medium == VehicleMedium.Boat && def.PlaningSpeed > 0 && MathF.Abs(v) < def.PlaningSpeed)
-        {
-            accel *= 0.5f; // below the planing speed the hull pushes water aside: half the thrust until it lifts onto the plane
         }
         // the launch boost: more thrust near a standstill, fading to the plain acceleration at h.LaunchSpeed (either direction of travel)
         accel *= 1f + (h.LaunchBoost - 1f) * MathF.Max(0f, 1f - MathF.Abs(v) / MathF.Max(0.1f, h.LaunchSpeed));

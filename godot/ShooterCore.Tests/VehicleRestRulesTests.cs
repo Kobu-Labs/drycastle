@@ -138,7 +138,7 @@ public class VehicleRestRulesTests
     }
 
     [Fact]
-    public void ABoatFloatingStillRestsButADriftingOneDoesNot()
+    public void AFloatingVehicleStillRestsButADriftingOneDoesNot()
     {
         var floating = new DriveState { Position = new Vector3(0, 0.3f, -5), Afloat = true };
         Assert.True(DriveRest.IsAtRest(floating, floating));

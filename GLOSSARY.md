@@ -100,12 +100,8 @@ _Avoid_: supply drop, crate
 A class of primary weapon (machine guns, assault rifles, shotguns, SMGs, sniper rifles) that shares a base recoil pattern; individual weapons may override it. Pistols form the secondary category.
 _Avoid_: weapon type, class
 
-**Boat**:
-A water-only vehicle: it floats on a water body, has no drive on land (it coasts to a stop), and never runs anyone over.
-_Avoid_: ship, watercraft
-
 **Amphibious transport**:
-An open three-seat vehicle, a boat-shaped hull on four wheels: a driver, an armed seat beside them and a ring gun over the rear. On land it drives (and runs people over there); in a water body it floats and handles as a boat, slower. Nothing covers its riders: all three sit in exposed seats.
+An open three-seat vehicle, a boat-shaped hull on four wheels: a driver, an armed seat beside them and a ring gun over the rear. On land it drives (and runs people over there); in a water body it floats and drives like a boat (a lazy helm, a stern that swings out), slower. Nothing covers its riders: all three sit in exposed seats.
 _Avoid_: APC, amphib, Schwimmwagen, duck
 
 **Predicted vehicle**:
@@ -161,7 +157,7 @@ The lowest stance: the player lies down and spreads less. Toggled by the prone k
 _Avoid_: lay down, crawl
 
 **Water body**:
-A lake, pond or river area from the map pipeline (`water.json`), with a surface height. The shooter swims in it, and boats float on it.
+A lake, pond or river area from the map pipeline (`water.json`), with a surface height. The shooter swims in it, and the amphibious transport floats on it.
 _Avoid_: pond (alone), lake (alone), pool
 
 **Breath**:

@@ -127,7 +127,6 @@ public class SeatSwitchTests
     [InlineData("jeep")]
     [InlineData("quad")]
     [InlineData("amphibious")]
-    [InlineData("boat")]
     [InlineData("flak")]
     [InlineData("bus")]
     public void EveryShippedVehicleKeepsItsMarkersApartAndInsideTheBody(string id)

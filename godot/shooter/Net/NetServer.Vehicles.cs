@@ -102,31 +102,10 @@ public partial class NetServer
                 }
                 return false;
             }
-            // water craft: a boat floats on a water body, 4 m to 15 m off its shore (WaterSpawns); with too little such water it takes the largest body
-            bool PlaceWater(int kind, IEnumerable<WaterSpawns.Spot> cands)
-            {
-                foreach (var c in cands)
-                {
-                    var p = new NVec3(c.X, c.SurfaceY, c.Z);
-                    if (spots.Any(s => NVec3.Distance(s.Pos, p) < 12f)) continue;
-                    spots.Add((p, (float)(_rng.NextDouble() * Math.PI * 2), kind));
-                    return true;
-                }
-                return false;
-            }
-            var boatShore = WaterSpawns.ShoreCandidates(Water).OrderBy(_ => _rng.Next()).ToList();
-            var boatInterior = WaterSpawns.FallbackCandidates(Water);
             for (var i = 0; i < kinds.Count; i++)
             {
                 var kind = kinds[i];
                 var def = Vehicles.Vehicles[kind];
-                if (def.Medium == VehicleMedium.Boat)
-                {
-                    if (PlaceWater(kind, boatShore)) continue;
-                    if (PlaceWater(kind, boatInterior)) { GD.Print($"server: too little shore water for {def.Id}: placed on the largest water body"); continue; }
-                    GD.PrintErr($"server: no water for {def.Id} (no water.json, or no body at least {WaterSpawns.MinDepth} m deep)");
-                    continue;
-                }
                 var anchor = anchors.Count > 0 ? anchors[i % anchors.Count] : Spawns[0];
                 var near = Spawns.Where(s => Dist2D(s, anchor) <= 40f).OrderBy(Rank).ThenBy(_ => _rng.Next()).ToList();
                 // amphibious: a shore candidate near its cluster first, so it can drive straight into the water
