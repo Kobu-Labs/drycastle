@@ -54,6 +54,7 @@ public sealed partial class ItemCell : Control
     bool _hover, _pressed, _disabled, _dragSource, _dragActive, _valid, _dragged, _focusFromHover, _error;
     float _shakeX;
     Tween? _shake;
+    StyleBoxFlat? _errorBox;
     PanelContainer? _tip;
     Label? _tipText;
 
@@ -109,6 +110,9 @@ public sealed partial class ItemCell : Control
         Sfx.Ui("ui.error");
         if (!IsInsideTree()) return;
         _shake?.Kill();
+        _errorBox = new StyleBoxFlat { DrawCenter = false, BorderColor = ShooterTheme.Danger }; // once per refusal, not per frame (the colour follows the colour-blind setting)
+        _errorBox.SetBorderWidthAll(ShooterTheme.BorderStrong);
+        _errorBox.SetCornerRadiusAll(ShooterTheme.Radius);
         _error = true;
         QueueRedraw();
         if (GameSettings.Current.ReduceMotion)
@@ -157,13 +161,7 @@ public sealed partial class ItemCell : Control
             DrawPips(held, dim);
         }
         if (HasFocus()) DrawStyleBox(GetThemeStylebox("focus", Type), area);
-        if (_error)
-        {
-            var border = new StyleBoxFlat { DrawCenter = false, BorderColor = ShooterTheme.Danger };
-            border.SetBorderWidthAll(ShooterTheme.BorderStrong);
-            border.SetCornerRadiusAll(ShooterTheme.Radius);
-            DrawStyleBox(border, area);
-        }
+        if (_error && _errorBox != null) DrawStyleBox(_errorBox, area);
         DrawSetTransform(Vector2.Zero);
     }
 
