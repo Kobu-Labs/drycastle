@@ -67,7 +67,9 @@ public sealed partial class ChurchChant : Node3D
 
     AudioStream? Load(string rel, bool loop)
     {
-        var path = ModelLib.AssetPath(rel);
+        // the private pack first (the chant is not ours to publish), then the asset library
+        var path = System.IO.Path.Combine(GamePaths.PrivateAssets(), rel);
+        if (!System.IO.File.Exists(path)) path = ModelLib.AssetPath(rel);
         if (!System.IO.File.Exists(path)) { Warn(rel, $"holy mass: sound not found: {path} (skipped)"); return null; }
         var stream = AudioStreamOggVorbis.LoadFromFile(path);
         if (stream == null) { Warn(rel, $"holy mass: sound failed to load: {path} (skipped)"); return null; }
