@@ -19,14 +19,14 @@ public static class WaterPalettes
     public static readonly WaterPalette River = new(
         Shallow: new Color(0.50f, 0.47f, 0.24f),
         Deep: new Color(0.15f, 0.13f, 0.07f),
-        WaveCap: 0.10f,
+        WaveCap: 0.16f,
         Flow: Vector2.Zero);
 
     /// <summary>Lakes and ponds: darker, more murk, smaller waves.</summary>
     public static readonly WaterPalette Still = new(
         Shallow: new Color(0.44f, 0.45f, 0.22f),
         Deep: new Color(0.12f, 0.12f, 0.06f),
-        WaveCap: 0.05f,
+        WaveCap: 0.09f,
         Flow: Vector2.Zero);
 
     public static bool IsRiver(string id) => Array.IndexOf(RiverIds, id) >= 0;
@@ -36,10 +36,20 @@ public static class WaterPalettes
     /// <summary>Longer side of the body's bounding box (m): the size the wave amplitude scales with.</summary>
     public static float Extent(WaterBody body) => MathF.Max(body.MaxX - body.MinX, body.MaxZ - body.MinZ);
 
-    /// <summary>Wave amplitude (m) of a body, 0 with reduce motion. Boats bob with the same amplitude as the shader's surface.</summary>
-    public static float WaveAmplitude(WaterBody body)
+    /// <summary>Depth (m) at which the waves reach their full height: they die out towards the bank, so the waterline stays put.</summary>
+    public const float WaveFullDepth = 0.6f;
+
+    /// <summary>Wave amplitude (m) of a body in open water. The surface mesh and the boats' bob use the same one.</summary>
+    public static float WaveAmplitude(WaterBody body) => WaterWaves.Amplitude(Extent(body), For(body).WaveCap);
+
+    /// <summary>Share of the amplitude at (x, z): 0 at the bank, 1 from <see cref="WaveFullDepth"/> of water (the shader's smoothstep).</summary>
+    public static float WaveDamp(WaterBody body, float x, float z)
     {
-        if (WaterSurfaces.ReduceMotion()) return 0f;
-        return WaterWaves.Amplitude(Extent(body), For(body).WaveCap);
+        var t = Math.Clamp(body.DepthAt(x, z) / WaveFullDepth, 0f, 1f);
+        return t * t * (3f - 2f * t);
     }
+
+    /// <summary>Height (m) of the waved surface above the body's flat surface at (x, z), now (<see cref="WaterSurfaces.WaveClock"/>).</summary>
+    public static float WaveOffset(WaterBody body, float x, float z) =>
+        WaterWaves.Height(x, z, (float)WaterSurfaces.WaveClock, WaveAmplitude(body) * WaveDamp(body, x, z));
 }

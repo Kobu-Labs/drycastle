@@ -1,11 +1,11 @@
 shader_type spatial;
 // Low-poly water surface (WaterSurfaces.cs sets the palette, wave clock, flow and depth texture per body).
 // The look matches the flat-coloured, faceted map: three flat depth bands (shallow, middle, deep) with hard edges, a
-// hard-edged foam strip along the bank, and flat-shaded facets that rock with the waves. The mesh itself is flat; the
-// facets are a regular triangle grid worked out per pixel from the WaterWaves sum (wave_height below), so they are
-// even everywhere and cost no vertices. The water column under a pixel comes from the body's depth grid (water.json)
-// as a texture, not from the depth buffer. The water covers its whole outline, nearly opaque, so the bank is a hard
-// edge where the ground rises out of it. Lit by the scene's sun and ambient light, so it follows the day and night
+// hard-edged foam strip along the bank, and real waves: the mesh is a regular triangle grid whose vertices rise and
+// fall with the WaterWaves sum (wave_height below), shaded flat, one normal per triangle. The waves die out towards
+// the bank (over wave_full_m of depth), so the waterline stays put. The water column comes from the body's depth grid
+// (water.json) as a texture, not from the depth buffer. The water covers its whole outline, nearly opaque, so the bank
+// is a hard edge where the ground rises out of it; the grid's cells that stick out past the outline are not drawn. Lit by the scene's sun and ambient light, so it follows the day and night
 // cycle. One-sided: swimming is at the surface only, the camera is never under it.
 render_mode blend_mix, cull_back, depth_draw_never, specular_schlick_ggx;
 
@@ -16,8 +16,8 @@ uniform float shallow_m = 0.5;         // m of depth: the shallow band ends here
 uniform float deep_m = 1.6;            // m of depth: the deep band starts here (the middle band lies between)
 uniform float shallow_alpha = 0.82;    // the bed shows faintly through the shallow band only
 uniform float foam_m = 0.16;           // m of depth at the bank under which the foam strip lies
-uniform float facet_m = 3.0;           // m: side of the facet grid's cells (each cell is two triangles)
-uniform float facet_strength = 0.6;    // tilt of the facets (0: a flat sheet)
+uniform float wave_amp = 0.1;          // m: amplitude of WaterWaves.Height in open water (0: a flat sheet)
+uniform float wave_full_m = 0.6;       // m of depth at which the waves reach their full height (WaterPalettes.WaveFullDepth)
 uniform float wave_time = 0.0;         // s: the WaterWaves clock (WaterSurfaces sets it; frozen with reduce motion)
 uniform vec2 flow = vec2(0.0);         // m/s: river current, the hook for the flow slice (zero: static water)
 uniform vec2 depth_origin = vec2(0.0);    // south-west corner of the depth grid, local metres (x east, y north = -z)
@@ -35,28 +35,30 @@ float wave_height(vec2 p, float t) {
 		+ 0.1 * sin(4.3 * dot(vec2(0.1961, 0.9806), p) - 3.4 * t);
 }
 
+vec2 depth_uv(vec2 p) {
+	return (vec2(p.x, -p.y) - depth_origin) * depth_inv_size;
+}
+
 void vertex() {
+	// the vertex rides the shared wave height at its place; in the shallows the waves die out
+	vec2 p = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
+	float full = smoothstep(0.0, wave_full_m, textureLod(depth_tex, depth_uv(p), 0.0).r);
+	VERTEX.y += wave_amp * full * wave_height(p, wave_time);
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 void fragment() {
 	vec2 p = world_pos.xz;
-	float depth = texture(depth_tex, (vec2(p.x, -p.y) - depth_origin) * depth_inv_size).r;
+	float depth = texture(depth_tex, depth_uv(p)).r;
 
-	// the facet under this pixel: the cell of a regular grid, split along its diagonal into two triangles; the facet's
-	// slope is that of the plane through the wave heights at its three corners, so the whole triangle shades as one
-	vec2 g = (p - flow * wave_time) / facet_m;
-	vec2 cell = floor(g);
-	vec2 f = g - cell;
-	bool lower = f.x + f.y < 1.0;
-	vec2 a = (lower ? cell : cell + vec2(1.0, 1.0)) * facet_m;
-	vec2 bx = (lower ? cell + vec2(1.0, 0.0) : cell + vec2(0.0, 1.0)) * facet_m;
-	vec2 bz = (lower ? cell + vec2(0.0, 1.0) : cell + vec2(1.0, 0.0)) * facet_m;
-	float ha = wave_height(a, wave_time);
-	vec2 slope = vec2(wave_height(bx, wave_time) - ha, wave_height(bz, wave_time) - ha) * (lower ? 1.0 : -1.0);
-	// far away a facet is smaller than a pixel: flatten them there, so the surface does not shimmer
-	slope *= facet_strength / (1.0 + length(VERTEX) * 0.01);
-	NORMAL = normalize(mat3(VIEW_MATRIX) * normalize(vec3(-slope.x, 1.0, -slope.y)));
+	// flat shading: the triangle's own normal, from the screen-space derivatives of the position, turned to the viewer
+	vec3 n = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
+	if (dot(n, VERTEX) > 0.0) {
+		n = -n;
+	}
+	// far away a triangle is smaller than a pixel: flatten the shading there, so the surface does not shimmer
+	float fade = length(VERTEX) * 0.008;
+	NORMAL = normalize(mix(n, mat3(VIEW_MATRIX) * vec3(0.0, 1.0, 0.0), fade / (1.0 + fade)));
 
 	// three flat depth bands with hard edges, and a hard foam strip at the bank whose width breathes slowly
 	float mid = step(shallow_m, depth);
@@ -67,7 +69,8 @@ void fragment() {
 	float foam = 1.0 - step(foam_m * (1.0 + 0.3 * lap), depth);
 
 	ALBEDO = mix(col, foam_colour.rgb, foam);
-	ALPHA = mix(mix(shallow_alpha, 0.94, mid), 0.9, foam);
+	// the grid's cells reach past the outline; there the depth is zero and nothing is drawn
+	ALPHA = mix(mix(shallow_alpha, 0.94, mid), 0.9, foam) * step(0.01, depth);
 	ROUGHNESS = mix(0.35, 0.9, foam);
 	SPECULAR = 0.3;
 	METALLIC = 0.0;

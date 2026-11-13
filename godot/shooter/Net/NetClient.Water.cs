@@ -87,7 +87,9 @@ public partial class NetClient
     void WaterWalk(Vector3 feet, float depth, float speed, bool grounded, ref double rippleDue, ref float wadeAcc, float dt)
     {
         if (depth <= 0f) { wadeAcc = 0f; return; }
-        var at = new Vector3(feet.X, Water.SurfaceY(feet.X, feet.Z), feet.Z);
+        var body = Water.BodyAt(feet.X, feet.Z);
+        if (body == null) return;
+        var at = new Vector3(feet.X, body.SurfaceY + WaterPalettes.WaveOffset(body, feet.X, feet.Z), feet.Z);
         if (depth >= 0.3f && speed >= 1f && Now >= rippleDue)
         {
             Ripples.Emit(at, 0.8f);
@@ -113,7 +115,7 @@ public partial class NetClient
             return;
         }
         var t = (float)WaterSurfaces.WaveClock;
-        var amp = WaterPalettes.WaveAmplitude(body);
+        var amp = WaterPalettes.WaveAmplitude(body) * WaterPalettes.WaveDamp(body, p.X, p.Z);
         if (visual != null)
         {
             visual.Position = new Vector3(0f, WaterWaves.Height(p.X, p.Z, t, amp), 0f);
@@ -123,7 +125,7 @@ public partial class NetClient
         }
         if (!v.Destroyed && v.Kmh >= 3.6f && Now >= v.RippleDue)
         {
-            Ripples.Emit(new Vector3(p.X, body.SurfaceY, p.Z), 2.2f, 1.4f);
+            Ripples.Emit(new Vector3(p.X, body.SurfaceY + WaterWaves.Height(p.X, p.Z, t, amp), p.Z), 2.2f, 1.4f);
             v.RippleDue = Now + 0.5;
         }
     }

@@ -4,16 +4,18 @@ using Drycastle.ShooterCore;
 namespace Drycastle.MapLoader;
 
 /// <summary>
-/// The visible water: one flat mesh per water body at its surface height (the outline triangulated, holes cut out).
+/// The visible water: one mesh per water body at its surface height, a regular triangle grid the waves move.
 /// Each body has its own material with its palette (<see cref="WaterPalettes"/>) and depth texture (the
 /// body's depth grid from water.json); the shader (water_surface.gdshader) does the low-poly look per pixel: flat
-/// depth bands, a hard foam strip at the bank and facets that rock with the waves, lit by the scene's own sun. Built
-/// once when the map loads (client only). Reduce motion freezes the facets (<see cref="WaveClock"/> stays 0).
+/// depth bands, a hard foam strip at the bank and flat-shaded waves, lit by the scene's own sun. Built once when the
+/// map loads (client only). Reduce motion freezes the waves where they are (<see cref="WaveClock"/> stays 0).
 /// </summary>
 public partial class WaterSurfaces : Node3D
 {
     /// <summary>The shader is an embedded resource of this assembly (water_surface.gdshader beside this file), so the viewer and the shooter, which are separate Godot projects, draw the same water.</summary>
     const string ShaderResource = "water_surface.gdshader";
+    /// <summary>Side of the surface mesh's cells (m): the triangles the waves move and the light shades flat.</summary>
+    const float GridCell = 2.5f;
 
     readonly List<(ShaderMaterial Mat, WaterBody Body)> _surfaces = new();
 
@@ -47,7 +49,7 @@ public partial class WaterSurfaces : Node3D
         var shader = LoadShader();
         foreach (var body in water.Bodies)
         {
-            var mesh = MeshFor(body);
+            var mesh = body.Grid != null ? GridMesh(body) : OutlineMesh(body);
             if (mesh == null) { GD.PrintErr($"water: body {body.Id} has no triangulable outline, not drawn"); continue; }
             var pal = WaterPalettes.For(body);
             // drawn before every other transparent thing, so ripple rings, splashes and glass over the water are not covered by it
@@ -58,8 +60,10 @@ public partial class WaterSurfaces : Node3D
             mat.SetShaderParameter("depth_tex", DepthTexture(body, out var origin, out var invSize));
             mat.SetShaderParameter("depth_origin", origin);
             mat.SetShaderParameter("depth_inv_size", invSize);
+            mat.SetShaderParameter("wave_amp", WaterPalettes.WaveAmplitude(body));
+            mat.SetShaderParameter("wave_full_m", WaterPalettes.WaveFullDepth);
             _surfaces.Add((mat, body));
-            AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = mat, Name = $"Water{body.Id}", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+            AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = mat, Name = $"Water{body.Id}", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, ExtraCullMargin = 0.5f });
         }
     }
 
@@ -98,11 +102,52 @@ public partial class WaterSurfaces : Node3D
     }
 
     /// <summary>
-    /// A flat mesh of the body at its surface height: the outline triangulated, nothing more (the waves are in the
-    /// shader, per pixel). A body with holes (islands) is Delaunay triangulated over its ring points and the triangles
-    /// whose centre lies outside the body are dropped. Null when Godot cannot triangulate the outline.
+    /// The body as a regular grid of <see cref="GridCell"/> squares, each two triangles, at its surface height: the
+    /// vertices the shader's waves move. The grid is aligned to the world, and a cell is kept when a corner or its
+    /// centre is in the body, so the mesh reaches a little past the outline; the shader does not draw that part (the
+    /// depth is zero there). Null when no cell touches the body.
     /// </summary>
-    static ArrayMesh? MeshFor(WaterBody body)
+    static ArrayMesh? GridMesh(WaterBody body)
+    {
+        var i0 = Mathf.FloorToInt(body.MinX / GridCell);
+        var j0 = Mathf.FloorToInt(body.MinZ / GridCell);
+        var cols = Mathf.CeilToInt(body.MaxX / GridCell) - i0;
+        var rows = Mathf.CeilToInt(body.MaxZ / GridCell) - j0;
+        var stride = cols + 1;
+        var inside = new bool[stride * (rows + 1)];
+        for (var j = 0; j <= rows; j++)
+            for (var i = 0; i <= cols; i++)
+                inside[j * stride + i] = body.Contains((i0 + i) * GridCell, (j0 + j) * GridCell);
+        var index = new int[inside.Length];
+        Array.Fill(index, -1);
+        var verts = new List<Vector3>();
+        var idx = new List<int>();
+        int Vertex(int i, int j)
+        {
+            ref var v = ref index[j * stride + i];
+            if (v < 0) { v = verts.Count; verts.Add(new Vector3((i0 + i) * GridCell, body.SurfaceY, (j0 + j) * GridCell)); }
+            return v;
+        }
+        for (var j = 0; j < rows; j++)
+            for (var i = 0; i < cols; i++)
+            {
+                var k = j * stride + i;
+                if (!(inside[k] || inside[k + 1] || inside[k + stride] || inside[k + stride + 1]
+                      || body.Contains((i0 + i + 0.5f) * GridCell, (j0 + j + 0.5f) * GridCell))) continue;
+                int a = Vertex(i, j), b = Vertex(i + 1, j), c = Vertex(i, j + 1), d = Vertex(i + 1, j + 1);
+                // front faces look up (clockwise seen from above, x east and z south)
+                idx.Add(a); idx.Add(b); idx.Add(c);
+                idx.Add(b); idx.Add(d); idx.Add(c);
+            }
+        return idx.Count < 3 ? null : Build(verts.ToArray(), idx.ToArray());
+    }
+
+    /// <summary>
+    /// For a body without a depth grid (water.json version 1): the outline triangulated, flat. A body with holes
+    /// (islands) is Delaunay triangulated over its ring points and the triangles whose centre lies outside the body are
+    /// dropped. Null when Godot cannot triangulate the outline.
+    /// </summary>
+    static ArrayMesh? OutlineMesh(WaterBody body)
     {
         Vector2[] pts;
         var idx = new List<int>();
@@ -129,18 +174,18 @@ public partial class WaterSurfaces : Node3D
             var a = pts[idx[i]]; var b = pts[idx[i + 1]]; var c = pts[idx[i + 2]];
             if ((b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X) < 0f) (idx[i + 1], idx[i + 2]) = (idx[i + 2], idx[i + 1]);
         }
-        var verts = new Vector3[pts.Length];
-        var normals = new Vector3[pts.Length];
-        for (var i = 0; i < pts.Length; i++)
-        {
-            verts[i] = new Vector3(pts[i].X, body.SurfaceY, pts[i].Y);
-            normals[i] = Vector3.Up;
-        }
+        return Build(pts.Select(q => new Vector3(q.X, body.SurfaceY, q.Y)).ToArray(), idx.ToArray());
+    }
+
+    static ArrayMesh Build(Vector3[] verts, int[] idx)
+    {
+        var normals = new Vector3[verts.Length];
+        Array.Fill(normals, Vector3.Up);
         var arrays = new Godot.Collections.Array();
         arrays.Resize((int)Mesh.ArrayType.Max);
         arrays[(int)Mesh.ArrayType.Vertex] = verts;
         arrays[(int)Mesh.ArrayType.Normal] = normals;
-        arrays[(int)Mesh.ArrayType.Index] = idx.ToArray();
+        arrays[(int)Mesh.ArrayType.Index] = idx;
         var mesh = new ArrayMesh();
         mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
         return mesh;
