@@ -57,7 +57,7 @@ public class WaterTests
     [Fact]
     public void ParseRejectsWrongVersionAndMissingBodies()
     {
-        Assert.Throws<DataFileException>(() => Water.Parse("""{"version": 2, "bodies": []}"""));
+        Assert.Throws<DataFileException>(() => Water.Parse("""{"version": 3, "bodies": []}"""));
         Assert.Throws<DataFileException>(() => Water.Parse("""{"version": 1}"""));
         Assert.Throws<DataFileException>(() => Water.Parse("not json"));
     }
