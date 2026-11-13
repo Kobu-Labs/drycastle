@@ -447,8 +447,8 @@ public partial class NetClient : Node
         if (inCar != _driving)
         {
             // entering or leaving a car: no prediction while driving; on exit take the server's position (the free side) as is
-            _driving = inCar; _pending.Clear(); _me.InVehicle = inCar;
-            if (!inCar) { _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); _me.EndChase(_carYaw); ClearSeats(); }
+            _driving = inCar; _pending.Clear(); _reconcile = null; _me.InVehicle = inCar;
+            if (!inCar) { _reconcile = null; _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); _me.EndChase(_carYaw); ClearSeats(); }
             return;
         }
         if (_driving || _controlling || _gunship != null) { _pending.Clear(); return; }
@@ -469,7 +469,21 @@ public partial class NetClient : Node
         var s = predicted;
         s.Position = sp;
         if (err > SnapDistance) { s.Velocity = default; _pending.Clear(); }
-        _me.SetState(s);
+        // C-02: the replay is run by ReplayReconcile in the next physics tick, not here. This runs in _Process, where
+        // Godot's MoveAndSlide uses the frame delta (60 Hz) instead of the physics delta (30 Hz): every replayed step
+        // moved half a tick, and the next comparison was off by exactly that (8.9 cm, always ahead).
+        _reconcile = s;
+    }
+
+    /// <summary>A reconcile from a snapshot, waiting for the next physics tick (see <see cref="OnSelf"/>).</summary>
+    MoveState? _reconcile;
+
+    /// <summary>Puts the body at the server's position and replays the unacked inputs, in a physics tick so the steps match the server's.</summary>
+    void ReplayReconcile()
+    {
+        if (_reconcile is not { } s) return;
+        _reconcile = null;
+        _me!.SetState(s);
         for (var i = 0; i < _pending.Count; i++)
         {
             _me.Simulate(_pending[i].Input.ToMove(SpeedFor(_pending[i].Input.Slot)), 1f / Wire.TickRate);
@@ -484,6 +498,7 @@ public partial class NetClient : Node
         if (Bot && LossBot != "") { if (_elapsed >= BotSeconds) LossFail("timeout: round never reached its end"); }
         else if (Bot && _elapsed >= BotSeconds) { if (CarBot != "") CarResult(false, "timeout"); else if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
         if (!_gotSelf) return; // wait for our spawn position
+        ReplayReconcile(); // C-02: a snapshot's reconcile replays here, with the physics step (see OnSelf)
         var dt = (float)delta;
         MoveInput mi;
         if (Bot && MatchBot != "")
@@ -521,7 +536,8 @@ public partial class NetClient : Node
         var sentPitch = GunnerLook(ref mi); // at the turret the aim is sent (ground-stabilised, #160), and the player's own look is left alone
         if (_gunship == null) _me.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? _wantSlot : 0), GunnerAim);
-        if (!_driving && !_controlling && _gunship == null) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
+        // C-03: a dead body does not move on the server (its input is zero and it is skipped), so it is not predicted either; else each snapshot snapped it back
+        if (!_driving && !_controlling && _gunship == null) { if (!Dead) _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         PredictFlight(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
         PredictDrive(ni, dt);  // and so does the driver of an amphibious transport
         _pending.Add(new Pending { Input = ni, After = _me.State });
