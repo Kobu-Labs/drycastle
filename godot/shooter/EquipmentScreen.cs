@@ -26,7 +26,7 @@ public sealed partial class EquipmentScreen : Control
     readonly Label _openKey = new(), _activateKey = new(), _dropKey = new();
     InputDevice _device = InputDevice.KeyboardMouse;
     CamoSpec? _shownLook;
-    bool _open, _framingQueued;
+    bool _open, _framingQueued, _quietFraming;
     float _alpha;
     bool _pending, _dimmed;
     double _pendingSince;
@@ -191,10 +191,16 @@ public sealed partial class EquipmentScreen : Control
         Modulate = new Color(1, 1, 1, a);
     }
 
+    /// <summary>
+    /// Gives the first cell the focus for the keys. The figure keeps the whole-body framing it opens with: the head close-up is for a player who points at
+    /// or moves to the head slot, not for the focus the screen starts on.
+    /// </summary>
     void FocusFirst()
     {
         if (!_open) return;
+        _quietFraming = true;
         CellAt(EquipmentNav.First(c => SlotOf(c) != null)).FocusByKeys();
+        Callable.From(() => _quietFraming = false).CallDeferred(); // after the framing check the focus queued
     }
 
     public override void _Process(double delta)
@@ -269,7 +275,7 @@ public sealed partial class EquipmentScreen : Control
         Callable.From(() =>
         {
             _framingQueued = false;
-            if (_open) _avatar.Frame(_slots[(int)EquipSlot.Headgear].HasFocus() ? CamoPreview.Framing.Head : CamoPreview.Framing.Body);
+            if (_open && !_quietFraming) _avatar.Frame(_slots[(int)EquipSlot.Headgear].HasFocus() ? CamoPreview.Framing.Head : CamoPreview.Framing.Body);
         }).CallDeferred();
     }
 
