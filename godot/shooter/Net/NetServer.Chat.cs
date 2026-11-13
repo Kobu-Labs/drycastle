@@ -121,7 +121,7 @@ public partial class NetServer
             : humans.FirstOrDefault(o => o.Name.Replace(" ", "").Equals(who, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>"/give item [player]": the item goes on the player (the admin without a name), a new one with no pickups counted, and replaces what they wore in its slot. A living player only.</summary>
+    /// <summary>"/give item [player]": a new item, with no pickups counted, goes on the player (the admin without a name) if its slot is empty, else into their bag. Both full refuses it. A living player only.</summary>
     void ChatGive(Client c, IReadOnlyList<string> args)
     {
         var index = Items.IndexOf(args[0]);
@@ -130,9 +130,15 @@ public partial class NetServer
         if (target == null) { ChatTo(c, ChatLineKind.Error, $"No player '{args[1]}'. Use the name without spaces, or #id."); return; }
         if (_match.Get(target.Id)?.Life != PlayerLife.Alive) { ChatTo(c, ChatLineKind.Error, $"{target.Name} is not alive."); return; }
         var def = Items.Items[index];
-        target.Worn.Wear(def.Slot, new ItemStack(index));
+        var placed = ItemRules.Place(Items, new ItemStack(index), target.Worn, target.Bag, swap: false, out _);
+        if (placed == ItemPlace.NoRoom)
+        {
+            ChatTo(c, ChatLineKind.Error, target == c ? $"The {def.Name} does not fit: your slot and bag are full." : $"The {def.Name} does not fit: {target.Name}'s slot and bag are full.");
+            return;
+        }
         SendEquipment(target);
-        ChatTo(c, ChatLineKind.Info, target == c ? $"You wear the {def.Name} now." : $"{target.Name} wears the {def.Name} now.");
+        var worn = placed == ItemPlace.Worn;
+        ChatTo(c, ChatLineKind.Info, target == c ? $"You {(worn ? "wear" : "carry")} the {def.Name} now." : $"{target.Name} {(worn ? "wears" : "carries")} the {def.Name} now.");
         if (target != c) ChatTo(target, ChatLineKind.Info, $"{c.Name} gave you the {def.Name}.");
     }
 

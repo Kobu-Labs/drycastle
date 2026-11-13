@@ -117,6 +117,7 @@ public partial class NetClient : Node
     {
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
         InitCorpses();
+        InitGroundItems();
         InitCarePackages();
         InitMissile();
         InitTurrets();
@@ -223,6 +224,7 @@ public partial class NetClient : Node
         RenderRemotes();
         if (PoseDemo && !_poseDemoDone && _me != null) SpawnPoseDemo();
         RenderCorpses();
+        RenderGroundItems();
         RenderCarePackages();
         RenderTurrets();
         RenderAnimals();
@@ -580,7 +582,7 @@ public partial class NetClient : Node
             mi = new MoveInput { MoveY = 1, Yaw = yaw, Buttons = jump, SpeedScale = 1 };
         }
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
-        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickCorpses(dt); TickCarePackages(dt); }
+        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); }
         FxDemoInput(ref mi);
         _aimHeld = mi.Has(MoveButtons.Aim);
         TickRecoil(mi);

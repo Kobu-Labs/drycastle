@@ -8,8 +8,9 @@ namespace Drycastle.Shooter;
 /// hold and tap of the interact key, and the chooser. Holding the key takes the corpse's weapon into the primary position
 /// (<see cref="CorpseRules.PrimaryPos"/>); a tap opens <see cref="CorpseChooser"/> to pick the primary or the secondary.
 /// The server validates reach and slot; the hotbar it sends back (<see cref="EventKind.Hotbar"/>) is the one that counts.
-/// A corpse that carries an item (<see cref="EventKind.CorpseItem"/>) adds a third row to the chooser, key 3: putting the item on is a
-/// separate action from taking the weapon, and the prompt names the item.
+/// A corpse that carries items (<see cref="EventKind.CorpseItems"/>) adds a third row to the chooser, key 3, for the first of them: taking the
+/// item is a separate action from taking the weapon, and the prompt names it. The list of all its items is for the corpse chooser's own screen
+/// (<see cref="CorpseItems"/>).
 /// </summary>
 public partial class NetClient
 {
@@ -46,7 +47,7 @@ public partial class NetClient
         _chooser = new CorpseChooser();
         _chooser.Picked += pos =>
         {
-            if (_chooser.IsOpen) { if (pos == CorpseChooser.ItemPos) SendPickUpItem(_chooser.Corpse); else SendPickUp(_chooser.Corpse, pos); }
+            if (_chooser.IsOpen) { if (pos == CorpseChooser.ItemPos) RequestTakeCorpseItem(_chooser.Corpse, 0); else SendPickUp(_chooser.Corpse, pos); }
             _chooser.Close();
         };
         AddChild(_chooser);
@@ -121,7 +122,7 @@ public partial class NetClient
     /// <summary>The corpse prompt in reach (hidden while the chooser is up); null otherwise.</summary>
     string? CorpsePrompt()
     {
-        if (_near is not { } id || ChooserOpen || CorpseWeapon(id) is not { } w) return null;
+        if (_near is not { } id || ChooserOpen || GroundItemOwnsKey || CorpseWeapon(id) is not { } w) return null;
         var key = InputBindings.Name("interact");
         var item = CorpseItem(id);
         var hold = CorpseRules.CanReplace(w, CorpseRules.PrimaryPos);
@@ -141,7 +142,7 @@ public partial class NetClient
         if (ChooserOpen && (Dead || _driving || _near != _chooser.Corpse)) _chooser.Close();
         if (use && !_useWas) { _useHeld = 0; _holdSent = false; }
         if (use) _useHeld += dt;
-        var near = _crateNear != null ? null : _near; // a care package in reach owns the key (ticket #143)
+        var near = _crateNear != null || GroundItemOwnsKey ? null : _near; // a care package in reach owns the key (ticket #143), and so does a ground item nearer than the corpse (#267)
         if (use && !_holdSent && !ChooserOpen && near is { } id && _useHeld >= CorpseHoldSeconds && CorpseWeapon(id) is { } w
             && CorpseRules.CanReplace(w, CorpseRules.PrimaryPos))
         {
@@ -166,9 +167,10 @@ public partial class NetClient
         var item = CorpseItem(corpse);
         if (item != null)
         {
-            var worn = WornIn(item.Slot); // what the item would replace
-            options.Add((CorpseChooser.ItemPos, worn != null
-                ? Strings.F("corpse.item.swap", ItemName(item), ItemName(worn)) : Strings.F("corpse.item", ItemName(item))));
+            var worn = WornIn(item.Slot); // the slot is taken: the item goes in the bag, and swaps with what is worn only when the bag is full
+            options.Add((CorpseChooser.ItemPos, worn == null ? Strings.F("corpse.item", ItemName(item))
+                : BagIsFull ? Strings.F("corpse.item.swap", ItemName(item), ItemName(worn))
+                : Strings.F("corpse.item.bag", ItemName(item))));
         }
         if (options.Count == 0) return;
         var title = weaponRows == 0 ? Strings.F("corpse.title", ItemName(item!)) // nothing of the weapon can be taken: the item is the offer
