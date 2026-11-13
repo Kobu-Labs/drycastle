@@ -511,7 +511,8 @@ public partial class NetClient : Node
         if (_reconcile is not { } s) return;
         _reconcile = null;
         var before = _me!.State.Position; // where the eye was drawn: the predicted present
-        _me.SetState(s);
+        if (_me.IsOnFloor() != s.OnFloor) _rub.FloorFlagMismatch++; // measurement: a replay that would start with the wrong floor flag without SetStateForReplay
+        _me.SetStateForReplay(s); // the body's floor flag must match the state's before the first replayed step (I-rubber-banding round 2)
         for (var i = 0; i < _pending.Count; i++)
         {
             _me.Simulate(_pending[i].Input.ToMove(SpeedFor(_pending[i].Input.Slot)), 1f / Wire.TickRate);

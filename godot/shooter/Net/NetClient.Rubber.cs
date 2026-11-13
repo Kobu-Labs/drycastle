@@ -29,6 +29,8 @@ public sealed class RubberStats
     public int OnFootNearRemote, OnFootNearRemoteOver20;
     /// <summary>On-foot reconciles whose error is mostly vertical, and of those over 20 cm.</summary>
     public int OnFootVertical, OnFootVerticalOver20;
+    /// <summary>Reconciles whose replay would have started with the body's floor flag different from the state's (the case SetStateForReplay corrects).</summary>
+    public int FloorFlagMismatch;
 
     public void AddOnFoot(double err, bool nearRemote, bool vertical)
     {
@@ -70,7 +72,7 @@ public sealed class RubberStats
 
     public Dictionary<string, object?> ToDict() => new()
     {
-        ["onfoot_reconciles"] = OnFoot, ["onfoot_near_remote"] = OnFootNearRemote, ["onfoot_near_remote_over_20cm"] = OnFootNearRemoteOver20, ["onfoot_vertical"] = OnFootVertical, ["onfoot_vertical_over_20cm"] = OnFootVerticalOver20,
+        ["onfoot_reconciles"] = OnFoot, ["onfoot_near_remote"] = OnFootNearRemote, ["onfoot_near_remote_over_20cm"] = OnFootNearRemoteOver20, ["floor_flag_mismatch"] = FloorFlagMismatch, ["onfoot_vertical"] = OnFootVertical, ["onfoot_vertical_over_20cm"] = OnFootVerticalOver20,
         ["onfoot_over_3cm"] = OnFootOver[0], ["onfoot_over_5cm"] = OnFootOver[1], ["onfoot_over_20cm"] = OnFootOver[2],
         ["onfoot_over_50cm"] = OnFootOver[3], ["onfoot_over_2m"] = OnFootOver[4], ["onfoot_max_m"] = OnFootMax,
         ["vehicle_reconciles"] = VehicleCorrections, ["vehicle_pos_over_5cm"] = VehiclePosOver5, ["vehicle_pos_over_20cm"] = VehiclePosOver20,
