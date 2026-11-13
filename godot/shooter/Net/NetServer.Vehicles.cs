@@ -248,11 +248,11 @@ public partial class NetServer
     /// <summary>Tells the riders who sits where when that has changed since the last send (an entry, an exit, a switch, a seat freed by a death or a drop).</summary>
     void SendSeatState(ServerCar car)
     {
-        var now = new ushort[car.Seat.Count];
+        Span<ushort> now = stackalloc ushort[car.Seat.Count]; // every tick for every car: no heap array unless the seats changed
         for (var s = 0; s < now.Length; s++) now[s] = car.Seat.Occupant(s);
         if (car.SeatsSent != null && car.SeatsSent.AsSpan().SequenceEqual(now)) return;
-        car.SeatsSent = now;
-        var msg = new EventMsg((byte)EventKind.SeatState, SeatCodec.EncodeState(car.Id, now));
+        car.SeatsSent = now.ToArray();
+        var msg = new EventMsg((byte)EventKind.SeatState, SeatCodec.EncodeState(car.Id, car.SeatsSent));
         foreach (var o in Occupants(car)) Send(o, msg);
     }
 
@@ -274,7 +274,12 @@ public partial class NetServer
         return id != 0 && _byId.TryGetValue(id, out var c) ? c : null;
     }
 
-    List<Client> Occupants(ServerCar car) => Enumerable.Range(0, car.Seat.Count).Select(s => OccupantAt(car, s)).OfType<Client>().ToList();
+    List<Client> Occupants(ServerCar car)
+    {
+        var list = new List<Client>(car.Seat.Count);
+        for (var s = 0; s < car.Seat.Count; s++) if (OccupantAt(car, s) is { } o) list.Add(o);
+        return list;
+    }
 
     /// <summary>A gunner's inputs: reload when asked, then one round when the trigger is held and the gun is ready.</summary>
     void GunnerInput(Client c, NetInput i)
@@ -364,7 +369,7 @@ public partial class NetServer
             if (car.Flies) StepFlyingVehicle(car, driver, dt);
             else if (car.Drives) StepDrivenVehicle(car, driver, dt);
             else if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt, Water);
-            else car.Step(def, 0, 0, false, dt, Water);
+            else if (!car.Asleep || car.Seat.Occupied) car.StepParked(dt, Water); // a parked car at rest is not stepped until disturbed (ParkedRules, T2-04)
             car.TickEndPos = car.GlobalPosition;
             if (car.GlobalPosition.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); continue; }
             // a wall takes speed from a driven car; a helicopter is hurt by what it hits whoever flies it, or nobody
@@ -372,8 +377,9 @@ public partial class NetServer
                 DamageVehicle(car, (car.LastImpact - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, 0, SpecialWeapons.Vehicle, 0);
             if (car.DetonateAt >= 0 && _elapsed >= car.DetonateAt) { Detonate(car); continue; }
             var occupied = car.Seat.Occupied;
-            foreach (var o in Occupants(car))
+            for (var s = 0; s < car.Seat.Count; s++) // the riders are put on their seats (no list per car per tick)
             {
+                if (OccupantAt(car, s) is not { } o) continue;
                 var at = SeatPos(car, o.CarSeat);
                 o.Body.Teleport(at);
                 _match.SetPosition(o.Id, N(at));
@@ -465,6 +471,7 @@ public partial class NetServer
     /// </summary>
     void DamageVehicle(ServerCar car, float amount, ushort attacker, byte weapon, float delay)
     {
+        car.Wake();
         if (car.Destroyed || amount <= 0 || Vehicles == null) return;
         if (attacker != 0 && _byId.TryGetValue(attacker, out var attackerClient)) amount *= attackerClient.Perks.VehicleDamageDealt; // Tank Hunter
         if (attacker != 0) { car.LastAttacker = attacker; car.LastWeapon = weapon; }

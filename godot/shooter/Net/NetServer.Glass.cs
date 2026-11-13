@@ -46,6 +46,7 @@ public partial class NetServer
         if (float.IsInfinity(wall) || damage <= 0) return;
         if (car != null)
         {
+            car.Wake(); // a parked car is stepped again after a shot at it (its glass, and whatever the hit does to it)
             if (car.Destroyed || car.Def.Glass.Count == 0) return;
             var i = VehiclePaneCrossed(car, from, dir, wall);
             if (i >= 0 && _glass.Damage(new GlassPaneKey(car.Id, (ushort)i), damage, VehiclePaneHp(car.Def, i))) _glassHits++;
