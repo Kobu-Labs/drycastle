@@ -75,7 +75,7 @@ public sealed partial class MapLoader
             if (!CollisionOnly) return;
             var solid = (Node3D)prefab.Duplicate();
             solid.Name = "Solid";
-            foreach (var m in AllMeshes(solid).ToList()) m.Free();
+            foreach (var m in AllMeshes(solid).ToList()) m.Mesh = null; // not Free(): a prefab root is itself a mesh and the bodies hang under the meshes
             node.AddChild(solid);
             return;
         }
