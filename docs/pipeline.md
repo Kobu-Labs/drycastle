@@ -348,16 +348,36 @@ only when both are in the open or both are in the same room), and the ladders go
 shared movement step). The client darkens the rooms and hangs a lamp in each (`shooter/BunkerLights.cs`). The placeable
 `prim:bunker` is the closed form (a placed object collides as one box) and has no room.
 
-**Water bodies (`water.json`).** Written when the terrain exists, listed in `manifest.json` under
-`files.water`. One body per parcel of kind `water`: `{"id", "polygon", "surface_y", "bed_y"}`, with
-the polygon in the same geo-interface form as `parcels.json` (local metres, x east, y north) and the
-heights in metres on the terrain's datum (as `terrain.json`). The surface is the median terrain
-height along the parcel outline (the shoreline); the bed is the lowest terrain height on a 2 m grid
-inside. A water parcel with no terrain under its outline gets no body (a warning is printed). The
-shooter reads it as `ShooterCore.Water` (`Water.Parse`, format version 1): depth, surface and
-breath queries in Godot ground axes (x east, z = -north). The surface and bed are flat per body, so
-depth is one value per body (an approximation). The file is absent for a map without terrain.
-`"water"` is listed under `generated`; water surface meshes are not generated.
+**Water bodies (`water.json`, version 2).** Written when the terrain exists, listed in `manifest.json` under
+`files.water`. One body per parcel of kind `water`, and one per region with a `water_y` (`edits.json`; a region
+is split in pieces where the terrain under its level is not one piece). Each body is
+`{"id", "polygon", "surface_y", "bed_y", "max_depth_m", "depth", "flow"}`: the polygon in the geo-interface form of
+`parcels.json` (local metres, x east, y north), the heights in metres on the terrain's datum (as `terrain.json`).
+The surface is the median terrain height along the parcel outline (the shoreline), or the region's `water_y`.
+`bed_y` is the lowest bed (`surface_y - max_depth_m`), kept for readers of version 1. `depth` is the bed as a grid:
+`{"origin", "cell_m": 2.0, "cols", "rows", "cm"}`, the south-west corner in local metres, and `cm` the depths in
+centimetres as base64 of little-endian uint16, rows from the south, 0 outside the outline. `flow` is reserved (an empty
+list until flow is added). A water parcel with no terrain under its outline gets no body (a warning is printed).
+
+*The natural bed (`bed.py`).* Each body's depth comes from its outline alone (seeded, so the same map gives the same
+bed): depth grows from the bank over a shelf (banks shelve), a river (`water.river_ids` in `rules.yaml`: the Morava's
+seven parcels) gets pools and riffles from a seeded value-noise pattern along its main axis (mid-channel 2.5 m, pools to
+3.5 m, riffles 0.8 m, bars every 60 to 120 m), and the outside of a bend (the outline curls round the water) is deeper
+and steeper. Ponds and lakes (every other body) get a shallow bowl (1.5 m). A region's `max_depth` (edits.json, or the
+`set_region_water` MCP tool) scales its bed so the deepest point is that deep. Every parameter is the `water` section of
+`rules.yaml`.
+
+*The carve (`bed.carve_terrain`, stage `export`).* The terrain grid under each body is then lowered to surface minus
+depth (the grid's bilinear depth), so the terrain mesh and `terrain_collision` both carry the bed. Outside the outline a
+bank standing above the surface is cut down to it over `water.carve_blend_m` (4 m, never raised). The chunks that hold a
+body use the full 4 m collision grid, not the decimated one. The water is planned on the terrain before the carve (the
+shoreline and wet areas read the ground as it was), and the flat water regions use the same wet areas as `water.json`.
+`region-run` carves the same way, so a hot-reloaded region drapes on the bed the export carves.
+
+The shooter reads it as `ShooterCore.Water` (`Water.Parse`, versions 1 and 2): depth (`Water.Depth`, `DepthAt`, the
+sample's `WaterDepth`) is bilinear over the grid in Godot ground axes (x east, z = -north, so the grid's y is `-z`), and
+a version 1 body keeps its flat bed. The file is absent for a map without terrain. `"water"` is listed under `generated`;
+water surface meshes are not generated.
 
 **Water craft placement (#132).** The boat spawns on a water body, 4 m to 15 m off its shoreline, at the body's surface
 (`WaterSpawns.ShoreCandidates`, sampled on a 3 m grid over bodies at least 1.5 m deep). The amphibious transport spawns on

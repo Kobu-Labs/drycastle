@@ -120,7 +120,7 @@ def test_ponds_are_a_shallow_bowl() -> None:
     r = rules()
     grid = depth_grid(POND, "P-0922", r["pond"], False, r["bed"])
     d = wet_interior(grid, POND)
-    assert d.max() <= r["pond"]["max_depth_m"] * (1 + r["pond"]["pattern_gain"]) + 0.01
+    assert d.max() <= r["pond"]["max_depth_m"] + 0.01  # never deeper than the bowl
     assert d.max() > 1.2
     assert d.min() >= r["bed"]["min_depth_m"] - 1e-9
 

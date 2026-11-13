@@ -219,7 +219,8 @@ def depth_grid(
     else:
         cap = float(params["max_depth_m"])
         pattern = value_noise(px, py, seed, float(params["pattern_m"]), float(params["pattern_m"]))
-        target = cap * (1.0 + float(params["pattern_gain"]) * pattern)  # the class's bowl, a little irregular
+        # the class's bowl, a little irregular: from (1 - pattern_gain) * cap up to cap itself, never deeper
+        target = cap * (1.0 - float(params["pattern_gain"]) * 0.5 * (1.0 - pattern))
         shelf = np.full(px.size, float(params["shelf_m"]))
     target = np.clip(target, 0.0, None)
     depth = target * _smooth(bank / shelf)

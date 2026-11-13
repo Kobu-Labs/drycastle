@@ -192,7 +192,7 @@ water:
     max_depth_m: 1.5  # the shallow bowl of a pond or lake (its max_depth in edits.json overrides it)
     shelf_m: 5
     pattern_m: 30  # a little irregularity on the bottom
-    pattern_gain: 0.1  # its share of the depth
+    pattern_gain: 0.1  # the bottom dips to (1 - this) of max_depth_m in places, never deeper than max_depth_m
 
 # --- Regions (export, region-run) ---------------------------------------------------------
 regions:
