@@ -3,7 +3,7 @@ AREA ?= village
 # MAP: the map folder the viewer, editor and shooter targets load; follows AREA (override with MAP=<dir>).
 MAP ?= $(if $(filter slice,$(AREA)),out/map,out/village/map)
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props detail export parcel-run region-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run region-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -34,8 +34,14 @@ props:
 
 # Ground detail: draped patches (dirt, gravel, leaf litter, beds, furrows, verges) and clutter instances (tufts, pebbles, ...)
 # for every parcel; writes data/work/detail*.{json,npy}. Needs props. See docs/pipeline.md "Detail".
+# ENGINE=rust (or DRYCASTLE_DETAIL_ENGINE=rust) runs the Rust engine, built by detail-rust-build; without it the Python stage runs.
 detail:
-	cd pipeline && uv run python -m drycastle_pipeline detail --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline detail --area $(AREA) $(if $(ENGINE),--engine $(ENGINE),)
+
+# Builds the Rust engine of the detail stage (pipeline/rust/detail, PyO3 + GEOS built from source: needs cargo, cmake and a C++
+# compiler) and installs it into the pipeline's venv with maturin. `make setup` (uv sync) removes it again: build it again after.
+detail-rust-build:
+	cd pipeline && uv pip install --quiet maturin && uv run maturin develop --release --manifest-path rust/detail/Cargo.toml
 
 export:
 	cd pipeline && uv run python -m drycastle_pipeline export --area $(AREA)

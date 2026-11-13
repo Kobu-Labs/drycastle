@@ -1,0 +1,28 @@
+[package]
+name = "drycastle_detail"
+version = "0.1.0"
+edition = "2021"
+description = "Ground detail stage of the Drycastle map pipeline (patches, clutter, meadow raster), parallel"
+
+[lib]
+name = "drycastle_detail"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.30", features = ["extension-module"] }
+geos = { version = "11", features = ["static", "v3_12_0"] }
+rayon = "1"
+rstar = "0.12"
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+earcutr = "0.4"
+flate2 = "1"
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = "thin"
+codegen-units = 4
+
+[profile.dev]
+opt-level = 1
