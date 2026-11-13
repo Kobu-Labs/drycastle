@@ -456,8 +456,9 @@ unchanged; when the vehicle blows up, everyone aboard dies with it.
 
 ## 7b. Items and equipment (#261)
 
-The shooter has no inventory bag: the weapons are the hotbar, and what a player wears is **Equipment**, one item per equipment slot (GLOSSARY). Today
-there is one slot, headgear, and one item, the Bigfoot head. Decisions: ADR 0016.
+The weapons are the hotbar, what a player wears is **Equipment**, one item per equipment slot, and what is carried unworn is the **Bag**, six cells
+(GLOSSARY). Today there is one slot, headgear, and one item, the Bigfoot head. Decisions: ADR 0016 and, for the bag, multi-item corpses and ground
+items, ADR 0018 (#267, protocol 31).
 
 - **Data.** `items.json` (`ItemsFile`, `ShooterCore/Items`): `id`, `name`, `slot` (`headgear`), `pickup_limit` (leave out for no limit) and the
   effects as plain fields (`headshot_immune`). An item travels on the wire as its position in the list plus one, so new items are appended. A new
@@ -465,23 +466,37 @@ there is one slot, headgear, and one item, the Bigfoot head. Decisions: ADR 0016
 - **Bigfoot head.** Worn in place of a helmet. A headshot on its wearer is resolved as a body hit (`HitTarget.HeadGuarded`, read by `HitMath.Raycast`):
   the weapon's body damage, no headshot multiplier, hit marker, kill-cause or bonus XP, for hitscan and shotgun pellets alike. Rockets, blasts
   and the vehicle guns never had a headshot. What a player wears is state, not pose: lag compensation (ADR 0013) rewinds where they stood, not this.
-- **Death and the corpse.** At death the worn item comes off and the corpse carries it (`Corpse.Item`), with the pickups already counted, so the
-  player respawns bare headed. The corpse keeps its weapon as before; the two are separate takes. The item lives as long as the corpse (120 s). The
-  corpse cap evicts the oldest corpse without an item first.
-- **Taking it.** Tap the interact key at a corpse that carries an item: the chooser gets a third row, key 3, "Put on the Bigfoot head" (or "..., leaving
-  your X" when the slot is full: what was worn goes onto the corpse with its count). Holding the key still takes the weapon only. The prompt names the
-  item. Same conditions as the weapon: alive, on foot, in reach.
+- **Death and the corpse.** At death everything worn and bagged comes off and the corpse carries it (`Corpse.Items`, up to 7: the worn items, then
+  the bag), with the pickups already counted, so the player respawns bare headed with an empty bag. The corpse keeps its weapon as before; the two are
+  separate takes. The items live as long as the corpse (120 s). The corpse cap evicts the oldest thing without an item first.
+- **Taking it.** Tap the interact key at a corpse that carries items: the chooser gets a third row, key 3, for the first of them ("Put on the Bigfoot
+  head"; "Take the X into your bag" when the slot is taken; "..., leaving your X" when the bag is full too and what was worn goes onto the corpse with its
+  count). Holding the key still takes the weapon only. The prompt names the first item. Same conditions as the weapon: alive, on foot, in reach. The
+  item goes into its empty slot, else the bag, else it swaps with what is worn. The chooser for the whole list is a separate issue; `NetClient.RequestTakeCorpseItem`
+  takes any item of it by index.
+- **The bag and the moves (#267).** `Bag` holds six `ItemStack`s. `RequestEquip(cell)` wears a bagged item (what was worn goes into that cell),
+  `RequestUnequip(slot)` puts the worn item in the first empty cell (refused with "Your bag is full" when there is none), `RequestDropWorn` and
+  `RequestDropBagged` put an item on the ground. None of them counts a pickup; the server validates each and answers with an `Equipment` event.
+  `ItemRules` (pure, `ShooterCore/Items/Equipment.cs`) holds the rules and `BagTests` the tests.
+- **Ground items.** A dropped item lands at the terrain height under the player's feet (no throw), or under the vehicle they ride, any seat, a
+  helicopter in the air too. It is a world entity (type 2, `GroundItem`: state byte = item, hp byte = pickups) shown as a placeholder marker
+  (`NetClient.MakeGroundItemVisual`, to be replaced by the item's model). Tap the interact key within reach: "E  Pick up X". It goes into its empty
+  slot, else the bag; with both full nothing is taken or counted ("Your bag is full"). Each take counts one pickup (the dropper's too); an item at its
+  limit crumbles. It expires after 120 s and shares the corpse cap.
 - **The pickup limit.** The Bigfoot head has `pickup_limit` 3. Every take counts on the item, which keeps its count when it drops again on the next
   corpse, so it can be taken three times over its whole life. The next attempt removes it from the corpse, gives the taker nothing, and shows the
   toast "The item crumbles in your hands". Other items set their own limit or none (no limit: it never crumbles).
-- **What lasts.** Nothing is stored (ADR 0003's profile is untouched). A death drops the item on the corpse; leaving the match loses it; a new round
-  keeps it on the player (the round's corpses, and any item on them, go); a reconnect starts bare.
+- **What lasts.** Nothing is stored (ADR 0003's profile is untouched). A death drops everything on the corpse; leaving the match loses it; a new round
+  keeps it on the player (the round's corpses and ground items, and any item on them, go); a reconnect starts bare.
 - **HUD.** A "Headgear / name" chip sits beside the health bar while an item is worn, and is hidden otherwise. There is no model for the Bigfoot head
   yet, so other players still see the helmet; only the wearer's server-side hit rule and HUD chip change.
-- **Granting it for tests.** An admin's `/give <item> [player]` puts a fresh item (no pickups counted) on a living player, or on the admin.
-- **Wire (protocol 28).** Event kinds 190 `PickUpCorpseItem` (client to server, u16 corpse), 191 `CorpseItem` (server to everyone: u16 corpse, u8 item or
-  0; sent when a corpse that carries one spawns, when it changes, and to a joiner for each corpse that carries one), 192 `Equipment` (server to the
-  wearer: u8 count, one u8 item per slot) and 193 `ItemNotice` (server to one player: u8 reason, 1 = crumbled). Codecs: `ItemEvents`.
+- **Granting it for tests.** An admin's `/give <item> [player]` gives a fresh item (no pickups counted) to a living player, or to the admin: worn when the slot is empty, else in the bag; refused when both are full.
+- **Wire (protocol 31).** Event kinds 190 `PickUpCorpseItem` (client to server: u16 corpse, u8 index in its list), 191 `CorpseItems` (server to everyone:
+  u16 corpse, u8 count, then u8 item and u8 pickups each; sent when a corpse that carries items spawns, when its list changes, and to a joiner for each
+  corpse that carries any), 192 `Equipment` (server to the owner: u8 slot count and the slots, u8 cell count and the bag cells, each u8 item and u8
+  pickups), 193 `ItemNotice` (server to one player: u8 reason, 1 = crumbled, 2 = bag full), and the requests 200 `EquipItem` (u8 cell), 201 `UnequipItem`
+  (u8 slot), 202 `DropItem` (u8 worn or bag, u8 slot or cell) and 203 `TakeGroundItem` (u16 world entity id). World entity type 2 is the ground item.
+  Codecs: `ItemEvents`.
 
 ## 8. Known gaps (collected from the closed tickets)
 
@@ -604,9 +619,13 @@ Event kinds (`EventKind`, one byte in the event message):
 | | | 132 | LoadoutAck (server to the editing player) |
 | | | 140 | TargetRoster (server to one player on join, kinds 140-149) |
 | | | 190 | PickUpCorpseItem (client to server, kinds 190-199 are items and equipment, #261) |
-| | | 191 | CorpseItem (server to everyone, and to a joiner) |
-| | | 192 | Equipment (server to the wearer) |
+| | | 191 | CorpseItems (server to everyone, and to a joiner) |
+| | | 192 | Equipment (server to the owner: worn and bag) |
 | | | 193 | ItemNotice (server to one player) |
+| | | 200 | EquipItem (client to server, kinds 200-209 are the bag and ground items, #267) |
+| | | 201 | UnequipItem (client to server) |
+| | | 202 | DropItem (client to server) |
+| | | 203 | TakeGroundItem (client to server) |
 
 Message tags (`Wire.T*`): Hello 1, Welcome 2, Join 3, Leave 4, Event 5, Profile 6, SaveLoadout 7, SelectSlot 8, Error 9,
 SaveCamo 10, Input 11, Snapshot 20, WorldSnapshot 21. SaveLoadout is slot, six item strings, name (string), seq (u32 LE).

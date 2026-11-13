@@ -85,7 +85,7 @@ A lamp post of the base map, placed from OSM street lamp nodes or along roads by
 _Avoid_: light, streetlight, lamp post
 
 **Corpse**:
-A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. It also carries the Item its player wore, which another player can put on instead (see Pickup limit).
+A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. It also carries every Item its player wore or carried in the Bag (up to seven), which another player can take one at a time (see Pickup limit).
 _Avoid_: ragdoll, body, drop
 
 **Sandbox mode**:
@@ -97,7 +97,7 @@ A player whose player token is listed on the server (`--admin-token`). Admins ma
 _Avoid_: operator, moderator, op
 
 **Chat command**:
-A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (put an Item on a player, or on yourself), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
+A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
 _Avoid_: console command, cheat
 
 **Care package**:
@@ -137,12 +137,20 @@ The weapons a player can select: the primary, the secondary and the knife of the
 _Avoid_: inventory, toolbar, slots
 
 **Item**:
-Something a player wears that is not a weapon, perk or killstreak, defined in `items.json`. The first Items are event rewards (the Bigfoot head). A player wears at most one Item per equipment slot.
+Something a player wears that is not a weapon, perk or killstreak, defined in `items.json`. The first Items are event rewards (the Bigfoot head). A player wears at most one Item per equipment slot and carries the rest in the Bag.
 _Avoid_: loot, gear, drop (as a noun)
 
 **Equipment**:
-What a player wears right now: one Item per equipment slot, of which the headgear slot is the only one. It belongs to the match and not to the Profile: death puts the worn Item on the Corpse, leaving the match loses it, and a new round keeps it.
-_Avoid_: inventory (the shooter has no bag; the weapons are the Hotbar), outfit (that is Camouflage)
+What a player wears right now: one Item per equipment slot, of which the headgear slot is the only one. It belongs to the match and not to the Profile: death puts the worn Items on the Corpse, leaving the match loses it, and a new round keeps it. What is carried unworn is the Bag.
+_Avoid_: inventory (the weapons are the Hotbar), outfit (that is Camouflage)
+
+**Bag**:
+Six cells that hold Items a player carries without wearing them. Match state like Equipment, never in the Profile. Moving an Item between the Bag and an equipment slot is free (no pickup is counted): equipping into a taken slot swaps the worn Item into the Bag, and taking an Item off with a full Bag is refused. Death puts everything in it on the Corpse; leaving the match loses it, a new round keeps it.
+_Avoid_: inventory, backpack, stash
+
+**Ground item**:
+An Item lying on the ground after a player dropped it from their Equipment or Bag. It lands at their feet with no throw, or on the ground under their vehicle (any seat, a helicopter in the air included). Anyone, the dropper too, takes it with the interact key; each take counts one pickup, and with the slot and the Bag full nothing is taken. It expires on the Corpse timer and shares the Corpse cap, which removes things that carry no Item first.
+_Avoid_: loot, drop (as a noun), pickup (that is the act)
 
 **Headgear slot**:
 The equipment slot on the head: an Item in it is worn instead of a helmet. Not the Camouflage's headgear, which is only the look of the helmet; the slot is gameplay.
@@ -153,7 +161,7 @@ The first Item: headgear, the reward for defeating the Bigfoot event. A headshot
 _Avoid_: Bigfoot mask, Bigfoot helmet
 
 **Pickup limit**:
-How many times an Item can be taken from a Corpse over its whole life. The count belongs to the Item and travels with it from corpse to wearer to corpse; the attempt after the last pickup makes it crumble (it is gone, and the player reads "The item crumbles in your hands"). An Item with no limit never crumbles.
+How many times an Item can be taken from a Corpse or the ground over its whole life. Moving it between the Bag and an equipment slot or dropping it counts nothing. The count belongs to the Item and travels with it from corpse to wearer or Bag to corpse or ground; the attempt after the last pickup makes it crumble (it is gone, and the player reads "The item crumbles in your hands"). An Item with no limit never crumbles.
 _Avoid_: use count, durability, charges
 
 **Streak weapon**:
@@ -257,7 +265,7 @@ A flat test map (far from the village) run by one of the `--*-smoke` flags for s
 _Avoid_: test map, sandbox
 
 **World entity**:
-A non-player thing the server replicates on one channel: a corpse, a turret, an attack missile, a care package or an aircraft, identified by a type byte.
+A non-player thing the server replicates on one channel: a corpse, a ground item, a turret, an attack missile, a care package or an aircraft, identified by a type byte.
 _Avoid_: object, prop, actor
 
 **Protocol version**:
