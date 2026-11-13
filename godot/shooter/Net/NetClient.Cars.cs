@@ -23,6 +23,10 @@ public partial class NetClient
         /// <summary>A flying vehicle's rotors, their sound and the downwash (null for everything that drives, or a model without rotors).</summary>
         public RotorFx? Rotor;
         public readonly Interpolator Buf = new();
+        /// <summary>The vehicle's visible parts (<see cref="CarFx.VisualName"/>): a boat's wave bob and tilt move this, not the root.</summary>
+        public Node3D? Visual;
+        /// <summary>Next time (s) a wake ring is due while the vehicle moves on the water.</summary>
+        public double RippleDue;
         public ushort Driver;
         public int Kind;
         public NVec3 Pos;
@@ -163,6 +167,7 @@ public partial class NetClient
             if (flies) PoseFlight(v, rt, dt, ref p, ref rot); // a helicopter pitches and rolls; the one this player flies is drawn from its prediction
             v.Node.GlobalPosition = p;
             v.Node.Rotation = rot;
+            WaterCraft(v, p);
             if (v.Destroyed) continue;
             var flakMine = v.Flak != null && RenderFlak(v, s, rt, dt);
             if (v.DoorGun != null && RenderDoorGun(v, rot, rt, dt)) { flakMine = true; doorGunner = true; } // the gun camera, as at the flak
