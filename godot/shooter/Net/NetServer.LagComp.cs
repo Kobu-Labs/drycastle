@@ -68,7 +68,12 @@ public partial class NetServer
             SyncLife(o);
             list.Add(o.Car == null && LagComp.TryTargetAt(o.Poses, view, o.LifeStart, out var past) ? past : now);
         }
-        list.AddRange(TargetHitTargets());
+        var dummies = _match.Targets.All; // living target dummies stand where they stand (not rewound); an index loop, as in LiveTargets
+        for (var i = 0; i < dummies.Count; i++)
+        {
+            var d = dummies[i];
+            if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
+        }
         return list;
     }
 
