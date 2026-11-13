@@ -6,8 +6,8 @@ namespace Drycastle.MapLoader;
 /// <summary>
 /// The visible water: one mesh per water body at its surface height, a regular triangle grid the waves move.
 /// Each body has its own material with its palette (<see cref="WaterPalettes"/>) and depth texture (the
-/// body's depth grid from water.json); the shader (water_surface.gdshader) does the low-poly look per pixel: flat
-/// depth bands, a hard foam strip at the bank and flat-shaded waves, lit by the scene's own sun. Built once when the
+/// body's depth grid from water.json); the shader (water_surface.gdshader) does the low-poly look per pixel: smooth
+/// depth colour, a hard foam strip at the bank and flat-shaded waves, lit by the scene's own sun. Built once when the
 /// map loads (client only). Reduce motion freezes the waves where they are (<see cref="WaveClock"/> stays 0).
 /// </summary>
 public partial class WaterSurfaces : Node3D
