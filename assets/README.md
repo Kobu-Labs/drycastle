@@ -86,6 +86,13 @@ Z), `gun_mount` (the ring's carriage, yaw about Y from the ring centre, all the 
 `seat_gunner`, the lights (`light_head_l`/`_r`, `light_tail_l`/`_r`), `smoke_engine` (the engine is in the stern) and the wake points at the waterline
 (`wake_bow`, `wake_stern_l`/`_r`; the waterline afloat is 0.56 m above the origin, under the cockpit floor).
 
+**Unverified, user-provided artwork (2026-11-13):** `welcome-sign/welcome_sign.glb` is the village welcome sign ("VITAJTE V OBCI", coat of arms, village name):
+an arched board between two light-blue posts that bend in to two legs with two cross rails, a cap and a ball on each post (about 1.05 x 3.35 x 0.12 m, origin on
+the ground between the legs, the legs run 0.15 m below it, it faces +Z, the board shows the artwork on both faces). The structure is original geometry written as
+code in `scripts/make_welcome_sign_model.py` (standard library only; `python3 -I scripts/make_welcome_sign_model.py` rebuilds the GLB byte for byte; `--photo <picture>`
+re-cuts `board.png` first and needs Pillow). The board face is `board.png`, cut from the owner's picture of the sign so the coat of arms is exactly as shown; its
+origin and terms are **not confirmed** (`welcome-sign/NOTICE.txt`), so the asset (`pack:welcome-sign/welcome_sign`, category `other`) and its pack are flagged `UNVERIFIED` in the manifest. It is placeable from the editor's object picker like any asset; the pipeline test allows that licence only for the packs in `UNVERIFIED_PACKS` (`pipeline/tests/test_primitives.py`).
+
 kenney.nl answered automated requests with HTTP 403, and Quaternius distributes through itch.io or
 Patreon pages. Neither was circumvented. The same CC0 archives are published openly by their creators
 on OpenGameArt.org (`opengameart.org/content/car-kit`, `/city-kit-suburban`, `/stylized-nature-megakit`),

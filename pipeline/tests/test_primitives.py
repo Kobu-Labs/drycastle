@@ -13,6 +13,9 @@ from drycastle_pipeline.buildings import hex_to_rgb
 from drycastle_pipeline.primitives import PRIMITIVES, build_primitive
 
 MANIFEST = load_manifest()
+# Packs whose terms the owner has not confirmed yet: listed and placeable, but flagged UNVERIFIED with a NOTICE.txt instead of CC0 + LICENSE.txt.
+# Everything else must stay CC0. Remove a pack from here once its terms are confirmed.
+UNVERIFIED_PACKS = {"welcome-sign"}
 
 
 def bbox(mesh):
@@ -90,11 +93,14 @@ def test_manifest_is_valid_and_ids_unique() -> None:
     assert ids and len(ids) == len(set(ids))
     pack_names = {p["name"] for p in MANIFEST["packs"]}
     for p in MANIFEST["packs"]:
-        assert p["licence"] == "CC0" and p["url"].startswith("https://") and p["downloaded"]
-        assert (DEFAULT_MANIFEST.parent / p["name"] / "LICENSE.txt").is_file()
+        if p["name"] in UNVERIFIED_PACKS:
+            assert p["licence"] == "UNVERIFIED" and (DEFAULT_MANIFEST.parent / p["name"] / "NOTICE.txt").is_file()
+        else:
+            assert p["licence"] == "CC0" and (DEFAULT_MANIFEST.parent / p["name"] / "LICENSE.txt").is_file()
+        assert p["url"].startswith("https://") and p["downloaded"]
     for a in MANIFEST["assets"]:
         assert a["category"] in CATEGORIES, a["id"]
-        assert a["licence"] == "CC0", a["id"]
+        assert a["licence"] == ("UNVERIFIED" if a["pack"] in UNVERIFIED_PACKS else "CC0"), a["id"]
         assert a["name"] and a["source"] and isinstance(a["tags"], list)
         assert len(a["size_m"]) == 3 and all(v > 0 for v in a["size_m"]), a["id"]
         if a["id"].startswith("pack:"):
