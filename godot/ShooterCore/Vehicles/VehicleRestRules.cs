@@ -35,7 +35,7 @@ public static class DriveRest
         && MathF.Abs(after.Speed) < ParkedRules.RestEpsilon && MathF.Abs(after.Slip) < ParkedRules.RestEpsilon
         && MathF.Abs(after.YawRate) < ParkedRules.RestEpsilon && MathF.Abs(after.VerticalSpeed) < ParkedRules.RestEpsilon
         && MathF.Abs(after.Throttle) < ParkedRules.RestEpsilon && MathF.Abs(after.Steer) < ParkedRules.RestEpsilon
-        && MathF.Abs(after.Pitch) < ParkedRules.RestEpsilon && MathF.Abs(after.Roll) < ParkedRules.RestEpsilon
+        && MathF.Abs(after.Pitch - before.Pitch) < ParkedRules.RestEpsilon && MathF.Abs(after.Roll - before.Roll) < ParkedRules.RestEpsilon // parked on a slope the lie is the slope's: only a change is motion
         && Vector3.Distance(before.Position, after.Position) < ParkedRules.RestEpsilon
         && MathF.Abs(FlightMath.Wrap(after.Yaw - before.Yaw)) < ParkedRules.RestEpsilon;
 }

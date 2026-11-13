@@ -129,6 +129,15 @@ public class VehicleRestRulesTests
     }
 
     [Fact]
+    public void ADrivenVehicleParkedOnASlopeRestsAndOneStillSettlingDoesNot()
+    {
+        var parked = new DriveState { Position = Vector3.Zero, Pitch = -0.009f, Roll = -0.007f };
+        Assert.True(DriveRest.IsAtRest(parked, parked));
+        var settling = parked; settling.Pitch = 0f;
+        Assert.False(DriveRest.IsAtRest(parked, settling));
+    }
+
+    [Fact]
     public void ABoatFloatingStillRestsButADriftingOneDoesNot()
     {
         var floating = new DriveState { Position = new Vector3(0, 0.3f, -5), Afloat = true };
