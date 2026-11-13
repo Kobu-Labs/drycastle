@@ -486,13 +486,8 @@ breath queries in Godot ground axes (x east, z = -north). The surface and bed ar
 depth is one value per body (an approximation). The file is absent for a map without terrain.
 `"water"` is listed under `generated`; water surface meshes are not generated.
 
-**Water craft placement (#132).** The boat spawns on a water body, 4 m to 15 m off its shoreline, at the body's surface
-(`WaterSpawns.ShoreCandidates`, sampled on a 3 m grid over bodies at least 1.5 m deep). The amphibious transport spawns on
-land within 40 m of water when it can. Too little water (no shore-band candidate, for example a pond narrower than 8 m) falls
-back to the interior of the largest body, furthest from the bank first, and the server logs it; with no `water.json` at all
-no boat spawns and the server prints an error. The current slice map (`0.4.0-slice`, from the export before `water.json`
-existed) has one water parcel, P-0097: about 28,000 m² (2.8 ha), where a 3 m grid gives roughly 2,000 boat-band points.
-Its bed depths are not in the export yet, so whether it is deep enough for the 1.5 m test is unchecked until a map is built with `water.json`.
+**Water craft placement (#132).** The amphibious transport spawns on land within 40 m of water when it can (`NetServer.Vehicles`,
+using `Water.ShoreDistance`); it is the only vehicle that floats, and nothing is placed on the water itself.
 
 `make preview` renders `out/preview/topdown.png` (parcels by kind, buildings in wall colour),
 `iso.png` (isometric view from the mesh data: terrain relief, roads, buildings, fences, trees;

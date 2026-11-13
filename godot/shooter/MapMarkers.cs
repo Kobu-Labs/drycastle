@@ -20,6 +20,8 @@ public sealed class MapMarkers
     public List<NVector2> Vehicles { get; } = new();
     public List<NVector2> Friends { get; } = new();
     public MinimapPings Pings { get; } = new();
+    /// <summary>Gunfire blips (enemy shots near the player); null until the client has the match data's radius and lifetime.</summary>
+    public GunfireBlips? Blips { get; set; }
     /// <summary>Team deathmatch: pings use the enemy colour (orange) and friends are drawn, as outlined circles in the friend colour.</summary>
     public bool TeamColours { get; set; }
 

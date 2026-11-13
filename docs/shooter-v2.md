@@ -273,8 +273,8 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 
 ## 7. Vehicles and the world
 
-- Vehicles (`vehicles.json`): car, motorcycle, bicycle (v1), war jeep and quad bike (#131), boat and amphibious transport
-  (#132). Handling was reworked in #134 (max speed, turn radius, braking, hp). Headlights and tail lights come from the
+- Vehicles (`vehicles.json`): car, motorcycle, bicycle (v1), war jeep and quad bike (#131), and the amphibious transport
+  (#132; a boat type was shipped with it and later removed). Handling was reworked in #134 (max speed, turn radius, braking, hp). Headlights and tail lights come from the
   optional `lights` block (#137).
 - Seat switch: while seated in any vehicle the number keys (the `slot_1` to `slot_4` actions, rebindable) take that seat, and a seat
   schematic shows the seats (bottom right). Client request: event kind 161 (u8 seat index); the server answers the riders with kind 162 (who
@@ -388,7 +388,7 @@ and the server corrects it (ADR 0010); everyone else, its riders included, sees 
 **Driving** is `DriveModel` (pure, in ShooterCore), not the car model the other vehicles share. On land it pulls hard from a standstill and eases
 off towards top speed, the brake bites at once, and the steering sets a circle that widens with speed and is held to what the tyres grip, so it
 is quick at low speed and calm at top speed. In a water body it floats (wherever the water over the ground is at least `float_depth` deep; the
-village's ponds are only 0.2 to 0.9 m deep in the terrain, so depth decides no more than that) and is a boat: thrust against a drag that grows
+village's ponds are only 0.2 to 0.9 m deep in the terrain, so depth decides no more than that) and handles like a boat: thrust against a drag that grows
 with the square of the speed, a lazy helm, a stern that swings out, sideways speed the water takes away slowly. Going in fast, that same drag
 checks it hard, and the hull drops to its waterline on a spring and comes up again; coming out, the wheels haul it up the bank over a few
 ticks. It lies on the slope under its four wheels; a ledge higher than `step_height` under a wheel is a wall, a drop deeper than `snap_down`
@@ -460,12 +460,11 @@ Not built:
 - XP gain toasts (kill, headshot, roadkill, streak kill). The server sends only `LevelUp` and the round summary; a per-kill
   XP event is needed (#143). Left open here (not trivial: a new wire event).
 - Perk icon. The HUD shows the perk as a text label (#143); there is no icon asset.
-- HUD XP bar; minimap size, opacity and zoom as settings (#119, #143). Enemy minimap dots are fed only by UAV pings (#121).
+- HUD XP bar; minimap size, opacity and zoom as settings (#119, #143). Enemy minimap dots are fed by UAV pings (#121) and gunfire blips: an enemy's gun shot within `gunfire_blip_radius` (match.json, 150 m) shows a fading diamond for `gunfire_blip_seconds` (1.5 s), one per shooter per `gunfire_blip_interval` (0.25 s). No wire event of its own: every client already receives each Shot and PelletFan with the shooter and origin (rules in `GunfireBlipRules`, tracker `GunfireBlips`). Knife, streak weapons and vehicle guns do not blip; Ghost does not hide it; no protocol bump.
 - Scope zoom levels above 1 (#113). Sniper sway reduction (#139): `sway_amount` is read but never applied.
 - Concealment wired into the tick, name tags and kill cam; suit visible in first person; tufts do not follow limbs (#140, #141).
 - Water: water surface mesh, underwater fog and muffling, bubbles, light shafts, remote swim animation, splash on entry
   for predicted shots (#138, #142). Holes in water bodies are not cut out of the surface (an island in a lake is covered).
-- Boats and amphibious vehicles are server-only visually (primitive boxes, no CC0 model in `assets/manifest.json`).
 - Turret: the knife can hit a turret through a wall; the owner leaving leaves the turret firing (kills still credit the
   departed id) (#123).
 - Aircraft: no way out of a turret or gunship except the streak's own end (#125, #126); the owner's body stays shootable

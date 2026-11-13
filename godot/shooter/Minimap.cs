@@ -23,6 +23,7 @@ public sealed partial class Minimap : Control
     /// <summary>How fast the shown yaw eases to the view yaw, per second (about 0.15 s to settle).</summary>
     public const float FollowRate = 14f;
     const float ArrowHalf = 9f;
+    readonly List<GunfireBlip> _blipScratch = new();
 
     /// <summary>Half the view's width in metres (zoom). A smaller value zooms in.</summary>
     public float ZoomMetres { get; set; } = 90f;
@@ -79,6 +80,9 @@ public sealed partial class Minimap : Control
     /// the previous set. This is the UAV streak's layer.
     /// </summary>
     public void SetEnemyPings(IReadOnlyList<Vector2> groundXZ, double expiry) => _markers.SetPings(groundXZ, expiry);
+
+    /// <summary>Gives the map the gunfire blips tracker (see <see cref="GunfireBlips"/>); the tactical map draws the same ones.</summary>
+    public void SetBlips(GunfireBlips? blips) => _markers.Blips = blips;
 
     public void ClearEnemyPings() => _markers.Pings.Clear();
 
@@ -149,6 +153,13 @@ public sealed partial class Minimap : Control
                 var p = centre + Screen(pings[i], theta, pxPerMetre, inner);
                 DrawCircle(p, 6f, ShooterTheme.Outline);
                 DrawCircle(p, 4f, TeamColours ? ShooterTheme.Enemy : ShooterTheme.Danger);
+            }
+            if (_markers.Blips is { } blips)
+            {
+                blips.Collect(now, _blipScratch);
+                var still = GameSettings.Current.ReduceMotion;
+                foreach (var b in _blipScratch)
+                    MapGlyphs.Blip(this, centre + Screen(b.Position, theta, pxPerMetre, inner), b, still, 0.7f);
             }
             DrawNorth(centre, theta, half);
         }

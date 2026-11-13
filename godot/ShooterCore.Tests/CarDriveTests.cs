@@ -80,7 +80,7 @@ public class CarDriveTests
         VehiclesFile.Validate(With(_ => { }));
         // a car never floats, so the water numbers are not read and not checked
         VehiclesFile.Validate(With(v => v.Drive!.Water.CoastDrag = 5f));
-        Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Medium = VehicleMedium.Boat)));
+        Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Medium = VehicleMedium.Air)));
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Drive!.Land.Grip = 0)));
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Drive!.ThrottleRise = 0)));
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Drive!.Camera.TurnFollow = 2)));

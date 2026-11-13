@@ -11,5 +11,8 @@
   "friendly_fire": false,
   "team_score_goal": 75,
   "targets": 0,
-  "targets_award_xp": true
+  "targets_award_xp": true,
+  "gunfire_blip_radius": 150,
+  "gunfire_blip_seconds": 1.5,
+  "gunfire_blip_interval": 0.25
 }

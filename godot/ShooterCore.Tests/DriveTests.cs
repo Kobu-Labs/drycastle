@@ -107,7 +107,7 @@ public class DriveTests
             return f;
         }
         VehiclesFile.Validate(With(_ => { }));
-        Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Medium = VehicleMedium.Boat)));
+        Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Medium = VehicleMedium.Air)));
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Drive!.ThrottleRise = 0)));
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Drive!.Land.Grip = 0)));
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Drive!.Land.HandbrakeGrip = 1.5f)));

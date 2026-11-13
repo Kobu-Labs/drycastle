@@ -64,6 +64,24 @@ public partial class Player : CharacterBody3D
     /// The state is exact at once; only the eye is drawn at the old place and glides to the new one. Never sent, never part of the state.
     /// </summary>
     public Vector3 ViewOffset { get; set; }
+    /// <summary>
+    /// Cosmetic drop of the first-person eye, metres (positive: lower): the camera part of the landing dip (#259). A position, not a pitch, so the
+    /// crosshair stays on the aim the server resolves. Never sent, never part of the state; zero in the chase and seat cameras.
+    /// </summary>
+    public float ViewDip { get; set; }
+    float _lookYaw, _lookPitch;
+
+    /// <summary>
+    /// How far the mouse turned the view since the last call, radians in the camera's own sense (x yaw, positive turns left; y pitch, positive looks up),
+    /// after sensitivity, zoom and invert-Y, and clamped as the pitch is. Resets the count. The viewmodel's look lag reads it (#259).
+    /// </summary>
+    public Vector2 TakeLook()
+    {
+        var look = new Vector2(_lookYaw, _lookPitch);
+        _lookYaw = _lookPitch = 0;
+        return look;
+    }
+
     /// <summary>The first-person eye on the body, for the stance (set with the stance shape).</summary>
     Vector3 _eyeLocal;
 
@@ -102,7 +120,7 @@ public partial class Player : CharacterBody3D
     public override void _Process(double delta)
     {
         if (!_camera.IsInsideTree()) return;
-        if (!_chase) _camera.Position = _eyeLocal + ViewOffset; // the eye glides over a reconcile (ViewOffset); the physics sets the eye's place per tick
+        if (!_chase) _camera.Position = _eyeLocal + ViewOffset + Vector3.Down * ViewDip; // the eye glides over a reconcile (ViewOffset) and dips on a landing (ViewDip); the physics sets the eye's place per tick
         if (!_chase) _camera.Rotation = new Vector3(RecoilState.ClampPitch(_pitch + AimKick.X + ViewSway.X), _yaw + AimKick.Y + ViewSway.Y, 0);
         var target = ZoomFov > 0 ? ZoomFov : (GameSettings.Current.Fov + FovBoost) * (IronSightZoom ? IronSightFovScale : 1f);
         if (Mathf.IsEqualApprox(_fovNow, target)) return;
@@ -326,8 +344,11 @@ public partial class Player : CharacterBody3D
         {
             var gs = GameSettings.Current;
             var k = GameSettings.BaseSensitivity * gs.Sensitivity * Mathf.Min(1f, LookScale());
+            var pitchBefore = _pitch;
             _yaw -= m.Relative.X * k;
+            _lookYaw -= m.Relative.X * k;
             _pitch = Mathf.Clamp(_pitch - m.Relative.Y * k * (gs.InvertY ? -1 : 1), -1.55f, 1.55f);
+            _lookPitch += _pitch - pitchBefore;
             _camera.Rotation = new Vector3(_pitch, _yaw, 0);
         }
         else if (!SelfManageMouse) return;

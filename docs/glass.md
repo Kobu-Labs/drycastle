@@ -13,7 +13,7 @@ Glass panes on vehicles and buildings have hit points, crack as they lose them a
 | Flak truck | `vehicles.json` `glass` | two windscreen halves, a door window and a quarter light on each side (6) |
 | Utility helicopter | `vehicles.json` `glass` | two windscreen halves, two cockpit doors |
 
-The motorcycle, bicycle, quad, amphibious transport and boat have no glass. The utility helicopter also has two open sides (its cabin has no doors; `open_sides` in `vehicles.json`, written by hand next to the generated `glass` list, which the model script leaves alone).
+The motorcycle, bicycle, quad and amphibious transport have no glass. The utility helicopter also has two open sides (its cabin has no doors; `open_sides` in `vehicles.json`, written by hand next to the generated `glass` list, which the model script leaves alone).
 
 **Generated models (bus, flak truck, helicopter).** The model script builds every pane as its own node `glass_N` (N = the pane's place in the vehicle's `glass` list) and, when run without an output path, rewrites that list in `vehicles.json`: `centre`, `normal`, `size` (the bounding rectangle) and `outline` (a convex counter-clockwise polygon `[u, v]` in metres from the centre, so a trapezoid or a triangle is its real shape). Do not edit those lists by hand; change the script and run it (`python3 -I scripts/make_bus_model.py`, and the same for `make_flak_model.py` and `make_utility_helicopter_model.py`). The client hides the `glass_N` node while the pane is shattered. Shots, the crack overlay and the fragments use the outline.
 

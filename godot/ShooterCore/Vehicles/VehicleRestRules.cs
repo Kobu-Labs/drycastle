@@ -25,7 +25,7 @@ public static class FlightRest
 /// <summary>
 /// When a driverless driven vehicle (the amphibious transport) can stop being stepped. Same idea as <see cref="FlightRest"/>: on its wheels or
 /// afloat, at a standstill with the wheel centred and nothing sinking, climbing out or falling, it is a fixed point of the hands-off step.
-/// Afloat, a drift (a move from where it floats) keeps it awake, so a boat that is carried away is stepped every tick.
+/// Afloat, a drift (a move from where it floats) keeps it awake, so a vehicle that is carried away is stepped every tick.
 /// </summary>
 public static class DriveRest
 {
