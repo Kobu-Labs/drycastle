@@ -76,20 +76,23 @@ forest, water, the land the roads lie on, gardens of no property) is not kept as
 `ground` in `rules.yaml`) cuts it into **ground areas** by type instead, written to `parcels.json` under `ground` in the
 shape of a parcel (`id` `A-0001`..., `kind` = the type, polygon, area, anchor, chunk):
 
-* a region of `edits.json` with a `ground` type is a **hand-drawn ground area**: its polygon outside the parcels is
-  ground of that type, whatever the rules say (where two overlap the higher ID wins). Draw the region in the editor,
-  then give it a type with the MCP tool `set_region_ground` (or `create_region` with `ground`). The editor paints it as
-  a preview at once; the real ground (terrain colour, detail, trees) comes with the next full run (`make map`), and the
-  baked map does not paint it as a region;
+* a region of `edits.json` with a `ground` stack (a list of type names, lowest first) is a **hand-drawn ground area**:
+  its polygon outside the parcels is ground of the topmost type of the stack that carries terrain attributes, whatever
+  the rules say (where two overlap the higher ID wins). Draw the region in the editor, then give it a stack there or with
+  the MCP tool `set_region_ground` (or `create_region` with `ground`). The editor paints it as a preview at once; the
+  real ground (terrain colour, detail, trees) comes with the next full run (`make map`), and the baked map does not paint
+  it as a region. A stack whose types carry no terrain attribute makes no ground area at all, see "Ground attributes
+  and stacks";
 * then the types are tried in the order of `ground.types`, each takes what the ones above left of its source: `dike`
   (the parcels and clips of `detail.dike`), `water` and `forest` (the OSM natural/landuse polygons, with their own
   outlines), `allotments`, `orchard`, `meadow`, `village` (OSM `landuse=residential`: street sides, greens);
 * what no type claims is the default, `field`.
 
-A type is the whole description of a kind of ground, one entry of `ground.types`: its source (`osm` or `rule`), terrain
-`colours`, detail `recipe` (field, forest, village, dike) with optional `detail` settings laid over that recipe's
-section for this type only (a meadow is the field recipe without furrows and headlands), `water` and `spawns`. A new type is one new entry; the map area can override a type
-(`areas.village.ground.types`). There is no road ground: a road is the OSM ribbon on top of whatever lies under it.
+A type is a named bundle of attributes, one entry of `ground.types`: its source (`osm` or `rule`, or none) and the
+`attributes` it carries: terrain `colours`, detail `recipe` (field, forest, village, dike) with optional `detail`
+settings laid over that recipe's section for this type only (a meadow is the field recipe without furrows and
+headlands), `water`, `spawns`, `event_spawn` (see "Ground attributes and stacks"). A new type is one new entry; the map
+area can override a type (`areas.village.ground.types`). There is no road ground: a road is the OSM ribbon on top of whatever lies under it.
 Ground areas have no fence and no edits of their own, and their IDs are only stable while the inputs are. Trees are not
 part of a type: they come from the orthophoto only (`docs/ortho.md`).
 
@@ -98,43 +101,86 @@ land). `ground.carve` in `rules.yaml` lists such parcels: the parcel keeps its I
 grown by `margin_m` (a slim yard, mitre corners, never over another parcel), and the rest of its land becomes ground like
 any other. Today P-0073 (the dike strip, with a hut) and P-0754 (a 13 ha field with one building).
 
+### Ground attributes and stacks (ADR 0015)
+
+A ground type ticks the attributes it carries, under `attributes` of its entry. The attributes are a fixed catalog in
+code (`ground_attributes.py`, mirrored in `godot/viewer/GroundTypeEdits.cs`); the editor groups them by relation:
+
+| Group | Attribute | Value | Stacks |
+|---|---|---|---|
+| Appearance | `colours` | 1-6 `#rrggbb` terrain shades | terrain |
+| Appearance | `recipe` | `field`, `forest`, `village`, `dike` (none: no detail) | terrain |
+| Appearance | `detail` | settings laid over that recipe's `detail` section | terrain |
+| Water | `water` | `true`: a body of water (`water.json`), no detail | terrain |
+| Spawning | `spawns` | `true`: players may spawn on it | adds up |
+| Events | `event_spawn` | the events that may spawn there (`bigfoot`) | adds up |
+
+* **Terrain attributes are decided by one type per point.** A ground area still has one `kind`, the topmost type of
+  its stack that carries any terrain attribute (colours, recipe, detail or water), and the terrain, detail and water
+  stages read that type exactly as they read the single type before; they have no stacking logic. A type without a
+  terrain attribute is never that type, so it can lie on top of forest without changing how the forest looks.
+* **The other attributes add up** over every stacked type (`ground_attributes.accumulate`): `spawns` if any carries it, the union of the `event_spawn` lists.
+* **Stacks.** A region's `ground` is a list of type names, lowest first, so `["forest", "bigfoot_zone"]` is forest that
+  also carries an event. Between regions the higher ID is on top, as for paint. `ground.drawn_ground` turns the
+  regions into ground areas (the topmost terrain type of each region, the higher ID winning an overlap) and into
+  **ground layers**: for every region, the types of its stack that carry attributes that add up, except the one that
+  decides its terrain (its ground area is that type). `parcels.json` lists them under `ground_layers` as `{id (L-0001...),
+  region, types, polygon}` over the region's whole polygon (not cut by the parcels), and only when there are some. A
+  point carries the types of the ground area under it plus those of every layer over it.
+* **Where the layers are used.** The editor draws them as a translucent, toggleable overlay (`docs/viewer-and-editor.md`).
+  Nothing in the build or the game reads them yet: baking event points from them and exporting the attributes at runtime
+  is issue #263, and the props stage still reads `spawns` of the type of the ground area only.
+* A type with an OSM source (`osm`) or a `rule` has to carry a terrain attribute: the land it takes has to look like
+  something. (A type with only events that should follow OSM land would need its own overlay of that land.)
+
 ### Ground types of your own (`edits.json` `ground_types`)
 
 The types can be changed, added and removed without touching `rules.yaml`: `pipeline/config/edits.json` has an optional
 top-level `ground_types`, `{"<name>": {...}}`, written only when there is something in it. An entry has the keys of a
-`rules.yaml` type (`colours`, `recipe`, `detail`, `water`, `spawns`, `osm`; no `rule`, rule types stay in `rules.yaml`)
-or `"deleted": true`:
+`rules.yaml` type (`osm`, `attributes`; no `rule`, rule types stay in `rules.yaml`) or `"deleted": true`. In `attributes`
+a value `null` removes that attribute of the type of the rules (the type stops carrying it):
 
 ```json
 "ground_types": {
- "meadow": {"colours": ["#8cb86a", "#82ad62"], "detail": {"tone_per_ha": 6}, "spawns": false},
- "dunes": {"colours": ["#d8c38a"], "osm": {"natural": ["sand"]}, "recipe": "field"},
+ "meadow": {"attributes": {"colours": ["#8cb86a", "#82ad62"], "detail": {"tone_per_ha": 6}, "spawns": null}},
+ "dunes": {"attributes": {"colours": ["#d8c38a"], "recipe": "field"}, "osm": {"natural": ["sand"]}},
+ "bigfoot_zone": {"attributes": {"event_spawn": ["bigfoot"]}},
  "orchard": {"deleted": true}
 }
 ```
 
+and a region over a forest can then carry `"ground": ["forest", "bigfoot_zone"]`.
+
 * **Merge rule** (`ground.ground_types(rules_path, area, edits_path=None)`, `merge_ground_types`): the types of
   `rules.yaml` (with the area overlay) come first; a key of an edits entry overrides that key of the rules entry (the
-  dicts `osm` and `detail` are merged key by key, deeper dicts the same way, lists and plain values are replaced, so
-  `colours` is replaced whole and `osm: {natural: [...]}` replaces only the natural list); a new name is a new type
+  dicts `osm`, `attributes` and `detail` are merged key by key, deeper dicts the same way, lists and plain values are replaced, so
+  `colours` is replaced whole and `osm: {natural: [...]}` replaces only the natural list); an attribute set to `null` is
+  removed; a new name is a new type
   appended after the rules' types (so the rules' types take OSM land first); `deleted` removes a type of the rules.
   Without `edits_path` the result is `rules.yaml` alone. Every stage that reads the types passes the edits path (parcels
   for the OSM sources and `drawn_ground`, scene for the terrain colours, props for `spawns`, detail for the recipe and
-  its `detail` settings, export for `water`). A region whose `ground` names a type that no longer exists is skipped with
-  a warning by the parcels stage.
-* **Validation** (`edits.py`, mirrored by the editor): names are lower_snake (`^[a-z][a-z0-9_]{0,23}$`); `colours` 1 to
-  6 `#rrggbb`; `recipe` one of `field`, `forest`, `village`, `dike`, or `null` for no detail; `detail` an object whose
-  top-level keys exist in the shipped `detail.<recipe>` section (the recipe is the entry's own or the rules type's);
-  `water` and `spawns` booleans; `osm` an object `{landuse|natural: [text, ...]}`; `deleted` is `true` and alone, names a
+  its `detail` settings, export for `water`). A stack names a type that no longer exists: that name is skipped with a
+  warning by the parcels stage (a stack of only such names skips the region).
+* **Validation** (`edits.py`, mirrored by the editor): names are lower_snake (`^[a-z][a-z0-9_]{0,23}$`); `attributes`
+  holds only catalog keys: `colours` 1 to 6 `#rrggbb`; `recipe` one of `field`, `forest`, `village`, `dike`; `detail` an
+  object whose top-level keys exist in the shipped `detail.<recipe>` section (the recipe is the entry's own or the rules
+  type's, one is needed); `water` and `spawns` `true`; `event_spawn` a non-empty list of known events; `null` only to
+  remove an attribute that the type of `rules.yaml` carries; `osm` an object `{landuse|natural: [text, ...]}`, and a
+  type that takes OSM land has terrain attributes; `deleted` is `true` and alone, names a
   type of `rules.yaml`, and is refused for the default type and for a type with a `rule` (the dike, `detail.dike` needs
-  it). Unknown keys are errors.
+  it). A region's `ground` is a non-empty list of unique names, not together with `water_y`. Unknown keys are errors,
+  also the old flat keys (`colours`, `recipe`, ... at the top of an entry, and `ground` as one name).
 * **Rebuild**: a type change needs the full map build (`make map`): the ground areas, terrain colours and detail are
   made by the parcels, scene and detail stages. Nothing is hot-reloaded. The editor, MCP and this document say so.
 * **Export**: `parcels.json` `ground_types` lists every type of the rules (and then the user's own) with the rules'
-  own entry (`rules`; `custom: true` instead for a user's type) and a summary at the build (`colour`, `colours`,
-  `recipe`, `water`, `spawns`, `source` = `osm`, `rule` or `drawn`); `ground_default` names the default type;
+  own entry (`rules`, in the shape of `rules.yaml`; `custom: true` instead for a user's type) and a summary at the build (`colour`, `colours`,
+  `recipe`, `water`, `spawns`, `attributes` = the attribute keys carried, `source` = `osm`, `rule` or `drawn`); `ground_default` names the default type;
   `ground_recipes` holds the shipped settings of each recipe (without the clutter tables). The editor lays the current
   `edits.json` over `rules`, so its list is live between builds.
+* **Migration** (ADR 0015): `rules.yaml` `ground.types` moved every `colours`, `recipe`, `detail`, `water`, `spawns` of a
+  type under `attributes`; `edits.json` had no ground types or ground regions to move. A rebuilt village map is
+  byte-identical in terrain, detail and water (the baked chunk files and `water.json`); only `parcels.json` `ground_types[].rules`
+  and the `rules.yaml` hash in `manifest.json` change.
 Edits of a parcel that is no longer kept are skipped with a warning by the props stage; putting the parcel in a group
 with a building plot (by hand in `edits.json`, it is not shown in the editor) brings it back.
 
