@@ -426,6 +426,33 @@ public partial class Player : CharacterBody3D
         Simulate(input, (float)delta);
     }
 
+    readonly KinematicCollision3D _stepHit = new();
+
+    /// <summary>
+    /// Walking into a low ledge (up to <see cref="MoveConsts.StepHeight"/>: a doorstep, a kerb, a stair) lifts the body onto it instead of stopping it.
+    /// Run before the move, on the floor only: when the way ahead is blocked by something that is no walkable slope, but is free one step higher and
+    /// has a floor to stand on there, the body is raised to that floor and the move then carries it forward. Part of the tick, so the server and a
+    /// client's replay do the same.
+    /// </summary>
+    void StepUp(float dt)
+    {
+        if (!IsOnFloor()) return;
+        var ahead = new Vector3(Velocity.X, 0, Velocity.Z) * dt;
+        var len = ahead.Length();
+        if (len < 1e-4f) return;
+        var floorCos = Mathf.Cos(FloorMaxAngle);
+        var here = GlobalTransform;
+        if (!TestMove(here, ahead, _stepHit) || _stepHit.GetNormal().Y >= floorCos) return; // free, or a slope the move climbs anyway
+        var up = Vector3.Up * MoveConsts.StepHeight;
+        if (TestMove(here, up)) return; // no headroom
+        var raised = here.Translated(up);
+        var probe = ahead / len * Mathf.Max(len, MoveConsts.CapsuleRadius + 0.05f); // far enough to stand on the ledge, not on its edge
+        if (TestMove(raised, probe)) return; // a wall, not a ledge
+        if (!TestMove(raised.Translated(probe), -up, _stepHit) || _stepHit.GetNormal().Y < floorCos) return; // nothing to stand on up there
+        var rise = MoveConsts.StepHeight + _stepHit.GetTravel().Y;
+        if (rise > 0.02f) GlobalPosition += Vector3.Up * rise;
+    }
+
     /// <summary>One movement tick: the shared step, the physics move and (when authoritative) fall damage and respawn.</summary>
     public void Simulate(in MoveInput input, float dt)
     {
@@ -447,6 +474,7 @@ public partial class Player : CharacterBody3D
         SetStanceShape(_state.Stance);
 
         Velocity = ToG(_state.Velocity);
+        StepUp(dt);
         MoveAndSlide();
         LastFallDamage = MovementStep.PostMove(ref _state, ToN(GlobalPosition), ToN(Velocity), IsOnFloor(), Water.DepthAt(ToN(GlobalPosition)));
         if (Authoritative && LastFallDamage > 0)

@@ -25,12 +25,13 @@ BAYS = (-2.8, 1.3, 5.4, 9.5)  # pilasters and ribs
 PEW_W, PEW_PITCH, PEW_V0, AISLE_W = 2.0, 1.25, -4.5, 1.8  # the Synty pew is 2.0 x 0.76 m
 ROWS_RIGHT, ROWS_LEFT = 11, 6  # the stairs take the rear of the left block
 GALLERY_PEWS = ((0.2, 10.9), (2.6, 10.9))  # centre u, v
-SEAT_H, SEATS_PER_PEW, SEAT_GAP = 0.45, 3, 0.6
+SEAT_H, SEATS_PER_PEW, SEAT_GAP = 0.51, 3, 0.6  # the Synty pew's seat is 0.51 m up
 # standing spots (u, v, way in along v): the free floor by the stairs, and a kneeler before each side altar
 STANDING = ((-0.9, 4.6, 3.1), (-0.3, 5.8, 3.1), (-0.9, 7.0, 3.1), (-0.3, 8.2, 3.1), (-1.7, -5.6, -5.6), (3.65, -5.6, -5.6))
 
 CREAM, MARBLE, RIB, WOOD, CARPET = "#efe6d2", "#d9a99a", "#faf6ee", "#4a2e1c", "#8e1b1f"
 FLOOR, GOLD, PIPE, PANE, CANVAS = "#d8cdb4", "#c9a03c", "#b9bcc4", "#bcd3e6", "#3b3027"
+BAR = "#5b6470"
 
 
 def pews() -> list[tuple[float, float, int]]:
@@ -129,8 +130,28 @@ def build_shell(S, detail: bool, yellow, plinth) -> None:
         )
     # high altar backdrop (pews, altar table, lectern and stoup are props the game places, see church_info)
     S.box(CU - 1.3, CU + 1.3, CV0, CV0 + 0.4, F, 3.6, marble)
+    # pilasters and side altars by the arch: solid, so nobody walks through them
+    for v in BAYS:
+        for x0, x1 in ((IU0, IU0 + 0.2), (IU1 - 0.2, IU1)):
+            S.box(x0, x1, v - 0.3, v + 0.3, F, Z_SPRING - 0.4, marble)
+    for x0, x1 in ((IU0 + 0.2, CU0 - 0.2), (CU1 + 0.2, IU1 - 0.2)):
+        S.box(x0 - 0.1, x1 + 0.1, IV0, IV0 + 0.7, F, F + 1.0, rib)
+        S.box(x0, x1, IV0, IV0 + 0.4, F + 1.0, 3.2, marble)
     if not detail:
         return
+
+    def window(face, plane, at, w, z0, z1, rise) -> None:
+        """Arched window: a white surround, the glass set in it, dark glazing bars."""
+        S.plate(face, plane, at, _arch(w + 0.24, z0 - 0.12, z1, rise + 0.12), 0.05, rib)
+        S.plate(face, plane, at, _arch(w, z0, z1, rise), 0.08, pane)
+        bar = hex_to_rgb(BAR)
+        for k in range(1, 3 if w > 0.6 else 2):  # uprights
+            a = -w / 2 + w * k / (3 if w > 0.6 else 2)
+            S.plate(face, plane, at + a, _rect(0.03, z0, z1 + rise * 0.6), 0.1, bar)
+        z = z0 + 0.45
+        while z < z1 + 0.01:  # cross bars
+            S.plate(face, plane, at, _rect(w, z - 0.015, z + 0.015), 0.1, bar)
+            z += 0.45
 
     # vault, ribs over pilasters, ridge rib
     _arc(IV0, IV1, 0.0, 0.1, S, cream)
@@ -139,25 +160,22 @@ def build_shell(S, detail: bool, yellow, plinth) -> None:
     for v in BAYS:
         _arc(v - 0.15, v + 0.15, -0.14, 0.14, S, rib)
         for x0, x1, cap in ((IU0, IU0 + 0.2, IU0 + 0.28), (IU1 - 0.2, IU1, IU1 - 0.28)):
-            S.box(x0, x1, v - 0.3, v + 0.3, F, Z_SPRING - 0.4, marble)
             S.box(min(x0, cap), max(x1, cap), v - 0.38, v + 0.38, Z_SPRING - 0.4, Z_SPRING, rib)
     # windows and paintings between the pilasters
     for k, v in enumerate((-4.85, -0.75, 3.35, 7.45, 11.55)):
         for face, plane in (("right", IU0), ("left", IU1)):
-            S.plate(face, plane, v, _arch(0.9, 2.7, 4.0, 0.6), 0.04, pane)
+            window(face, plane, v, 0.9, 2.7, 4.0, 0.6)
             if k < 2 or (face == "left" and k < 4):
                 S.plate(face, plane, v, _rect(1.1, 1.1, 2.4), 0.05, gold)
                 S.plate(face, plane, v, _rect(0.9, 1.2, 2.3), 0.07, canvas)
     # chancel: windows, sacristy door, high altar; side altars by the arch
     for dx in (-1.58, 1.58):
-        S.plate("front", CV0, CU + dx, _arch(0.45, 2.2, 3.8, 0.3), 0.04, pane)
+        window("front", CV0, CU + dx, 0.45, 2.2, 3.8, 0.3)
     S.plate("right", CU0, -9.9, _rect(1.1, F, F + 2.1), 0.05, wood)
     S.plate("front", CV0 + 0.4, CU, _arch(1.4, F + 1.1, 3.0, 0.5), 0.05, gold)
     S.plate("front", CV0 + 0.4, CU, _arch(1.0, F + 1.3, 2.8, 0.4), 0.08, canvas)
     S.box(CU - 0.8, CU + 0.8, CV0, CV0 + 0.4, 3.6, 4.3, gold)
     for x0, x1 in ((IU0 + 0.2, CU0 - 0.2), (CU1 + 0.2, IU1 - 0.2)):
-        S.box(x0, x1, IV0, IV0 + 0.4, F, 3.2, marble)
-        S.box(x0 - 0.1, x1 + 0.1, IV0, IV0 + 0.7, F, F + 1.0, rib)
         S.plate("front", IV0 + 0.4, (x0 + x1) / 2, _arch(0.7, F + 1.2, 2.6, 0.3), 0.05, gold)
     # organ pipes and gilding, carpet
     for i in range(-9, 10):

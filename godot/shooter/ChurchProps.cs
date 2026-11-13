@@ -28,7 +28,7 @@ public partial class ChurchProps : Node3D
     /// <summary>Model, atlas, box (x across, y up, z deep, metres) and where the model's own origin sits across its width (a pew's is at one end).</summary>
     static readonly Dictionary<string, (string Model, string Atlas, Vector3 Box, float OriginX)> Kinds = new()
     {
-        ["pew"] = ("pew_01", "glb/atlas/dark_fantasy_01_A.png", new Vector3(2.0f, 1.0f, 0.76f), -1.0f),
+        ["pew"] = ("pew_01", "glb/atlas/dark_fantasy_01_A.png", new Vector3(2.0f, 0.95f, 0.2f), -1.0f), // the backrest only: a row stays wide enough to walk into
         ["altar"] = ("altar_table_01", "glb/atlas/dark_fantasy_01_A.png", new Vector3(2.03f, 0.86f, 0.9f), 0f),
         ["holy_water"] = ("holy_water_01", "glb/atlas/dark_fantasy_01_A.png", new Vector3(1.09f, 1.31f, 1.06f), 0f),
         ["lectern"] = ("church_lectern_01", "glb/atlas/fantasy_kingdom_01_A.png", new Vector3(0.55f, 1.14f, 0.55f), 0f),
@@ -52,7 +52,7 @@ public partial class ChurchProps : Node3D
                 Position = new Vector3(pos[0].GetSingle(), pos[2].GetSingle(), -pos[1].GetSingle()),
                 Rotation = new Vector3(0, Mathf.Pi - Mathf.DegToRad(p.GetProperty("yaw").GetSingle()), 0), // the models face +Z
             };
-            var body = new StaticBody3D { CollisionLayer = CollisionLayers.World, Position = new Vector3(0, k.Box.Y / 2, 0) };
+            var body = new StaticBody3D { CollisionLayer = CollisionLayers.World, Position = new Vector3(0, k.Box.Y / 2, kind == "pew" ? -0.15f : 0) };
             body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = k.Box } });
             pivot.AddChild(body);
             if (draw && SyntyLib.Instance(k.Model, k.Atlas) is { } model)

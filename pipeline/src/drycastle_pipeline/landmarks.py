@@ -219,7 +219,7 @@ def church_solids(detail: bool = True) -> _Solids:
     S.box(nx0, -1.28, -12.08, -7.3, 3.8, 4.0, rf)
     # porch: floor slab, four white columns, roof slab on a white entablature
     S.box(nx0 - 0.1, nx1 + 0.1, 14.0, 16.6, 0.0, 0.25, st)
-    for dx in (-3.5, -1.2, 1.2, 3.5):
+    for dx in (-3.5, -1.7, 1.7, 3.5):  # the middle pair stands clear of the doorway
         S.box(cu + dx - 0.2, cu + dx + 0.2, 16.0, 16.4, 0.25, 3.3, w)
     S.box(nx0 - 0.15, nx1 + 0.15, 13.9, 16.7, 3.3, 3.7, w)
     S.shed(nx0 - 0.25, nx1 + 0.25, 13.9, 16.9, 3.95, 3.95, 0.25, rf)

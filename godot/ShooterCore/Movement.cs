@@ -18,6 +18,8 @@ public static class MoveConsts
     public const float FallSafeDrop = 4f;
     public const float FallLethalDrop = 14f;
     public const float CapsuleRadius = 0.35f;
+    /// <summary>A ledge up to this high (a kerb, a doorstep, a stair) is walked onto, not walked into.</summary>
+    public const float StepHeight = 0.3f;
     public const float CapsuleHeight = 1.8f;
     public const float CrouchHeight = 1.2f;
     public const float EyeHeight = 1.65f;

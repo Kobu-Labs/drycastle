@@ -30,6 +30,9 @@ public interface ICitizenHits
 /// </summary>
 public sealed class CitizenCrowd : ICitizenHits
 {
+    /// <summary>A sitter's hit shape is the crouch shape lifted this far: the pelvis is on the pew, so the head is higher than a croucher's.</summary>
+    public const float SeatedHitLiftM = 0.3f;
+
     sealed record Pending(double At, int SeatId, IReadOnlyList<Vector3> Doors);
 
     readonly CitizensConfig _cfg;
@@ -203,6 +206,6 @@ public sealed class CitizenCrowd : ICitizenHits
     public void AddTargets(List<HitTarget> into)
     {
         foreach (var c in _byHit.Values)
-            if (c.Alive) into.Add(new HitTarget(c.HitId, c.Position, c.HitStance, c.Yaw));
+            if (c.Alive) into.Add(new HitTarget(c.HitId, c.State == CitizenState.Seated ? c.Position + new Vector3(0, SeatedHitLiftM, 0) : c.Position, c.HitStance, c.Yaw));
     }
 }

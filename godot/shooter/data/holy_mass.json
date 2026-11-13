@@ -16,7 +16,7 @@
     // How long a killed citizen lies before it is removed.
     "corpse_seconds": 15,
     // Height of the pews' seats: church.json gives the seat point on the seat; a sitter is hit as a crouching body standing under it.
-    "seat_height_m": 0.45,
+    "seat_height_m": 0.51,
     // Civilian clothing and skin, picked per citizen from its look number.
     "palette": ["#4a4038", "#5b4a36", "#3d4654", "#554a5e", "#6b3f3a", "#4b5543", "#2f2f33", "#7a6a55"],
     "skin_tones": ["#f0c8a4", "#e0ac84", "#c68e5f"],

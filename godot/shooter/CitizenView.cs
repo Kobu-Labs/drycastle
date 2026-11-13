@@ -96,7 +96,7 @@ public sealed partial class CitizenView : Node3D
         _anim.AddAnimationLibrary("", lib);
         if (_role == CitizenRole.Citizen && _model.FindChildren("*", "Skeleton3D", true, false).FirstOrDefault() is Skeleton3D skeleton)
         {
-            _sit = new SitPose { Name = "Sit", Influence = 0, PelvisM = _cfg.SeatHeightM + 0.1f };
+            _sit = new SitPose { Name = "Sit", Influence = 0, PelvisM = _cfg.SeatHeightM + 0.09f };
             skeleton.AddChild(_sit);
         }
     }
@@ -255,7 +255,8 @@ public sealed partial class CitizenView : Node3D
 public sealed partial class SitPose : SkeletonModifier3D
 {
     public float PelvisM = 0.55f;
-    public float BackM = 0.12f;
+    /// <summary>How far behind the seat point the hip joints are. The Synty pew's backrest is 0.1 m behind its middle, so the hips sit a little in front.</summary>
+    public float BackM = -0.03f;
     const float Bend = 1.45f; // radians, a little short of level so the feet reach the floor
 
     public override void _ProcessModificationWithDelta(double delta)
