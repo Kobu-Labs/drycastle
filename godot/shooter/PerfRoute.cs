@@ -9,6 +9,7 @@ namespace Drycastle.Shooter;
 /// (first-use hitches are logged apart) the camera visits <c>--perf-views</c> viewpoints (spawn points spread over the map, four headings each, standing
 /// eye height) for <c>--perf-dwell</c> seconds each, and every frame records its time, draw calls, primitives, objects, CPU and GPU render time.
 /// Variants: <c>--perf-msaa 0|2|4|8</c>, <c>--perf-noshadow</c>, <c>--perf-shadow-dist M</c>, <c>--perf-vsync</c> (off by default for measurement).
+/// Bench: <c>--perf-blasts N</c> spawns N rocket explosions a second at 20-250 m around the camera during the measured views (a gunship gunner is about 7 a second).
 /// Writes DIR/route-frames.csv and DIR/route-summary.json, then quits. Measurement only.
 /// </summary>
 public partial class PerfRoute : Node
@@ -20,7 +21,10 @@ public partial class PerfRoute : Node
     public double Dwell = 2.0, Settle = 0.6;
     public bool NoShadow, Vsync;
     public float ShadowDist = -1;
+    public float BlastRate;
     public string Tag = "";
+    double _blastAcc;
+    readonly Random _rng = new(7);
 
     record struct Sample(int View, double T, double Ms, double Draws, double Prims, double Objects, double CpuMs, double GpuMs, double Nodes);
 
@@ -78,10 +82,26 @@ public partial class PerfRoute : Node
         }
         _viewT += delta;
         if (_viewT >= Settle) _s.Add(Take(_view, delta));
+        SpawnBlasts(delta);
         if (_viewT < Settle + Dwell) return;
         _view++; _viewT = 0;
         if (_view >= _anchors.Count * 4) { Finish(); return; }
         Goto(_view);
+    }
+
+    void SpawnBlasts(double dt)
+    {
+        if (BlastRate <= 0) return;
+        _blastAcc += dt * BlastRate;
+        var world = Player.GetParent<Node3D>();
+        while (_blastAcc >= 1)
+        {
+            _blastAcc -= 1;
+            var ang = _rng.NextDouble() * Math.PI * 2;
+            var d = 20 + _rng.NextDouble() * 230;
+            var at = Player.GlobalPosition + new Vector3((float)(Math.Cos(ang) * d), 0, (float)(Math.Sin(ang) * d));
+            RocketFx.Explode(world, at, 3.5f);
+        }
     }
 
     void Goto(int v)
@@ -145,7 +165,7 @@ public partial class Shooter
         AddChild(new PerfRoute
         {
             Player = player, Map = _map, OutDir = cfg.Str("perf-out", "out/perf/route"), Views = I(cfg.Str("perf-views"), 96), Msaa = I(cfg.Str("perf-msaa"), -1),
-            Dwell = F(cfg.Str("perf-dwell"), 2f), NoShadow = cfg.Flag("perf-noshadow"), ShadowDist = F(cfg.Str("perf-shadow-dist"), -1f), Vsync = cfg.Flag("perf-vsync"), Tag = cfg.Str("perf-tag"),
+            Dwell = F(cfg.Str("perf-dwell"), 2f), NoShadow = cfg.Flag("perf-noshadow"), ShadowDist = F(cfg.Str("perf-shadow-dist"), -1f), BlastRate = F(cfg.Str("perf-blasts"), 0f), Vsync = cfg.Flag("perf-vsync"), Tag = cfg.Str("perf-tag"),
         });
     }
 }

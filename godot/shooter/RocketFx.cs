@@ -124,41 +124,139 @@ public static class RocketFx
         return p;
     }
 
+    /// <summary>Blast kits in the pool. Each live blast holds one kit, so the nodes are bounded by this count, not by the blast rate (T2-16).</summary>
+    public const int KitPool = 4;
+    /// <summary>Beyond this distance from the camera a small blast (radius below <see cref="SimplifyMaxRadius"/>) keeps its flash, fireball and ring only.</summary>
+    public const float SimplifyRange = 120f;
+    /// <summary>Blasts this large (MOAB, aircraft) are never simplified: they read from far away.</summary>
+    public const float SimplifyMaxRadius = 8f;
+    const double KitLifeMs = 2200;
+
+    /// <summary>One blast's nodes, reused: the flash, fireball and ring, the light and the four emitters.</summary>
+    sealed class Kit
+    {
+        public Node3D Root = null!;
+        public MeshInstance3D Flash = null!, Fireball = null!, Ring = null!;
+        public OmniLight3D Light = null!;
+        public CpuParticles3D Fire = null!, Spark = null!, Smoke = null!, Debris = null!;
+        public readonly List<Tween> Tweens = new();
+        public ulong EndMs;
+    }
+
+    static Node3D? _kitWorld;
+    static Kit[]? _kits;
+
+    /// <summary>Builds the pool under <paramref name="world"/> once per world: hidden kits, so an idle kit draws nothing.</summary>
+    static Kit[] Kits(Node3D world)
+    {
+        if (_kits != null && _kitWorld == world && GodotObject.IsInstanceValid(_kits[0].Root)) return _kits;
+        var c = C;
+        var off = GeometryInstance3D.ShadowCastingSetting.Off;
+        _kits = new Kit[KitPool];
+        for (var i = 0; i < KitPool; i++)
+        {
+            var k = new Kit { Root = new Node3D { Name = "BlastKit", Visible = false } };
+            k.Flash = new MeshInstance3D { Mesh = c.Ball, MaterialOverride = c.FlashMat, CastShadow = off };
+            k.Fireball = new MeshInstance3D { Mesh = c.Ball, MaterialOverride = c.FireballMat, CastShadow = off };
+            k.Ring = new MeshInstance3D { Mesh = c.Ring, CastShadow = off, Position = new Vector3(0, 0.15f, 0) };
+            k.Light = new OmniLight3D { LightColor = new Color(1f, 0.65f, 0.25f), LightEnergy = 10f, ShadowEnabled = false };
+            k.Root.AddChild(k.Flash); k.Root.AddChild(k.Fireball); k.Root.AddChild(k.Ring); k.Root.AddChild(k.Light);
+            k.Fire = Pooled(k.Root, c.Fire, c.FireRamp, 24, 0.7, new Vector3(0, 1.5f, 0), c.Grow);
+            k.Spark = Pooled(k.Root, c.Spark, c.SparkRamp, 24, 1.0, new Vector3(0, -9.8f, 0), c.Shrink);
+            k.Smoke = Pooled(k.Root, c.Smoke, c.SmokeRamp, 16, 1.6, new Vector3(0, 1.2f, 0), c.Grow);
+            k.Debris = Pooled(k.Root, c.Debris, null, 10, 1.3, new Vector3(0, -14f, 0), null);
+            world.AddChild(k.Root);
+            _kits[i] = k;
+        }
+        _kitWorld = world;
+        return _kits;
+    }
+
+    /// <summary>An emitter for a kit: hidden and idle until <see cref="Play"/> sets its size and starts it (the <see cref="ParticleFx"/> rule).</summary>
+    static CpuParticles3D Pooled(Node3D root, Mesh mesh, Gradient? ramp, int amount, double life, Vector3 gravity, Curve? curve)
+    {
+        var p = new CpuParticles3D
+        {
+            Mesh = mesh, Amount = amount, Lifetime = life, OneShot = true, Explosiveness = 0.95f, Emitting = false, Visible = false, LocalCoords = false,
+            Direction = Vector3.Up, Gravity = gravity, ScaleAmountCurve = curve, ColorRamp = ramp,
+            AngularVelocityMin = -180, AngularVelocityMax = 180, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
+        root.AddChild(p);
+        return p;
+    }
+
+    /// <summary>The kit to use: an idle one, else the one whose blast started first (its tail is cut, nothing else changes).</summary>
+    static Kit Pick(Kit[] kits, ulong now)
+    {
+        var best = kits[0];
+        foreach (var k in kits)
+        {
+            if (k.EndMs <= now) return k;
+            if (k.EndMs < best.EndMs) best = k;
+        }
+        return best;
+    }
+
     public static void Explode(Node3D world, Vector3 at, float radius)
     {
         if (!ShotFx.Enabled || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree()) return;
         var c = C;
-        var root = new Node3D { Position = at };
-        world.AddChild(root);
+        var kits = Kits(world);
         var r = Mathf.Max(1f, radius);
-        var off = GeometryInstance3D.ShadowCastingSetting.Off;
+        var now = Time.GetTicksMsec();
+        var k = Pick(kits, now);
+        var cam = world.GetViewport()?.GetCamera3D();
+        var simple = r < SimplifyMaxRadius && cam != null && cam.GlobalPosition.DistanceTo(at) > SimplifyRange;
 
-        // flash sphere (white-hot, gone in 0.12 s) and fireball (grows 0.35 s, fades)
-        var flash = new MeshInstance3D { Mesh = c.Ball, MaterialOverride = c.FlashMat, Scale = Vector3.One * r * 0.15f, CastShadow = off };
-        var fireball = new MeshInstance3D { Mesh = c.Ball, MaterialOverride = c.FireballMat, Scale = Vector3.One * r * 0.2f, CastShadow = off };
-        var ring = new MeshInstance3D { Mesh = c.Ring, Scale = Vector3.One * r * 0.15f, CastShadow = off, Position = new Vector3(0, 0.15f, 0) };
-        root.AddChild(flash); root.AddChild(fireball); root.AddChild(ring);
-        var tf = flash.CreateTween().SetParallel();
-        tf.TweenProperty(flash, "scale", Vector3.One * r * 0.5f, 0.12f);
-        tf.TweenProperty(flash, "transparency", 1f, 0.12f);
-        var tb = fireball.CreateTween().SetParallel();
-        tb.TweenProperty(fireball, "scale", Vector3.One * r * 0.55f, 0.35f).SetEase(Tween.EaseType.Out);
-        tb.TweenProperty(fireball, "transparency", 1f, 0.35f).SetDelay(0.1f);
-        var tr = ring.CreateTween().SetParallel();
-        tr.TweenProperty(ring, "scale", new Vector3(r * 1.1f, r * 1.1f, r * 1.1f), 0.3f).SetEase(Tween.EaseType.Out);
-        tr.TweenProperty(ring, "transparency", 1f, 0.3f);
+        foreach (var t in k.Tweens) t.Kill();
+        k.Tweens.Clear();
+        k.EndMs = now + (ulong)KitLifeMs;
+        k.Root.Position = at;
+        k.Root.Visible = true;
 
-        var light = new OmniLight3D { LightColor = new Color(1f, 0.65f, 0.25f), LightEnergy = 10f, OmniRange = r * 3.5f, ShadowEnabled = false };
-        root.AddChild(light);
-        var tl = light.CreateTween();
-        tl.TweenProperty(light, "light_energy", 0f, 0.35f);
+        // flash sphere (white-hot, gone in 0.12 s) and fireball (grows 0.35 s, fades) and the shockwave ring
+        k.Flash.Scale = Vector3.One * r * 0.15f; k.Flash.Transparency = 0;
+        k.Fireball.Scale = Vector3.One * r * 0.2f; k.Fireball.Transparency = 0;
+        k.Ring.Scale = Vector3.One * r * 0.15f; k.Ring.Transparency = 0;
+        var tf = k.Flash.CreateTween().SetParallel();
+        tf.TweenProperty(k.Flash, "scale", Vector3.One * r * 0.5f, 0.12f);
+        tf.TweenProperty(k.Flash, "transparency", 1f, 0.12f);
+        var tb = k.Fireball.CreateTween().SetParallel();
+        tb.TweenProperty(k.Fireball, "scale", Vector3.One * r * 0.55f, 0.35f).SetEase(Tween.EaseType.Out);
+        tb.TweenProperty(k.Fireball, "transparency", 1f, 0.35f).SetDelay(0.1f);
+        var tr = k.Ring.CreateTween().SetParallel();
+        tr.TweenProperty(k.Ring, "scale", new Vector3(r * 1.1f, r * 1.1f, r * 1.1f), 0.3f).SetEase(Tween.EaseType.Out);
+        tr.TweenProperty(k.Ring, "transparency", 1f, 0.3f);
+        k.Tweens.Add(tf); k.Tweens.Add(tb); k.Tweens.Add(tr);
 
-        // 24 fire + 24 sparks + 16 smoke + 10 debris
-        Emitter(root, c.Fire, c.FireRamp, 24, 0.7, Vector3.Up, 180f, 1f, r * 0.9f, new Vector3(0, 1.5f, 0), r * 0.8f, r * 1.4f, c.Grow);
-        Emitter(root, c.Spark, c.SparkRamp, 24, 1.0, Vector3.Up, 180f, r * 1.0f, r * 2.4f, new Vector3(0, -9.8f, 0), 0.6f, 1.4f, c.Shrink);
-        Emitter(root, c.Smoke, c.SmokeRamp, 16, 1.6, Vector3.Up, 60f, 0.8f, r * 0.45f, new Vector3(0, 1.2f, 0), r * 0.5f, r * 0.9f, c.Grow);
-        Emitter(root, c.Debris, null, 10, 1.3, Vector3.Up, 70f, r * 0.8f, r * 1.9f, new Vector3(0, -14f, 0), 0.7f, 1.8f);
+        // the light and the particles, unless the blast is far and small
+        k.Light.Visible = !simple;
+        k.Light.OmniRange = r * 3.5f;
+        k.Light.LightEnergy = 10f;
+        if (!simple)
+        {
+            var tl = k.Light.CreateTween();
+            tl.TweenProperty(k.Light, "light_energy", 0f, 0.35f);
+            k.Tweens.Add(tl);
+        }
+        Burst(k.Fire, simple, 1f, r * 0.9f, r * 0.8f, r * 1.4f, 180f);
+        Burst(k.Spark, simple, r * 1.0f, r * 2.4f, 0.6f, 1.4f, 180f);
+        Burst(k.Smoke, simple, 0.8f, r * 0.45f, r * 0.5f, r * 0.9f, 60f);
+        Burst(k.Debris, simple, r * 0.8f, r * 1.9f, 0.7f, 1.8f, 70f);
 
-        ShotFx.Expire(world, root, 2.2f);
+        // the kit's root hides itself when the blast is over: an idle kit is not drawn
+        var end = k.Root.CreateTween();
+        end.TweenInterval(KitLifeMs / 1000.0);
+        end.TweenCallback(Callable.From(() => { if (GodotObject.IsInstanceValid(k.Root)) k.Root.Visible = false; }));
+        k.Tweens.Add(end);
+    }
+
+    static void Burst(CpuParticles3D p, bool skip, float vMin, float vMax, float sMin, float sMax, float spread)
+    {
+        if (skip) { p.Emitting = false; p.Visible = false; return; }
+        p.Spread = spread;
+        p.InitialVelocityMin = vMin; p.InitialVelocityMax = vMax;
+        p.ScaleAmountMin = sMin; p.ScaleAmountMax = sMax;
+        ParticleFx.Fire(p);
     }
 }

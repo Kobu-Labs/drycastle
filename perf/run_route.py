@@ -16,7 +16,7 @@ from common import *
 VARIANTS = {
     "base": [],
     "msaa0": ["--perf-msaa", "0"], "msaa2": ["--perf-msaa", "2"], "msaa4": ["--perf-msaa", "4"], "msaa8": ["--perf-msaa", "8"],
-    "noshadow": ["--perf-noshadow"], "shadow100": ["--perf-shadow-dist", "100"],
+    "noshadow": ["--perf-noshadow"], "shadow100": ["--perf-shadow-dist", "100"], "shadow60": ["--perf-shadow-dist", "60"], "shadow40": ["--perf-shadow-dist", "40"],
     "mobile": ["--perf-msaa", "0"], "compat": ["--perf-msaa", "0"],
 }
 RENDERER = {"mobile": ["--rendering-method", "mobile"], "compat": ["--rendering-method", "gl_compatibility"]}
@@ -34,6 +34,7 @@ def main():
     ap.add_argument("--timeout", type=int, default=900)
     ap.add_argument("--gpu-index", type=int, default=-1, help="Godot --gpu-index (pick the adapter: 0/1)")
     ap.add_argument("--repeat", type=int, default=1)
+    ap.add_argument("--blasts", type=float, default=0, help="bench: rocket explosions per second around the camera (--perf-blasts)")
     a = ap.parse_args()
     for v in [x for _ in range(a.repeat) for x in a.variants.split(",")]:
         d = out_dir(f"{a.tag}-{a.gpu}{a.gpu_index if a.gpu_index >= 0 else ''}-{v}-{int(time.time()) % 100000}")
@@ -41,7 +42,7 @@ def main():
         if a.gpu == "nvidia":
             env.update({"__NV_PRIME_RENDER_OFFLOAD": "1", "__GLX_VENDOR_LIBRARY_NAME": "nvidia", "__VK_LAYER_NV_optimus": "NVIDIA_only", "DRI_PRIME": "1"})
         args = [GODOT, "--path", str(SHOOTER), "--resolution", a.res, "--windowed"] + (["--gpu-index", str(a.gpu_index)] if a.gpu_index >= 0 else []) + RENDERER.get(v, []) + ["--", "--role", "client", "--offline", "--map", a.map, "--perf-route", "--perf-out", str(d),
-                "--perf-views", str(a.views), "--perf-dwell", str(a.dwell), "--perf-tag", v] + VARIANTS.get(v, [])
+                "--perf-views", str(a.views), "--perf-dwell", str(a.dwell), "--perf-tag", v] + VARIANTS.get(v, []) + (["--perf-blasts", str(a.blasts)] if a.blasts > 0 else [])
         log = open(d / "client.log", "w")
         t0 = time.time()
         p = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, text=True, env=env)
