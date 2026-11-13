@@ -18,6 +18,7 @@
 #              model         name of a hand-modelled landmark (pipeline/src/drycastle_pipeline/landmarks.py)
 #                            that replaces the generated mesh, e.g. church
 #              model_axis    with model: bearing of the model's front in radians, counter-clockwise from east
+#              remove        true: the building is left out of the map (a placed object stands there instead)
 # Keys that match no building are reported as a warning.
 #
 # Example (commented out):
@@ -196,3 +197,8 @@ buildings:
     levels: 2
     roof: flat
     height_m: 6.3
+  # the two long sheds of the military base (P-0349): the open hangars o-0582 and o-0583 stand in their place
+  w378920355:
+    remove: true
+  w378920332:
+    remove: true

@@ -37,6 +37,7 @@ OVERRIDE_FIELDS = (
     "roof_colour",
     "model",
     "model_axis",
+    "remove",
 )
 _COLOUR = re.compile(r"^#[0-9a-fA-F]{6}$")
 _NUMBER = re.compile(r"^\s*(-?\d+(?:[.,]\d+)?)\s*(m)?\s*$")
@@ -124,6 +125,8 @@ def load_overrides(path: Path = DEFAULT_OVERRIDES) -> dict[str, dict]:
         for name, value in fields.items():
             if name not in OVERRIDE_FIELDS:
                 raise RulesError(f"overrides: {key}: unknown field {name}")
+            if name == "remove" and not isinstance(value, bool):
+                raise RulesError(f"overrides: {key}: remove must be true or false")
             if name == "roof_height_m" and not (isinstance(value, int | float) and value > 0):
                 raise RulesError(f"overrides: {key}: roof_height_m must be a positive number")
             if name == "roof" and value not in ROOFS:
@@ -370,6 +373,8 @@ def build_buildings(
                 if key in overrides:
                     merged.update(overrides[key])
                     used.add(key)
+            if merged.pop("remove", False):
+                continue  # replaced by a placed object (a hangar from a pack): no mesh, no collider, no interior
             out.append(
                 derive_building(
                     bid, parcel["id"], shape(f["geometry"]), f["properties"]["tags"], rules, merged

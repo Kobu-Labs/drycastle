@@ -155,7 +155,7 @@ public class IntelTests
     public void TheShippedIntelFileIsValid()
     {
         var f = IntelFile.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "intel.json")));
-        Assert.Equal("pack:synty-military/SM_Bld_Hangar_01", f.BaseAsset);
+        Assert.Equal("pack:synty-military/SM_Bld_Hangar_Open_01", f.BaseAsset);
         Assert.False(string.IsNullOrWhiteSpace(f.BaseBunker)); // the fallback
         Assert.Throws<DataFileException>(() => IntelFile.Parse("""{ "version": 1, "rotate_seconds": 0 }"""));
         Assert.Throws<DataFileException>(() => IntelFile.Parse("""{ "version": 1, "view_range_m": 1 }"""));
@@ -205,24 +205,19 @@ public class IntelTests
     }
 
     [Fact]
-    public void TheScreenOfTheHangarAsPlacedHangsOnTheFarEndFacingTheEntrance()
+    public void TheScreenOfTheHangarAsPlacedHangsOnTheSideWallFacingAcrossTheHall()
     {
-        // o-0582 in the village map: local (187.856, -41.124) m, turned 329 degrees; ground z is -north
+        // o-0582 in the village map (the west open hangar of the military base): local (537.706, 585.105) m, turned 332.5 degrees; ground z is -north
         var f = IntelFile.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "intel.json")));
-        var origin = new Vector2(187.856f, 41.124f);
-        var a = IntelRoom.Place("o-0582", origin, 150f, 329f, 1f, f.Room!);
-        Near(new Vector2(198.04f, 28.58f), a.At, 2);
-        Near(new Vector2(-0.515f, 0.857f), a.Facing); // 329 degrees: local +z points south-south-west
+        var origin = new Vector2(537.706f, -585.105f);
+        var a = IntelRoom.Place("o-0582", origin, 150f, 332.5f, 1f, f.Room!);
+        Near(IntelRoom.Rotate(new Vector2(1, 0), 332.5f), a.Facing); // local +x: toward the other hangar
         Assert.Equal(150f + 0.114f + 1.0f, a.Y0, 3);
-        // in the object's own frame again: 16 m from its middle on the -z end wall, inside the footprint (30.6 x 36.3 m), looking at the +z end
+        // in the object's own frame again: 13.4 m from its middle on the -x side wall, halfway along the hall (30.6 x 36.3 m)
         var rel = a.At - origin;
-        Assert.Equal(-16.0f, Vector2.Dot(rel, a.Facing), 3);
-        Assert.InRange(MathF.Abs(Vector2.Dot(rel, IntelRoom.Rotate(new Vector2(1, 0), 329f))), 0f, 30.6f / 2);
-        Assert.InRange(MathF.Abs(Vector2.Dot(rel, a.Facing)), 0f, 36.3f / 2);
-        // the open part is the small door of the +z end, in front of the screen
-        Assert.Equal(new[] { "SM_Bld_Hangar_Door_Small_01" }, f.Room!.OpenParts);
-        var entrance = origin + IntelRoom.Rotate(new Vector2(10.7f, 16.3f), 329f);
-        Assert.True(Vector2.Dot(entrance - a.At, a.Facing) > 30f);
+        Assert.Equal(-13.4f, Vector2.Dot(rel, a.Facing), 3);
+        Assert.InRange(MathF.Abs(Vector2.Dot(rel, IntelRoom.Rotate(new Vector2(0, 1), 332.5f))), 0f, 0.01f);
+        Assert.Empty(f.Room!.OpenParts); // both ends of the open hangar are open
     }
 
     [Fact]
