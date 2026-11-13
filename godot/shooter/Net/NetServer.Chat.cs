@@ -63,6 +63,7 @@ public partial class NetServer
             case "sandbox": ChatSandbox(c, args); break;
             case "time": ChatTimeCommand(c, args); break;
             case "restart": ChatRestart(c, args); break;
+            case "event": ChatEvent(c, args[0]); break;
         }
         GD.Print($"server: {c.Name} #{c.Id} ran {text}");
     }
@@ -135,6 +136,15 @@ public partial class NetServer
         var name = mode == MatchMode.TeamDeathmatch ? "team deathmatch" : "free-for-all";
         ChatToAll(ChatLineKind.System, "", changed ? $"{c.Name} restarted the round in {name}." : $"{c.Name} restarted the round.");
         GD.Print($"server: round restarted by {c.Name} #{c.Id}, mode {name}");
+    }
+
+    /// <summary>"/event rozhlas": starts the village loudspeaker broadcast on every client now. Everyone is told who did.</summary>
+    void ChatEvent(Client c, string name)
+    {
+        if (name != "rozhlas") return; // the parser only lets known events through
+        BroadcastEvent(EventKind.RozhlasStart, Array.Empty<byte>());
+        ChatToAll(ChatLineKind.System, "", $"{c.Name} started the rozhlas.");
+        GD.Print($"server: rozhlas started by {c.Name} #{c.Id}");
     }
 
     void ChatTimeCommand(Client c, IReadOnlyList<string> args)

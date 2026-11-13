@@ -5,30 +5,35 @@ using Num = System.Numerics;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The village loudspeaker (rozhlas): a baked broadcast (rozhlas.json) played from the megaphone poles. Which broadcast is
-/// on the air and how far into it comes from the clock alone (<see cref="RozhlasRules.OnAir"/>), so every client hears the
-/// same moment without any message. A few voices follow the speakers nearest to the camera; each one's volume comes from
-/// its own distance (<see cref="RozhlasRules.GainDb"/>), so walking toward a pole brings the announcement up and away from
-/// it takes it down, and duller too: each voice has its own bus with a low-pass filter set from the distance
-/// (<see cref="RozhlasRules.CutoffHz"/>). The audio is optional: with no file the game stays silent. Client only, and silent on headless runs.
+/// The village loudspeaker (rozhlas): a baked broadcast (rozhlas.json) heard across the village. It is one shared recording,
+/// not one per speaker: which broadcast is on the air and how far into it comes from the clock alone
+/// (<see cref="RozhlasRules.OnAir"/>), so every client hears the same moment without any message, and only the distance from
+/// the camera to the nearest megaphone pole sets how loud (<see cref="RozhlasRules.GainDb"/>) and how dull
+/// (<see cref="RozhlasRules.CutoffHz"/>, a low-pass on the player's own bus) it is. Walking toward a pole brings the announcement
+/// up and away from it takes it down; poles next to each other do not add up. The audio is optional: with no file the game stays
+/// silent. Client only, and silent on headless runs.
 /// </summary>
 public partial class Rozhlas : Node
 {
-    const float RefreshSeconds = 0.25f;
     const string DataPath = "res://data/rozhlas.json";
+    const string BusName = "Rozhlas";
 
     /// <summary>Where the speakers hang (Godot axes); the horns of the megaphone poles.</summary>
     public IReadOnlyList<Vector3> Speakers { get; init; } = Array.Empty<Vector3>();
 
+    /// <summary>The loudspeaker of this client, for the network layer to trigger (null before the map is loaded and on headless runs).</summary>
+    public static Rozhlas? Current { get; private set; }
+
     RozhlasFile _cfg = null!;
     Num.Vector3[] _spk = Array.Empty<Num.Vector3>();
     AudioStream?[] _streams = Array.Empty<AudioStream?>();
-    AudioStreamPlayer3D[] _voices = Array.Empty<AudioStreamPlayer3D>();
-    string[] _buses = Array.Empty<string>();
-    int[] _held = Array.Empty<int>();
+    AudioStreamPlayer _player = null!;
+    int _bus = -1;
+    /// <summary>Unix seconds an admin's /event rozhlas started a broadcast at, while it is still playing; it takes the place of the scheduled one.</summary>
+    double? _triggeredAt;
+    const long TriggeredSlot = -1;
     long _slot = long.MinValue;
     int _variant = -1;
-    double _refreshIn;
 
     public override void _Ready()
     {
@@ -38,36 +43,35 @@ public partial class Rozhlas : Node
         if (!Sfx.Enabled || Speakers.Count == 0) { SetProcess(false); return; }
         _streams = _cfg.Files.Select(LoadStream).ToArray();
         if (_streams.All(s => s == null)) { GD.Print("rozhlas: no audio yet (run scripts/make_rozhlas.py); staying silent"); SetProcess(false); return; }
+        Current = this;
         _spk = Speakers.Select(s => new Num.Vector3(s.X, s.Y, s.Z)).ToArray();
-        _voices = new AudioStreamPlayer3D[_cfg.Voices];
-        _held = new int[_cfg.Voices];
-        _buses = new string[_voices.Length];
-        for (var i = 0; i < _voices.Length; i++)
-        {
-            // one bus per voice so each can have its own low-pass; it feeds the SFX bus (so the effects volume still applies)
-            _buses[i] = $"Rozhlas{i}";
-            AudioServer.AddBus();
-            var bus = AudioServer.BusCount - 1;
-            AudioServer.SetBusName(bus, _buses[i]);
-            AudioServer.SetBusSend(bus, "SFX");
-            AudioServer.AddBusEffect(bus, new AudioEffectLowPassFilter { CutoffHz = _cfg.NearCutoffHz, Db = AudioEffectFilter.FilterDB.Filter24Db });
-            // distance is handled here (GainDb, CutoffHz), so Godot adds no attenuation of its own; the node still pans it
-            _voices[i] = new AudioStreamPlayer3D { Bus = _buses[i], AttenuationModel = AudioStreamPlayer3D.AttenuationModelEnum.Disabled, MaxDistance = 0f };
-            AddChild(_voices[i]);
-            _held[i] = -1;
-        }
+        // its own bus so the low-pass can follow the distance; it feeds the SFX bus (so the effects volume still applies)
+        AudioServer.AddBus();
+        _bus = AudioServer.BusCount - 1;
+        AudioServer.SetBusName(_bus, BusName);
+        AudioServer.SetBusSend(_bus, "SFX");
+        AudioServer.AddBusEffect(_bus, new AudioEffectLowPassFilter { CutoffHz = _cfg.NearCutoffHz, Db = AudioEffectFilter.FilterDB.Filter24Db });
+        _player = new AudioStreamPlayer { Bus = BusName };
+        AddChild(_player);
+    }
+
+    Vector3? _listener;
+
+    /// <summary>Where the player is (their body, riding in a vehicle too), set every frame by the network client. A vehicle's chase or orbit camera can be far from the player, so the distance to the poles is taken from here; the camera is only the fallback when nothing sets it (offline runs).</summary>
+    public void SetListener(Vector3 at) => _listener = at;
+
+    /// <summary>Starts the broadcast now, from its beginning (a broadcast already on the air starts over).</summary>
+    public void Trigger()
+    {
+        if (!IsProcessing()) return; // no audio here
+        _triggeredAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
+        Stop();
     }
 
     public override void _ExitTree()
     {
-        foreach (var name in _buses)
-            if (AudioServer.GetBusIndex(name) is var i and >= 0) AudioServer.RemoveBus(i);
-    }
-
-    void SetCutoff(int voice, float hz)
-    {
-        var bus = AudioServer.GetBusIndex(_buses[voice]);
-        if (bus >= 0 && AudioServer.GetBusEffect(bus, 0) is AudioEffectLowPassFilter f) f.CutoffHz = hz;
+        if (Current == this) Current = null;
+        if (AudioServer.GetBusIndex(BusName) is var i and >= 0) AudioServer.RemoveBus(i);
     }
 
     static AudioStream? LoadStream(string rel)
@@ -82,44 +86,35 @@ public partial class Rozhlas : Node
     public override void _Process(double delta)
     {
         var cam = GetViewport().GetCamera3D();
-        if (cam == null) return;
+        if (_listener == null && cam == null) return;
         var length = _streams.Where(s => s != null).Select(s => s!.GetLength()).DefaultIfEmpty(0).Max();
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
-        if (RozhlasRules.OnAir(now, _cfg.PeriodS, length, _streams.Length) is not { } air || _streams[air.Variant] is not { } stream)
+        if (_triggeredAt is { } t0 && now - t0 >= length) _triggeredAt = null; // the triggered one has played out
+        var scheduled = _triggeredAt is { } t
+            ? new RozhlasOnAir(TriggeredSlot, Array.FindIndex(_streams, s => s != null), now - t)
+            : RozhlasRules.OnAir(now, _cfg.PeriodS, length, _streams.Length);
+        if (scheduled is not { } air || _streams[air.Variant] is not { } stream
+            || air.Offset >= stream.GetLength()) // this variant is shorter than the slot's window
         {
-            if (_slot != long.MinValue) StopAll();
+            Stop();
             return;
         }
-        if (air.Offset >= stream.GetLength()) { if (_slot != long.MinValue) StopAll(); return; } // this variant is shorter than the slot's window
-        var p = cam.GlobalPosition;
-        var listener = new Num.Vector3(p.X, p.Y, p.Z);
-        if (air.Slot != _slot || air.Variant != _variant) { StopAll(); _slot = air.Slot; _variant = air.Variant; }
+        var p = _listener ?? cam!.GlobalPosition;
+        var distance = RozhlasRules.NearestDistance(_spk, new Num.Vector3(p.X, p.Y, p.Z));
+        if (distance >= _cfg.MaxDistance) { Stop(); return; } // out of range: stop, and join mid-broadcast again on the way back
+        if (air.Slot != _slot || air.Variant != _variant) { Stop(); _slot = air.Slot; _variant = air.Variant; }
 
-        _refreshIn -= delta;
-        if (_refreshIn <= 0)
-        {
-            _refreshIn = RefreshSeconds;
-            _held = RozhlasRules.Assign(_held, RozhlasRules.Nearest(_spk, listener, _voices.Length, _cfg.MaxDistance));
-        }
-        for (var v = 0; v < _voices.Length; v++)
-        {
-            var player = _voices[v];
-            if (_held[v] < 0) { if (player.Playing) player.Stop(); continue; }
-            var at = Speakers[_held[v]];
-            player.GlobalPosition = at;
-            var distance = at.DistanceTo(cam.GlobalPosition);
-            player.VolumeDb = _cfg.VolumeDb + RozhlasRules.GainDb(distance, _cfg.ReferenceDistance, _cfg.MaxDistance);
-            SetCutoff(v, RozhlasRules.CutoffHz(distance, _cfg.ReferenceDistance, _cfg.MaxDistance, _cfg.NearCutoffHz, _cfg.FarCutoffHz));
-            if (player.Playing && player.Stream == stream) continue;
-            player.Stream = stream;
-            player.Play((float)air.Offset); // join mid-broadcast: every speaker is at the same point of the same recording
-        }
+        _player.VolumeDb = _cfg.VolumeDb + RozhlasRules.GainDb(distance, _cfg.ReferenceDistance, _cfg.MaxDistance, _cfg.RolloffDb);
+        if (AudioServer.GetBusEffect(_bus, 0) is AudioEffectLowPassFilter f)
+            f.CutoffHz = RozhlasRules.CutoffHz(distance, _cfg.ReferenceDistance, _cfg.MaxDistance, _cfg.NearCutoffHz, _cfg.FarCutoffHz);
+        if (_player.Playing && _player.Stream == stream) return;
+        _player.Stream = stream;
+        _player.Play((float)air.Offset); // the clock says where in the recording the village is
     }
 
-    void StopAll()
+    void Stop()
     {
-        foreach (var v in _voices) v.Stop();
-        for (var i = 0; i < _held.Length; i++) _held[i] = -1;
+        if (_player.Playing) _player.Stop();
         _slot = long.MinValue; _variant = -1;
     }
 }

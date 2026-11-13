@@ -34,6 +34,9 @@ public partial class NetClient
             case EventKind.ChatLine when ChatEvents.DecodeLine(payload) is { } line:
                 _hud?.AddChatLine(line);
                 break;
+            case EventKind.RozhlasStart:
+                Rozhlas.Current?.Trigger(); // the village loudspeaker starts now
+                break;
             case EventKind.ClockSet when ChatEvents.DecodeClock(payload) is { } change:
                 DayNightCycle.Current?.SetServerClock(change.Clock, change.Tick); // the sky jumps to the new time at once
                 break;

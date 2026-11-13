@@ -12,8 +12,9 @@ public class RozhlasTests
     {
         Assert.Equal(0f, RozhlasRules.GainDb(2f, 6f, 350f));
         Assert.Equal(0f, RozhlasRules.GainDb(6f, 6f, 350f));
-        Assert.Equal(-6.02f, RozhlasRules.GainDb(12f, 6f, 350f), 0.01f);
-        Assert.Equal(-12.04f, RozhlasRules.GainDb(24f, 6f, 350f), 0.01f);
+        Assert.Equal(-6f, RozhlasRules.GainDb(12f, 6f, 350f), 0.01f);
+        Assert.Equal(-12f, RozhlasRules.GainDb(24f, 6f, 350f), 0.01f);
+        Assert.Equal(-6f, RozhlasRules.GainDb(24f, 6f, 350f, 3f), 0.01f); // a gentler roll-off: 3 dB per doubling
     }
 
     [Fact]
@@ -50,21 +51,15 @@ public class RozhlasTests
     }
 
     [Fact]
-    public void NearestPicksTheClosestSpeakersInRange()
+    public void LoudnessFollowsTheNearestSpeakerOnly()
     {
-        var s = new List<Vector3> { new(100, 0, 0), new(10, 0, 0), new(500, 0, 0), new(30, 0, 0), new(60, 0, 0) };
-        Assert.Equal(new[] { 1, 3 }, RozhlasRules.Nearest(s, Vector3.Zero, 2, 350f));
-        Assert.Equal(new[] { 1, 3, 4, 0 }, RozhlasRules.Nearest(s, Vector3.Zero, 8, 350f)); // 500 m is out of range
-        Assert.Empty(RozhlasRules.Nearest(s, new Vector3(2000, 0, 0), 3, 350f));
-    }
-
-    [Fact]
-    public void AVoiceKeepsItsSpeakerWhileItIsStillWanted()
-    {
-        Assert.Equal(new[] { 7, 4, 9 }, RozhlasRules.Assign(new[] { 7, 4, -1 }, new[] { 4, 7, 9 }));
-        // 7 drops out of the wanted set: its voice takes the new speaker, 4 stays put
-        Assert.Equal(new[] { 9, 4, -1 }, RozhlasRules.Assign(new[] { 7, 4, -1 }, new[] { 4, 9 }));
-        Assert.Equal(new[] { -1, -1 }, RozhlasRules.Assign(new[] { 3, 5 }, Array.Empty<int>()));
+        var s = new List<Vector3> { new(100, 0, 0), new(10, 0, 0), new(500, 0, 0) };
+        Assert.Equal(10f, RozhlasRules.NearestDistance(s, Vector3.Zero), 3);
+        Assert.Equal(40f, RozhlasRules.NearestDistance(s, new Vector3(50, 0, 0)), 3); // 10 is 40 away, 100 is 50 away
+        Assert.Equal(float.PositiveInfinity, RozhlasRules.NearestDistance(Array.Empty<Vector3>(), Vector3.Zero));
+        // a second speaker beside the first adds nothing: the level is the same with or without it
+        var pair = new List<Vector3> { new(10, 0, 0), new(10.5f, 0, 0) };
+        Assert.Equal(RozhlasRules.NearestDistance(new List<Vector3> { new(10, 0, 0) }, Vector3.Zero), RozhlasRules.NearestDistance(pair, Vector3.Zero), 3);
     }
 
     [Fact]
@@ -115,6 +110,5 @@ public class RozhlasTests
         var f = RozhlasFile.Parse("""{ "version": 1, "files": ["x.ogg"], "period_s": 300, "max_distance": 200, "reference_distance": 5 }""");
         Assert.Equal(300, f.PeriodS);
         Assert.Throws<DataFileException>(() => RozhlasFile.Parse("""{ "version": 1, "reference_distance": 50, "max_distance": 20 }"""));
-        Assert.Throws<DataFileException>(() => RozhlasFile.Parse("""{ "version": 1, "voices": 0 }"""));
     }
 }

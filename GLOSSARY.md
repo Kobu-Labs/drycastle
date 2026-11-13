@@ -312,5 +312,5 @@ A creature of the world that is not a player: a deer, a dog, a cow. It has hit p
 _Avoid_: NPC (alone), mob, critter
 
 **Rozhlas**:
-The village loudspeaker broadcast: a song, a barely audible announcement, a clear "OPAKUJEM" (I repeat), then the announcement again, played from the megaphone poles. Baked from clean recordings by `scripts/make_rozhlas.py`; on the air at a clock-derived moment, so every client hears the same thing. Louder and clearer the closer the player is to a speaker, quieter and duller the further.
+The village loudspeaker broadcast: a song, the announcement, "OPAKUJEM" (I repeat), then the announcement again, all through the same bad-loudspeaker sound, heard across the village as one shared recording, not one per pole. Baked from clean recordings by `scripts/make_rozhlas.py`; on the air at a clock-derived moment, so every client hears the same thing. Louder and clearer the closer the player is to the nearest megaphone pole, quieter and duller the further; poles next to each other do not add up.
 _Avoid_: PA system, radio, announcer
