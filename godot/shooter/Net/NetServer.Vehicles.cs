@@ -365,18 +365,19 @@ public partial class NetServer
             for (var s = 0; s < car.Seat.Count; s++) if (car.Seat.Occupant(s) != 0 && OccupantAt(car, s) == null) car.Seat.Clear(s);
             SendSeatState(car);
             var driver = OccupantAt(car, 0);
+            var occupied = car.Seat.Occupied;
+            if (occupied) car.Wake(); // somebody aboard: the vehicle is stepped every tick until it is empty and rests again
             car.PrevPos = car.Drives ? car.TickEndPos : car.GlobalPosition; // a driven vehicle has already moved this tick, on its driver's inputs
             if (car.Flies) StepFlyingVehicle(car, driver, dt);
             else if (car.Drives) StepDrivenVehicle(car, driver, dt);
             else if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt, Water);
-            else if (!car.Asleep || car.Seat.Occupied) car.StepParked(dt, Water); // a parked car at rest is not stepped until disturbed (ParkedRules, T2-04)
+            else if (!car.Asleep || occupied) car.StepParked(dt, Water); // a parked car at rest is not stepped until disturbed (ParkedRules, T2-04)
             car.TickEndPos = car.GlobalPosition;
             if (car.GlobalPosition.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); continue; }
             // a wall takes speed from a driven car; a helicopter is hurt by what it hits whoever flies it, or nobody
             if ((driver != null || car.Flies) && car.Def.CrashDamage && car.LastImpact > Vehicles.CrashMinSpeedLoss)
                 DamageVehicle(car, (car.LastImpact - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, 0, SpecialWeapons.Vehicle, 0);
             if (car.DetonateAt >= 0 && _elapsed >= car.DetonateAt) { Detonate(car); continue; }
-            var occupied = car.Seat.Occupied;
             for (var s = 0; s < car.Seat.Count; s++) // the riders are put on their seats (no list per car per tick)
             {
                 if (OccupantAt(car, s) is not { } o) continue;
@@ -442,7 +443,12 @@ public partial class NetServer
     /// </summary>
     void StepFlyingVehicle(ServerCar car, Client? pilot, float dt)
     {
-        if (pilot == null) car.StepFlight(FlightInput.Pilotless(car.Seat.Occupied), dt, _tick);
+        if (pilot == null)
+        {
+            // a helicopter resting on the ground is not stepped until disturbed (FlightRest); the flight tick still follows the server tick, as a step would leave it
+            if (car.Asleep) car.FlightTick = _tick;
+            else car.StepFlightUnpiloted(dt, _tick);
+        }
         else if (_tick - car.FlightTick > FlightStarveTicks) car.StepFlight(FlightInput.Idle, dt, _tick);
         car.LastImpact = car.FlightImpact;
         car.FlightImpact = 0;
@@ -460,7 +466,10 @@ public partial class NetServer
     /// </summary>
     void StepDrivenVehicle(ServerCar car, Client? driver, float dt)
     {
-        if (driver == null || _tick - car.DriveTick > DriveStarveTicks) car.StepDrive(DriveInput.None, dt);
+        if (driver == null || _tick - car.DriveTick > DriveStarveTicks)
+        {
+            if (!car.Asleep) car.StepDriveUnpiloted(dt); // a parked one at rest is not stepped until disturbed (DriveRest)
+        }
         car.LastImpact = car.DriveImpact;
         car.DriveImpact = 0;
     }

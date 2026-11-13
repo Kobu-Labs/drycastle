@@ -118,6 +118,7 @@ public partial class NetServer
         if (crossed == null) return;
         foreach (var x in crossed)
         {
+            x.Car.Wake(); // a shot through its glass wakes a parked vehicle, as ShotGlass does
             if (x.Dist >= before || x.Car.Destroyed) continue;
             var dmg = damage(x.Dist);
             if (dmg > 0 && _glass.Damage(new GlassPaneKey(x.Car.Id, (ushort)x.Pane), dmg, VehiclePaneHp(x.Car.Def, x.Pane))) _glassHits++;
@@ -141,6 +142,7 @@ public partial class NetServer
             if (car.Destroyed || car.Def.Glass.Count == 0) continue;
             var feet = N(car.GlobalPosition);
             if (NVec3.Distance(c, feet) > radius + car.HalfLength + car.Def.Height) continue;
+            car.Wake();
             var rects = car.Def.GlassRects;
             for (var i = 0; i < rects.Count; i++)
             {

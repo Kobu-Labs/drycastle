@@ -304,6 +304,29 @@ public partial class ServerCar : CharacterBody3D
         Asleep = ParkedRules.Sleeps(RestCount);
     }
 
+    /// <summary>
+    /// One driverless flight step (the stabiliser's), then whether the helicopter now rests on the ground (<see cref="Asleep"/>, <see cref="FlightRest"/>).
+    /// A helicopter with a rider never rests: somebody may take the pilot seat.
+    /// </summary>
+    public void StepFlightUnpiloted(float dt, uint tick)
+    {
+        var before = Flight;
+        StepFlight(FlightInput.Pilotless(Seat.Occupied), dt, tick);
+        RestCount = ParkedRules.NextRestCount(RestCount, FlightRest.IsAtRest(before, Flight) && !Seat.Occupied);
+        Asleep = ParkedRules.Sleeps(RestCount);
+    }
+
+    /// <summary>
+    /// One hands-off drive step, then whether the vehicle now rests (<see cref="Asleep"/>, <see cref="DriveRest"/>). With a rider it never rests.
+    /// </summary>
+    public void StepDriveUnpiloted(float dt)
+    {
+        var before = Drive;
+        StepDrive(DriveInput.None, dt);
+        RestCount = ParkedRules.NextRestCount(RestCount, DriveRest.IsAtRest(before, Drive) && !Seat.Occupied);
+        Asleep = ParkedRules.Sleeps(RestCount);
+    }
+
     public void Step(VehicleDef def, float throttle, float steer, bool handbrake, float dt, Water water)
     {
         var body = def.CanFloat ? water.BodyAt(GlobalPosition.X, GlobalPosition.Z) : null;
