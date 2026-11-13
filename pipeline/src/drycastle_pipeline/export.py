@@ -24,7 +24,7 @@ from drycastle_pipeline.regions import region_rank
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.scene import build_scene
 from drycastle_pipeline.textures import TexturedMesh, tex_node_name
-from drycastle_pipeline.water import build_water
+from drycastle_pipeline.water import water_doc, water_rules
 
 DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # 0.2.0: fences and trees of a parcel moved from the chunk-level props / props_collision nodes into
@@ -341,11 +341,10 @@ def run_export(
         parcels_file["origin_epsg5514"] = parcels_doc["origin_epsg5514"]
     _dump(out_dir / "parcels.json", parcels_file)
     water_file = out_dir / "water.json"
-    if scene.terrain is not None:
-        water_doc, water_skipped = build_water(parcels_out, scene.terrain, scene.regions)
-        for pid in water_skipped:
+    if scene.water is not None:
+        for pid in scene.water.skipped:
             print(f"export: warning: water parcel/region {pid} has no terrain under it (or none below its surface); no water body", file=sys.stderr)
-        _dump(water_file, water_doc)
+        _dump(water_file, water_doc(scene.water.bodies, water_rules(rules_path, area)))
         files["water"] = "water.json"
     elif water_file.exists():
         water_file.unlink()  # no terrain: a water file from an earlier run would be stale

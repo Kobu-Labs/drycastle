@@ -20,12 +20,14 @@ import sys
 import time
 from pathlib import Path
 
+from drycastle_pipeline.bed import carve_terrain
 from drycastle_pipeline.config import DEFAULT_AREA, area_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
 from drycastle_pipeline.parcel_run import _EMPTY_GLB
 from drycastle_pipeline.regions import node_name, overlapping, plan_regions, region_meshes
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.terrain import load_terrain
+from drycastle_pipeline.water import plan_water, water_rules
 
 REGION_RUN_FORMAT_VERSION = 1
 
@@ -47,13 +49,17 @@ def run_region_run(
     glb_path: Path | None = None,
 ) -> dict:
     t0 = time.perf_counter()
-    terrain, _ = load_terrain(work_dir, mmap=True)
+    terrain, _ = load_terrain(work_dir)  # carved below, so not memory-mapped
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     graph_path = work_dir / "roads.json"
     graph = json.loads(graph_path.read_text()) if graph_path.is_file() else None
     plan = plan_regions(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), terrain)
     for warning in plan.warnings:
         print(f"region-run: warning: {warning}", file=sys.stderr)
+    # the terrain the export draws on: carved to the water beds, after the water is worked out on the uncarved ground
+    wrules = water_rules(rules_path)
+    water = plan_water(parcels_doc["parcels"], terrain, plan.regions, wrules)
+    carve_terrain(terrain, water.bodies, float(wrules["carve_blend_m"]))
     named = set(regions) if regions else set(plan.regions)
     for rid in sorted(named - set(plan.regions)):
         print(f"region-run: warning: {rid} is not in the edits; its nodes are removed", file=sys.stderr)
@@ -61,7 +67,7 @@ def run_region_run(
     t1 = time.perf_counter()
     meshes = region_meshes(
         plan, terrain, graph, load_section("roads", rules_path), load_section("regions", rules_path),
-        only=targets,
+        only=targets, wet=water.wet,
     )
     glb = {}
     if glb_path is not None:
