@@ -35,11 +35,8 @@ public partial class NetServer
 
     void SendIntel(string announcedId) => BroadcastEvent(EventKind.IntelSync, IntelCodec.Encode(Intel.Events, _elapsed, announcedId));
 
-    /// <summary>Join: the board as it is, so the screen is right the moment the joiner reaches it. Nothing is announced to them.</summary>
-    void SendIntelOnJoin(Client c)
-    {
-        if (!Intel.IsEmpty) Send(c, new EventMsg((byte)EventKind.IntelSync, IntelCodec.Encode(Intel.Events, _elapsed)));
-    }
+    /// <summary>Join: the board as it is (empty too: a client that was on another server drops what that one showed), so the screen is right the moment the joiner reaches it. Nothing is announced to them.</summary>
+    void SendIntelOnJoin(Client c) => Send(c, new EventMsg((byte)EventKind.IntelSync, IntelCodec.Encode(Intel.Events, _elapsed)));
 
     /// <summary>Each tick: an event whose time on the board is up goes, and the clients are told.</summary>
     void IntelTick()

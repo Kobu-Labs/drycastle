@@ -192,8 +192,8 @@ public partial class UiShell : CanvasLayer
 
     // ---- toast: the one notification pattern ----
 
-    /// <summary>Shows the one toast. <paramref name="icon"/> (optional) sits before the text; the text always says what happened.</summary>
-    public void Toast(string text, ToastKind kind = ToastKind.Info, Texture2D? icon = null)
+    /// <summary>Shows the one toast. <paramref name="icon"/> (optional) sits before the text; the text always says what happened. <paramref name="seconds"/> keeps a long message up longer than the usual 3.5 s (6 s for an error).</summary>
+    public void Toast(string text, ToastKind kind = ToastKind.Info, Texture2D? icon = null, double? seconds = null)
     {
         var prefix = Strings.T(kind switch { ToastKind.Warn => "toast.warn", ToastKind.Error => "toast.error", _ => "toast.info" });
         _toast.ThemeTypeVariation = kind switch { ToastKind.Warn => "MenuToastWarn", ToastKind.Error => "MenuToastError", _ => "MenuToast" };
@@ -206,7 +206,7 @@ public partial class UiShell : CanvasLayer
         PlaceToast();
         var id = ++_toastId;
         if (Instant) return;
-        GetTree().CreateTimer(kind == ToastKind.Error ? 6.0 : 3.5).Timeout += () =>
+        GetTree().CreateTimer(seconds ?? (kind == ToastKind.Error ? 6.0 : 3.5)).Timeout += () =>
         {
             if (id != _toastId || !IsInstanceValid(_toast)) return;
             if (GameSettings.Current.ReduceMotion) { _toast.Visible = false; return; }

@@ -66,6 +66,13 @@ public static class TacticalMapMath
     /// <summary>The short grid reference of a cell, such as "C7".</summary>
     public static string Reference(int column, int row) => ColumnLabel(column) + RowLabel(row);
 
+    /// <summary>The grid reference of a ground point (x, z) on the sheet of <paramref name="extentMetres"/> (its west edge at <paramref name="originX"/>, its south edge at <paramref name="southZ"/>), with the cell size the sheet itself uses.</summary>
+    public static string ReferenceOf(Vector2 groundXZ, float originX, float southZ, float extentMetres)
+    {
+        var (column, row) = CellOf(ToMap(groundXZ, originX, southZ), extentMetres, CellSize(extentMetres));
+        return Reference(column, row);
+    }
+
     /// <summary>The player's heading in whole degrees, 0 to 359, clockwise from north (north 0, east 90), for a yaw in the game's convention (forward = (-sin yaw, -cos yaw) in ground x/z).</summary>
     public static int HeadingDegrees(float yaw)
     {

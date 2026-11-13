@@ -35,6 +35,7 @@ namespace Drycastle.Shooter;
 ///   --bazooka-bot a|b         client: scripted bazooka smoke role (a shoots, b is the target)
 ///   --weapons-bot a|b         client: scripted weapons smoke role (a shoots, b stands still)
 ///   --menu-shots DIR          render main menu, connect (empty, error), settings tabs, pause, loading and a dialog at 1280x720 and 3840x2160 into DIR as PNGs, then exit (needs a display)
+///   --intel-shots DIR         render the intel screen's content (no events, one, under way, a test event, several) at the 3.0 m and 1.6 m screens' texture sizes into DIR as PNGs, then exit (needs a display)
 ///   --offline                 client: skip the menus and walk the map locally (the old dev view)
 ///   (client with a display and none of the smoke flags starts at the main menu; --connect host:port --name N joins straight away)
 ///   --model-shots DIR         render the remote character animations and the first-person weapon viewmodels into DIR as PNGs, then exit (needs a display)
@@ -85,6 +86,7 @@ public partial class Shooter : Node3D
         if (cfg.Str("model-shots") != "") { _ = ModelShots.Run(this, cfg.Str("model-shots")); return; }
         if (cfg.Str("hud-shots") != "") { _ = HudShots.Run(this, cfg.Str("hud-shots")); return; }
         if (cfg.Str("menu-shots") != "") { _ = MenuShots.Run(this, cfg.Str("menu-shots")); return; }
+        if (cfg.Str("intel-shots") != "") { _ = IntelShots.Run(this, cfg.Str("intel-shots")); return; }
         if (role == "client")
         {
             if (!_smoke && !_smokeMove && DisplayServer.GetName() != "headless") { _capFps = true; Engine.MaxFps = FocusedFps; }
@@ -339,6 +341,7 @@ public partial class Shooter : Node3D
         {
             var bunkers = Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));
             if (bunkers.Rooms.Count > 0) AddChild(new BunkerLights { Shelters = bunkers });
+            if (IntelScreen.Create(bunkers, _map) is { } intel) AddChild(intel); // the base's wall screen, in the command post of its bunker
         }
         var s = _map.Stats;
         // Lamps are solid, so the server gets the same pole colliders as the client (map 0.5.0+; none on older maps).
