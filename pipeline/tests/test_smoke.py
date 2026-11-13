@@ -37,7 +37,9 @@ def test_run_all_runs_every_stage_in_order(
 ) -> None:
     assert cli.main(["run-all"]) == 0
     lines = capsys.readouterr().out.strip().splitlines()
-    assert lines == [f"{s}: fake" for s in EXPECTED_ORDER]
+    assert [ln for ln in lines if not ln.startswith("timing:")] == [f"{s}: fake" for s in EXPECTED_ORDER]
+    timed = [ln.split()[1] for ln in lines[len(EXPECTED_ORDER) + 1 :]]  # after the total line, slowest first
+    assert sorted(timed) == sorted(EXPECTED_ORDER)
 
 
 def test_force_flag_reaches_fetch(fake_fetch: list[bool]) -> None:

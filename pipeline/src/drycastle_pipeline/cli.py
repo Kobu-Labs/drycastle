@@ -1,6 +1,7 @@
 """Command-line interface for the map pipeline."""
 
 import argparse
+import time
 from collections.abc import Sequence
 
 from drycastle_pipeline.config import AREAS, DEFAULT_AREA
@@ -14,6 +15,14 @@ PREVIEW = "preview"  # not a map stage: renders PNGs from the work files
 PARCEL_RUN = "parcel-run"  # not a map stage: fences and trees of some parcels, as JSON
 REGION_RUN = "region-run"  # not a map stage: the meshes of some regions, as a GLB
 DEFAULT_EXAGGERATION = 3.0  # same as preview.DEFAULT_EXAGGERATION
+
+
+def print_timings(timings: list[tuple[str, float]]) -> None:
+    """The seconds of every stage of a ``run-all``, slowest first, with each one's share of the total."""
+    total = sum(seconds for _, seconds in timings)
+    print(f"timing: {total:.1f} s in all")
+    for name, seconds in sorted(timings, key=lambda t: -t[1]):
+        print(f"timing: {name:<12} {seconds:7.1f} s  {100 * seconds / total:4.1f} %")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -136,10 +145,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     from drycastle_pipeline.stages import STAGES
 
     if args.stage == RUN_ALL:
-        for run in STAGES.values():
+        timings: list[tuple[str, float]] = []
+        for name, run in STAGES.items():
+            started = time.perf_counter()
             status = run(force=args.force, report=args.report, area=args.area, edits=args.edits)
+            timings.append((name, time.perf_counter() - started))
             if status != 0:
+                print(f"{name}: failed")
                 return status
+        print_timings(timings)
         return 0
     if args.stage == PREVIEW:
         from drycastle_pipeline import preview
