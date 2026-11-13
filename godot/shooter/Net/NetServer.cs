@@ -52,6 +52,10 @@ public partial class NetServer : Node
         public readonly WorldSnapshotEncoder WEnc = new();
         public Vector3 Start;
         public float MaxMoved;
+        /// <summary>Lag compensation (ADR 0013): this player's poses at the end of recent ticks, and the tick the current life (since the last teleport) began.</summary>
+        public readonly PoseRing Poses = new();
+        public uint LifeStart;
+        public int TeleportsSeen;
         public ServerCar? Car;
         /// <summary>Seat of <see cref="Car"/> this player sits in (0 = driver).</summary>
         public int CarSeat;
@@ -224,6 +228,8 @@ public partial class NetServer : Node
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
         PerfLap(ServerPerf.Ph.Detonate);
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
+        CaptureLagPoses(); // the poses this tick ends with, the state the snapshots carry (ADR 0013)
+        PerfLap(ServerPerf.Ph.LagCapture);
         if (catchUp && LossTest == 0) _skippedSnapshots++; // the next regular tick sends the current state
         else SendSnapshots();
         PerfLap(ServerPerf.Ph.Snapshots);
@@ -791,7 +797,7 @@ public partial class NetServer : Node
             var held = SeatAimRules.Aim(seat!.Aim, carYaw, carPitch, carRoll, yaw, pitch);
             yaw = held.ViewYaw; pitch = held.ViewPitch;
         }
-        var targets = seatCar != null ? RiderRules.NotAboard(LiveTargets(), seatCar.Seat) : LiveTargets();
+        var targets = seatCar != null ? RiderRules.NotAboard(ShotTargets(c), seatCar.Seat) : ShotTargets(c); // players where the shooter's screen showed them (ADR 0013)
         _shotsFired++;
         var aiming = (i.Buttons & (ushort)MoveButtons.Aim) != 0;
         var body = c.Body.State;
@@ -833,10 +839,10 @@ public partial class NetServer : Node
         {
             var fwd = HitMath.Forward(yaw, 0);
             var hit = HitMath.Melee(N(feet), yaw, w.Reach, targets, c.Id);
-            if (hit is { } h && _byId.TryGetValue(h.Id, out var v))
+            if (hit is { } h && _byId.ContainsKey(h.Id) && TargetFeet(targets, h.Id) is { } victimFeet)
             {
-                // a wall between the attacker and the victim's chest blocks the stab
-                var chest = v.Body.GlobalPosition + Vector3.Up * 1.0f;
+                // a wall between the attacker and the victim's chest blocks the stab (the chest where the victim was seen, ADR 0013)
+                var chest = victimFeet + Vector3.Up * 1.0f;
                 var to = chest - eye;
                 if (WorldHit(eye, to.Normalized(), to.Length(), out _, seatCar) < to.Length() - 0.05f) { _wallBlocked++; hit = null; }
             }

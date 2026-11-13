@@ -21,7 +21,8 @@ namespace Drycastle.Shooter;
 ///   --nav-cache DIR           server: where the bots' baked navigation tiles are kept (default navcache in the Godot user data folder); baked once per map version
 ///   --perf-out DIR            server: write per-phase tick timings and counters to DIR/server-ticks.csv (perf investigation, measurement only)
 ///   --loss-bot streaker       client (perf investigation): with --sandbox, grants and activates the killstreaks of --perf-streaks a,b,c every --perf-streak-period s, and spawns the vehicle indices of --perf-vehicles i,j every 5 periods
-///   --perf-lagcomp            server: with --perf-out, log every hitscan shot against present and rewound positions (shadow mode, nothing changes)
+///   --perf-lagcomp            server: with --perf-out, log every hitscan shot against present and rewound positions (hit_used is what the server did)
+///   --no-lagcomp              server: shots resolve against present player positions, as before lag compensation (ADR 0013); the A/B baseline
 ///   --cluster-spawns          server: keep one dense cluster of spawn points (dev aid: players and bots meet at once instead of crossing the village)
 ///   --sandbox                 client: ask the server for sandbox mode (also DRYCASTLE_SANDBOX=1); the server may refuse
 ///   --dev-ui                  client: show the dev-only UI (the Advanced section of the connect screen); debug builds always show it
@@ -412,7 +413,7 @@ public partial class Shooter : Node3D
             AdminTokens = new HashSet<string>(cfg.Str("admin-token").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.OrdinalIgnoreCase),
             Bots = int.TryParse(cfg.Str("bots", "0"), out var bots) ? Math.Clamp(bots, 0, NetServer.MaxBots) : 0,
             ClusterSpawns = cfg.Flag("cluster-spawns"),
-            PerfOut = cfg.Str("perf-out"), PerfLagComp = cfg.Flag("perf-lagcomp"),
+            PerfOut = cfg.Str("perf-out"), PerfLagComp = cfg.Flag("perf-lagcomp"), NoLagComp = cfg.Flag("no-lagcomp"),
             MapDir = Path.GetFullPath(GamePaths.Map(cfg.Str("map", ""))),
             NavCacheDir = cfg.Str("nav-cache", Path.Combine(OS.GetUserDataDir(), "navcache")),
         };

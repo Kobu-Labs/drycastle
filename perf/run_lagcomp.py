@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""B1: what the missing lag compensation costs (measurement plan B1/B3). Shadow mode: nothing on the server changes.
+"""B1: what the missing lag compensation costs (measurement plan B1/B3), and the A/B for the rewind of ADR 0013.
 
 Server with --perf-out --perf-lagcomp; N walker bots patrol the cluster; M `aimer` bots stand still and shoot the nearest remote where THEIR screen
-shows it (interpolated position), i.e. a perfect-aim human. Every hitscan shot is resolved twice on the server (present positions as today, and the
-positions RTT/2 + 3 ticks ago) and logged to lagcomp.csv. Latency is added by the userspace UDP proxy (real datagrams, both directions).
+shows it (interpolated position), i.e. a perfect-aim human. Every hitscan shot is logged to lagcomp.csv with hit_used (what the server did: rewound,
+or present with --no-lagcomp), hit_now (present positions) and hit_rewound (the poses the shooter's screen showed). Latency is added by the userspace
+UDP proxy (real datagrams, both directions).
 
-Usage: run_lagcomp.py [--rtts 0,50,100,200] [--walkers 6] [--aimers 2] [--duration 90] [--tag B1]
+Usage: run_lagcomp.py [--rtts 0,50,100,200] [--walkers 6] [--aimers 2] [--duration 90] [--tag B1] [--no-lagcomp]
 """
 import argparse, csv, subprocess, sys, time
 from pathlib import Path
@@ -20,7 +21,7 @@ def run(a, rtt, d):
     ms = "min_players=1,score_goal=100000,time_limit=100000,min_spawn_distance=5,respawn_delay=2,spawn_protection=0"
     slog = open(d / "server.log", "w")
     srv = subprocess.Popen(pin(sc) + base + ["--role", "server", "--port", str(sport), "--map", a.map, "--cluster-spawns", "--perf-out", str(d / "perf"), "--perf-lagcomp",
-                                              "--match-set", ms, "--quit-after", str(a.duration + 90)], stdout=slog, stderr=subprocess.STDOUT, text=True)
+                                              "--match-set", ms, "--quit-after", str(a.duration + 90)] + (["--no-lagcomp"] if a.no_lagcomp else []), stdout=slog, stderr=subprocess.STDOUT, text=True)
     if wait_for(d / "server.log", "SHOOTER_NET_LISTENING", 120) is None:
         srv.kill(); raise SystemExit("server did not start")
     proxy = None
@@ -60,9 +61,11 @@ pc = lambda xs, p: xs[min(len(xs) - 1, int(p / 100 * len(xs)))] if xs else 0
 
 
 def summarise(rows, rtt):
-    ok = [r for r in rows if r["hit_rewound"] != "-1"]
+    ok = rows
     shots = len(ok)
+    used_hit = sum(1 for r in ok if r["hit_used"] != "0")  # what the server did: the real hit rate
     now_hit = sum(1 for r in ok if r["hit_now"] != "0")
+    resolve = sorted(float(r["resolve_us"]) for r in ok)
     rew_hit = sum(1 for r in ok if r["hit_rewound"] != "0")
     both = sum(1 for r in ok if r["hit_now"] != "0" and r["hit_rewound"] != "0")
     rtts = sorted(float(r["rtt_ms"]) for r in ok)
@@ -77,7 +80,8 @@ def summarise(rows, rtt):
             "now_within_0p3m_pct": 100.0 * sum(1 for x in aimed if x[1] < 0.3) / len(aimed) if aimed else None, "rewound_within_0p3m_pct": 100.0 * sum(1 for x in aimed if x[0] < 0.3) / len(aimed) if aimed else None,
             "now_within_0p56m_pct": 100.0 * sum(1 for x in aimed if x[1] < 0.56) / len(aimed) if aimed else None, "rewound_within_0p56m_pct": 100.0 * sum(1 for x in aimed if x[0] < 0.56) / len(aimed) if aimed else None,
             "target_rtt_ms": rtt, "shots_logged": len(rows), "shots_with_history": shots, "measured_rtt_ms_p50": pc(rtts, 50), "back_ticks_p50": pc(sorted(int(r["back_ticks"]) for r in ok), 50),
-            "hit_rate_now": now_hit / shots if shots else None, "hit_rate_rewound": rew_hit / shots if shots else None, "both": both,
+            "hit_rate_used": used_hit / shots if shots else None, "hit_rate_now": now_hit / shots if shots else None, "hit_rate_rewound": rew_hit / shots if shots else None, "both": both,
+            "resolve_us_p50": pc(resolve, 50), "resolve_us_p90": pc(resolve, 90), "resolve_us_max": resolve[-1] if resolve else None,
             "only_rewound": rew_hit - both, "only_now": now_hit - both, "target_speed_mps_p50": pc(speeds, 50), "target_speed_mps_p90": pc(speeds, 90)}
 
 
@@ -91,6 +95,7 @@ def main():
     ap.add_argument("--jitter", type=float, default=0.0)
     ap.add_argument("--port", type=int, default=27430)
     ap.add_argument("--tag", default="B1-lagcomp")
+    ap.add_argument("--no-lagcomp", action="store_true", help="server with rewind off (A/B baseline): hit_used is then the present resolution")
     a = ap.parse_args()
     out = []
     for rtt in [int(x) for x in a.rtts.split(",")]:

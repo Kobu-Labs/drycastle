@@ -111,8 +111,12 @@ public partial class Player : CharacterBody3D
     /// </summary>
     public bool TurretLook { get; set; }
 
+    /// <summary>How many times the body was put somewhere else (spawn, seat, exit, debug). The server's lag compensation starts a new life at each one (ADR 0013).</summary>
+    public int Teleports { get; private set; }
+
     public void Teleport(Vector3 feet)
     {
+        Teleports++;
         GlobalPosition = feet;
         Velocity = Vector3.Zero;
         _state = new MoveState { Position = ToN(feet), OnFloor = false, FallPeakY = feet.Y };
