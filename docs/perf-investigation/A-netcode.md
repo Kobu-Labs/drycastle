@@ -27,7 +27,7 @@ Scope: `godot/ShooterCore/Net/*`, `godot/shooter/Net/NetServer*.cs`, `NetClient*
 ## 3. Findings
 
 ### A-01. World channel still uses the last-sent baseline and 30-tick keyframes
-- **Status of the audit items:** T1-2 (last-sent baseline) and T2-11 (age keyframes) are **fixed for the entity channel and still open for the world channel**.
+- **Status: fixed in protocol 26 (issue #256).** The world channel now has the same acknowledged baseline as the entity channel: a world ack in the inputs, a per-client world history, deltas against the baseline, no 30-tick keyframe. The audit items T1-2 and T2-11 are fixed for both channels. The mechanism below describes the pre-fix code.
 - **Mechanism.** `WorldSnapshotEncoder` diffs against the state last sent to that client (`godot/ShooterCore/Net/WorldReplication.cs:84-90`, `:110-123`), keyframes when `tick - LastFull >= Wire.KeyEvery` (`:115`, `Wire.cs:186`), and the client applies each packet on its own with no tick assembly and no ack (`WorldReplication.cs:236-287`). The input ack never feeds this encoder (`NetServer.cs:924-928`). The class comment (`WorldReplication.cs:74-77`) still describes the pre-#164 behaviour.
 - **Cost.** A keyframe is 4 + 12 + 4 + 3 (+1 for hit points) = 23-24 B. Per client, that is 24 B/s per idle world entity. Realistic world population: 16 corpses (`Corpses.cs:13`) plus one streak entity per player with `max_active` 1 (`killstreaks.json:14-18`), so about 30 at 16 players, about 0.7 kB/s per client; about 80 at 64 players, about 1.9 kB/s; cap 256 (`WorldEntities.cs:84`), 6.1 kB/s. Recovery after a lost packet takes up to 1 s (CONFIRMED).
 - **Fix.** Give the world encoder the same acked baseline as `SnapshotEncoder` (add a baseline tick to the world header: 4 B per packet, plus a keyframe-on-first-sight rule). Protocol bump, can ride with the next bump.
@@ -130,7 +130,7 @@ Measurement is a plan, not a run. Nothing here was executed.
 
 | audit id | status here | where |
 |---|---|---|
-| T1-2 (last-sent baseline) | fixed for entities; open for world | `Snapshot.cs:68-95`; `WorldReplication.cs:110-123` (A-01) |
+| T1-2 (last-sent baseline) | fixed for entities and world (protocol 26) | `Snapshot.cs:68-95`; `WorldReplication.cs` (A-01) |
 | T1-1 (frame cap) | not in scope; not checked | |
 | T2-03 (scratch buffers) | fixed | `Snapshot.cs:55-58` |
 | T2-05 (catch-up) | fixed | `NetServer.cs:183`, `:212` |
@@ -139,7 +139,7 @@ Measurement is a plan, not a run. Nothing here was executed.
 | T2-08 (interest management) | open (A-07) | |
 | T2-09 (effects on reliable) | open (A-03) | `NetServer.cs:491-504` |
 | T2-10 (encode once) | fixed | `NetServer.cs:500` |
-| T2-11 (age keyframes) | fixed for entities; open for world (A-01) | `Snapshot.cs:84-95` |
+| T2-11 (age keyframes) | fixed for entities and world (protocol 26) | `Snapshot.cs:84-95` |
 | T3-012 (join scoreboard) | open; scoreboard per kill is A-04 | `NetServer.cs:534` |
 | T3-022 (empty packet) | open (A-05) | `Snapshot.cs:116` |
 | T3-023 (header 4 B, shot 27 B) | open; priced in section 4 | `Wire.cs:198`; `WeaponCodec.cs:47` |

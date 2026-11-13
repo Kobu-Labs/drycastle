@@ -550,7 +550,7 @@ public partial class NetClient : Node
         if (_pending.Count > 120) _pending.RemoveAt(0);
         var recent = new NetInput[Math.Min(3, _pending.Count)];
         for (var i = 0; i < recent.Length; i++) recent[i] = _pending[_pending.Count - recent.Length + i].Input;
-        Tx(_peer, Wire.ChanData, Wire.EncodeInputs(recent, _dec.AckTick), 0); // the inputs name the snapshot tick they follow (the server's delta baseline)
+        Tx(_peer, Wire.ChanData, Wire.EncodeInputs(recent, _dec.AckTick, WorldEntities.AckTick), 0); // the inputs name the entity and world ticks they follow (the server's delta baselines)
         _conn.Flush();
         var p = _me.State.Position;
         _meMin = NVec3.Min(_meMin, p); _meMax = NVec3.Max(_meMax, p);

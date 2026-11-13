@@ -6,7 +6,7 @@ The 64-client spike (`docs/spikes/netcode-spike.md`, localhost, Godot 4.7.2) sho
 
 Caveats: single runs on localhost without latency or loss, movement-only workload; recheck if Godot's synchroniser changes, and test loss recovery before the PoC ships.
 
-## Channel layout (protocol 25; perf investigation A-03, A-04, A-05, E-06)
+## Channel layout (protocol 26; perf investigation A-01, A-03, A-04, A-05, E-06)
 
 Three ENet channels per connection, `Wire.Channels = 3`:
 
@@ -20,4 +20,4 @@ Why: ENet delivers a reliable channel in order, so one lost datagram held every 
 
 Same bump: the hello carries the map build hash (FNV-1a of the map's `manifest.json`, which names every chunk's hash), and a server refuses a different build by name (E-06). An entity tick with nothing to send sends no packet except every `Wire.EmptyTickHeartbeat` (3) ticks, which carries the input ack (A-05). The scoreboard goes out at most once a tick (A-04).
 
-Not in this bump: the world channel still diffs against the last state sent, with a 30-tick keyframe (A-01, G-03). It needs a per-client world ack and baseline history and stays open.
+The world channel shares the acknowledged baseline (protocol 26, A-01, G-03). The inputs carry a world ack next to the entity ack, the server keeps a per-client history of world states (the same depth as the entity history) and every world packet names its baseline tick. Unchanged world entities are omitted; a keyframe goes only to an entity new to the baseline (first sight, or after a spawn), and there are no periodic keyframes. A lost world packet heals on the next tick against the same baseline, and a tick commits only when all its packets arrive. Spawn and despawn stay on the reliable channel with the spawn's full state. A baseline older than the history falls back to a full set.

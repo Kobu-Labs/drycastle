@@ -588,7 +588,7 @@ public class FlightTests
             inFlight.Enqueue(Wire.EncodeInputs(new[] { ni }));
             if (inFlight.Count <= 5) continue;                       // the latency
             var got = new List<NetInput>();
-            Assert.True(Wire.TryDecodeInputs(inFlight.Dequeue(), got, out _));
+            Assert.True(Wire.TryDecodeInputs(inFlight.Dequeue(), got, out _, out _));
             FlightModel.Step(ref server, def, FlightInput.FromNet(got[0]), Dt, world);
             Assert.Equal(history[got[0].Seq].Position, server.Position);
             Assert.Equal(history[got[0].Seq].Velocity, server.Velocity);

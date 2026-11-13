@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Numerics;
 using Drycastle.ShooterCore;
 using Xunit;
@@ -61,6 +62,21 @@ public class WorldEntityTests
 
     static List<WorldEntry> Entries(WorldEntityManager m) => m.Snapshot();
 
+    /// <summary>One server tick for one client, against the client's acknowledged world tick. The packets are delivered unless <paramref name="lost"/>.</summary>
+    static List<byte[]> Send(WorldSnapshotEncoder enc, WorldReplica rep, uint tick, WorldEntityManager m, bool lost = false)
+    {
+        var packets = enc.Encode(tick, rep.AckTick, Entries(m));
+        if (!lost) foreach (var p in packets) rep.Apply(p);
+        return packets;
+    }
+
+    static uint BaseOf(byte[] p) => BinaryPrimitives.ReadUInt32LittleEndian(p.AsSpan(5));
+
+    /// <summary>Flags of the first record of a packet.</summary>
+    static byte FirstFlags(byte[] p) => p[WorldSnapshotEncoder.HeaderBytes + 3];
+
+    static WorldState StateOf(WorldEntityManager m, ushort id) => m.StateOf(id)!.Value;
+
     [Fact]
     public void SpawnAndDespawnPayloadsRoundTrip()
     {
@@ -87,7 +103,7 @@ public class WorldEntityTests
     }
 
     [Fact]
-    public void StateRoundTripsThroughKeyframeAndDelta()
+    public void StateRoundTripsThroughKeyframeAndDeltaAgainstTheAckedBaseline()
     {
         var types = Types();
         var enc = new WorldSnapshotEncoder(types);
@@ -97,19 +113,23 @@ public class WorldEntityTests
         Relay(m, rep);
         var id = m.Spawn(e)!.Value;
 
-        // keyframe (new entity)
-        foreach (var p in enc.Encode(10, Entries(m))) Assert.True(rep.Apply(p));
-        AssertMatches(rep.Entities[id].State, Entries(m)[0].State);
+        // keyframe (new entity, no baseline yet)
+        var first = Send(enc, rep, 10, m);
+        Assert.Single(first);
+        Assert.Equal(Wire.NoTick, BaseOf(first[0]));
+        Assert.Equal(Wire.FKey | Wire.FHp, FirstFlags(first[0]));
+        AssertMatches(rep.Entities[id].State, StateOf(m, id));
         Assert.Equal(Hp, rep.Entities[id].Type);
 
-        // small move, rotation and hp change: delta
+        // small move, rotation and hp change: a delta against tick 10, the client's acknowledged tick
         e.Pos = new Vector3(1.5f, 2, 3.25f); e.Yaw = 0.7f; e.Health = 61;
-        var packets = enc.Encode(11, Entries(m));
+        var packets = Send(enc, rep, 11, m);
         Assert.Single(packets);
-        Assert.Equal(Wire.FPosDelta | Wire.FRot | Wire.FHp, packets[0][6 + 3]); // flags of the only record: no keyframe
-        foreach (var p in packets) Assert.True(rep.Apply(p));
-        AssertMatches(rep.Entities[id].State, Entries(m)[0].State);
+        Assert.Equal(10u, BaseOf(packets[0]));
+        Assert.Equal(Wire.FPosDelta | Wire.FRot | Wire.FHp, FirstFlags(packets[0]));
+        AssertMatches(rep.Entities[id].State, StateOf(m, id));
         Assert.Equal(61, rep.Entities[id].State.Hp);
+        Assert.Equal(11u, rep.AckTick);
     }
 
     [Fact]
@@ -122,34 +142,30 @@ public class WorldEntityTests
         Relay(m, rep);
         var e = new Dummy { Pos = Vector3.Zero };
         var id = m.Spawn(e)!.Value;
-        foreach (var p in enc.Encode(0, Entries(m))) rep.Apply(p);
+        Send(enc, rep, 0, m);
 
         e.Pos = new Vector3(900, 0, 0); // 115200 units: too big for the i16 delta, so the record goes absolute
-        foreach (var p in enc.Encode(1, Entries(m))) Assert.True(rep.Apply(p));
-        AssertMatches(rep.Entities[id].State, Entries(m)[0].State);
+        var packets = Send(enc, rep, 1, m);
+        Assert.Single(packets);
+        Assert.Equal(Wire.FPosAbs, FirstFlags(packets[0]));
+        AssertMatches(rep.Entities[id].State, StateOf(m, id));
     }
 
     [Fact]
-    public void UnchangedEntitiesAreOmittedAndKeyframesComeEvery30Ticks()
+    public void UnchangedEntitiesAreOmittedWithNoPeriodicKeyframes()
     {
         var types = Types();
         var enc = new WorldSnapshotEncoder(types);
+        var rep = new WorldReplica();
         var m = new WorldEntityManager(types);
         m.Spawn(new Dummy { Pos = new Vector3(5, 0, 5) });
-        var keyframes = new List<uint>();
         var packetTicks = new List<uint>();
-        for (uint tick = 0; tick < 90; tick++)
-        {
-            var packets = enc.Encode(tick, Entries(m));
-            if (packets.Count > 0) packetTicks.Add(tick);
-            foreach (var p in packets)
-                if ((p[6 + 3] & Wire.FKey) == Wire.FKey) keyframes.Add(tick);
-        }
-        // the entity never moves: packets only on keyframe ticks, and keyframes 30 ticks apart after the first
-        Assert.Equal(keyframes, packetTicks);
-        Assert.True(keyframes.Count >= 3);
-        for (var i = 2; i < keyframes.Count; i++) Assert.Equal(30u, keyframes[i] - keyframes[i - 1]);
-        Assert.Empty(enc.Encode(100, Array.Empty<WorldEntry>()));
+        for (uint tick = 0; tick < 200; tick++)
+            if (Send(enc, rep, tick, m).Count > 0) packetTicks.Add(tick);
+
+        // the entity never moves: one keyframe for the first sight, then no packets at all, also past the history depth (no 30-tick keyframe)
+        Assert.Equal(new uint[] { 0 }, packetTicks);
+        Assert.Equal(0u, rep.AckTick); // nothing was committed after the keyframe, so the ack stays at tick 0
     }
 
     [Fact]
@@ -161,24 +177,135 @@ public class WorldEntityTests
         var m = new WorldEntityManager(types);
         Relay(m, rep);
         var id = m.Spawn(new Dummy { TypeId = Plain, Owner = 4, Health = 50 })!.Value;
-        foreach (var p in enc.Encode(0, Entries(m))) Assert.True(rep.Apply(p));
+        var packets = Send(enc, rep, 0, m);
+        Assert.Equal(0, FirstFlags(packets[0]) & Wire.FHp);
         Assert.Equal(0, rep.Entities[id].State.Hp);
         Assert.Equal((ushort)4, rep.Entities[id].State.Owner);
     }
 
     [Fact]
-    public void SpawnBeforeTheFirstKeyframeReachesTheClientInOrder()
+    public void LostPacketHealsOnTheNextTickAgainstTheSameBaseline()
     {
         var types = Types();
         var m = new WorldEntityManager(types);
         var rep = new WorldReplica();
         Relay(m, rep);
         var enc = new WorldSnapshotEncoder(types);
-        var id = m.Spawn(new Dummy { Pos = new Vector3(2, 0, 2) })!.Value;
-        // the spawn event alone already creates the entity with its state
-        Assert.True(rep.Entities.ContainsKey(id));
-        foreach (var p in enc.Encode(7, Entries(m))) Assert.True(rep.Apply(p));
-        AssertMatches(rep.Entities[id].State, Entries(m)[0].State);
+        var da = new Dummy { Pos = new Vector3(0, 0, 0) };
+        var db = new Dummy { Pos = new Vector3(0, 0, 0) };
+        var ida = m.Spawn(da)!.Value;
+        var idb = m.Spawn(db)!.Value;
+        Send(enc, rep, 0, m);
+        Assert.Equal(0u, rep.AckTick);
+
+        // tick 1: both move, and the packets are lost on the way
+        da.Pos = new Vector3(1, 0, 0); db.Pos = new Vector3(0, 2, 0);
+        Send(enc, rep, 1, m, lost: true);
+        Assert.Equal(0u, rep.AckTick); // nothing committed: the client still acknowledges tick 0
+        Assert.NotEqual(StateOf(m, idb), rep.Entities[idb].State);
+
+        // tick 2: the client acknowledged 0, so the delta carries tick 1's change too: no keyframe is needed
+        da.Pos = new Vector3(2, 0, 0);
+        var packets = Send(enc, rep, 2, m);
+        Assert.Single(packets);
+        Assert.Equal(0u, BaseOf(packets[0]));
+        Assert.Equal(Wire.FPosDelta, FirstFlags(packets[0]));
+        Assert.Equal(2u, rep.AckTick);
+        AssertMatches(rep.Entities[ida].State, StateOf(m, ida));
+        AssertMatches(rep.Entities[idb].State, StateOf(m, idb));
+    }
+
+    [Fact]
+    public void AWorldTickCommitsOnlyWhenAllItsPacketsArrive()
+    {
+        var types = Types();
+        var m = new WorldEntityManager(types);
+        var rep = new WorldReplica();
+        Relay(m, rep);
+        var enc = new WorldSnapshotEncoder(types);
+        var dummies = new List<Dummy>();
+        for (var i = 0; i < 45; i++) { var d = new Dummy { Pos = new Vector3(i, 0, 0) }; dummies.Add(d); m.Spawn(d); }
+        Assert.Equal(2, Send(enc, rep, 0, m).Count); // 40 + 5: two packets for one tick
+        Assert.Equal(0u, rep.AckTick);
+
+        foreach (var d in dummies) d.Pos += new Vector3(1, 0, 0);
+        var packets = enc.Encode(1, rep.AckTick, Entries(m));
+        Assert.Equal(2, packets.Count);
+        Assert.False(rep.Apply(packets[1])); // the second half arrives alone: not a tick yet
+        Assert.Equal(0u, rep.AckTick);
+        Assert.True(rep.Apply(packets[0])); // the tick completes
+        Assert.Equal(1u, rep.AckTick);
+        foreach (var (id, _) in rep.Entities) AssertMatches(rep.Entities[id].State, StateOf(m, id));
+    }
+
+    [Fact]
+    public void BaselineThatFellOutOfTheHistoryFallsBackToKeyframes()
+    {
+        var types = Types();
+        var m = new WorldEntityManager(types);
+        var rep = new WorldReplica();
+        Relay(m, rep);
+        var enc = new WorldSnapshotEncoder(types);
+        var dummies = new List<Dummy>();
+        for (var i = 0; i < 3; i++) { var d = new Dummy { Pos = new Vector3(i, 1, 0) }; dummies.Add(d); m.Spawn(d); }
+        Send(enc, rep, 0, m);
+        Assert.Equal(0u, rep.AckTick);
+
+        // the client's acknowledgements stop while the server runs past the history depth (its last ack is now too old to keep)
+        for (uint tick = 1; tick <= WorldHistory.Depth + 4; tick++)
+        {
+            foreach (var d in dummies) d.Pos += new Vector3(1, 0, 0);
+            enc.Encode(tick, Wire.NoTick, Entries(m)); // not delivered
+        }
+
+        foreach (var d in dummies) d.Pos += new Vector3(1, 0, 0);
+        var packets = enc.Encode(WorldHistory.Depth + 5, rep.AckTick, Entries(m));
+        Assert.Single(packets);
+        Assert.Equal(Wire.NoTick, BaseOf(packets[0])); // full set: no baseline any more
+        Assert.Equal(Wire.FKey, FirstFlags(packets[0]) & Wire.FKey);
+        Assert.True(rep.Apply(packets[0]));
+        Assert.Equal(WorldHistory.Depth + 5u, rep.AckTick);
+        foreach (var (id, _) in rep.Entities) AssertMatches(rep.Entities[id].State, StateOf(m, id));
+    }
+
+    [Fact]
+    public void DeltaAgainstABaselineTheClientDoesNotHoldIsRejected()
+    {
+        var types = Types();
+        var enc = new WorldSnapshotEncoder(types);
+        var m = new WorldEntityManager(types);
+        var e = new Dummy();
+        var id = m.Spawn(e)!.Value;
+        enc.Encode(0, Wire.NoTick, Entries(m)); // the keyframe goes to a client that is not listening
+        e.Pos = new Vector3(0.5f, 0, 0);
+        var rep = new WorldReplica();
+        var delta = enc.Encode(1, 0u, Entries(m)); // a delta against tick 0, which this client never committed
+        Assert.Single(delta);
+        Assert.False(rep.Apply(delta[0]));
+        Assert.False(rep.HasState);
+        Assert.False(rep.Entities.ContainsKey(id));
+    }
+
+    [Fact]
+    public void RemovedEntityLeavesTheBaselineAndTheClientState()
+    {
+        var types = Types();
+        var (m, _) = Manager(types);
+        var enc = new WorldSnapshotEncoder(types);
+        var rep = new WorldReplica();
+        Relay(m, rep);
+        var a = m.Spawn(new Dummy())!.Value;
+        var b = m.Spawn(new Dummy())!.Value;
+        Send(enc, rep, 0, m);
+        Assert.True(rep.States.ContainsKey(a));
+
+        m.Despawn(a, WorldDespawnReason.Removed); // the reliable event removes the entity at once
+        var packets = Send(enc, rep, 1, m);
+        Assert.Single(packets); // b is unchanged and omitted; a is a removal record
+        Assert.Equal(Wire.FRemove, FirstFlags(packets[0]));
+        Assert.False(rep.States.ContainsKey(a));
+        Assert.True(rep.States.ContainsKey(b));
+        Assert.False(rep.Entities.ContainsKey(a));
     }
 
     [Fact]
@@ -190,31 +317,15 @@ public class WorldEntityTests
         var e = new Dummy { Pos = new Vector3(3, 1, 3), Health = 40 };
         var id = m.Spawn(e)!.Value;
         var spawnPayload = WorldCodec.EncodeSpawn(id, Hp, Entries(m)[0].State);
-        var keyframe = enc.Encode(5, Entries(m));
+        var keyframe = enc.Encode(5, Wire.NoTick, Entries(m));
 
         var rep = new WorldReplica();
-        foreach (var p in keyframe) Assert.True(rep.Apply(p)); // unreliable arrives first: held, not applied
+        Assert.True(rep.Apply(keyframe[0])); // unreliable arrives first: committed, but the entity is not spawned yet
         Assert.False(rep.Entities.ContainsKey(id));
+        Assert.True(rep.States.ContainsKey(id));
         rep.OnEvent(EventKind.WorldSpawn, spawnPayload);
         Assert.True(rep.Entities.ContainsKey(id));
-        AssertMatches(rep.Entities[id].State, Entries(m)[0].State);
-    }
-
-    [Fact]
-    public void DeltaForAnUnknownEntityIsDropped()
-    {
-        var types = Types();
-        var enc = new WorldSnapshotEncoder(types);
-        var m = new WorldEntityManager(types);
-        var e = new Dummy();
-        var id = m.Spawn(e)!.Value;
-        enc.Encode(0, Entries(m)); // the keyframe goes to a client that is not listening
-        e.Pos = new Vector3(0.5f, 0, 0);
-        var rep = new WorldReplica();
-        var delta = enc.Encode(1, Entries(m)); // a delta, for an id this client never got a spawn or keyframe for
-        Assert.Single(delta);
-        Assert.True(rep.Apply(delta[0]));
-        Assert.False(rep.Entities.ContainsKey(id));
+        AssertMatches(rep.Entities[id].State, StateOf(m, id));
     }
 
     [Fact]
@@ -243,7 +354,7 @@ public class WorldEntityTests
         var rep = new WorldReplica();
         Relay(m, rep);
         var a = m.Spawn(new Dummy())!.Value;
-        var inFlight = enc.Encode(3, Entries(m)); // sent before the despawn, delivered after it
+        var inFlight = enc.Encode(3, Wire.NoTick, Entries(m)); // sent before the despawn, delivered after it
         m.Despawn(a, WorldDespawnReason.Destroyed);
         foreach (var p in inFlight) rep.Apply(p);
         Assert.False(rep.Entities.ContainsKey(a));

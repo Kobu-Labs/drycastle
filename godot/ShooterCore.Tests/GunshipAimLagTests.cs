@@ -200,7 +200,7 @@ public class GunshipAimLagTests
         Assert.True(input.HasAim);
         Assert.True(Vector3.Distance(input.Aim, p) <= 0.5f / 128f + 1e-6f);
         var got = new List<NetInput>();
-        Assert.True(Wire.TryDecodeInputs(Wire.EncodeInputs(new[] { input }), got, out _));
+        Assert.True(Wire.TryDecodeInputs(Wire.EncodeInputs(new[] { input }), got, out _, out _));
         Assert.Equal(input, Assert.Single(got));
         Assert.Equal(input.Aim, Assert.Single(got).Aim);
     }
@@ -213,7 +213,7 @@ public class GunshipAimLagTests
         var pkt = Wire.EncodeInputs(new[] { plain, aimed, plain });
         Assert.Equal(Wire.InputHeaderBytes + Wire.InputBytes + (Wire.InputBytes + Wire.AimBytes) + Wire.InputBytes, pkt.Length);
         var got = new List<NetInput>();
-        Assert.True(Wire.TryDecodeInputs(pkt, got, out _));
+        Assert.True(Wire.TryDecodeInputs(pkt, got, out _, out _));
         Assert.Equal(new[] { plain, aimed, plain }, got);
         Assert.False(got[0].HasAim);
         Assert.True(got[1].HasAim);
@@ -225,8 +225,8 @@ public class GunshipAimLagTests
         var aimed = NetInput.From(2, new MoveInput(), 0f, 0, new Vector3(10, 0, 20));
         var pkt = Wire.EncodeInputs(new[] { aimed });
         var got = new List<NetInput>();
-        Assert.False(Wire.TryDecodeInputs(pkt.AsSpan(0, pkt.Length - 1), got, out _));
-        Assert.False(Wire.TryDecodeInputs(pkt.AsSpan(0, Wire.InputBytes + 2), got, out _));
+        Assert.False(Wire.TryDecodeInputs(pkt.AsSpan(0, pkt.Length - 1), got, out _, out _));
+        Assert.False(Wire.TryDecodeInputs(pkt.AsSpan(0, Wire.InputBytes + 2), got, out _, out _));
         Assert.Empty(got);
     }
 }
