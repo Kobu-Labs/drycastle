@@ -7910,6 +7910,797 @@
     -1249571.68
    ],
    "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Fence_Gate_01",
+   "id": "o-0584",
+   "position": [
+    -588612.23,
+    -1249611.46
+   ],
+   "rotation_deg": 343.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Fence_Gate_01",
+   "id": "o-0585",
+   "position": [
+    -588614.56,
+    -1249619.11
+   ],
+   "rotation_deg": 343.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_Shack_02",
+   "id": "o-0586",
+   "position": [
+    -588604.85,
+    -1249611.46
+   ],
+   "rotation_deg": 343.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Road_Barrier_01",
+   "id": "o-0587",
+   "position": [
+    -588596.78,
+    -1249615.86
+   ],
+   "rotation_deg": 343.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-0588",
+   "position": [
+    -588604.78,
+    -1249605.61
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "prim:bunker",
+   "id": "o-0589",
+   "position": [
+    -588599.81,
+    -1249599.74
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_LightPole_01",
+   "id": "o-0590",
+   "position": [
+    -588609.64,
+    -1249609.0
+   ],
+   "rotation_deg": 343.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-0591",
+   "position": [
+    -588536.17,
+    -1249666.12
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-0592",
+   "position": [
+    -588493.17,
+    -1249607.34
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-0593",
+   "position": [
+    -588547.28,
+    -1249525.05
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Crate_Stack_02",
+   "id": "o-0594",
+   "position": [
+    -588502.03,
+    -1249555.82
+   ],
+   "rotation_deg": 242.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Crate_Stack_01",
+   "id": "o-0595",
+   "position": [
+    -588502.91,
+    -1249557.68
+   ],
+   "rotation_deg": 242.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Barrel_Stack_01",
+   "id": "o-0596",
+   "position": [
+    -588510.34,
+    -1249571.9
+   ],
+   "rotation_deg": 242.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Crate_Cube_02",
+   "id": "o-0597",
+   "position": [
+    -588520.93,
+    -1249538.32
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Lockers_01",
+   "id": "o-0598",
+   "position": [
+    -588495.76,
+    -1249554.69
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Lockers_01",
+   "id": "o-0599",
+   "position": [
+    -588496.87,
+    -1249556.82
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Table_Metal",
+   "id": "o-0600",
+   "position": [
+    -588498.58,
+    -1249560.78
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Table_Metal",
+   "id": "o-0601",
+   "position": [
+    -588499.74,
+    -1249562.99
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Shelves_Preset_01",
+   "id": "o-0602",
+   "position": [
+    -588501.71,
+    -1249566.36
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Crate_Stack_02",
+   "id": "o-0603",
+   "position": [
+    -588472.99,
+    -1249566.09
+   ],
+   "rotation_deg": 242.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Crate_Stack_01",
+   "id": "o-0604",
+   "position": [
+    -588473.88,
+    -1249567.95
+   ],
+   "rotation_deg": 242.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Makeshift_Table_03",
+   "id": "o-0605",
+   "position": [
+    -588476.49,
+    -1249572.5
+   ],
+   "rotation_deg": 242.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Electronics_Shelf_Preset_01",
+   "id": "o-0606",
+   "position": [
+    -588478.58,
+    -1249576.81
+   ],
+   "rotation_deg": 242.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_WireSpool_01",
+   "id": "o-0607",
+   "position": [
+    -588481.27,
+    -1249579.94
+   ],
+   "rotation_deg": 242.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_LightPole_01",
+   "id": "o-0608",
+   "position": [
+    -588548.73,
+    -1249583.05
+   ],
+   "rotation_deg": 152.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_LightPole_01",
+   "id": "o-0609",
+   "position": [
+    -588535.43,
+    -1249589.98
+   ],
+   "rotation_deg": 152.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_LightPole_01",
+   "id": "o-0610",
+   "position": [
+    -588525.67,
+    -1249595.06
+   ],
+   "rotation_deg": 152.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_LightPole_01",
+   "id": "o-0611",
+   "position": [
+    -588488.14,
+    -1249597.68
+   ],
+   "rotation_deg": 152.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Runway_Light_01",
+   "id": "o-0612",
+   "position": [
+    -588539.37,
+    -1249602.95
+   ],
+   "rotation_deg": 62.5,
+   "scale": 2.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Runway_Light_01",
+   "id": "o-0613",
+   "position": [
+    -588542.11,
+    -1249594.27
+   ],
+   "rotation_deg": 62.5,
+   "scale": 2.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Runway_Light_01",
+   "id": "o-0614",
+   "position": [
+    -588550.19,
+    -1249590.06
+   ],
+   "rotation_deg": 62.5,
+   "scale": 2.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Runway_Light_01",
+   "id": "o-0615",
+   "position": [
+    -588558.87,
+    -1249592.8
+   ],
+   "rotation_deg": 62.5,
+   "scale": 2.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Runway_Light_01",
+   "id": "o-0616",
+   "position": [
+    -588563.08,
+    -1249600.88
+   ],
+   "rotation_deg": 62.5,
+   "scale": 2.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Runway_Light_01",
+   "id": "o-0617",
+   "position": [
+    -588560.34,
+    -1249609.56
+   ],
+   "rotation_deg": 62.5,
+   "scale": 2.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Runway_Light_01",
+   "id": "o-0618",
+   "position": [
+    -588552.26,
+    -1249613.77
+   ],
+   "rotation_deg": 62.5,
+   "scale": 2.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Runway_Light_01",
+   "id": "o-0619",
+   "position": [
+    -588543.57,
+    -1249611.03
+   ],
+   "rotation_deg": 62.5,
+   "scale": 2.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Light_Portable_01",
+   "id": "o-0620",
+   "position": [
+    -588563.76,
+    -1249595.39
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Light_Portable_01",
+   "id": "o-0621",
+   "position": [
+    -588538.69,
+    -1249608.45
+   ],
+   "rotation_deg": 242.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Gaspump_Cover_01",
+   "id": "o-0622",
+   "position": [
+    -588518.05,
+    -1249615.32
+   ],
+   "rotation_deg": 57.8
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Gastank_01",
+   "id": "o-0623",
+   "position": [
+    -588519.28,
+    -1249607.87
+   ],
+   "rotation_deg": 57.8
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Barrel_Stack_01",
+   "id": "o-0624",
+   "position": [
+    -588509.21,
+    -1249611.19
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Propane_01",
+   "id": "o-0625",
+   "position": [
+    -588509.87,
+    -1249613.37
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Propane_01",
+   "id": "o-0626",
+   "position": [
+    -588510.24,
+    -1249613.96
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_GasCan_01",
+   "id": "o-0627",
+   "position": [
+    -588518.23,
+    -1249619.45
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_LightPole_01",
+   "id": "o-0628",
+   "position": [
+    -588526.55,
+    -1249617.42
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_LightPole_01",
+   "id": "o-0629",
+   "position": [
+    -588516.39,
+    -1249623.81
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_LightPole_01",
+   "id": "o-0630",
+   "position": [
+    -588544.66,
+    -1249645.25
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_LightPole_01",
+   "id": "o-0631",
+   "position": [
+    -588536.45,
+    -1249650.42
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Barrier_Base_Row_02",
+   "id": "o-0632",
+   "position": [
+    -588523.87,
+    -1249617.79
+   ],
+   "rotation_deg": 327.8
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Barrier_Base_Row_02",
+   "id": "o-0633",
+   "position": [
+    -588517.78,
+    -1249621.62
+   ],
+   "rotation_deg": 327.8
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Barrier_Base_Single_02",
+   "id": "o-0634",
+   "position": [
+    -588540.26,
+    -1249647.77
+   ],
+   "rotation_deg": 327.8
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Barrier_Base_Single_02",
+   "id": "o-0635",
+   "position": [
+    -588537.72,
+    -1249649.37
+   ],
+   "rotation_deg": 327.8
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Cone_01",
+   "id": "o-0636",
+   "position": [
+    -588531.51,
+    -1249624.57
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Cone_01",
+   "id": "o-0637",
+   "position": [
+    -588520.46,
+    -1249631.52
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Cone_01",
+   "id": "o-0638",
+   "position": [
+    -588539.98,
+    -1249637.56
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Cone_01",
+   "id": "o-0639",
+   "position": [
+    -588528.51,
+    -1249644.77
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_Barracks_01",
+   "id": "o-0640",
+   "position": [
+    -588558.92,
+    -1249553.91
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_Barracks_01",
+   "id": "o-0641",
+   "position": [
+    -588566.08,
+    -1249567.65
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_Tent_Open_01",
+   "id": "o-0642",
+   "position": [
+    -588544.62,
+    -1249553.5
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_Tent_Sandbags_01",
+   "id": "o-0643",
+   "position": [
+    -588552.24,
+    -1249568.13
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_CamoNet_Tent_03",
+   "id": "o-0644",
+   "position": [
+    -588556.95,
+    -1249577.18
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_FirePit_01",
+   "id": "o-0645",
+   "position": [
+    -588541.3,
+    -1249561.42
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Table_Outdoor_01",
+   "id": "o-0646",
+   "position": [
+    -588538.4,
+    -1249555.83
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Chair_Folding_01",
+   "id": "o-0647",
+   "position": [
+    -588543.09,
+    -1249560.49
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Chair_Folding_01",
+   "id": "o-0648",
+   "position": [
+    -588539.52,
+    -1249562.35
+   ],
+   "rotation_deg": 242.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Portaloo_01",
+   "id": "o-0650",
+   "position": [
+    -588572.49,
+    -1249563.78
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Portaloo_01",
+   "id": "o-0651",
+   "position": [
+    -588573.51,
+    -1249565.73
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "prim:radio_tower",
+   "id": "o-0652",
+   "position": [
+    -588547.38,
+    -1249530.64
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Satelite_Dish_02",
+   "id": "o-0653",
+   "position": [
+    -588537.64,
+    -1249534.68
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Radio_Control_Box_01",
+   "id": "o-0654",
+   "position": [
+    -588534.52,
+    -1249543.34
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Drone_Control_Room_02",
+   "id": "o-0655",
+   "position": [
+    -588545.75,
+    -1249540.51
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Generator_Large_01",
+   "id": "o-0656",
+   "position": [
+    -588551.07,
+    -1249537.74
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Generator_Large_01",
+   "id": "o-0657",
+   "position": [
+    -588548.76,
+    -1249538.94
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Satellite_Dish_02",
+   "id": "o-0658",
+   "position": [
+    -588540.46,
+    -1249543.33
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Satellite_Dish_03",
+   "id": "o-0659",
+   "position": [
+    -588538.13,
+    -1249543.97
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Light_Portable_01",
+   "id": "o-0660",
+   "position": [
+    -588541.83,
+    -1249537.32
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Crate_Stack_02",
+   "id": "o-0661",
+   "position": [
+    -588554.66,
+    -1249624.31
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Crate_Stack_01",
+   "id": "o-0662",
+   "position": [
+    -588552.62,
+    -1249625.29
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Crate_Stack_03",
+   "id": "o-0663",
+   "position": [
+    -588550.66,
+    -1249626.35
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Crate_Cube_02",
+   "id": "o-0664",
+   "position": [
+    -588548.24,
+    -1249627.6
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Pallet_01",
+   "id": "o-0665",
+   "position": [
+    -588556.47,
+    -1249627.82
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Crate_Ammo_01",
+   "id": "o-0666",
+   "position": [
+    -588556.48,
+    -1249627.82
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Barrel_Stack_01",
+   "id": "o-0667",
+   "position": [
+    -588552.57,
+    -1249629.85
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Barrel_Stack_01",
+   "id": "o-0668",
+   "position": [
+    -588550.44,
+    -1249630.96
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_BarrelPile_01",
+   "id": "o-0669",
+   "position": [
+    -588555.93,
+    -1249633.27
+   ],
+   "rotation_deg": 332.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_LightPole_01",
+   "id": "o-0670",
+   "position": [
+    -588585.5,
+    -1249575.05
+   ],
+   "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_LightPole_01",
+   "id": "o-0671",
+   "position": [
+    -588595.87,
+    -1249591.07
+   ],
+   "rotation_deg": 62.5
   }
  ],
  "parcels": {
@@ -8581,7 +9372,19 @@
   },
   "P-0349": {
    "fence": {
-    "mode": "none"
+    "colour": "#5f636a",
+    "column": "metal_post",
+    "gaps": [
+     {
+      "at": [
+       -588614.6,
+       -1249614.9
+      ],
+      "width_m": 9.0
+     }
+    ],
+    "height_m": 2.4,
+    "type": "wire"
    }
   },
   "P-0351": {
@@ -12021,6 +12824,725 @@
     ]
    ],
    "water_y": 186.4
+  },
+  "R-0024": {
+   "colour": "#8a7f63",
+   "polygon": [
+    [
+     -588559.61,
+     -1249540.06
+    ],
+    [
+     -588535.04,
+     -1249552.85
+    ],
+    [
+     -588550.97,
+     -1249583.45
+    ],
+    [
+     -588575.98,
+     -1249570.43
+    ]
+   ]
+  },
+  "R-0025": {
+   "colour": "#9b9b96",
+   "polygon": [
+    [
+     -588557.12,
+     -1249538.53
+    ],
+    [
+     -588534.06,
+     -1249550.54
+    ],
+    [
+     -588525.75,
+     -1249534.57
+    ],
+    [
+     -588548.37,
+     -1249522.8
+    ]
+   ]
+  },
+  "R-0026": {
+   "colour": "#8d8676",
+   "polygon": [
+    [
+     -588555.06,
+     -1249620.78
+    ],
+    [
+     -588544.42,
+     -1249626.32
+    ],
+    [
+     -588552.27,
+     -1249641.4
+    ],
+    [
+     -588562.91,
+     -1249635.86
+    ]
+   ]
+  },
+  "R-0027": {
+   "colour": "#a9a69e",
+   "polygon": [
+    [
+     -588541.33,
+     -1249565.58
+    ],
+    [
+     -588485.89,
+     -1249594.44
+    ],
+    [
+     -588489.4,
+     -1249601.18
+    ],
+    [
+     -588516.89,
+     -1249586.87
+    ],
+    [
+     -588522.3,
+     -1249597.25
+    ],
+    [
+     -588550.24,
+     -1249582.7
+    ]
+   ]
+  },
+  "R-0028": {
+   "colour": "#a9a69e",
+   "polygon": [
+    [
+     -588521.99,
+     -1249608.7
+    ],
+    [
+     -588526.38,
+     -1249615.39
+    ],
+    [
+     -588514.45,
+     -1249622.9
+    ],
+    [
+     -588510.27,
+     -1249616.08
+    ]
+   ]
+  },
+  "R-0029": {
+   "colour": "#858a8f",
+   "polygon": [
+    [
+     -588528.02,
+     -1249617.9
+    ],
+    [
+     -588532.21,
+     -1249624.37
+    ],
+    [
+     -588536.43,
+     -1249630.8
+    ],
+    [
+     -588540.62,
+     -1249637.27
+    ],
+    [
+     -588544.85,
+     -1249643.7
+    ],
+    [
+     -588534.78,
+     -1249650.04
+    ],
+    [
+     -588527.97,
+     -1249645.23
+    ],
+    [
+     -588523.99,
+     -1249638.63
+    ],
+    [
+     -588519.98,
+     -1249632.06
+    ],
+    [
+     -588516.0,
+     -1249625.47
+    ]
+   ]
+  },
+  "R-0030": {
+   "colour": "#e2b92c",
+   "polygon": [
+    [
+     -588527.85,
+     -1249617.83
+    ],
+    [
+     -588528.01,
+     -1249618.08
+    ],
+    [
+     -588516.17,
+     -1249625.54
+    ],
+    [
+     -588516.01,
+     -1249625.29
+    ]
+   ]
+  },
+  "R-0031": {
+   "colour": "#e2b92c",
+   "polygon": [
+    [
+     -588530.24,
+     -1249621.53
+    ],
+    [
+     -588530.4,
+     -1249621.78
+    ],
+    [
+     -588518.42,
+     -1249629.32
+    ],
+    [
+     -588518.27,
+     -1249629.06
+    ]
+   ]
+  },
+  "R-0032": {
+   "colour": "#e2b92c",
+   "polygon": [
+    [
+     -588532.63,
+     -1249625.22
+    ],
+    [
+     -588532.79,
+     -1249625.48
+    ],
+    [
+     -588520.73,
+     -1249633.07
+    ],
+    [
+     -588520.57,
+     -1249632.81
+    ]
+   ]
+  },
+  "R-0033": {
+   "colour": "#e2b92c",
+   "polygon": [
+    [
+     -588535.06,
+     -1249628.89
+    ],
+    [
+     -588535.22,
+     -1249629.15
+    ],
+    [
+     -588522.99,
+     -1249636.85
+    ],
+    [
+     -588522.83,
+     -1249636.59
+    ]
+   ]
+  },
+  "R-0034": {
+   "colour": "#e2b92c",
+   "polygon": [
+    [
+     -588537.44,
+     -1249632.59
+    ],
+    [
+     -588537.6,
+     -1249632.84
+    ],
+    [
+     -588525.29,
+     -1249640.6
+    ],
+    [
+     -588525.13,
+     -1249640.34
+    ]
+   ]
+  },
+  "R-0035": {
+   "colour": "#e2b92c",
+   "polygon": [
+    [
+     -588539.87,
+     -1249636.26
+    ],
+    [
+     -588540.03,
+     -1249636.52
+    ],
+    [
+     -588527.59,
+     -1249644.35
+    ],
+    [
+     -588527.43,
+     -1249644.09
+    ]
+   ]
+  },
+  "R-0036": {
+   "colour": "#e2b92c",
+   "polygon": [
+    [
+     -588542.26,
+     -1249639.96
+    ],
+    [
+     -588542.42,
+     -1249640.21
+    ],
+    [
+     -588530.95,
+     -1249647.43
+    ],
+    [
+     -588530.79,
+     -1249647.18
+    ]
+   ]
+  },
+  "R-0037": {
+   "colour": "#e2b92c",
+   "polygon": [
+    [
+     -588544.68,
+     -1249643.63
+    ],
+    [
+     -588544.84,
+     -1249643.88
+    ],
+    [
+     -588534.94,
+     -1249650.12
+    ],
+    [
+     -588534.78,
+     -1249649.86
+    ]
+   ]
+  },
+  "R-0038": {
+   "colour": "#e2b92c",
+   "polygon": [
+    [
+     -588527.85,
+     -1249618.01
+    ],
+    [
+     -588544.68,
+     -1249643.81
+    ],
+    [
+     -588544.43,
+     -1249643.97
+    ],
+    [
+     -588527.6,
+     -1249618.17
+    ]
+   ]
+  },
+  "R-0039": {
+   "colour": "#e2b92c",
+   "polygon": [
+    [
+     -588516.42,
+     -1249625.2
+    ],
+    [
+     -588535.2,
+     -1249649.78
+    ],
+    [
+     -588534.95,
+     -1249649.94
+    ],
+    [
+     -588516.17,
+     -1249625.36
+    ]
+   ]
+  },
+  "R-0040": {
+   "colour": "#ebe9e1",
+   "polygon": [
+    [
+     -588541.47,
+     -1249607.0
+    ],
+    [
+     -588540.73,
+     -1249605.23
+    ],
+    [
+     -588540.32,
+     -1249603.35
+    ],
+    [
+     -588540.23,
+     -1249601.44
+    ],
+    [
+     -588540.48,
+     -1249599.54
+    ],
+    [
+     -588541.06,
+     -1249597.71
+    ],
+    [
+     -588541.95,
+     -1249596.01
+    ],
+    [
+     -588543.11,
+     -1249594.49
+    ],
+    [
+     -588544.53,
+     -1249593.19
+    ],
+    [
+     -588546.14,
+     -1249592.16
+    ],
+    [
+     -588547.92,
+     -1249591.43
+    ],
+    [
+     -588549.79,
+     -1249591.01
+    ],
+    [
+     -588551.7,
+     -1249590.93
+    ],
+    [
+     -588553.6,
+     -1249591.18
+    ],
+    [
+     -588555.43,
+     -1249591.76
+    ],
+    [
+     -588557.13,
+     -1249592.64
+    ],
+    [
+     -588558.65,
+     -1249593.81
+    ],
+    [
+     -588559.95,
+     -1249595.22
+    ],
+    [
+     -588560.98,
+     -1249596.84
+    ],
+    [
+     -588561.71,
+     -1249598.61
+    ],
+    [
+     -588562.13,
+     -1249600.48
+    ],
+    [
+     -588562.21,
+     -1249602.4
+    ],
+    [
+     -588561.96,
+     -1249604.3
+    ],
+    [
+     -588561.39,
+     -1249606.13
+    ],
+    [
+     -588560.5,
+     -1249607.83
+    ],
+    [
+     -588559.33,
+     -1249609.35
+    ],
+    [
+     -588557.92,
+     -1249610.65
+    ],
+    [
+     -588556.3,
+     -1249611.68
+    ],
+    [
+     -588554.53,
+     -1249612.41
+    ],
+    [
+     -588552.66,
+     -1249612.82
+    ],
+    [
+     -588550.74,
+     -1249612.91
+    ],
+    [
+     -588548.84,
+     -1249612.66
+    ],
+    [
+     -588547.01,
+     -1249612.08
+    ],
+    [
+     -588545.31,
+     -1249611.2
+    ],
+    [
+     -588543.79,
+     -1249610.03
+    ],
+    [
+     -588542.5,
+     -1249608.62
+    ]
+   ]
+  },
+  "R-0041": {
+   "colour": "#7c8083",
+   "polygon": [
+    [
+     -588541.86,
+     -1249606.79
+    ],
+    [
+     -588541.16,
+     -1249605.09
+    ],
+    [
+     -588540.76,
+     -1249603.3
+    ],
+    [
+     -588540.68,
+     -1249601.46
+    ],
+    [
+     -588540.92,
+     -1249599.64
+    ],
+    [
+     -588541.48,
+     -1249597.88
+    ],
+    [
+     -588542.32,
+     -1249596.25
+    ],
+    [
+     -588543.44,
+     -1249594.79
+    ],
+    [
+     -588544.8,
+     -1249593.55
+    ],
+    [
+     -588546.35,
+     -1249592.56
+    ],
+    [
+     -588548.05,
+     -1249591.86
+    ],
+    [
+     -588549.85,
+     -1249591.46
+    ],
+    [
+     -588551.68,
+     -1249591.38
+    ],
+    [
+     -588553.51,
+     -1249591.62
+    ],
+    [
+     -588555.26,
+     -1249592.17
+    ],
+    [
+     -588556.89,
+     -1249593.02
+    ],
+    [
+     -588558.35,
+     -1249594.14
+    ],
+    [
+     -588559.59,
+     -1249595.5
+    ],
+    [
+     -588560.58,
+     -1249597.05
+    ],
+    [
+     -588561.28,
+     -1249598.75
+    ],
+    [
+     -588561.68,
+     -1249600.54
+    ],
+    [
+     -588561.76,
+     -1249602.38
+    ],
+    [
+     -588561.52,
+     -1249604.2
+    ],
+    [
+     -588560.97,
+     -1249605.96
+    ],
+    [
+     -588560.12,
+     -1249607.59
+    ],
+    [
+     -588559.0,
+     -1249609.05
+    ],
+    [
+     -588557.65,
+     -1249610.29
+    ],
+    [
+     -588556.09,
+     -1249611.28
+    ],
+    [
+     -588554.4,
+     -1249611.98
+    ],
+    [
+     -588552.6,
+     -1249612.38
+    ],
+    [
+     -588550.76,
+     -1249612.46
+    ],
+    [
+     -588548.94,
+     -1249612.22
+    ],
+    [
+     -588547.19,
+     -1249611.67
+    ],
+    [
+     -588545.55,
+     -1249610.82
+    ],
+    [
+     -588544.1,
+     -1249609.7
+    ],
+    [
+     -588542.85,
+     -1249608.34
+    ]
+   ]
+  },
+  "R-0042": {
+   "colour": "#ebe9e1",
+   "polygon": [
+    [
+     -588554.24,
+     -1249603.39
+    ],
+    [
+     -588553.53,
+     -1249603.76
+    ],
+    [
+     -588552.47,
+     -1249601.72
+    ],
+    [
+     -588550.34,
+     -1249602.83
+    ],
+    [
+     -588551.41,
+     -1249604.87
+    ],
+    [
+     -588550.7,
+     -1249605.24
+    ],
+    [
+     -588548.2,
+     -1249600.45
+    ],
+    [
+     -588548.91,
+     -1249600.08
+    ],
+    [
+     -588549.97,
+     -1249602.12
+    ],
+    [
+     -588552.1,
+     -1249601.01
+    ],
+    [
+     -588551.04,
+     -1249598.97
+    ],
+    [
+     -588551.75,
+     -1249598.6
+    ]
+   ]
   }
  },
  "version": 1
