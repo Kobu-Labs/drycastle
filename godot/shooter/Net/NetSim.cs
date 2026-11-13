@@ -8,7 +8,7 @@ namespace Drycastle.Shooter;
 /// Network impairment for tests (issue #93), applied in the application send path of both the client and the server
 /// (no tc, no root). Option string: <c>latency_ms=50,jitter_ms=5,loss=0.03</c> (every key optional).
 /// Every outgoing packet is delayed by latency +/- jitter (one way, per sender, and never reordered: ENet sequences at send time);
-/// unreliable datagrams (the snapshots and inputs on channel 1) are additionally dropped with probability <c>loss</c>.
+/// unreliable datagrams (the snapshots and inputs on channel 1, the effects on channel 2) are additionally dropped with probability <c>loss</c>.
 /// Reliable packets are delayed but never dropped: loss recovery of those is ENet's job and the simulation does not model its retransmit timeouts.
 /// </summary>
 public sealed class NetSim

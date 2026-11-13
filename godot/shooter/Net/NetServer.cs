@@ -204,7 +204,6 @@ public partial class NetServer : Node
         DropSilentPeers();
         PerfLap(ServerPerf.Ph.Housekeeping);
         _match.Update();
-        if (_tick % Wire.TickRate == 0 && _clients.Count > 0) BroadcastEvent(EventKind.MatchState, MatchCodec.Encode(BuildMatchState())); // about once a second, so the scoreboard ping is not stale
         _match.Entities.Tick((float)delta);
         PerfLap(ServerPerf.Ph.Match);
         StreakTick((float)delta);
@@ -226,6 +225,7 @@ public partial class NetServer : Node
         DetonateFlak();    // flak shells that have arrived burst now
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
+        FlushScoreboard(); // once a tick at most, and about once a second (the ping), however many kills the tick had (A-04)
         PerfLap(ServerPerf.Ph.Detonate);
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
         CaptureLagPoses(); // the poses this tick ends with, the state the snapshots carry (ADR 0013)
@@ -411,6 +411,12 @@ public partial class NetServer : Node
             Reject(c, $"Protocol mismatch: this server speaks protocol {Wire.ProtocolVersion}, your game speaks {h.Version}. Update the game to the server's build.");
             return;
         }
+        // the map build decides spawns, tree and parcel solids, glass indices and water: a different build would desync silently (E-06)
+        if (Map != null && Map.BuildHash != 0 && h.MapHash != Map.BuildHash)
+        {
+            Reject(c, $"Map mismatch: this server runs map {Map.MapVersion} (build {Map.BuildHash:x16}), and your game has a different map build. Install the server's map folder, then start again.");
+            return;
+        }
         c.Id = _ids.Allocate(id => _clients.Values.Any(o => o.Id == id) || _byId.ContainsKey(id));
         if (c.Id == 0) { Reject(c, "The server is full."); return; }
         var name = LoadoutRules.SanitizePlayerName(h.Name);
@@ -523,8 +529,10 @@ public partial class NetServer : Node
         ReliableMsg m = new EventMsg((byte)kind, payload);
         PerfEventSent(kind, payload);
         var bytes = Wire.Encode(m); // encoded once: every recipient gets the same bytes (Tx copies them into the packet)
+        // effects that may be lost go unreliable on their own channel, so they never hold back the reliable events (A-03)
+        var effect = Wire.IsEffect(kind);
         foreach (var c in _clients.Values)
-            if (c.Joined) Tx(c.Peer!, Wire.ChanReliable, bytes, (int)ENetPacketPeer.FlagReliable);
+            if (c.Joined) Tx(c.Peer!, effect ? Wire.ChanEffects : Wire.ChanReliable, bytes, effect ? 0 : (int)ENetPacketPeer.FlagReliable);
     }
 
     void OnDebug(Client c, byte[] payload)
@@ -556,7 +564,7 @@ public partial class NetServer : Node
     {
         switch (e)
         {
-            case ScoreboardChanged: BroadcastEvent(EventKind.MatchState, MatchCodec.Encode(BuildMatchState())); break;
+            case ScoreboardChanged: _scoreDirty = true; break; // sent once the tick's events are in (FlushScoreboard)
             case PhaseChanged { Phase: MatchPhase.Ending }:
                 _roundsEnded++;
                 RoundEnded();
@@ -598,6 +606,20 @@ public partial class NetServer : Node
             case TargetKilled tk: OnTargetKilled(tk); break;
             case PlayerDied d: LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
         }
+    }
+
+    /// <summary>Set by a scoreboard change; cleared by the flush that sends the table.</summary>
+    bool _scoreDirty;
+
+    /// <summary>
+    /// Sends the scoreboard when it changed this tick, and about once a second regardless (the time left and the pings move). A kill
+    /// used to resend the whole table at once, so a tick with three kills sent it three times (A-04).
+    /// </summary>
+    void FlushScoreboard()
+    {
+        var due = _scoreDirty || _tick % Wire.TickRate == 0;
+        _scoreDirty = false;
+        if (due && _clients.Count > 0) BroadcastEvent(EventKind.MatchState, MatchCodec.Encode(BuildMatchState()));
     }
 
     MatchStateMsg BuildMatchState()
@@ -974,10 +996,13 @@ public partial class NetServer : Node
         foreach (var r in _rockets)
             ents.Add(EntityRecord.Make(r.Id, EntityType.Projectile, N(r.Pos),
                 MathF.Atan2(-r.Dir.X, -r.Dir.Z), MathF.Asin(Math.Clamp(r.Dir.Y, -1f, 1f)), 0, EntityState.Alive, r.Weapon));
+        // an empty tick (nothing changed for this client) sends no packet except the heartbeat, which carries the input ack (A-05)
+        var heartbeat = _tick % Wire.EmptyTickHeartbeat == 0;
         foreach (var c in _clients.Values)
         {
             if (!c.Joined) continue;
-            foreach (var pkt in c.Enc.Encode(_tick, c.Ack, c.SnapAck, ents)) Tx(c.Peer!, Wire.ChanData, pkt, 0);
+            foreach (var pkt in c.Enc.Encode(_tick, c.Ack, c.SnapAck, ents))
+                if (pkt.Length > SnapshotEncoder.HeaderBytes || heartbeat) Tx(c.Peer!, Wire.ChanData, pkt, 0);
         }
         var world = _match.Entities.Snapshot();
         foreach (var c in _clients.Values)

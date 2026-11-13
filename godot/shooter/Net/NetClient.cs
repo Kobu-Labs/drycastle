@@ -244,7 +244,7 @@ public partial class NetClient : Node
             switch (ev)
             {
                 case ENetConnection.EventType.Connect:
-                    Tx(peer, Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName, Token, SandboxRequested ? HelloFlags.Sandbox : (byte)0)), (int)ENetPacketPeer.FlagReliable);
+                    Tx(peer, Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName, Token, SandboxRequested ? HelloFlags.Sandbox : (byte)0, Map?.BuildHash ?? 0)), (int)ENetPacketPeer.FlagReliable);
                     _conn.Flush();
                     break;
                 case ENetConnection.EventType.Disconnect:

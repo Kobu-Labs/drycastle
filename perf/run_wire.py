@@ -85,19 +85,31 @@ def main():
     sev = read_events(d / "perf" / "events-server.csv")
     base_ms = a.rtt / 2
     lat, sent_total, missing = [], 0, 0
+    # per event kind (2 Shot, 3 Hit, 4 Kill, ...): reliable events must arrive; unreliable effects (A-03) may be lost, so each
+    # server stamp is matched to the first unmatched client stamp at or after it, within 2 s (a lost one is counted missing, not shifted)
+    KIND = {2: "Shot", 3: "Hit", 4: "Kill"}
+    per_kind = {}
     t_first = min((min(v) for v in sev.values()), default=0) + a.warm * 1_000_000
     for n in names:
         cev = read_events(d / "perf" / f"events-{n}.csv")
         for key, sts in sev.items():
-            for k, st in enumerate(sts):
+            ck = KIND.get(int(key[0]), key[0])
+            cts_all = cev.get(key, [])
+            j = 0
+            for st in sts:
                 if st < t_first:
                     continue
                 sent_total += 1
-                cts = cev.get(key)
-                if not cts or k >= len(cts):
-                    missing += 1
+                per_kind.setdefault(ck, {"sent": 0, "missing": 0, "lat": []})
+                per_kind[ck]["sent"] += 1
+                while j < len(cts_all) and cts_all[j] < st:
+                    j += 1
+                if j >= len(cts_all) or cts_all[j] - st > 2_000_000:
+                    missing += 1; per_kind[ck]["missing"] += 1
                     continue
-                lat.append((cts[k] - st) / 1000.0 - base_ms)
+                v = (cts_all[j] - st) / 1000.0 - base_ms
+                lat.append(v); per_kind[ck]["lat"].append(v)
+                j += 1
     # --- per-client 1 Hz logs
     started = completed = recon = expected = 0
     gaps, rtts, ticks_secs = [], [], 0
@@ -114,11 +126,14 @@ def main():
     slines = [l for l in (d / "server.log").read_text(errors="replace").splitlines() if l.startswith("server: stats")]
     res = {"machine": machine(), "args": vars(a),
            "reliable_event_extra_latency_ms": stats(lat), "reliable_events_expected": sent_total, "reliable_events_missing": missing,
+           "per_kind": {k: {"sent": v["sent"], "delivered_pct": 100.0 * (v["sent"] - v["missing"]) / v["sent"] if v["sent"] else None, "extra_latency_ms": stats(v["lat"])} for k, v in sorted(per_kind.items())},
            "ticks_started": started, "ticks_completed": completed, "tick_completion_pct_of_started": 100.0 * completed / started if started else None, "ticks_expected": expected, "tick_completion_pct_of_expected": 100.0 * completed / expected if expected else None,
            "client_seconds": ticks_secs, "snapshots_completed_per_client_s": completed / ticks_secs if ticks_secs else None, "reconciles_per_client_s": recon / ticks_secs if ticks_secs else None,
            "max_gap_ms_per_second": stats(gaps), "enet_rtt_ms": stats(rtts), "server_stats_tail": slines[-2:], "proxy": __import__("json").load(open(d / "proxy.json")) if (d / "proxy.json").exists() else None}
     write_json(d / "result.json", res)
     print(a.tag, "events", sent_total, "missing", missing, "extra latency ms", {k: round(v, 1) for k, v in stats(lat).items()})
+    for k, v in sorted(per_kind.items()):
+        print(f"  {k}: sent {v['sent']} delivered {100.0 * (v['sent'] - v['missing']) / v['sent'] if v['sent'] else 0:.2f}% extra latency ms", {kk: round(vv, 1) for kk, vv in stats(v['lat']).items() if kk in ('p50', 'p99', 'max')})
     print(f'  ticks expected {expected} started {started} completed {completed} ({res["tick_completion_pct_of_expected"]}% of expected) ; completed/s/client {res["snapshots_completed_per_client_s"]}; reconciles/s/client {res["reconciles_per_client_s"]}')
     print(f'  max gap/s {res["max_gap_ms_per_second"]} ; rtt {res["enet_rtt_ms"]}')
     print("  ", slines[-1:] , "->", d)
