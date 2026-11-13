@@ -72,12 +72,12 @@ public sealed class ServerPerf
     }
 
     /// <summary>End of a tick: one row. <paramref name="extra"/> are the tick's counts (players, bots, moving cars, entities, parked cars).</summary>
-    public void End(uint tick, int players, int bots, int carsMoving, int carsTotal, int entities, double nowS)
+    public void End(uint tick, int players, int bots, int carsMoving, int carsTotal, int entities, double nowS, int carsAsleep, int carsParkedAwake)
     {
         if (!_headerDone)
         {
             _sb.Append("tick,total_us,").Append(string.Join(',', Names.Select(n => n + "_us"))).Append(',').Append(string.Join(',', Names.Select(n => n + "_alloc")))
-               .Append(",alloc_bytes,gc0,gc1,gc2,rays,live_targets_calls,live_targets_elems,players,bots,cars_moving,cars_total,entities\n");
+               .Append(",alloc_bytes,gc0,gc1,gc2,rays,live_targets_calls,live_targets_elems,players,bots,cars_moving,cars_total,entities,cars_asleep,cars_parked_awake\n");
             _headerDone = true;
         }
         var total = (Stopwatch.GetTimestamp() - _t0) * 1_000_000 / Stopwatch.Frequency;
@@ -87,7 +87,8 @@ public sealed class ServerPerf
         _sb.Append(',').Append(GC.GetAllocatedBytesForCurrentThread() - _allocAtStart)
            .Append(',').Append(GC.CollectionCount(0) - _gc0).Append(',').Append(GC.CollectionCount(1) - _gc1).Append(',').Append(GC.CollectionCount(2) - _gc2)
            .Append(',').Append(PerfCounters.Rays - _rays0).Append(',').Append(PerfCounters.LiveTargetsCalls - _lt0).Append(',').Append(PerfCounters.LiveTargetsElems - _lte0)
-           .Append(',').Append(players).Append(',').Append(bots).Append(',').Append(carsMoving).Append(',').Append(carsTotal).Append(',').Append(entities).Append('\n');
+           .Append(',').Append(players).Append(',').Append(bots).Append(',').Append(carsMoving).Append(',').Append(carsTotal).Append(',').Append(entities)
+           .Append(',').Append(carsAsleep).Append(',').Append(carsParkedAwake).Append('\n');
         if (nowS >= _flushAt) { Flush(); _flushAt = nowS + 2; }
     }
 
@@ -119,7 +120,13 @@ public partial class NetServer
         if (_perf == null) return;
         var joined = _clients.Values.Count(c => c.Joined);
         var moving = _cars.Count(c => c.Velocity.LengthSquared() > 0.01f || c.Seat.Occupied);
-        _perf.End(_tick, joined, _byId.Count - joined, moving, _cars.Count, _match.Entities.Snapshot().Count + joined + _cars.Count + _rockets.Count, _elapsed);
+        var asleep = 0; var parkedAwake = 0; // parked = driverless, not a flyer or a driven type: the only cars the sleep rule covers
+        foreach (var c in _cars)
+        {
+            if (c.Asleep) asleep++;
+            else if (!c.Destroyed && !c.Seat.Occupied && !c.Flies && !c.Drives) parkedAwake++;
+        }
+        _perf.End(_tick, joined, _byId.Count - joined, moving, _cars.Count, _match.Entities.Snapshot().Count + joined + _cars.Count + _rockets.Count, _elapsed, asleep, parkedAwake);
     }
 
     // ---- lag-compensation log (measurement plan B1, ADR 0013): --perf-lagcomp. Every hitscan shot is resolved three ways, one CSV row per shot in

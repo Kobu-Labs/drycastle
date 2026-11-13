@@ -149,7 +149,7 @@ public partial class ServerCar : CharacterBody3D
     /// <summary>Gone from the world after the blast: no collision, no driving; comes back through <see cref="Reset"/>.</summary>
     public void Destroy()
     {
-        Destroyed = true; DetonateAt = -1; Asleep = false;
+        Destroyed = true; DetonateAt = -1; Asleep = false; RestCount = 0;
         CollisionLayer = 0;
         Velocity = Vector3.Zero; State.Speed = 0;
         Flight.Velocity = System.Numerics.Vector3.Zero;
@@ -159,7 +159,7 @@ public partial class ServerCar : CharacterBody3D
     /// <summary>Back to the origin. <paramref name="repair"/> restores the HP too: not on an abandon return (a smoking vehicle stays damaged).</summary>
     public void Reset(bool repair = true)
     {
-        Asleep = false;
+        Asleep = false; RestCount = 0;
         if (repair || Destroyed)
         {
             Hp = Def.Hp; LastAttacker = 0; LastWeapon = 0; DetonateAt = -1;
@@ -226,7 +226,7 @@ public partial class ServerCar : CharacterBody3D
     /// </summary>
     public void ApplyBump(System.Numerics.Vector3 move, System.Numerics.Vector3 deltaV)
     {
-        Asleep = false;
+        Wake();
         if (Flies)
         {
             Flight.Position += move;
@@ -288,17 +288,20 @@ public partial class ServerCar : CharacterBody3D
     /// <see cref="Wake"/> (a rider, a hit, a bump, a blast, a reset).
     /// </summary>
     public bool Asleep;
+    /// <summary>Consecutive resting driverless steps so far (<see cref="ParkedRules"/> hysteresis).</summary>
+    public int RestCount;
 
     /// <summary>Puts a parked car back into the step (it was disturbed).</summary>
-    public void Wake() => Asleep = false;
+    public void Wake() { Asleep = false; RestCount = 0; }
 
     /// <summary>One driverless step (throttle, steer and handbrake zero), then whether the car now rests (<see cref="Asleep"/>).</summary>
     public void StepParked(float dt, Water water)
     {
         var before = GlobalPosition;
         Step(Def, 0, 0, false, dt, water);
-        var moved = GlobalPosition.X != before.X || GlobalPosition.Y != before.Y || GlobalPosition.Z != before.Z;
-        Asleep = ParkedRules.RestsAfterStep(moved, State.Speed, State.YawRate, Afloat || IsOnFloor());
+        var moved = before.DistanceTo(GlobalPosition);
+        RestCount = ParkedRules.NextRestCount(RestCount, ParkedRules.IsAtRest(moved, State.Speed, State.YawRate, Afloat || IsOnFloor()));
+        Asleep = ParkedRules.Sleeps(RestCount);
     }
 
     public void Step(VehicleDef def, float throttle, float steer, bool handbrake, float dt, Water water)
