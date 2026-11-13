@@ -5,16 +5,16 @@ using Vector2 = Godot.Vector2;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The tactical map: a full-screen, north-up map sheet of the whole map, opened with the map key (M). It is view only: no
-/// panning, zooming or waypoints, and the mouse and the player's controls stay as they are. It is built from three parts:
-/// - the sheet (<see cref="SheetLayer"/>): terrain, parcels and roads from the shared <see cref="MapBase"/>, a labelled grid, the
+/// The tactical map: a full-screen, north-up map sheet of the whole map, opened with the map key (M). It frees the mouse (the
+/// shell asks <see cref="Hud.TacticalMapOpen"/>) and the legs keep working, but the view does not turn and nothing fires. Left
+/// click, or Enter / the pad's A at the keyboard cursor (arrows, the D-pad), sets the player's waypoint; clicking it again or
+/// right-clicking clears it. It is built from three parts:
+/// - the sheet (<see cref="SheetLayer"/>): the ground's own colours (the terrain mesh, top-down) with roads, a labelled grid, the
 ///   frame and its tick marks. Godot keeps its draw commands, so it is redrawn only when the layout or the map changes;
-/// - the markers (<see cref="MarkerLayer"/>): the player's arrow, vehicles, friends and UAV pings from the shared
-///   <see cref="MapMarkers"/> (the data the minimap shows), redrawn each frame while the map is open;
-/// - the margin furniture: a left panel (title, compass rose with the heading, grid reference, position) and a right panel
-///   (legend, scale bar, how to close).
-/// While closed it is invisible and does not process. The sheet's maths (cell size, references, heading, scale bar, layout)
-/// is in <see cref="TacticalMapMath"/> and <see cref="TacticalMapLayout"/>.
+/// - the markers (<see cref="MarkerLayer"/>): the player's arrow, vehicles, friends, UAV pings and the waypoint from the shared
+///   <see cref="MapMarkers"/> (the data the minimap shows), redrawn each frame while the map is open; it takes the clicks;
+/// - one panel on the right: the compass rose and the current grid reference. Nothing else (no legend, scale or readouts).
+/// While closed it is invisible and does not process. The sheet's maths is in <see cref="TacticalMapMath"/> and <see cref="TacticalMapLayout"/>.
 /// </summary>
 public sealed partial class TacticalMap : Control
 {
@@ -36,110 +36,71 @@ public sealed partial class TacticalMap : Control
 
     readonly SheetLayer _sheet;
     readonly MarkerLayer _markers;
-    readonly PanelContainer _left, _right;
-    readonly Label _subtitle, _gridValue, _positionValue, _headingValue, _hint;
+    readonly PanelContainer _right;
+    readonly Label _gridValue;
     readonly CompassRose _rose = new();
-    readonly ScaleBar _scale = new();
-    readonly MapSwatch[] _swatches;
+    readonly Func<bool> _typing;
+    /// <summary>The keyboard / pad cursor on the sheet (layer pixels), shown only after it was moved and until the mouse moves.</summary>
+    Vector2 _cursor;
+    bool _cursorShown;
 
     // what the readouts show now, so a label is written only when its value changes
     (int Column, int Row) _shownCell = (-1, -1);
-    int _shownE = -1, _shownN = -1, _shownHeading = -1;
+    int _shownHeading = -1;
     bool _shownNone;
-    string _positionFormat = "", _headingFormat = "";
-    readonly string[] _dir = new string[8];
 
     public bool IsOpen => _open;
 
-    public TacticalMap(MapMarkers markers)
+    /// <summary>The map; <paramref name="typing"/> says the chat box has the keyboard (Enter is then the chat's).</summary>
+    public TacticalMap(MapMarkers markers, Func<bool> typing)
     {
         _m = markers;
+        _typing = typing;
         MouseFilter = MouseFilterEnum.Ignore;
         Visible = false;
         SetProcess(false);
+        SetProcessInput(false);
 
         _sheet = new SheetLayer(this) { MouseFilter = MouseFilterEnum.Ignore, TextureFilter = TextureFilterEnum.LinearWithMipmaps };
-        _markers = new MarkerLayer(this) { MouseFilter = MouseFilterEnum.Ignore };
+        _markers = new MarkerLayer(this) { MouseFilter = MouseFilterEnum.Stop };
         AddChild(_sheet);
         AddChild(_markers);
 
-        // left: title, compass rose with the heading, grid reference and position
-        _left = Panel();
-        var l = Column(_left);
-        l.AddChild(Text(Strings.T("map.title"), "HudHead"));
-        _subtitle = Text("", "HudSmall");
-        l.AddChild(_subtitle);
-        l.AddChild(Gap());
-        var roseRow = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
-        roseRow.AddChild(_rose);
-        l.AddChild(roseRow);
-        l.AddChild(Gap());
-        l.AddChild(Text(Strings.T("map.heading"), "HudSmall"));
-        _headingValue = Text("", "HudBig");
-        l.AddChild(_headingValue);
-        l.AddChild(Text(Strings.T("map.grid"), "HudSmall"));
-        _gridValue = Text("", "HudBig");
-        l.AddChild(_gridValue);
-        l.AddChild(Text(Strings.T("map.position"), "HudSmall"));
-        _positionValue = Text("", "HudDim");
-        l.AddChild(_positionValue);
-        l.AddChild(Text(Strings.T("map.position.note"), "HudSmall"));
-        AddChild(_left);
-
-        // right: legend, scale bar, how to close
+        // right: the compass rose and the current grid reference
         _right = Panel();
         var r = Column(_right);
-        r.AddChild(Text(Strings.T("map.legend"), "HudSmall"));
-        _swatches = new[]
-        {
-            new MapSwatch(MapSwatch.Kind.Player), new MapSwatch(MapSwatch.Kind.Vehicle),
-            new MapSwatch(MapSwatch.Kind.Friend), new MapSwatch(MapSwatch.Kind.Ping, _m),
-        };
-        var names = new[] { "map.legend.you", "map.legend.vehicle", "map.legend.friend", "map.legend.enemy" };
-        for (var i = 0; i < _swatches.Length; i++)
-        {
-            var row = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-            row.AddThemeConstantOverride("separation", ShooterTheme.Space);
-            row.AddChild(_swatches[i]);
-            var label = Text(Strings.T(names[i]), "HudDim");
-            label.ClipText = true;
-            label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            row.AddChild(label);
-            r.AddChild(row);
-        }
+        var roseRow = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
+        roseRow.AddChild(_rose);
+        r.AddChild(roseRow);
         r.AddChild(Gap());
-        r.AddChild(Text(Strings.T("map.scale"), "HudSmall"));
-        r.AddChild(_scale);
-        r.AddChild(Gap());
-        _hint = Text("", "HudSmall");
-        r.AddChild(_hint);
+        r.AddChild(Text(Strings.T("map.grid"), "HudSmall"));
+        _gridValue = Text("", "HudBig");
+        r.AddChild(_gridValue);
         AddChild(_right);
     }
 
     // ---- open and close ----
 
-    /// <summary>Shows the map over <paramref name="map"/> (null: no map data, the sheet says so). Reads the key names and strings once.</summary>
+    /// <summary>Shows the map over <paramref name="map"/> (null: no map data, the sheet says so).</summary>
     public void Open(MapBase? map)
     {
         if (!ReferenceEquals(map, _base)) { _base = map; _tex = null; _texSide = 0; }
-        for (var i = 0; i < 8; i++) _dir[i] = Strings.T("map.dir." + i);
-        _positionFormat = Strings.T("map.position.value");
-        _headingFormat = Strings.T("map.heading.value");
-        _rose.SetLabels(_dir[0], _dir[2], _dir[4], _dir[6]);
-        Set(_hint, Strings.F("map.hint", InputBindings.Name("map")));
-        _shownCell = (-1, -1); _shownE = _shownN = _shownHeading = -1; _shownNone = false;
+        _rose.SetLabels(Strings.T("map.dir.0"), Strings.T("map.dir.2"), Strings.T("map.dir.4"), Strings.T("map.dir.6"));
+        _shownCell = (-1, -1); _shownHeading = -1; _shownNone = false;
+        _cursorShown = false;
         _layoutDirty = true;
         _open = true;
         Visible = true;
         SetProcess(true);
+        SetProcessInput(true);
         if (GameSettings.Current.ReduceMotion) SetAlpha(1f);
-        foreach (var s in _swatches) s.QueueRedraw();
     }
 
     /// <summary>Starts hiding the map (a short fade, none with reduce motion). It stops processing once it is gone.</summary>
     public void Close()
     {
         _open = false;
+        SetProcessInput(false);
         if (GameSettings.Current.ReduceMotion) FinishClose();
     }
 
@@ -170,6 +131,80 @@ public sealed partial class TacticalMap : Control
         _markers.QueueRedraw();
     }
 
+    // ---- the waypoint: click, or the keyboard / pad cursor ----
+
+    /// <summary>How close (layer pixels) a click must be to the waypoint to take it away instead of moving it.</summary>
+    const float WaypointHitPx = 16f;
+
+    /// <summary>Sets or clears the waypoint at a layer position (a click, or the cursor + Enter). Ignored outside the map square.</summary>
+    void PlaceAt(Vector2 layerPos)
+    {
+        if (_base is not { } b || _side <= 0) return;
+        var f = (layerPos - new Vector2(Gutter, Gutter)) / _side;
+        if (f.X < 0f || f.Y < 0f || f.X > 1f || f.Y > 1f) return;
+        var g = TacticalMapMath.FromSheet(new System.Numerics.Vector2(f.X, f.Y), b.Origin.X, b.SouthZ, b.SideMetres);
+        _m.Waypoint.Click(g, WaypointHitPx / Math.Max(_k, 1e-4f));
+    }
+
+    /// <summary>Keyboard and pad: arrows or the D-pad move a cursor over the sheet, Enter or A places the waypoint (or takes it away under the cursor), Delete clears it. The chat box keeps its own Enter.</summary>
+    public override void _Input(InputEvent e)
+    {
+        if (!_open || _base == null || _side <= 0 || _typing()) return;
+        var step = _cell * _k * 0.5f;
+        var move = Vector2.Zero;
+        switch (e)
+        {
+            case InputEventMouseMotion: _cursorShown = false; return;
+            case InputEventKey { Pressed: true } k:
+                switch (k.Keycode)
+                {
+                    case Key.Left: move = Vector2.Left; break;
+                    case Key.Right: move = Vector2.Right; break;
+                    case Key.Up: move = Vector2.Up; break;
+                    case Key.Down: move = Vector2.Down; break;
+                    case Key.Enter or Key.KpEnter when !k.Echo: Accept(); return;
+                    case Key.Delete when !k.Echo: _m.Waypoint.Clear(); GetViewport().SetInputAsHandled(); return;
+                }
+                break;
+            case InputEventJoypadButton { Pressed: true } j:
+                switch (j.ButtonIndex)
+                {
+                    case JoyButton.DpadLeft: move = Vector2.Left; break;
+                    case JoyButton.DpadRight: move = Vector2.Right; break;
+                    case JoyButton.DpadUp: move = Vector2.Up; break;
+                    case JoyButton.DpadDown: move = Vector2.Down; break;
+                    case JoyButton.A: Accept(); return;
+                    case JoyButton.X: _m.Waypoint.Clear(); GetViewport().SetInputAsHandled(); return;
+                }
+                break;
+        }
+        if (move == Vector2.Zero) return;
+        if (!_cursorShown) StartCursor();
+        var lo = new Vector2(Gutter, Gutter);
+        _cursor = (_cursor + move * step).Clamp(lo, lo + new Vector2(_side, _side));
+        GetViewport().SetInputAsHandled();
+
+        void Accept()
+        {
+            if (!_cursorShown) { StartCursor(); GetViewport().SetInputAsHandled(); return; } // the first press only shows where it is
+            PlaceAt(_cursor);
+            GetViewport().SetInputAsHandled();
+        }
+    }
+
+    /// <summary>Shows the cursor, at the waypoint if one is set, else at the player, else in the middle.</summary>
+    void StartCursor()
+    {
+        _cursorShown = true;
+        var f = new Vector2(0.5f, 0.5f);
+        if (_base is { } b)
+        {
+            var at = _m.Waypoint.At ?? (_m.HasPlayer ? new System.Numerics.Vector2(_m.Player.X, _m.Player.Y) : (System.Numerics.Vector2?)null);
+            if (at is { } a) { var t = TacticalMapMath.ToSheet(a, b.Origin.X, b.SouthZ, b.SideMetres); f = new Vector2(Math.Clamp(t.X, 0f, 1f), Math.Clamp(t.Y, 0f, 1f)); }
+        }
+        _cursor = new Vector2(Gutter, Gutter) + f * _side;
+    }
+
     // ---- layout ----
 
     void Layout()
@@ -186,8 +221,6 @@ public sealed partial class TacticalMap : Control
             layer.Size = frame.Size;
         }
         var panelW = Math.Clamp(frame.Position.X - PanelGap - ShooterTheme.Margin, PanelMin, PanelMax);
-        _left.Position = new Vector2(frame.Position.X - PanelGap - panelW, frame.Position.Y);
-        _left.Size = new Vector2(panelW, 0);
         _right.Position = new Vector2(frame.End.X + PanelGap, frame.Position.Y);
         _right.Size = new Vector2(panelW, 0);
 
@@ -203,23 +236,19 @@ public sealed partial class TacticalMap : Control
                 _rowLabels = new string[cells];
                 for (var i = 0; i < cells; i++) { _colLabels[i] = TacticalMapMath.ColumnLabel(i); _rowLabels[i] = TacticalMapMath.RowLabel(i); }
             }
-            Set(_subtitle, Strings.F("map.subtitle", _cell));
             var wanted = MinimapView.TextureSide(b.SideMetres, _k * Math.Max(0.01f, GetGlobalTransformWithCanvas().Scale.X), MinTextureSide, MaxTextureSide);
             if (_tex == null || MinimapView.NeedsRebuild(_texSide, wanted)) { _texSide = wanted; _tex = b.Texture(wanted); }
-            _scale.Configure(_k, panelW - 2 * ShooterTheme.Space - 72f);
         }
         else
         {
             _k = 0; _cell = 0; _cells = 0;
-            Set(_subtitle, Strings.T("map.none"));
-            _scale.Configure(0f, 0f);
         }
         _sheet.QueueRedraw();
     }
 
     // ---- readouts ----
 
-    /// <summary>Grid reference, position and heading. Each label is written only when its value changes.</summary>
+    /// <summary>The compass heading and the grid reference. Each is written only when its value changes.</summary>
     void UpdateReadouts()
     {
         var has = _m.HasPlayer;
@@ -227,7 +256,6 @@ public sealed partial class TacticalMap : Control
         if (heading != _shownHeading)
         {
             _shownHeading = heading;
-            Set(_headingValue, has ? string.Format(_headingFormat, heading, _dir[TacticalMapMath.Octant(heading)]) : Strings.T("map.none"));
             _rose.SetHeading(heading);
         }
         if (_base is not { } b || !has)
@@ -235,9 +263,8 @@ public sealed partial class TacticalMap : Control
             if (!_shownNone)
             {
                 _shownNone = true;
-                _shownCell = (-1, -1); _shownE = _shownN = -1;
+                _shownCell = (-1, -1);
                 Set(_gridValue, Strings.T("map.none"));
-                Set(_positionValue, Strings.T("map.none"));
             }
             return;
         }
@@ -245,9 +272,6 @@ public sealed partial class TacticalMap : Control
         var map = TacticalMapMath.ToMap(new System.Numerics.Vector2(_m.Player.X, _m.Player.Y), b.Origin.X, b.SouthZ);
         var cell = TacticalMapMath.CellOf(map, b.SideMetres, _cell);
         if (cell != _shownCell) { _shownCell = cell; Set(_gridValue, TacticalMapMath.Reference(cell.Column, cell.Row)); }
-        var e = Math.Clamp((int)MathF.Floor(map.X), 0, (int)b.SideMetres);
-        var n = Math.Clamp((int)MathF.Floor(map.Y), 0, (int)b.SideMetres);
-        if (e != _shownE || n != _shownN) { _shownE = e; _shownN = n; Set(_positionValue, string.Format(_positionFormat, e, n)); }
     }
 
     static void Set(Label l, string text) { if (l.Text != text) l.Text = text; }
@@ -383,6 +407,26 @@ public sealed partial class TacticalMap : Control
 
         readonly List<GunfireBlip> _blipScratch = new();
 
+        public override void _GuiInput(InputEvent e)
+        {
+            if (!_o._open || e is not InputEventMouseButton { Pressed: true } mb) return;
+            if (mb.ButtonIndex == MouseButton.Left) _o.PlaceAt(mb.Position);
+            else if (mb.ButtonIndex == MouseButton.Right) _o._m.Waypoint.Clear();
+            else return;
+            AcceptEvent();
+        }
+
+        /// <summary>A plain crosshair (outlined, so it reads on any ground) for the keyboard / pad cursor.</summary>
+        void DrawCursor(Vector2 p)
+        {
+            const float r = 14f, gap = 4f;
+            foreach (var d in new[] { Vector2.Left, Vector2.Right, Vector2.Up, Vector2.Down })
+            {
+                DrawLine(p + d * gap, p + d * r, ShooterTheme.Outline, 5f);
+                DrawLine(p + d * gap, p + d * r, ShooterTheme.Waypoint, 2f);
+            }
+        }
+
         public override void _Draw()
         {
             if (_o._base is not { } b || !_o._m.HasPlayer || _o._side <= 0) return;
@@ -398,8 +442,10 @@ public sealed partial class TacticalMap : Control
                 var still = GameSettings.Current.ReduceMotion;
                 foreach (var bl in _blipScratch) MapGlyphs.Blip(this, At(bl.Position, b), bl, still, 1.3f);
             }
+            if (m.Waypoint.At is { } wp) MapGlyphs.Waypoint(this, At(wp, b), 1.3f);
             var me = At(new System.Numerics.Vector2(m.Player.X, m.Player.Y), b);
             MapGlyphs.Player(this, me, TacticalMapMath.HeadingRadians(m.Yaw));
+            if (_o._cursorShown) DrawCursor(_o._cursor);
         }
     }
 
@@ -466,82 +512,10 @@ public sealed partial class TacticalMap : Control
             DrawString(font, new Vector2(at.X - 20f, at.Y + drop), text, HorizontalAlignment.Center, 40f, fs, colour);
     }
 
-    // ---- the scale bar ----
-
-    /// <summary>A two-segment scale bar of a round length in metres (see <see cref="TacticalMapMath.ScaleBarMetres"/>), with its labels. Configured on layout, drawn once.</summary>
-    sealed partial class ScaleBar : Control
-    {
-        float _px;
-        string _zero = "0", _mid = "", _end = "";
-
-        public ScaleBar()
-        {
-            CustomMinimumSize = new Vector2(0, 48);
-            MouseFilter = MouseFilterEnum.Ignore;
-        }
-
-        public void Configure(float pxPerMetre, float maxPx)
-        {
-            var metres = TacticalMapMath.ScaleBarMetres(pxPerMetre, maxPx);
-            _px = metres * pxPerMetre;
-            var fmt = Strings.T("map.scale.m");
-            _mid = metres > 0 ? Num(metres / 2f) : "";
-            _end = metres > 0 ? string.Format(fmt, Num(metres)) : "";
-            QueueRedraw();
-        }
-
-        static string Num(float v) => v.ToString(v < 1f ? "0.#" : "0", System.Globalization.CultureInfo.InvariantCulture);
-
-        public override void _Draw()
-        {
-            if (_px <= 0f) return;
-            var font = GetThemeDefaultFont();
-            const int fs = ShooterTheme.FontSmall;
-            var x0 = 4f;
-            const float y = 8f, h = 8f;
-            DrawRect(new Rect2(x0, y, _px / 2f, h), ShooterTheme.Text);
-            DrawRect(new Rect2(x0 + _px / 2f, y, _px / 2f, h), ShooterTheme.Outline);
-            DrawRect(new Rect2(x0, y, _px, h), ShooterTheme.Text, false, ShooterTheme.Border);
-            var labelY = y + h + 4f + font.GetAscent(fs);
-            DrawString(font, new Vector2(x0 - 30f, labelY), _zero, HorizontalAlignment.Center, 60f, fs, ShooterTheme.Dim);
-            DrawString(font, new Vector2(x0 + _px / 2f - 30f, labelY), _mid, HorizontalAlignment.Center, 60f, fs, ShooterTheme.Dim);
-            DrawString(font, new Vector2(x0 + _px - 30f, labelY), _end, HorizontalAlignment.Center, 60f, fs, ShooterTheme.Dim);
-        }
-    }
-
-    // ---- the legend swatches: the same glyphs as the markers, so the legend always matches ----
-
-    sealed partial class MapSwatch : Control
-    {
-        public enum Kind { Player, Vehicle, Friend, Ping }
-
-        readonly Kind _kind;
-        readonly MapMarkers? _m;
-
-        public MapSwatch(Kind kind, MapMarkers? markers = null)
-        {
-            _kind = kind;
-            _m = markers;
-            CustomMinimumSize = new Vector2(32, 32);
-            MouseFilter = MouseFilterEnum.Ignore;
-        }
-
-        public override void _Draw()
-        {
-            var c = Size / 2f;
-            switch (_kind)
-            {
-                case Kind.Player: MapGlyphs.Player(this, c, 0f); break;
-                case Kind.Vehicle: MapGlyphs.Vehicle(this, c); break;
-                case Kind.Friend: MapGlyphs.Friend(this, c); break;
-                default: MapGlyphs.Ping(this, c, _m?.TeamColours ?? false); break;
-            }
-        }
-    }
 }
 
 /// <summary>
-/// The tactical map's marker shapes, drawn by the map and its legend alike. Shapes differ as well as colours (never colour
+/// The tactical map's marker shapes, drawn by the map and the minimap alike. Shapes differ as well as colours (never colour
 /// only): the player is an arrow in a ring, vehicles are squares, friends are rings, enemy pings are discs. These are the
 /// minimap's shapes, a little larger for the big sheet.
 /// </summary>
@@ -582,6 +556,14 @@ static class MapGlyphs
         var ink = ShooterTheme.Enemy; ink.A = a;
         c.DrawPolyline(pts, shell, 4f * scale, true);
         c.DrawPolyline(pts, ink, 2f * scale, true);
+    }
+
+    /// <summary>The waypoint: a downward triangle whose tip is the point, in the waypoint green (a shape no other marker has; never colour only).</summary>
+    public static void Waypoint(CanvasItem c, Vector2 p, float scale)
+    {
+        var tri = new[] { p + new Vector2(-9, -15) * scale, p + new Vector2(9, -15) * scale, p };
+        c.DrawColoredPolygon(new[] { tri[0] + new Vector2(-2, -2), tri[1] + new Vector2(2, -2), tri[2] + new Vector2(0, 3) }, ShooterTheme.Outline);
+        c.DrawColoredPolygon(tri, ShooterTheme.Waypoint);
     }
 
     /// <summary>The player: an arrow pointing along the view, <paramref name="rotation"/> radians clockwise from up (north on the sheet), in a ring so nothing else on the map looks like it.</summary>

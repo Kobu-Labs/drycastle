@@ -85,30 +85,60 @@
 - the bus
 
 # Holy Mass
-- in nomine patris et spritus sancti playing in the churh
-    - i will provode the asset, it will be with non trivial echo, as if it was really played in the church
+Settled design (2026-11-13). Numbers live in `data/holy_mass.json`.
+- chant: in nomine patris et spiritus sancti, positional in the church, non trivial echo
+    - asset provided later, ~1 min, loops; placeholder https://www.youtube.com/watch?v=XTMS5LgXCGQ
+- announcement: church bells, audible village-wide (no intel room)
+- started with `/event mass`, ended with `/event current end`; does not wait for the Bigfoot lifecycle (#264), brings the minimum it needs
+## Church interior
+- permanent in the model (`church_solids`), real shell collision like bunkers; new ADR extending 0009
+- doors are solid outside the event, the event opens them; client hides the interior while doors are shut
+- nave, aisle, bench rows, altar, sacristy door next to the altar, gallery (second floor) with seats and stairs
+- door at least 2 m wide (NPC navigation, 0.5 m radius)
+- blast shelter like a bunker room: a blast outside does not hurt players inside and the other way round
+- pipeline exports `church.json`: seat poses, aisle path, altar and monk spots, demon wall anchors, doors
 ## Mechanics
-- the church opens its interior - models needs to be updated
-- citizens NPCs will start exiting their houses and go to sit on the benches in the churh
-- citizens can be killed
-- citizens will continue to enter the church and take seats unless its capacity was filled in terms of seats
-    - this should be tweakable, but limited by the geamoetry of the churck
-    - we can place seats along the seconds floor as well
-- the pastor and some more monks will be in front of the altar
-- when pastor is killed the song will stop playing, the monks will look at the pastor shocked
-- a closed door will be next to the altar, when pastor is killed after some while a new one appears and takes their place, song will start playing shortly after
-- some basic hand gestures should be added to the pastor
-- player can take a seat and sit trough the whole Holy Mass
-    - when its completed everybody the church will just close and the player will be teleported in front of it, looking ats its door
-    - a very angelic like text will appear in the middle of the screen, something like "You feel a divine blessing"
-- if the pastor is killed three times it will turn into a demonic figure, crawling on all fours on the walls, throwing fireballs on fireballs at the players
-- killing the devils will not close the churck immediately, only after every player leaves,
-- after killing the devil a hellish screen of "You feel cursed" will appear
+- timeline: gather (~2 min) -> Mass (2 min default, chant looped) -> end
+- citizens: new world entity, not bots; count = seat count (ground floor + gallery, tweakable, limited by geometry)
+    - spawn staggered at house doors near the church, navmesh to the church door, scripted path to their seat
+    - can be killed (one hit), not replaced, no other consequence; bots ignore them
+- pastor and monks in front of the altar; pastor has basic hand gestures
+- pastor killed: chant stops, monks look at the pastor shocked, Mass progress pauses (no reset)
+    - ~10 s later a new pastor comes out of the sacristy door, chant resumes ~5 s after
+- monks can be killed, no effect, no respawn
+- player takes a free seat with interact; seated players cannot fire and can be killed
+- blessing needs: seated at Mass end, seated for at least 80 % of the Mass, not a sinner
+    - sinner = killed a citizen, monk or pastor during this event
+- Mass completed: church closes, seated players are teleported in front of it facing the door, angelic text "You feel a divine blessing"
+## Demon
+- pastor killed three times: it turns into a demonic figure, the doors slam shut and lock in whoever is inside
+- the Mass is void (no blessing this event), remaining citizens flee or die
+- crawls on all fours on walls and ceiling: scripted movement between baked anchors, not physics
+- throws fireballs: arcing projectiles, small splash, burn
+- hit-count damage model like Bigfoot, scaled by players inside
+- wipe: heals, doors reopen, waits
+- killed: hellish text "You feel cursed" for every player with at least one hit; doors open, the church closes only after every player leaves
 ## Reward
+Both are a status, not an Item: no slot, no drop. They survive a round change and end when the player dies.
 - underwent the Mass - divine blessing
-    - when player dies they can be brought back from death (only once)
-- killed - devils curse
-    - adds fire damage to bullets, these will visually set players ablaze, dealing around 0.5hp/s for 10s
+    - lethal damage is negated once: full HP in place, ~1 s invulnerable, golden flash; streak kept, attacker gets no kill
+- killed the demon - devils curse (pure buff)
+    - adds fire damage to bullets, these visually set players ablaze, dealing 0.5hp/s for 10s
+## Assets
+- Synty packs where they fit, instead of modelling: citizens, pastor, monks, demon, benches, altar and other interior props
+- picks (pack in brackets):
+    - pastor `SM_Chr_Priest_01`, monks `SM_Chr_Monk_01`, lectern `SM_Prop_Church_Lectern_01` (POLYGON Fantasy Kingdom, Godot)
+    - pew `SM_Prop_Pew_01` / `SM_Prop_Pew_Large_01`, holy water `SM_Prop_Holy_Water_01`, altar `SM_Prop_Altar_Table_01` (POLYGON Dark Fantasy, Godot)
+    - citizens `SM_Chr_Male_Peasant_01`, `SM_Chr_Female_Peasant_01`, `SM_Chr_Female_Peasant_02` (POLYGON Fantasy Characters, Unity package: meshes are in `Models/Characters.fbx`; 15 texture variants 01-05 x A-C for variety)
+    - demon `SM_Chr_Demon_01` (POLYGON Horror Mansion, Unity package: mesh is in `Models/Characters.fbx`, import the FBX and rebuild the material by hand)
+- no pack ships animations: walk, sit, gestures, shocked look, death and the demon crawl need another source
+- the church shell stays the code model (it fits the real footprint); Synty props are placed inside it at `church.json` poses
+- Synty is paid: only in gitignored `assets-private/`, never in this public repo (#265); every Synty asset needs a CC0 or code fallback so the game runs without the pack
+## Tickets
+1. Enterable church (pipeline, ADR, `church.json`)
+2. Citizen NPC entity (walk to seat, sit, die)
+3. Mass event and blessing (timeline, pastor, sitting, status concept, minimal `/event mass`)
+4. Demon and curse
 
 # Carousel/Carnival/Fair
 - techno music

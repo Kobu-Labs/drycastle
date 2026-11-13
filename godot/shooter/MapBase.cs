@@ -80,6 +80,9 @@ public sealed class MapBase
         return true;
     }
 
+    /// <summary>Terrain height at ground (x, z), the map's mean where the terrain has no triangle.</summary>
+    public float HeightAt(float x, float z) => _map.GroundHeightOrMean(x, z);
+
     /// <summary>The terrain texture of <paramref name="side"/> texels, rasterised on first request and then kept.</summary>
     public ImageTexture Texture(int side)
     {
@@ -99,8 +102,12 @@ public sealed class MapBase
         var px = new byte[side * side * 4];
         var terrain = Rgba(Terrain);
         for (var i = 0; i < px.Length; i += 4) Buffer.BlockCopy(terrain, 0, px, i, 4);
-        foreach (var parcel in _map.Parcels.Values)
-            Fill(px, side, metresPerTexel, Rgba(ParcelColour(parcel.Kind)), parcel.Rings.Select(r => r.Select(v => new NVector2(v.X, v.Y)).ToArray()).ToList(), parcel.Bounds);
+        // the real ground colour from the terrain mesh wherever the map has terrain; the default shows where it is cut off. A map with no terrain mesh falls back to flat parcel colours.
+        if (!PaintTerrain(px, side, metresPerTexel))
+        {
+            foreach (var parcel in _map.Parcels.Values)
+                Fill(px, side, metresPerTexel, Rgba(ParcelColour(parcel.Kind)), parcel.Rings.Select(r => r.Select(v => new NVector2(v.X, v.Y)).ToArray()).ToList(), parcel.Bounds);
+        }
         foreach (var region in _map.RegionPaints)
         {
             var box = new Rect2(region.Ring[0], Vector2.Zero);
@@ -111,6 +118,65 @@ public sealed class MapBase
         img.GenerateMipmaps();
         return ImageTexture.CreateFromImage(img);
     }
+
+    /// <summary>Rasterises the terrain meshes' triangles with their interpolated vertex colours (top-down, so each texel is the ground colour at that point). False when there is no coloured terrain.</summary>
+    bool PaintTerrain(byte[] px, int side, float metresPerTexel)
+    {
+        var any = false;
+        foreach (var mi in _map.TerrainVisuals)
+        {
+            if (!GodotObject.IsInstanceValid(mi) || mi.Mesh is not { } mesh) continue;
+            for (var s = 0; s < mesh.GetSurfaceCount(); s++)
+            {
+                var arrays = mesh.SurfaceGetArrays(s);
+                var v = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+                var col = arrays[(int)Mesh.ArrayType.Color].AsColorArray();
+                var idx = arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
+                if (col.Length != v.Length) continue;
+                var n = idx.Length > 0 ? idx.Length : v.Length;
+                for (var t = 0; t + 2 < n; t += 3)
+                {
+                    var a = idx.Length > 0 ? idx[t] : t;
+                    var b = idx.Length > 0 ? idx[t + 1] : t + 1;
+                    var c = idx.Length > 0 ? idx[t + 2] : t + 2;
+                    Triangle(px, side, metresPerTexel, v[a], v[b], v[c], col[a], col[b], col[c]);
+                }
+                any = true;
+            }
+        }
+        return any;
+    }
+
+    /// <summary>One triangle (ground x, z from the vertices' X and Z) into the texel grid: every texel centre inside it takes the barycentric blend of the three colours.</summary>
+    void Triangle(byte[] px, int side, float mpt, Vector3 a, Vector3 b, Vector3 c, Color ca, Color cb, Color cc)
+    {
+        float ax = (a.X - Origin.X) / mpt, ay = (a.Z - Origin.Y) / mpt;
+        float bx = (b.X - Origin.X) / mpt, by = (b.Z - Origin.Y) / mpt;
+        float cx = (c.X - Origin.X) / mpt, cy = (c.Z - Origin.Y) / mpt;
+        var d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+        if (Math.Abs(d) < 1e-9f) return;
+        var u0 = Math.Max(0, (int)Math.Ceiling(Math.Min(ax, Math.Min(bx, cx)) - 0.5f));
+        var u1 = Math.Min(side - 1, (int)Math.Floor(Math.Max(ax, Math.Max(bx, cx)) - 0.5f));
+        var v0 = Math.Max(0, (int)Math.Ceiling(Math.Min(ay, Math.Min(by, cy)) - 0.5f));
+        var v1 = Math.Min(side - 1, (int)Math.Floor(Math.Max(ay, Math.Max(by, cy)) - 0.5f));
+        const float e = -1e-4f;
+        for (var v = v0; v <= v1; v++)
+            for (var u = u0; u <= u1; u++)
+            {
+                float x = u + 0.5f, y = v + 0.5f;
+                var l1 = ((by - cy) * (x - cx) + (cx - bx) * (y - cy)) / d;
+                var l2 = ((cy - ay) * (x - cx) + (ax - cx) * (y - cy)) / d;
+                var l3 = 1f - l1 - l2;
+                if (l1 < e || l2 < e || l3 < e) continue;
+                var o = (v * side + u) * 4;
+                px[o] = ToByte(l1 * ca.R + l2 * cb.R + l3 * cc.R);
+                px[o + 1] = ToByte(l1 * ca.G + l2 * cb.G + l3 * cc.G);
+                px[o + 2] = ToByte(l1 * ca.B + l2 * cb.B + l3 * cc.B);
+                px[o + 3] = 255;
+            }
+    }
+
+    static byte ToByte(float f) => (byte)Math.Clamp((int)MathF.Round(f * 255f), 0, 255);
 
     void Fill(byte[] px, int side, float metresPerTexel, byte[] colour, List<NVector2[]> rings, Rect2 b)
     {

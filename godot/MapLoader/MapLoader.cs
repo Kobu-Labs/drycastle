@@ -29,6 +29,7 @@ public sealed partial class MapLoader
     readonly Dictionary<string, List<CollisionShape3D>> _propsShapes = new();
     readonly Dictionary<string, Node3D> _replacements = new();
     readonly List<(Vector3[] faces, Aabb box)> _terrain = new();
+    readonly List<MeshInstance3D> _terrainVisuals = new();
     float _meanTerrainY = float.NaN;
 
     /// <summary>Root of everything the loader created. Add it to the scene tree.</summary>
@@ -221,6 +222,8 @@ public sealed partial class MapLoader
 
     /// <summary>Ground paint regions (regions.json) for the minimap, in ID order (the higher ID paints last): ring in ground (x, z) metres and colour.</summary>
     public IReadOnlyList<RegionPaint> RegionPaints => _regionPaints;
+    /// <summary>The visible terrain meshes (one per chunk file, vertex colours = the ground's colour; identity transforms), for the maps' top-down colour. Empty on a collision-only load.</summary>
+    public IReadOnlyList<MeshInstance3D> TerrainVisuals => _terrainVisuals;
     readonly List<RegionPaint> _regionPaints = new();
 
     void ReadRegionPaint(string? path)
@@ -369,6 +372,10 @@ public sealed partial class MapLoader
                     if (!_propsTexVisuals.TryGetValue(propsId, out var tex)) _propsTexVisuals[propsId] = tex = new();
                     tex.Add(mi);
                 }
+            }
+            else if (name == "terrain")
+            {
+                _terrainVisuals.Add(mi);
             }
             else if (RegionId(name) is { } regionId)
             {

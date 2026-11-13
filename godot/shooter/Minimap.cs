@@ -161,6 +161,7 @@ public sealed partial class Minimap : Control
                 foreach (var b in _blipScratch)
                     MapGlyphs.Blip(this, centre + Screen(b.Position, theta, pxPerMetre, inner), b, still, 0.7f);
             }
+            if (_markers.Waypoint.At is { } wp) MapGlyphs.Waypoint(this, centre + Screen(wp, theta, pxPerMetre, inner), 0.8f);
             DrawNorth(centre, theta, half);
         }
         DrawSetTransform(centre);

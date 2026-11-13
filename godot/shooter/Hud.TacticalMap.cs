@@ -7,18 +7,22 @@ namespace Drycastle.Shooter;
 /// The tactical map overlay (the M key): a full-screen, north-up map sheet of the whole map (see <see cref="TacticalMap"/>).
 /// It lives under the HUD root, above the panels and the minimap but below the scoreboard, the post-match XP panel and the
 /// chat, so the control-mode switch hides it with the rest of the HUD. It reads the same <see cref="MapMarkers"/> as the
-/// minimap, which the match already feeds, so nothing extra is fed. Toggling does not pause anything or touch the mouse.
+/// minimap, which the match already feeds, so nothing extra is fed. Toggling does not pause anything; while it is open the shell frees the mouse (it asks <see cref="TacticalMapOpen"/>) and the legs keep working (<see cref="Player.MoveWithFreeMouse"/>). The waypoint it sets is drawn in the world by <see cref="WaypointMarker"/>.
 /// While closed it is invisible and does not process, so it costs nothing per frame beyond one flag check.
 /// </summary>
 public partial class Hud
 {
     TacticalMap _tacticalMap = null!;
+    WaypointMarker _waypointMarker = null!;
 
     public bool TacticalMapOpen => _tacticalMap.IsOpen;
 
     void BuildTacticalMap()
     {
-        _tacticalMap = new TacticalMap(_mapMarkers);
+        _waypointMarker = new WaypointMarker(_mapMarkers.Waypoint, () => _minimap.Base) { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _waypointMarker.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        _root.AddChild(_waypointMarker);
+        _tacticalMap = new TacticalMap(_mapMarkers, () => ChatOpen);
         _tacticalMap.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _root.AddChild(_tacticalMap);
         // the scoreboard (hold Tab) and the post-match XP panel stay above the map
@@ -54,5 +58,6 @@ public partial class Hud
     void UpdateTacticalMap()
     {
         if (_tacticalMap.IsOpen && MapBlocked) _tacticalMap.Close();
+        if (_mapMarkers.HasPlayer) _mapMarkers.Waypoint.ClearIfReached(new System.Numerics.Vector2(_mapMarkers.Player.X, _mapMarkers.Player.Y));
     }
 }

@@ -10,6 +10,8 @@ public partial class NetClient
 {
     /// <summary>The Equipment screen is up: the mouse is released for it.</summary>
     public bool EquipmentOpen => _hud?.EquipmentOpen ?? false;
+    /// <summary>The tactical map is open: the shell frees the mouse so a waypoint can be clicked.</summary>
+    public bool TacticalMapOpen => _hud?.TacticalMapOpen ?? false;
 
     /// <summary>Closes the Equipment screen. True when it was open (the shell then does not open Pause for this Esc).</summary>
     public bool CloseEquipment() => _hud?.CloseEquipment() ?? false;

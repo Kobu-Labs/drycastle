@@ -105,6 +105,11 @@ public partial class DayNightCycle : Node3D
         _sun.LightColor = Col(l.SunColour);
         _sun.LightEnergy = l.SunEnergy;
         _sun.ShadowEnabled = l.SunEnergy > 0.01f; // shadows fade with the sun and are gone at night
+        // Grazing light (dawn/dusk) stretches each shadow texel over a long strip of ground: self-shadow stripes (acne).
+        // Bias grows as the sun drops; at 30 deg and up it is Godot's default.
+        var low = 1f - Mathf.Clamp(l.SunElevationDeg / 30f, 0f, 1f);
+        _sun.ShadowNormalBias = Mathf.Lerp(2f, 5f, low);
+        _sun.ShadowBias = Mathf.Lerp(0.1f, 0.3f, low);
 
         _moon.RotationDegrees = new Vector3(-l.MoonElevationDeg, SunAzimuthDeg + 180f, 0);
         _moon.LightColor = Col(l.MoonColour);
