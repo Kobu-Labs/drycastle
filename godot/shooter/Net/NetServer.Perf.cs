@@ -112,7 +112,7 @@ public partial class NetServer
         GD.Print($"server: perf phases on, writing {PerfOut}/server-ticks.csv (--perf-out)");
     }
 
-    void PerfLap(ServerPerf.Ph p) => _perf?.Lap(p);
+    void PerfLap(ServerPerf.Ph p) { _perf?.Lap(p); PhaseLap(p); }
 
     void PerfEnd()
     {

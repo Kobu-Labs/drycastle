@@ -191,6 +191,7 @@ public partial class NetServer : Node
         }
         _elapsed += delta;
         _perf?.Begin();
+        PhasesBegin();
         foreach (var cl in _clients.Values) cl.PacketsThisTick = 0;
         Poll();
         PerfLap(ServerPerf.Ph.Poll);
