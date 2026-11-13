@@ -24,15 +24,9 @@
     // that faces +Z; its sit clip ends with the pelvis 0.647 units above the origin and 0.389 units behind it (measured in the clip).
     // Surfaces are the material names of the model.
     "models": [
-      { "file": "animated-characters/soldier-male.glb", "import_height": 3.147, "height_m": 1.78, "yaw_deg": 180,
-        "clothes": ["Main", "DarkGreen"], "dark": ["Black"], "skin": ["Skin", "Face"], "hide": ["Helmet"],
-        "walk_clip": "Walk", "death_clip": "Death", "sit_clip": "SitDown", "sit_pelvis_m": 0.366, "sit_back_m": 0.22 },
-      { "file": "animated-characters/soldier-female.glb", "import_height": 3.147, "height_m": 1.66, "yaw_deg": 180,
-        "clothes": ["Main", "DarkGreen"], "dark": ["Black"], "skin": ["Skin", "Face"], "hide": [],
-        "walk_clip": "Walk", "death_clip": "Death", "sit_clip": "SitDown", "sit_pelvis_m": 0.34, "sit_back_m": 0.2 },
-      { "file": "animated-characters/rifleman-male.glb", "import_height": 3.147, "height_m": 1.74, "yaw_deg": 180,
-        "clothes": ["Main"], "dark": ["Black", "Grey"], "skin": ["Skin", "Face"], "hide": ["Helmet"],
-        "walk_clip": "Walk", "death_clip": "Death", "sit_clip": "SitDown", "sit_pelvis_m": 0.36, "sit_back_m": 0.22 }
+      { "file": "peasant_male_01" },
+      { "file": "peasant_female_01" },
+      { "file": "peasant_female_02" }
     ]
   }
 }

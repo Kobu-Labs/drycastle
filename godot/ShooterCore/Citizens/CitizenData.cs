@@ -6,7 +6,7 @@ namespace Drycastle.ShooterCore;
 /// </summary>
 public sealed class CitizenModelDef
 {
-    /// <summary>The GLB, relative to the asset library (assets/).</summary>
+    /// <summary>The Synty model's name (assets-private/synty/glb/{file}.glb). The other fields are left from the stand-in models and unused.</summary>
     public string File { get; set; } = "";
     /// <summary>How tall the model is as it imports (the animated characters: 3.147 rig units); with <see cref="HeightM"/> it gives the scale.</summary>
     public float ImportHeight { get; set; } = 1;
@@ -76,8 +76,7 @@ public sealed class HolyMassFile : IVersioned
         if (c.Models.Count == 0 || c.Palette.Count == 0 || c.SkinTones.Count == 0) throw new DataFileException($"{F}: citizens needs at least one model, palette colour and skin tone");
         foreach (var m in c.Models)
         {
-            if (!m.File.EndsWith(".glb", StringComparison.Ordinal)) throw new DataFileException($"{F}: a citizen model must be a .glb path in the asset library");
-            if (!(m.ImportHeight > 0) || !(m.HeightM > 0)) throw new DataFileException($"{F}: {m.File}: import_height and height_m must be positive");
+            if (m.File.Length == 0) throw new DataFileException($"{F}: a citizen model needs a file (the name of a Synty model)");
         }
         return f;
     }

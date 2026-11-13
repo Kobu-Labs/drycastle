@@ -3,7 +3,7 @@ using System.Numerics;
 namespace Drycastle.ShooterCore;
 
 /// <summary>What a citizen is doing: the replicated state byte. Walking is the way to the church door on the navigation mesh, Entering the scripted walk inside to the seat.</summary>
-public enum CitizenState : byte { Walking = 0, Entering = 1, Seated = 2, Dead = 3 }
+public enum CitizenState : byte { Walking = 0, Entering = 1, Seated = 2, Dead = 3, Kneeling = 4 }
 
 /// <summary>Citizen world entity rules: the wire type, the state byte and the ids a citizen is hit under.</summary>
 public static class CitizenRules
@@ -19,7 +19,7 @@ public static class CitizenRules
 
     public static bool IsHitId(ushort id) => id >= FirstHitId && id < FirstHitId + HitIdCount;
 
-    public static CitizenState StateOf(byte state) => (CitizenState)Math.Min(state, (byte)CitizenState.Dead);
+    public static CitizenState StateOf(byte state) => state <= (byte)CitizenState.Kneeling ? (CitizenState)state : CitizenState.Dead;
 
     public static void Register(WorldEntityRegistry registry)
     {
@@ -68,7 +68,9 @@ public sealed class Citizen : IWorldEntity
     public float Yaw { get; private set; }
     public CitizenState State { get; private set; }
     public bool Alive => State != CitizenState.Dead;
-    public bool Seated => State == CitizenState.Seated;
+    public bool Seated => State is CitizenState.Seated or CitizenState.Kneeling;
+    /// <summary>The place is a standing spot, not a pew: on arrival the citizen kneels (<see cref="CitizenState.Kneeling"/>) instead of sitting.</summary>
+    public bool Stand { get; init; }
     /// <summary>The player whose hit killed it.</summary>
     public ushort Killer { get; private set; }
     /// <summary>Whether it was sitting when it was killed.</summary>
@@ -127,7 +129,7 @@ public sealed class Citizen : IWorldEntity
 
     void Sit()
     {
-        State = CitizenState.Seated;
+        State = Stand ? CitizenState.Kneeling : CitizenState.Seated;
         if (_enter.Count > 0) Position = _enter[^1];
         Yaw = SeatYaw;
     }

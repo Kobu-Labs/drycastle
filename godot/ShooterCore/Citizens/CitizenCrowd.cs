@@ -126,7 +126,7 @@ public sealed class CitizenCrowd : ICitizenHits
         if (route.Count == 0) { Log?.Invoke($"citizens: no route from a house at ({door.X:0}, {door.Z:0}) to the church door, seat {seat.Id} stays empty"); return false; }
         var look = (ushort)_rng.Next(ushort.MaxValue + 1);
         var factor = 1f + (float)(_rng.NextDouble() * 2 - 1) * _cfg.SpeedJitter;
-        var citizen = new Citizen(_cfg, seat.Id, seat.Yaw, route, _church.RouteTo(seat, _cfg.SeatHeightM), look, factor);
+        var citizen = new Citizen(_cfg, seat.Id, seat.Yaw, route, _church.RouteTo(seat, _cfg.SeatHeightM), look, factor) { Stand = seat.Stand };
         var hit = NextHitId();
         citizen.HitId = hit;
         citizen.Died += OnDied;

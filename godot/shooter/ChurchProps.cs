@@ -14,10 +14,10 @@ public partial class ChurchProps : Node3D
     /// <summary>Model, atlas, box (x across, y up, z deep, metres) and where the model's own origin sits across its width (a pew's is at one end).</summary>
     static readonly Dictionary<string, (string Model, string Atlas, Vector3 Box, float OriginX)> Kinds = new()
     {
-        ["pew"] = ("pew_01", "dark_fantasy_01_A", new Vector3(2.0f, 1.0f, 0.76f), -1.0f),
-        ["altar"] = ("altar_table_01", "dark_fantasy_01_A", new Vector3(2.03f, 0.86f, 0.9f), 0f),
-        ["holy_water"] = ("holy_water_01", "dark_fantasy_01_A", new Vector3(1.09f, 1.31f, 1.06f), 0f),
-        ["lectern"] = ("church_lectern_01", "fantasy_kingdom_01_A", new Vector3(0.55f, 1.14f, 0.55f), 0f),
+        ["pew"] = ("pew_01", "glb/atlas/dark_fantasy_01_A.png", new Vector3(2.0f, 1.0f, 0.76f), -1.0f),
+        ["altar"] = ("altar_table_01", "glb/atlas/dark_fantasy_01_A.png", new Vector3(2.03f, 0.86f, 0.9f), 0f),
+        ["holy_water"] = ("holy_water_01", "glb/atlas/dark_fantasy_01_A.png", new Vector3(1.09f, 1.31f, 1.06f), 0f),
+        ["lectern"] = ("church_lectern_01", "glb/atlas/fantasy_kingdom_01_A.png", new Vector3(0.55f, 1.14f, 0.55f), 0f),
     };
 
     /// <summary>The props of the church.json in <paramref name="mapDir"/>, or null when the map has none.</summary>
