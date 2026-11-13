@@ -40,6 +40,8 @@ public partial class NetClient
         public DrivePrediction Predict = null!;
         /// <summary>What a correction moved the picture by, faded out over a few frames so the vehicle does not jump.</summary>
         public Vector3 Smooth;
+        /// <summary>What a correction turned the picture by (yaw x, pitch y, roll z; radians), faded out the same way (I-rubber-banding).</summary>
+        public Vector3 AngleFix;
     }
 
     readonly Dictionary<ushort, DriveView> _drives = new();
@@ -100,11 +102,15 @@ public partial class NetClient
         _driveReconcile = null;
         if (_drive == null) return;
         var before = _drive.Predict.State.Position;
+        var yawBefore = _drive.Predict.State.Yaw;
+        var attBefore = new Vector3(_drive.Predict.State.Yaw, _drive.Predict.State.Pitch, _drive.Predict.State.Roll);
         if (!_drive.Predict.Reconcile(r.Ack, r.Server, 1f / Wire.TickRate)) return;
         _driveCorrections++;
         _recon++;
         var moved = before - _drive.Predict.State.Position;
+        _rub.AddVehicle(moved.Length(), FlightMath.Wrap(_drive.Predict.State.Yaw - yawBefore));
         _drive.Smooth += new Vector3(moved.X, moved.Y, moved.Z);
+        _drive.AngleFix += AngleDelta(attBefore, _drive.Predict.State.Yaw, _drive.Predict.State.Pitch, _drive.Predict.State.Roll);
     }
 
     void StopDriving()
@@ -163,6 +169,7 @@ public partial class NetClient
             _drive.Smooth *= Mathf.Exp(-CorrectionFade * dt);
             if (_drive.Smooth.LengthSquared() > 400f) _drive.Smooth = Vector3.Zero; // a teleport (a return to its origin), not a correction: do not glide there
             p = new Vector3(s.Position.X, s.Position.Y, s.Position.Z) + _drive.Smooth;
+            ApplyAngleFix(ref s, ref _drive.AngleFix, dt);
         }
         else
         {
@@ -179,6 +186,24 @@ public partial class NetClient
         view.Pose = DriveBody.Step(ref view.Body, def, new DriveBodyInput(s.Speed, s.YawRate, s.Throttle, s.Afloat, s.Pitch, s.Roll), dt);
         p.Y += view.Pose.Lift;
         rot = new Vector3(view.Pose.Pitch, s.Yaw, view.Pose.Roll);
+    }
+
+    /// <summary>
+    /// The turn a correction made (yaw, pitch, roll), as the difference of the attitude before and after, the yaw wrapped. A correction that turns
+    /// more than a radian (a flip, a reset) is not glided over.
+    /// </summary>
+    static Vector3 AngleDelta(Vector3 before, float yawAfter, float pitchAfter, float rollAfter)
+    {
+        var d = new Vector3(FlightMath.Wrap(before.X - yawAfter), before.Y - pitchAfter, before.Z - rollAfter);
+        return d.Length() > 1f ? Vector3.Zero : d;
+    }
+
+    /// <summary>Fades the turn of the last correction and adds what is left to the drawn attitude (the predictor's own state is not changed).</summary>
+    static void ApplyAngleFix(ref DriveState s, ref Vector3 fix, float dt)
+    {
+        fix *= Mathf.Exp(-CorrectionFade * dt);
+        if (fix.LengthSquared() < 1e-8f) fix = Vector3.Zero;
+        s.Yaw += fix.X; s.Pitch += fix.Y; s.Roll += fix.Z;
     }
 
     /// <summary>The driver's camera and the body's place for this frame.</summary>

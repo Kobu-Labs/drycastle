@@ -59,6 +59,13 @@ public partial class Player : CharacterBody3D
     public Vector2 AimKick { get; set; }
     /// <summary>Cosmetic breath sway on the camera, radians (pitch, yaw). Never sent; the server's aim error is separate.</summary>
     public Vector2 ViewSway { get; set; }
+    /// <summary>
+    /// Cosmetic offset of the first-person eye, metres: what a reconcile moved the body by, fading out over a few frames (I-rubber-banding).
+    /// The state is exact at once; only the eye is drawn at the old place and glides to the new one. Never sent, never part of the state.
+    /// </summary>
+    public Vector3 ViewOffset { get; set; }
+    /// <summary>The first-person eye on the body, for the stance (set with the stance shape).</summary>
+    Vector3 _eyeLocal;
 
     public override void _Ready()
     {
@@ -95,6 +102,7 @@ public partial class Player : CharacterBody3D
     public override void _Process(double delta)
     {
         if (!_camera.IsInsideTree()) return;
+        if (!_chase) _camera.Position = _eyeLocal + ViewOffset; // the eye glides over a reconcile (ViewOffset); the physics sets the eye's place per tick
         if (!_chase) _camera.Rotation = new Vector3(RecoilState.ClampPitch(_pitch + AimKick.X + ViewSway.X), _yaw + AimKick.Y + ViewSway.Y, 0);
         var target = ZoomFov > 0 ? ZoomFov : (GameSettings.Current.Fov + FovBoost) * (IronSightZoom ? IronSightFovScale : 1f);
         if (Mathf.IsEqualApprox(_fovNow, target)) return;
@@ -427,7 +435,8 @@ public partial class Player : CharacterBody3D
             _shape.Position = new Vector3(0, h / 2, 0);
         }
         // the camera is set every call: the chase camera moves it, and EndChase relies on this to put it back
-        _camera.Position = new Vector3(0, MovementStep.EyeHeight(stance), 0);
+        _eyeLocal = new Vector3(0, MovementStep.EyeHeight(stance), 0);
+        _camera.Position = _eyeLocal + ViewOffset;
     }
 
     static NVec3 ToN(Vector3 v) => new(v.X, v.Y, v.Z);

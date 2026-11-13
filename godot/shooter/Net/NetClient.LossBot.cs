@@ -76,6 +76,7 @@ public partial class NetClient
     /// <summary>Errors above <see cref="SnapDistance"/> are respawn or teleport snaps (the position jump can arrive before the spawn event), counted apart so they do not hide the real prediction error.</summary>
     void LossOnPredictionError(float err)
     {
+        if (err > ReconcileEpsilon) _rub.AddOnFoot(err, LastNearRemote, LastVertical);
         if (!_lwin) return;
         if (err > SnapDistance) { _lBigErr++; return; }
         _lErr.Add(err);
@@ -137,7 +138,7 @@ public partial class NetClient
         var tWin1 = tWin0 + LossMeasure;
         if (!_lwin && !_lwinDone && t >= tWin0)
         {
-            _lwin = true; _lWindowStartNow = Now; _lRecon0 = _recon; _lLastArr = 0; _lErr.Clear(); _lMaxErr = 0; _lBigErr = 0;
+            _lwin = true; _lWindowStartNow = Now; _lRecon0 = _recon; _lLastArr = 0; _lErr.Clear(); _lMaxErr = 0; _lBigErr = 0; _rub = new RubberStats();
             _conn.PopStatistic(ENetConnection.HostStatistic.SentData); _conn.PopStatistic(ENetConnection.HostStatistic.ReceivedData);
             if (Sim != null) { Sim.Sent = 0; Sim.Dropped = 0; }
         }
@@ -152,6 +153,7 @@ public partial class NetClient
                 ["recv_kBps"] = _conn.PopStatistic(ENetConnection.HostStatistic.ReceivedData) / secs / 1000,
                 ["sent_kBps"] = _conn.PopStatistic(ENetConnection.HostStatistic.SentData) / secs / 1000,
             };
+            foreach (var kv in _rub.ToDict()) _lWin[kv.Key] = kv.Value; // I-rubber-banding telemetry of the window
         }
         if (_lt0 >= 0 && t >= tWin1 + LossTimeline.BotReportAfterStop) { LossReport(true, ""); return default; }
         var quiet = t >= tWin1;

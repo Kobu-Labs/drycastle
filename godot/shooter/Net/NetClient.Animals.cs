@@ -85,8 +85,8 @@ public partial class NetClient
     void RenderAnimals()
     {
         if (_animals.Count == 0 || _lastTick == 0) return;
+        var rt = RenderTickNow();
         var now = Time.GetTicksMsec() / 1000.0;
-        var rt = _lastTick + (now - _lastArrival) * Wire.TickRate - InterpDelayTicks;
         foreach (var (id, v) in _animals)
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;

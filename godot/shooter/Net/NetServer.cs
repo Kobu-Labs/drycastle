@@ -71,6 +71,8 @@ public partial class NetServer : Node
         /// <summary>Server time of the connect, for the hello deadline.</summary>
         public double ConnectedAt;
         public CatchUpBudget CatchUp;
+        /// <summary>Ticks a living on-foot player was simulated (one or two inputs) and ticks it had no input queued, so its body stood still (A-08; loss-test telemetry).</summary>
+        public int StepTicks, StarvedTicks;
         /// <summary>The profile token from the hello ("" = guest). One live session per token.</summary>
         public string Token = "";
         public int PacketsThisTick;
@@ -643,6 +645,7 @@ public partial class NetServer : Node
     {
         // normally one input per tick; if the queue backs up (jitter), catch up with a second one
         var n = c.CatchUp.Steps(c.Inputs.Count); // a second input only while the catch-up credit lasts (#197)
+        if (c.Inputs.Count == 0 && c.Car == null && _match.Get(c.Id)?.Life == PlayerLife.Alive) c.StarvedTicks++; // A-08: no input for this tick (the body does not move)
         for (var k = 0; k < n && c.Inputs.Count > 0; k++)
         {
             var i = c.Inputs.Dequeue();
@@ -683,6 +686,7 @@ public partial class NetServer : Node
             c.Body.Yaw = Quant.Yaw(i.Yaw);
             c.Body.Pitch = Quant.Pitch(i.Pitch);
             c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
+            c.StepTicks++;
             c.Recoil.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Fire) != 0, c.W.Current.Recoil);
             // breath hold: sprint is cancelled while aiming, so the sprint bit with aim held is the breath key
             c.Breath.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Aim) != 0 && c.W.Current.ZoomFov > 0,

@@ -116,7 +116,7 @@ public partial class NetServer
             {
                 ["id"] = c.Id, ["name"] = c.Name, ["x"] = e.X, ["y"] = e.Y, ["z"] = e.Z, ["health"] = (int)e.Health, ["state"] = (int)e.State,
                 ["kills"] = mp?.Kills ?? 0, ["deaths"] = mp?.Deaths ?? 0, ["hitsTaken"] = l.HitsTaken, ["hitsDealt"] = l.HitsDealt, ["hitEventsSent"] = l.HitEventsSent,
-                ["deathEventsSent"] = l.Deaths, ["killsStat"] = l.Kills,
+                ["deathEventsSent"] = l.Deaths, ["killsStat"] = l.Kills, ["stepTicks"] = c.StepTicks, ["starvedTicks"] = c.StarvedTicks,
             };
         }).ToList(),
     };

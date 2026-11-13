@@ -31,6 +31,8 @@ public partial class NetClient
         public FlightPrediction Predict = null!;
         /// <summary>What a correction moved the picture by, faded out over a few frames so the helicopter does not jump.</summary>
         public Vector3 Smooth;
+        /// <summary>What a correction turned the picture by (yaw x, pitch y, roll z; radians), faded out the same way (I-rubber-banding).</summary>
+        public Vector3 AngleFix;
         public FlightState Shown;
     }
 
@@ -78,10 +80,14 @@ public partial class NetClient
             return;
         }
         var before = _pilot.Predict.State.Position;
+        var yawBefore = _pilot.Predict.State.Yaw;
+        var attBefore = new Vector3(_pilot.Predict.State.Yaw, _pilot.Predict.State.Pitch, _pilot.Predict.State.Roll);
         if (!_pilot.Predict.Reconcile(ack, server, 1f / Wire.TickRate)) return;
         _flightCorrections++;
         var moved = before - _pilot.Predict.State.Position;
+        _rub.AddVehicle(moved.Length(), FlightMath.Wrap(_pilot.Predict.State.Yaw - yawBefore));
         _pilot.Smooth += new Vector3(moved.X, moved.Y, moved.Z);
+        _pilot.AngleFix += AngleDelta(attBefore, _pilot.Predict.State.Yaw, _pilot.Predict.State.Pitch, _pilot.Predict.State.Roll);
         TelemetryFlightCorrection(new Vector3(moved.X, moved.Y, moved.Z).Length());
     }
 
@@ -117,10 +123,13 @@ public partial class NetClient
                 var now = NetInput.From(0, _me.Sample(), 0, 0);
                 FlightModel.Step(ref s, _pilot.Def, PilotInput(now), ahead / Wire.TickRate, _pilot.Probe);
             }
-            _pilot.Shown = s;
             _pilot.Smooth *= Mathf.Exp(-CorrectionFade * dt);
             if (_pilot.Smooth.LengthSquared() > 400f) _pilot.Smooth = Vector3.Zero; // a teleport (a return to its origin), not a correction: do not glide there
             p = new Vector3(s.Position.X, s.Position.Y, s.Position.Z) + _pilot.Smooth;
+            _pilot.AngleFix *= Mathf.Exp(-CorrectionFade * dt);
+            if (_pilot.AngleFix.LengthSquared() < 1e-8f) _pilot.AngleFix = Vector3.Zero;
+            s.Yaw += _pilot.AngleFix.X; s.Pitch += _pilot.AngleFix.Y; s.Roll += _pilot.AngleFix.Z; // a correction's turn, faded out (not in the predictor's state)
+            _pilot.Shown = s;
             rot = new Vector3(s.Pitch, s.Yaw, s.Roll);
             return;
         }
