@@ -26,6 +26,8 @@ PEW_W, PEW_PITCH, PEW_V0, AISLE_W = 2.0, 1.25, -4.5, 1.8  # the Synty pew is 2.0
 ROWS_RIGHT, ROWS_LEFT = 11, 6  # the stairs take the rear of the left block
 GALLERY_PEWS = ((0.2, 10.9), (2.6, 10.9))  # centre u, v
 SEAT_H, SEATS_PER_PEW, SEAT_GAP = 0.45, 3, 0.6
+# standing spots (u, v, way in along v): the free floor by the stairs, and a kneeler before each side altar
+STANDING = ((-0.9, 4.6, 3.1), (-0.3, 5.8, 3.1), (-0.9, 7.0, 3.1), (-0.3, 8.2, 3.1), (-1.7, -5.6, -5.6), (3.65, -5.6, -5.6))
 
 CREAM, MARBLE, RIB, WOOD, CARPET = "#efe6d2", "#d9a99a", "#faf6ee", "#4a2e1c", "#8e1b1f"
 FLOOR, GOLD, PIPE, PANE, CANVAS = "#d8cdb4", "#c9a03c", "#b9bcc4", "#bcd3e6", "#3b3027"
@@ -166,7 +168,7 @@ def build_shell(S, detail: bool, yellow, plinth) -> None:
 
 
 def church_info(b: dict, dz: float = 0.0) -> dict:
-    """``church.json``: door, aisle, seats with routes, spots, demon anchors and shelter volumes of church ``b``.
+    """``church.json``: door, aisle, seats (``stand``: a standing spot, ``pos`` on the floor) with routes, spots, demon anchors and shelter volumes of church ``b``.
 
     Points are ``[x east, y north, z up]`` in local metres (as ``parcels.json``; z as ``terrain.json``), yaws are
     compass bearings in degrees (0 north, 90 east), normals are (east, north, up).
@@ -203,6 +205,11 @@ def church_info(b: dict, dz: float = 0.0) -> dict:
             seats.append({
                 "id": len(seats), "pos": pt(su, v, z + SEAT_H), "yaw": into, "path": path, "floor": fl,
             })  # fmt: skip
+    for u, v, via in STANDING:
+        seats.append({
+            "id": len(seats), "pos": pt(u, v, F), "yaw": into, "path": aisle + [pt(CU, via, F), pt(u, via, F)],
+            "floor": 0, "stand": True,
+        })  # fmt: skip
     props += [
         {"kind": "altar", "pos": pt(CU, -11.9, F), "yaw": out},
         {"kind": "lectern", "pos": pt(CU + 1.4, -8.3, F), "yaw": out},

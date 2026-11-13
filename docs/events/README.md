@@ -131,7 +131,14 @@ Both are a status, not an Item: no slot, no drop. They survive a round change an
     - pew `SM_Prop_Pew_01` / `SM_Prop_Pew_Large_01`, holy water `SM_Prop_Holy_Water_01`, altar `SM_Prop_Altar_Table_01` (POLYGON Dark Fantasy, Godot)
     - citizens `SM_Chr_Male_Peasant_01`, `SM_Chr_Female_Peasant_01`, `SM_Chr_Female_Peasant_02` (POLYGON Fantasy Characters, Unity package: meshes are in `Models/Characters.fbx`; 15 texture variants 01-05 x A-C for variety)
     - demon `SM_Chr_Demon_01` (POLYGON Horror Mansion, Unity package: mesh is in `Models/Characters.fbx`, import the FBX and rebuild the material by hand)
-- no pack ships animations: walk, sit, gestures, shocked look, death and the demon crawl need another source
+- animations: Synty animation packs (Emotes And Taunts, Idles, Base Locomotion, Sword Combat), the Polygon-rig variant of each clip (`A_POLY_*`; the `A_MOD_*` twin is for the Sidekick rig), converted into `assets-private/synty/anim/`
+    - citizens: death `SWD_Death_B`, `SWD_Death_L` (sword not shown); idle picked at random from the idle clips; walk from Base Locomotion; sit down and sitting are code-built (no clip exists)
+    - some citizens take a standing spot instead of a seat and pray kneeling: `IDL_Pray_Kneeling_Enter/Loop/Exit_Masc`
+    - Mass completed: some citizens clap (`EMOT_Celebrate_Clapping_Polite_Femn`), on standing up or at their standing spot
+    - pastor gestures: `EMOT_Angry_TantrumStomp_Femn`, `EMOT_Angry_StranglingMotion_Femn`, `EMOT_Reproach_CalmDown_Femn`, `IDL_PointHand_Index_F_Femn`, `IDL_Pray_Standing_Enter/Loop/Exit_Femn`, `IDL_Thoughtful_R_Enter_Femn`, `IDL_Thoughtful_L_Loop/Exit_Femn`, `IDL_Plead_F_Masc`; death and walk as citizens; Mass survived: `EMOT_Sporty_Flex_Combo_Femn`
+    - monks shocked: `EMOT_Reproach_CalmDown_Femn` or `EMOT_Sad_Crying_Masc`, very rarely `EMOT_Celebrate_Dab_Femn`; death and idle as citizens
+    - demon: scream `EMOT_Aggressive_Roar_Low_Masc`; crawl on all fours, creepy head movements and emotes, and the fireball throw are our own procedural system (no clips)
+    - transformation: the pastor turns into the demon in an animation with lots of fire, then the demon drops on all fours
 - the church shell stays the code model (it fits the real footprint); Synty props are placed inside it at `church.json` poses
 - Synty is paid: only in gitignored `assets-private/`, never in this public repo (#265); no fallback models, the event needs the pack
 ## Tickets

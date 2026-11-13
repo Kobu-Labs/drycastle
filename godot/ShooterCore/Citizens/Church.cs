@@ -3,8 +3,8 @@ using System.Text.Json;
 
 namespace Drycastle.ShooterCore;
 
-/// <summary>One seat of the church: where the pelvis rests on the pew, the way the sitter faces, the scripted route to it from the door, and the floor (0 ground, 1 gallery).</summary>
-public sealed record ChurchSeat(int Id, Vector3 Pos, float Yaw, IReadOnlyList<Vector3> Path, int Floor);
+/// <summary>One seat of the church: where the pelvis rests on the pew, the way the sitter faces, the scripted route to it from the door, and the floor (0 ground, 1 gallery). A standing spot (<c>Stand</c>) has no pew: its point is on the floor and the citizen stands or kneels there.</summary>
+public sealed record ChurchSeat(int Id, Vector3 Pos, float Yaw, IReadOnlyList<Vector3> Path, int Floor, bool Stand = false);
 
 /// <summary>
 /// The church the citizens walk to (church.json, exported by the map pipeline next to bunkers.json). Godot-free; every point is in Godot axes
@@ -41,9 +41,9 @@ public sealed class Church
     }
 
     /// <summary>The floor under the seat, where a sitter's feet stand (the seat point is on the seat).</summary>
-    public static Vector3 FeetOf(ChurchSeat seat, float seatHeight) => seat.Pos - new Vector3(0, seatHeight, 0);
+    public static Vector3 FeetOf(ChurchSeat seat, float seatHeight) => seat.Stand ? seat.Pos : seat.Pos - new Vector3(0, seatHeight, 0);
 
-    /// <summary>Parse church.json: <c>{"door": {"x","y","z","yaw"}, "aisle": [[x,y,z]...], "seats": [{"id","pos":[x,y,z],"yaw","path":[[x,y,z]...],"floor"}]}</c> (aisle, path and floor optional).</summary>
+    /// <summary>Parse church.json: <c>{"door": {"x","y","z","yaw"}, "aisle": [[x,y,z]...], "seats": [{"id","pos":[x,y,z],"yaw","path":[[x,y,z]...],"floor","stand"}]}</c> (aisle, path, floor and stand optional).</summary>
     public static Church Parse(string json, string name = "church.json")
     {
         JsonDocument doc;
@@ -67,7 +67,8 @@ public sealed class Church
                 var floor = s.TryGetProperty("floor", out var fl) ? fl.GetInt32() : 0;
                 if (floor is < 0 or > 1) throw new DataFileException($"{name}: seat {id}: floor is 0 (ground) or 1 (gallery)");
                 list.Add(new ChurchSeat(id, Point(pos, name, $"seat {id} pos"), Bearing(s.TryGetProperty("yaw", out var y) ? y.GetSingle() : 0),
-                    s.TryGetProperty("path", out var p) ? Points(p, name, $"seat {id} path") : new List<Vector3>(), floor));
+                    s.TryGetProperty("path", out var p) ? Points(p, name, $"seat {id} path") : new List<Vector3>(), floor,
+                    s.TryGetProperty("stand", out var st) && st.ValueKind == JsonValueKind.True));
             }
             return new Church(doorPos, doorYaw, aisle, list);
         }
