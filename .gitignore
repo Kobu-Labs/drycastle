@@ -30,3 +30,8 @@ pipeline/config/map.local.yaml
 # rozhlas source recordings (large; only the baked ogg is kept)
 assets/drycastle-rozhlas/source/
 assets/drycastle-rozhlas/parts/
+
+# paid Synty assets (private; never commit)
+assets-private/
+# linked private packs (res://Assets/Synty/<Pack> -> assets-private/...)
+godot/*/Assets/

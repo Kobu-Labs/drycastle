@@ -68,6 +68,17 @@ public sealed partial class MapLoader
         if (_assetManifest == null) ReadAssetManifest();
         var category = _assetManifest!.TryGetValue(asset, out var entry) ? entry.Category : "";
         var size = entry?.Size ?? GVector3.One;
+        if (entry is { Scene.Length: > 0 } && GetAssetTemplate(asset, out _) is { } prefab)
+        {
+            // a private pack prefab brings its own bodies. With a model they are already in it; a headless load has no
+            // model, so it gets a copy of the prefab with the meshes taken out.
+            if (!CollisionOnly) return;
+            var solid = (Node3D)prefab.Duplicate();
+            solid.Name = "Solid";
+            foreach (var m in AllMeshes(solid).ToList()) m.Free();
+            node.AddChild(solid);
+            return;
+        }
         if (entry is { Solids.Count: > 0 })
         {
             // the asset says itself what is solid (a flood wall piece): one body per surface, with a box for each
