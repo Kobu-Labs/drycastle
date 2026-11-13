@@ -347,6 +347,10 @@ _Avoid_: world map, big map, full map
 A creature of the world that is not a player: a deer, a dog, a cow. It has hit points and can be shot dead (`animals.json` lists the species, their hit points, speeds and models). It stands, eats, wanders around the spot it spawned at, and runs from players, vehicles and the shot that hurt it. A killed animal lies for `corpse_seconds` with its death clip held on the last frame, then is removed. It is a world entity (wire type 50) the server owns; clients only draw it. Not a target dummy (a player-shaped practice target) and not a corpse (what a killed player leaves).
 _Avoid_: NPC (alone), mob, critter
 
+**Citizen**:
+A villager of the Holy Mass: leaves a house, walks the navigation mesh to the church door, follows the church's scripted route to its seat and sits. Any hit kills it in one (it lies for `corpse_seconds`, nothing replaces it); it never reacts to combat, and bots do not see it. The server tells who killed it (the event's sinner rule). A world entity (wire type 51) with a pure brain; `holy_mass.json` holds its numbers and bodies, `church.json` (door, aisle, seats) its destination. Not a bot (bots are players with loadouts), not an Animal, not a target dummy.
+_Avoid_: NPC (alone), villager, pedestrian
+
 **Rozhlas**:
 The village loudspeaker broadcast: a song, the announcement, "OPAKUJEM" (I repeat), then the announcement again, all through the same bad-loudspeaker sound, heard across the village as one shared recording, not one per pole. Baked from clean recordings by `scripts/make_rozhlas.py`; on the air at a clock-derived moment, so every client hears the same thing. Louder and clearer the closer the player is to the nearest megaphone pole, quieter and duller the further; poles next to each other do not add up. An **Event announcement** also starts it, and so does an admin's `/event rozhlas`.
 _Avoid_: PA system, radio, announcer

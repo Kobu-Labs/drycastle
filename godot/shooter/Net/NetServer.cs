@@ -176,6 +176,7 @@ public partial class NetServer : Node
         CorpseRules.Register(WorldEntityRegistry.Shared);
         GroundItemRules.Register(WorldEntityRegistry.Shared);
         TurretRules.Register(WorldEntityRegistry.Shared);
+        CitizenRules.Register(WorldEntityRegistry.Shared);
         _corpses = new CorpseBook(_match.Entities);
         InitAircraft();
         BuildCarePackages();
@@ -218,6 +219,7 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Housekeeping);
         _match.Update();
         _match.Entities.Tick((float)delta);
+        CitizensTick((float)delta);
         PerfLap(ServerPerf.Ph.Match);
         StreakTick((float)delta);
         PerfLap(ServerPerf.Ph.Streaks);
@@ -594,6 +596,7 @@ public partial class NetServer : Node
                 GD.Print($"server: round over, winners {string.Join(",", _match.Winners)}");
                 break;
             case PhaseChanged { Phase: MatchPhase.Running }:
+                _crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
                 ResetCars();
                 LossRoundStart();
                 RoundStarted();
@@ -772,6 +775,7 @@ public partial class NetServer : Node
             var d = dummies[i];
             if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
         }
+        _crowd?.AddTargets(list); // the citizens of the Holy Mass
         PerfCounters.LiveTargetsCalls++; PerfCounters.LiveTargetsElems += list.Count;
         return list;
     }
@@ -949,6 +953,11 @@ public partial class NetServer : Node
         if (_streaks.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
+        if (CitizenRules.IsHitId(victim)) // a citizen: the hit marker, but no assist, streak, refill or kill feed
+        {
+            if (_byId.TryGetValue(attackerId, out var shooter)) Send(shooter, new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attackerId, weaponIdx, (ushort)damage, head, backstab, r == DamageResult.Killed))));
+            return r;
+        }
         if (r == DamageResult.Damaged && Scores(attackerId) && Scores(victim)) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
         BotHit(victim, attackerId);
         _hitsLanded++;

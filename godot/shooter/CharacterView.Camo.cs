@@ -93,7 +93,7 @@ public sealed partial class CharacterView
     /// Replaces the imported mesh with a copy whose skin surface carries vertex colours (white, and a dark grey for the boots), cached per model.
     /// Surface names and materials are kept, so surfaces can be found by material name. Skin weights are copied as they are.
     /// </summary>
-    static void PrepareMesh(MeshInstance3D mi, string path)
+    internal static void PrepareMesh(MeshInstance3D mi, string path)
     {
         if (mi.Mesh is not Mesh src) return;
         if (!PreparedMeshes.TryGetValue(path, out var prepared))
@@ -160,7 +160,7 @@ public sealed partial class CharacterView
         return mat;
     }
 
-    static ShaderMaterial HiddenMaterial()
+    internal static ShaderMaterial HiddenMaterial()
     {
         _hiddenShader ??= new Shader { Code = "shader_type spatial;\nrender_mode unshaded;\nvoid fragment() { discard; }\n" };
         return new ShaderMaterial { Shader = _hiddenShader };

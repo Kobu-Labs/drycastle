@@ -1,6 +1,6 @@
 namespace Drycastle.ShooterCore;
 
-public enum ChatArgKind { Int, Choice, Time, Player }
+public enum ChatArgKind { Int, Choice, Time, Player, IntOrChoice }
 
 /// <summary>One argument of a chat command. <see cref="Min"/> and <see cref="Max"/> bound an <see cref="ChatArgKind.Int"/>.</summary>
 public sealed record ChatArg(string Name, ChatArgKind Kind, bool Required = true, int Min = 0, int Max = 0);
@@ -76,6 +76,9 @@ public static class ChatCommands
     /// <summary>Most bots a server takes (they need no peer slot, so this is apart from the player limit).</summary>
     public const int MaxBots = 64;
 
+    /// <summary>Most citizens one /citizens asks for (the data's max_count may be lower).</summary>
+    public const int MaxCitizens = 200;
+
     public static readonly IReadOnlyList<ChatCommand> All = new ChatCommand[]
     {
         new("help", "List the commands, or explain one", new[] { new ChatArg("command", ChatArgKind.Choice, false) }, AdminOnly: false),
@@ -85,6 +88,7 @@ public static class ChatCommands
         new("give", "Give an item to a player (name or #id), or to yourself. It is worn if the slot is empty, else it goes in the bag", new[] { new ChatArg("item", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
         new("restart", "Restart the round now, optionally in another mode (ffa or tdm)", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
         new("event", "Trigger a village event now", new[] { new ChatArg("event", ChatArgKind.Choice), new ChatArg("action", ChatArgKind.Choice, false) }),
+        new("citizens", "Send citizens to the church to sit on its pews (a number), or remove them all (clear)", new[] { new ChatArg("count", ChatArgKind.IntOrChoice, true, 1, MaxCitizens) }),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
     };
 
@@ -111,6 +115,7 @@ public static class ChatCommands
                 ("intel", "TEST: announce a made-up event and put it on the intel screen at the base"),
             },
             ChatArgKind.Choice when cmd.Name == "event" => new[] { ("clear", "take the test event off the intel screen again (with intel)") },
+            ChatArgKind.IntOrChoice when cmd.Name == "citizens" => new[] { ("clear", "remove every citizen") },
             ChatArgKind.Choice when cmd.Name == "help" => Visible(ctx).Select(c => (c.Name, c.Summary)).ToList(),
             _ => Array.Empty<(string, string)>(),
         };
@@ -132,6 +137,8 @@ public static class ChatCommands
                     return null;
                 }
                 return n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            case ChatArgKind.IntOrChoice when token.Length > 0 && token.All(char.IsAsciiDigit):
+                goto case ChatArgKind.Int;
             case ChatArgKind.Time:
                 if (ChatTime.Parse(token) == null)
                 {
@@ -212,13 +219,14 @@ public static class ChatCommands
         var help = arg.Kind switch
         {
             ChatArgKind.Int => $"{arg.Name}: a whole number from {arg.Min} to {arg.Max}",
+            ChatArgKind.IntOrChoice => $"{arg.Name}: a whole number from {arg.Min} to {arg.Max}, or clear",
             ChatArgKind.Time => $"{arg.Name}: HH:MM, a word, freeze or resume",
             ChatArgKind.Player => $"{arg.Name}: a player's name (no spaces) or #id from the scoreboard",
             _ => $"{arg.Name}",
         } + (arg.Required ? "" : " (optional)");
 
         string? err = null;
-        if (current != "" && suggestions.Count == 0 || (arg.Kind == ChatArgKind.Int && current != ""))
+        if (current != "" && suggestions.Count == 0 || (arg.Kind == ChatArgKind.Int && current != "") || (arg.Kind == ChatArgKind.IntOrChoice && current.Length > 0 && current.All(char.IsAsciiDigit)))
             if (Validate(cmd, argIndex, current, ctx, out var e) == null) err = e;
         return new ChatHint(cmd.Usage, cmd.Summary, help, suggestions, from, err);
     }

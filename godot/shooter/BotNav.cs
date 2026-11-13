@@ -88,6 +88,9 @@ public sealed class BotNav
         return _result.Path;
     }
 
+    /// <summary>The point of the mesh nearest to <paramref name="p"/> (where a citizen stands when it leaves a house).</summary>
+    public Vector3 Snap(Vector3 p) => NavigationServer3D.MapGetClosestPoint(_map, p);
+
     public void Free()
     {
         foreach (var r in _regions) NavigationServer3D.FreeRid(r);
