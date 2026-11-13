@@ -55,7 +55,8 @@ public partial class NetServer
         _turretEnemies.Clear();
         var targets = LiveTargets();
         foreach (var t in targets)
-            if (t.Id != owner) _turretEnemies.Add(new TurretCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM));
+            if (t.Id != owner && !CitizenRules.IsHitId(t.Id)) _turretEnemies.Add( // citizens are no enemy: automatic guns leave them alone
+                new TurretCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM));
         ReturnTargets(targets);
         return _turretEnemies;
     }
