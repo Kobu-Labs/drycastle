@@ -12,8 +12,11 @@ public sealed record ChatCommand(string Name, string Summary, IReadOnlyList<Chat
     public string Usage => "/" + Name + string.Concat(Args.Select(a => a.Required ? $" <{a.Name}>" : $" [{a.Name}]"));
 }
 
-/// <summary>What the chat needs to know about the viewer and the server to complete and validate: admin rights and the vehicle ids (vehicles.json) the server can spawn.</summary>
-public sealed record ChatContext(bool IsAdmin, IReadOnlyList<string> Vehicles);
+/// <summary>What the chat needs to know about the viewer and the server to complete and validate: admin rights, the vehicle ids (vehicles.json) the server can spawn and the item ids (items.json) /give takes.</summary>
+public sealed record ChatContext(bool IsAdmin, IReadOnlyList<string> Vehicles, IReadOnlyList<string>? ItemIds = null)
+{
+    public IReadOnlyList<string> Items => ItemIds ?? Array.Empty<string>();
+}
 
 /// <summary>A command line that parsed: the command and its normalised (lower case) arguments, or the reason it did not.</summary>
 public sealed record ChatParse(ChatCommand? Command, IReadOnlyList<string> Args, string? Error)
@@ -79,6 +82,7 @@ public static class ChatCommands
         new("bots", "Set how many bots play, or show the count. Takes effect at once", new[] { new ChatArg("count", ChatArgKind.Int, false, 0, MaxBots) }),
         new("spawn", "Spawn a vehicle in front of you", new[] { new ChatArg("vehicle", ChatArgKind.Choice) }),
         new("sandbox", "Turn sandbox mode on or off for a player (name or #id), or flip it", new[] { new ChatArg("player", ChatArgKind.Player), new ChatArg("state", ChatArgKind.Choice, false) }),
+        new("give", "Put an item on a player (name or #id), or on yourself. It replaces what they wear in that slot", new[] { new ChatArg("item", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
         new("restart", "Restart the round now, optionally in another mode (ffa or tdm)", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
         new("event", "Trigger a village event now", new[] { new ChatArg("event", ChatArgKind.Choice) }),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
@@ -98,6 +102,7 @@ public static class ChatCommands
             ChatArgKind.Time => ChatTime.Presets.Select(p => (p.Name, ChatTime.Format(p.Minute)))
                 .Concat(new[] { ("freeze", "stop the clock"), ("resume", "let it run") }).ToList(),
             ChatArgKind.Choice when cmd.Name == "spawn" => ctx.Vehicles.Select(v => (v, "")).ToList(),
+            ChatArgKind.Choice when cmd.Name == "give" => ctx.Items.Select(i => (i, "")).ToList(),
             ChatArgKind.Choice when cmd.Name == "sandbox" => new[] { ("on", "godmode, unlimited ammo, no score"), ("off", "back to normal play") },
             ChatArgKind.Choice when cmd.Name == "restart" => new[] { ("ffa", "free-for-all, everyone alone"), ("tdm", "team deathmatch, two teams") },
             ChatArgKind.Choice when cmd.Name == "event" => new[] { ("rozhlas", "the village loudspeaker broadcast, for everyone, now") },
