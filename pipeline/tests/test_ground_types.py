@@ -201,3 +201,18 @@ def test_invalid_file_raises_edits_error(tmp_path) -> None:
     path.write_text(json.dumps({"version": 1, "ground_types": {"Bad": {}}}))
     with pytest.raises(EditsError):
         ground_types(edits_path=path)
+
+
+def test_the_editor_mirrors_the_attribute_catalog() -> None:
+    """GroundTypeEdits.cs repeats the catalog (the editor cannot import Python): the attributes, their groups and stacking, the events."""
+    import re
+
+    from drycastle_pipeline.config import REPO_ROOT
+    from drycastle_pipeline.ground_attributes import EVENTS, RECIPES
+
+    src = (REPO_ROOT / "godot" / "viewer" / "GroundTypeEdits.cs").read_text()
+    rows = re.findall(r'new\("(\w+)", "(\w+)", (Terrain|Any|Union), ', src)
+    assert {k: (g, s.lower()) for k, g, s in rows} == {k: (a.group, a.stacking) for k, a in ATTRIBUTES.items()}
+    assert re.findall(r'new\("(\w+)", "[A-Z]\w+", "', src) == [g.key for g in GROUPS]
+    assert re.search(r"Events = \{ ([^}]*) \}", src).group(1).replace('"', "").split(", ") == list(EVENTS)
+    assert re.search(r"Recipes = \{ ([^}]*) \}", src).group(1).replace('"', "").split(", ") == list(RECIPES)

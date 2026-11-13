@@ -56,7 +56,6 @@ from drycastle_pipeline.ground_attributes import (
     GROUPS,
     RECIPES,
     attributes_of,
-    carries_terrain,
     default_tint,
     terrain_index,
 )

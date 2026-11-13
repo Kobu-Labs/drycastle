@@ -573,9 +573,9 @@ def _check_ground_type(name: str, entry: object, path: str, errors: list[str]) -
             ):
                 errors.append(f"{path}.osm.{cls}: must be a list of OSM values (text)")
     own_source = isinstance(osm, dict) and any(osm.values())
-    if len(errors) == n and (own_source or (shipped.get(name) or {}).get("osm") or (shipped.get(name) or {}).get("rule")):
-        if not any(k in _effective_attributes(name, entry, shipped) for k in TERRAIN_KEYS):
-            errors.append(f"{path}.attributes: a type that takes OSM land needs appearance or water attributes ({', '.join(TERRAIN_KEYS)})")
+    takes_land = own_source or (shipped.get(name) or {}).get("osm") or (shipped.get(name) or {}).get("rule")
+    if len(errors) == n and takes_land and not any(k in _effective_attributes(name, entry, shipped) for k in TERRAIN_KEYS):
+        errors.append(f"{path}.attributes: a type that takes OSM land needs appearance or water attributes ({', '.join(TERRAIN_KEYS)})")
 
 
 def _check_ground_types(types: dict, errors: list[str]) -> None:
