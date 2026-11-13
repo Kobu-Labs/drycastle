@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bakes the village loudspeaker (rozhlas) broadcast: assets/drycastle-rozhlas/rozhlas_<n>.ogg.
 
-    song (bad but musical) -> announcement (almost inaudible) -> OPAKUJEM (clear) -> the announcement again
+    song (bad but musical) -> announcement -> OPAKUJEM (same degradation as the announcement) -> the announcement again
 
 Inputs are clean, dry recordings in assets/drycastle-rozhlas/source/ (mono or stereo, any format ffmpeg reads):
 
@@ -9,13 +9,13 @@ Inputs are clean, dry recordings in assets/drycastle-rozhlas/source/ (mono or st
     announcement.*  the spoken announcement, recorded close to the microphone with no room sound
     opakujem.*      the word OPAKUJEM, recorded separately
 
-Every badness comes from here (band limit, low sample rate, bit crushing, clipping, echo, hiss, hum, wobble, dropouts),
+Every badness comes from here (band limit, low sample rate, bit crushing, clipping, echo, hiss, hum, wobble),
 so it can be tuned without re-recording. Needs ffmpeg and ffprobe; standard library only:
 
     python3 -I scripts/make_rozhlas.py [--src DIR] [--out DIR] [--seed N] [--variants N] [--song-start S] [--song-seconds S] [--keep-wavs]
 
-Each variant uses a different seed (different hiss, dropout rhythm and echo taps), so one recording gives several broadcasts;
-list them all in godot/shooter/data/rozhlas.json. The levels are the SONG/VOICE/CLEAR dicts below.
+Each variant uses a different seed (different hiss and echo taps), so one recording gives several broadcasts;
+list them all in godot/shooter/data/rozhlas.json. The levels are the SONG and VOICE dicts below.
 """
 import argparse
 import random
@@ -30,15 +30,13 @@ RATE = 44100
 
 # Song: tinny and a little distorted, but the beat and the tune carry.
 SONG = dict(low=300, high=4000, rate=11025, bits=10, crush_mix=0.4, wobble_hz=4.0, wobble_depth=0.04,
-            echo="0.8:0.6:90:0.3", noise=0.015, level_db=-6)
-# Announcement: barely audible, under the hiss, so the words come and go (the voice sits only a little above the noise); bandwidth of a cheap horn, hard clipping, a long echo off the houses, pumping and dropouts.
+            echo="0.8:0.6:90:0.3", noise=0.0, level_db=-6)
+# Announcement: bandwidth of a cheap horn, hard clipping, an echo off the houses and pumping (no dropouts: they sounded like cuts).
 VOICE = dict(low=500, high=2200, rate=5000, bits=6, crush_mix=0.7, gain_db=18, clip=0.15, wobble_hz=6.0, wobble_depth=0.15,
-             pump_hz=3.0, pump_depth=0.4, noise=0.06, level_db=-5.5)
-# OPAKUJEM: still a loudspeaker, but clear.
-CLEAR = dict(low=300, high=4500, noise=0.01, echo="0.7:0.5:70:0.2", level_db=-5.5)  # about as loud as the song (measured: LUFS of both within 0.5 dB)
+             pump_hz=3.0, pump_depth=0.4, noise=0.0, level_db=-5.5)
 SONG_START_S, SONG_SECONDS, SONG_FADE_S = 0.0, 60.0, 3.0  # the part of the song that is played (the intro, not the whole song)
-FADE_S, BED_NOISE = 0.5, 0.02  # every part fades in and out; a faint hiss bed runs under the whole broadcast so the gaps are not dead silence
-GAP_SONG_S, GAP_VOICE_S, GAP_CLEAR_S = 0.6, 2.0, 2.0  # silence after the song, after the first announcement (before OPAKUJEM), after OPAKUJEM
+FADE_S, BED_NOISE = 0.5, 0.0  # every part fades in and out; BED_NOISE is a faint hiss under the whole broadcast (0 = none)
+GAP_SONG_S, GAP_VOICE_S, GAP_CLEAR_S = 0.6, 1.0, 0.0  # silence after the song, after the first announcement (before OPAKUJEM), after OPAKUJEM
 
 
 def run(cmd):
@@ -72,18 +70,12 @@ def song_chain(p):
 
 
 def voice_chain(p, rng):
-    period = rng.uniform(1.4, 2.6)   # dropouts: a different rhythm for every variant
-    hole = rng.uniform(0.08, 0.2)
     taps = "|".join(f"{rng.randint(*r)}" for r in ((220, 320), (420, 520), (560, 700)))
     return (f"highpass=f={p['low']},lowpass=f={p['high']},volume={p['gain_db']}dB,asoftclip=type=hard:threshold={p['clip']},"
             f"aresample={p['rate']},acrusher=bits={p['bits']}:mix={p['crush_mix']},"
             f"vibrato=f={p['wobble_hz']}:d={p['wobble_depth']},tremolo=f={p['pump_hz']}:d={p['pump_depth']},"
-            f"aecho=0.7:0.7:{taps}:0.3|0.2|0.12,volume='if(lt(mod(t,{period:.2f}),{hole:.2f}),0,1)':eval=frame,"
+            f"aecho=0.7:0.7:{taps}:0.3|0.2|0.12,"
             f"alimiter=limit=0.9:level=0,volume={p['level_db']}dB")
-
-
-def clear_chain(p):
-    return f"highpass=f={p['low']},lowpass=f={p['high']},aecho={p['echo']},alimiter=limit=0.9:level=0,volume={p['level_db']}dB"
 
 
 def trim(inp, out, start, seconds, fade):
@@ -100,12 +92,12 @@ def bake(src, out, seed, tmp, song_start=SONG_START_S, song_seconds=SONG_SECONDS
     song = tmp / "song_cut.wav"
     parts = [(tmp / "song.wav", song_chain(SONG), SONG["noise"]),
              (tmp / "voice.wav", voice_chain(VOICE, rng), VOICE["noise"]),
-             (tmp / "clear.wav", clear_chain(CLEAR), CLEAR["noise"])]
+             (tmp / "opakujem.wav", voice_chain(VOICE, rng), VOICE["noise"])]
     for (wav, chain, noise), inp in zip(parts, (song, ann, opa)):
         degrade(inp, wav, chain, noise, rng.randint(1, 10**6))
-    # the announcement is degraded twice with different dropouts, like a repeated reading over the same bad line
+    # the announcement is degraded twice with different echo taps, like a repeated reading over the same bad line
     degrade(ann, tmp / "voice2.wav", voice_chain(VOICE, rng), VOICE["noise"], rng.randint(1, 10**6))
-    order = [("song.wav", GAP_SONG_S), ("voice.wav", GAP_VOICE_S), ("clear.wav", GAP_CLEAR_S), ("voice2.wav", 0.5)]
+    order = [("song.wav", GAP_SONG_S), ("voice.wav", GAP_VOICE_S), ("opakujem.wav", GAP_CLEAR_S), ("voice2.wav", 0.5)]
     cmd = ["ffmpeg", "-y", "-v", "error"]
     for name, _ in order:
         cmd += ["-i", str(tmp / name)]
