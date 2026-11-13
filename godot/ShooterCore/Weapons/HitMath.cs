@@ -10,7 +10,7 @@ public readonly record struct MeleeHit(ushort Id, bool Backstab, float Distance)
 
 /// <summary>
 /// Server-side hit resolution without Godot: ray against the player capsule and head sphere, damage falloff, aim
-/// direction with spread, melee reach and backstab test. No lag compensation: targets are at their current positions.
+/// direction with spread, melee reach and backstab test. Targets are the positions passed in: the server passes players where the shooter saw them (ADR 0013).
 /// </summary>
 public static class HitMath
 {
