@@ -76,6 +76,7 @@ public partial class NetClient
     {
         _hud?.SetControlMode(_gunship != null || _controlling); // one mode switch: a turret or the missile owns the screen (ticket #152)
         _hud?.SetHealth(Mathf.CeilToInt(_me?.Health ?? 100));
+        _hud?.SetHeadgear(_headgearName);
         UavTick();
         if (_me != null) Rozhlas.Current?.SetListener(_me.GlobalPosition); // the loudspeaker is heard where the player is, not where a vehicle's orbiting camera is
         if (_me != null) _hud?.SetBreath(Breath.AirLeft(_me.State), _me.HeadUnder);

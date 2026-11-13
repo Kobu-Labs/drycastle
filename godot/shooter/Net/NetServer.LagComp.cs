@@ -128,7 +128,7 @@ public partial class NetServer
             var now = HitTargetOf(o);
             if (o == c) { list.Add(now); continue; } // the shooter stands where it stands
             SyncLife(o);
-            list.Add(o.Car == null && LagComp.TryTargetAt(o.Poses, view, o.LifeStart, out var past) ? past : now);
+            list.Add(o.Car == null && LagComp.TryTargetAt(o.Poses, view, o.LifeStart, out var past) ? past with { HeadGuarded = now.HeadGuarded } : now); // what a player wears is not rewound, only where they stood
         }
         var dummies = _match.Targets.All; // living target dummies stand where they stand (not rewound); an index loop, as in LiveTargets
         for (var i = 0; i < dummies.Count; i++)

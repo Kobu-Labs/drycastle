@@ -10,7 +10,7 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class NetClient
 {
-    /// <summary>What the server said at join: admin or not, and the vehicles /spawn takes. Until then, a player with no commands.</summary>
+    /// <summary>What the server said at join: admin or not, and the vehicles /spawn takes (the items /give takes are items.json's, which the client has itself). Until then, a player with no commands.</summary>
     public ChatContext ChatCtx { get; private set; } = new(false, Array.Empty<string>());
 
     public bool ChatOpen => _hud?.ChatOpen ?? false;
@@ -29,7 +29,7 @@ public partial class NetClient
         switch (kind)
         {
             case EventKind.ChatStatus when ChatEvents.DecodeStatus(payload) is { } st:
-                ChatCtx = new ChatContext(st.Admin, st.Vehicles);
+                ChatCtx = new ChatContext(st.Admin, st.Vehicles, ItemData.Items.Select(i => i.Id).ToList());
                 break;
             case EventKind.ChatLine when ChatEvents.DecodeLine(payload) is { } line:
                 _hud?.AddChatLine(line);

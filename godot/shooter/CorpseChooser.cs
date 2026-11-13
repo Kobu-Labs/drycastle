@@ -3,13 +3,17 @@ using Godot;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The two-option chooser opened by a tap of the interact key at a corpse (ticket #130): pick which hotbar position the
-/// corpse's weapon replaces. Keyboard only, as the mouse is captured during play: 1 and 2 choose, Esc cancels. Esc is
+/// The chooser opened by a tap of the interact key at a corpse (ticket #130): pick which hotbar position the
+/// corpse's weapon replaces, or, when the corpse carries an item (issue #261), put the item on (the third row, <see cref="ItemPos"/>).
+/// Keyboard only, as the mouse is captured during play: 1, 2 and 3 choose, Esc cancels. Esc is
 /// consumed here so it never reaches the pause menu. Colours and sizes come from <see cref="ShooterTheme"/>.
 /// </summary>
 public sealed partial class CorpseChooser : CanvasLayer
 {
-    /// <summary>Raised with the 0-based hotbar position the player picked (0 primary, 1 secondary).</summary>
+    /// <summary>The position of the item row, after the two hotbar positions: the key 3.</summary>
+    public const int ItemPos = 2;
+
+    /// <summary>Raised with the 0-based position the player picked (0 primary, 1 secondary, <see cref="ItemPos"/> the item).</summary>
     public event Action<int>? Picked;
 
     readonly PanelContainer _panel = new();
@@ -47,7 +51,7 @@ public sealed partial class CorpseChooser : CanvasLayer
         l.MouseFilter = Control.MouseFilterEnum.Ignore;
     }
 
-    /// <summary>Shows the chooser. <paramref name="options"/> holds (hotbar position, text) pairs; only those positions can be picked.</summary>
+    /// <summary>Shows the chooser. <paramref name="options"/> holds (position, text) pairs, the position being the number key minus one; only those can be picked.</summary>
     public void Open(ushort corpse, string title, IReadOnlyList<(int Pos, string Text)> options)
     {
         Corpse = corpse;
@@ -81,6 +85,7 @@ public sealed partial class CorpseChooser : CanvasLayer
         {
             case Key.Key1: pos = 0; break;
             case Key.Key2: pos = 1; break;
+            case Key.Key3: pos = ItemPos; break;
             case Key.Escape: Close(); GetViewport().SetInputAsHandled(); return;
             default: return;
         }

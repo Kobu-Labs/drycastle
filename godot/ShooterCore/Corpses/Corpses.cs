@@ -64,15 +64,19 @@ public enum PickUpResult : byte { Ok, Gone, OutOfReach, BadSlot, WrongKind, Alre
 /// plus reserve, capped at 255 on the wire). The state is replicated as <see cref="WorldState"/>: the weapon in
 /// <see cref="WorldState.State"/> and the rounds in <see cref="WorldState.Hp"/> (corpses have no hit points).
 /// Corpses take no damage. They despawn after <see cref="CorpseRules.LifetimeSeconds"/>.
+/// <para>
+/// A corpse can also carry one <see cref="Item"/> (what its player wore, or an event's reward): not in the world state, but announced
+/// by <see cref="EventKind.CorpseItem"/>. The item lives and dies with the corpse.
+/// </para>
 /// </summary>
 public sealed class Corpse : IWorldEntity
 {
     readonly float _yaw;
     float _age;
 
-    public Corpse(ushort owner, Vector3 position, float yaw, int weapon, int rounds)
+    public Corpse(ushort owner, Vector3 position, float yaw, int weapon, int rounds, ItemStack? item = null)
     {
-        Owner = owner; _body = new ThrownBody(position); _yaw = yaw; Weapon = weapon; Rounds = rounds;
+        Owner = owner; _body = new ThrownBody(position); _yaw = yaw; Weapon = weapon; Rounds = rounds; Item = item;
     }
 
     public byte TypeId => CorpseRules.TypeId;
@@ -87,6 +91,8 @@ public sealed class Corpse : IWorldEntity
     /// <summary>weapons.json index of the weapon the corpse carries.</summary>
     public int Weapon { get; private set; }
     public int Rounds { get; private set; }
+    /// <summary>The item the corpse carries (with how often it has been taken), or null.</summary>
+    public ItemStack? Item { get; private set; }
 
     public void Tick(float dt)
     {
@@ -110,6 +116,9 @@ public sealed class Corpse : IWorldEntity
         Weapon = weapon;
         Rounds = rounds;
     }
+
+    /// <summary>Puts an item on the corpse (the one a taker swapped out), or clears it (taken, or crumbled).</summary>
+    public void CarryItem(ItemStack? item) => Item = item;
 }
 
 /// <summary>
@@ -133,11 +142,23 @@ public sealed class CorpseBook
     /// <summary>The corpses on the map, oldest first.</summary>
     public IEnumerable<Corpse> Bodies => _order.Select(x => x.Body);
 
-    /// <summary>Puts a new corpse on the map, removing the oldest corpses first to stay within <see cref="CorpseRules.MaxCorpses"/>.</summary>
+    /// <summary>The corpses on the map with their ids, oldest first.</summary>
+    public IEnumerable<(ushort Id, Corpse Body)> WithIds => _order;
+
+    /// <summary>The corpse with this id, or null.</summary>
+    public Corpse? Get(ushort id) => _order.FirstOrDefault(x => x.Id == id).Body;
+
+    /// <summary>
+    /// Puts a new corpse on the map, removing the oldest corpses first to stay within <see cref="CorpseRules.MaxCorpses"/>. A corpse that
+    /// carries an item goes last: a busy fight must not wipe out an event reward, so the oldest corpse without one is taken first.
+    /// </summary>
     public ushort? Add(Corpse body)
     {
         while (_order.Count >= CorpseRules.MaxCorpses)
-            if (!_world.Despawn(_order[0].Id, WorldDespawnReason.Removed)) _order.RemoveAt(0);
+        {
+            var at = Math.Max(0, _order.FindIndex(x => x.Body.Item == null));
+            if (!_world.Despawn(_order[at].Id, WorldDespawnReason.Removed)) _order.RemoveAt(at);
+        }
         var id = _world.Spawn(body);
         if (id is { } i) _order.Add((i, body));
         return id;
@@ -159,6 +180,25 @@ public sealed class CorpseBook
         taker.ReplaceHotbar(hotbarPos, body.Weapon, out var dropped, out var rounds);
         body.Carry(dropped, rounds);
         return PickUpResult.Ok;
+    }
+
+    /// <summary>
+    /// Item pickup: the taker at <paramref name="player"/> puts on the item the corpse carries (<see cref="ItemRules.Take"/> counts the
+    /// pickup). What the taker wore in that slot is left on the corpse. An item taken as often as its definition allows crumbles instead: it
+    /// is gone from the corpse and the taker gets nothing. The corpse's weapon is not involved; this is a separate action.
+    /// </summary>
+    public ItemPickUp TryPickUpItem(ushort corpseId, Vector3 player, Equipment taker, ItemsFile items, float slack = CorpseRules.LatencySlackMetres)
+    {
+        var entry = _order.FirstOrDefault(x => x.Id == corpseId);
+        if (entry.Body == null) return ItemPickUp.Gone;
+        var body = entry.Body;
+        if (!CorpseRules.InReach(player, body.Position, slack)) return ItemPickUp.OutOfReach;
+        if (body.Item is not { } carried) return ItemPickUp.NoItem;
+        var result = ItemRules.Take(items, carried, out var taken);
+        if (result == ItemPickUp.Crumbled) body.CarryItem(null);
+        if (result != ItemPickUp.Ok) return result;
+        body.CarryItem(taker.Wear(items.At(taken.Item)!.Slot, taken));
+        return ItemPickUp.Ok;
     }
 }
 

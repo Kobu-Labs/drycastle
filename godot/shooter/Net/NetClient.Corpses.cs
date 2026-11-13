@@ -8,6 +8,8 @@ namespace Drycastle.Shooter;
 /// hold and tap of the interact key, and the chooser. Holding the key takes the corpse's weapon into the primary position
 /// (<see cref="CorpseRules.PrimaryPos"/>); a tap opens <see cref="CorpseChooser"/> to pick the primary or the secondary.
 /// The server validates reach and slot; the hotbar it sends back (<see cref="EventKind.Hotbar"/>) is the one that counts.
+/// A corpse that carries an item (<see cref="EventKind.CorpseItem"/>) adds a third row to the chooser, key 3: putting the item on is a
+/// separate action from taking the weapon, and the prompt names the item.
 /// </summary>
 public partial class NetClient
 {
@@ -42,7 +44,11 @@ public partial class NetClient
         WorldEntities.Spawned += OnCorpseSpawned;
         WorldEntities.Despawned += OnCorpseDespawned;
         _chooser = new CorpseChooser();
-        _chooser.Picked += pos => { if (_chooser.IsOpen) SendPickUp(_chooser.Corpse, pos); _chooser.Close(); };
+        _chooser.Picked += pos =>
+        {
+            if (_chooser.IsOpen) { if (pos == CorpseChooser.ItemPos) SendPickUpItem(_chooser.Corpse); else SendPickUp(_chooser.Corpse, pos); }
+            _chooser.Close();
+        };
         AddChild(_chooser);
     }
 
@@ -60,6 +66,7 @@ public partial class NetClient
 
     void OnCorpseDespawned(ushort id)
     {
+        _corpseItems.Remove(id);
         if (!_corpses.Remove(id, out var v)) return;
         v.Node.QueueFree();
         if (_chooser.IsOpen && _chooser.Corpse == id) _chooser.Close();
@@ -116,7 +123,10 @@ public partial class NetClient
     {
         if (_near is not { } id || ChooserOpen || CorpseWeapon(id) is not { } w) return null;
         var key = InputBindings.Name("interact");
-        return CorpseRules.CanReplace(w, CorpseRules.PrimaryPos)
+        var item = CorpseItem(id);
+        var hold = CorpseRules.CanReplace(w, CorpseRules.PrimaryPos);
+        if (item != null) return Strings.F(hold ? "hud.corpse.hold.item" : "hud.corpse.tap.item", key, WeaponName(w.Id), ItemName(item));
+        return hold
             ? Strings.F("hud.corpse.hold", key, WeaponName(w.Id))
             : Strings.F("hud.corpse.tap", key, WeaponName(w.Id));
     }
@@ -152,8 +162,19 @@ public partial class NetClient
             var current = WeaponName(Weapons!.Weapons[_hotbar[pos]].Id);
             options.Add((pos, Strings.F(pos == CorpseRules.PrimaryPos ? "corpse.primary" : "corpse.secondary", current)));
         }
+        var weaponRows = options.Count;
+        var item = CorpseItem(corpse);
+        if (item != null)
+        {
+            var worn = WornIn(item.Slot); // what the item would replace
+            options.Add((CorpseChooser.ItemPos, worn != null
+                ? Strings.F("corpse.item.swap", ItemName(item), ItemName(worn)) : Strings.F("corpse.item", ItemName(item))));
+        }
         if (options.Count == 0) return;
-        _chooser.Open(corpse, Strings.F("corpse.title", WeaponName(weapon.Id)), options);
+        var title = weaponRows == 0 ? Strings.F("corpse.title", ItemName(item!)) // nothing of the weapon can be taken: the item is the offer
+            : item != null ? Strings.F("corpse.title.item", WeaponName(weapon.Id), ItemName(item))
+            : Strings.F("corpse.title", WeaponName(weapon.Id));
+        _chooser.Open(corpse, title, options);
     }
 
     void SendPickUp(ushort corpse, int pos) =>
