@@ -70,12 +70,14 @@ public partial class WaterSurfaces : Node3D
     }
 
     /// <summary>The ring's points without the closing repeat of its first point (a duplicate breaks the triangulation).</summary>
-    static void AddRingPoints(List<Vector2> into, Vector2[] ring)
+    static void AddRingPoints(List<Vector2> into, System.Numerics.Vector2[] ring)
     {
         var n = ring.Length;
         if (n > 1 && ring[0] == ring[n - 1]) n--;
-        for (var i = 0; i < n; i++) into.Add(ring[i]);
+        for (var i = 0; i < n; i++) into.Add(ToGodot(ring[i]));
     }
+
+    static Vector2 ToGodot(System.Numerics.Vector2 p) => new(p.X, p.Y);
 
     /// <summary>
     /// A grid mesh of the body at its surface height: the outline and the holes, plus interior grid points, Delaunay
@@ -101,10 +103,10 @@ public partial class WaterSurfaces : Node3D
         }
         if (idx.Count < 3)
         {
-            var ring = body.Rings[0];
-            pts = ring;
+            var outline = body.Rings[0].Select(ToGodot).ToArray();
+            pts = outline;
             idx.Clear();
-            idx.AddRange(Geometry2D.TriangulatePolygon(ring));
+            idx.AddRange(Geometry2D.TriangulatePolygon(outline));
             if (idx.Count < 3) return null;
         }
         var verts = new Vector3[pts.Length];
