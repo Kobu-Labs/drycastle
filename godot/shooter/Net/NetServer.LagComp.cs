@@ -32,7 +32,7 @@ public partial class NetServer
         {
             SyncLife(o);
             var valid = o.Car == null && _match.Get(o.Id)?.Life == PlayerLife.Alive;
-            o.Poses.Record(_tick, valid, new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw));
+            o.Poses.Record(_tick, valid, new HitTarget(o.Id, N(o.Body.GlobalPosition), BodyStanceOf(o), o.Body.Yaw));
         }
     }
 

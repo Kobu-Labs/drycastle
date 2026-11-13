@@ -113,8 +113,14 @@ public static class ChatCommands
             {
                 ("rozhlas", "the village loudspeaker broadcast, for everyone, now"),
                 ("intel", "TEST: announce a made-up event and put it on the intel screen at the base"),
+                ("mass", "the Holy Mass: the bells ring, the village walks to the church, the pastor leads the Mass"),
+                ("current", "the running event (with end)"),
             },
-            ChatArgKind.Choice when cmd.Name == "event" => new[] { ("clear", "take the test event off the intel screen again (with intel)") },
+            ChatArgKind.Choice when cmd.Name == "event" => new[]
+            {
+                ("clear", "take the test event off the intel screen again (with intel)"),
+                ("end", "conclude the running event as if it was completed (with current)"),
+            },
             ChatArgKind.IntOrChoice when cmd.Name == "citizens" => new[] { ("clear", "remove every citizen") },
             ChatArgKind.Choice when cmd.Name == "help" => Visible(ctx).Select(c => (c.Name, c.Summary)).ToList(),
             _ => Array.Empty<(string, string)>(),

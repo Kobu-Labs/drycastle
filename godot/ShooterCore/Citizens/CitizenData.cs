@@ -52,11 +52,50 @@ public sealed class CitizensConfig
     public List<CitizenModelDef> Models { get; set; } = new();
 }
 
-/// <summary>holy_mass.json, schema version 1. Only the citizens section exists so far; the Mass event adds its own.</summary>
+/// <summary>The Mass event (holy_mass.json, <c>mass</c>): the timeline, the pastor, the seats kept for players and the blessing. Times in seconds, lengths in metres.</summary>
+public sealed class MassConfig
+{
+    /// <summary>Citizens walk in during the gather (the farthest house takes house_radius_m / walk_speed s, the stagger adds to it), then the Mass runs for mass_seconds of progress.</summary>
+    public float GatherSeconds { get; set; } = 120;
+    public float MassSeconds { get; set; } = 120;
+    /// <summary>After the Mass completes: citizens stand and clap, the pastor flexes; then everyone is removed and the event is over.</summary>
+    public float CompletedSeconds { get; set; } = 12;
+    /// <summary>The time over which the citizens leave their houses, and the radius of the houses that send one (a house 100 m away is 70 s of walking).</summary>
+    public float StaggerSeconds { get; set; } = 25;
+    public float HouseRadiusM { get; set; } = 100;
+    /// <summary>Seats no citizen is sent to, so players can take them during the gather (ground floor, spread along the nave). A player takes any seat no citizen has, these or one a killed citizen left.</summary>
+    public int PlayerSeats { get; set; } = 8;
+    /// <summary>How near a player must be to a seat's point (ground distance) to sit in it.</summary>
+    public float SitReachM { get; set; } = 1.6f;
+    /// <summary>The share of the Mass a player must have sat through to be blessed.</summary>
+    public float BlessedShare { get; set; } = 0.8f;
+    /// <summary>A killed pastor: a new one walks out of the sacristy after this long, and the Mass continues this long after he has arrived. The pastor killed this many times turns.</summary>
+    public float PastorReplaceSeconds { get; set; } = 10;
+    public float ResumeSeconds { get; set; } = 5;
+    public int PastorKillsToTurn { get; set; } = 3;
+    /// <summary>The share of the citizens (and the monks) that clap when the Mass completes.</summary>
+    public float ClapShare { get; set; } = 0.4f;
+    /// <summary>Synty models of the pastor and the monks, and the atlas texture (under assets-private/synty/) they wear.</summary>
+    public string PastorModel { get; set; } = "priest_01";
+    public string MonkModel { get; set; } = "monk_01";
+    public string Atlas { get; set; } = "glb/atlas/fantasy_kingdom_01_A.png";
+    /// <summary>The pastor does a gesture every few seconds (a random time within these) between the praying base clips. A monk who sees the pastor killed is shocked; this share of them dab.</summary>
+    public float GestureMinSeconds { get; set; } = 5;
+    public float GestureMaxSeconds { get; set; } = 11;
+    public float MonkDabShare { get; set; } = 0.03f;
+    /// <summary>Audio files under the shipped assets (no asset exists yet: a missing file is skipped, logged once). The chant loops while the Mass progresses; the bells play village-wide once at the start.</summary>
+    public string ChantSound { get; set; } = "audio/holy_mass/chant.ogg";
+    public string BellsSound { get; set; } = "audio/holy_mass/bells.ogg";
+    /// <summary>The chant is heard within this distance of the pastor, fading out (positional, with the church's echo).</summary>
+    public float ChantRangeM { get; set; } = 40;
+}
+
+/// <summary>holy_mass.json, schema version 1: the citizens and the Mass event.</summary>
 public sealed class HolyMassFile : IVersioned
 {
     public int Version { get; set; }
     public CitizensConfig Citizens { get; set; } = new();
+    public MassConfig Mass { get; set; } = new();
 
     public static HolyMassFile Load(string path) => Validate(DataFile.Load<HolyMassFile>(path));
 
@@ -71,6 +110,13 @@ public sealed class HolyMassFile : IVersioned
         if (!(c.TurnRateDegPerS > 0)) throw new DataFileException($"{F}: citizens.turn_rate_deg_per_s must be positive");
         if (!(c.StaggerSeconds >= 0) || !(c.HouseRadiusM > 0) || !(c.HouseMinM >= 0) || !(c.CorpseSeconds > 0) || !(c.SeatHeightM >= 0))
             throw new DataFileException($"{F}: citizens: stagger_seconds, house_min_m and seat_height_m are not negative; house_radius_m and corpse_seconds are positive");
+        var mass = f.Mass;
+        if (!(mass.GatherSeconds >= 0) || !(mass.MassSeconds > 0) || !(mass.CompletedSeconds >= 0) || !(mass.StaggerSeconds >= 0) || !(mass.HouseRadiusM > 0))
+            throw new DataFileException($"{F}: mass: gather_seconds, completed_seconds and stagger_seconds are not negative; mass_seconds and house_radius_m are positive");
+        if (mass.PlayerSeats < 0 || !(mass.SitReachM > 0) || !(mass.BlessedShare is >= 0 and <= 1) || !(mass.ClapShare is >= 0 and <= 1) || !(mass.MonkDabShare is >= 0 and <= 1))
+            throw new DataFileException($"{F}: mass: player_seats is not negative, sit_reach_m positive, the shares 0..1");
+        if (!(mass.PastorReplaceSeconds >= 0) || !(mass.ResumeSeconds >= 0) || mass.PastorKillsToTurn < 1 || !(mass.GestureMinSeconds > 0) || mass.GestureMaxSeconds < mass.GestureMinSeconds || !(mass.ChantRangeM > 0))
+            throw new DataFileException($"{F}: mass: pastor_replace_seconds and resume_seconds are not negative, pastor_kills_to_turn is at least 1, gesture_min_seconds is positive and not above gesture_max_seconds");
         foreach (var col in c.Palette.Concat(c.SkinTones))
             if (col.Length != 7 || col[0] != '#' || !col.Skip(1).All(Uri.IsHexDigit)) throw new DataFileException($"{F}: citizens: '{col}' is not a #rrggbb colour");
         if (c.Models.Count == 0 || c.Palette.Count == 0 || c.SkinTones.Count == 0) throw new DataFileException($"{F}: citizens needs at least one model, palette colour and skin tone");

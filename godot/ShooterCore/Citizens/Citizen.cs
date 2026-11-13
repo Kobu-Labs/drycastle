@@ -3,7 +3,11 @@ using System.Numerics;
 namespace Drycastle.ShooterCore;
 
 /// <summary>What a citizen is doing: the replicated state byte. Walking is the way to the church door on the navigation mesh, Entering the scripted walk inside to the seat.</summary>
-public enum CitizenState : byte { Walking = 0, Entering = 1, Seated = 2, Dead = 3, Kneeling = 4 }
+/// <remarks>Standing is the pastor and monks at their spot, or a citizen on its feet after the Mass; Clapping is the Mass done and the body cheering (the pastor flexes).</remarks>
+public enum CitizenState : byte { Walking = 0, Entering = 1, Seated = 2, Dead = 3, Kneeling = 4, Standing = 5, Clapping = 6 }
+
+/// <summary>Who a citizen entity is. It travels in the entity state's hit-point byte (<c>role * 2 + alive</c>).</summary>
+public enum CitizenRole : byte { Citizen = 0, Monk = 1, Pastor = 2 }
 
 /// <summary>Citizen world entity rules: the wire type, the state byte and the ids a citizen is hit under.</summary>
 public static class CitizenRules
@@ -19,7 +23,7 @@ public static class CitizenRules
 
     public static bool IsHitId(ushort id) => id >= FirstHitId && id < FirstHitId + HitIdCount;
 
-    public static CitizenState StateOf(byte state) => state <= (byte)CitizenState.Kneeling ? (CitizenState)state : CitizenState.Dead;
+    public static CitizenState StateOf(byte state) => state <= (byte)CitizenState.Clapping ? (CitizenState)state : CitizenState.Dead;
 
     public static void Register(WorldEntityRegistry registry)
     {
@@ -69,6 +73,8 @@ public sealed class Citizen : IWorldEntity
     public CitizenState State { get; private set; }
     public bool Alive => State != CitizenState.Dead;
     public bool Seated => State is CitizenState.Seated or CitizenState.Kneeling;
+    /// <summary>Pastor and monks are citizen entities that never sit: they walk to a spot and stand there.</summary>
+    public CitizenRole Role { get; init; }
     /// <summary>The place is a standing spot, not a pew: on arrival the citizen kneels (<see cref="CitizenState.Kneeling"/>) instead of sitting.</summary>
     public bool Stand { get; init; }
     /// <summary>The player whose hit killed it.</summary>
@@ -116,7 +122,20 @@ public sealed class Citizen : IWorldEntity
         }
     }
 
-    public WorldState Serialize() => WorldState.Make(Position, Yaw, 0, Look, (byte)State, Alive ? 1 : 0);
+    public WorldState Serialize() => WorldState.Make(Position, Yaw, 0, Look, (byte)State, (byte)Role * 2 + (Alive ? 1 : 0));
+
+    /// <summary>A one-point walk is already there: stand (or sit) now, before the first state goes out.</summary>
+    public void Settle() { if (State is CitizenState.Walking or CitizenState.Entering && _walk.Count < 2) Sit(); }
+
+    /// <summary>The role in an entity state's hit-point byte.</summary>
+    public static CitizenRole RoleOf(byte hp) => (CitizenRole)Math.Min(hp >> 1, (int)CitizenRole.Pastor);
+
+    /// <summary>The Mass is done: a living citizen on its feet or in its seat takes this state (standing up from the pew is the client's: it follows the state).</summary>
+    public void Finish(bool clap)
+    {
+        if (!Alive || State is CitizenState.Walking or CitizenState.Entering) return;
+        State = clap ? CitizenState.Clapping : CitizenState.Standing;
+    }
 
     // ---- behaviour ----
 
@@ -129,7 +148,7 @@ public sealed class Citizen : IWorldEntity
 
     void Sit()
     {
-        State = Stand ? CitizenState.Kneeling : CitizenState.Seated;
+        State = Role != CitizenRole.Citizen ? CitizenState.Standing : Stand ? CitizenState.Kneeling : CitizenState.Seated;
         if (_enter.Count > 0) Position = _enter[^1];
         Yaw = SeatYaw;
     }

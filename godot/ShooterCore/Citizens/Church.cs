@@ -6,6 +6,9 @@ namespace Drycastle.ShooterCore;
 /// <summary>One seat of the church: where the pelvis rests on the pew, the way the sitter faces, the scripted route to it from the door, and the floor (0 ground, 1 gallery). A standing spot (<c>Stand</c>) has no pew: its point is on the floor and the citizen stands or kneels there.</summary>
 public sealed record ChurchSeat(int Id, Vector3 Pos, float Yaw, IReadOnlyList<Vector3> Path, int Floor, bool Stand = false);
 
+/// <summary>A place with a facing: where the pastor, a monk or the sacristy door is, or where blessed players are put.</summary>
+public sealed record ChurchSpot(Vector3 Pos, float Yaw);
+
 /// <summary>
 /// The church the citizens walk to (church.json, exported by the map pipeline next to bunkers.json). Godot-free; every point is in Godot axes
 /// (x east, y up, z = -north) and every yaw is a Godot yaw (0 faces -Z, positive turns left). In the file points are local map metres like the
@@ -20,6 +23,12 @@ public sealed class Church
     /// <summary>The route from the door along the aisle, used by seats that give no path of their own.</summary>
     public IReadOnlyList<Vector3> Aisle { get; }
     public IReadOnlyList<ChurchSeat> Seats { get; }
+    /// <summary>Where blessed players are put when the Mass completes, facing the door (null when the file has none).</summary>
+    public ChurchSpot? Exit { get; init; }
+    /// <summary>The pastor's spot in front of the altar, the monks' spots, and the sacristy door a new pastor walks out of (null / empty when the file has none).</summary>
+    public ChurchSpot? Pastor { get; init; }
+    public IReadOnlyList<ChurchSpot> Monks { get; init; } = Array.Empty<ChurchSpot>();
+    public ChurchSpot? SacristyDoor { get; init; }
 
     readonly Dictionary<int, ChurchSeat> _byId = new();
 
@@ -43,7 +52,7 @@ public sealed class Church
     /// <summary>The floor under the seat, where a sitter's feet stand (the seat point is on the seat).</summary>
     public static Vector3 FeetOf(ChurchSeat seat, float seatHeight) => seat.Stand ? seat.Pos : seat.Pos - new Vector3(0, seatHeight, 0);
 
-    /// <summary>Parse church.json: <c>{"door": {"x","y","z","yaw"}, "aisle": [[x,y,z]...], "seats": [{"id","pos":[x,y,z],"yaw","path":[[x,y,z]...],"floor","stand"}]}</c> (aisle, path, floor and stand optional).</summary>
+    /// <summary>Parse church.json: <c>{"door": {"x","y","z","yaw"}, "aisle": [[x,y,z]...], "seats": [{"id","pos":[x,y,z],"yaw","path":[[x,y,z]...],"floor","stand"}], "exit"|"pastor"|"sacristy_door": {"pos","yaw"}, "monks": [{"pos","yaw"}]}</c> (everything but door and seats optional).</summary>
     public static Church Parse(string json, string name = "church.json")
     {
         JsonDocument doc;
@@ -70,8 +79,25 @@ public sealed class Church
                     s.TryGetProperty("path", out var p) ? Points(p, name, $"seat {id} path") : new List<Vector3>(), floor,
                     s.TryGetProperty("stand", out var st) && st.ValueKind == JsonValueKind.True));
             }
-            return new Church(doorPos, doorYaw, aisle, list);
+            return new Church(doorPos, doorYaw, aisle, list)
+            {
+                Exit = Spot(root, "exit", name),
+                Pastor = Spot(root, "pastor", name),
+                SacristyDoor = Spot(root, "sacristy_door", name),
+                Monks = root.TryGetProperty("monks", out var mk) && mk.ValueKind == JsonValueKind.Array
+                    ? mk.EnumerateArray().Select(m => SpotOf(m, name, "monks")).ToList() : new List<ChurchSpot>(),
+            };
         }
+    }
+
+    static ChurchSpot? Spot(JsonElement root, string key, string file) =>
+        root.TryGetProperty(key, out var e) && e.ValueKind == JsonValueKind.Object ? SpotOf(e, file, key) : null;
+
+    /// <summary><c>{"pos":[x,y,z],"yaw":bearing}</c>.</summary>
+    static ChurchSpot SpotOf(JsonElement e, string file, string what)
+    {
+        if (e.ValueKind != JsonValueKind.Object || !e.TryGetProperty("pos", out var pos)) throw new DataFileException($"{file}: {what} is {{\"pos\": [x, y, z], \"yaw\"}}");
+        return new ChurchSpot(Point(pos, file, what), Bearing(e.TryGetProperty("yaw", out var y) ? y.GetSingle() : 0));
     }
 
     public static Church Load(string path) => Parse(File.ReadAllText(path), Path.GetFileName(path));

@@ -171,7 +171,9 @@ public partial class NetServer
     void ChatEvent(Client c, IReadOnlyList<string> args)
     {
         var clear = args.Count > 1 && args[1] == "clear";
-        if (args.Count > 1 && args[0] != "intel") { ChatTo(c, ChatLineKind.Error, $"/event {args[0]} takes no action. Only /event intel takes clear."); return; }
+        if (args.Count > 1 && args[0] is not ("intel" or "current")) { ChatTo(c, ChatLineKind.Error, $"/event {args[0]} takes no action. /event intel takes clear, /event current takes end."); return; }
+        if (args[0] == "current" && (args.Count < 2 || args[1] != "end")) { ChatTo(c, ChatLineKind.Error, "Usage: /event current end"); return; }
+        if (args[0] == "intel" && args.Count > 1 && args[1] != "clear") { ChatTo(c, ChatLineKind.Error, "Usage: /event intel [clear]"); return; }
         switch (args[0]) // the parser only lets known events through
         {
             case "rozhlas":
@@ -180,6 +182,8 @@ public partial class NetServer
                 GD.Print($"server: rozhlas started by {c.Name} #{c.Id}");
                 break;
             case "intel": ChatIntel(c, clear); break;
+            case "mass": ChatMass(c); break;
+            case "current": ChatCurrentEnd(c); break;
         }
     }
 
