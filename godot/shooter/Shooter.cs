@@ -177,7 +177,7 @@ public partial class Shooter : Node3D
         _shell = new UiShell
         {
             PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks)),
-            WantsFreeMouse = () => _client is { Dead: true } or { ChatOpen: true } or { EquipmentOpen: true }, // the respawn screen, the chat box and the Equipment screen release the mouse (buttons to click, keys to type, cells to drag)
+            WantsFreeMouse = () => _client is { Dead: true } or { ChatOpen: true } or { EquipmentOpen: true } or { ChooserFreesMouse: true }, // the respawn screen, the chat box, the Equipment screen and the corpse chooser's item list release the mouse (buttons to click, keys to type, cells to drag or click)
             BackHandler = () => (_client?.CloseChat() ?? false) || (_client?.CloseEquipment() ?? false) || (_client?.CloseTacticalMap() ?? false), // Esc closes the chat box, then the Equipment screen, then the tactical map, before it opens Pause
         };
         AddChild(_shell);

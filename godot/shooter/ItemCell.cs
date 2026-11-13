@@ -14,6 +14,13 @@ namespace Drycastle.Shooter;
 public sealed partial class ItemCell : Control
 {
     const string Type = "ItemCell";
+
+    /// <summary>
+    /// A screen that sent a wish ignores further ones until the server answers, so a second click on the stale picture cannot undo the first. Its cells dim
+    /// (<see cref="Disabled"/>) when the answer takes longer than <see cref="PendingDimAfter"/> seconds (no flicker on a fast link), and it gives up on an
+    /// answer that never comes (a refusal sends no event) after <see cref="PendingGiveUp"/> seconds.
+    /// </summary>
+    public const double PendingDimAfter = 0.12, PendingGiveUp = 0.6;
     /// <summary>The gap between two pips; a limit too large for the cell is drawn with the pips closer together.</summary>
     const int PipGap = ShooterTheme.Space / 2;
 

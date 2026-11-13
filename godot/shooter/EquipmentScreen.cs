@@ -18,9 +18,6 @@ namespace Drycastle.Shooter;
 /// </summary>
 public sealed partial class EquipmentScreen : Control
 {
-    /// <summary>Seconds after a wish before the cells dim to say they wait for the server, and after which a wish the server never answered (refused) is given up on.</summary>
-    const double PendingDimAfter = 0.12, PendingGiveUp = 0.6;
-
     readonly NetClient _client;
     readonly CamoPreview _avatar;
     readonly PanelContainer _panel;
@@ -212,7 +209,7 @@ public sealed partial class EquipmentScreen : Control
 
     /// <summary>
     /// Sends a wish to the server. While one waits for the answer (the next Equipment event) the others are ignored: a second click on the stale picture
-    /// would undo the first (a swap twice is no swap). A wish the server never answers (a refusal) is given up on after <see cref="PendingGiveUp"/> seconds.
+    /// would undo the first (a swap twice is no swap). A wish the server never answers (a refusal) is given up on after <see cref="ItemCell.PendingGiveUp"/> seconds.
     /// </summary>
     void Perform(ItemWish wish, ItemCell? at)
     {
@@ -238,8 +235,8 @@ public sealed partial class EquipmentScreen : Control
     void UpdatePending()
     {
         var waited = Time.GetTicksMsec() / 1000.0 - _pendingSince;
-        if (waited >= PendingGiveUp) { EndPending(); return; }
-        if (waited >= PendingDimAfter && !_dimmed) SetDimmed(true);
+        if (waited >= ItemCell.PendingGiveUp) { EndPending(); return; }
+        if (waited >= ItemCell.PendingDimAfter && !_dimmed) SetDimmed(true);
     }
 
     void EndPending()

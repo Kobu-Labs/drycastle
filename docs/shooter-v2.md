@@ -469,11 +469,14 @@ items, ADR 0018 (#267, protocol 31).
 - **Death and the corpse.** At death everything worn and bagged comes off and the corpse carries it (`Corpse.Items`, up to 7: the worn items, then
   the bag), with the pickups already counted, so the player respawns bare headed with an empty bag. The corpse keeps its weapon as before; the two are
   separate takes. The items live as long as the corpse (120 s). The corpse cap evicts the oldest thing without an item first.
-- **Taking it.** Tap the interact key at a corpse that carries items: the chooser gets a third row, key 3, for the first of them ("Put on the Bigfoot
-  head"; "Take the X into your bag" when the slot is taken; "..., leaving your X" when the bag is full too and what was worn goes onto the corpse with its
-  count). Holding the key still takes the weapon only. The prompt names the first item. Same conditions as the weapon: alive, on foot, in reach. The
-  item goes into its empty slot, else the bag, else it swaps with what is worn. The chooser for the whole list is a separate issue; `NetClient.RequestTakeCorpseItem`
-  takes any item of it by index.
+- **Taking it (#269).** Tap the interact key at a corpse that carries items: the chooser (`CorpseChooser`) shows, under the weapon rows (keys 1 and 2), one
+  cell for each item (`ItemCell`, the same cell as the Equipment screen: icon, pickup pips, name tooltip). A click or Enter on a cell takes that item
+  (`RequestTakeCorpseItem` by index): into its empty slot, else the bag, else it swaps with what is worn (the corpse keeps what was worn). The cell leaves the
+  list when the server's next list for the corpse arrives; an item taken as often as it may be crumbles, the cell goes and the toast "The item crumbles in your
+  hands" shows. The arrows move between the cells and the chooser stays open for the next one; with nothing left (and no weapon row) it closes, Esc cancels.
+  A chooser with a list releases the mouse; one with only the weapon rows is keyboard only as before. A corpse with no items shows no list. Holding the key
+  still takes the weapon only. The prompt names the item only for a corpse that carries exactly one ("... or put on X"), and says "an item" for several.
+  Same conditions as the weapon: alive, on foot, in reach.
 - **The bag and the moves (#267).** `Bag` holds six `ItemStack`s. `RequestEquip(cell)` wears a bagged item (what was worn goes into that cell),
   `RequestUnequip(slot)` puts the worn item in the first empty cell (refused with "Your bag is full" when there is none), `RequestDropWorn` and
   `RequestDropBagged` put an item on the ground. None of them counts a pickup; the server validates each and answers with an `Equipment` event.

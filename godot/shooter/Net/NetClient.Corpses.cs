@@ -8,9 +8,10 @@ namespace Drycastle.Shooter;
 /// hold and tap of the interact key, and the chooser. Holding the key takes the corpse's weapon into the primary position
 /// (<see cref="CorpseRules.PrimaryPos"/>); a tap opens <see cref="CorpseChooser"/> to pick the primary or the secondary.
 /// The server validates reach and slot; the hotbar it sends back (<see cref="EventKind.Hotbar"/>) is the one that counts.
-/// A corpse that carries items (<see cref="EventKind.CorpseItems"/>) adds a third row to the chooser, key 3, for the first of them: taking the
-/// item is a separate action from taking the weapon, and the prompt names it. The list of all its items is for the corpse chooser's own screen
-/// (<see cref="CorpseItems"/>).
+/// A corpse that carries items (<see cref="EventKind.CorpseItems"/>, up to seven; issues #261, #269) adds a row of item cells to the chooser, one for each
+/// of them: taking an item is a separate action from taking the weapon (a click or Enter on its cell, <see cref="RequestTakeCorpseItem"/>), and the cell
+/// leaves the list when the server sends the corpse's next list. Holding the key still takes the weapon only. The prompt names the item only when there is
+/// exactly one, and nothing else for several.
 /// </summary>
 public partial class NetClient
 {
@@ -38,6 +39,9 @@ public partial class NetClient
     /// <summary>True while the corpse chooser is up; the hotbar keys and wheel belong to it then.</summary>
     bool ChooserOpen => _chooser.IsOpen;
 
+    /// <summary>The chooser shows a list of Items: the mouse is released for it (the shell asks). A chooser with only the weapon rows keeps the mouse captured.</summary>
+    public bool ChooserFreesMouse => _chooser.HasItems;
+
     /// <summary>Called once from <see cref="_Ready"/>: registers the corpse type, follows the corpse entities and builds the chooser.</summary>
     void InitCorpses()
     {
@@ -47,9 +51,11 @@ public partial class NetClient
         _chooser = new CorpseChooser();
         _chooser.Picked += pos =>
         {
-            if (_chooser.IsOpen) { if (pos == CorpseChooser.ItemPos) RequestTakeCorpseItem(_chooser.Corpse, 0); else SendPickUp(_chooser.Corpse, pos); }
+            if (_chooser.IsOpen) SendPickUp(_chooser.Corpse, pos);
             _chooser.Close();
         };
+        _chooser.ItemPicked += index => { if (_chooser.IsOpen) RequestTakeCorpseItem(_chooser.Corpse, index); }; // the cell leaves with the server's next list
+        CorpseItemsChanged += corpse => { if (_chooser.IsOpen && _chooser.Corpse == corpse) _chooser.SetItems(ChooserItems(corpse)); };
         AddChild(_chooser);
     }
 
@@ -125,9 +131,9 @@ public partial class NetClient
     {
         if (_near is not { } id || ChooserOpen || GroundItemOwnsKey || CorpseWeapon(id) is not { } w) return null;
         var key = InputBindings.Name("interact");
-        var item = CorpseItem(id);
         var hold = CorpseRules.CanReplace(w, CorpseRules.PrimaryPos);
-        if (item != null) return Strings.F(hold ? "hud.corpse.hold.item" : "hud.corpse.tap.item", key, WeaponName(w.Id), ItemName(item));
+        if (CorpseItems(id).Count > 1) return Strings.F(hold ? "hud.corpse.hold.items" : "hud.corpse.tap.items", key, WeaponName(w.Id)); // a list: its own chooser names them
+        if (CorpseItem(id) is { } item) return Strings.F(hold ? "hud.corpse.hold.item" : "hud.corpse.tap.item", key, WeaponName(w.Id), ItemName(item));
         return hold
             ? Strings.F("hud.corpse.hold", key, WeaponName(w.Id))
             : Strings.F("hud.corpse.tap", key, WeaponName(w.Id));
@@ -155,6 +161,10 @@ public partial class NetClient
         _useWas = use;
     }
 
+    /// <summary>The corpse's Items as the chooser's cells, in the server's order.</summary>
+    List<ChooserItem> ChooserItems(ushort corpse) =>
+        CorpseItems(corpse).Select(h => new ChooserItem(h, ItemIcon(h.Def), ItemName(h.Def))).ToList();
+
     void OpenChooser(ushort corpse, WeaponDef weapon)
     {
         var options = new List<(int Pos, string Text)>();
@@ -164,20 +174,13 @@ public partial class NetClient
             var current = WeaponName(Weapons!.Weapons[_hotbar[pos]].Id);
             options.Add((pos, Strings.F(pos == CorpseRules.PrimaryPos ? "corpse.primary" : "corpse.secondary", current)));
         }
-        var weaponRows = options.Count;
-        var item = CorpseItem(corpse);
-        if (item != null)
-        {
-            var worn = WornIn(item.Slot); // the slot is taken: the item goes in the bag, and swaps with what is worn only when the bag is full
-            options.Add((CorpseChooser.ItemPos, worn == null ? Strings.F("corpse.item", ItemName(item))
-                : BagIsFull ? Strings.F("corpse.item.swap", ItemName(item), ItemName(worn))
-                : Strings.F("corpse.item.bag", ItemName(item))));
-        }
-        if (options.Count == 0) return;
-        var title = weaponRows == 0 ? Strings.F("corpse.title", ItemName(item!)) // nothing of the weapon can be taken: the item is the offer
-            : item != null ? Strings.F("corpse.title.item", WeaponName(weapon.Id), ItemName(item))
-            : Strings.F("corpse.title", WeaponName(weapon.Id));
-        _chooser.Open(corpse, title, options);
+        var items = ChooserItems(corpse);
+        if (options.Count == 0 && items.Count == 0) return;
+        var title = options.Count == 0 // nothing of the weapon can be taken: the Items are the offer
+            ? items.Count == 1 ? Strings.F("corpse.title", items[0].Name) : Strings.T("corpse.title.items")
+            : items.Count == 0 ? Strings.F("corpse.title", WeaponName(weapon.Id))
+            : Strings.F("corpse.title.with_items", WeaponName(weapon.Id));
+        _chooser.Open(corpse, title, options, items);
     }
 
     void SendPickUp(ushort corpse, int pos) =>
