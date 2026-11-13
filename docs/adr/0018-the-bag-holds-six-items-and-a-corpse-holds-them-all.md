@@ -27,6 +27,6 @@ Decided for the Equipment screen work (issue #267, after #261). **Amends** ADR 0
 
 ## Consequences
 
-- The Equipment screen and the corpse chooser read their state from `NetClient.Items.cs` (`WornItems`, `BagContents`, `CorpseItems(id)`, `ItemsChanged`, `CorpseItemsChanged`) and send wishes with `RequestEquip`, `RequestUnequip`, `RequestDropWorn`, `RequestDropBagged`, `RequestTakeGroundItem` and `RequestTakeCorpseItem`. The existing single item row of the chooser takes index 0.
+- The Equipment screen and the corpse chooser read their state from `NetClient.Items.cs` (`WornItems`, `BagContents`, `CorpseItems(id)`, `ItemsChanged`, `CorpseItemsChanged`) and send wishes with `RequestEquip`, `RequestUnequip`, `RequestDropWorn`, `RequestDropBagged`, `RequestTakeGroundItem` and `RequestTakeCorpseItem`. The chooser lists every item of the corpse and takes the chosen index (#269).
 - A corpse can now carry an event reward and six other items, and the cap protects every carrier alike: a busy fight can still remove a carrier once only carriers are left, the oldest first.
 - Protocol 31: a client of 30 or older is refused at the hello.
