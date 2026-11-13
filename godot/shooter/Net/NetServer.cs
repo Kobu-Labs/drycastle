@@ -175,6 +175,7 @@ public partial class NetServer : Node
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
         StatusInit();
+        DemonInit();
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");
         _match.Entities.Spawned += w => BroadcastEvent(EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State));
         _match.Entities.Despawned += w => BroadcastEvent(EventKind.WorldDespawn, WorldCodec.EncodeDespawn(w.Id, w.Reason));
@@ -792,6 +793,7 @@ public partial class NetServer : Node
             if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
         }
         _crowd?.AddTargets(list); // the citizens of the Holy Mass
+        AddDemonTarget(list);
         PerfCounters.LiveTargetsCalls++; PerfCounters.LiveTargetsElems += list.Count;
         return list;
     }
@@ -967,6 +969,7 @@ public partial class NetServer : Node
     DamageResult Deal(ushort attackerId, byte weaponIdx, ushort victim, float damage, bool head, bool backstab, KillCause cause = KillCause.Standard)
     {
         if (_streaks.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
+        if (DemonRules.IsHitId(victim)) return DemonHit(attackerId, weaponIdx, damage); // the demon: a hit count, no hit points
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
         if (CitizenRules.IsHitId(victim)) // a citizen: the hit marker, but no assist, streak, refill or kill feed

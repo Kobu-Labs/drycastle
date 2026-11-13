@@ -7,7 +7,8 @@ namespace Drycastle.ShooterCore;
 public sealed record Anchor(int Id, Vector3 Pos, Vector3 Normal, int[] Links);
 
 /// <summary>
-/// The anchor graph of the church (<c>anchors</c> of church.json: <c>[{"id":0,"pos":[x,y,z],"normal":[x,y,z],"links":[1,2]}]</c>). A link is a straight
+/// The anchor graph of the church (<c>anchors</c> of church.json: <c>[{"id":0,"pos":[x,y,z],"normal":[x,y,z],"links":[1,2]}]</c>). Like the rest of the
+/// file, positions and normals are in map axes (x east, y north, z up) and become game axes (x, z, -y), as <see cref="Church"/> does. A link is a straight
 /// crawl along the surface and counts both ways whichever end names it. Normals are normalised here. A graph that is empty, names an unknown anchor,
 /// links an anchor to itself, repeats an id or is not connected is refused, since the demon would be stuck in a part of it.
 /// </summary>
@@ -83,5 +84,6 @@ public sealed class AnchorGraph
         }
     }
 
-    static Vector3 Vec(JsonElement a) => a.GetArrayLength() == 3 ? new Vector3(a[0].GetSingle(), a[1].GetSingle(), a[2].GetSingle()) : throw new FormatException("a vector needs 3 numbers");
+    /// <summary>A map-axes vector (x east, y north, z up) in game axes.</summary>
+    static Vector3 Vec(JsonElement a) => a.GetArrayLength() == 3 ? new Vector3(a[0].GetSingle(), a[2].GetSingle(), -a[1].GetSingle()) : throw new FormatException("a vector needs 3 numbers");
 }

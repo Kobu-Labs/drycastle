@@ -117,6 +117,7 @@ public static class ChatCommands
                 ("rozhlas", "the village loudspeaker broadcast, for everyone, now"),
                 ("intel", "TEST: announce a made-up event and put it on the intel screen at the base"),
                 ("mass", "the Holy Mass: the bells ring, the village walks to the church, the pastor leads the Mass"),
+                ("demon", "TEST: the pastor turns into the demon now; stand in the church to fight it"),
                 ("current", "the running event (with end)"),
             },
             ChatArgKind.Choice when cmd.Name == "event" => new[]

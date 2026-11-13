@@ -101,6 +101,30 @@ public class MassTests
     }
 
     [Fact]
+    public void TheDemonTurnsAtOnceOnAdminCommandAndTheCongregationBurns()
+    {
+        var (mass, crowd, entities, _) = Make();
+        var turned = 0;
+        mass.PastorTurns += () => turned++;
+        mass.ForceTurn(); // from idle: void at once
+        Assert.Equal(MassPhase.Void, mass.Phase);
+        Assert.Equal(1, turned);
+        mass.ForceTurn();
+        Assert.Equal(1, turned);
+        mass.End();
+
+        mass.Start();
+        Run(mass, crowd, entities, 21);
+        var alive = crowd.AliveCount;
+        Assert.True(alive > 2);
+        crowd.Remove(mass.Pastor!); // the pastor's body is taken away
+        Assert.Equal(alive - 1, crowd.Count == 0 ? 0 : crowd.AliveCount);
+        var died = crowd.KillAll(); // everyone else dies in place
+        Assert.Equal(alive - 1, died);
+        Assert.Equal(0, crowd.AliveCount);
+    }
+
+    [Fact]
     public void ThirdKillTurnsThePastorAndVoidsTheMass()
     {
         var (mass, crowd, entities, _) = Make();

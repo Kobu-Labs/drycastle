@@ -9,5 +9,6 @@ public static class MassStrings
         ("mass.stand", "{0} or {1}  Stand up"),
         ("mass.bells", "The church bells ring. The Holy Mass is about to begin."),
         ("mass.blessed", "You feel a divine blessing"),
+        ("mass.cursed", "You feel cursed"),
     };
 }

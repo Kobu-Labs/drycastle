@@ -75,6 +75,25 @@ public sealed class FireballDef
     public bool Ignites { get; set; }
 }
 
+/// <summary>The fight around the brain: the turning, the climb to the walls, the doors and the corpse. Seconds and metres.</summary>
+public sealed class DemonFightDef
+{
+    /// <summary>The pause between the third pastor kill and the start of the burning.</summary>
+    public float TransformDelayS { get; set; } = 1f;
+    /// <summary>The whole turning: the priest burns until <see cref="TransformSwapS"/>, the demon stands and roars, and drops on all fours in the last <see cref="TransformDropS"/>. It cannot be hit meanwhile.</summary>
+    public float TransformS { get; set; } = 7f;
+    public float TransformSwapS { get; set; } = 3f;
+    public float TransformDropS { get; set; } = 1f;
+    /// <summary>After the turning it leaps from the floor to its first anchor in this time (hittable, not yet fighting).</summary>
+    public float ClimbS { get; set; } = 1.5f;
+    /// <summary>The doors shut again this long after a player is inside while it waits (they never shut on the first step).</summary>
+    public float DoorGraceS { get; set; } = 3f;
+    /// <summary>The dead demon stays this long, then the event is over.</summary>
+    public float CorpseS { get; set; } = 8f;
+    /// <summary>The middle of its body is this far off the surface it holds on to; the hit volume is centred there.</summary>
+    public float BodyHeightM { get; set; } = 0.5f;
+}
+
 /// <summary>
 /// holy_mass_demon.json, schema version 1: the demon of the Holy Mass event, its fireball and the burn (the fireball's, and the devil's curse's).
 /// Optional like items.json; a separate file until it is merged with holy_mass.json. Every number lives here.
@@ -85,6 +104,7 @@ public sealed class DemonFile : IVersioned
     public DemonHitsDef Hits { get; set; } = new();
     public DemonHitWeights HitWeights { get; set; } = new();
     public DemonCrawlDef Crawl { get; set; } = new();
+    public DemonFightDef Fight { get; set; } = new();
     public FireballDef Fireball { get; set; } = new();
     public BurnDef Burn { get; set; } = new();
 
@@ -125,6 +145,12 @@ public sealed class DemonFile : IVersioned
         if (c.MaxHops < 1) throw new DataFileException($"{F}: \"crawl.max_hops\" is required and must be 1 or more");
         if (c.DwellS is not { Length: 2 } d || !(d[0] > 0) || d[1] < d[0] || !float.IsFinite(d[1]))
             throw new DataFileException($"{F}: \"crawl.dwell_s\" must be [min, max] with 0 < min <= max");
+
+        var ft = f.Fight;
+        Pos(ft.TransformS, "fight.transform_s"); Pos(ft.TransformSwapS, "fight.transform_swap_s"); Pos(ft.TransformDropS, "fight.transform_drop_s");
+        Pos(ft.ClimbS, "fight.climb_s"); Pos(ft.CorpseS, "fight.corpse_s"); Pos(ft.BodyHeightM, "fight.body_height_m");
+        NonNeg(ft.TransformDelayS, "fight.transform_delay_s"); NonNeg(ft.DoorGraceS, "fight.door_grace_s");
+        if (ft.TransformSwapS + ft.TransformDropS >= ft.TransformS) throw new DataFileException($"{F}: \"fight.transform_swap_s\" and \"transform_drop_s\" must fit inside \"transform_s\"");
 
         var b = f.Fireball;
         Pos(b.SpeedMps, "fireball.speed_mps"); Pos(b.GravityMps2, "fireball.gravity_mps2"); Pos(b.LifeS, "fireball.life_s");

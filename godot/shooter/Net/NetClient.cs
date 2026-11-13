@@ -123,6 +123,7 @@ public partial class NetClient : Node
         InitTurrets();
         InitAnimals();
         InitCitizens();
+        InitDemon();
         InitAircraft();
         InitFlak();
         InitSeats();
@@ -231,6 +232,7 @@ public partial class NetClient : Node
         RenderTurrets();
         RenderAnimals();
         RenderCitizens();
+        RenderDemon();
         RenderCars();
         RenderAircraft(delta);
         RenderRockets();
@@ -317,6 +319,7 @@ public partial class NetClient : Node
                 OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
                 OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
                 OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
+                OnDemonEvent((EventKind)e.Kind, e.Payload); // the demon: fireballs, the curse
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 OnProgressionEvent((EventKind)e.Kind, e.Payload);

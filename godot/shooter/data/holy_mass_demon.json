@@ -14,6 +14,16 @@
     "retarget_s": 4,
     "rearm_delay_s": 5
   },
+  "fight": {
+    "transform_delay_s": 1.0,
+    "transform_s": 7.0,
+    "transform_swap_s": 3.0,
+    "transform_drop_s": 1.0,
+    "climb_s": 1.5,
+    "door_grace_s": 3.0,
+    "corpse_s": 8.0,
+    "body_height_m": 0.5
+  },
   "fireball": {
     "speed_mps": 24,
     "gravity_mps2": 9.8,
