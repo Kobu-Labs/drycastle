@@ -155,6 +155,45 @@ terrain:
     road: ["#8e8e8e"]
     other: ["#72996b", "#7aa072", "#6a9163"]
 
+# --- Water (water stage of export; bed.py, water.py) --------------------------------------
+# Every water body (a water parcel, or a region with water_y) gets a natural bed generated from its outline, and
+# the terrain under it is carved to that bed. Depths in metres.
+water:
+  # Water bodies that are rivers (current, pools and riffles, outer bends deeper); the rest are static (ponds, lakes).
+  # The ids are parcel or region IDs; a region piece "R-0023.2" counts as "R-0023". The Morava is seven parcels.
+  river_ids: [P-0901, P-0534, P-1180, P-1184, P-1378, P-1597, P-1596]
+  bed:
+    # Grid of the depth in water.json: cells of this size, and the least depth inside an outline.
+    cell_m: 2.0
+    min_depth_m: 0.1
+  # The terrain under a body is lowered to its bed; a bank standing above the surface is cut down to it over this
+  # many metres outside the outline (never raised), so banks meet the water without a step.
+  carve_blend_m: 4.0
+  river:
+    mid_depth_m: 2.5  # typical mid-channel depth
+    pool_depth_m: 3.5  # deepest pool: the body's max_depth (edits.json) when it has one
+    riffle_depth_m: 0.8  # shallowest riffle (wadeable)
+    # Pools and riffles follow a seeded value-noise pattern along the flow (the body's main axis). Bars every
+    # 60 to 120 m: a lattice of about pattern_m, jittered by the seed per body.
+    pattern_m: 60
+    # Across the flow the pattern changes slowly, so the bars run across the channel.
+    cross_m: 150
+    # Pattern values below this are riffles (the shallow runs); the change to a riffle takes about RIFFLE_RAMP.
+    riffle_below: -0.35
+    # The bed reaches its depth this far from the bank: banks shelve.
+    shelf_m: 6
+    # On the outside of a bend the shelf is shorter by this share at a full bend (steeper banks).
+    outer_shelf_steepness: 0.4
+    # The bank curvature (1/m) of a full bend: 0.02 is a bend of radius 50 m (gentler bends count for less).
+    bend_curvature_per_m: 0.02
+    # Extra depth on the outside of a full bend.
+    bend_depth_m: 0.6
+  pond:
+    max_depth_m: 1.5  # the shallow bowl of a pond or lake (its max_depth in edits.json overrides it)
+    shelf_m: 5
+    pattern_m: 30  # a little irregularity on the bottom
+    pattern_gain: 0.1  # its share of the depth
+
 # --- Regions (export, region-run) ---------------------------------------------------------
 regions:
   # Regions (hand-drawn colour shapes, edits.json) float this far above the terrain surface ...

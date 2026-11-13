@@ -20,7 +20,7 @@ export and by ``region-run``, with the same code, so a hot-reloaded region equal
   of draped, and covers the terrain below that level reached from the drawn outline (:func:`water.wet_area`:
   the outline is only a hint, the shore is where the ground rises above the level; overlaps with other
   regions are not resolved for water), and the export
-  also writes it to ``water.json`` (see :func:`water.build_water`). The flat mesh sits
+  also writes it to ``water.json`` (see :func:`water.plan_water`; the terrain under it is carved to its bed). The flat mesh sits
   ``WATER_VISUAL_DROP_M`` under the surface, so the shooter's own water surface, drawn at
   ``water_y``, always wins and nothing z-fights.
 * Entries that fail the drape (no terrain, polygon outside the terrain coverage) are warned about
@@ -54,6 +54,7 @@ class Region:
     colour: list[int]
     polygon: Polygon  # local metres (x east, y north), clipped to the terrain coverage
     water_y: float | None = None  # flat water surface height (terrain datum), None: ground paint
+    max_depth: float | None = None  # the body's deepest point in metres (its bed's scale), None: the class default
 
 
 @dataclass
@@ -95,7 +96,9 @@ def plan_regions(edits: Edits, origin: list[float] | None, terrain: Terrain | No
             plan.warnings.append(f"regions.{rid}: outside the terrain coverage; region skipped")
             continue
         poly = pieces[0] if len(pieces) == 1 else MultiPolygon(pieces)
-        plan.regions[rid] = Region(rid, hex_to_rgb(entry["colour"]), poly, entry.get("water_y"))
+        plan.regions[rid] = Region(
+            rid, hex_to_rgb(entry["colour"]), poly, entry.get("water_y"), entry.get("max_depth")
+        )
     return plan
 
 
@@ -270,8 +273,13 @@ def region_meshes(
     roads_cfg: dict,
     rcfg: dict,
     only: set[str] | None = None,
+    wet: dict[str, BaseGeometry] | None = None,
 ) -> dict[str, Mesh]:
-    """``{region ID: mesh}`` for the planned regions (``only``: just these), empty ones omitted."""
+    """``{region ID: mesh}`` for the planned regions (``only``: just these), empty ones omitted.
+
+    ``wet`` are the water areas already worked out for the water bodies (``WaterPlan.wet``, from the terrain before
+    it was carved, so the flat surface matches water.json); a water region not in it works its own out.
+    """
     out: dict[str, Mesh] = {}
     for rid in sorted(plan.regions if only is None else only & set(plan.regions)):
         geom = visible_area(plan, rid)
@@ -280,8 +288,11 @@ def region_meshes(
         water_y = plan.regions[rid].water_y
         if water_y is not None:
             # the drawn outline is only a hint: the water lies wherever the terrain is below its level
-            wet = wet_area(plan.regions[rid].polygon, terrain, water_y)
-            mesh = flat_mesh(wet, plan.regions[rid].colour, water_y - WATER_VISUAL_DROP_M)
+            if wet is not None and rid in wet:
+                area = wet[rid]
+            else:
+                area = wet_area(plan.regions[rid].polygon, terrain, water_y)
+            mesh = flat_mesh(area, plan.regions[rid].colour, water_y - WATER_VISUAL_DROP_M)
             if mesh.face_count:
                 out[rid] = mesh
             continue
