@@ -60,6 +60,7 @@ public partial class Viewer : Node3D
                  $"visual_triangles={s.Triangles} load_time={s.LoadSeconds:F2}s");
 
         AddEnvironment();
+        AddWater();
         _player = new Player { Name = "Player" };
         AddChild(_player);
 
@@ -143,6 +144,24 @@ public partial class Viewer : Node3D
             var k = a[i][2..];
             if (i + 1 < a.Length && !a[i + 1].StartsWith("--")) _opts[k] = a[++i];
             else _flags.Add(k);
+        }
+    }
+
+    /// <summary>
+    /// The map's water (water.json) drawn with the same surfaces as the shooter (WaterSurfaces: murky depth colour, foam, waves).
+    /// Read once at load: a changed water region or depth needs a restart of the viewer (the terrain carve is not hot reloaded either).
+    /// Nothing is drawn for a dry map or headless runs.
+    /// </summary>
+    void AddWater()
+    {
+        if (string.IsNullOrEmpty(_map.WaterJson)) return;
+        try
+        {
+            WaterSurfaces.Attach(this, Drycastle.ShooterCore.Water.Parse(_map.WaterJson));
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr($"water not drawn: {e.Message}");
         }
     }
 

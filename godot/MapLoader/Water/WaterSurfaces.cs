@@ -1,7 +1,7 @@
 using Godot;
 using Drycastle.ShooterCore;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.MapLoader;
 
 /// <summary>
 /// The visible water: one mesh per water body at its surface height, drawn two-sided (the underside darker). Each body
@@ -13,14 +13,28 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class WaterSurfaces : Node3D
 {
-    public const string ShaderPath = "res://shaders/water_surface.gdshader";
+    /// <summary>The shader is an embedded resource of this assembly (water_surface.gdshader beside this file), so the viewer and the shooter, which are separate Godot projects, draw the same water.</summary>
+    const string ShaderResource = "water_surface.gdshader";
     /// <summary>Grid spacing of the surface mesh (m): the waves are about 1.5 m and longer, so this is enough.</summary>
     const float GridCell = 2.5f;
 
     readonly List<(ShaderMaterial Mat, WaterBody Body)> _surfaces = new();
+    bool _reduceMotionSeen;
+
+    /// <summary>Whether reduce motion is on: freezes the waves and normal maps. The shooter points this at its settings; the viewer leaves it off.</summary>
+    public static Func<bool> ReduceMotion { get; set; } = () => false;
 
     /// <summary>The clock the waves run on, in seconds: the shader (wave_time) and the boats' bob read the same one. Frozen at 0 with reduce motion.</summary>
-    public static double WaveClock => GameSettings.Current.ReduceMotion ? 0.0 : Time.GetTicksMsec() / 1000.0;
+    public static double WaveClock => ReduceMotion() ? 0.0 : Time.GetTicksMsec() / 1000.0;
+
+    static Shader LoadShader()
+    {
+        var asm = typeof(WaterSurfaces).Assembly;
+        var name = asm.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith(ShaderResource, StringComparison.Ordinal))
+                   ?? throw new FileNotFoundException($"embedded shader {ShaderResource} is missing from {asm.GetName().Name}");
+        using var reader = new StreamReader(asm.GetManifestResourceStream(name)!);
+        return new Shader { Code = reader.ReadToEnd() };
+    }
 
     /// <summary>Adds the surfaces of <paramref name="water"/> under <paramref name="parent"/>. Nothing is built for a dry map or headless runs.</summary>
     public static WaterSurfaces? Attach(Node parent, Water water)
@@ -34,7 +48,7 @@ public partial class WaterSurfaces : Node3D
 
     void Build(Water water)
     {
-        var shader = GD.Load<Shader>(ShaderPath);
+        var shader = LoadShader();
         var noise = WaterNoiseTexture.Get();
         foreach (var body in water.Bodies)
         {
@@ -51,14 +65,14 @@ public partial class WaterSurfaces : Node3D
             _surfaces.Add((mat, body));
             AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = mat, Name = $"Water{body.Id}", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
         }
+        _reduceMotionSeen = ReduceMotion();
         ApplyMotion();
-        GameSettings.Changed += ApplyMotion;
     }
-
-    public override void _ExitTree() => GameSettings.Changed -= ApplyMotion;
 
     public override void _Process(double delta)
     {
+        var reduce = ReduceMotion();
+        if (reduce != _reduceMotionSeen) { _reduceMotionSeen = reduce; ApplyMotion(); }
         var t = (float)WaveClock;
         foreach (var (mat, _) in _surfaces) mat.SetShaderParameter("wave_time", t);
     }

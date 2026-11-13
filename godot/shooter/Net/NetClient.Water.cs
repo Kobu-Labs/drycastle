@@ -1,5 +1,7 @@
 using Godot;
 using Drycastle.ShooterCore;
+using WaterPalettes = Drycastle.MapLoader.WaterPalettes;
+using WaterSurfaces = Drycastle.MapLoader.WaterSurfaces;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;

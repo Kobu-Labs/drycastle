@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.ShooterCore;
+using WaterSurfaces = Drycastle.MapLoader.WaterSurfaces;
 
 namespace Drycastle.Shooter;
 
@@ -329,6 +330,7 @@ public partial class Shooter : Node3D
         _map.CollisionOnly = cfg.Str("role", "client") == "server"; // the server never draws the map
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Water.Empty : Drycastle.ShooterCore.Water.Parse(_map.WaterJson);
+        WaterSurfaces.ReduceMotion = () => GameSettings.Current.ReduceMotion;
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {

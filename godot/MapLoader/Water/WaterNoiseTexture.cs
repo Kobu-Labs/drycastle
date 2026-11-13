@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.MapLoader;
 
 /// <summary>
 /// The tiling detail texture of the water surface, generated once in code (no binary asset): a 128 texel periodic value

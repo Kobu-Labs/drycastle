@@ -98,6 +98,16 @@ viewing and headless servers are unaffected):
   file changes nothing.
   `parcel-run`/`export` take `--work DIR` and `export` takes `--out DIR` for such experiments.
 
+### Water
+
+The viewer and the editor draw the map's water (`water.json`) with the same surfaces as the shooter: murky depth colour
+from the carved bed, shore foam, waves, reflection (`MapLoader/Water/`: `WaterSurfaces`, `WaterPalettes`,
+`WaterNoiseTexture`, and the shader `water_surface.gdshader`, embedded in the MapLoader assembly so both Godot projects
+use one file). It is read once at load: after changing a water region (`water_y`, `max_depth`) or anything that moves
+the bed, re-export and restart the viewer. The terrain carve is not hot reloaded, and neither is the surface. A water
+region's colour is painted on the carved bed (there is no flat mesh at the surface any more), so with no water drawn
+(old viewer, headless) it shows as a sunken patch.
+
 ### Ground clutter (near-only)
 
 Maps with `files.clutter` in `manifest.json` (and `files.clutter_meshes`) draw small ground clutter: tufts, flowers, pebbles, rocks, leaves, sticks, ferns.

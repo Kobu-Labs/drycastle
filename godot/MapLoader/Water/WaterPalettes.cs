@@ -1,7 +1,7 @@
 using Godot;
 using Drycastle.ShooterCore;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.MapLoader;
 
 /// <summary>
 /// The look of one water body: the murky palette (olive shallows with some sediment to dark brown-green deep water),
@@ -41,7 +41,7 @@ public static class WaterPalettes
     /// <summary>Wave amplitude (m) of a body, 0 with reduce motion. Boats bob with the same amplitude as the shader's surface.</summary>
     public static float WaveAmplitude(WaterBody body)
     {
-        if (GameSettings.Current.ReduceMotion) return 0f;
+        if (WaterSurfaces.ReduceMotion()) return 0f;
         return WaterWaves.Amplitude(Extent(body), For(body).WaveCap);
     }
 }

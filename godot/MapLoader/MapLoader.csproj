@@ -8,6 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The water surface shader ships inside the assembly so the viewer and the shooter (separate Godot projects) share one file. -->
+    <EmbeddedResource Include="Water/water_surface.gdshader" LogicalName="water_surface.gdshader" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Pure collision geometry (trees, placed objects), shared with the server and the tests. -->
     <ProjectReference Include="../ShooterCore/ShooterCore.csproj" />
   </ItemGroup>
