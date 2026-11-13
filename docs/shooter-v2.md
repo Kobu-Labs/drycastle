@@ -457,7 +457,7 @@ unchanged; when the vehicle blows up, everyone aboard dies with it.
 ## 7b. Items and equipment (#261)
 
 The shooter has no inventory bag: the weapons are the hotbar, and what a player wears is **Equipment**, one item per equipment slot (GLOSSARY). Today
-there is one slot, headgear, and one item, the Bigfoot head. Decisions: ADR 0015.
+there is one slot, headgear, and one item, the Bigfoot head. Decisions: ADR 0016.
 
 - **Data.** `items.json` (`ItemsFile`, `ShooterCore/Items`): `id`, `name`, `slot` (`headgear`), `pickup_limit` (leave out for no limit) and the
   effects as plain fields (`headshot_immune`). An item travels on the wire as its position in the list plus one, so new items are appended. A new
