@@ -26,3 +26,5 @@ Why: it is the smallest rule that makes breaking glass matter, and it reuses a m
 **Defaults that are only numbers** (`glass.json`): 60 hit points for every pane; crack stages at 66 % and 33 % (three stages, the first as soon as a pane is damaged); a blast does 150 at its centre falling to nothing at its radius; panes are whole again at the start of a round and when their vehicle returns repaired; about 28 fragments, 12 shatter animations at once, none beyond 150 m.
 
 See `docs/glass.md` for where the code is and what is left out.
+
+**Note (ADR 0013, B-02, issue #257): the panes are tested at the rewound pose.** A shot at a vehicle's glass is tested in the frame of the vehicle where it stood at the shooter's view tick (the same pose as its hull and its exposed riders), not where it stands now. The pane keys (owner, index), the hit points and the wire are unchanged. The blast of a rocket still damages the panes at the vehicle's present pose, as the blast does everything else.

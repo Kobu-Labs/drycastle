@@ -68,6 +68,13 @@ public partial class ServerCar : CharacterBody3D
     /// <summary>Server time at which the vehicle blows up (it ran out of HP), or negative.</summary>
     public double DetonateAt = -1;
     public bool Destroyed;
+    /// <summary>Counts every <see cref="Reset"/>: the lag compensation starts a new pose history when it changes (ADR 0013, B-02).</summary>
+    public int Lives;
+    public int LivesSeen;
+    /// <summary>The tick the current life began (a reset): no rewind goes before it.</summary>
+    public uint LifeStart;
+    /// <summary>This vehicle's poses at the end of recent ticks, for rewinding a shot (ADR 0013, B-02).</summary>
+    public readonly VehiclePoseRing Poses = new();
     public double ReturnAt;
     /// <summary>Speed lost to a wall in the last <see cref="Step"/> (m/s), for crash damage.</summary>
     public float LastImpact;
@@ -160,6 +167,7 @@ public partial class ServerCar : CharacterBody3D
     public void Reset(bool repair = true)
     {
         Asleep = false; RestCount = 0;
+        Lives++; // a new life for the lag compensation's pose history (NetServer.SyncCarLife)
         if (repair || Destroyed)
         {
             Hp = Def.Hp; LastAttacker = 0; LastWeapon = 0; DetonateAt = -1;

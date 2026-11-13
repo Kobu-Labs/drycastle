@@ -16,6 +16,12 @@ public partial class NetServer
     /// <summary><c>--no-lagcomp</c>: shots resolve against present positions, as before this change (the A/B baseline for the perf harness).</summary>
     public bool NoLagComp;
 
+    /// <summary>
+    /// The tick the shot being resolved rewinds vehicles to (B-02), or null for the present. Set for the length of a shot (<c>FireWeapon</c>, a gun
+    /// round, a rocket's step) and cleared after it, so the blasts and everything else see the vehicles where they stand.
+    /// </summary>
+    uint? _vehicleView;
+
     /// <summary>Microseconds the last shot spent choosing its targets; only measured in a perf run (<see cref="PerfOut"/>).</summary>
     double _lagResolveUs;
 
@@ -40,6 +46,62 @@ public partial class NetServer
         if (n == o.TeleportsSeen) return;
         o.TeleportsSeen = n;
         o.LifeStart = _tick;
+    }
+
+    /// <summary>
+    /// The vehicles' poses at the end of the tick, captured where the players' are (ADR 0013, B-02). A sleeping vehicle keeps one run at its
+    /// rest pose (<see cref="VehiclePoseRing.RecordRest"/>); a destroyed one is not a target.
+    /// </summary>
+    void CaptureVehiclePoses()
+    {
+        foreach (var car in _cars)
+        {
+            SyncCarLife(car);
+            if (car.Destroyed) { car.Poses.Record(_tick, false, default); continue; }
+            var pose = PresentPose(car);
+            if (car.Asleep) car.Poses.RecordRest(_tick, pose);
+            else car.Poses.Record(_tick, true, pose);
+        }
+    }
+
+    /// <summary>A reset or a repair starts a new life for a vehicle's history: nothing before it is a place the vehicle can be shot at (ADR 0013).</summary>
+    void SyncCarLife(ServerCar car)
+    {
+        if (car.Lives == car.LivesSeen) return;
+        car.LivesSeen = car.Lives;
+        car.LifeStart = _tick;
+        car.Poses.Clear();
+    }
+
+    /// <summary>The vehicle as it stands now: its feet, yaw and attitude, and the turret's yaw (the same numbers the hit box and the seats read).</summary>
+    static VehiclePose PresentPose(ServerCar car)
+    {
+        var (_, pitch, roll) = AttitudeOf(car);
+        return new VehiclePose(N(car.GlobalPosition), car.State.Yaw, pitch, roll, car.TurretLocalYaw);
+    }
+
+    /// <summary>
+    /// The ticks a shot from <paramref name="c"/> rewinds vehicles by (the same estimate as the players, <see cref="BackTicksOf"/>), or -1 for the
+    /// present: with <c>--no-lagcomp</c>, or for a shooter with no connection (a bot).
+    /// </summary>
+    int VehicleBackOf(Client c)
+    {
+        if (NoLagComp || c.Peer == null) return -1;
+        SyncLife(c);
+        return BackTicksOf(c);
+    }
+
+    /// <summary>The tick a shot rewinds vehicles to: <paramref name="back"/> ticks before now, never before the shooter's life; null (the present) for -1.</summary>
+    uint? ViewOf(int back, uint lifeStart) => back < 0 ? null : LagComp.ViewTick(_tick, back, lifeStart);
+
+    /// <summary>
+    /// Where a vehicle stands for the shot being resolved (<see cref="_vehicleView"/>): its pose at that tick, or where it stands now when it was
+    /// not recorded there (or no shot is rewinding). A destroyed vehicle is not asked: it has no hull.
+    /// </summary>
+    VehiclePose PoseOf(ServerCar car)
+    {
+        SyncCarLife(car);
+        return _vehicleView is { } v && LagComp.TryVehicleAt(car.Poses, v, car.LifeStart, out var past) ? past : PresentPose(car);
     }
 
     /// <summary>The targets a shot from <paramref name="c"/> resolves against. With <c>--no-lagcomp</c>, or for a shooter with no connection (a bot, which sees the present), the present positions.</summary>

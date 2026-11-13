@@ -257,13 +257,19 @@ public partial class NetServer
     }
 
     /// <summary>World position of a seat of the car (its offset in the car's frame). A flak truck's gunner sits on the turret, so the seat turns with it.</summary>
-    static Vector3 SeatPos(ServerCar car, int seat)
+    static Vector3 SeatPos(ServerCar car, int seat) => SeatPosAt(car, seat, PresentPose(car));
+
+    /// <summary>
+    /// A seat's world position with the car at pose <paramref name="pose"/> (the rewound pose of a shot, B-02, or the present one): the offset in the
+    /// car's frame turned by the yaw, and by the attitude for a helicopter or a driven vehicle.
+    /// </summary>
+    static Vector3 SeatPosAt(ServerCar car, int seat, VehiclePose pose)
     {
         var offset = car.Def.Seats[seat].Offset;
-        if (car.Def.Flak is { } flak && car.Def.Seats[seat].Role == "gunner") offset = FlakRules.TurretSeatOffset(flak, offset, car.TurretLocalYaw);
-        var p = car.Flies ? car.Flight.ToWorld(offset) // a helicopter's seats tilt with it
-            : car.Drives ? car.Drive.ToWorld(offset)   // a driven vehicle's lie on the slope it stands on
-            : VehicleSeat.SeatPosition(N(car.GlobalPosition), car.State.Yaw, offset);
+        if (car.Def.Flak is { } flak && car.Def.Seats[seat].Role == "gunner") offset = FlakRules.TurretSeatOffset(flak, offset, pose.TurretYaw);
+        var p = car.Flies || car.Drives // a helicopter's seats tilt with it; a driven vehicle's lie on the slope it stands on
+            ? pose.Feet + FlightMath.Rotate(new System.Numerics.Vector3(offset[0], offset[1], offset[2]), pose.Yaw, pose.Pitch, pose.Roll)
+            : VehicleSeat.SeatPosition(pose.Feet, pose.Yaw, offset);
         return new Vector3(p.X, p.Y, p.Z);
     }
 
@@ -297,6 +303,7 @@ public partial class NetServer
     /// </summary>
     void FireGun(Client c, ServerCar car, NetInput i, VehicleGunDef def)
     {
+        _vehicleView = ViewOf(VehicleBackOf(c), c.LifeStart); // the other vehicles, where the gunner's screen showed them (B-02)
         var eye = SeatPos(car, c.CarSeat) + Vector3.Up * 1.4f;
         var yaw = Quant.Yaw(i.Yaw); var pitch = Quant.Pitch(i.Pitch);
         var d = HitMath.SpreadDirection(yaw, RecoilState.ClampPitch(pitch), def.SpreadDegrees, _rng);
@@ -314,6 +321,7 @@ public partial class NetServer
             DamageVehicle(shotCar, def.Damage * Vehicles.BulletDamageMultiplier, c.Id, SpecialWeapons.VehicleGun, 0);
         if (hit == null && shotCar != car && wall <= def.Range) ShotGlass(shotCar, eye, dir, wall, def.Damage);
         DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, _ => def.Damage);
+        _vehicleView = null;
     }
 
     /// <summary>Exit position: right, left, behind, in front of the car (first with ground and room for the capsule), else above the roof.</summary>

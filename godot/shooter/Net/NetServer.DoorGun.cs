@@ -53,6 +53,7 @@ public partial class NetServer
     /// </summary>
     void FireDoorGun(Client c, ServerCar car, VehicleDoorGunDef def, VehicleGunDef gun, DoorGunAim aim)
     {
+        _vehicleView = ViewOf(VehicleBackOf(c), c.LifeStart); // the other vehicles, where the gunner's screen showed them (B-02)
         var (yaw, pitch, roll) = AttitudeOf(car);
         var muzzle = DoorGunRules.Muzzle(def, DoorGunRules.GunPivot(def, N(car.GlobalPosition), yaw, pitch, roll, aim), aim);
         var d = HitMath.SpreadDirection(aim.ViewYaw, aim.ViewPitch, gun.SpreadDegrees, _rng);
@@ -73,5 +74,6 @@ public partial class NetServer
         else if (shotCar == null && wall <= gun.Range) BulletPuff(N(end)); // dust where the round meets the ground or a wall
         if (hit == null && wall <= gun.Range) ShotGlass(shotCar, from, dir, wall, gun.Damage);
         DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, _ => gun.Damage);
+        _vehicleView = null;
     }
 }

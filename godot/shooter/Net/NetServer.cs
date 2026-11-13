@@ -137,7 +137,7 @@ public partial class NetServer : Node
     // rockets: server-owned projectile entities, ids from 0x8000 up (player ids count up from 1)
     /// <summary>A rocket in flight. Speed and Life are per launch when set (a gunship's, killstreaks.json); zero keeps the weapon's own.</summary>
     /// <summary>FromCar is the vehicle its owner fired it from, in an armed seat (null on foot): while the owner still rides it, the rocket passes its hull and spares its riders.</summary>
-    sealed class Rocket { public ushort Id, Owner; public byte Weapon; public Vector3 Pos, Dir; public float Age; public SplashDef? Blast; public float Speed, Life; public ServerCar? FromCar; }
+    sealed class Rocket { public ushort Id, Owner; public byte Weapon; public Vector3 Pos, Dir; public float Age; public SplashDef? Blast; public float Speed, Life; public ServerCar? FromCar; public int ViewBack = -1; public uint ViewLife; }
     readonly List<Rocket> _rockets = new();
     ushort _nextRocket = 0x8000;
     public bool BazookaSmoke;
@@ -234,6 +234,7 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Detonate);
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
         CaptureLagPoses(); // the poses this tick ends with, the state the snapshots carry (ADR 0013)
+        CaptureVehiclePoses(); // and the vehicles' (B-02)
         PerfLap(ServerPerf.Ph.LagCapture);
         if (catchUp && LossTest == 0) _skippedSnapshots++; // the next regular tick sends the current state
         else SendSnapshots();
@@ -772,8 +773,8 @@ public partial class NetServer : Node
     /// </summary>
     HitTarget HitTargetOf(Client o)
     {
-        if (o.Car is { } car && car.Def.Seats[o.CarSeat].Exposed)
-            return new HitTarget(o.Id, N(SeatPos(car, o.CarSeat)), RiderRules.HitStance(car.Def, o.CarSeat, o.Body.State.Stance), o.Body.Yaw);
+        if (o.Car is { } car && car.Def.Seats[o.CarSeat].Exposed) // the seat where the car stood at the shot's view (B-02), or now
+            return new HitTarget(o.Id, N(SeatPosAt(car, o.CarSeat, PoseOf(car))), RiderRules.HitStance(car.Def, o.CarSeat, o.Body.State.Stance), o.Body.Yaw);
         return new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw);
     }
 
@@ -790,18 +791,58 @@ public partial class NetServer : Node
     /// <summary>Distance from <paramref name="from"/> along <paramref name="dir"/> to the first world collider (player bodies excluded), or infinity.</summary>
     float WorldDistance(Vector3 from, Vector3 dir, float max) => WorldHit(from, dir, max, out _);
 
-    /// <summary>As <see cref="WorldDistance"/>, and the vehicle if that is what the ray stopped on (destroyed vehicles have no collision, so they are shot through).</summary>
-    /// <param name="skip">A vehicle the ray passes through: the one the shot is fired from, by a rider (its hull is not in its own riders' way).</param>
+    /// <summary>
+    /// The walls a ray stops on: the world and the shot-only cover (tree crowns), by physics. Vehicles are not in it: their hulls are
+    /// <see cref="NearestHull"/>, analytic, at the pose the shot's view showed (ADR 0013, B-02). Player bodies are excluded.
+    /// </summary>
+    float WallDistance(Vector3 from, Vector3 dir, float max)
+    {
+        var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
+        q.CollisionMask = CollisionLayers.World | CollisionLayers.ShotOnly;
+        q.Exclude = PlayerRids();
+        var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
+        return r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3());
+    }
+
+    /// <summary>
+    /// The nearest vehicle hull a ray from <paramref name="from"/> enters within <paramref name="max"/>, among the living vehicles that are not
+    /// <paramref name="skipA"/>, <paramref name="skipB"/> or in <paramref name="passed"/>. The hull is the upright box of <see cref="VehicleBox"/>
+    /// (the one <see cref="VehicleCollider"/> uses) at the pose <see cref="PoseOf"/> gives it. Distance in metres from <paramref name="from"/>.
+    /// </summary>
+    ServerCar? NearestHull(Vector3 from, Vector3 dir, float max, ServerCar? skipA, ServerCar? skipB, List<ServerCar>? passed, out float distance, out VehiclePose pose)
+    {
+        ServerCar? best = null;
+        distance = float.PositiveInfinity; pose = default;
+        foreach (var car in _cars)
+        {
+            if (car == skipA || car == skipB || car.Destroyed || passed != null && passed.Contains(car)) continue;
+            var p = PoseOf(car);
+            if (VehicleBox.Ray(N(from), N(dir), max, p.Feet, p.Yaw, car.HalfWidth, car.HalfLength, car.Def.Height) is not { } hit || hit.Distance >= distance) continue;
+            best = car; distance = hit.Distance; pose = p;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Distance from <paramref name="from"/> along <paramref name="dir"/> to the first thing a ray stops on: a wall, or a vehicle's hull (the
+    /// nearer of <see cref="WallDistance"/> and <see cref="NearestHull"/>), and which vehicle if it was one. The shooter's own vehicle
+    /// (<paramref name="skip"/>) is not in the way.
+    /// </summary>
     float WorldHit(Vector3 from, Vector3 dir, float max, out ServerCar? car, ServerCar? skip = null)
     {
+        var wall = WallDistance(from, dir, max);
+        var hull = NearestHull(from, dir, max, skip, null, null, out var d, out _);
+        if (hull != null && d < wall) { car = hull; return d; }
         car = null;
-        var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
-        q.CollisionMask = CollisionLayers.Bullets; // world (1), vehicles (2) and shot-only cover (tree crowns): bullets and rockets stop on them
-        q.Exclude = skip == null ? PlayerRids() : new Godot.Collections.Array<Rid>(PlayerRids()) { skip.GetRid() };
-        var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
-        if (r.Count == 0) return float.PositiveInfinity;
-        car = r["collider"].As<GodotObject>() as ServerCar;
-        return from.DistanceTo(r["position"].AsVector3());
+        return wall;
+    }
+
+    /// <summary>The distance the ray stops at with two vehicles left out (the hull it hit and the shooter's own): a wall or another hull.</summary>
+    float NextStop(Vector3 from, Vector3 dir, float max, ServerCar? skipA, ServerCar? skipB)
+    {
+        var wall = WallDistance(from, dir, max);
+        NearestHull(from, dir, max, skipA, skipB, null, out var d, out _);
+        return MathF.Min(wall, d);
     }
 
     const float MaxShotRange = 300f;
@@ -816,6 +857,8 @@ public partial class NetServer : Node
     void FireWeapon(Client c, in NetInput i, FireOutcome shot, ServerCar? seatCar = null)
     {
         var w = shot.Weapon;
+        var back = VehicleBackOf(c); // the vehicles this shot rewinds (B-02): the same view tick as the players (ADR 0013)
+        _vehicleView = ViewOf(back, c.LifeStart);
         var seat = seatCar?.Def.Seats[c.CarSeat];
         var feet = seatCar != null ? SeatPos(seatCar, c.CarSeat) : c.Body.GlobalPosition;
         var eye = feet + Vector3.Up * (seat != null ? SeatAimRules.EyeHeight(seat) : MovementStep.EyeHeight(c.Body.State.Stance));
@@ -860,6 +903,7 @@ public partial class NetServer : Node
             var dir = HitMath.Forward(yaw, pitch);
             var rocket = new Rocket { Id = _nextRocket, Owner = c.Id, Weapon = (byte)shot.WeaponIndex, Pos = eye, Dir = new Vector3(dir.X, dir.Y, dir.Z), FromCar = seatCar };
             _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
+            rocket.ViewBack = back; rocket.ViewLife = c.LifeStart; // a rocket rewinds vehicles by the shooter's lag at each step (B-02)
             _rockets.Add(rocket);
             _rocketsFired++;
             BroadcastEvent(EventKind.Launch, WeaponCodec.Encode(new LaunchMsg(rocket.Id, c.Id, rocket.Weapon, N(eye), dir * w.ProjectileSpeed)));
@@ -879,6 +923,7 @@ public partial class NetServer : Node
             if (hit is { } m) Deal(c.Id, (byte)shot.WeaponIndex, m.Id, HitMath.MeleeDamage(w, m.Backstab), false, m.Backstab);
             else if (TurretMelee(N(feet), yaw, w.Reach) is { } turret) _match.Entities.Damage(turret, Turret.KnifeDamage * c.Perks.VehicleDamageDealt, c.Id);
         }
+        _vehicleView = null; // the blast and everything after the shot see the vehicles where they stand
     }
 
     /// <summary>Applies damage through the match and sends the hit event; returns the result (Ignored when absorbed).</summary>
@@ -915,12 +960,15 @@ public partial class NetServer : Node
             var len = speed * dt;
             // a rocket fired from an armed seat passes its own vehicle's hull and riders for as long as its owner still rides it
             var own = RocketCar(r);
+            // the vehicles a rocket meets are where its shooter's screen showed them, this step (B-02); the players are where they stand (ADR 0013)
+            _vehicleView = ViewOf(r.ViewBack, r.ViewLife);
             var wall = WorldHit(r.Pos, r.Dir, len, out var hitCar, own);
             var all = LiveTargets();
             var targets = own != null ? RiderRules.NotAboard(all, own.Seat) : all;
             var (exposedGunner, pastHull) = ExposedGunnerBehind(hitCar, r.Pos, r.Dir, len, targets, skip: own);
             var step = RocketFlight.Step(N(r.Pos), N(r.Dir), r.Age, speed, life, dt, wall, targets, r.Owner, exposedGunner, pastHull);
             ReturnTargets(all); // the step is done with the targets (NotAboard copied its own)
+            _vehicleView = null;
             switch (step.Outcome)
             {
                 case RocketOutcome.Player:
