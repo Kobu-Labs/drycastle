@@ -2,7 +2,7 @@
 
 Same local frame as ``landmarks.church_solids`` (u across, v along, front at +v, z up from the building base).
 ``build_shell`` replaces the solid nave and apse blocks by walls with a doorway; the collision mesh is the real
-shell (walls, floor, gallery, stair ramp, pews as boxes), decoration is in the visual mesh only.
+shell (walls, floor, gallery, stair ramp), decoration is in the visual mesh only.
 ``church_info`` is what the game needs to know, for ``church.json``.
 """
 
@@ -125,18 +125,7 @@ def build_shell(S, detail: bool, yellow, plinth) -> None:
             [(lo, floor), (hi, floor)]
             + [([lo[i], lo[j], hi[j], hi[i]], floor) for i, j in ((0, 1), (1, 2), (2, 0))]
         )
-    # pews and altar
-    for u, v, fl in pews():
-        z = GZ if fl else F
-        x0, x1 = u - PEW_W / 2, u + PEW_W / 2
-        if not detail:
-            S.box(x0, x1, v - 0.2, v + 0.31, z, z + 0.95, wood)
-            continue
-        S.box(x0, x1, v - 0.2, v + 0.25, z + SEAT_H - 0.05, z + SEAT_H, wood)
-        S.box(x0, x1, v + 0.25, v + 0.31, z + 0.1, z + 0.95, wood)
-        for x in (x0, x1 - 0.06):
-            S.box(x, x + 0.06, v - 0.22, v + 0.31, z, z + 0.95, wood)
-    S.box(CU - 1.1, CU + 1.1, -12.3, -11.5, F, F + 1.0, rib)
+    # high altar backdrop (pews, altar table, lectern and stoup are props the game places, see church_info)
     S.box(CU - 1.3, CU + 1.3, CV0, CV0 + 0.4, F, 3.6, marble)
     if not detail:
         return
@@ -164,19 +153,15 @@ def build_shell(S, detail: bool, yellow, plinth) -> None:
     S.plate("front", CV0 + 0.4, CU, _arch(1.4, F + 1.1, 3.0, 0.5), 0.05, gold)
     S.plate("front", CV0 + 0.4, CU, _arch(1.0, F + 1.3, 2.8, 0.4), 0.08, canvas)
     S.box(CU - 0.8, CU + 0.8, CV0, CV0 + 0.4, 3.6, 4.3, gold)
-    S.box(CU - 0.05, CU + 0.05, -11.95, -11.85, F + 1.0, F + 1.6, gold)
-    S.box(CU - 0.2, CU + 0.2, -11.95, -11.85, F + 1.35, F + 1.45, gold)
     for x0, x1 in ((IU0 + 0.2, CU0 - 0.2), (CU1 + 0.2, IU1 - 0.2)):
         S.box(x0, x1, IV0, IV0 + 0.4, F, 3.2, marble)
         S.box(x0 - 0.1, x1 + 0.1, IV0, IV0 + 0.7, F, F + 1.0, rib)
         S.plate("front", IV0 + 0.4, (x0 + x1) / 2, _arch(0.7, F + 1.2, 2.6, 0.3), 0.05, gold)
-    # organ pipes and gilding, lectern, holy water stoup, carpet
+    # organ pipes and gilding, carpet
     for i in range(-9, 10):
         x = CU + 0.19 * i
         S.box(x - 0.07, x + 0.07, 12.9, 13.04, GZ + 1.3, 5.6 + 1.1 * abs(math.cos(i * math.pi / 6)), pipe)
     S.box(CU - 1.95, CU + 1.95, 12.76, 12.8, GZ + 1.15, GZ + 1.3, gold)
-    S.box(CU + 1.2, CU + 1.6, -8.5, -8.1, F, F + 1.1, wood)
-    S.box(CU + 1.25, CU + 1.65, 12.9, 13.3, F, F + 0.9, marble)
     S.box(CU - 0.6, CU + 0.6, -11.4, IV1, F, F + 0.015, carpet)
 
 

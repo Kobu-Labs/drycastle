@@ -133,7 +133,7 @@ Both are a status, not an Item: no slot, no drop. They survive a round change an
     - demon `SM_Chr_Demon_01` (POLYGON Horror Mansion, Unity package: mesh is in `Models/Characters.fbx`, import the FBX and rebuild the material by hand)
 - no pack ships animations: walk, sit, gestures, shocked look, death and the demon crawl need another source
 - the church shell stays the code model (it fits the real footprint); Synty props are placed inside it at `church.json` poses
-- Synty is paid: only in gitignored `assets-private/`, never in this public repo (#265); every Synty asset needs a CC0 or code fallback so the game runs without the pack
+- Synty is paid: only in gitignored `assets-private/`, never in this public repo (#265); no fallback models, the event needs the pack
 ## Tickets
 1. Enterable church (pipeline, ADR, `church.json`)
 2. Citizen NPC entity (walk to seat, sit, die)
