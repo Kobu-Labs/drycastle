@@ -7,10 +7,20 @@ namespace Drycastle.ShooterCore;
 /// </summary>
 public static class ParkedRules
 {
-    /// <param name="placeMoved">The step changed the car's position at all (bitwise, so a car creeping on a slope is not at rest).</param>
+    /// <summary>Movement per tick below which a step counts as standing still (m). A car creeping down a 1 degree slope moves about 0.6 mm a tick, so it stays awake; float jitter on a floor is far below this.</summary>
+    public const float RestEpsilon = 1e-4f;
+    /// <summary>Consecutive resting steps before a car is put to sleep (hysteresis: one quiet tick is not enough).</summary>
+    public const int RestTicksToSleep = 3;
+
+    /// <param name="moved">How far the step moved the car's position (m).</param>
     /// <param name="speed">Speed after the step, m/s.</param>
-    /// <param name="yawRate">Yaw rate after the step, rad/s (eases to exactly zero, so a turning car is not at rest).</param>
+    /// <param name="yawRate">Yaw rate after the step, rad/s.</param>
     /// <param name="supported">The car stands on the ground or floats after the step (in the air it falls, so it is not at rest).</param>
-    public static bool RestsAfterStep(bool placeMoved, float speed, float yawRate, bool supported) =>
-        !placeMoved && speed == 0f && yawRate == 0f && supported;
+    public static bool IsAtRest(float moved, float speed, float yawRate, bool supported) =>
+        moved < RestEpsilon && MathF.Abs(speed) < RestEpsilon && MathF.Abs(yawRate) < RestEpsilon && supported;
+
+    /// <summary>The count of consecutive resting steps after this one.</summary>
+    public static int NextRestCount(int count, bool atRest) => atRest ? count + 1 : 0;
+
+    public static bool Sleeps(int restCount) => restCount >= RestTicksToSleep;
 }
