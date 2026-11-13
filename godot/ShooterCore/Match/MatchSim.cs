@@ -10,7 +10,7 @@ public enum DamageResult { Ignored, Damaged, Killed }
 public static class SpecialWeapons
 {
     /// <summary>A vehicle run over or blown up; <see cref="VehicleGun"/> is the jeep's roof gun.</summary>
-    public const byte Drown = 251, Vehicle = 252, Debug = 253, Void = 254, Fall = 255;
+    public const byte Vehicle = 252, Debug = 253, Void = 254, Fall = 255;
     /// <summary>The jeep's roof gun (a gunner's rounds).</summary>
     public const byte VehicleGun = 250;
     /// <summary>The MOAB's blast (ticket #129): its kills are streak kills.</summary>

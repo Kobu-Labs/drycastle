@@ -133,12 +133,20 @@ The lowest stance: the player lies down and spreads less. Toggled by the prone k
 _Avoid_: lay down, crawl
 
 **Water body**:
-A lake, pond or river area from the map pipeline (`water.json`), with a surface height. The shooter swims in it, and boats float on it.
+A lake, pond or river area from the map pipeline (`water.json`), with a surface height and a bed under it (see Bed). Its depth varies across the body. In deep water the shooter floats at the surface and swims; in shallow water it wades; boats float on it.
 _Avoid_: pond (alone), lake (alone), pool
 
+**Bed**:
+The ground under a water body, carved into the terrain so walking, wading and the visible bottom agree. Its depth varies across the body (a per-body depth grid in `water.json`), and depth at a point is the surface minus the bed there.
+_Avoid_: riverbed (alone), floor, bottom
+
+**Current**:
+The flow of a river water body, which pushes swimmers and boats and not waders. Only the Morava has one, and it is added in a later slice (not yet built).
+_Avoid_: flow (alone), drift
+
 **Breath**:
-The air meter under water: it runs down while the player is submerged (shown as AIR on the HUD). Also the sniper's breath hold while scoped.
-_Avoid_: oxygen, stamina
+The sniper's breath hold while scoped: the time the scope can be held steady before the breath must be let go and recovered. There is no air under water.
+_Avoid_: oxygen, stamina, air
 
 **Headlights**:
 A vehicle's front and tail lights, from the optional `lights` block in `vehicles.json`. The driver toggles them with the headlights key (H).

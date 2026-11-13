@@ -10,7 +10,7 @@ public static class Strings
 {
     static readonly (string Key, string Text)[] Table =
     {
-        ("hud.health", "HEALTH"), ("hud.low", "LOW"), ("hud.air", "AIR"),
+        ("hud.health", "HEALTH"),
         ("hud.stance.stand", "Standing"), ("hud.stance.crouch", "Crouched"), ("hud.stance.prone", "Prone"),
         ("hud.reloading", "RELOADING"), ("hud.ammo.reserve", "/ {0}"), ("hud.ammo.none", "-"),
         ("hud.timer.waiting", "--:--"), ("hud.phase.waiting", "Waiting for players"), ("hud.phase.ending", "Round over"),
@@ -38,7 +38,7 @@ public static class Strings
         ("hud.score.team", "Team {0}   You {1} : {2} Enemy"), ("score.team.tag", "[{0}] {1}"), ("score.ending.team", "Round over: team {0} wins"),
         ("weapon.pistol", "M1911"), ("weapon.ak47", "AK-47"), ("weapon.bazooka", "Bazooka"), ("weapon.knife", "Knife"), ("weapon.sniper", "Sniper"), ("weapon.glock17", "Glock 17"), ("weapon.deagle", "Desert Eagle"), ("weapon.m82", "Barrett M82"), ("weapon.awm", "AWM"), ("weapon.svd", "Dragunov SVD"),
         ("hud.breath.ready", "Breath: hold {0}"), ("hud.breath.held", "Breath held"), ("hud.breath.exhaled", "Breath out, steadying"), ("hud.breath.empty", "Breath empty, refilling"),
-        ("weapon.fall", "Fall"), ("weapon.drown", "Drowned"), ("weapon.void", "Void"), ("weapon.debug", "Debug"), ("weapon.vehicle", "Car"), ("weapon.vehicle_gun", "Mounted MG"), ("weapon.moab", "MOAB"), ("moab.inbound", "MOAB inbound {0}"), ("moab.blast", "MOAB by {0}"), ("moab.cancelled", "MOAB cancelled"), ("weapon.turret", "Turret"), ("feed.roadkill", "Roadkill"), ("weapon.unknown", "?"),
+        ("weapon.fall", "Fall"),("weapon.void", "Void"), ("weapon.debug", "Debug"), ("weapon.vehicle", "Car"), ("weapon.vehicle_gun", "Mounted MG"), ("weapon.moab", "MOAB"), ("moab.inbound", "MOAB inbound {0}"), ("moab.blast", "MOAB by {0}"), ("moab.cancelled", "MOAB cancelled"), ("weapon.turret", "Turret"), ("feed.roadkill", "Roadkill"), ("weapon.unknown", "?"),
         ("player.unknown", "Player {0}"),
         ("hud.corpse.hold", "Hold {0}  take {1} as primary     Tap {0}  choose slot"), ("hud.corpse.tap", "Tap {0}  take {1}"),
         ("hud.crate.hold", "Hold {0}  open care package"), ("hud.crate.opening", "Opening..."),

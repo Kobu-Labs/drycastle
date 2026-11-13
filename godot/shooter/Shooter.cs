@@ -216,7 +216,7 @@ public partial class Shooter : Node3D
             steps.Add(() => CarFx.Warm(model));
         }
         steps.Add(GlassFx.Load);
-        foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, UnderwaterView.ShaderPath, DayNightCycle.SkyShaderPath })
+        foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, DayNightCycle.SkyShaderPath })
         {
             var path = sh;
             steps.Add(() => GD.Load<Shader>(path));
@@ -514,7 +514,6 @@ public partial class Shooter : Node3D
     void AddLightAndSky()
     {
         AddChild(new DayNightCycle { LocalClock = _data.Environment.ToClock(), MinAmbient = _data.Environment.MinAmbient });
-        AddChild(new UnderwaterView { Water = _water });
     }
 
     /// <summary>Client view: light, sky and the first-person player at a random spawn point.</summary>
