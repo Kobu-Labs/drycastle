@@ -111,7 +111,8 @@ public enum EventKind : byte
 public abstract record ReliableMsg;
 /// <summary>Client to server, first message after connecting. Token is the client-generated player token (ADR 0003); empty = guest.</summary>
 /// <summary>Flags are <see cref="HelloFlags"/> bits (v10). A v9 hello has none and decodes as 0.</summary>
-public sealed record HelloMsg(byte Version, string Name, string Token = "", byte Flags = 0) : ReliableMsg;
+/// <summary>MapHash (v25): the map build's identity (MapLoader.BuildHash); the server refuses a different one by name. 0 when unknown.</summary>
+public sealed record HelloMsg(byte Version, string Name, string Token = "", byte Flags = 0, ulong MapHash = 0) : ReliableMsg;
 
 /// <summary>Bits of <see cref="HelloMsg.Flags"/>.</summary>
 public static class HelloFlags
@@ -146,7 +147,7 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 /// Wire format (little-endian). Channel 0 is reliable (control + events), channel 1 is unreliable-sequenced (input, snapshots), channel 2 is unreliable (effects, <see cref="IsEffect"/>).
 ///
 /// ch0 messages: u8 type, then
-///   Hello(1):   u8 version, u8 nameLen, name utf8, u8 tokenLen, token utf8, u8 flags (v10, see HelloFlags)
+///   Hello(1):   u8 version, u8 nameLen, name utf8, u8 tokenLen, token utf8, u8 flags (v10, see HelloFlags), u64 mapHash (v25)
 ///   Welcome(2): u8 version, u16 playerId, u8 tickRate, u32 serverTick, u16 startMinute, u32 dayLengthMs, u8 frozen
 ///   Join(3):    u16 playerId, u8 nameLen, name utf8
 ///   Leave(4):   u16 playerId
@@ -177,8 +178,15 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 /// </summary>
 public static class Wire
 {
-    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-155 (sandbox status, grant, action, state, held streak and notice, #156); v11: GunshipStatus is weapon and zoom only (2 bytes; ammo and heat are gone, #157); v12: the gunship FX is coalesced per tick (event kinds 121-123 replace the per-round Shot, ImpactFx and Ac130Blast of the gunships, #159), and the Explosion carries its blast radius (a gunship rocket's is 8 m); v13: GunshipShots carries each tracer's speed and length (#160); v14: the camo spec grows from 30 to 33 bytes (codec 2: body, skin tone, headgear); v15: an input carries the gunner's aim, a ground point (flags byte, 12 more bytes when set), so the rounds land on the reticle (#161); v16: a gunship rocket flies at its own speed (killstreaks.json projectile_speed_mps) and lives out its range, so clients animate it at its Launch velocity's speed, not the bazooka's 40 m/s; v17: entity snapshots are deltas against the client's acknowledged tick (the inputs carry the snapshot tick, the snapshot carries its baseline and set position, removals are records), so a lost packet no longer leaves an entity wrong until a keyframe; v19: the flak truck, entity type 4 (a turret's aim record, <see cref="FlakRecord"/>), event kind 160 (the gunner's ammo), and aircraft carry their hit points (world state hp, percent) and can be destroyed; v20: seat switching in vehicles, event kinds 161 (a rider asks for another seat) and 162 (who sits in each seat, to the riders); v21: the utility helicopter (ADR 0006), entity type 5 (a flying vehicle's velocity, pitch, roll and rotor, <see cref="FlightRecord"/>), a turret aim record for its door gun, and the pilot's inputs step the helicopter one for one (the snapshot's ack is the helicopter's too); v22: glass panes (ADR 0007), event kinds 170 (a pane's hit points) and 171 (the panes of a scope, for a joiner, a new round and a returned vehicle); v23: chat and admin commands, event kinds 180 (a line or command from a player), 181 (a chat log line), 182 (admin flag and spawnable vehicles for a joiner) and 183 (the day clock changed live).; v24: the amphibious transport (ADR 0010, 0011, 0012), entity type 6 (a driven vehicle's speeds, the slope it stands on, its steering and whether it floats, <see cref="DriveRecord"/>), the driver's inputs step it one for one as the pilot's do the helicopter, a turret aim record for its ring gun, and a rider in an armed seat fires their own weapons, so the server answers a seated player's Fire, Reload and weapon switch.</summary>
-    public const byte ProtocolVersion = 24;
+    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-155 (sandbox status, grant, action, state, held streak and notice, #156); v11: GunshipStatus is weapon and zoom only (2 bytes; ammo and heat are gone, #157); v12: the gunship FX is coalesced per tick (event kinds 121-123 replace the per-round Shot, ImpactFx and Ac130Blast of the gunships, #159), and the Explosion carries its blast radius (a gunship rocket's is 8 m); v13: GunshipShots carries each tracer's speed and length (#160); v14: the camo spec grows from 30 to 33 bytes (codec 2: body, skin tone, headgear); v15: an input carries the gunner's aim, a ground point (flags byte, 12 more bytes when set), so the rounds land on the reticle (#161); v16: a gunship rocket flies at its own speed (killstreaks.json projectile_speed_mps) and lives out its range, so clients animate it at its Launch velocity's speed, not the bazooka's 40 m/s; v17: entity snapshots are deltas against the client's acknowledged tick (the inputs carry the snapshot tick, the snapshot carries its baseline and set position, removals are records), so a lost packet no longer leaves an entity wrong until a keyframe; v19: the flak truck, entity type 4 (a turret's aim record, <see cref="FlakRecord"/>), event kind 160 (the gunner's ammo), and aircraft carry their hit points (world state hp, percent) and can be destroyed; v20: seat switching in vehicles, event kinds 161 (a rider asks for another seat) and 162 (who sits in each seat, to the riders); v21: the utility helicopter (ADR 0006), entity type 5 (a flying vehicle's velocity, pitch, roll and rotor, <see cref="FlightRecord"/>), a turret aim record for its door gun, and the pilot's inputs step the helicopter one for one (the snapshot's ack is the helicopter's too); v22: glass panes (ADR 0007), event kinds 170 (a pane's hit points) and 171 (the panes of a scope, for a joiner, a new round and a returned vehicle); v23: chat and admin commands, event kinds 180 (a line or command from a player), 181 (a chat log line), 182 (admin flag and spawnable vehicles for a joiner) and 183 (the day clock changed live).; v24: the amphibious transport (ADR 0010, 0011, 0012), entity type 6 (a driven vehicle's speeds, the slope it stands on, its steering and whether it floats, <see cref="DriveRecord"/>), the driver's inputs step it one for one as the pilot's do the helicopter, a turret aim record for its ring gun, and a rider in an armed seat fires their own weapons, so the server answers a seated player's Fire, Reload and weapon switch; v25: the lossy effects (Shot, PelletFan, ImpactFx, gunship tracers and impacts) ride channel 2 unreliable, so a lost one cannot stall Hit, Kill or Death (A-03), the hello carries the map build hash and a different build is refused by name (E-06), and an empty tick sends no packet except every third tick, the heartbeat that carries the input ack (A-05).</summary>
+    public const byte ProtocolVersion = 25;
+    /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
+    public static ulong Fnv1a64(ReadOnlySpan<byte> data)
+    {
+        var h = 14695981039346656037UL;
+        foreach (var b in data) { h ^= b; h *= 1099511628211UL; }
+        return h;
+    }
     /// <summary>"No tick": the snapshot tick of an input before the first commit, and the baseline of a full set.</summary>
     public const uint NoTick = uint.MaxValue;
     public const byte TickRate = 30;
@@ -276,7 +284,11 @@ public static class Wire
         Span<byte> t = stackalloc byte[4];
         switch (m)
         {
-            case HelloMsg h: o.Add(THello); o.Add(h.Version); WriteName(o, h.Name); WriteStr(o, Fit(h.Token, MaxTokenBytes)); o.Add(h.Flags); break;
+            case HelloMsg h:
+                o.Add(THello); o.Add(h.Version); WriteName(o, h.Name); WriteStr(o, Fit(h.Token, MaxTokenBytes)); o.Add(h.Flags);
+                Span<byte> hash = stackalloc byte[8];
+                BinaryPrimitives.WriteUInt64LittleEndian(hash, h.MapHash); o.AddRange(hash.ToArray());
+                break;
             case WelcomeMsg w:
                 o.Add(TWelcome); o.Add(w.Version);
                 BinaryPrimitives.WriteUInt16LittleEndian(t, w.PlayerId); o.AddRange(t[..2].ToArray());
@@ -344,7 +356,8 @@ public static class Wire
                     var token = "";
                     if (p < d.Length) { int tl = d[p]; token = Encoding.UTF8.GetString(d.Slice(p + 1, tl)); p += 1 + tl; }
                     var flags = p < d.Length ? d[p] : (byte)0;
-                    return new HelloMsg(d[1], name, token, flags);
+                    var mapHash = p + 9 <= d.Length ? BinaryPrimitives.ReadUInt64LittleEndian(d[(p + 1)..]) : 0UL; // v25 and later
+                    return new HelloMsg(d[1], name, token, flags, mapHash);
                 }
                 case TWelcome:
                     return new WelcomeMsg(d[1], BinaryPrimitives.ReadUInt16LittleEndian(d[2..]), d[4], BinaryPrimitives.ReadUInt32LittleEndian(d[5..]),

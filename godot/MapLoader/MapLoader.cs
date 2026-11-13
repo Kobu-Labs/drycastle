@@ -34,6 +34,8 @@ public sealed partial class MapLoader
     /// <summary>Root of everything the loader created. Add it to the scene tree.</summary>
     public Node3D Root { get; } = new() { Name = "Map" };
     public string MapVersion { get; private set; } = "";
+    /// <summary>FNV-1a of manifest.json, which names every chunk's hash: the identity of this map build (Hello and the join check, E-06). 0 before a load.</summary>
+    public ulong BuildHash { get; private set; }
     public string RoadsJson { get; private set; } = "";
     /// <summary>Contents of water.json (empty when the map has no water file); parsed by the shooter (ShooterCore.Water).</summary>
     public string WaterJson { get; private set; } = "";
@@ -95,7 +97,9 @@ public sealed partial class MapLoader
         _mapDir = mapDir;
         if (!Directory.Exists(mapDir)) throw new DirectoryNotFoundException(mapDir);
 
-        using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(mapDir, "manifest.json")));
+        var manifestBytes = File.ReadAllBytes(Path.Combine(mapDir, "manifest.json"));
+        BuildHash = Drycastle.ShooterCore.Wire.Fnv1a64(manifestBytes);
+        using var manifest = JsonDocument.Parse(manifestBytes);
         MapVersion = manifest.RootElement.GetProperty("map_version").GetString() ?? "";
         if (manifest.RootElement.TryGetProperty("edit_defaults", out var ed)) EditDefaults = EditDefaults.Read(ed);
         ReadParcels(Path.Combine(mapDir, "parcels.json"));
