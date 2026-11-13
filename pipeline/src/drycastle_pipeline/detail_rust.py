@@ -20,7 +20,6 @@ import numpy as np
 
 from drycastle_pipeline import detail as D
 from drycastle_pipeline.assets import ASSETS_DIR, load_manifest
-from drycastle_pipeline.buildings import hex_to_rgb
 from drycastle_pipeline.config import DEFAULT_AREA, area_paths
 from drycastle_pipeline.detail_meshes import KINDS, TINTABLE
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits

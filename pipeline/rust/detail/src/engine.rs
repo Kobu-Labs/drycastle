@@ -35,7 +35,7 @@ struct Out {
     rows: Vec<f64>,
     clutter: Vec<Clutter>,
     cells: Cells,
-    tally: BTreeMap<&'static str, (usize, f64, usize)>,
+    tally: BTreeMap<&'static str, (usize, f64, usize, f64)>,
     failed: Option<String>,
     secs: f64,
 }
@@ -282,6 +282,7 @@ pub fn run(inp: Inputs) -> Result<Value, String> {
     let mut clutter_by_recipe: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
     let mut failed = vec![];
     let mut tris = 0usize;
+    let (mut tri_area, mut patch_area) = (0.0f64, 0.0f64);
     let mcfg = cfg.at("meadow");
     let ls = meadow::layers(mcfg);
     let mut raster = Raster::new(chunk_m, mcfg.at("cell_m").f(), ls.len());
@@ -291,7 +292,9 @@ pub fn run(inp: Inputs) -> Result<Value, String> {
         if let Some(f) = &o.failed {
             failed.push(f.clone());
         }
-        for (layer, (n, a, c)) in &o.tally {
+        for (layer, (n, a, c, ta)) in &o.tally {
+            tri_area += ta;
+            patch_area += a;
             *by_type.entry(part.recipe.clone()).or_default().entry(layer).or_default() += n;
             *area_by_type.entry(part.recipe.clone()).or_default().entry(layer).or_default() += a;
             *count_by_type.entry(part.recipe.clone()).or_default().entry(layer).or_default() += c;
@@ -404,6 +407,8 @@ pub fn run(inp: Inputs) -> Result<Value, String> {
         "clutter": after,
         "max_per_chunk": max_per_chunk,
         "patch_triangles": tris,
+        "patch_area_m2": patch_area,
+        "patch_triangle_area_m2": tri_area,
         "patch_triangles_by_type": by_type,
         "patch_area_by_type": area_by_type,
         "patch_count_by_type": count_by_type,

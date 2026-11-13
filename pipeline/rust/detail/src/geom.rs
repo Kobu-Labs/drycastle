@@ -239,17 +239,13 @@ pub fn simplify(g: &G, tol: f64) -> G {
     err_count(g.topology_preserve_simplify(tol)).unwrap_or_else(|| dup(g))
 }
 
+/// ``g`` cut to a box. GEOS has a fast ``clip_by_rect``, but it returns wrong rings when a hole touches the outline at a point (a
+/// lawn with a dirt blob on its edge), so the exact overlay is used.
 pub fn clip_rect(g: &G, x0: f64, y0: f64, x1: f64, y1: f64) -> G {
     if is_empty(g) {
         return empty();
     }
-    match g.clip_by_rect(x0, y0, x1, y1) {
-        Ok(r) => r,
-        Err(_) => {
-            GEOS_ERRORS.fetch_add(1, Ordering::Relaxed);
-            inter(g, &rect(x0, y0, x1, y1))
-        }
-    }
+    inter(g, &rect(x0, y0, x1, y1))
 }
 
 pub fn intersects(a: &G, b: &G) -> bool {

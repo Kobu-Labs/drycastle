@@ -144,9 +144,9 @@ impl Img<'_> {
 
 /// The track as patches: per road stretch of ``piece_m``, a rectangle along it clipped to the track.
 fn track_pieces(ctx: &Ctx, rc: Cfg, rng: &mut Rng, tile: (f64, f64)) -> Vec<Patch> {
-    let mut track_parts = vec![];
     let mut pieces: Vec<(Pt, Pt)> = vec![];
     let (tw, th) = tile;
+    let mut segs: Vec<Polyline> = vec![];
     for (line, _width) in &ctx.road_lines {
         let inside = geom::inter(line, &ctx.polygon);
         for seg in geom::lines_g(&inside) {
@@ -154,13 +154,22 @@ fn track_pieces(ctx: &Ctx, rc: Cfg, rng: &mut Rng, tile: (f64, f64)) -> Vec<Patc
             if pl.length() < 0.5 {
                 continue;
             }
-            track_parts.push(ribbon(&pl, rc.at("track_width_m").f() / 2.0, rc.at("track_wobble_m").f(), rng, rc.at("spill")));
             let k = ((pl.length() / rc.at("piece_m").f()).round_ties_even() as usize).max(1);
             for i in 0..k {
                 pieces.push((pl.at(pl.length() * i as f64 / k as f64), pl.at(pl.length() * (i + 1) as f64 / k as f64)));
             }
+            segs.push(pl);
         }
     }
+    // a ribbon per road stretch, each with its own stream, on all cores
+    let base = rng.next_u64();
+    let track_parts: Vec<G> = {
+        use rayon::prelude::*;
+        segs.par_iter()
+            .enumerate()
+            .map(|(i, pl)| ribbon(pl, rc.at("track_width_m").f() / 2.0, rc.at("track_wobble_m").f(), &mut Rng::cell(base, i as i64, 0), rc.at("spill")))
+            .collect()
+    };
     if track_parts.is_empty() {
         return vec![];
     }

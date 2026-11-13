@@ -230,44 +230,62 @@ pub fn lift_tri(t: &Terrain, tri: &Tri, lift: f64) -> Option<[[f64; 3]; 3]> {
 }
 
 pub struct Textures<'a> {
-    pub tile: &'a dyn Fn(&str) -> (f64, f64),
-    pub index: &'a dyn Fn(&str) -> f64,
+    pub tile: &'a (dyn Fn(&str) -> (f64, f64) + Sync),
+    pub index: &'a (dyn Fn(&str) -> f64 + Sync),
 }
 
-/// The rows (``PATCH_ROW`` numbers each) of the patches' triangles; adds the triangle count and area per layer to ``tally``.
-pub fn patch_rows(patches: &[Patch], t: &Terrain, lift_m: f64, tex: &Textures, rows: &mut Vec<f64>, tally: &mut BTreeMap<&'static str, (usize, f64, usize)>) {
-    for p in patches {
-        let lift = p.lift.unwrap_or(lift_m);
-        let tris = drape_xy(&p.geom, t);
-        let e = tally.entry(p.layer).or_insert((0, 0.0, 0));
-        e.1 += geom::area(&p.geom);
-        e.2 += 1;
-        let (tw, th) = p.texture.map(|n| (tex.tile)(n)).unwrap_or((1.0, 1.0));
-        let (c, s) = ((-p.angle).cos(), (-p.angle).sin());
-        for tri in &tris {
-            let Some(v) = lift_tri(t, tri, lift) else { continue };
-            e.0 += 1;
-            for q in &v {
-                rows.extend_from_slice(q);
+/// The rows of one patch and its numbers (triangles, area, 1, triangle area).
+fn rows_of(p: &Patch, t: &Terrain, lift_m: f64, tex: &Textures) -> (Vec<f64>, (usize, f64, usize, f64)) {
+    let lift = p.lift.unwrap_or(lift_m);
+    let tris = drape_xy(&p.geom, t);
+    let mut e = (0, geom::area(&p.geom), 1, 0.0);
+    let mut rows = Vec::with_capacity(tris.len() * PATCH_ROW);
+    let (tw, th) = p.texture.map(|n| (tex.tile)(n)).unwrap_or((1.0, 1.0));
+    let (c, s) = ((-p.angle).cos(), (-p.angle).sin());
+    for tri in &tris {
+        let Some(v) = lift_tri(t, tri, lift) else { continue };
+        e.0 += 1;
+        e.3 += ((v[1][0] - v[0][0]) * (v[2][1] - v[0][1]) - (v[2][0] - v[0][0]) * (v[1][1] - v[0][1])).abs() / 2.0;
+        for q in &v {
+            rows.extend_from_slice(q);
+        }
+        match p.texture {
+            None => {
+                let col = p.colour.unwrap_or([128, 128, 128]);
+                rows.extend([col[0] as f64, col[1] as f64, col[2] as f64]);
+                rows.extend([0.0; 6]);
+                rows.push(-1.0);
             }
-            match p.texture {
-                None => {
-                    let col = p.colour.unwrap_or([128, 128, 128]);
-                    rows.extend([col[0] as f64, col[1] as f64, col[2] as f64]);
-                    rows.extend([0.0; 6]);
-                    rows.push(-1.0);
+            Some(name) => {
+                rows.extend([255.0, 255.0, 255.0]);
+                for q in &v {
+                    let (dx, dy) = (q[0] - p.origin[0], q[1] - p.origin[1]);
+                    rows.push((dx * c - dy * s) / tw);
+                    rows.push((dx * s + dy * c) / th);
                 }
-                Some(name) => {
-                    rows.extend([255.0, 255.0, 255.0]);
-                    for q in &v {
-                        let (dx, dy) = (q[0] - p.origin[0], q[1] - p.origin[1]);
-                        rows.push((dx * c - dy * s) / tw);
-                        rows.push((dx * s + dy * c) / th);
-                    }
-                    rows.push((tex.index)(name));
-                }
+                rows.push((tex.index)(name));
             }
         }
+    }
+    (rows, e)
+}
+
+/// The rows (``PATCH_ROW`` numbers each) of the patches' triangles, in patch order; adds the triangle count, area, patch count and
+/// triangle area per layer to ``tally``. The patches are draped in parallel (the order of the rows does not depend on it).
+pub fn patch_rows(patches: &[Patch], t: &Terrain, lift_m: f64, tex: &Textures, rows: &mut Vec<f64>, tally: &mut BTreeMap<&'static str, (usize, f64, usize, f64)>) {
+    use rayon::prelude::*;
+    let parts: Vec<(Vec<f64>, (usize, f64, usize, f64))> = if patches.len() > 8 {
+        patches.par_iter().map(|p| rows_of(p, t, lift_m, tex)).collect()
+    } else {
+        patches.iter().map(|p| rows_of(p, t, lift_m, tex)).collect()
+    };
+    for (p, (r, e)) in patches.iter().zip(parts) {
+        rows.extend_from_slice(&r);
+        let slot = tally.entry(p.layer).or_insert((0, 0.0, 0, 0.0));
+        slot.0 += e.0;
+        slot.1 += e.1;
+        slot.2 += e.2;
+        slot.3 += e.3;
     }
 }
 
@@ -384,5 +402,24 @@ mod tests {
         assert!((last[12] - (x - 2.0) / 4.0).abs() < 1e-9 && (last[13] - (y - 2.0) / 2.0).abs() < 1e-9);
         assert!((last[2] - (x / 10.0 + 0.05)).abs() < 1e-9); // z = terrain (x / 10) + the patch's own lift
         assert!((tally["tone_a"].1 - 96.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn triangulation_of_a_hole_touching_the_shell_covers_exactly_the_polygon() {
+        // a real case of the village: a dirt blob (the hole) touches the lawn's outline at a vertex
+        let g = geom::polygon(
+            &[[-11.567871470429083, -62.11095578592623], [-12.141376600777429, -62.013211866400326], [-13.62222115381016, -60.703595195731964],
+              [-13.321640199994796, -60.645186174215134], [-13.291711791369172, -60.30534497108568], [-11.594258977891856, -60.30315282367267]],
+            &[vec![[-11.594258977891856, -60.30315282367267], [-12.456464213546626, -60.313491289017854], [-12.285249877489315, -60.61395146234278],
+                   [-11.957718057904847, -60.67512761395121]]],
+        );
+        let pc = geom::polys(&g).remove(0);
+        let mut tris = vec![];
+        triangulate(&pc, &mut tris);
+        assert!((area_of(&tris) - geom::area(&g)).abs() < 1e-9, "{} vs {}", area_of(&tris), geom::area(&g));
+        // and draped over terrain cells (the cut to a cell must not break the touching ring either): cells of 10 m from (-20, -80)
+        let t = Terrain::new(40.0, 4, -2, -8, 5, 5, vec![0.0; 25], vec![true; 25]);
+        let draped = drape_xy(&g, &t);
+        assert!((area_of(&draped) - geom::area(&g)).abs() < 1e-9, "{} vs {}", area_of(&draped), geom::area(&g));
     }
 }

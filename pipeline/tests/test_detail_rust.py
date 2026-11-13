@@ -11,12 +11,12 @@ from shapely.geometry import Point
 
 pytest.importorskip("drycastle_detail", reason="build the Rust engine: make detail-rust-build")
 
-from drycastle_pipeline import detail as D  # noqa: E402
-from drycastle_pipeline import detail_rust as R  # noqa: E402
-from drycastle_pipeline import meadow as M  # noqa: E402
-from drycastle_pipeline.buildings import footprint_polygon  # noqa: E402
-from drycastle_pipeline.props import run_props  # noqa: E402
-from tests.synthetic import make_workspace  # noqa: E402
+from drycastle_pipeline import detail as D
+from drycastle_pipeline import detail_rust as R
+from drycastle_pipeline import meadow as M
+from drycastle_pipeline.buildings import footprint_polygon
+from drycastle_pipeline.props import run_props
+from tests.synthetic import make_workspace
 
 FILES = ("detail.json", "detail_patches.npy", "detail_patches.json", "detail_meadow.bin")
 
@@ -66,7 +66,7 @@ def test_files_have_the_formats_of_the_python_stage(ws, py_result, tmp_path) -> 
     assert da["chunk_size_m"] == db["chunk_size_m"]
     rows = [r for kinds in db["chunks"].values() for rs in kinds.values() for r in rs]
     assert rows and all(len(r) in (5, 6) for r in rows)
-    rows_py, tex = D.load_patches(py_dir)
+    _, tex = D.load_patches(py_dir)
     rows_rs, tex_rs = D.load_patches(out)
     assert tex == tex_rs and len(D.patches_by_chunk(rows_rs, tex_rs, 250.0)) > 0
     ma, mb = M.decode((py_dir / "detail_meadow.bin").read_bytes()), M.decode((out / "detail_meadow.bin").read_bytes())
