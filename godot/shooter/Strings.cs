@@ -25,7 +25,7 @@ public static class Strings
         ("hud.hint.released", "Mouse released. Close the menu to resume"),
         ("hud.seats.title", "Seat {0}: {1}"), ("hud.seats.hint", "{0}-{1}  Switch seat"),
         ("hud.seat.driver", "Driver"), ("hud.seat.gunner", "Gunner"), ("hud.seat.passenger", "Passenger"),
-        ("hud.vehicle.speed", "{0} km/h"), ("hud.flak.ammo", "FLAK  {0} / {1}"), ("hud.flak.reload", "FLAK  RELOADING"), ("weapon.flak", "Flak"), ("hud.vehicle.enter", "{0}  Enter car"), ("hud.vehicle.exit", "{0}  Exit car     Space  Handbrake"),
+        ("hud.vehicle.speed", "{0} km/h"), ("hud.flak.ammo", "FLAK  {0} / {1}"), ("hud.flak.reload", "FLAK  RELOADING"), ("weapon.flak", "Flak"), ("weapon.burn", "Burning"), ("status.blessed", "BLESSED"), ("status.cursed", "CURSED"), ("status.burning", "BURNING"), ("toast.status.blessed", "A blessing watches over you: it will save you from one lethal hit"), ("toast.status.cursed", "You are cursed: your bullets set enemies ablaze"), ("toast.status.saved", "The blessing saved your life"), ("hud.vehicle.enter", "{0}  Enter car"), ("hud.vehicle.exit", "{0}  Exit car     Space  Handbrake"),
         ("hud.vehicle.view.cockpit", "{0}  Cockpit view"), ("hud.vehicle.view.chase", "{0}  Chase view"),
         ("hud.seat.pilot", "Pilot"), ("hud.flight.enter", "{0}  Board helicopter"), ("hud.flight.readout", "{0} km/h  ALT {1}"),
         ("hud.flight.spool", "Rotor starting     {0}  Exit"), ("hud.flight.takeoff", "{0}  Take off     {1}  Exit"),

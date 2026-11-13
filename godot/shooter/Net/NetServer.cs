@@ -43,6 +43,10 @@ public partial class NetServer : Node
         public PlayerWeapons W = null!;
         /// <summary>What the player wears (items.json): set at join, taken off onto the corpse at death, never stored in the profile.</summary>
         public Equipment Worn = null!;
+        /// <summary>The blessing and the curse the player carries (Holy Mass reward); ends at death, survives a round change, never stored.</summary>
+        public readonly PlayerStatuses Status = new();
+        /// <summary>Whether the last <see cref="EventKind.StatusState"/> said this player burns.</summary>
+        public bool BurningSent;
         /// <summary>What the player carries unworn: set at join, emptied onto the corpse at death, never stored in the profile (ADR 0018).</summary>
         public Bag Bag = null!;
         /// <summary>The player's perk values. Neutral until the loadout ticket sets them from the player's loadout.</summary>
@@ -170,6 +174,7 @@ public partial class NetServer : Node
         _xp = new MatchXp(Levels.Awards);
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
+        StatusInit();
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");
         _match.Entities.Spawned += w => BroadcastEvent(EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State));
         _match.Entities.Despawned += w => BroadcastEvent(EventKind.WorldDespawn, WorldCodec.EncodeDespawn(w.Id, w.Reason));
@@ -236,10 +241,12 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Corpses);
         StepVehicles((float)delta);
         PerfLap(ServerPerf.Ph.Vehicles);
+        StatusTick((float)delta); // burns tick
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
         DetonateFlak();    // flak shells that have arrived burst now
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
+        FlushStatuses(); // statuses and burning that changed this tick
         FlushScoreboard(); // once a tick at most, and about once a second (the ping), however many kills the tick had (A-04)
         PerfLap(ServerPerf.Ph.Detonate);
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
@@ -482,6 +489,7 @@ public partial class NetServer : Node
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
         SendWornOnJoin(c); // what the others wear (#266), to draw on their characters
+        SendStatusOnJoin(c); // who is blessed, cursed or burning
         _match.AddPlayer(c.Id, c.Name, c.Sandbox); // spawns the player (event) and broadcasts the scoreboard
         SandboxAnnounce(c); // sandbox name tags both ways, and the held streak (#156)
         _host.Flush();
@@ -501,6 +509,7 @@ public partial class NetServer : Node
     void Leave(Client c)
     {
         StreakLeave(c.Id);
+        StatusLeave(c.Id);
         if (c.Car != null) { c.Car.Seat.Exit(c.Id); c.Car = null; }
         foreach (var car in _cars) { car.RemoveCollisionExceptionWith(c.Body); car.Probe?.Unignore(c.Body); car.DriveWorld?.Unignore(c.Body); } // the exception outlives the freed body otherwise (T3-014)
         c.Body.QueueFree();
@@ -599,6 +608,7 @@ public partial class NetServer : Node
                 _crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
                 ResetCars();
                 LossRoundStart();
+                StatusRoundStart();
                 RoundStarted();
                 if (_roundsEnded > 0) { _restarts++; _finishAt = _elapsed + 1.5; }
                 GD.Print("server: round started");
@@ -630,7 +640,7 @@ public partial class NetServer : Node
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon, k.Cause)));
                 break;
             case TargetKilled tk: OnTargetKilled(tk); break;
-            case PlayerDied d: LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
+            case PlayerDied d: OnStatusDeath(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
         }
     }
 
@@ -958,6 +968,8 @@ public partial class NetServer : Node
             if (_byId.TryGetValue(attackerId, out var shooter)) Send(shooter, new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attackerId, weaponIdx, (ushort)damage, head, backstab, r == DamageResult.Killed))));
             return r;
         }
+        if (r == DamageResult.Saved) BroadcastEvent(EventKind.BlessingSaved, StatusCodec.EncodeSaved(victim)); // the blessing is used up; the mask follows with the flush
+        else if (r == DamageResult.Damaged) CurseOnHit(attackerId, weaponIdx, victim);
         if (r == DamageResult.Damaged && Scores(attackerId) && Scores(victim)) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
         BotHit(victim, attackerId);
         _hitsLanded++;

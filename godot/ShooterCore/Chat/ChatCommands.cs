@@ -89,6 +89,7 @@ public static class ChatCommands
         new("restart", "Restart the round now, optionally in another mode (ffa or tdm)", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
         new("event", "Trigger a village event now", new[] { new ChatArg("event", ChatArgKind.Choice), new ChatArg("action", ChatArgKind.Choice, false) }),
         new("citizens", "Send citizens to the church to sit on its pews (a number), or remove them all (clear)", new[] { new ChatArg("count", ChatArgKind.IntOrChoice, true, 1, MaxCitizens) }),
+        new("status", "Give a player (name or #id), or yourself, the divine blessing or the devil's curse, or clear their statuses", new[] { new ChatArg("status", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
     };
 
@@ -108,7 +109,8 @@ public static class ChatCommands
             ChatArgKind.Choice when cmd.Name == "spawn" => ctx.Vehicles.Select(v => (v, "")).ToList(),
             ChatArgKind.Choice when cmd.Name == "give" => ctx.Items.Select(i => (i, "")).ToList(),
             ChatArgKind.Choice when cmd.Name == "sandbox" => new[] { ("on", "godmode, unlimited ammo, no score"), ("off", "back to normal play") },
-            ChatArgKind.Choice when cmd.Name == "restart" => new[] { ("ffa", "free-for-all, everyone alone"), ("tdm", "team deathmatch, two teams") },
+            ChatArgKind.Choice when cmd.Name == "status" => new[] { ("bless", "one lethal hit is negated"), ("curse", "your bullets set victims ablaze"), ("clear", "take every status away") },
+            ChatArgKind.Choice when cmd.Name == "restart"=> new[] { ("ffa", "free-for-all, everyone alone"), ("tdm", "team deathmatch, two teams") },
             ChatArgKind.Choice when cmd.Name == "event" && argIndex == 0 => new[]
             {
                 ("rozhlas", "the village loudspeaker broadcast, for everyone, now"),
