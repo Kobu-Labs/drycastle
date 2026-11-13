@@ -110,4 +110,52 @@ public class StatusTests
         Assert.True(a.Has(StatusKind.Curse));
         Assert.Empty(CurseRules.Grant(new ushort[] { 1 }, _ => a)); // already cursed
     }
+    [Fact]
+    public void Burn_pays_whole_points_five_over_a_full_burn()
+    {
+        var set = new BurnSet(); var pay = new BurnPayout();
+        set.Ignite(2, 1, CurseBurn.Default);
+        var total = 0; var firstAt = -1f; var t = 0f;
+        var ticks = new List<BurnTick>();
+        for (var i = 0; i < 12 * 30; i++, t += 1f / 30)
+        {
+            ticks.Clear(); set.Step(1f / 30, ticks);
+            foreach (var k in ticks) { var w = pay.Whole(k); if (w > 0 && firstAt < 0) firstAt = t; total += w; }
+        }
+        Assert.Equal(5, total);
+        Assert.InRange(firstAt, 1.8f, 2.2f); // 1 hp every 2 s
+        Assert.False(set.IsBurning(2));
+    }
+
+    [Fact]
+    public void Blessing_negates_one_lethal_hit_without_a_kill_then_protects_briefly()
+    {
+        double now = 0;
+        var m = new MatchSim(new MatchConfig(), () => now, new[] { new System.Numerics.Vector3(0, 0, 0), new System.Numerics.Vector3(100, 0, 0) }, new Random(1));
+        m.AddPlayer(1, "a"); m.AddPlayer(2, "b");
+        now += 3.5; m.Update(); // spawn protection over
+        var statuses = new PlayerStatuses(); statuses.Grant(StatusKind.Blessing);
+        m.SaveFromDeath = id => id == 2 && BlessingRules.TryConsume(statuses);
+        m.ApplyDamage(2, 1, 0, 40);
+        Assert.Equal(DamageResult.Saved, m.ApplyDamage(2, 1, 0, 200));
+        Assert.Equal(MoveConsts.MaxHealth, m.Get(2)!.Health);
+        Assert.Equal(PlayerLife.Alive, m.Get(2)!.Life);
+        Assert.Equal(0, m.Get(1)!.Kills);
+        Assert.Equal(0, m.Get(2)!.Deaths);
+        Assert.False(statuses.Has(StatusKind.Blessing));
+        Assert.Equal(DamageResult.Ignored, m.ApplyDamage(2, 1, 0, 200)); // invulnerable for a second
+        now += BlessingRules.InvulnerableS + 0.1;
+        Assert.Equal(DamageResult.Killed, m.ApplyDamage(2, 1, 0, 200)); // used up
+        Assert.Equal(1, m.Get(1)!.Kills);
+    }
+
+    [Fact]
+    public void Status_codec_round_trips()
+    {
+        Assert.True(StatusCodec.TryDecodeState(StatusCodec.EncodeState(7, 3, true), out var id, out var mask, out var burning));
+        Assert.Equal(((ushort)7, (byte)3, true), (id, mask, burning));
+        Assert.True(StatusCodec.TryDecodeSaved(StatusCodec.EncodeSaved(9), out var saved));
+        Assert.Equal((ushort)9, saved);
+        Assert.False(StatusCodec.TryDecodeState(new byte[3], out _, out _, out _));
+    }
 }

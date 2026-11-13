@@ -7,7 +7,7 @@ public enum StatusKind : byte
 {
     /// <summary>The devil's curse (killing the demon): the player's hits set the victim ablaze (<see cref="CurseRules"/>). Until the player dies.</summary>
     Curse = 0,
-    /// <summary>Divine blessing: one lethal hit is negated. Only the kind exists here; the revive belongs to its own ticket. Until used up or the player dies.</summary>
+    /// <summary>Divine blessing: one lethal hit is negated. The save is <see cref="BlessingRules"/>, hooked into <see cref="MatchSim.SaveFromDeath"/>. Until used up or the player dies.</summary>
     Blessing = 1,
 }
 

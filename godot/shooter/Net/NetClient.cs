@@ -306,11 +306,13 @@ public partial class NetClient : Node
                 _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
                 if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
                 ForgetWorn(l.PlayerId);
+                ForgetStatus(l.PlayerId);
                 break;
             case EventMsg e:
                 if ((EventKind)e.Kind == EventKind.TargetRoster) OnTargetRoster(e.Payload); // target dummies' names (#148)
                 OnSandboxEvent((EventKind)e.Kind, e.Payload); // sandbox answer (#156)
                 OnChatEvent((EventKind)e.Kind, e.Payload); // chat lines, the admin flag, the day clock
+                OnStatusEvent((EventKind)e.Kind, e.Payload); // statuses: blessing, curse, burning
                 OnItemEvent((EventKind)e.Kind, e.Payload); // what the player wears, what a corpse carries, an item crumbling
                 OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
                 OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
@@ -389,7 +391,7 @@ public partial class NetClient : Node
             if (rec.Type == EntityType.Flight) { OnFlightState(rec, h.Tick); continue; }
             if (rec.Type == EntityType.Drive) { OnDriveState(rec, h.Tick); continue; }
             if (rec.Type is not (EntityType.Player or EntityType.Target)) continue;
-            if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); _remotes[id] = r; }
+            if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); _remotes[id] = r; SyncStatusFx(id); }
             r.State = rec.State; r.Stance = rec.Stance; r.Slot = rec.Weapon;
             r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);

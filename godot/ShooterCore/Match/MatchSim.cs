@@ -4,7 +4,8 @@ namespace Drycastle.ShooterCore;
 
 public enum MatchPhase : byte { Waiting = 0, Running = 1, Ending = 2 }
 
-public enum DamageResult { Ignored, Damaged, Killed }
+/// <summary>Saved: a lethal hit was negated (a blessing, <see cref="BlessingRules"/>); the victim is at full health and the shooter has no kill.</summary>
+public enum DamageResult { Ignored, Damaged, Killed, Saved }
 
 /// <summary>Weapon ids for deaths that no weapon from weapons.json caused.</summary>
 public static class SpecialWeapons
@@ -27,6 +28,8 @@ public static class SpecialWeapons
     public const byte Helper = 245;
     /// <summary>The flak truck's shells (a gunner's rounds): its kills are ordinary kills, not the streak's, like the jeep's roof gun.</summary>
     public const byte Flak = 243;
+    /// <summary>Burning (the devil's curse, <see cref="BurnSet"/>): a kill is credited to the curse owner and named "Burning" in the feed.</summary>
+    public const byte Burn = 242;
 }
 
 public abstract record MatchEvent;
@@ -69,6 +72,8 @@ public sealed class MatchPlayer
     public float Health;
     public Vector3 Position;
     public double RespawnAt, ProtectedUntil;
+    /// <summary>Invulnerable until this time after a blessing saved the player; unlike spawn protection, firing does not end it.</summary>
+    public double InvulnerableUntil;
 }
 
 /// <summary>
@@ -118,6 +123,9 @@ public sealed class MatchSim
 
     public void SetTargets(IReadOnlyList<TargetSpot> spots) => Targets = new TargetDummies(spots, TargetDummies.RespawnDelay);
     public event Action<MatchEvent>? Event;
+
+    /// <summary>Asked when a hit would kill (not for falls out of the world or the MOAB, which ignore protection): true negates it once (the host removes the blessing).</summary>
+    public Func<ushort, bool>? SaveFromDeath { get; set; }
 
     public MatchPlayer? Get(ushort id) => _players.GetValueOrDefault(id);
 
@@ -238,8 +246,15 @@ public sealed class MatchSim
         if (v.Sandbox && !v.Vulnerable) return DamageResult.Ignored; // godmode (#156): nothing hurts a sandbox player, unless they switched damage on
         if (!_cfg.FriendlyFire && AreFriends(victim, attacker)) return DamageResult.Ignored; // teammates cannot hurt each other (self damage is not friendly fire)
         if (!ignoreProtection && IsProtected(victim)) return DamageResult.Ignored;
+        if (!ignoreProtection && _now() < v.InvulnerableUntil) return DamageResult.Ignored; // just saved by a blessing
         v.Health -= amount;
         if (v.Health > 0) return DamageResult.Damaged;
+        if (!ignoreProtection && SaveFromDeath?.Invoke(victim) == true)
+        {
+            v.Health = MoveConsts.MaxHealth;
+            v.InvulnerableUntil = _now() + BlessingRules.InvulnerableS;
+            return DamageResult.Saved;
+        }
 
         v.Health = 0; v.Life = PlayerLife.Dead; v.Deaths++;
         v.RespawnAt = _now() + _cfg.RespawnDelay;
@@ -366,6 +381,7 @@ public sealed class MatchSim
         p.Position = SpawnChooser.Choose(_spawns, others, _cfg.MinSpawnDistance, _rng);
         p.Life = PlayerLife.Alive;
         p.Health = MoveConsts.MaxHealth;
+        p.InvulnerableUntil = 0;
         p.ProtectedUntil = _now() + _cfg.SpawnProtection;
         Emit(new PlayerSpawned(p.Id, p.Position, _cfg.SpawnProtection));
     }
