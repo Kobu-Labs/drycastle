@@ -50,6 +50,7 @@ from drycastle_pipeline.config import DEFAULT_AREA, area_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
 from drycastle_pipeline import meadow as meadow_mod
 from drycastle_pipeline.ground import ground_types, ground_units, type_colours, water_kinds
+from drycastle_pipeline.ground_attributes import attributes_of
 from drycastle_pipeline.meshes import Mesh
 from drycastle_pipeline.props import chunk_of, seeded
 from drycastle_pipeline.regions import drape, plan_regions
@@ -977,7 +978,7 @@ def area_type(parcel: dict, types: dict[str, dict] | None = None) -> str | None:
         return "dike"
     if parcel["kind"] in ("garden", "building_plot"):
         return "garden"
-    return (types if types is not None else _shipped_types()).get(parcel["kind"], {}).get("recipe")
+    return attributes_of((types if types is not None else _shipped_types()).get(parcel["kind"])).get("recipe")
 
 
 # --- the village ----------------------------------------------------------------------------
@@ -1063,11 +1064,11 @@ class Village:
     def cfg_for(self, parcel: dict, recipe: str) -> dict:
         """The detail rules for a unit: for a ground area whose type has ``detail`` settings, those laid over the
         section of its recipe."""
-        spec = self.types.get(parcel["kind"], {})
-        if not spec.get("detail") or spec.get("recipe") != recipe:
+        attrs = attributes_of(self.types.get(parcel["kind"]))
+        if not attrs.get("detail") or attrs.get("recipe") != recipe:
             return self.cfg
         if parcel["kind"] not in self._type_cfg:
-            self._type_cfg[parcel["kind"]] = {**self.cfg, recipe: _merge(self.cfg[recipe], spec["detail"])}
+            self._type_cfg[parcel["kind"]] = {**self.cfg, recipe: _merge(self.cfg[recipe], attrs["detail"])}
         return self._type_cfg[parcel["kind"]]
 
     @staticmethod

@@ -22,6 +22,7 @@ from pathlib import Path
 
 from drycastle_pipeline.config import DEFAULT_AREA, area_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
+from drycastle_pipeline.ground import ground_types
 from drycastle_pipeline.parcel_run import _EMPTY_GLB
 from drycastle_pipeline.regions import node_name, overlapping, plan_regions, region_meshes
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
@@ -45,17 +46,19 @@ def run_region_run(
     edits_path: Path = DEFAULT_EDITS,
     rules_path: Path = DEFAULT_RULES,
     glb_path: Path | None = None,
+    area: str | None = None,
 ) -> dict:
     t0 = time.perf_counter()
     terrain, _ = load_terrain(work_dir, mmap=True)
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     graph_path = work_dir / "roads.json"
     graph = json.loads(graph_path.read_text()) if graph_path.is_file() else None
-    plan = plan_regions(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), terrain)
+    edits = load_edits(edits_path)
+    plan = plan_regions(edits, parcels_doc.get("origin_epsg5514"), terrain, types=ground_types(rules_path, area, edits_path))
     for warning in plan.warnings:
         print(f"region-run: warning: {warning}", file=sys.stderr)
     named = set(regions) if regions else set(plan.regions)
-    for rid in sorted(named - set(plan.regions)):
+    for rid in sorted(named - set(plan.regions) - set(edits.regions)):  # a region of a ground layer is in the edits but has no mesh
         print(f"region-run: warning: {rid} is not in the edits; its nodes are removed", file=sys.stderr)
     targets = overlapping(plan, named)
     t1 = time.perf_counter()
@@ -97,6 +100,7 @@ def run(
             regions or [],
             edits_path,
             glb_path=Path(glb) if glb else None,
+            area=area,
         )
     except FileNotFoundError as exc:
         print(
