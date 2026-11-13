@@ -56,13 +56,7 @@ public partial class NetServer
     {
         if (hull is not { Destroyed: false } || !hull.Seat.Occupied) return (null, float.PositiveInfinity);
         if (RiderRules.Exposed(hull.Def, hull.Seat, targets, seatsOnly) is not { } riders) return (null, float.PositiveInfinity);
-        var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
-        q.CollisionMask = CollisionLayers.Bullets;
-        var exclude = new Godot.Collections.Array<Rid>(PlayerRids()) { hull.GetRid() };
-        if (skip != null) exclude.Add(skip.GetRid());
-        q.Exclude = exclude;
-        var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
-        return (riders, r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3()));
+        return (riders, NextStop(from, dir, max, hull, skip)); // the walls and the other hulls, the hull and the shooter's own left out (B-02)
     }
 
     /// <summary>The turret record of a flak vehicle for the snapshot: the world aim and the gunner's id.</summary>

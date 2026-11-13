@@ -61,8 +61,8 @@ public partial class NetServer
     /// <summary>The pane of <paramref name="car"/> a ray that stopped on its hull <paramref name="wall"/> metres out crosses first, or -1.</summary>
     int VehiclePaneCrossed(ServerCar car, Vector3 from, Vector3 dir, float wall)
     {
-        var feet = N(car.GlobalPosition); var yaw = car.State.Yaw;
-        return GlassRules.FirstCrossed(car.Def.GlassRects, GlassRules.ToVehicle(N(from), feet, yaw), GlassRules.DirToVehicle(N(dir), yaw), wall - 0.1f, wall + GlassData.VehicleReach);
+        var pose = PoseOf(car); // the panes where the hull was at the shot's view, as the hit was (B-02)
+        return GlassRules.FirstCrossed(car.Def.GlassRects, GlassRules.ToVehicle(N(from), pose.Feet, pose.Yaw), GlassRules.DirToVehicle(N(dir), pose.Yaw), wall - 0.1f, wall + GlassData.VehicleReach);
     }
 
     /// <summary>A pane a bullet went through: the vehicle, the pane and the metres along the ray.</summary>
@@ -84,22 +84,21 @@ public partial class NetServer
     float BulletHit(Vector3 from, Vector3 dir, float max, out ServerCar? car, ref List<GlassCross>? crossed, ServerCar? ignore = null, ServerCar? solid = null)
     {
         var off = 0f;
-        var exclude = ignore == null ? null : new Godot.Collections.Array<Rid>(PlayerRids()) { ignore.GetRid() };
+        List<ServerCar>? passed = null; // the vehicles this ray has gone through (left out from here on)
         var n = N(from); var nd = N(dir);
         for (var pass = 0; ; pass++)
         {
-            var q = PhysicsRayQueryParameters3D.Create(from + dir * off, from + dir * max);
-            q.CollisionMask = CollisionLayers.Bullets;
-            q.Exclude = exclude ?? PlayerRids();
-            var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
-            if (r.Count == 0) { car = null; return float.PositiveInfinity; }
-            car = r["collider"].As<GodotObject>() as ServerCar;
-            var wall = from.DistanceTo(r["position"].AsVector3());
-            if (car == null || car == solid || car.Destroyed || pass >= MaxGlassPasses) return wall;
+            // the walls, and the hulls of the vehicles at the shot's view (B-02): the nearest of them, from where the ray is now
+            var o = from + dir * off;
+            var wallD = WallDistance(o, dir, max - off);
+            var hull = NearestHull(o, dir, max - off, ignore, null, passed, out var hullD, out var pose);
+            if (hull == null || hullD >= wallD) { car = null; return off + wallD; }
+            car = hull;
+            var wall = off + hullD;
+            if (car == solid || pass >= MaxGlassPasses) return wall;
             var panes = car.Def.GlassRects; var open = car.Def.OpenSideRects;
             if (panes.Count == 0 && open.Count == 0) return wall;
-            var feet = N(car.GlobalPosition); var yaw = car.State.Yaw;
-            var lo = GlassRules.ToVehicle(n, feet, yaw); var ld = GlassRules.DirToVehicle(nd, yaw);
+            var lo = GlassRules.ToVehicle(n, pose.Feet, pose.Yaw); var ld = GlassRules.DirToVehicle(nd, pose.Yaw);
             var way = GlassRules.Through(panes, open, lo, ld, wall, GlassData.VehicleReach);
             if (!way.Enters || way.EntryT > max) return wall; // the body where the ray met it, or the round's range ends before the pane
             if (way.EntryPane >= 0) (crossed ??= new()).Add(new GlassCross(car, way.EntryPane, way.EntryT));
@@ -108,7 +107,7 @@ public partial class NetServer
                 return MathF.Min(MathF.Max(VehicleBox.ExitDistance(lo, ld, car.HalfWidth, car.HalfLength, car.Def.Height), way.EntryT), max);
             if (way.ExitPane >= 0) (crossed ??= new()).Add(new GlassCross(car, way.ExitPane, way.ExitT));
             off = way.ExitT + 0.02f;
-            exclude = new Godot.Collections.Array<Rid>(exclude ?? PlayerRids()) { car.GetRid() };
+            (passed ??= new()).Add(car);
         }
     }
 
