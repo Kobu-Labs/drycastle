@@ -63,6 +63,11 @@ LAMP_CAGE, LAMP_GLOW = "#2f3133", "#f0c987"
 LAMP_SIZE = 0.3  # a caged lamp hangs under the ceiling of every room
 LANDING = 0.9  # props stay this far from the hatches (and from the ladder landings next to them)
 PROP_GAP = 0.03  # between a prop and its wall
+SCREEN_Z0, SCREEN_H = 0.85, 1.1  # the intel screen in the command post: its lower edge above the floor, and its height (the room is 2.1 m)
+SCREEN_W_MIN, SCREEN_W_MAX = 1.6, 3.0  # the widest it hangs, the narrowest worth hanging
+SCREEN_MARGIN = 0.25  # it keeps this far from the ends of its wall
+SCREEN_ZONE = 0.9  # no furniture stands this deep in front of it (the deepest piece is 0.9)
+SCREEN_STEP, SCREEN_SLIDE = 0.2, 0.1  # widths and positions tried
 # furnishing per level (0 ground, 1..3 down): (name, width along the wall, depth, height, colour)
 FURNITURE = {
     0: [],  # the ground floor: ammunition boxes under the firing slits (see _furnish)
@@ -431,6 +436,55 @@ def _keepouts(level: int, hatches: list[_Hatch] | None, door_xy) -> list:
     return keep
 
 
+@dataclass(frozen=True)
+class _Screen:
+    """Where the intel screen hangs in the command post: ``centre`` on the wall, ``facing`` into the room,
+    ``zone`` the strip in front of it that no furniture stands in."""
+
+    centre: np.ndarray
+    facing: np.ndarray
+    width: float
+    zone: Polygon
+
+
+def _intel_screen(room: Polygon, inner: list[_Edge], hatches: list[_Hatch] | None) -> _Screen | None:
+    """The wall of the command post (the lowest floor) that the intel screen hangs on: the widest stretch of
+    straight wall at most ``SCREEN_W_MAX`` wide that is clear of the ladder landing, longest wall first, nearest
+    the middle of the wall. None when no wall takes a screen of at least ``SCREEN_W_MIN`` (then there is no intel
+    room in this bunker). The floors under the ground have no openings, so any wall will do."""
+    if not hatches:
+        return None
+    keep = hatches[UNDER - 1].square.buffer(LANDING)
+    roomy = room.buffer(1e-3, join_style="mitre")
+    best = None
+    for e in inner:
+        usable = e.ln - 2 * SCREEN_MARGIN
+        for width in np.arange(min(SCREEN_W_MAX, usable), SCREEN_W_MIN - EPS, -SCREEN_STEP):
+            for s0 in np.arange(SCREEN_MARGIN, e.ln - SCREEN_MARGIN - width + EPS, SCREEN_SLIDE):
+                a, b = e.p + e.t * s0, e.p + e.t * (s0 + width)
+                d = -e.n * SCREEN_ZONE
+                zone = Polygon([a, b, b + d, a + d])
+                if not roomy.contains(zone) or zone.intersects(keep):
+                    continue
+                key = (round(float(width), 2), round(e.ln, 2), -round(abs(s0 + width / 2 - e.ln / 2), 2), -e.k)
+                if best is None or key > best[0]:
+                    best = (key, _Screen((a + b) / 2, -e.n, float(width), zone))
+    return best[1] if best else None
+
+
+def _screen_export(s: _Screen) -> dict:
+    z0 = -STOREY * UNDER + SCREEN_Z0
+    return {
+        "x": round(float(s.centre[0]), 3),
+        "y": round(float(s.centre[1]), 3),
+        "dx": round(float(s.facing[0]), 4),
+        "dy": round(float(s.facing[1]), 4),
+        "z0": round(z0, 3),
+        "z1": round(z0 + SCREEN_H, 3),
+        "width": round(s.width, 3),
+    }
+
+
 def lamp_xy(grown_ring) -> tuple[float, float]:
     """Where the lamp of a room hangs: the mean of its shelter polygon's corners. The game hangs its light at the same place."""
     pts = np.asarray(grown_ring, float)
@@ -453,7 +507,10 @@ def _underground(
         b.flat(_walk_holes(room, hatches[k - 1].square), z1, False, hex_to_rgb(CEILING))
         top = z1 + SLAB + (FLOOR_Z if k == 1 else 0.0)
         _tube(b, hatches[k - 1].square, z1, top, hex_to_rgb(INNER) if detail else concrete)
-        _furnish(b, room, inner, k, _keepouts(k, hatches, door_xy), z0, [])
+        keep = _keepouts(k, hatches, door_xy)
+        if k == UNDER and (screen := _intel_screen(room, inner, hatches)):
+            keep.append(screen.zone)  # the wall the intel screen hangs on stays free of furniture
+        _furnish(b, room, inner, k, keep, z0, [])
         if detail:
             _ladder(b, hatches[k - 1], z0, -STOREY * (k - 1) + (FLOOR_Z if k == 1 else 0.0))
             _lamp(b, lamp, z1)
@@ -570,6 +627,9 @@ def bunker_rooms(ring, door_dir) -> dict:
     - ``ladders``: where a climber stands (``x``, ``y``), the way they face (``dx``, ``dy``) and the heights of the
       floor below and the floor above (``z0``, ``z1``).
     - ``hatch``: the hole in the ground floor, which the terrain is cut by.
+    - ``intel`` (when a wall of the command post takes one): where the intel screen hangs, on the lowest floor.
+      ``x``, ``y`` is the middle of the screen on the wall, ``dx``, ``dy`` the way it faces (into the room),
+      ``z0``, ``z1`` its lower and upper edge and ``width`` its width. The game draws the screen there.
     """
     poly = orient(Polygon(ring), 1.0)
     plan = _plan(poly, _edges(np.array(poly.exterior.coords)[:-1]), door_dir)
@@ -601,4 +661,7 @@ def bunker_rooms(ring, door_dir) -> dict:
         )
     if hatches:
         out["hatch"] = [[round(x, 3), round(y, 3)] for x, y in list(hatches[0].square.exterior.coords)[:-1]]
+        inner = _edges(np.array(room.exterior.coords)[:-1])
+        if screen := _intel_screen(room, inner, hatches):
+            out["intel"] = _screen_export(screen)
     return out

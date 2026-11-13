@@ -164,6 +164,7 @@ def build_scene(
                                 "floors": [_raised(r, dz) for r in rooms["floors"]],
                                 "ladders": [_raised(r, dz) for r in rooms["ladders"]],
                                 "hatch": rooms["hatch"],
+                                **({"intel": _raised(rooms["intel"], dz)} if "intel" in rooms else {}),
                             })
                 else:
                     m = fn(b)
