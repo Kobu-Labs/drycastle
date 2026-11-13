@@ -77,7 +77,7 @@ A lamp post of the base map, placed from OSM street lamp nodes or along roads by
 _Avoid_: light, streetlight, lamp post
 
 **Corpse**:
-A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile.
+A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. It also carries the Item its player wore, which another player can put on instead (see Pickup limit).
 _Avoid_: ragdoll, body, drop
 
 **Sandbox mode**:
@@ -89,7 +89,7 @@ A player whose player token is listed on the server (`--admin-token`). Admins ma
 _Avoid_: operator, moderator, op
 
 **Chat command**:
-A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
+A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (put an Item on a player, or on yourself), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
 _Avoid_: console command, cheat
 
 **Care package**:
@@ -128,6 +128,26 @@ _Avoid_: seat change, swap seat
 The weapons a player can select: the primary, the secondary and the knife of the active loadout (keys 1-3 and the next-weapon cycle). A corpse swap changes its primary or secondary position. Smoke arenas and `--debug-cmds` servers hold every weapon.
 _Avoid_: inventory, toolbar, slots
 
+**Item**:
+Something a player wears that is not a weapon, perk or killstreak, defined in `items.json`. The first Items are event rewards (the Bigfoot head). A player wears at most one Item per equipment slot.
+_Avoid_: loot, gear, drop (as a noun)
+
+**Equipment**:
+What a player wears right now: one Item per equipment slot, of which the headgear slot is the only one. It belongs to the match and not to the Profile: death puts the worn Item on the Corpse, leaving the match loses it, and a new round keeps it.
+_Avoid_: inventory (the shooter has no bag; the weapons are the Hotbar), outfit (that is Camouflage)
+
+**Headgear slot**:
+The equipment slot on the head: an Item in it is worn instead of a helmet. Not the Camouflage's headgear, which is only the look of the helmet; the slot is gameplay.
+_Avoid_: helmet slot, hat slot
+
+**Bigfoot head**:
+The first Item: headgear, the reward for defeating the Bigfoot event. A headshot on its wearer is a body hit: the weapon's body damage, with no headshot multiplier, marker or bonus XP. It has a Pickup limit of three.
+_Avoid_: Bigfoot mask, Bigfoot helmet
+
+**Pickup limit**:
+How many times an Item can be taken from a Corpse over its whole life. The count belongs to the Item and travels with it from corpse to wearer to corpse; the attempt after the last pickup makes it crumble (it is gone, and the player reads "The item crumbles in your hands"). An Item with no limit never crumbles.
+_Avoid_: use count, durability, charges
+
 **Streak weapon**:
 A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the turret, the MOAB, the aircraft guns). Kills made with one do not advance the Streak counter. The jeep's roof gun, the utility helicopter's door gun and the amphibious transport's ring gun are not streak weapons.
 _Avoid_: killstreak weapon (ambiguous with the streak itself)
@@ -141,7 +161,7 @@ The half-angle of the cone a shot can land in. It starts from the weapon's own s
 _Avoid_: accuracy, bloom, recoil (recoil moves the aim; spread scatters around it)
 
 **Camouflage**:
-A loadout's look (`camo.json`): the character (body model, skin tone, headgear), the suit's base colour and pattern, ghillie tufts and face paint. Chosen in the customiser and stored per loadout slot.
+A loadout's look (`camo.json`): the character (body model, skin tone, headgear: the helmet's look, not the Headgear slot), the suit's base colour and pattern, ghillie tufts and face paint. Chosen in the customiser and stored per loadout slot.
 _Avoid_: outfit, cosmetic
 
 **Shot-only cover**:

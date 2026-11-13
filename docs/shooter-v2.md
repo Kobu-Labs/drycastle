@@ -20,7 +20,7 @@ simulation, the data files and the wire codecs; the Godot scenes, shaders and HU
   loadout item, so players cannot select it; see section 9. Smoke arenas and `--debug-cmds` servers keep every weapon on
   the hotbar (`LoadoutHotbar.All`).
 - Corpses (#130): a killed player leaves a corpse holding its primary. Walking onto it and pressing E swaps the corpse's
-  weapon into the primary or the secondary position.
+  weapon into the primary or the secondary position. A corpse also carries the item its player wore (section 7b).
 - Loadout autosave, rename, copy and reset (#145). Each loadout has a name (1-24 characters, trimmed, `LoadoutRules.ValidateName`,
   default "Class 1" .. "Class 5"). The editor saves on its own after a pause: every `SaveLoadout` carries a client sequence
   number (`seq`), and the server answers each one with a `LoadoutAck` event so the client can match answers. Copy (`CopyLoadout`)
@@ -454,6 +454,35 @@ unchanged; when the vehicle blows up, everyone aboard dies with it.
 - *No driver.* It is stepped hands off every tick and coasts, on land or water. A driver whose inputs stop arriving for 6 ticks is driven the
   same way until they resume.
 
+## 7b. Items and equipment (#261)
+
+The shooter has no inventory bag: the weapons are the hotbar, and what a player wears is **Equipment**, one item per equipment slot (GLOSSARY). Today
+there is one slot, headgear, and one item, the Bigfoot head. Decisions: ADR 0015.
+
+- **Data.** `items.json` (`ItemsFile`, `ShooterCore/Items`): `id`, `name`, `slot` (`headgear`), `pickup_limit` (leave out for no limit) and the
+  effects as plain fields (`headshot_immune`). An item travels on the wire as its position in the list plus one, so new items are appended. A new
+  event item is a line in the file, plus a field only when it has a new kind of effect.
+- **Bigfoot head.** Worn in place of a helmet. A headshot on its wearer is resolved as a body hit (`HitTarget.HeadGuarded`, read by `HitMath.Raycast`):
+  the weapon's body damage, no headshot multiplier, hit marker, kill-cause or bonus XP, for hitscan and shotgun pellets alike. Rockets, blasts
+  and the vehicle guns never had a headshot. What a player wears is state, not pose: lag compensation (ADR 0013) rewinds where they stood, not this.
+- **Death and the corpse.** At death the worn item comes off and the corpse carries it (`Corpse.Item`), with the pickups already counted, so the
+  player respawns bare headed. The corpse keeps its weapon as before; the two are separate takes. The item lives as long as the corpse (120 s). The
+  corpse cap evicts the oldest corpse without an item first.
+- **Taking it.** Tap the interact key at a corpse that carries an item: the chooser gets a third row, key 3, "Put on the Bigfoot head" (or "..., leaving
+  your X" when the slot is full: what was worn goes onto the corpse with its count). Holding the key still takes the weapon only. The prompt names the
+  item. Same conditions as the weapon: alive, on foot, in reach.
+- **The pickup limit.** The Bigfoot head has `pickup_limit` 3. Every take counts on the item, which keeps its count when it drops again on the next
+  corpse, so it can be taken three times over its whole life. The next attempt removes it from the corpse, gives the taker nothing, and shows the
+  toast "The item crumbles in your hands". Other items set their own limit or none (no limit: it never crumbles).
+- **What lasts.** Nothing is stored (ADR 0003's profile is untouched). A death drops the item on the corpse; leaving the match loses it; a new round
+  keeps it on the player (the round's corpses, and any item on them, go); a reconnect starts bare.
+- **HUD.** A "Headgear / name" chip sits beside the health bar while an item is worn, and is hidden otherwise. There is no model for the Bigfoot head
+  yet, so other players still see the helmet; only the wearer's server-side hit rule and HUD chip change.
+- **Granting it for tests.** An admin's `/give <item> [player]` puts a fresh item (no pickups counted) on a living player, or on the admin.
+- **Wire (protocol 28).** Event kinds 190 `PickUpCorpseItem` (client to server, u16 corpse), 191 `CorpseItem` (server to everyone: u16 corpse, u8 item or
+  0; sent when a corpse that carries one spawns, when it changes, and to a joiner for each corpse that carries one), 192 `Equipment` (server to the
+  wearer: u8 count, one u8 item per slot) and 193 `ItemNotice` (server to one player: u8 reason, 1 = crumbled). Codecs: `ItemEvents`.
+
 ## 8. Known gaps (collected from the closed tickets)
 
 Not built:
@@ -510,7 +539,7 @@ usage are listed above the input. A command that cannot be valid is shown with t
 Commands are for admins. The dev server (`make shooter-server`) passes `--admin-all`, so every player is one (`ADMIN=0` turns it off); never pass it on a release server. Otherwise start the server with `--admin-token TOKEN[,TOKEN...]`, where a token is the `player_token` in the `[connect]` section of the client's settings file (Godot user data
 folder, `shooter_settings.cfg`). They run on the server, so they work live: `/bots N` (0 to 64) changes the roster on the next tick (the first time bots are wanted after a start with none, the navigation is
 baked once, and the server pauses for that, the admin is told); `/spawn vehicle` puts a vehicle in front of the admin (up to 32 a run, shared with the sandbox's 8; spawned vehicles are not removed);
-`/time HH:MM|dawn|morning|noon|dusk|night|midnight|freeze|resume` sets the day clock and sends it to every client at once (event 183); `/restart [ffa|tdm]` starts a fresh round now (scores, lives and world entities reset), in the current match mode or, with an argument, in that one (the teams are regrouped, everyone is told; the mode reaches clients in the next scoreboard). `/event rozhlas` starts the village loudspeaker broadcast on every client now (event 184, no payload; each client starts its own copy at once and the scheduled broadcast waits until it ends); `/help [command]` lists them for anyone.
+`/time HH:MM|dawn|morning|noon|dusk|night|midnight|freeze|resume` sets the day clock and sends it to every client at once (event 183); `/restart [ffa|tdm]` starts a fresh round now (scores, lives and world entities reset), in the current match mode or, with an argument, in that one (the teams are regrouped, everyone is told; the mode reaches clients in the next scoreboard). `/event rozhlas` starts the village loudspeaker broadcast on every client now (event 184, no payload; each client starts its own copy at once and the scheduled broadcast waits until it ends); `/give <item> [player]` puts an item of `items.json` on a living player (by name or `#id`) or on the admin, a fresh one with no pickups counted, replacing what was worn in its slot (section 7b); `/help [command]` lists them for anyone.
 The grammar, completion and history are pure code in `ShooterCore/Chat` (`ChatCommands`, `ChatCompleter`, `ChatHistory`) with tests in `ChatTests`; `NetServer.Chat.cs` runs the commands, `ChatBox.cs` draws the window.
 
 ## 9. Wire protocol
@@ -564,6 +593,10 @@ Event kinds (`EventKind`, one byte in the event message):
 | | | 131 | ResetLoadout (client to server) |
 | | | 132 | LoadoutAck (server to the editing player) |
 | | | 140 | TargetRoster (server to one player on join, kinds 140-149) |
+| | | 190 | PickUpCorpseItem (client to server, kinds 190-199 are items and equipment, #261) |
+| | | 191 | CorpseItem (server to everyone, and to a joiner) |
+| | | 192 | Equipment (server to the wearer) |
+| | | 193 | ItemNotice (server to one player) |
 
 Message tags (`Wire.T*`): Hello 1, Welcome 2, Join 3, Leave 4, Event 5, Profile 6, SaveLoadout 7, SelectSlot 8, Error 9,
 SaveCamo 10, Input 11, Snapshot 20, WorldSnapshot 21. SaveLoadout is slot, six item strings, name (string), seq (u32 LE).
@@ -590,7 +623,7 @@ Database migrations (`godot/ShooterServer.Persistence/migrations`, applied in or
 stats, weapon_kills), 0002 roadkills, 0003 camo, 0004 loadout camo, 0005 loadout name (`loadouts.name`, empty for rows
 from before #145; the server gives those "Class N" on load).
 
-Data file versions: weapons 2, every other file 1.
+Data file versions: weapons 2, every other file 1 (`items.json` included).
 
 ## 10. Open design questions
 
