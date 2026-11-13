@@ -139,6 +139,21 @@ public sealed class CitizenCrowd : ICitizenHits
         return Spawn(free, staggerSeconds ?? _cfg.StaggerSeconds, houseRadiusM ?? _cfg.HouseRadiusM);
     }
 
+    /// <summary>Removes one citizen's entity at once, without a death clip (the pastor who turns into the demon).</summary>
+    public void Remove(Citizen c)
+    {
+        if (_entityOfHit.TryGetValue(c.HitId, out var entity)) _entities.Despawn(entity, WorldDespawnReason.Removed);
+    }
+
+    /// <summary>Kills every living citizen, monk and pastor in place (the demon's fire): each plays its death clip and is removed after the corpse time. Nobody is credited (killer 0). Returns how many died.</summary>
+    public int KillAll()
+    {
+        var n = 0;
+        foreach (var c in _byHit.Values.Where(c => c.Alive).ToList())
+            if (_entityOfHit.TryGetValue(c.HitId, out var entity)) { _entities.Damage(entity, 1, 0); n++; }
+        return n;
+    }
+
     /// <summary>Removes every citizen and cancels those still waiting to leave.</summary>
     public void Clear()
     {

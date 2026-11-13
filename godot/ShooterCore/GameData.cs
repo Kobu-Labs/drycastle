@@ -21,6 +21,8 @@ public class GameData
     public ItemsFile Items { get; init; } = new();
     /// <summary>holy_mass.json (the citizens of the Holy Mass and, later, the event itself). Defaults when the file is absent.</summary>
     public HolyMassFile HolyMass { get; init; } = new();
+    /// <summary>holy_mass_demon.json (the demon of the Holy Mass, its fireball and the burn). Defaults when the file is absent (the numbers are then zero: the demon fight needs the file).</summary>
+    public DemonFile Demon { get; init; } = new();
     /// <summary>turret.json: the sentry turret's tuning (the turret killstreak).</summary>
     public required TurretFile Turret { get; init; }
 
@@ -39,7 +41,7 @@ public class GameData
         """;
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -59,6 +61,7 @@ public class GameData
             Animals = animalsJson == "" ? new() : AnimalsFile.Parse(animalsJson),
             Items = itemsJson == "" ? new() : ItemsFile.Parse(itemsJson),
             HolyMass = holyMassJson == "" ? new() : HolyMassFile.Parse(holyMassJson),
+            Demon = demonJson == "" ? new() : DemonFile.Parse(demonJson),
         };
     }
 
@@ -82,6 +85,7 @@ public class GameData
             Animals = File.Exists(Path.Combine(dir, "animals.json")) ? AnimalsFile.Load(Path.Combine(dir, "animals.json")) : new(),
             Items = File.Exists(Path.Combine(dir, "items.json")) ? ItemsFile.Load(Path.Combine(dir, "items.json")) : new(),
             HolyMass = File.Exists(Path.Combine(dir, "holy_mass.json")) ? HolyMassFile.Load(Path.Combine(dir, "holy_mass.json")) : new(),
+            Demon = File.Exists(Path.Combine(dir, "holy_mass_demon.json")) ? DemonFile.Load(Path.Combine(dir, "holy_mass_demon.json")) : new(),
         };
     }
 }

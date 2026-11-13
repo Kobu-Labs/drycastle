@@ -149,6 +149,14 @@ Both are a status, not an Item: no slot, no drop. They survive a round change an
 - seated player: body and weapon not simulated, look still taken; interact or jump stands up; replicated as a crouch at the seat feet (no sit pose for the player character); shot as a crouching figure
 - Mass time = progress (paused while the pastor is gone); seated time counts only while it progresses; ended early the share is measured against progress so far (none: every seated non-sinner)
 - audio: `chant_sound` loops positionally with a reverb bus, `bells_sound` plays once everywhere; no asset yet, a missing file is skipped and logged once
+## Implemented (ticket 4: demon and curse)
+- `/event demon` turns the pastor now (`HolyMassEvent.ForceTurn`); the third pastor kill does the same. Numbers: `holy_mass_demon.json` (`fight` section: delays, turning, climb, door grace, corpse time). Server: `NetServer.Demon.cs`, client: `NetClient.Demon.cs`, `DemonView.cs` (body, head, emotes, death), `DemonPose.cs` (crawl modifier), `DemonFx.cs`
+- stages: delay -> transforming (the dead pastor is removed, everyone else in the church dies where they stand, the demon burns into being; not hittable) -> climbing (scripted leap to the first anchor) -> fighting (`DemonBrain`) -> dying (corpse time, then the event is `End`ed)
+- doors: shut while a living player is inside; empty church (a wipe, or nobody was in when it turned): they open and the demon waits (it heals on a wipe); a player inside shuts them after `door_grace_s`. Killed: doors open, `_closeWhenEmpty`
+- wire: world entity 52 (owner field = octahedral surface normal, yaw/pitch = facing, state `DemonState`, hp byte = share of hits left); events 216 fireball (clients fly the arc), 217 impact, 218 cursed toast. Hit id 39999
+- fireball damage and burn are the victim's own (weapon "Burning", no kill credit); hits on the demon count by weapon kind (splash weapons explosive, special weapons and vehicles vehicle, the rest bullet)
+- gait: diagonal, driven by distance, two-bone IK per limb to footholds on the surface plane (`DemonPose`)
+
 ## Tickets
 1. Enterable church (pipeline, ADR, `church.json`)
 2. Citizen NPC entity (walk to seat, sit, die)

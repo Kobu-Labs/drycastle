@@ -10,17 +10,17 @@ public class DemonTests
     static string DataDir => Path.Combine(AppContext.BaseDirectory, "data");
     static DemonFile Def => DemonFile.Load(Path.Combine(DataDir, "holy_mass_demon.json"));
 
-    /// <summary>A hand-written room, 20 x 30 x 10 m about the origin: three anchors on the west wall, two on the ceiling, three on the east wall.</summary>
+    /// <summary>A hand-written room, 20 x 30 x 10 m about the origin, in the file's map axes (x east, y north, z up): three anchors on the west wall, two on the ceiling, three on the east wall. In the game's axes (x, z, -y) the ceiling is y = 10.</summary>
     public const string ChurchJson = """
         { "anchors": [
-          { "id": 0, "pos": [-10, 3, -10], "normal": [1, 0, 0],  "links": [1, 3] },
-          { "id": 1, "pos": [-10, 3, 0],   "normal": [1, 0, 0],  "links": [2, 3] },
-          { "id": 2, "pos": [-10, 3, 10],  "normal": [1, 0, 0],  "links": [] },
-          { "id": 3, "pos": [-5, 10, 0],   "normal": [0, -1, 0], "links": [4] },
-          { "id": 4, "pos": [5, 10, 0],    "normal": [0, -1, 0], "links": [5] },
-          { "id": 5, "pos": [10, 3, 0],    "normal": [-1, 0, 0], "links": [6, 7] },
-          { "id": 6, "pos": [10, 3, -10],  "normal": [-1, 0, 0], "links": [] },
-          { "id": 7, "pos": [10, 3, 10],   "normal": [-1, 0, 0], "links": [] }
+          { "id": 0, "pos": [-10, 10, 3],  "normal": [1, 0, 0],  "links": [1, 3] },
+          { "id": 1, "pos": [-10, 0, 3],   "normal": [1, 0, 0],  "links": [2, 3] },
+          { "id": 2, "pos": [-10, -10, 3], "normal": [1, 0, 0],  "links": [] },
+          { "id": 3, "pos": [-5, 0, 10],   "normal": [0, 0, -1], "links": [4] },
+          { "id": 4, "pos": [5, 0, 10],    "normal": [0, 0, -1], "links": [5] },
+          { "id": 5, "pos": [10, 0, 3],    "normal": [-1, 0, 0], "links": [6, 7] },
+          { "id": 6, "pos": [10, 10, 3],   "normal": [-1, 0, 0], "links": [] },
+          { "id": 7, "pos": [10, -10, 3],  "normal": [-1, 0, 0], "links": [] }
         ] }
         """;
 
@@ -81,6 +81,16 @@ public class DemonTests
         Assert.Equal(new[] { 0, 2, 3 }, g.Neighbours(1));
         Assert.Contains(4, g.Neighbours(5));
         Assert.All(g.Anchors, a => Assert.Equal(1f, a.Normal.Length(), 1e-5f));
+    }
+
+    [Fact]
+    public void The_file_is_in_map_axes_and_comes_out_in_game_axes()
+    {
+        var g = AnchorGraph.FromJson("""{"anchors":[{"id":0,"pos":[1,2,3],"normal":[0,1,0],"links":[]}]}""");
+        Assert.Equal(new Vector3(1, 3, -2), g[0].Pos);
+        Assert.Equal(new Vector3(0, 0, -1), g[0].Normal); // north is -z
+        Assert.Equal(new Vector3(0, 10, 0), Graph[3].Pos + new Vector3(5, 0, 0)); // the ceiling is up
+        Assert.Equal(new Vector3(0, -1, 0), Graph[3].Normal);
     }
 
     [Fact]
@@ -380,5 +390,34 @@ public class DemonTests
         Assert.Equal(FireballOutcome.World, wall.Outcome);
         var old = FireballFlight.Step(new Fireball(0, new Vector3(0, 50, 0), Vector3.Zero, def.LifeS - 0.01f), def, 0.1f, (_, _, _) => float.PositiveInfinity, Array.Empty<HitTarget>());
         Assert.Equal(FireballOutcome.Expired, old.Outcome);
+    }
+
+    // ---- the entity and its wire ----
+
+    [Fact]
+    public void The_normal_and_facing_survive_the_wire()
+    {
+        foreach (var n in new[] { new Vector3(0, -1, 0), new Vector3(1, 0, 0), new Vector3(-0.8355f, 0, 0.5495f), new Vector3(0.6f, -0.6f, 0.5f), Vector3.UnitY })
+        {
+            var u = DemonRules.UnpackNormal(DemonRules.PackNormal(n));
+            Assert.True(Vector3.Dot(Vector3.Normalize(n), u) > 0.998f, $"{n} came back as {u}");
+        }
+        var e = new DemonEntity { Position = new Vector3(1, 4, -2), Normal = new Vector3(0, -1, 0), Forward = Vector3.Normalize(new Vector3(0.3f, 0, -1)), State = DemonState.Crawling, HitsLeft = 0.5f };
+        var w = e.Serialize();
+        Assert.Equal(DemonState.Crawling, DemonRules.StateOf(w.State));
+        Assert.InRange(w.Hp, 127, 129);
+        Assert.True(Vector3.Dot(e.Forward, DemonRules.Facing(w.YawRad, w.PitchRad)) > 0.999f);
+        Assert.Equal(0, new DemonEntity { HitsLeft = 0 }.Serialize().Hp);
+    }
+
+    [Fact]
+    public void Fireball_events_round_trip_and_bad_lengths_are_refused()
+    {
+        var f = new DemonFireballMsg(7, new Vector3(1, 2, 3), new Vector3(4, -5, 6));
+        Assert.Equal(f, DemonCodec.DecodeFireball(DemonCodec.EncodeFireball(f)));
+        var i = new DemonImpactMsg(7, new Vector3(1, 2, 3), true, false);
+        Assert.Equal(i, DemonCodec.DecodeImpact(DemonCodec.EncodeImpact(i)));
+        Assert.Null(DemonCodec.DecodeFireball(new byte[5]));
+        Assert.Null(DemonCodec.DecodeImpact(new byte[5]));
     }
 }

@@ -137,6 +137,7 @@ public partial class NetServer
             if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
         }
         _crowd?.AddTargets(list); // citizens walk slowly: not rewound
+        AddDemonTarget(list); // so does the demon on its wall
         return list;
     }
 

@@ -173,6 +173,16 @@ public sealed class HolyMassEvent
         Changed?.Invoke();
     }
 
+    /// <summary>Admin test (<c>/event demon</c>): the pastor turns now, without the kills. The Mass is void; from an idle event it starts one that is void at once.</summary>
+    public void ForceTurn()
+    {
+        if (Phase == MassPhase.Void) return;
+        PastorKills = Math.Max(PastorKills, _cfg.PastorKillsToTurn);
+        PastorReady = false; _replaceLeft = _resumeLeft = -1;
+        SetPhase(MassPhase.Void);
+        PastorTurns?.Invoke();
+    }
+
     // ---- players ----
 
     /// <summary>The seat a player at <paramref name="pos"/> could sit in now: the nearest one in reach that no citizen has and no player sits in. Only while the Mass is gathering or on.</summary>

@@ -55,7 +55,7 @@ public partial class NetServer
         _mass.MassPhaseChanged += p =>
         {
             GD.Print($"server: holy mass: {p}");
-            if (p == MassPhase.Idle) foreach (var id in _sitters.Keys.ToList()) MassStandUp(id);
+            if (p == MassPhase.Idle) { foreach (var id in _sitters.Keys.ToList()) MassStandUp(id); DemonClear(); }
             // the doors: open for the event, slammed shut when the pastor turns, and shut again afterwards once nobody is left inside
             if (p == MassPhase.Gather) { _closeWhenEmpty = false; ChurchDoors.Open(); }
             else if (p == MassPhase.Void) ChurchDoors.Close();
@@ -114,6 +114,7 @@ public partial class NetServer
         if (_closeWhenEmpty && ChurchDoors.PlayersInside().Count == 0) { _closeWhenEmpty = false; ChurchDoors.Close(); }
         if (_mass == null) return;
         _mass.Update(dt);
+        DemonTick(dt);
         if (_massDirty) { _massDirty = false; SendMassState(); }
         foreach (var c in _byId.Values)
         {

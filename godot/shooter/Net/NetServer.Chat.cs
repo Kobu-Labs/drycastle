@@ -185,6 +185,7 @@ public partial class NetServer
                 break;
             case "intel": ChatIntel(c, clear); break;
             case "mass": ChatMass(c); break;
+            case "demon": ChatDemon(c); break;
             case "current": ChatCurrentEnd(c); break;
         }
     }
