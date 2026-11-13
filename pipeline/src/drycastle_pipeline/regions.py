@@ -23,9 +23,11 @@ export and by ``region-run``, with the same code, so a hot-reloaded region equal
   also writes it to ``water.json`` (see :func:`water.build_water`). The flat mesh sits
   ``WATER_VISUAL_DROP_M`` under the surface, so the shooter's own water surface, drawn at
   ``water_y``, always wins and nothing z-fights.
-* **Hand-drawn ground.** A region with ``ground`` (a ground type) is not paint in the baked map: the parcels
-  stage turns its polygon into ground of that type (``ground.py``), and the export and the detail stage leave it
-  out. ``region-run`` still paints it, so the editor shows the shape at once.
+* **Hand-drawn ground.** A region with ``ground`` (a stack of ground types) is not paint in the baked map: the parcels
+  stage turns its polygon into ground of the stack's terrain type (``ground.py``), and the export and the detail
+  stage leave it out. ``region-run`` still paints it, so the editor shows the shape at once, unless the stack
+  carries no terrain attribute (only spawning or events): that is a layer over the ground, which the editor
+  draws as a translucent overlay and no mesh paints.
 * Entries that fail the drape (no terrain, polygon outside the terrain coverage) are warned about
   and skipped; a schema error fails the file as for every other edit kind (see ``edits.py``).
 """
@@ -40,6 +42,7 @@ from shapely.geometry.base import BaseGeometry
 
 from drycastle_pipeline.buildings import hex_to_rgb
 from drycastle_pipeline.edits import Edits, region_ring
+from drycastle_pipeline.ground_attributes import carries_terrain
 from drycastle_pipeline.meshes import Mesh, triangulate
 from drycastle_pipeline.roads import road_mesh
 from drycastle_pipeline.terrain import Terrain
@@ -75,13 +78,20 @@ def _polygons(geom: BaseGeometry) -> list[Polygon]:
     return [p for g in getattr(geom, "geoms", []) for p in _polygons(g)]
 
 
-def plan_regions(edits: Edits, origin: list[float] | None, terrain: Terrain | None, ground: bool = True) -> RegionPlan:
+def plan_regions(
+    edits: Edits,
+    origin: list[float] | None,
+    terrain: Terrain | None,
+    ground: bool = True,
+    types: dict[str, dict] | None = None,
+) -> RegionPlan:
     """Resolve the regions of the edits: local frame, clipped to the terrain coverage.
 
     A region without terrain under it (none at all, or outside the coverage) is skipped with a
     warning. Parts outside the coverage are cut off silently, like road ribbons. ``ground`` False leaves
     out the regions that are hand-drawn ground areas (``ground`` key): the baked map has them as ground
-    (:mod:`drycastle_pipeline.ground`), only the editor's hot reload paints them, as a preview.
+    (:mod:`drycastle_pipeline.ground`), only the editor's hot reload paints them, as a preview; with the ground
+    ``types`` it leaves out those whose stack carries no terrain attribute (a layer of attributes is not paint).
     """
     plan = RegionPlan()
     if not edits.regions:
@@ -90,7 +100,7 @@ def plan_regions(edits: Edits, origin: list[float] | None, terrain: Terrain | No
         raise ValueError("parcels.json has no origin_epsg5514; run the parcels stage again")
     for rid in sorted(edits.regions):
         entry = edits.regions[rid]
-        if not ground and "ground" in entry:
+        if "ground" in entry and (not ground or (types is not None and not _paints(entry["ground"], types))):
             continue
         if terrain is None:
             plan.warnings.append(f"regions.{rid}: no terrain; region skipped")
@@ -104,6 +114,12 @@ def plan_regions(edits: Edits, origin: list[float] | None, terrain: Terrain | No
         poly = pieces[0] if len(pieces) == 1 else MultiPolygon(pieces)
         plan.regions[rid] = Region(rid, hex_to_rgb(entry["colour"]), poly, entry.get("water_y"))
     return plan
+
+
+def _paints(stack: list[str], types: dict[str, dict]) -> bool:
+    """True when a ground stack has a type that decides terrain (colours, recipe, detail or water), so its region is a
+    preview of ground in the editor."""
+    return any(carries_terrain(types.get(name)) for name in stack)
 
 
 def region_rank(rid: str) -> tuple[int, str]:

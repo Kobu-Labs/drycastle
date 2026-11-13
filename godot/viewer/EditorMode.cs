@@ -563,6 +563,7 @@ public partial class EditorMode : Node
                     case Key.G: GroupSelected(); break;
                     case Key.T: ToggleTopDown(); break;
                     case Key.O: ToggleOrtho(); break;
+                    case Key.V: ToggleLayers(); break;
                     case Key.Enter or Key.KpEnter:
                         if (GetViewport().GuiGetFocusOwner() is (LineEdit or TextEdit)) break;
                         if (Tool == EditorTool.Group) { if (!_btnGroup.Disabled) GroupSelected(); }
@@ -615,6 +616,7 @@ public partial class EditorMode : Node
         UpdateObjectTools();
         UpdatePolesTool();
         UpdateRegionTool();
+        UpdateLayers();
         UpdateSketchTool();
         PollSketchFile(delta);
         UpdateYouDot();

@@ -372,20 +372,27 @@ unique across all sketches. Every mark shows its name as a tag in the 3D view, i
 
 ### Ground types tool
 
-Rail icon 4 (`Ground types`). Lists every ground type of the map (swatch of the first colour, name, recipe, and a tag when you
-edited it, made it, or deleted it) and edits one at a time: terrain colours (swatch, picker, `#rrggbb` field, add up to 6, remove),
-detail recipe (dropdown), water and spawns checkboxes, OSM values (comma lists for `landuse` and `natural`; read only for a rule
-type), and "Advanced detail settings" (the effective `detail` overlay as read-only text, with number fields for furrow probability,
-headland keep and tone patches per ha, from the one table `GroundTypeEdits.DetailFields`). Buttons: New type (name field,
-Create, or Duplicate selected, which copies everything but the OSM tags), Reset to rules (removes your override, also brings a
-deleted type back), Delete (asks first; disabled for the default type and the dike). Rename does not exist: names are IDs (a
-disabled button explains it). Every change is one save and one undo step; the types live in `edits.json` `ground_types` over
-`rules.yaml` (docs/pipeline.md "Ground types of your own"). A banner says the change shows after the next full map build
-(`make map`); the editor does not hot-reload ground. The Regions page's Ground dropdown lists the effective types (your edits
-included, deleted ones and rule types left out). Keys: `4` opens, Tab reaches the list, `N` the name field, `Del` deletes, Ctrl+Z
-undoes, Esc leaves a text field, then deselects, then leaves the tool; `Ctrl+P` lists the types. States, keyboard walkthrough and
-what is not verified: `docs/ground-types-ui-notes.md`. A map without `ground_types` in its `parcels.json` shows an explanation to
-build it again.
+Rail icon 4 (`Ground types`). Lists every ground type of the map (swatch of the first colour, or the overlay tint of a type
+that only adds attributes; name, what it does, and a tag when you edited it, made it, or deleted it) and edits one at a time.
+A type is a bundle of **attributes** (ADR 0015); the form groups them by relation and a checkbox ticks each one the type
+carries: **Appearance** (Terrain colours: swatch, picker, `#rrggbb` field, add up to 6, remove; Detail recipe: dropdown, with
+"Advanced detail settings", the effective `detail` overlay as read-only text plus number fields for furrow probability,
+headland keep and tone patches per ha, from the one table `GroundTypeEdits.DetailFields`), **Spawning** (players may spawn
+here), **Water** (water body) and **Events** (Event spawn: one checkbox per event, today Bigfoot; it only marks where the
+event may spawn, the game does not use it yet). Appearance and Water say "topmost wins" and Spawning and Events "adds up
+over every stacked type" under their headings. A type that takes OSM land or is made by a rule cannot untick its last
+appearance or water attribute (the checkbox is disabled with the reason as tooltip); OSM values (comma lists for `landuse`
+and `natural`; read only for a rule type). Buttons: New type (name field, Create: one green shade and the field recipe;
+Create layer: carries nothing yet, for a type that only adds spawning or events; or Duplicate selected, which copies the
+attributes but not the OSM tags), Reset to rules (removes your override, also brings a deleted type back), Delete (asks
+first; disabled for the default type and the dike). Rename does not exist: names are IDs (a disabled button explains it).
+Every change is one save and one undo step; the types live in `edits.json` `ground_types` over `rules.yaml`
+(docs/pipeline.md "Ground attributes and stacks", "Ground types of your own"). A banner says the change shows after the next
+full map build (`make map`); the editor does not hot-reload ground. The Regions page's ground stack lists the effective types
+(your edits included, deleted ones and rule types left out). Keys: `4` opens, Tab reaches the list, `N` the name field, `Del`
+deletes, Ctrl+Z undoes, Esc leaves a text field, then deselects, then leaves the tool; `Ctrl+P` lists the types. States,
+keyboard walkthrough and what is not verified: `docs/ground-types-ui-notes.md`. A map without `ground_types` in its
+`parcels.json` shows an explanation to build it again.
 
 ### Regions tool
 
@@ -396,8 +403,19 @@ drag corners, `[` `]` plus arrows, recolour, `Del` (asks first). Invalid shapes 
 keyboard walkthrough: `docs/regions-ui-notes.md`. `make viewer-region-editor-smoke` drives all of it headless and compares every saved
 `edits.json` with the Python writer's text.
 
-A selected region has a **Ground** dropdown: "Paint only" (the region only colours the ground) or one of the map's ground
-types (`ground_types` in the exported `parcels.json`: field, meadow, orchard, forest, ...). With a type the region is a
-hand-drawn ground area (`ground` in `edits.json`, see docs/pipeline.md "Parcels and ground areas"): its colour becomes the
-type's terrain colour and the editor keeps showing it as paint, and the real ground of that type (terrain colour, grass,
-trees) appears after the next full map build (`make map`). One save, one undo step; disabled for a water region.
+A selected region has a **Ground stack** (ADR 0015). "Paint only" (an empty stack): the region only colours the ground. Add a
+type of the map (`ground_types` in the exported `parcels.json`: field, meadow, orchard, forest, bigfoot_zone, ...) from the Add
+dropdown and it goes on top of the stack; each row has Up, Down and Remove, and says what the type does there: it decides the
+terrain, adds spawning or events, or is shadowed by the type above. With a type that carries terrain attributes the region is a
+hand-drawn ground area (`ground` in `edits.json`, a list, lowest first; see docs/pipeline.md "Parcels and ground areas"): its colour
+becomes the colour of the topmost such type and the editor keeps showing it as paint, and the real ground (terrain colour,
+grass, trees) appears after the next full map build (`make map`). A stack of only types that add attributes (spawning, events) makes
+no ground: the ground stays as it is and the region is drawn as an attribute layer (below), its colour being the overlay colour. One
+save and one undo step for each change; disabled for a water region. A deleted or unknown type in a stack is shown with a warning
+and skipped by the build.
+
+**Attribute layers.** The regions whose stack has a type that adds spawning or events (not counting the type that decides the
+terrain) are drawn as a translucent overlay (about a third opaque, a thin edge in the same colour) draped on the terrain, in the
+region's own colour, so they never hide the ground under them. `V` toggles it; the same switch is under View > Layers and on the
+Regions page, it is on by default and remembered (`editor_ui.cfg`); `Ctrl+P` has it too. The overlay is rebuilt when the edits or the
+ground types change. Nothing is saved by it.

@@ -1,0 +1,24 @@
+# Ground types are bundles of attributes, and ground areas stack
+
+Decided with the user for the Bigfoot event (issue #260; the events themselves are `docs/events/README.md` and issue #263). Events need areas that sit on top of existing terrain ("Bigfoot may spawn here", over a forest). Ground areas were exclusive: each point had one ground type, and that type also decided terrain colour and detail, so a marker type would have repainted the forest and displaced what grows on it.
+
+**Decision.** A **ground type** is a named bundle of **attributes**; a **ground area** can carry several types, stacked.
+
+- The attributes are a fixed catalog in code (`ground_attributes.py`, mirrored in `GroundTypeEdits.cs`): each needs something in the pipeline or the game to use it. The editor groups them by relation: Appearance (`colours`, `recipe`, `detail`), Spawning (`spawns`), Water (`water`), Events (`event_spawn`). Types stay user-defined in `rules.yaml` and `edits.json`; a type ticks the attributes it carries, under `attributes` of its entry, next to `osm` / `rule` (where it takes land from). An override sets an attribute to `null` to stop carrying one of the rules.
+- Every attribute **stacks** one of two ways. The *terrain* ones (appearance and water) are decided by one type per point: the **topmost stacked type that carries any of them** decides all of them, exactly as the single type did. The others (spawning, events) **add up** over every stacked type, none shadows another.
+- Draw order is the priority. A region's `ground` is a list of type names, lowest first; between regions the higher ID is on top, as it already was for paint and for ground.
+- Only a type with terrain attributes can take OSM land or be a rule type: the land it takes has to look like something. A type that carries only spawning or events can lie over anything.
+
+**Why the topmost type decides all terrain attributes together, not each attribute on its own.** The stages that build terrain colour, detail recipes and water ask what kind of ground a unit is and read one type. Per-attribute stacking would mix a colour of one type with a recipe of another, which no single type describes and the recipes (field, forest, village, dike) were not written for. With type-level priority the pipeline still sees one appearance type per point, so `build_ground`, `scene`, `detail` and `export` change only in how they read a type, not in what they compute. Water is in the same class because a water body has no detail and its own mesh: it is part of what the ground is.
+
+**Where the attributes that add up live.** They are not cut into the ground areas: that would split forest polygons along every event zone, change their IDs and detail, and break "a type with only an Events attribute stacked over forest does not change the baked output". The parcels stage writes them as `ground_layers` in `parcels.json`: one entry per hand-drawn stack that has a type with such attributes, `{id, region, types, polygon}`, over the region's whole polygon (not clipped to the free land; the type that decides the region's terrain is left out, its ground area is that type). The key is only written when there are layers. What a point carries is the types of the ground area under it plus the types of every layer over it (`ground_attributes.accumulate`).
+
+**Not done here.** Nothing in the game uses the attributes yet. Baking event points from the layers, and the runtime export of attributes, are issue #263 (which blocks the Bigfoot event). The props stage still reads `spawns` of the type of the ground area only, so a `spawns` carried by a layer is stored but does not yet add spawn points. A type with an OSM source and no terrain attributes is refused instead of becoming an overlay of OSM land.
+
+**Compatibility.** The old flat shape (`colours`, `recipe`, `water`, `spawns` at the top of a type entry, `ground: "meadow"` on a region) is not read any more: `rules.yaml` was migrated, `edits.json` had no ground types or ground regions to migrate, and the validator names the old keys as unknown. The map artifact's `parcels.json` `ground_types[].rules` is in the new shape; the editor reads both ends from the same build.
+
+Consequences:
+
+- The Ground types tool shows the attributes grouped, with a tick per attribute; the Regions page's Ground control is a stack (add, move, remove); a region whose stack has no terrain type is drawn as a translucent, toggleable overlay and no paint, so it never hides the terrain. MCP: `set_ground_type` takes `attributes`, `list_ground_types` returns the catalog, `set_region_ground` and `create_region` take a stack.
+- Adding an attribute is a code change in three places: the catalog, the validator (Python and C#), and whatever uses it.
+- Two ADRs are numbered 0010 (placed objects, the amphibious transport); this one takes the next free number, 0015. They keep their numbers because other documents refer to them.

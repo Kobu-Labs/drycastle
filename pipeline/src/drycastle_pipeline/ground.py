@@ -4,8 +4,9 @@ Only a property is a parcel: a cadastral parcel that holds a building, or that i
 with one that does. All the other land of the cadastre (fields, forest, water, the land the roads lie on, loose
 gardens) is not kept as parcels; it is cut into **ground areas** by type instead:
 
-* a region of ``edits.json`` with a ``ground`` type is a hand-drawn ground area: its polygon outside the parcels
-  is ground of that type, whatever the rules say (:func:`drawn_ground`; where two overlap the higher ID wins);
+* a region of ``edits.json`` with a ``ground`` stack is a hand-drawn ground area: its polygon outside the parcels
+  is ground of the stack's terrain type, whatever the rules say (:func:`drawn_ground`; where two overlap the higher ID
+  wins). A stack whose types carry no terrain attribute only adds a layer of attributes (below), no ground area;
 * then the types of ``ground.types`` are tried in their order and each takes what is left of its source: OSM
   landuse/natural polygons (``osm``), or the flood dike of ``detail.dike`` (``rule: dike``, see :func:`dike_ground`);
 * what no type claims is ``ground.default``.
@@ -14,18 +15,29 @@ A ground area is written to ``parcels.json`` under ``ground`` in the shape of a 
 = its type, ``polygon``, ``area``, ``anchor``, ``chunk``), so the stages that only ask what the ground is (terrain
 colour, detail recipes, trees, water) read parcels and ground areas alike through :func:`ground_units`.
 
-**The type is the whole description of the ground** (one entry of ``ground.types``): where it comes from (``osm`` or
-``rule``), its terrain ``colours``, its detail ``recipe`` (one of ``detail.RECIPES``, none: no detail) with optional
-``detail`` settings laid over that recipe's section of the rules, whether it is ``water`` and whether players may
-spawn on it (``spawns``). (Trees are not a property of a type: they come from the orthophoto only.) The functions at the end of this
-module hand those to the stages. The user can override and extend the types in ``edits.json`` (``ground_types``, see
-:func:`ground_types`); every stage that reads the types passes the edits path. Ground areas have no fence, no edits and no cadastral reference, and their IDs are
-only stable while the inputs are (they are numbered by type and place).
+**A type is a named bundle of attributes** (ADR 0015, the catalog is :mod:`drycastle_pipeline.ground_attributes`): the
+entry of ``ground.types`` has ``osm`` or ``rule`` (where it takes land from, none: hand-drawn or the default only) and
+``attributes``: terrain ``colours``, detail ``recipe`` (one of ``detail.RECIPES``) with optional ``detail`` settings laid
+over that recipe's section of the rules, ``water``, ``spawns`` (players may spawn on it), ``event_spawn`` (the events
+that may spawn there). (Trees are not a property of a type: they come from the orthophoto only.) The attributes of
+terrain kind (colours, recipe, detail, water) are decided by one type per point, so a ground area still has exactly
+one ``kind`` and the stages see one such type; the attributes of the other kinds (spawns, event_spawn) add up over every
+stacked type, and the hand-drawn stacks that carry any are written to ``parcels.json`` under ``ground_layers``
+(:func:`drawn_ground`). The user can override and extend the types in ``edits.json`` (``ground_types``, see
+:func:`ground_types`); every stage that reads the types passes the edits path. Ground areas have no fence, no edits and
+no cadastral reference, and their IDs are only stable while the inputs are (they are numbered by type and place).
 """
 
 import copy
 from pathlib import Path
 
+from drycastle_pipeline.ground_attributes import (
+    ATTRIBUTES,
+    attributes_of,
+    carries_layer,
+    carries_terrain,
+    terrain_index,
+)
 from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
 
 from shapely.geometry import Polygon
@@ -33,6 +45,7 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
 ID_PREFIX = "A-"
+LAYER_PREFIX = "L-"  # the ID of an attribute layer of ``ground_layers`` (a stack of hand-drawn types over a polygon)
 
 
 def _polys(g: BaseGeometry) -> list[Polygon]:
@@ -83,22 +96,43 @@ def dike_ground(geoms: dict[str, BaseGeometry], ways: dict[str, BaseGeometry], d
 
 def drawn_ground(
     regions: dict[str, dict], origin: tuple[float, float], types: dict[str, dict]
-) -> tuple[list[tuple[str, Polygon]], list[str]]:
-    """The hand-drawn ground areas of the edits' ``regions`` (those with a ``ground`` type) as ``(type, polygon)`` in
-    local metres, the winner of an overlap first (the higher ID), and warnings for the types the rules do not know."""
+) -> tuple[list[tuple[str, Polygon]], list[tuple[str, list[str], Polygon]], list[str]]:
+    """The hand-drawn ground of the edits' ``regions`` (those with a ``ground`` stack of type names, lowest first):
+    ``(areas, layers, warnings)``, polygons in local metres.
+
+    ``areas`` are ``(type, polygon)``, the winner of an overlap first (the higher ID): a region's type is the topmost of
+    its stack that carries terrain attributes, a region with none makes no ground area. ``layers`` are
+    ``(region id, type names, polygon)``, lowest first: the types of the stack that carry attributes that add up
+    (spawning, events), over the region's whole polygon, except the type that decides the region's terrain (its ground
+    area already is that type). ``warnings`` name the types the rules do not know; such a type
+    is left out of the stack (a region with no known type is skipped)."""
     from drycastle_pipeline.edits import region_ring
     from drycastle_pipeline.regions import region_rank
 
-    out, warnings = [], []
+    areas: list[tuple[str, Polygon]] = []
+    layers: list[tuple[str, list[str], Polygon]] = []
+    warnings: list[str] = []
     for rid in sorted(regions, key=region_rank, reverse=True):
-        name = regions[rid].get("ground")
-        if name is None:
+        stack = regions[rid].get("ground")
+        if stack is None:
             continue
-        if name not in types:
-            warnings.append(f"regions.{rid}: unknown ground type {name!r} (ground.types has {', '.join(types)}); skipped")
+        known = []
+        for name in stack:
+            if name in types:
+                known.append(name)
+            else:
+                warnings.append(f"regions.{rid}: unknown ground type {name!r} (ground.types has {', '.join(types)}); skipped")
+        if not known:
             continue
-        out.append((name, Polygon([(x - origin[0], y - origin[1]) for x, y in region_ring(regions[rid]["polygon"])])))
-    return out, warnings
+        poly = Polygon([(x - origin[0], y - origin[1]) for x, y in region_ring(regions[rid]["polygon"])])
+        top = terrain_index([types[n] for n in known])
+        if top is not None:
+            areas.append((known[top], poly))
+        added = [n for i, n in enumerate(known) if i != top and carries_layer(types[n])]  # the deciding type is the ground area's
+        if added:
+            layers.append((rid, added, poly))
+    layers.reverse()
+    return areas, layers, warnings
 
 
 def build_ground(
@@ -125,7 +159,7 @@ def build_ground(
         out += [(name, p) for p in _polys(mine)]
     for name, spec in cfg["types"].items():
         spec = spec or {}
-        if name == cfg["default"]:
+        if name == cfg["default"] or not carries_terrain(spec):  # a type without terrain attributes cannot decide what land is
             continue
         if spec.get("rule") == "dike":
             source = dike
@@ -160,15 +194,22 @@ def rules_ground_types(rules_path: Path = DEFAULT_RULES, area: str | None = None
 
 def merge_ground_types(rules: dict[str, dict], edited: dict[str, dict]) -> dict[str, dict]:
     """``rules`` types with the user's ``edited`` types (``ground_types`` of ``edits.json``) laid over them: a key of
-    an edited entry overrides that key of the rules entry (the dicts ``osm`` and ``detail`` key by key,
-    deeper dicts the same way, lists and values replace); a new name is a new type, appended at the end; an entry
-    with ``deleted`` removes the rules type. Neither input is changed."""
+    an edited entry overrides that key of the rules entry (the dicts ``osm``, ``attributes`` and ``detail`` key by key,
+    deeper dicts the same way, lists and values replace); an attribute set to ``null`` is removed (the type no longer
+    carries it); a new name is a new type, appended at the end; an entry with ``deleted`` removes the rules type.
+    Neither input is changed."""
     out = {name: copy.deepcopy(spec) for name, spec in rules.items()}
     for name, entry in edited.items():
         if entry.get("deleted"):
             out.pop(name, None)
+            continue
+        merged = _merge(out.get(name, {}), copy.deepcopy(entry))
+        attrs = {k: v for k, v in (merged.get("attributes") or {}).items() if v is not None}
+        if attrs:
+            merged["attributes"] = attrs
         else:
-            out[name] = _merge(out.get(name, {}), copy.deepcopy(entry))
+            merged.pop("attributes", None)
+        out[name] = merged
     return out
 
 
@@ -185,15 +226,17 @@ def ground_types(rules_path: Path = DEFAULT_RULES, area: str | None = None, edit
 
 def ground_type_row(name: str, rules_spec: dict | None, spec: dict) -> dict:
     """One ground type of ``parcels.json`` ``ground_types`` for the editor: ``spec`` is the effective type (summary:
-    colour, recipe, water, spawns, source), ``rules_spec`` the entry of rules.yaml (None: a type of the user,
-    ``custom``), which the editor lays the current edits over."""
+    colour, recipe, water, spawns, the attributes it carries, source), ``rules_spec`` the entry of rules.yaml (None: a
+    type of the user, ``custom``), which the editor lays the current edits over."""
+    attrs = attributes_of(spec)
     row = {
         "name": name,
-        "colour": (spec.get("colours") or ["#808080"])[0].lower(),
-        "colours": [c.lower() for c in spec.get("colours") or []],
-        "recipe": spec.get("recipe"),
-        "water": bool(spec.get("water")),
-        "spawns": bool(spec.get("spawns")),
+        "colour": (attrs.get("colours") or ["#808080"])[0].lower(),
+        "colours": [c.lower() for c in attrs.get("colours") or []],
+        "recipe": attrs.get("recipe"),
+        "water": bool(attrs.get("water")),
+        "spawns": bool(attrs.get("spawns")),
+        "attributes": [k for k in ATTRIBUTES if k in attrs],
         "source": "rule" if spec.get("rule") else ("osm" if spec.get("osm") else "drawn"),
     }
     if rules_spec is None:
@@ -216,12 +259,12 @@ def ground_type_source(name: str, rules: dict[str, dict], edited: dict[str, dict
 
 def type_colours(types: dict[str, dict]) -> dict[str, list[str]]:
     """Terrain shades by type, to lay over ``terrain.colours`` (which holds the parcel kinds and the fallback)."""
-    return {name: spec["colours"] for name, spec in types.items() if spec.get("colours")}
+    return {name: attributes_of(spec)["colours"] for name, spec in types.items() if attributes_of(spec).get("colours")}
 
 
 def water_kinds(types: dict[str, dict]) -> set[str]:
-    return {name for name, spec in types.items() if spec.get("water")}
+    return {name for name, spec in types.items() if attributes_of(spec).get("water")}
 
 
 def spawn_kinds(types: dict[str, dict]) -> set[str]:
-    return {name for name, spec in types.items() if spec.get("spawns")}
+    return {name for name, spec in types.items() if attributes_of(spec).get("spawns")}

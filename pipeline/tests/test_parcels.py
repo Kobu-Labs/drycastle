@@ -351,8 +351,8 @@ def test_stage_turns_a_region_with_a_ground_type_into_ground(tmp_path: Path, cap
 
     edits = tmp_path / "edits.json"
     edits.write_text(json.dumps({"version": 1, "regions": {
-        "R-0001": {"colour": "#112233", "polygon": ring(50, 0, 150, 50), "ground": "meadow"},  # half over the building plot
-        "R-0002": {"colour": "#112233", "polygon": ring(150, 0, 200, 50), "ground": "swamp"},
+        "R-0001": {"colour": "#112233", "polygon": ring(50, 0, 150, 50), "ground": ["meadow"]},  # half over the building plot
+        "R-0002": {"colour": "#112233", "polygon": ring(150, 0, 200, 50), "ground": ["swamp"]},
         "R-0003": {"colour": "#112233", "polygon": ring(150, 50, 200, 100)},  # paint only
     }}))
     build_parcels(work, tmp_path / "registry" / "parcels.registry.json", ParcelRules(), edits_path=edits)
@@ -362,6 +362,35 @@ def test_stage_turns_a_region_with_a_ground_type_into_ground(tmp_path: Path, cap
     meadow = next(g for g in doc["ground"] if g["kind"] == "meadow")
     assert shape(meadow["polygon"]).equals(box(100, 0, 150, 50))
     assert "R-0002" in capsys.readouterr().err  # unknown type: warned about and skipped
+    assert "ground_layers" not in doc  # no type adds attributes: the key is only there when something does
+
+
+def test_stage_keeps_the_attributes_that_add_up_as_layers_and_leaves_the_ground_alone(tmp_path: Path) -> None:
+    ox, oy = -500000.0, -1200000.0
+
+    def ring(x0, y0, x1, y1):
+        return [[ox + x0, oy + y0], [ox + x1, oy + y0], [ox + x1, oy + y1], [ox + x0, oy + y1]]
+
+    def build(name: str, regions: dict) -> dict:
+        work = tmp_path / name / "work"
+        _write_normalised(work)
+        edits = tmp_path / name / "edits.json"
+        edits.write_text(json.dumps({"version": 1, "ground_types": {"bigfoot_zone": {"attributes": {"event_spawn": ["bigfoot"]}}}, "regions": regions}))
+        build_parcels(work, tmp_path / name / "registry" / "parcels.registry.json", ParcelRules(), edits_path=edits)
+        return json.loads((work / "parcels.json").read_text())
+
+    meadow = {"colour": "#112233", "polygon": ring(50, 0, 150, 50), "ground": ["meadow"]}
+    plain = build("plain", {"R-0001": meadow})
+    stacked = build("stacked", {
+        "R-0001": {**meadow, "ground": ["meadow", "bigfoot_zone"]},
+        "R-0002": {"colour": "#aa00ff", "polygon": ring(150, 0, 200, 50), "ground": ["bigfoot_zone"]},  # only the event, on the field
+    })
+    assert stacked["ground"] == plain["ground"]  # the layers change no ground area
+    assert [(layer["id"], layer["region"], layer["types"]) for layer in stacked["ground_layers"]] == [
+        ("L-0001", "R-0001", ["bigfoot_zone"]), ("L-0002", "R-0002", ["bigfoot_zone"]),
+    ]
+    assert shape(stacked["ground_layers"][1]["polygon"]).equals(box(150, 0, 200, 50))
+    assert "ground_layers" not in plain
 
 
 def test_a_carved_parcel_is_its_building_outline_and_the_rest_is_ground(tmp_path: Path) -> None:

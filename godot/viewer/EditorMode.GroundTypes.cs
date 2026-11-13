@@ -6,13 +6,14 @@ using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 using GtRow = GroundTypeEdits.Row;
 
 /// <summary>
-/// The Ground types tool (GLOSSARY "Ground type"): list, edit, create, duplicate, reset and delete the ground types of
-/// the map. The user's changes are stored in edits.json `ground_types` over the entries of rules.yaml (see
-/// <see cref="GroundTypeEdits"/>); the types of rules.yaml as the last build wrote them come from parcels.json
-/// (`Map.GroundTypeTable`). The page has no states of its own beyond the selection: Nothing selected (the list and the
-/// New type row), Selected (the form of one type). Every change is ONE Mutate = one save = one undo step. A type change needs a full
-/// map build (make map): the banner says so. Esc goes one level up: leave a text field, deselect the type, leave the tool.
-/// Names are IDs, so there is no rename.
+/// The Ground types tool (GLOSSARY "Ground type", ADR 0015): list, edit, create, duplicate, reset and delete the ground types of
+/// the map. A type is a named bundle of attributes (the fixed catalog of <see cref="GroundTypeEdits"/>), grouped on the
+/// page by relation (Appearance, Spawning, Water, Events); a type ticks the attributes it carries. The user's changes are
+/// stored in edits.json `ground_types` over the entries of rules.yaml; the types of rules.yaml as the last build wrote them
+/// come from parcels.json (`Map.GroundTypeTable`). The page has no states of its own beyond the selection: Nothing selected
+/// (the list and the New type row), Selected (the form of one type). Every change is ONE Mutate = one save = one undo step.
+/// A type change needs a full map build (make map): the banner says so. Esc goes one level up: leave a text field, deselect
+/// the type, leave the tool. Names are IDs, so there is no rename.
 /// </summary>
 public partial class EditorMode
 {
@@ -24,19 +25,19 @@ public partial class EditorMode
     List<GtRow> _gtRows = new();
     readonly Dictionary<string, Obj?> _gtRecipeDefaults = new();
 
-    VBoxContainer _gtList = null!, _gtForm = null!, _gtColours = null!, _gtDetailFields = null!;
+    VBoxContainer _gtList = null!, _gtForm = null!, _gtColours = null!, _gtDetailFields = null!, _gtColoursBox = null!, _gtRecipeBox = null!;
     Label _gtError = null!, _gtListHead = null!, _gtTitle = null!, _gtStateNote = null!, _gtNameValid = null!, _gtColourNote = null!,
-        _gtOsmNote = null!, _gtOsmValid = null!, _gtDetailText = null!, _gtDetailNote = null!, _gtActionNote = null!;
+        _gtOsmNote = null!, _gtOsmValid = null!, _gtDetailText = null!, _gtDetailNote = null!, _gtActionNote = null!, _gtCarryNote = null!;
     LineEdit _gtName = null!, _gtLanduse = null!, _gtNatural = null!;
-    Button _gtCreate = null!, _gtDuplicate = null!, _gtAddColour = null!, _gtRename = null!, _gtReset = null!, _gtDelete = null!;
+    Button _gtCreate = null!, _gtCreateLayer = null!, _gtDuplicate = null!, _gtAddColour = null!, _gtRename = null!, _gtReset = null!, _gtDelete = null!;
     OptionButton _gtRecipe = null!;
-    CheckBox _gtWater = null!, _gtSpawns = null!;
+    CheckBox _gtCarryColours = null!, _gtCarryRecipe = null!, _gtWater = null!, _gtSpawns = null!;
+    readonly Dictionary<string, CheckBox> _gtEvents = new();
     VBoxContainer _gtOsmBox = null!;
     bool _gtSync, _gtSliderDrag;
     string _gtListSig = "", _gtColourSig = "", _gtDetailSig = "", _gtOsmSeen = "", _gtScrolledFor = "";
     readonly Dictionary<string, Button> _gtRowButtons = new();
     readonly Dictionary<string, SpinBox> _gtDetailSpins = new();
-    static readonly string[] RecipeItems = new[] { "No detail" }.Concat(GroundTypeEdits.Recipes).ToArray();
 
     // ---- the table ----
 
@@ -54,12 +55,14 @@ public partial class EditorMode
         {
             if (t.Custom) continue;
             Obj? raw;
-            if (t.RulesJson != null) raw = EditsFile.ParseValue(t.RulesJson) as Obj;
+            if (t.RulesJson != null) raw = EditsFile.ParseValue(t.RulesJson) is Obj parsed ? GroundTypeEdits.UpgradeRules(parsed) : null; // a map built before ADR 0015 has them flat
             else
             {
                 // built before ground types were editable: the colour only
                 raw = EditsFile.NewObject();
-                raw["colours"] = new List<object?> { t.Colour };
+                var attrs = EditsFile.NewObject();
+                attrs["colours"] = new List<object?> { t.Colour };
+                raw["attributes"] = attrs;
             }
             bases.Add((t.Name, raw));
             if (raw != null && !t.Legacy) known[t.Name] = raw;
@@ -72,18 +75,26 @@ public partial class EditorMode
 
     GtRow? GroundRow(string name) => GroundRows().FirstOrDefault(r => r.Name == name);
 
-    /// <summary>The types a region can be given now (name, colour of its first shade): the table without deleted types, rule types and water.</summary>
-    public List<(string Name, string Colour)> GroundChoices()
-        => GroundRows().Where(r => !r.Deleted && r.Effective.Rule == null && !r.Effective.Water).Select(r => (r.Name, r.Effective.Colour)).ToList();
+    /// <summary>The types a region can be given now (name, colour of its first shade or tint, whether it decides terrain): the table without deleted types, rule types and water.</summary>
+    public List<(string Name, string Colour, bool Terrain)> GroundChoices()
+        => GroundRows().Where(r => !r.Deleted && r.Effective.Rule == null && !r.Effective.Water).Select(r => (r.Name, r.Effective.Colour, r.Effective.CarriesTerrain)).ToList();
 
     static string StateWord(string state) => state switch { "overridden" => "edited", "custom" => "yours", "deleted" => "deleted", _ => "" };
 
-    static string RecipeWord(GtRow r) => r.Effective.Water ? "water" : r.Effective.Recipe ?? "no detail";
+    /// <summary>What the type does, in words: its detail recipe, water, what it adds to a stack, or that it carries nothing.</summary>
+    static string RecipeWord(GtRow r)
+    {
+        var s = r.Effective;
+        if (s.Water) return "water";
+        if (s.CarriesTerrain) return s.Recipe ?? "no detail";
+        var adds = new[] { s.Spawns ? "spawning" : null, s.EventSpawn.Count > 0 ? "events" : null }.Where(x => x != null);
+        return s.CarriesLayer ? "adds " + string.Join(" + ", adds) : "no attributes";
+    }
 
     static string RowText(GtRow r) => $"{r.Name}   {RecipeWord(r)}" + (StateWord(r.State) is { Length: > 0 } w ? $"   [{w}]" : "");
 
-    static string RowTip(GtRow r) => $"{r.Name}: recipe {RecipeWord(r)}, {r.Effective.Source}, {r.Effective.Colours.Count} colour{(r.Effective.Colours.Count == 1 ? "" : "s")}"
-        + (r.Effective.Spawns ? ", players spawn here" : "") + (r.State switch
+    static string RowTip(GtRow r) => $"{r.Name}: {RecipeWord(r)}, {r.Effective.Source}" + (r.Effective.Colours.Count > 0 ? $", {r.Effective.Colours.Count} colour{(r.Effective.Colours.Count == 1 ? "" : "s")}" : "")
+        + (r.Effective.Spawns ? ", players spawn here" : "") + (r.Effective.EventSpawn.Count > 0 ? ", event spawn: " + string.Join(", ", r.Effective.EventSpawn) : "") + (r.State switch
         {
             "overridden" => ". Edited by you over rules.yaml.",
             "custom" => ". Made by you.",
@@ -93,6 +104,17 @@ public partial class EditorMode
 
     string? DeleteBlocked(GtRow r)
         => r.Deleted ? "Already deleted" : r.InRules && GroundTypeEdits.ProtectedReason(r.Name, r.BaseRaw, Map.GroundDefault) is { } why ? $"Cannot be deleted: {why}" : null;
+
+    /// <summary>Why a terrain attribute of this type cannot be unticked (null: it can): a type that takes OSM land or is made by a rule needs one.</summary>
+    static string? UntickBlocked(GtRow r, string key)
+    {
+        var s = r.Effective;
+        if (!GroundTypeEdits.IsTerrainKey(key) || !s.Carries(key)) return null;
+        if (s.Rule != null && key == "recipe") return "The recipe of a rule type is fixed (the dike is built from detail.dike)";
+        if ((s.HasOsm || s.Rule != null) && s.Carried.Count(GroundTypeEdits.IsTerrainKey) == 1)
+            return "A type that takes OSM land needs appearance or water attributes: the land it takes has to look like something";
+        return null;
+    }
 
     // ---- selection ----
 
@@ -136,11 +158,32 @@ public partial class EditorMode
         });
     }
 
+    /// <summary>Change the attributes of a type: <paramref name="edit"/> gets the `attributes` object of its entry and the attributes of its rules entry (null for a type of yours).</summary>
+    bool MutateGroundAttrs(string name, string message, Action<Obj, Obj?> edit)
+    {
+        var rulesAttrs = GroundRow(name)?.BaseRaw?.GetValueOrDefault("attributes") as Obj;
+        return MutateGround(name, message, e =>
+        {
+            var a = e.GetValueOrDefault("attributes") as Obj ?? EditsFile.NewObject();
+            edit(a, rulesAttrs);
+            if (a.Count == 0) e.Remove("attributes"); else e["attributes"] = a;
+        });
+    }
+
+    /// <summary>Tick or untick an attribute in an entry's attributes: ticking one the rules carry drops the override (back to the rules' value), unticking one the rules carry says null.</summary>
+    static void Carry(Obj attrs, Obj? rulesAttrs, string key, bool carried, Func<object?> value)
+    {
+        var inRules = rulesAttrs?.ContainsKey(key) == true;
+        if (carried) { if (inRules) attrs.Remove(key); else attrs[key] = value(); }
+        else if (inRules) attrs[key] = null;
+        else attrs.Remove(key);
+    }
+
     public bool SetGroundColours(string name, IReadOnlyList<string> colours)
     {
         var parsed = colours.Select(c => ParseColour(c)).ToList();
         if (parsed.Count is < 1 or > GroundTypeEdits.ColoursMax || parsed.Any(c => c == null)) { Say($"a type has 1 to {GroundTypeEdits.ColoursMax} colours, each #rrggbb", true); return false; }
-        return MutateGround(name, $"{name}: {parsed.Count} colour{(parsed.Count == 1 ? "" : "s")}", e => e["colours"] = parsed.Cast<object?>().ToList());
+        return MutateGroundAttrs(name, $"{name}: {parsed.Count} colour{(parsed.Count == 1 ? "" : "s")}", (a, _) => a["colours"] = parsed.Cast<object?>().ToList());
     }
 
     public bool SetGroundColour(string name, int index, string colour)
@@ -169,17 +212,58 @@ public partial class EditorMode
         return SetGroundColours(name, list);
     }
 
-    /// <summary>Set the detail recipe (null: no detail). Your own `detail` settings go, they belong to the old recipe.</summary>
+    /// <summary>Tick or untick an attribute of a type: colours, recipe, water or spawns. Unticking the recipe takes its detail settings along. Refused where <see cref="UntickBlocked"/> says so.</summary>
+    public bool SetGroundCarried(string name, string key, bool carried)
+    {
+        if (GroundRow(name) is not { } row) { Say($"ground type {name} does not exist", true); return false; }
+        if (key is not ("colours" or "recipe" or "water" or "spawns")) { Say($"{key} is not an attribute that is ticked on its own", true); return false; }
+        if (row.Effective.Carries(key) == carried) return true;
+        if (!carried && UntickBlocked(row, key) is { } why) { Say($"{name}: {why}", true); return false; }
+        if (key == "recipe" && row.Effective.Rule != null) { Say($"{name} is made by a rule; its recipe is fixed", true); return false; }
+        return MutateGroundAttrs(name, $"{name}: {GroundTypeEdits.Attribute(key)!.Label} {(carried ? "on" : "off")}", (a, rules) =>
+        {
+            Carry(a, rules, key, carried, () => key switch
+            {
+                "colours" => new List<object?> { GroundTypeEdits.NewTypeColour },
+                "recipe" => "field",
+                _ => true,
+            });
+            if (key == "recipe" && !carried) Carry(a, rules, "detail", false, () => null); // the settings belong to the recipe
+        });
+    }
+
+    /// <summary>Set the detail recipe (null: no recipe, so no detail). Your own `detail` settings go, they belong to the old recipe.</summary>
     public bool SetGroundRecipe(string name, string? recipe)
     {
-        if (recipe != null && !GroundTypeEdits.Recipes.Contains(recipe)) { Say($"unknown recipe {recipe}", true); return false; }
-        return MutateGround(name, $"{name}: recipe {recipe ?? "none"}", e => { e["recipe"] = recipe; e.Remove("detail"); });
+        if (recipe == null) return SetGroundCarried(name, "recipe", false);
+        if (!GroundTypeEdits.Recipes.Contains(recipe)) { Say($"unknown recipe {recipe}", true); return false; }
+        return MutateGroundAttrs(name, $"{name}: recipe {recipe}", (a, rules) =>
+        {
+            a["recipe"] = recipe;
+            Carry(a, rules, "detail", false, () => null); // the rules' own settings belong to the rules' recipe too
+        });
     }
 
     public bool SetGroundFlag(string name, string key, bool value)
     {
         if (key is not ("water" or "spawns")) return false;
-        return MutateGround(name, $"{name}: {key} {(value ? "on" : "off")}", e => e[key] = value);
+        return SetGroundCarried(name, key, value);
+    }
+
+    /// <summary>Tick or untick one event of the type's event spawn (ticking the first one makes the type carry the attribute, unticking the last drops it).</summary>
+    public bool SetGroundEvent(string name, string evt, bool on)
+    {
+        if (!GroundTypeEdits.Events.Contains(evt)) { Say($"unknown event {evt}", true); return false; }
+        if (GroundRow(name) is not { } row) { Say($"ground type {name} does not exist", true); return false; }
+        var now = row.Effective.EventSpawn.ToList();
+        if (now.Contains(evt) == on) return true;
+        if (on) now.Add(evt); else now.Remove(evt);
+        var ordered = GroundTypeEdits.Events.Where(now.Contains).Cast<object?>().ToList();
+        return MutateGroundAttrs(name, $"{name}: event spawn {evt} {(on ? "on" : "off")}", (a, rules) =>
+        {
+            if (ordered.Count == 0) Carry(a, rules, "event_spawn", false, () => null);
+            else a["event_spawn"] = ordered;
+        });
     }
 
     public bool SetGroundOsm(string name, IReadOnlyList<string> landuse, IReadOnlyList<string> natural)
@@ -214,18 +298,22 @@ public partial class EditorMode
         var v = Math.Round(Math.Clamp(value, field.Min, field.Max), 6);
         if (field.Recipes.All(r => r != row.Effective.Recipe)) { Say($"{field.Label} does not apply to the recipe {row.Effective.Recipe ?? "none"}", true); return false; }
         var recipeDefault = RecipeDefault(row.Effective.Recipe, path);
-        var rulesSet = GroundTypeEdits.GetPath(row.BaseRaw?.GetValueOrDefault("detail") as Obj, path) != null;
-        return MutateGround(name, $"{name}: {field.Label} {v}", e =>
+        var rulesSet = GroundTypeEdits.GetPath(GroundTypeEdits.AttributesOf(row.BaseRaw).GetValueOrDefault("detail") as Obj, path) != null;
+        return MutateGroundAttrs(name, $"{name}: {field.Label} {v}", (a, _) =>
         {
-            if (e.GetValueOrDefault("detail") is not Obj d) e["detail"] = d = EditsFile.NewObject();
+            if (a.GetValueOrDefault("detail") is not Obj d) a["detail"] = d = EditsFile.NewObject();
             GroundTypeEdits.SetPath(d, path, FenceDraft.Num(v));
             if (!rulesSet && recipeDefault is { } def && Math.Abs(def - v) < 1e-9) GroundTypeEdits.RemovePath(d, path); // the recipe's own value: no override
-            if (d.Count == 0) e.Remove("detail");
+            if (d.Count == 0) a.Remove("detail");
         });
     }
 
-    /// <summary>Make a new type, or with <paramref name="from"/> a copy of that type's effective settings (not its OSM tags: the copy is drawn by hand only).</summary>
-    public bool CreateGroundType(string name, string? from = null)
+    /// <summary>
+    /// Make a new type: with one green shade and the field recipe (a ground type of its own), as a <paramref name="layer"/> that
+    /// carries nothing yet (to tick spawning or events, for a stack over any ground), or with <paramref name="from"/> a copy of
+    /// that type's effective attributes (not its OSM tags: the copy is drawn by hand only).
+    /// </summary>
+    public bool CreateGroundType(string name, string? from = null, bool layer = false)
     {
         var rows = GroundRows();
         if (GroundTypeEdits.NameProblem(name, rows.Select(r => r.Name)) is { } problem) { Say($"not created: {problem}", true); return false; }
@@ -236,21 +324,25 @@ public partial class EditorMode
             var types = GroundTypesOf(root);
             if (types.ContainsKey(name)) return (false, $"{name} already exists");
             var e = EditsFile.NewObject();
-            if (src == null)
+            var a = EditsFile.NewObject();
+            if (src != null)
             {
-                e["colours"] = new List<object?> { GroundTypeEdits.NewTypeColour };
-                e["recipe"] = "field";
+                var s = src.Effective;
+                if (s.Carries("colours")) a["colours"] = s.Colours.Cast<object?>().ToList();
+                if (s.Recipe != null) a["recipe"] = s.Recipe;
+                if (s.Detail.Count > 0) a["detail"] = ObjectEdits.CloneObj(s.Detail);
+                if (s.Water) a["water"] = true;
+                if (s.Spawns) a["spawns"] = true;
+                if (s.EventSpawn.Count > 0) a["event_spawn"] = s.EventSpawn.Cast<object?>().ToList();
             }
-            else
+            else if (!layer)
             {
-                e["colours"] = src.Effective.Colours.Cast<object?>().ToList();
-                if (src.Effective.Recipe != null) e["recipe"] = src.Effective.Recipe;
-                if (src.Effective.Detail.Count > 0) e["detail"] = ObjectEdits.CloneObj(src.Effective.Detail);
-                if (src.Effective.Water) e["water"] = true;
-                if (src.Effective.Spawns) e["spawns"] = true;
+                a["colours"] = new List<object?> { GroundTypeEdits.NewTypeColour };
+                a["recipe"] = "field";
             }
+            if (a.Count > 0) e["attributes"] = a;
             types[name] = e;
-            return (true, src == null ? $"created ground type {name}" : $"duplicated {from} as {name}");
+            return (true, src != null ? $"duplicated {from} as {name}" : layer ? $"created layer type {name}: tick what it adds" : $"created ground type {name}");
         });
         if (ok) { SelectGroundType(name); _gtName.Text = ""; }
         return ok;
@@ -291,10 +383,10 @@ public partial class EditorMode
     {
         if (SelectedGroundType is not { } name || GroundRow(name) is not { } r) { Say("no ground type selected", true); return false; }
         if (DeleteBlocked(r) is { } why) { Say($"{name}: {why}", true); return false; }
-        var used = Regions().Count(x => x.Ground == name);
+        var used = Regions().Count(x => x.Ground.Contains(name));
         ShowConfirm($"Delete ground type {name}?",
             (r.InRules ? $"{name} is removed from the map at the next build (Reset to rules brings it back)." : $"{name} is removed.")
-            + (used > 0 ? $" {used} region{(used == 1 ? "" : "s")} use it and will be skipped with a warning." : "")
+            + (used > 0 ? $" {used} region{(used == 1 ? "" : "s")} use it in their stack; it is skipped there with a warning." : "")
             + " Undo (Ctrl+Z) brings it back.", "Delete", () => DeleteGroundType(name));
         return true;
     }
@@ -323,7 +415,7 @@ public partial class EditorMode
 
     public string GroundHintText() => SelectedGroundType == null
         ? "ground types: Tab or click the list, N a new type, Ctrl+P commands, Esc leaves the tool"
-        : $"{SelectedGroundType}: Tab moves between the fields, Enter applies a typed value, Del deletes, Ctrl+Z undoes, Esc deselects";
+        : $"{SelectedGroundType}: Tab moves between the fields, Space ticks an attribute, Enter applies a typed value, Del deletes, Ctrl+Z undoes, Esc deselects";
 
     /// <summary>Esc: one level up (the selection, then the tool is left by the main handler). True when it deselected.</summary>
     bool GroundEscape()
@@ -365,7 +457,7 @@ public partial class EditorMode
     void BuildGroundPage(VBoxContainer page)
     {
         page.AddChild(new Label { Text = "Ground types", ThemeTypeVariation = "Header" });
-        page.AddChild(Note("A ground type is the whole description of one kind of ground: terrain colours, detail recipe, where it comes from and whether players spawn on it. Hand-drawn areas (Regions) use them."));
+        page.AddChild(Note("A ground type is a named bundle of attributes: terrain colours and detail, water, spawning, events. A type ticks the ones it carries. Hand-drawn areas (Regions) stack types: the topmost with terrain attributes decides how the ground looks, the others add up."));
         var banner = new PanelContainer { ThemeTypeVariation = "BannerPanel" };
         banner.AddChild(Note("Changes show after the next full map build (make map). The editor saves them at once; Ctrl+Z undoes.", "Warn"));
         page.AddChild(banner);
@@ -386,11 +478,14 @@ public partial class EditorMode
         page.AddChild(_gtName);
         _gtNameValid = Note("");
         page.AddChild(_gtNameValid);
-        var newRow = new HBoxContainer();
+        var newRow = new HFlowContainer();
         _gtCreate = FocusBtn("Create", () => CreateGroundType(_gtName.Text.Trim()), "PrimaryButton");
-        _gtCreate.TooltipText = "Make a new type with one green shade and the field recipe (Enter in the name field does the same)";
+        _gtCreate.TooltipText = "Make a new ground type with one green shade and the field recipe (Enter in the name field does the same)";
+        _gtCreateLayer = FocusBtn("Create layer", () => CreateGroundType(_gtName.Text.Trim(), null, true));
+        _gtCreateLayer.TooltipText = "Make a type that carries nothing yet: tick spawning or events to stack it over any ground without changing how it looks";
         _gtDuplicate = FocusBtn("Duplicate selected", () => { if (SelectedGroundType != null) CreateGroundType(_gtName.Text.Trim(), SelectedGroundType); });
         newRow.AddChild(_gtCreate);
+        newRow.AddChild(_gtCreateLayer);
         newRow.AddChild(_gtDuplicate);
         page.AddChild(newRow);
         page.AddChild(Note("A new type is for hand-drawn areas. It takes OSM land only if you give it OSM values, and the types above take theirs first."));
@@ -399,6 +494,20 @@ public partial class EditorMode
         _gtForm = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         page.AddChild(_gtForm);
         BuildGroundForm(_gtForm);
+    }
+
+    CheckBox CarryBox(string text, string tip, Action<bool> toggled)
+    {
+        var c = new CheckBox { Text = text, FocusMode = Control.FocusModeEnum.All, TooltipText = tip };
+        c.Toggled += on => { if (!_gtSync && SelectedGroundType != null) toggled(on); };
+        return c;
+    }
+
+    void GroupHeader(VBoxContainer form, string group)
+    {
+        var g = GroundTypeEdits.Groups.First(x => x.Key == group);
+        form.AddChild(new Label { Text = g.Label, ThemeTypeVariation = "Header" });
+        form.AddChild(Note(g.Note));
     }
 
     void BuildGroundForm(VBoxContainer form)
@@ -410,31 +519,66 @@ public partial class EditorMode
         _gtRename = new Button { Text = "Rename", Disabled = true, FocusMode = Control.FocusModeEnum.None,
             TooltipText = "Names are IDs: regions and edits refer to a type by its name, so it cannot be renamed. Duplicate the type under the new name and delete the old one." };
         form.AddChild(_gtRename);
+        _gtCarryNote = Note("");
+        form.AddChild(_gtCarryNote);
 
-        form.AddChild(new Label { Text = "Terrain colours", ThemeTypeVariation = "Header" });
+        // Appearance: colours, recipe (with its detail settings)
+        GroupHeader(form, "appearance");
+        _gtCarryColours = CarryBox("Terrain colours", GroundTypeEdits.Attribute("colours")!.Tip, on => SetGroundCarried(SelectedGroundType!, "colours", on));
+        form.AddChild(_gtCarryColours);
+        _gtColoursBox = new VBoxContainer();
+        form.AddChild(_gtColoursBox);
         _gtColours = new VBoxContainer();
-        form.AddChild(_gtColours);
+        _gtColoursBox.AddChild(_gtColours);
         _gtColourNote = Note("");
-        form.AddChild(_gtColourNote);
+        _gtColoursBox.AddChild(_gtColourNote);
         _gtAddColour = FocusBtn("Add a colour", () => { if (SelectedGroundType != null) AddGroundColour(SelectedGroundType); });
         _gtAddColour.TooltipText = "Add another terrain shade (a type has 1 to 6; one is picked per area)";
-        form.AddChild(_gtAddColour);
+        _gtColoursBox.AddChild(_gtAddColour);
 
-        form.AddChild(new Label { Text = "Detail", ThemeTypeVariation = "Header" });
+        _gtCarryRecipe = CarryBox("Detail recipe", GroundTypeEdits.Attribute("recipe")!.Tip, on => SetGroundCarried(SelectedGroundType!, "recipe", on));
+        form.AddChild(_gtCarryRecipe);
+        _gtRecipeBox = new VBoxContainer();
+        form.AddChild(_gtRecipeBox);
         _gtRecipe = new OptionButton { FocusMode = Control.FocusModeEnum.All, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        foreach (var r in RecipeItems) _gtRecipe.AddItem(r);
+        foreach (var r in GroundTypeEdits.Recipes) _gtRecipe.AddItem(r);
         _gtRecipe.ItemSelected += i =>
         {
-            if (!_gtSync && SelectedGroundType != null) SetGroundRecipe(SelectedGroundType, i <= 0 ? null : GroundTypeEdits.Recipes[(int)i - 1]);
+            if (!_gtSync && SelectedGroundType != null) SetGroundRecipe(SelectedGroundType, GroundTypeEdits.Recipes[(int)i]);
             _gtRecipe.ReleaseFocus();
         };
-        form.AddChild(FieldRow("Recipe", _gtRecipe, "The detail recipe: what grass, clutter and patches the ground gets"));
-        _gtWater = new CheckBox { Text = "Water body", FocusMode = Control.FocusModeEnum.All, TooltipText = "A body of water (water.json): swimming and drowning, no detail" };
-        _gtWater.Toggled += on => { if (!_gtSync && SelectedGroundType != null) SetGroundFlag(SelectedGroundType, "water", on); };
-        _gtSpawns = new CheckBox { Text = "Players may spawn here", FocusMode = Control.FocusModeEnum.All, TooltipText = "Spawn points may be placed on this ground" };
-        _gtSpawns.Toggled += on => { if (!_gtSync && SelectedGroundType != null) SetGroundFlag(SelectedGroundType, "spawns", on); };
-        form.AddChild(_gtWater);
+        _gtRecipeBox.AddChild(FieldRow("Recipe", _gtRecipe, "The detail recipe: what grass, clutter and patches the ground gets"));
+        _gtRecipeBox.AddChild(new Label { Text = "Advanced detail settings", ThemeTypeVariation = "Dim" });
+        _gtDetailNote = Note("");
+        _gtRecipeBox.AddChild(_gtDetailNote);
+        _gtDetailFields = new VBoxContainer();
+        _gtRecipeBox.AddChild(_gtDetailFields);
+        var box = new PanelContainer { ThemeTypeVariation = "ReadOnlyBox" };
+        _gtDetailText = new Label { ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart, TooltipText = "The effective detail settings of this type (rules.yaml with your changes), read only" };
+        box.AddChild(_gtDetailText);
+        _gtRecipeBox.AddChild(box);
+
+        // Spawning
+        GroupHeader(form, "spawning");
+        _gtSpawns = CarryBox(GroundTypeEdits.Attribute("spawns")!.Label, GroundTypeEdits.Attribute("spawns")!.Tip, on => SetGroundCarried(SelectedGroundType!, "spawns", on));
         form.AddChild(_gtSpawns);
+
+        // Water
+        GroupHeader(form, "water");
+        _gtWater = CarryBox(GroundTypeEdits.Attribute("water")!.Label, GroundTypeEdits.Attribute("water")!.Tip, on => SetGroundCarried(SelectedGroundType!, "water", on));
+        form.AddChild(_gtWater);
+
+        // Events
+        GroupHeader(form, "events");
+        form.AddChild(new Label { Text = GroundTypeEdits.Attribute("event_spawn")!.Label + ": " + GroundTypeEdits.Attribute("event_spawn")!.Tip, ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
+        _gtEvents.Clear();
+        foreach (var evt in GroundTypeEdits.Events)
+        {
+            var name = evt;
+            var c = CarryBox(char.ToUpperInvariant(evt[0]) + evt[1..], $"The {evt} event may spawn on this ground. Only marks the area; the game does not use it yet.", on => SetGroundEvent(SelectedGroundType!, name, on));
+            _gtEvents[evt] = c;
+            form.AddChild(c);
+        }
 
         form.AddChild(new Label { Text = "Source (OSM)", ThemeTypeVariation = "Header" });
         _gtOsmNote = Note("");
@@ -454,16 +598,6 @@ public partial class EditorMode
         _gtOsmBox.AddChild(FieldRow("natural", _gtNatural));
         _gtOsmValid = Note("");
         _gtOsmBox.AddChild(_gtOsmValid);
-
-        form.AddChild(new Label { Text = "Advanced detail settings", ThemeTypeVariation = "Header" });
-        _gtDetailNote = Note("");
-        form.AddChild(_gtDetailNote);
-        _gtDetailFields = new VBoxContainer();
-        form.AddChild(_gtDetailFields);
-        var box = new PanelContainer { ThemeTypeVariation = "ReadOnlyBox" };
-        _gtDetailText = new Label { ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart, TooltipText = "The effective detail settings of this type (rules.yaml with your changes), read only" };
-        box.AddChild(_gtDetailText);
-        form.AddChild(box);
 
         form.AddChild(new HSeparator());
         _gtReset = FocusBtn("Reset to rules", () => { if (SelectedGroundType != null) ResetGroundType(SelectedGroundType); });
@@ -521,7 +655,7 @@ public partial class EditorMode
             edit.GuiInput += e => { if (e is InputEventKey { Pressed: true, Keycode: Key.Escape }) { edit.ReleaseFocus(); edit.AcceptEvent(); _gtColourNote.Text = ""; edit.Text = hex; } };
             var remove = FocusBtn("Remove", () => { if (SelectedGroundType != null) RemoveGroundColour(SelectedGroundType, idx); });
             remove.Disabled = !canEdit || n <= 1;
-            remove.TooltipText = n <= 1 ? "A type keeps at least one colour" : $"Remove colour {i + 1}";
+            remove.TooltipText = n <= 1 ? "A type keeps at least one colour (untick Terrain colours to carry none)" : $"Remove colour {i + 1}";
             row.AddChild(picker);
             row.AddChild(edit);
             row.AddChild(remove);
@@ -589,16 +723,17 @@ public partial class EditorMode
         var problem = GroundTypeEdits.NameProblem(typed, rows.Select(r => r.Name));
         _gtNameValid.Text = typed.Length == 0 ? "Names are IDs: lower case letters, digits and _, at most 24." : problem ?? "Name is free.";
         _gtNameValid.ThemeTypeVariation = typed.Length == 0 ? "Dim" : problem != null ? "Danger" : "Dim";
-        _gtCreate.Disabled = problem != null;
+        _gtCreate.Disabled = _gtCreateLayer.Disabled = problem != null;
         _gtDuplicate.Disabled = problem != null || sel == null || sel.Deleted || sel.Effective.Rule != null;
         _gtDuplicate.TooltipText = sel == null ? "Select a type in the list to copy it under the name typed above"
             : sel.Effective.Rule != null ? "The dike is made by a rule and cannot be copied"
-            : $"Copy {sel.Name} (colours, recipe, detail settings, flags; not its OSM tags) under the name typed above";
+            : $"Copy {sel.Name} (its attributes; not its OSM tags) under the name typed above";
 
         _gtForm.Visible = sel != null;
         if (sel == null) { _gtOsmSeen = ""; _gtScrolledFor = ""; return; }
 
         var editable = !sel.Deleted;
+        var s = sel.Effective;
         _gtTitle.Text = sel.Name;
         _gtStateNote.Text = sel.State switch
         {
@@ -608,58 +743,74 @@ public partial class EditorMode
             _ => "As in rules.yaml. Any change you make is saved as an override in edits.json.",
         };
         _gtStateNote.ThemeTypeVariation = sel.Deleted ? "Warn" : "Dim";
+        _gtCarryNote.Text = s.CarriesTerrain
+            ? "Tick the attributes this type carries. Unticked ones are not carried."
+            : s.CarriesLayer ? "A layer type: it carries no appearance or water, so stacked over any ground it changes nothing about how the ground looks."
+            : "This type carries nothing yet. Tick the attributes it carries.";
 
         var selSig = sel.Name + "|" + sel.State;
-        var colSig = selSig + "|" + string.Join(",", sel.Effective.Colours);
+        var colSig = selSig + "|" + string.Join(",", s.Colours);
         if (colSig != _gtColourSig) { _gtColourSig = colSig; RebuildGroundColours(sel, editable); }
-        _gtAddColour.Disabled = !editable || sel.Effective.Colours.Count >= GroundTypeEdits.ColoursMax;
-        _gtAddColour.TooltipText = sel.Effective.Colours.Count >= GroundTypeEdits.ColoursMax ? "A type has at most 6 colours" : "Add another terrain shade (a type has 1 to 6; one is picked per area)";
+        _gtAddColour.Disabled = !editable || s.Colours.Count >= GroundTypeEdits.ColoursMax;
+        _gtAddColour.TooltipText = s.Colours.Count >= GroundTypeEdits.ColoursMax ? "A type has at most 6 colours" : "Add another terrain shade (a type has 1 to 6; one is picked per area)";
 
         _gtSync = true;
-        var recipeAt = sel.Effective.Recipe == null ? 0 : Array.IndexOf(GroundTypeEdits.Recipes, sel.Effective.Recipe) + 1;
-        if (!_gtRecipe.GetPopup().Visible) _gtRecipe.Selected = recipeAt;
-        _gtRecipe.Disabled = !editable || sel.Effective.Rule != null;
-        _gtRecipe.TooltipText = sel.Effective.Rule != null ? "The recipe of a rule type is fixed (the dike is built from detail.dike)" : "The detail recipe: what grass, clutter and patches the ground gets";
-        _gtWater.SetPressedNoSignal(sel.Effective.Water);
-        _gtSpawns.SetPressedNoSignal(sel.Effective.Spawns);
-        _gtWater.Disabled = _gtSpawns.Disabled = !editable;
+        _gtCarryColours.SetPressedNoSignal(s.Carries("colours"));
+        _gtCarryRecipe.SetPressedNoSignal(s.Carries("recipe"));
+        _gtWater.SetPressedNoSignal(s.Water);
+        _gtSpawns.SetPressedNoSignal(s.Spawns);
+        foreach (var (evt, check) in _gtEvents) check.SetPressedNoSignal(s.EventSpawn.Contains(evt));
+        foreach (var (key, check) in new[] { ("colours", _gtCarryColours), ("recipe", _gtCarryRecipe), ("water", _gtWater), ("spawns", _gtSpawns) })
+        {
+            var blocked = UntickBlocked(sel, key);
+            check.Disabled = !editable || (blocked != null && check.ButtonPressed);
+            check.TooltipText = blocked != null && s.Carries(key) ? blocked : GroundTypeEdits.Attribute(key)!.Tip;
+        }
+        foreach (var check in _gtEvents.Values) check.Disabled = !editable;
+        _gtColoursBox.Visible = s.Carries("colours");
+        _gtRecipeBox.Visible = s.Carries("recipe");
 
-        var rule = sel.Effective.Rule != null;
+        var recipeAt = s.Recipe == null ? -1 : Array.IndexOf(GroundTypeEdits.Recipes, s.Recipe);
+        if (!_gtRecipe.GetPopup().Visible) _gtRecipe.Selected = recipeAt;
+        _gtRecipe.Disabled = !editable || s.Rule != null;
+        _gtRecipe.TooltipText = s.Rule != null ? "The recipe of a rule type is fixed (the dike is built from detail.dike)" : "The detail recipe: what grass, clutter and patches the ground gets";
+
+        var rule = s.Rule != null;
         _gtOsmNote.Visible = rule;
-        _gtOsmNote.Text = rule ? $"Made by the rule {sel.Effective.Rule} (the flood dike of detail.dike in rules.yaml). Not editable here." : "";
+        _gtOsmNote.Text = rule ? $"Made by the rule {s.Rule} (the flood dike of detail.dike in rules.yaml). Not editable here." : "";
         _gtOsmBox.Visible = !rule;
-        var osmSig = selSig + "|" + string.Join(",", sel.Effective.Landuse) + ";" + string.Join(",", sel.Effective.Natural);
+        var osmSig = selSig + "|" + string.Join(",", s.Landuse) + ";" + string.Join(",", s.Natural);
         if (!_gtLanduse.HasFocus() && !_gtNatural.HasFocus() && _gtOsmSeen != osmSig)
         {
             _gtOsmSeen = osmSig;
-            _gtLanduse.Text = string.Join(", ", sel.Effective.Landuse);
-            _gtNatural.Text = string.Join(", ", sel.Effective.Natural);
+            _gtLanduse.Text = string.Join(", ", s.Landuse);
+            _gtNatural.Text = string.Join(", ", s.Natural);
             OsmValidate();
         }
         _gtLanduse.Editable = _gtNatural.Editable = editable;
 
-        var detailSig = selSig + "|" + sel.Effective.Recipe;
+        var detailSig = selSig + "|" + s.Recipe;
         if (detailSig != _gtDetailSig) { _gtDetailSig = detailSig; RebuildGroundDetailFields(sel); }
-        foreach (var f in GroundTypeEdits.FieldsFor(sel.Effective.Recipe))
+        foreach (var f in GroundTypeEdits.FieldsFor(s.Recipe))
             if (_gtDetailSpins.TryGetValue(f.Path, out var spin))
             {
                 if (!spin.GetLineEdit().HasFocus()) spin.SetValueNoSignal(EffectiveDetail(sel, f));
                 spin.Editable = editable;
             }
         _gtSync = false;
-        _gtDetailNote.Text = sel.Effective.Recipe == null ? "This type has no detail recipe, so it has no detail settings."
-            : sel.Effective.Recipe is "village" or "dike" ? $"The {sel.Effective.Recipe} recipe has no settings to edit here. Others are in rules.yaml (detail.{sel.Effective.Recipe}) and through the prompt."
+        _gtDetailNote.Text = s.Recipe == null ? "This type has no detail recipe, so it has no detail settings."
+            : s.Recipe is "village" or "dike" ? $"The {s.Recipe} recipe has no settings to edit here. Others are in rules.yaml (detail.{s.Recipe}) and through the prompt."
             : "Settings laid over the recipe for this type. Others are in rules.yaml and through the prompt.";
-        var text = GroundTypeEdits.DetailText(sel.Effective.Detail);
+        var text = GroundTypeEdits.DetailText(s.Detail);
         _gtDetailText.Text = text.Length == 0 ? "No detail overlay: the recipe's own settings apply." : text;
 
         _gtReset.Disabled = sel.State is not ("overridden" or "deleted");
         _gtReset.TooltipText = !sel.InRules ? "Your own type has no rules to reset to; Delete removes it"
             : _gtReset.Disabled ? "Nothing to reset: this type is as in rules.yaml" : "Remove your changes: the type is as in rules.yaml again (Ctrl+Z undoes)";
-        var blocked = DeleteBlocked(sel);
-        _gtDelete.Disabled = blocked != null;
-        _gtDelete.TooltipText = blocked ?? "Delete this type (asks first; Ctrl+Z undoes)";
-        _gtActionNote.Text = blocked != null && !sel.Deleted ? blocked + "." : "";
+        var blockedDelete = DeleteBlocked(sel);
+        _gtDelete.Disabled = blockedDelete != null;
+        _gtDelete.TooltipText = blockedDelete ?? "Delete this type (asks first; Ctrl+Z undoes)";
+        _gtActionNote.Text = blockedDelete != null && !sel.Deleted ? blockedDelete + "." : "";
 
         if (_gtScrolledFor != sel.Name)
         {

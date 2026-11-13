@@ -19,12 +19,20 @@ The scripted, re-runnable process that generates the base map from source data w
 The category of a parcel: building plot (it holds a building) or garden (the rest of a property).
 
 **Ground area**:
-A piece of the land outside the parcels with a ground type (field, forest, water, village, dike), cut from OSM land use and rules instead of cadastral outlines, or drawn by hand (a region with a ground type). The type picks its colour, vegetation and detail recipe. It has no fence and no stable ID.
+A piece of the land outside the parcels with a ground type (field, forest, water, village, dike), cut from OSM land use and rules instead of cadastral outlines, or drawn by hand (a region with a ground stack). It has the terrain of exactly one ground type, which picks its colour, vegetation and detail recipe, and it can lie under attribute layers. It has no fence and no stable ID.
 _Avoid_: area (that is the map area: slice or village), zone, road parcel
 
 **Ground type**:
-The whole description of one kind of ground (forest, field, meadow, orchard, allotments, village, dike, water, ...): where it comes from (OSM land use or a rule), its terrain colours, detail recipe and settings, whether it is water and whether players spawn on it. Defined in `rules.yaml` (`ground.types`); you override, add and delete types in `edits.json` (`ground_types`) from the editor's Ground types tool or MCP. A change shows after the next full map build. Names are IDs and cannot be renamed.
+A named bundle of attributes: the whole description of one kind of ground (forest, field, meadow, orchard, allotments, village, dike, water, ...) or of a layer over ground (a Bigfoot zone). It says where it comes from (OSM land use or a rule, or only drawn by hand) and ticks the attributes it carries. Defined in `rules.yaml` (`ground.types`); you override, add and delete types in `edits.json` (`ground_types`) from the editor's Ground types tool or MCP. A change shows after the next full map build. Names are IDs and cannot be renamed.
 _Avoid_: biome, terrain type
+
+**Ground attribute**:
+One thing a ground type can carry, from a fixed list (each needs something in the pipeline or the game to use it), grouped by relation: Appearance (terrain colours, detail recipe and settings), Spawning (players may spawn), Water (a body of water), Events (which events may spawn there, first Bigfoot). Appearance and Water decide the terrain: one type does, per point. Spawning and Events add up over every type that lies there.
+_Avoid_: property, flag, tag
+
+**Ground stack**:
+The ground types of one hand-drawn region, lowest first; between regions the higher ID is on top. The topmost type with appearance or water attributes decides the terrain of the area, exactly as a single type would; the attributes that add up are taken from every type in the stack. A stack of only such types is an **attribute layer**: it changes nothing about how the ground looks, and the editor draws it as a translucent overlay.
+_Avoid_: layer stack, z-order
 
 **Replacement scene**:
 What a mod supplies to replace a parcel's base contents.

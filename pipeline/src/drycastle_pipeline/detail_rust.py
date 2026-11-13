@@ -24,6 +24,7 @@ from drycastle_pipeline.config import DEFAULT_AREA, area_paths
 from drycastle_pipeline.detail_meshes import KINDS, TINTABLE
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
 from drycastle_pipeline.ground import ground_types, ground_units, type_colours, water_kinds
+from drycastle_pipeline.ground_attributes import attributes_of
 from drycastle_pipeline.regions import plan_regions
 from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
 from drycastle_pipeline.terrain import load_terrain
@@ -80,10 +81,10 @@ def build_input(work_dir: Path, rules_path: Path, area: str | None, edits_path: 
         if recipe is None:
             continue
         for r in {recipe, "dike"}:
-            spec = types.get(p["kind"], {})
+            attrs = attributes_of(types.get(p["kind"]))
             key = f"{p['kind']}|{r}"
-            if spec.get("detail") and spec.get("recipe") == r and key not in cfgs:
-                cfgs[key] = {**cfg, r: _merge(cfg[r], spec["detail"])}
+            if attrs.get("detail") and attrs.get("recipe") == r and key not in cfgs:
+                cfgs[key] = {**cfg, r: _merge(cfg[r], attrs["detail"])}
 
     sizes = {a["id"]: a.get("size_m", [1, 1, 1]) for a in load_manifest().get("assets", [])}
     discs = []

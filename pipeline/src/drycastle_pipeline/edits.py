@@ -10,7 +10,8 @@ formatting is fixed, so git diffs stay small. Version 1::
      "groups":  {"G-0001": {"parcels": ["P-0412", "P-0413"], "fence": {...}}},
      "regions": {"R-0001": {"colour": "#8a7a5c", "polygon": [[x, y], ...]}},
      "cables":  {"C-0001": {"from": "o-0012", "to": "o-0015"}},
-     "ground_types": {"meadow": {"spawns": false}, "my_dunes": {"colours": ["#d8c38a"]}}}
+     "ground_types": {"meadow": {"attributes": {"spawns": null}},
+                      "my_dunes": {"attributes": {"colours": ["#d8c38a"], "recipe": "field"}}}}
 
 ``fence`` (all keys optional)
     mode              auto | none | custom. Default auto, or custom when type, height_m,
@@ -68,12 +69,17 @@ formatting is fixed, so git diffs stay small. Version 1::
                         colour then tints the surface in the editor view; the body is also written
                         to water.json (swimming, drowning, the shooter's water surface) with its bed
                         at the lowest terrain inside the polygon. Without it the region is ground paint.
-    ground              optional ground type (a name of ``ground.types`` in rules.yaml, e.g. "meadow"): the
-                        region is a hand-drawn ground area. The parcels stage makes its polygon (outside the
-                        parcels) ground of that type, before the rule types and with the higher ID winning, so
-                        it gets the type's terrain colour, detail and trees on the next full run; it is then
-                        not painted as a region (the colour only tints the editor's preview until that run).
-                        A type the rules do not know is skipped with a warning. Not together with ``water_y``.
+    ground              optional stack of ground types (a non-empty list of unique names of ``ground.types``, e.g.
+                        ["meadow"], lowest first): the region is a hand-drawn ground area. The parcels stage makes
+                        its polygon (outside the parcels) ground of the topmost type of the stack that carries
+                        terrain attributes (colours, recipe, detail, water), before the rule types and with the
+                        higher ID winning, so it gets that type's terrain colour, detail and trees on the next full
+                        run; it is then not painted as a region (the colour only tints the editor's preview until
+                        that run). The attributes that add up (spawns, event_spawn) of every type of the stack
+                        are kept as a layer over the polygon (``ground_layers`` of parcels.json), so a stack of
+                        ["forest", "bigfoot_zone"] is forest that also carries an event. A stack with no terrain
+                        type only adds the layer: the colour then tints the editor's overlay. A type the rules
+                        do not know is skipped with a warning. Not together with ``water_y``.
 
 ``cables`` (the wires strung between two placed utility poles, or from a pole to a house connector;
 drawn by the game, see docs/utility-poles.md)
@@ -85,15 +91,20 @@ drawn by the game, see docs/utility-poles.md)
                         are cables.
 
 ``ground_types`` (overrides and additions to the ground types of ``ground.types`` in rules.yaml, by name; see
-ground.py. The key is only written when there are some.)
+ground.py and ground_attributes.py. The key is only written when there are some.)
     name                lower_snake, ``^[a-z][a-z0-9_]{0,23}$``. A name of rules.yaml overrides that type, a new name
                         is a new type (appended after the rules' types). Names are IDs: there is no rename.
-    colours             1-6 terrain shades, each "#rrggbb" (replaces the type's list).
-    recipe              field | forest | village | dike, or null for no detail (replaces the type's recipe).
-    detail              object laid over the shipped ``detail.<recipe>`` section of rules.yaml (deep merge); its
-                        top-level keys must exist in that section. Needs a recipe, own or the rules type's.
-    water, spawns       bool.
+    attributes          the attributes the type carries (the fixed catalog of ground_attributes.py), each one key:
+                          colours       1-6 terrain shades, each "#rrggbb" (replaces the type's list).
+                          recipe        field | forest | village | dike (replaces the type's recipe).
+                          detail        object laid over the shipped ``detail.<recipe>`` section of rules.yaml (deep
+                                        merge); its top-level keys must exist in that section. Needs a recipe, own or
+                                        the rules type's.
+                          water, spawns true.
+                          event_spawn   non-empty list of the events that may spawn here (``ground_attributes.EVENTS``).
+                        A value ``null`` removes that attribute of the rules type (only for a type of rules.yaml).
     osm                 {landuse|natural: [str, ...]}: the OSM values the type takes (a key replaces that class's list).
+                        A type that takes OSM land must carry terrain attributes.
     deleted             true (and nothing else): removes the type that rules.yaml defines. Not the default type and
                         not a type with a ``rule`` (the dike).
     There is no ``rule`` key: rule types stay in rules.yaml. Unknown keys are errors.
@@ -115,6 +126,14 @@ from pathlib import Path
 from shapely.geometry import LinearRing, Polygon
 
 from drycastle_pipeline.config import PIPELINE_DIR
+from drycastle_pipeline.ground_attributes import (
+    ATTRIBUTES,
+    COLOURS_MAX,
+    EVENTS,
+    FLAG_KEYS,
+    RECIPES,
+    TERRAIN_KEYS,
+)
 
 EDITS_VERSION = 1
 DEFAULT_EDITS = PIPELINE_DIR / "config" / "edits.json"
@@ -144,10 +163,10 @@ OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour"
 GROUP_KEYS = ("parcels", "fence")
 REGION_KEYS = ("colour", "polygon", "water_y", "ground")
 CABLE_KEYS = ("from", "to")
-GROUND_TYPE_KEYS = ("colours", "recipe", "detail", "water", "spawns", "osm", "deleted")
+GROUND_TYPE_KEYS = ("attributes", "osm", "deleted")
 GROUND_OSM_CLASSES = ("landuse", "natural")
-GROUND_RECIPES = ("field", "forest", "village", "dike")  # the detail.RECIPES a ground type can use (not garden)
-GROUND_COLOURS_MAX = 6
+GROUND_RECIPES = RECIPES  # the detail.RECIPES a ground type can use (not garden)
+GROUND_COLOURS_MAX = COLOURS_MAX
 GROUND_NAME_MAX = 24
 POLE_ASSET_PREFIX = "prim:pole_"
 CONNECTOR_ASSET_PREFIX = "prim:connector_"
@@ -375,8 +394,15 @@ def _check_region(entry: object, path: str, errors: list[str]) -> None:
     if "water_y" in entry and not (_is_num(entry["water_y"]) and math.isfinite(entry["water_y"])):
         errors.append(f"{path}.water_y: must be a number (metres, terrain datum)")
     if "ground" in entry:
-        if not (isinstance(entry["ground"], str) and _GROUND_TYPE.fullmatch(entry["ground"])):
-            errors.append(f"{path}.ground: must be a ground type name (lower case letters, digits, _)")
+        stack = entry["ground"]
+        if not (isinstance(stack, list) and stack):
+            errors.append(f"{path}.ground: must be a non-empty list of ground type names, lowest first")
+        else:
+            for i, name in enumerate(stack):
+                if not (isinstance(name, str) and _GROUND_TYPE.fullmatch(name)):
+                    errors.append(f"{path}.ground.{i}: must be a ground type name (lower case letters, digits, _)")
+                elif stack.index(name) != i:
+                    errors.append(f"{path}.ground.{i}: {name} is in the stack twice")
         if "water_y" in entry:
             errors.append(f"{path}.ground: not together with water_y (a water region is its own body of water)")
     if "polygon" not in entry:
@@ -455,6 +481,65 @@ def protected_ground_types() -> dict[str, str]:
     return out
 
 
+def _effective_attributes(name: str, entry: dict, shipped: dict) -> dict:
+    """The attributes a type has once its entry is laid over rules.yaml's (a ``null`` removes one)."""
+    out = dict((shipped.get(name) or {}).get("attributes") or {})
+    own = entry.get("attributes")
+    for key, value in own.items() if isinstance(own, dict) else []:
+        if value is None:
+            out.pop(key, None)
+        else:
+            out[key] = value
+    return out
+
+
+def _check_attributes(name: str, attrs: object, path: str, errors: list[str], shipped: dict) -> None:
+    from drycastle_pipeline.rules import load_section
+
+    if not _is_dict(attrs, path, errors):
+        return
+    known = tuple(ATTRIBUTES)
+    for key in attrs:
+        if key not in known:
+            errors.append(f"{path}.{key}: unknown attribute (the catalog has {', '.join(known)})")
+    for key, value in attrs.items():
+        kpath = f"{path}.{key}"
+        if key not in known:
+            continue
+        if value is None:
+            if name not in shipped or key not in ((shipped[name] or {}).get("attributes") or {}):
+                errors.append(f"{kpath}: null removes an attribute of the type in rules.yaml, and {name} has no {key} there")
+            continue
+        if key == "colours":
+            if not (isinstance(value, list) and 1 <= len(value) <= GROUND_COLOURS_MAX):
+                errors.append(f"{kpath}: must be a list of 1 to {GROUND_COLOURS_MAX} colours")
+            else:
+                for i, c in enumerate(value):
+                    _check_colour(c, f"{kpath}.{i}", errors)
+        elif key == "recipe":
+            if value not in GROUND_RECIPES:
+                errors.append(f"{kpath}: must be one of {', '.join(GROUND_RECIPES)}")
+        elif key in FLAG_KEYS:
+            if value is not True:
+                errors.append(f"{kpath}: must be true (null removes it)")
+        elif key == "event_spawn":
+            if not (isinstance(value, list) and value and all(isinstance(e, str) and e in EVENTS for e in value)):
+                errors.append(f"{kpath}: must be a non-empty list of events ({', '.join(EVENTS)})")
+            elif len(set(value)) != len(value):
+                errors.append(f"{kpath}: lists an event twice")
+    if "detail" in attrs and attrs["detail"] is not None:
+        detail = attrs["detail"]
+        if _is_dict(detail, f"{path}.detail", errors):
+            recipe = attrs["recipe"] if "recipe" in attrs else (((shipped.get(name) or {}).get("attributes") or {}).get("recipe"))
+            section = load_section("detail").get(recipe) if recipe in GROUND_RECIPES else None
+            if detail and not isinstance(section, dict):
+                errors.append(f"{path}.detail: needs a recipe (one of {', '.join(GROUND_RECIPES)}) to lay the settings over")
+            else:
+                for key in detail:
+                    if section is not None and key not in section:
+                        errors.append(f"{path}.detail.{key}: not a setting of detail.{recipe} (known: {', '.join(section)})")
+
+
 def _check_ground_type(name: str, entry: object, path: str, errors: list[str]) -> None:
     from drycastle_pipeline.rules import load_section
 
@@ -476,37 +561,21 @@ def _check_ground_type(name: str, entry: object, path: str, errors: list[str]) -
         elif name in (why := protected_ground_types()):
             errors.append(f"{path}.deleted: {name!r} cannot be deleted, it {why[name]}")
         return
-    if "colours" in entry:
-        cols = entry["colours"]
-        if not (isinstance(cols, list) and 1 <= len(cols) <= GROUND_COLOURS_MAX):
-            errors.append(f"{path}.colours: must be a list of 1 to {GROUND_COLOURS_MAX} colours")
-        else:
-            for i, c in enumerate(cols):
-                _check_colour(c, f"{path}.colours.{i}", errors)
-    recipe = (entry.get("recipe") if "recipe" in entry else (shipped.get(name) or {}).get("recipe"))
-    if "recipe" in entry and entry["recipe"] is not None and entry["recipe"] not in GROUND_RECIPES:
-        errors.append(f"{path}.recipe: must be one of {', '.join(GROUND_RECIPES)}, or null for no detail")
-        recipe = None
-    if "detail" in entry:
-        detail = entry["detail"]
-        if _is_dict(detail, f"{path}.detail", errors):
-            section = load_section("detail").get(recipe) if recipe in GROUND_RECIPES else None
-            if detail and not isinstance(section, dict):
-                errors.append(f"{path}.detail: needs a recipe (one of {', '.join(GROUND_RECIPES)}) to lay the settings over")
-            else:
-                for key in detail:
-                    if section is not None and key not in section:
-                        errors.append(f"{path}.detail.{key}: not a setting of detail.{recipe} (known: {', '.join(section)})")
-    for key in ("water", "spawns"):
-        if key in entry and not isinstance(entry[key], bool):
-            errors.append(f"{path}.{key}: must be true or false")
-    if "osm" in entry and _is_dict(entry["osm"], f"{path}.osm", errors):
-        _unknown_keys(entry["osm"], GROUND_OSM_CLASSES, f"{path}.osm", errors)
-        for cls, values in entry["osm"].items():
+    n = len(errors)
+    if "attributes" in entry:
+        _check_attributes(name, entry["attributes"], f"{path}.attributes", errors, shipped)
+    osm = entry.get("osm")
+    if "osm" in entry and _is_dict(osm, f"{path}.osm", errors):
+        _unknown_keys(osm, GROUND_OSM_CLASSES, f"{path}.osm", errors)
+        for cls, values in osm.items():
             if cls in GROUND_OSM_CLASSES and not (
                 isinstance(values, list) and all(isinstance(v, str) and v.strip() for v in values)
             ):
                 errors.append(f"{path}.osm.{cls}: must be a list of OSM values (text)")
+    own_source = isinstance(osm, dict) and any(osm.values())
+    takes_land = own_source or (shipped.get(name) or {}).get("osm") or (shipped.get(name) or {}).get("rule")
+    if len(errors) == n and takes_land and not any(k in _effective_attributes(name, entry, shipped) for k in TERRAIN_KEYS):
+        errors.append(f"{path}.attributes: a type that takes OSM land needs appearance or water attributes ({', '.join(TERRAIN_KEYS)})")
 
 
 def _check_ground_types(types: dict, errors: list[str]) -> None:

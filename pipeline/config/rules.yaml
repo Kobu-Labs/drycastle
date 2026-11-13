@@ -32,61 +32,73 @@ ground:
     P-0089: {margin_m: 2.0}   # the streets and squares of the village core: only a parcel because buildings stand on it
   # What no type below claims.
   default: field
-  # A type is the whole description of a kind of ground. Types are tried top to bottom; each takes what the ones above
-  # left of its source (a type without a source is only the default, or for hand-made areas):
+  # A type is a named bundle of attributes (ground_attributes.py; ADR 0015). Types are tried top to bottom; each takes what the
+  # ones above left of its source (a type without a source is only the default, or for hand-made areas):
   #   rule: dike    the flood dike of detail.dike (its parcels, and the clipped part of its clips parcels)
   #   osm           OSM polygons, {class: [values]} with class landuse or natural
-  # and says what the ground is like:
-  #   colours       terrain shades (one is picked per area)
-  #   recipe        detail recipe: field, forest, village or dike (detail.py RECIPES); none: no patches, no clutter
-  #   detail        settings laid over that recipe's section of `detail` below, for this type only
-  #   water         true: a water body (water.json), no detail
-  #   spawns        true: players may spawn on it
+  # and carries the attributes it lists under `attributes`. What a type does not list it does not carry. By relation:
+  #   Appearance    colours   terrain shades (one is picked per area)
+  #                 recipe    detail recipe: field, forest, village or dike (detail.py RECIPES); none: no patches, no clutter
+  #                 detail    settings laid over that recipe's section of `detail` below, for this type only
+  #   Water         water     true: a water body (water.json), no detail
+  #   Spawning      spawns    true: players may spawn on it
+  #   Events        event_spawn  the events that may spawn there, e.g. [bigfoot]
+  # A ground area has the terrain (appearance and water) of one type; hand-drawn areas can stack types, then the topmost
+  # type with appearance or water attributes decides, and spawning and events add up over all of them. A type with a source
+  # (osm, rule) needs appearance or water attributes: they say what the land it takes looks like.
   types:
     dike:
       rule: dike
-      colours: ["#86b362", "#7aa858"]
-      recipe: dike
+      attributes:
+        colours: ["#86b362", "#7aa858"]
+        recipe: dike
     water:
       osm: {natural: [water]}
-      colours: ["#6b7a6a", "#62725f"]
-      water: true
+      attributes:
+        colours: ["#6b7a6a", "#62725f"]
+        water: true
     forest:
       osm: {landuse: [forest], natural: [wood]}
-      colours: ["#2f5f38", "#2a5633", "#356a3c"]
-      recipe: forest
+      attributes:
+        colours: ["#2f5f38", "#2a5633", "#356a3c"]
+        recipe: forest
     # garden plots outside the properties: mostly dug-over soil in rows
     allotments:
       osm: {landuse: [allotments]}
-      colours: ["#8a9a5f", "#7f9058"]
-      recipe: field
-      detail: {furrow: {probability: 1.0, min_area_m2: 300, coverage: [0.5, 0.8], max_area_m2: 20000}, tone_per_ha: 8}
-      spawns: true
+      attributes:
+        colours: ["#8a9a5f", "#7f9058"]
+        recipe: field
+        detail: {furrow: {probability: 1.0, min_area_m2: 300, coverage: [0.5, 0.8], max_area_m2: 20000}, tone_per_ha: 8}
+        spawns: true
     # fruit trees in grass
     orchard:
       osm: {landuse: [orchard]}
-      colours: ["#7fae62", "#76a55a"]
-      recipe: field
-      detail: {furrow: {probability: 0.0}, headland: {keep: 0.0}}
-      spawns: true
+      attributes:
+        colours: ["#7fae62", "#76a55a"]
+        recipe: field
+        detail: {furrow: {probability: 0.0}, headland: {keep: 0.0}}
+        spawns: true
     # mown or grazed grass: no furrows, no dirt headlands
     meadow:
       osm: {landuse: [meadow, grass]}
-      colours: ["#7aa860", "#84b068", "#72a058"]
-      recipe: field
-      detail: {furrow: {probability: 0.0}, headland: {keep: 0.0}}
-      spawns: true
+      attributes:
+        colours: ["#7aa860", "#84b068", "#72a058"]
+        recipe: field
+        detail: {furrow: {probability: 0.0}, headland: {keep: 0.0}}
+        spawns: true
     # the open ground of the built-up area (street sides, greens, gardens of no property): grass, the asphalt is the OSM
     # ribbon on top (same shades as the grass of its recipe, detail.village)
     village:
       osm: {landuse: [residential]}
-      colours: ["#86b362", "#7aa858"]
-      recipe: village
-      spawns: true
+      attributes:
+        colours: ["#86b362", "#7aa858"]
+        recipe: village
+        spawns: true
     field:
-      colours: ["#72996b", "#7aa072", "#6a9163"]
-      recipe: field
-      spawns: true
+      attributes:
+        colours: ["#72996b", "#7aa072", "#6a9163"]
+        recipe: field
+        spawns: true
 
 # --- Chunking -------------------------------------------------------------------------------
 chunking:
@@ -544,7 +556,7 @@ spawns:
   # Candidate pool: spacing along roads and per-parcel point density in the open ground.
   road_spacing_m: 12
   ground_per_1000m2: 2.0
-  # Parcel kinds with spawns in the open ground; ground types: ground.types.<type>.spawns.
+  # Parcel kinds with spawns in the open ground; ground types: the `spawns` attribute of ground.types.
   ground_kinds: [garden]
 
 # --- Street lamps (props stage, data/work/lamps.json) ----------------------------------------
