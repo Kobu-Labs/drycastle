@@ -349,6 +349,22 @@ public partial class Player : CharacterBody3D
         SetStanceShape(s.Stance);
     }
 
+    /// <summary>
+    /// Puts the body in a state a reconcile replays from. The body's own floor flag (Godot's <c>IsOnFloor</c>, which drives the floor snap in
+    /// <c>MoveAndSlide</c>) is what its last move left, the newest predicted step, not the step this state came from. A replay that starts with
+    /// the wrong flag diverges: the parity probe (<c>--move-parity</c>) saw 56-63 of 794 replays over 5 mm, up to 3.6 m, before this. A short move
+    /// down onto a grounded step's floor or up off an airborne step's sets the flag from the contact at the restored place; the place and velocity
+    /// are then set exactly again. Only the flag is taken from that move; the replayed steps are the same as the server's.
+    /// </summary>
+    public void SetStateForReplay(MoveState s)
+    {
+        SetState(s);
+        if (IsOnFloor() == s.OnFloor) return;
+        Velocity = new Vector3(0, s.OnFloor ? -1f : 1f, 0);
+        MoveAndSlide();
+        SetState(s);
+    }
+
     MoveInput ReadInput()
     {
         if (InputOverride is { } o) return o;

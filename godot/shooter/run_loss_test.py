@@ -189,14 +189,19 @@ def analyse(name, sim, a, d, s, clients, srv_rc):
     srv_final = {p["id"]: (p["x"], p["y"], p["z"], p["health"], p["state"]) for p in s["final"]["players"]}
     fin = {"clients_with_mismatch": 0, "entity_mismatches": 0, "max_pos_err_m": 0.0, "static_server": all(
         (p["x"], p["y"], p["z"], p["health"], p["state"]) == srv_final[p["id"]] for p in (s.get("late") or {"players": []})["players"] if p["id"] in srv_final) and bool(s.get("late"))}
+    # Each client's final state is compared with the server's record at the same tick (its last snapshot's). The server's dump at
+    # ServerFinalAfterStop can predate a late server move (a knockback after the quiet phase began): a race in the gate, not a decode error.
+    server_ticks = load_states(d / "server_states.csv")
     for c in got:
         bad = 0
         seen = {p["id"]: (p["x"], p["y"], p["z"], p["health"], p["state"]) for p in c["final_players"]}
-        for i, v in srv_final.items():
+        ft = c.get("final_tick") or 0
+        ref = server_ticks[ft] if ft in server_ticks else srv_final
+        for i, v in ref.items():
             if seen.get(i) != v:
                 bad += 1
                 if i in seen: fin["max_pos_err_m"] = max(fin["max_pos_err_m"], math.dist(seen[i][:3], v[:3]) / 128)
-                fail(f"{c['name']}: final state of #{i} is {seen.get(i)}, server has {v}")
+                fail(f"{c['name']}: final state of #{i} is {seen.get(i)}, server at tick {ft} has {v}")
         fin["entity_mismatches"] += bad; fin["clients_with_mismatch"] += bad > 0
     res["final_state"] = fin
     if not fin["static_server"]: fail("server state still changing at the end: final comparison inconclusive")

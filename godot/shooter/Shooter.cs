@@ -98,7 +98,7 @@ public partial class Shooter : Node3D
                 return;
             }
         }
-        if (role == "client" && !_smoke && !_smokeMove && !cfg.Flag("offline") && !cfg.Flag("headless-bot") && DisplayServer.GetName() != "headless")
+        if (role == "client" && !_smoke && !_smokeMove && !cfg.Flag("move-parity") && !cfg.Flag("offline") && !cfg.Flag("headless-bot") && DisplayServer.GetName() != "headless")
         {
             GameSettings.RestoreWindowSize();
             StartMenus(cfg);
@@ -533,6 +533,7 @@ public partial class Shooter : Node3D
         var spawn = RandomSpawn();
         player.Teleport(spawn + Vector3.Up * 0.1f);
         if (_smokeMove) AddChild(new SmokeMove { Player = player, Spawn = spawn });
+        if (_cfg.Flag("move-parity")) AddChild(new MoveParity { Player = player, Spawn = spawn, Steps = int.Parse(_cfg.Str("move-parity-steps", "900")), Seed = int.Parse(_cfg.Str("move-parity-seed", "20261113")), Production = _cfg.Flag("move-parity-production") }); // replay parity probe (I-rubber-banding round 2), headless
         if (_cfg.Flag("perf-route")) BuildPerfRoute(_cfg, player); // perf investigation: scripted camera route, frame stats, quit
     }
 }
