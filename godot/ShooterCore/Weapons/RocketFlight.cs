@@ -27,7 +27,7 @@ public static class RocketFlight
     /// whose gunner sits in the open passes <paramref name="exposedGunner"/> and <paramref name="wallPastHull"/> (see <see cref="GunnerCover"/>).
     /// </summary>
     public static RocketStep Step(Vector3 pos, Vector3 dir, float age, float speed, float life, float dt, float wallDistance, IEnumerable<HitTarget> targets, ushort owner,
-        HitTarget? exposedGunner = null, float wallPastHull = float.PositiveInfinity)
+        ExposedRiders? exposedGunner = null, float wallPastHull = float.PositiveInfinity)
     {
         var len = speed * dt;
         var sweep = ProjectileMath.Sweep(pos, dir, len, wallDistance, targets, owner, exposedGunner, wallPastHull);

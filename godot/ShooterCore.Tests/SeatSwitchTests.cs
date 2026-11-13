@@ -96,7 +96,7 @@ public class SeatSwitchTests
     public void SeatsAreNumberedFromOneInTheOrderOfTheSeatsList()
     {
         var l = SeatSchematic.Layout(Type("amphibious"), 184, 168, 12, 16);
-        Assert.Equal(new[] { 1, 2, 3, 4 }, l.Seats.Select(s => s.Number));
+        Assert.Equal(new[] { 1, 2, 3 }, l.Seats.Select(s => s.Number));
         Assert.Equal("driver", l.Seats[0].Role);
     }
 

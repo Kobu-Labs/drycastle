@@ -30,6 +30,8 @@ public static class EditorTheme
     public static readonly Color Scrim = new(0f, 0f, 0f, 0.75f);
     /// <summary>Sketch marks (temporary points and lines): apart from the selection yellow, the region accent and the hover white.</summary>
     public static readonly Color Sketch = new(1f, 0.55f, 0.90f);
+    /// <summary>The character's own point on the ground in the top-down view: red, with a white rim for contrast on any ground.</summary>
+    public static readonly Color You = new(1f, 0.12f, 0.12f);
 
     public static StyleBoxFlat Box(Color bg, int pad = Space, Color? border = null, int radius = Radius)
     {
@@ -113,6 +115,11 @@ public static class EditorTheme
         t.SetColor("font_pressed_color", "FlatButton", Accent);
 
         t.SetStylebox("panel", "PanelContainer", Box(Surface, Space, null, 0));
+        // a notice that stays on screen (warn) and a read-only block of text
+        t.SetTypeVariation("BannerPanel", "PanelContainer");
+        t.SetStylebox("panel", "BannerPanel", Box(new Color(Warn, 0.15f), Space, Warn));
+        t.SetTypeVariation("ReadOnlyBox", "PanelContainer");
+        t.SetStylebox("panel", "ReadOnlyBox", Box(Raised, Space, Border));
         t.SetStylebox("normal", "LineEdit", Box(Raised, 8, Border));
         t.SetStylebox("focus", "LineEdit", Focus());
         t.SetStylebox("read_only", "LineEdit", Box(new Color(Raised, 0.45f), 8));

@@ -182,7 +182,7 @@ def build_scene(
                 scene.nodes.setdefault(key, {})[name] = mesh
 
     tcfg = load_section("terrain", rules_path)
-    colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(ground_types(rules_path, area))})
+    colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(ground_types(rules_path, area, edits_path))})
     dec = int(tcfg["collision_decimate"])
     grey = np.array(GREY, np.uint8)
     # the hatch of each bunker is a hole in the ground (#224): the terrain, seen and collided with, has it cut out

@@ -46,23 +46,23 @@ public partial class NetServer
     /// (<see cref="GunnerCover"/>). A rider behind a pane is reached by <see cref="BulletHit"/>, which lets bullets through glass.
     /// Otherwise no gunner (every rider stays behind the hull).
     /// </summary>
-    (HitTarget? Gunner, float PastHull) ExposedGunnerBehind(ServerCar? hull, Vector3 from, Vector3 dir, float max, IReadOnlyList<HitTarget> targets)
+    /// <remarks>
+    /// The riders are every rider of <paramref name="hull"/> in the open (<see cref="RiderRules.Exposed"/>): the one gunner of a flak truck or a
+    /// utility helicopter, or everyone aboard an amphibious transport (ADR 0012). <paramref name="seatsOnly"/> is for the weapons that never
+    /// reached a flak or helicopter gunner through the hull (the jeep's roof gun, the killstreak guns): they reach only riders whose seat says it
+    /// is exposed. <paramref name="skip"/> is the shooter's own vehicle, which the ray passes through as well.
+    /// </remarks>
+    (ExposedRiders? Gunner, float PastHull) ExposedGunnerBehind(ServerCar? hull, Vector3 from, Vector3 dir, float max, IReadOnlyList<HitTarget> targets, bool seatsOnly = false, ServerCar? skip = null)
     {
-        if (hull is not { Destroyed: false }) return (null, float.PositiveInfinity);
-        HitTarget? gunner = null;
-        if (hull.Def.ExposedGunner)
-        {
-            var seat = hull.Def.Seats.FindIndex(s => s.Role == "gunner");
-            var id = seat >= 0 ? hull.Seat.Occupant(seat) : (ushort)0;
-            if (id != 0) foreach (var t in targets) if (t.Id == id) { gunner = t; break; }
-        }
-        if (gunner == null) return (null, float.PositiveInfinity);
+        if (hull is not { Destroyed: false } || !hull.Seat.Occupied) return (null, float.PositiveInfinity);
+        if (RiderRules.Exposed(hull.Def, hull.Seat, targets, seatsOnly) is not { } riders) return (null, float.PositiveInfinity);
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
         q.CollisionMask = CollisionLayers.Bullets;
         var exclude = new Godot.Collections.Array<Rid>(PlayerRids()) { hull.GetRid() };
+        if (skip != null) exclude.Add(skip.GetRid());
         q.Exclude = exclude;
         var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
-        return (gunner, r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3()));
+        return (riders, r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3()));
     }
 
     /// <summary>The turret record of a flak vehicle for the snapshot: the world aim and the gunner's id.</summary>
@@ -105,7 +105,7 @@ public partial class NetServer
         var wall = WorldWall(from, new Vector3(dir.X, dir.Y, dir.Z), def.MaxRange);
         // the riders of the truck are not in the shell's way, nor is the truck itself
         var targets = LiveTargets().Where(t => car.Seat.SeatOf(t.Id) < 0).ToList();
-        var vehicles = GunshipVehicles().Where(v => _cars[v.Index] != car).ToList();
+        var vehicles = GunshipVehicles(targets).Where(v => _cars[v.Index] != car).ToList();
         var route = GunshipRouting.Route(shell, origin, dir, wall, targets, c.Id, vehicles, Vehicles?.BulletDamageMultiplier ?? 0f);
         var stop = route.Impact == GunshipImpact.None ? float.PositiveInfinity : route.Distance;
         var plan = FlakRules.Plan(def, origin, dir, stop, FlakTargets());

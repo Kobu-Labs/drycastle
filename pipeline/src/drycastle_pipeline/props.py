@@ -631,7 +631,7 @@ def run_props(
     graph = json.loads((work_dir / "roads.json").read_text())
     fcfg = load_section("props", rules_path, area)
     scfg = load_section("spawns", rules_path, area)
-    scfg["ground_kinds"] = sorted(set(scfg["ground_kinds"]) | spawn_kinds(ground_types(rules_path, area)))
+    scfg["ground_kinds"] = sorted(set(scfg["ground_kinds"]) | spawn_kinds(ground_types(rules_path, area, edits_path)))
     chunk_m = float(parcels_doc["chunk_size_m"])
     plan = plan_edits(load_edits(edits_path), parcels, parcels_doc.get("origin_epsg5514"), chunk_m)
     for warning in plan.warnings + unknown_asset_warnings(plan.objects):

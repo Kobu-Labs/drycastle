@@ -15,6 +15,8 @@ public class GameData
     public EnvironmentConfig Environment { get; init; } = new();
     /// <summary>glass.json (glass pane hit points, crack stages, shards; ADR 0007). Defaults when the file is absent.</summary>
     public GlassConfig Glass { get; init; } = new();
+    /// <summary>animals.json (the species of wildlife and livestock and their rules). Empty when the file is absent.</summary>
+    public AnimalsFile Animals { get; init; } = new();
     /// <summary>turret.json: the sentry turret's tuning (the turret killstreak).</summary>
     public required TurretFile Turret { get; init; }
 
@@ -33,7 +35,7 @@ public class GameData
         """;
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -50,6 +52,7 @@ public class GameData
             Environment = environmentJson == "" ? new() : EnvironmentConfig.Parse(environmentJson),
             Camo = camoJson == "" ? CamoFile.Parse(MinimalCamoJson) : CamoFile.Parse(camoJson),
             Glass = glassJson == "" ? new() : GlassConfig.Parse(glassJson),
+            Animals = animalsJson == "" ? new() : AnimalsFile.Parse(animalsJson),
         };
     }
 
@@ -70,6 +73,7 @@ public class GameData
             Environment = File.Exists(Path.Combine(dir, "environment.json")) ? EnvironmentConfig.Load(Path.Combine(dir, "environment.json")) : new(),
             Camo = File.Exists(Path.Combine(dir, "camo.json")) ? CamoFile.Load(Path.Combine(dir, "camo.json")) : CamoFile.Parse(MinimalCamoJson),
             Glass = File.Exists(Path.Combine(dir, "glass.json")) ? GlassConfig.Load(Path.Combine(dir, "glass.json")) : new(),
+            Animals = File.Exists(Path.Combine(dir, "animals.json")) ? AnimalsFile.Load(Path.Combine(dir, "animals.json")) : new(),
         };
     }
 }

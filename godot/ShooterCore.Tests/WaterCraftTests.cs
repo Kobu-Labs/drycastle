@@ -35,16 +35,14 @@ public class WaterCraftTests
     }
 
     [Fact]
-    public void ShippedAmphibiousDrivesOnLandWithFourSeatsAndRunsPeopleOverOnLand()
+    public void ShippedAmphibiousDrivesOnLandWithThreeSeatsAndRunsPeopleOverOnLand()
     {
         var a = Type("amphibious");
         Assert.Equal(VehicleMedium.Amphibious, a.Medium);
         Assert.True(a.RunOver);
         Assert.True(a.CrashDamage);
-        Assert.Equal(4, a.Seats.Count);
+        Assert.Equal(3, a.Seats.Count); // the driver and two riders (AmphibiousTransportTests holds what the riders do)
         Assert.Equal("driver", a.Seats[0].Role);
-        Assert.All(a.Seats.Skip(1), s => Assert.Equal("passenger", s.Role)); // passengers never shoot in v2
-        Assert.Null(a.Gun);
         Assert.True(a.WaterTopSpeed < a.TopSpeed);
         Assert.NotNull(a.Lights);
     }
@@ -133,7 +131,10 @@ public class WaterCraftTests
     [Fact]
     public void AnAmphibiousTopsOutAtItsWaterSpeedAfloatAndAtItsLandSpeedOnLand()
     {
-        var a = Type("amphibious");
+        // the car model's own rule for an amphibious type without a drive block. The shipped amphibious transport has one and is stepped by
+        // DriveModel instead (ADR 0010): DriveTests holds its numbers.
+        Assert.NotNull(Type("amphibious").Drive);
+        var a = new VehicleDef { Id = "duck", TopSpeed = 22, Acceleration = 4, Brake = 8, TurnRadius = 4.2f, MaxLateralAccel = 7.5f, Medium = VehicleMedium.Amphibious, WaterTopSpeed = 7, WaterAcceleration = 1.5f };
         var afloat = new CarState();
         for (var i = 0; i < 30 * 60; i++) CarModel.Step(ref afloat, a, 1, 0, false, 1f / 30, onWater: true);
         Assert.Equal(a.WaterTopSpeed, afloat.Speed, 3);

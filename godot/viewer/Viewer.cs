@@ -80,6 +80,12 @@ public partial class Viewer : Node3D
             // --editor starts in editor mode; the smoke and screenshot drivers switch it themselves
             if (_flags.Contains("editor") && !_flags.Contains("editor-smoke"))
             {
+                // the Street View follower (docs/streetview.md) writes this file; the character follows it
+                AddChild(new StreetViewFollow
+                {
+                    Name = "StreetViewFollow", Map = _map, Editor = _editor,
+                    FilePath = Path.Combine(Path.GetDirectoryName(_watcher!.StatePath) ?? ".", "streetview-position.json"),
+                });
                 _editor.SetActive(true);
                 // Interactive editing: don't render flat out (this pegged the GPU). Smoke/screenshot drivers stay uncapped.
                 DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Enabled);

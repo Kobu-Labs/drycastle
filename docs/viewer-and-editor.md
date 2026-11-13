@@ -157,6 +157,7 @@ Options: `--edits PATH` (default `pipeline/config/edits.json`), `--state PATH` (
 | Shift + left click | add or remove that parcel in the selection |
 | G | create a property group (`G-NNNN`) from 2+ selected parcels |
 | T | snap to a top-down view above the cursor; again restores the previous camera |
+| (Street View) | `streetview_follow.py` moves the character to where a Chrome Street View tab is; in the top-down view (T) a red point marks the spot below it, see `docs/streetview.md` |
 | Esc | stop placing / deselect the object / clear the parcel selection (in that order) |
 | Ctrl+Z, Ctrl+Y (Ctrl+Shift+Z) | undo / redo the saves made in this session (see Objects and undo) |
 
@@ -360,6 +361,23 @@ unique across all sketches. Every mark shows its name as a tag in the 3D view, i
   Ctrl+Z / Ctrl+Y. Esc steps back one level: the line being drawn, the selection, the tool.
 - Checked by the build and by the MCP server's sketch tests on the file format only; there is no headless smoke for the
   tool yet (the picker, the naming row and the reload from `sketch.json` are not covered).
+
+### Ground types tool
+
+Rail icon 4 (`Ground types`). Lists every ground type of the map (swatch of the first colour, name, recipe, and a tag when you
+edited it, made it, or deleted it) and edits one at a time: terrain colours (swatch, picker, `#rrggbb` field, add up to 6, remove),
+detail recipe (dropdown), water and spawns checkboxes, OSM values (comma lists for `landuse` and `natural`; read only for a rule
+type), and "Advanced detail settings" (the effective `detail` overlay as read-only text, with number fields for furrow probability,
+headland keep and tone patches per ha, from the one table `GroundTypeEdits.DetailFields`). Buttons: New type (name field,
+Create, or Duplicate selected, which copies everything but the OSM tags), Reset to rules (removes your override, also brings a
+deleted type back), Delete (asks first; disabled for the default type and the dike). Rename does not exist: names are IDs (a
+disabled button explains it). Every change is one save and one undo step; the types live in `edits.json` `ground_types` over
+`rules.yaml` (docs/pipeline.md "Ground types of your own"). A banner says the change shows after the next full map build
+(`make map`); the editor does not hot-reload ground. The Regions page's Ground dropdown lists the effective types (your edits
+included, deleted ones and rule types left out). Keys: `4` opens, Tab reaches the list, `N` the name field, `Del` deletes, Ctrl+Z
+undoes, Esc leaves a text field, then deselects, then leaves the tool; `Ctrl+P` lists the types. States, keyboard walkthrough and
+what is not verified: `docs/ground-types-ui-notes.md`. A map without `ground_types` in its `parcels.json` shows an explanation to
+build it again.
 
 ### Regions tool
 

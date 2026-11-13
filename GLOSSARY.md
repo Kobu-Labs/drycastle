@@ -22,6 +22,10 @@ The category of a parcel: building plot (it holds a building) or garden (the res
 A piece of the land outside the parcels with a ground type (field, forest, water, village, dike), cut from OSM land use and rules instead of cadastral outlines, or drawn by hand (a region with a ground type). The type picks its colour, vegetation and detail recipe. It has no fence and no stable ID.
 _Avoid_: area (that is the map area: slice or village), zone, road parcel
 
+**Ground type**:
+The whole description of one kind of ground (forest, field, meadow, orchard, allotments, village, dike, water, ...): where it comes from (OSM land use or a rule), its terrain colours, detail recipe and settings, whether it is water and whether players spawn on it. Defined in `rules.yaml` (`ground.types`); you override, add and delete types in `edits.json` (`ground_types`) from the editor's Ground types tool or MCP. A change shows after the next full map build. Names are IDs and cannot be renamed.
+_Avoid_: biome, terrain type
+
 **Replacement scene**:
 What a mod supplies to replace a parcel's base contents.
 
@@ -97,8 +101,20 @@ A water-only vehicle: it floats on a water body, has no drive on land (it coasts
 _Avoid_: ship, watercraft
 
 **Amphibious transport**:
-A four-seat vehicle that drives on land like the war jeep (and runs people over there) and floats at reduced speed on water.
-_Avoid_: APC, amphib
+An open three-seat vehicle, a boat-shaped hull on four wheels: a driver, an armed seat beside them and a ring gun over the rear. On land it drives (and runs people over there); in a water body it floats and handles as a boat, slower. Nothing covers its riders: all three sit in exposed seats.
+_Avoid_: APC, amphib, Schwimmwagen, duck
+
+**Armed seat**:
+A passenger seat whose rider keeps their own loadout and fights with it from the seat, in first person, aiming with the view inside the seat's arc. The mouse wheel changes the weapon there, since the number keys are the seat switch. The amphibious transport's front right seat is one; the bus's passenger seats are not.
+_Avoid_: shotgun seat, gunner seat (that seat works the vehicle's own gun), fighting seat
+
+**Exposed seat**:
+A seat the hull does not cover: a shot that reaches its rider's body hits the rider and not the hull, and a shot that misses them hits the hull. The flak truck's and the utility helicopter's gunner seats are exposed, and all three seats of the amphibious transport. Riders of one vehicle never hit each other.
+_Avoid_: open seat, unprotected seat
+
+**Ring gun**:
+The amphibious transport's machine gun, on a ring mount over the rear compartment and worked from the gunner seat by a gunner who stands inside the ring. The gunner's view aims it all the way round; over the two riders in front it cannot be depressed. Its rounds are the jeep's roof gun's, and its kills are ordinary kills.
+_Avoid_: turret (alone), pintle gun, rear gun
 
 **Seat switch**:
 Moving to another seat of the vehicle you sit in, without getting out: while seated, the number keys (the weapon slot keys) take that seat (key 2 is the second seat of the vehicle's `seats` list), and a small top-down schematic in the bottom right shows each seat with its number (free: outlined; yours: filled, double ring; taken: struck through). A vehicle with no `seats` list has the one driver seat. A free seat is taken at once; a taken one is refused. Leaving the driver seat leaves the vehicle without input, so it coasts to a stop (a utility helicopter in the air holds a hover, then sets itself down); a gunner's turret keeps its aim. One player can drive, go to the turret and drive again.
@@ -109,7 +125,7 @@ The weapons a player can select: the primary, the secondary and the knife of the
 _Avoid_: inventory, toolbar, slots
 
 **Streak weapon**:
-A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the turret, the MOAB, the aircraft guns). Kills made with one do not advance the Streak counter. The jeep's roof gun and the utility helicopter's door gun are not streak weapons.
+A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the turret, the MOAB, the aircraft guns). Kills made with one do not advance the Streak counter. The jeep's roof gun, the utility helicopter's door gun and the amphibious transport's ring gun are not streak weapons.
 _Avoid_: killstreak weapon (ambiguous with the streak itself)
 
 **Pellet fan**:
@@ -117,7 +133,7 @@ The pellets of one shotgun shot, sent as a seed, an aim and a cone so every clie
 _Avoid_: spread (alone), buckshot
 
 **Shot spread**:
-The half-angle of the cone a shot can land in. It starts from the weapon's own spread (base plus growth per shot, or the pellet cone of a shotgun), grows with the shooter's speed up to sprint speed and is at its widest in the air, and is then reduced by crouch, prone and aiming. The server and the crosshair use the same rule, so the crosshair gap is the cone.
+The half-angle of the cone a shot can land in. It starts from the weapon's own spread (base plus growth per shot, or the pellet cone of a shotgun), grows with the shooter's speed up to sprint speed and is at its widest in the air, and is then reduced by crouch, prone and aiming. From an armed seat the vehicle's speed stands in for the shooter's own, and the seat gives no stance bonus. The server and the crosshair use the same rule, so the crosshair gap is the cone.
 _Avoid_: accuracy, bloom, recoil (recoil moves the aim; spread scatters around it)
 
 **Camouflage**:
@@ -169,7 +185,7 @@ The utility helicopter's machine gun, on a pintle in its right door and worked f
 _Avoid_: turret (alone), minigun, side gun
 
 **Flak truck**:
-A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every other vehicle.
+A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every closed vehicle.
 _Avoid_: AA gun, anti-air vehicle, SPAAG
 
 **Bus**:
@@ -282,3 +298,7 @@ The blue (friend) and orange (enemy) the HUD uses, seen from the local player's 
 **Tactical map**:
 The full-screen, north-up map sheet of the whole base map that the M key (rebindable, `map`) opens and closes; Esc also closes it. It is view only and does not pause anything. Terrain, parcels and roads come from the same data as the minimap; a square grid labels columns A, B, C... from the west and rows 1, 2, 3... from the south, so a square has a short reference such as "C7" (the cell is 50, 100 or 200 m, chosen so there are about 10 to 20 a side; these are not S-JTSK coordinates). The margin shows a compass rose, the player's heading in degrees, the grid reference and position in metres from the south-west corner, a scale bar and a legend. Markers (the player's arrow, vehicles, friends in team deathmatch, UAV pings) are the minimap's, drawn from the same data. It closes on the respawn screen, at the end of a match and in a missile or turret view.
 _Avoid_: world map, big map, full map
+
+**Animal**:
+A creature of the world that is not a player: a deer, a dog, a cow. It has hit points and can be shot dead (`animals.json` lists the species, their hit points, speeds and models). It stands, eats, wanders around the spot it spawned at, and runs from players, vehicles and the shot that hurt it. A killed animal lies for `corpse_seconds` with its death clip held on the last frame, then is removed. It is a world entity (wire type 50) the server owns; clients only draw it. Not a target dummy (a player-shaped practice target) and not a corpse (what a killed player leaves).
+_Avoid_: NPC (alone), mob, critter

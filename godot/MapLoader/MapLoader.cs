@@ -43,8 +43,14 @@ public sealed partial class MapLoader
     public string BunkersJson { get; private set; } = "";
     /// <summary>Origin of the local frame in S-JTSK (EPSG:5514) metres (east, north), from parcels.json (map 0.4.0+); null for older maps.</summary>
     public (double X, double Y)? OriginEpsg5514 { get; private set; }
-    /// <summary>The ground types a region can be given (name, "#rrggbb" of its terrain colour), from parcels.json `ground_types`; empty for older maps.</summary>
+    /// <summary>The ground types a region can be given (name, "#rrggbb" of its terrain colour) as of the build: not the ones a rule makes, not water; from parcels.json `ground_types`, empty for older maps. The editor lists the current ones through <see cref="GroundTypeTable"/> and the edits.</summary>
     public IReadOnlyList<(string Name, string Colour)> GroundTypes { get; private set; } = Array.Empty<(string, string)>();
+    /// <summary>Every ground type of the map (those of rules.yaml, then the user's own) as written by the last build; empty for maps without `ground_types`.</summary>
+    public IReadOnlyList<MapGroundType> GroundTypeTable { get; private set; } = Array.Empty<MapGroundType>();
+    /// <summary>The type of the ground no other type claims (parcels.json `ground_default`); "" for older maps.</summary>
+    public string GroundDefault { get; private set; } = "";
+    /// <summary>The shipped settings of each detail recipe without its clutter tables, as JSON by recipe name (parcels.json `ground_recipes`); what a ground type's `detail` is laid over. Empty for older maps.</summary>
+    public IReadOnlyDictionary<string, string> GroundRecipes { get; private set; } = new Dictionary<string, string>();
     /// <summary>Rule values (fence and tree defaults) from the manifest (map 0.4.0+); null for older maps.</summary>
     public EditDefaults? EditDefaults { get; private set; }
     public LoadStats Stats { get; } = new();
@@ -234,11 +240,23 @@ public sealed partial class MapLoader
         if (doc.RootElement.TryGetProperty("ground_types", out var gt) && gt.ValueKind == JsonValueKind.Array)
         {
             var types = new List<(string, string)>();
+            var table = new List<MapGroundType>();
             foreach (var t in gt.EnumerateArray())
-                if (t.TryGetProperty("name", out var n) && t.TryGetProperty("colour", out var c) && n.GetString() is { } name && c.GetString() is { } colour)
-                    types.Add((name, colour));
+            {
+                if (!(t.TryGetProperty("name", out var n) && t.TryGetProperty("colour", out var c) && n.GetString() is { } name && c.GetString() is { } colour)) continue;
+                var source = t.TryGetProperty("source", out var so) ? so.GetString() ?? "" : "";
+                var water = t.TryGetProperty("water", out var w) && w.ValueKind == JsonValueKind.True;
+                var custom = t.TryGetProperty("custom", out var cu) && cu.ValueKind == JsonValueKind.True;
+                var rules = t.TryGetProperty("rules", out var ru) && ru.ValueKind == JsonValueKind.Object ? ru.GetRawText() : null;
+                if (source != "rule" && !water) types.Add((name, colour));
+                table.Add(new MapGroundType(name, colour, custom, rules, source == ""));
+            }
             GroundTypes = types;
+            GroundTypeTable = table;
         }
+        if (doc.RootElement.TryGetProperty("ground_default", out var gd) && gd.ValueKind == JsonValueKind.String) GroundDefault = gd.GetString() ?? "";
+        if (doc.RootElement.TryGetProperty("ground_recipes", out var gr) && gr.ValueKind == JsonValueKind.Object)
+            GroundRecipes = gr.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetRawText());
         foreach (var p in doc.RootElement.GetProperty("parcels").EnumerateArray())
         {
             var id = p.GetProperty("id").GetString()!;

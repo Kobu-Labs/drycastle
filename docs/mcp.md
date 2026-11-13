@@ -137,7 +137,10 @@ All inputs and outputs are JSON. Write tools return `summary`, `warnings` and th
 | `set_region_colour` | `id`, `colour` | |
 | `set_region_water` | `id`, `water_y` (null = ground paint again) | makes the region a body of water: flat surface at `water_y` (metres, terrain datum), also in `water.json`; no tree trunks inside it |
 | `set_region_ground` | `id`, `ground` (a type of `list_ground_types`; null = ground paint again) | makes the region a hand-drawn ground area of that type (terrain colour, detail and trees of the type, overriding the rules there); shown as a coloured preview until the next full run (`make map`); not for water regions |
-| `list_ground_types` | | the ground types of `rules.yaml` (`ground.types`): colours, recipe, trees, water, source |
+| `list_ground_types` | | the effective ground types (`rules.yaml` with your `edits.json` `ground_types` laid over): `source` (`rules`, `overridden`, `custom`), colours, recipe, detail overlay, water, spawns, OSM values, where it comes from; `deleted` names the rules' types you removed |
+| `set_ground_type` | `name` (lower_snake, max 24), any of `colours` (1-6 `#rrggbb`), `recipe` (field / forest / village / dike / `"none"`), `water`, `spawns`, `osm` (`{landuse?: [..], natural?: [..]}`), `detail` (object merged into your earlier detail settings) | creates a custom type or updates your override of a type of the rules: only the given keys are overridden; validated like the file (refused with the reasons, nothing written); not for a deleted type (reset it first); shows after the next full run (`make map`) |
+| `reset_ground_type` | `name` | removes your override of a type of the rules (also brings a deleted one back); refused for a custom type (delete it) and when there is no override |
+| `delete_ground_type` | `name` | a custom type is removed, a type of the rules is marked deleted (`reset_ground_type` undoes); refused for the default type and the dike; names the regions that still use it (they are skipped with a warning at the next build) |
 | `move_region_point` | `id`, `index`, `position?` `[x,y]` or `offset?` `{dx,dy}` | exactly one of position / offset |
 | `delete_region` | `id` | |
 | `list_regions` | `near?` `{x,y,radius_m?}` or `{parcel,radius_m?}`, `limit?` | id, colour, `area_m2`, `points`, `bbox`, `centroid`; `distance_m` when `near` |

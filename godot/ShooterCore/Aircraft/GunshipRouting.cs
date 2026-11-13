@@ -2,8 +2,11 @@ using System.Numerics;
 
 namespace Drycastle.ShooterCore;
 
-/// <summary>A vehicle's hit volume as the gunship routing sees it: its index in the server's car list, its footprint and its height.</summary>
-public readonly record struct GunshipVehicle(int Index, Vector3 Feet, float Yaw, float HalfWidth, float HalfLength, float Height);
+/// <summary>
+/// A vehicle's hit volume as the gunship routing sees it: its index in the server's car list, its footprint and its height, and the riders its
+/// hull does not cover (an amphibious transport's, ADR 0012; null for none), whom a round reaches through that volume.
+/// </summary>
+public readonly record struct GunshipVehicle(int Index, Vector3 Feet, float Yaw, float HalfWidth, float HalfLength, float Height, ExposedRiders? Riders = null);
 
 /// <summary>What a gunship round's ray stopped on.</summary>
 public enum GunshipImpact : byte { None, World, Body, Vehicle }
@@ -37,14 +40,20 @@ public static class GunshipRouting
         var range = def.RangeM;
         var car = -1;
         var carDist = float.PositiveInfinity;
+        var behind = float.PositiveInfinity; // the next vehicle along the ray, behind the first
+        ExposedRiders? riders = null;
         foreach (var v in vehicles)
         {
-            if (VehicleBox.Ray(origin, dir, range, v.Feet, v.Yaw, v.HalfWidth, v.HalfLength, v.Height) is not { } h || h.Distance >= carDist) continue;
+            if (VehicleBox.Ray(origin, dir, range, v.Feet, v.Yaw, v.HalfWidth, v.HalfLength, v.Height) is not { } h) continue;
+            if (h.Distance >= carDist) { behind = MathF.Min(behind, h.Distance); continue; }
+            behind = carDist;
             carDist = h.Distance;
             car = v.Index;
+            riders = v.Riders;
         }
         var blocker = MathF.Min(wallDistance, carDist);
-        if (HitMath.Raycast(origin, dir, range, blocker, targets, owner) is { } body)
+        // riders in the open on the vehicle the ray stopped on are reached through its hull, up to whatever is behind it (GunnerCover)
+        if (GunnerCover.Raycast(origin, dir, range, blocker, targets, owner, riders, MathF.Min(wallDistance, behind)) is { } body)
             return new GunshipRoute(GunshipImpact.Body, body.Distance, body.Id, -1, def.Damage);
         if (car >= 0 && carDist <= range)
             return new GunshipRoute(GunshipImpact.Vehicle, carDist, 0, car, def.Damage * bulletMultiplier);

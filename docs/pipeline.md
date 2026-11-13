@@ -97,6 +97,44 @@ part of a type: they come from the orthophoto only (`docs/ortho.md`).
 land). `ground.carve` in `rules.yaml` lists such parcels: the parcel keeps its ID but becomes the building outline(s)
 grown by `margin_m` (a slim yard, mitre corners, never over another parcel), and the rest of its land becomes ground like
 any other. Today P-0073 (the dike strip, with a hut) and P-0754 (a 13 ha field with one building).
+
+### Ground types of your own (`edits.json` `ground_types`)
+
+The types can be changed, added and removed without touching `rules.yaml`: `pipeline/config/edits.json` has an optional
+top-level `ground_types`, `{"<name>": {...}}`, written only when there is something in it. An entry has the keys of a
+`rules.yaml` type (`colours`, `recipe`, `detail`, `water`, `spawns`, `osm`; no `rule`, rule types stay in `rules.yaml`)
+or `"deleted": true`:
+
+```json
+"ground_types": {
+ "meadow": {"colours": ["#8cb86a", "#82ad62"], "detail": {"tone_per_ha": 6}, "spawns": false},
+ "dunes": {"colours": ["#d8c38a"], "osm": {"natural": ["sand"]}, "recipe": "field"},
+ "orchard": {"deleted": true}
+}
+```
+
+* **Merge rule** (`ground.ground_types(rules_path, area, edits_path=None)`, `merge_ground_types`): the types of
+  `rules.yaml` (with the area overlay) come first; a key of an edits entry overrides that key of the rules entry (the
+  dicts `osm` and `detail` are merged key by key, deeper dicts the same way, lists and plain values are replaced, so
+  `colours` is replaced whole and `osm: {natural: [...]}` replaces only the natural list); a new name is a new type
+  appended after the rules' types (so the rules' types take OSM land first); `deleted` removes a type of the rules.
+  Without `edits_path` the result is `rules.yaml` alone. Every stage that reads the types passes the edits path (parcels
+  for the OSM sources and `drawn_ground`, scene for the terrain colours, props for `spawns`, detail for the recipe and
+  its `detail` settings, export for `water`). A region whose `ground` names a type that no longer exists is skipped with
+  a warning by the parcels stage.
+* **Validation** (`edits.py`, mirrored by the editor): names are lower_snake (`^[a-z][a-z0-9_]{0,23}$`); `colours` 1 to
+  6 `#rrggbb`; `recipe` one of `field`, `forest`, `village`, `dike`, or `null` for no detail; `detail` an object whose
+  top-level keys exist in the shipped `detail.<recipe>` section (the recipe is the entry's own or the rules type's);
+  `water` and `spawns` booleans; `osm` an object `{landuse|natural: [text, ...]}`; `deleted` is `true` and alone, names a
+  type of `rules.yaml`, and is refused for the default type and for a type with a `rule` (the dike, `detail.dike` needs
+  it). Unknown keys are errors.
+* **Rebuild**: a type change needs the full map build (`make map`): the ground areas, terrain colours and detail are
+  made by the parcels, scene and detail stages. Nothing is hot-reloaded. The editor, MCP and this document say so.
+* **Export**: `parcels.json` `ground_types` lists every type of the rules (and then the user's own) with the rules'
+  own entry (`rules`; `custom: true` instead for a user's type) and a summary at the build (`colour`, `colours`,
+  `recipe`, `water`, `spawns`, `source` = `osm`, `rule` or `drawn`); `ground_default` names the default type;
+  `ground_recipes` holds the shipped settings of each recipe (without the clutter tables). The editor lays the current
+  `edits.json` over `rules`, so its list is live between builds.
 Edits of a parcel that is no longer kept are skipped with a warning by the props stage; putting the parcel in a group
 with a building plot (by hand in `edits.json`, it is not shown in the editor) brings it back.
 
