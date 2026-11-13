@@ -4,10 +4,11 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The intel screen on the wall of the base's command post (bunker, third floor down; ADR 0017): a steel frame and a quad that
-/// shows <see cref="IntelScreenView"/>, which is drawn into a <see cref="SubViewport"/>. The wall comes from bunkers.json (the
-/// pipeline reserves it, <see cref="IntelAnchor"/>), the bunker from intel.json. The events on it are the board the server sends
-/// (<see cref="Board"/>, filled by the network client); with several, the screen shows each for a few seconds in turn.
+/// The intel screen on the wall of the base (the military hangar's floor, or the command post of a bunker as the fallback; ADR 0017):
+/// a steel frame and a quad that shows <see cref="IntelScreenView"/>, which is drawn into a <see cref="SubViewport"/>. The wall comes
+/// from the first placed object of intel.json's <c>base_asset</c> (<see cref="IntelRoom.Place"/>: its position, turn and scale in
+/// objects.json, never the model) or else from bunkers.json (<see cref="IntelAnchor"/>). The events on it are the board the server
+/// sends (<see cref="Board"/>, filled by the network client); with several, the screen shows each for a few seconds in turn.
 ///
 /// Client only, and costless away from the wall: further than <see cref="IntelFile.ViewRangeM"/> from the camera the quad is hidden
 /// and the viewport does not render. Within range the view is rewritten about once a second and re-rendered for a few frames (the
@@ -43,23 +44,51 @@ public partial class IntelScreen : Node3D
         Name = "IntelScreen";
     }
 
-    /// <summary>
-    /// The screen of this map's base, or null when the map has none: the base bunker (intel.json) has no wall reserved for it in
-    /// bunkers.json (a map exported before the intel room). Then there is no intel room, and the announcement still reaches everyone.
-    /// A broken intel.json fails the run, like the other data files.
-    /// </summary>
-    public static IntelScreen? Create(Shelters bunkers, Drycastle.MapLoader.MapLoader map)
+    /// <summary>intel.json. A broken file fails the run, like the other data files.</summary>
+    public static IntelFile LoadConfig()
     {
         var json = Godot.FileAccess.Open(DataPath, Godot.FileAccess.ModeFlags.Read)?.GetAsText()
             ?? throw new DataFileException($"intel.json: cannot open ({Godot.FileAccess.GetOpenError()})");
-        var cfg = IntelFile.Parse(json);
-        var anchor = bunkers.IntelScreens.FirstOrDefault(a => a.BunkerId == cfg.BaseBunker);
+        return IntelFile.Parse(json);
+    }
+
+    /// <summary>
+    /// The screen of this map's base, or null when the map has none: no object of the base asset is placed and the fallback bunker
+    /// (intel.json) has no wall reserved for it in bunkers.json (a map exported before the intel room). Then there is no intel room,
+    /// and the announcement still reaches everyone.
+    /// </summary>
+    public static IntelScreen? Create(Shelters bunkers, Drycastle.MapLoader.MapLoader map)
+    {
+        var cfg = LoadConfig();
+        var anchor = FindAnchor(cfg, bunkers, map);
         if (anchor == null)
         {
-            GD.Print($"intel: bunker '{cfg.BaseBunker}' has no wall for an intel screen in this map (export the map again); no intel room, announcements still work");
+            GD.Print($"intel: no object of '{cfg.BaseAsset}' is placed and bunker '{cfg.BaseBunker}' has no wall for an intel screen in this map (export the map again); no intel room, announcements still work");
             return null;
         }
+        GD.Print($"intel: the screen hangs on {anchor.HostId} at ({anchor.At.X:F1}, {-anchor.At.Y:F1}) local metres");
         return new IntelScreen(anchor, cfg, map);
+    }
+
+    /// <summary>The first placed object of the base asset carries the room; without one, the base bunker's reserved wall; else none.</summary>
+    static IntelAnchor? FindAnchor(IntelFile cfg, Shelters bunkers, Drycastle.MapLoader.MapLoader map)
+    {
+        if (cfg.BaseAsset != "" && cfg.Room is { } room && map.FirstObjectOfAsset(cfg.BaseAsset) is { } o)
+            return IntelRoom.Place(o.Id, new System.Numerics.Vector2(o.Position.X, o.Position.Z), o.Position.Y, o.YawDeg, o.Scale, room);
+        return cfg.BaseBunker == "" ? null : bunkers.IntelScreens.FirstOrDefault(a => a.HostId == cfg.BaseBunker);
+    }
+
+    /// <summary>
+    /// Opens the parts of the base object that intel.json names (the small door of the hangar's entrance end), so players can walk
+    /// in: the closed prefab is solid all round. Both roles do it, as both build the object's collision. Nothing happens when the
+    /// map has no such object or the object has no such part (a placeholder box).
+    /// </summary>
+    public static void OpenEntrance(Drycastle.MapLoader.MapLoader map)
+    {
+        var cfg = LoadConfig();
+        if (cfg.BaseAsset == "" || cfg.Room is not { OpenParts.Count: > 0 } room || map.FirstObjectOfAsset(cfg.BaseAsset) is not { } o) return;
+        var n = map.OpenObjectParts(o.Id, room.OpenParts);
+        GD.Print($"intel: opened {n} of {room.OpenParts.Count} entrance part(s) of {o.Id}");
     }
 
     /// <summary>The grid reference of the base on the tactical map sheet ("F7"), or null when there is no map to say it on. The announcement names it.</summary>

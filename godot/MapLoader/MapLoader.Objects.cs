@@ -67,6 +67,48 @@ public sealed partial class MapLoader
         }
     }
 
+    /// <summary>How a placed object stands in map space (Godot axes): its origin, its turn about the vertical axis (degrees, Godot's Y rotation) and its scale.</summary>
+    public readonly record struct ObjectPose(string Id, Vector3 Position, float YawDeg, float Scale);
+
+    /// <summary>
+    /// The first placed object of an asset (the lowest object id, ordinal) and where it stands now; null when none is placed. From the
+    /// object's own node transform, which comes from objects.json (position, rotation, scale, terrain height), never from the model.
+    /// </summary>
+    public ObjectPose? FirstObjectOfAsset(string asset)
+    {
+        foreach (var (id, node) in _objectNodes.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            if (!GodotObject.IsInstanceValid(node) || !_objectAssets.TryGetValue(id, out var a) || a != asset) continue;
+            var x = node.Basis.X; // the turn from the axis, not from Euler angles, which fold a turn past 90 degrees into the other axes
+            return new ObjectPose(id, node.Position, Mathf.RadToDeg(MathF.Atan2(-x.Z, x.X)), x.Length());
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Opens parts of a placed object's model: every node of the object named in <paramref name="names"/> (a door of a prefab) is
+    /// hidden and its collision bodies stop colliding. Returns how many nodes it found: none for an object that has no such part
+    /// (a placeholder box, a headless load without the model).
+    /// </summary>
+    public int OpenObjectParts(string objectId, IEnumerable<string> names)
+    {
+        if (!_objectNodes.TryGetValue(objectId, out var root) || !GodotObject.IsInstanceValid(root)) return 0;
+        GeometryChanged();
+        var wanted = names.ToHashSet(StringComparer.Ordinal);
+        var found = 0;
+        foreach (var part in Descendants(root).Where(d => wanted.Contains(d.Name.ToString())).ToList())
+        {
+            found++;
+            if (part is Node3D n3) n3.Visible = false;
+            foreach (var body in new[] { part }.Concat(Descendants(part)).OfType<CollisionObject3D>())
+            {
+                body.CollisionLayer = 0;
+                body.CollisionMask = 0;
+            }
+        }
+        return found;
+    }
+
     /// <summary>A fresh copy of an asset's scene (not in the tree; the caller frees it); null when unknown or unloadable.</summary>
     public Node3D? InstantiateAsset(string asset)
         => GetAssetTemplate(asset, out _) is { } t ? (Node3D)t.Duplicate() : null;

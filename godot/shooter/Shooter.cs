@@ -354,11 +354,12 @@ public partial class Shooter : Node3D
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Water.Empty : Drycastle.ShooterCore.Water.Parse(_map.WaterJson);
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
+        IntelScreen.OpenEntrance(_map); // the hangar's small door, so the intel room can be entered (client and server alike)
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {
             var bunkers = Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));
             if (bunkers.Rooms.Count > 0) AddChild(new BunkerLights { Shelters = bunkers });
-            if (IntelScreen.Create(bunkers, _map) is { } intel) AddChild(intel); // the base's wall screen, in the command post of its bunker
+            if (IntelScreen.Create(bunkers, _map) is { } intel) AddChild(intel); // the base's wall screen, on the hangar floor (or in the command post of the fallback bunker)
         }
         var s = _map.Stats;
         // Lamps are solid, so the server gets the same pole colliders as the client (map 0.5.0+; none on older maps).

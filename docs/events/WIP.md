@@ -44,7 +44,7 @@ Private assets (ticket #265):
 ## To check by hand (no agent ran the game)
 
 1. Editor, #260: Ground types tool (attribute groups, Create layer), Regions page (ground stack, Up/Down), the overlay (`V` toggles it). Needs screenshots at 1280x720 and 3840x2160 and a keyboard-only pass, see `docs/ground-types-ui-notes.md` "Not verified".
-2. `make export`, then as admin `/event intel`: toast and chat line, then the bunker `w378900206` (about (-406, 111) local metres), down three ladders to the screen. Also `make shooter-intel-shots DIR=out/intel`.
+2. `make export` (the hangar `o-0582` must be in `objects.json`; the intel room moved from the bunker `w378900206` to the military hangar, about (188, -41) local metres, ADR 0017 amended), then as admin `/event intel`: toast and chat line, then in through the small door of the hangar's SSW end (local +z end; the pack must be installed) to the screen on the far end wall. Check which end is which, that the small door opens and the screen is not buried in the door panel (numbers in `intel.json` `room`). Also `make shooter-intel-shots DIR=out/intel`.
 3. `/give bigfoot_head`, then check headshots become body hits, death drops it on the corpse, the third pickup still works and the fourth crumbles.
 4. `make test` (pipeline) and a `make map` on `events` to confirm the byte-identical result still holds with the newest `main` commits.
 

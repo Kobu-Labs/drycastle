@@ -313,7 +313,7 @@ The state of a glass pane with no hit points left: its fragments fly out once, a
 _Avoid_: broken, destroyed (that is a vehicle or an aircraft)
 
 **Bunker**:
-One of the village's three concrete WW2 fortifications: a building of the base map, and the only kind of building a player can go inside. It has a ground floor and three floors under it; the lowest is its command post, and in the **Base** that is the **Intel room**.
+One of the village's three concrete WW2 fortifications: a building of the base map, and the only kind of building a player can go inside. It has a ground floor and three floors under it; the lowest is its command post. Not the **Base**: that is the military hangar.
 _Avoid_: pillbox, fortification
 
 **Flood wall**:
@@ -356,11 +356,11 @@ The village loudspeaker broadcast: a song, the announcement, "OPAKUJEM" (I repea
 _Avoid_: PA system, radio, announcer
 
 **Base**:
-The one bunker, named in `intel.json`, that players are told to report to when something is happening. It is an ordinary bunker; what makes it the base is that its command post is the intel room.
+The place players are told to report to when something is happening: the military hangar, a large building placed on the map. It is an ordinary building; what makes it the base is that the intel room is on its floor.
 _Avoid_: HQ, headquarters, camp, outpost
 
 **Intel room**:
-The command post (the floor three levels down) of the base, with the intel screen on one wall. The pipeline reserves that wall and keeps furniture off it (`intel` in `bunkers.json`). It is reached like any bunker floor, by the ladders.
+The floor of the base, with the intel screen on the wall of its far end, facing the entrance. It is where players walk in through the hangar's small door and read what is coming. A map with no hangar uses the command post of a bunker instead.
 _Avoid_: briefing room, war room, control room
 
 **Intel screen**:

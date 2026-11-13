@@ -155,9 +155,88 @@ public class IntelTests
     public void TheShippedIntelFileIsValid()
     {
         var f = IntelFile.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "intel.json")));
-        Assert.False(string.IsNullOrWhiteSpace(f.BaseBunker));
+        Assert.Equal("pack:synty-military/SM_Bld_Hangar_01", f.BaseAsset);
+        Assert.False(string.IsNullOrWhiteSpace(f.BaseBunker)); // the fallback
         Assert.Throws<DataFileException>(() => IntelFile.Parse("""{ "version": 1, "rotate_seconds": 0 }"""));
         Assert.Throws<DataFileException>(() => IntelFile.Parse("""{ "version": 1, "view_range_m": 1 }"""));
+    }
+
+    // ---- the room on a placed object ----
+
+    const string RoomJson = """{ "floor_m": 0.5, "at": [2.0, -16.0], "facing": [0, 1], "bottom_m": 1.0, "width_m": 3.0, "height_m": 1.1 }""";
+    static IntelRoomFile Room(string json = RoomJson) => IntelFile.Parse($$"""{ "version": 1, "base_asset": "a", "room": {{json}} }""").Room!;
+    static void Near(Vector2 expected, Vector2 actual, int places = 3) { Assert.Equal(expected.X, actual.X, places); Assert.Equal(expected.Y, actual.Y, places); }
+
+    [Fact]
+    public void AnUnturnedObjectCarriesTheScreenAtItsOwnOffsets()
+    {
+        var a = IntelRoom.Place("o-1", new Vector2(10, 20), 100f, 0f, 1f, Room());
+        Assert.Equal("o-1", a.HostId);
+        Near(new Vector2(12, 4), a.At);
+        Near(new Vector2(0, 1), a.Facing); // local +z is still south
+        Assert.Equal(101.5f, a.Y0, 3); // origin + floor + bottom edge
+        Assert.Equal(102.6f, a.Y1, 3);
+        Assert.Equal(1.1f, a.Height, 3);
+        Assert.Equal(3.0f, a.Width);
+    }
+
+    [Fact]
+    public void ATurnFollowsGodotsYRotation()
+    {
+        // 90 degrees counter-clockwise from above: local +z goes to +x (east), local +x to -z (north)
+        var a = IntelRoom.Place("o", Vector2.Zero, 0f, 90f, 1f, Room());
+        Near(new Vector2(-16, -2), a.At);
+        Near(new Vector2(1, 0), a.Facing);
+        Near(new Vector2(0, -1), IntelRoom.Rotate(new Vector2(1, 0), 90f));
+        // a full turn and a turn beyond 180 degrees (the sign a loader's Euler angles would lose) come back the same
+        Near(IntelRoom.Place("o", new Vector2(5, 5), 0f, 25f, 1f, Room()).At, IntelRoom.Place("o", new Vector2(5, 5), 0f, 385f, 1f, Room()).At);
+        Near(IntelRoom.Place("o", new Vector2(5, 5), 0f, 200f, 1f, Room()).At, IntelRoom.Place("o", new Vector2(5, 5), 0f, -160f, 1f, Room()).At);
+    }
+
+    [Fact]
+    public void ScaleMovesTheOffsetsButNotTheScreensSize()
+    {
+        var a = IntelRoom.Place("o", new Vector2(10, 20), 100f, 0f, 2f, Room());
+        Near(new Vector2(14, -12), a.At);
+        Assert.Equal(103f, a.Y0, 3); // 100 + (0.5 + 1.0) * 2
+        Assert.Equal(3.0f, a.Width);
+        Assert.Equal(1.1f, a.Height, 3);
+        Near(new Vector2(12, 4), IntelRoom.Place("o", new Vector2(10, 20), 100f, 0f, 0f, Room()).At); // a scale that is no scale counts as 1
+    }
+
+    [Fact]
+    public void TheScreenOfTheHangarAsPlacedHangsOnTheFarEndFacingTheEntrance()
+    {
+        // o-0582 in the village map: local (187.856, -41.124) m, turned 329 degrees; ground z is -north
+        var f = IntelFile.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "intel.json")));
+        var origin = new Vector2(187.856f, 41.124f);
+        var a = IntelRoom.Place("o-0582", origin, 150f, 329f, 1f, f.Room!);
+        Near(new Vector2(198.04f, 28.58f), a.At, 2);
+        Near(new Vector2(-0.515f, 0.857f), a.Facing); // 329 degrees: local +z points south-south-west
+        Assert.Equal(150f + 0.114f + 1.0f, a.Y0, 3);
+        // in the object's own frame again: 16 m from its middle on the -z end wall, inside the footprint (30.6 x 36.3 m), looking at the +z end
+        var rel = a.At - origin;
+        Assert.Equal(-16.0f, Vector2.Dot(rel, a.Facing), 3);
+        Assert.InRange(MathF.Abs(Vector2.Dot(rel, IntelRoom.Rotate(new Vector2(1, 0), 329f))), 0f, 30.6f / 2);
+        Assert.InRange(MathF.Abs(Vector2.Dot(rel, a.Facing)), 0f, 36.3f / 2);
+        // the open part is the small door of the +z end, in front of the screen
+        Assert.Equal(new[] { "SM_Bld_Hangar_Door_Small_01" }, f.Room!.OpenParts);
+        var entrance = origin + IntelRoom.Rotate(new Vector2(10.7f, 16.3f), 329f);
+        Assert.True(Vector2.Dot(entrance - a.At, a.Facing) > 30f);
+    }
+
+    [Fact]
+    public void TheRoomOfIntelJsonIsChecked()
+    {
+        Assert.Equal(1.0f, Room().BottomM);
+        Assert.Empty(Room().OpenParts);
+        Assert.Throws<DataFileException>(() => IntelFile.Parse("""{ "version": 1, "base_asset": "a" }""")); // an asset needs its room
+        Assert.Throws<DataFileException>(() => Room("""{ "at": [1], "facing": [0, 1] }"""));
+        Assert.Throws<DataFileException>(() => Room("""{ "at": [1, 1], "facing": [0, 2] }"""));
+        Assert.Throws<DataFileException>(() => Room("""{ "at": [1, 1], "facing": [0, 1], "width_m": 1.0 }"""));
+        Assert.Throws<DataFileException>(() => Room("""{ "at": [1, 1], "facing": [0, 1], "height_m": 0.5 }"""));
+        Assert.Throws<DataFileException>(() => Room("""{ "at": [1, 1], "facing": [0, 1], "bottom_m": -1 }"""));
+        Assert.Null(IntelFile.Parse("""{ "version": 1, "base_bunker": "w1" }""").Room); // the bunker alone is a valid file too
     }
 
     [Fact]
@@ -171,7 +250,7 @@ public class IntelTests
         """;
         var s = Shelters.Parse(json);
         var a = Assert.Single(s.IntelScreens);
-        Assert.Equal("wA", a.BunkerId);
+        Assert.Equal("wA", a.HostId);
         Assert.Equal(new Vector2(2, -3), a.At); // north is -z
         Assert.Equal(new Vector2(0, 1), a.Facing); // facing south into the room
         Assert.Equal(1.1f, a.Height, 3);
