@@ -1,0 +1,10 @@
+LICENCE UNVERIFIED (board artwork).
+
+board.png is the board of the village welcome sign cut out of a picture of the sign provided by the project owner
+(2026-11-13); the coat of arms, the lettering and the board's look are as shown in that picture. The picture's origin
+and the terms for the artwork (the village's coat of arms is its own heraldic design) have NOT been confirmed, and
+board.png is NOT claimed to be CC0. Before any release or public distribution the owner must confirm the terms.
+
+The structure (posts, legs, rails, caps, balls, the board's shape) is original geometry written as code in
+scripts/make_welcome_sign_model.py (CC0). welcome_sign.glb embeds board.png, so as a whole it is unverified too.
+Rebuild: python3 -I scripts/make_welcome_sign_model.py   (add --photo <picture> to re-cut board.png first; needs Pillow).
