@@ -273,7 +273,7 @@ The state of a glass pane with no hit points left: its fragments fly out once, a
 _Avoid_: broken, destroyed (that is a vehicle or an aircraft)
 
 **Bunker**:
-One of the village's three concrete WW2 fortifications: a building of the base map, and the only kind of building a player can go inside. It has a ground floor and three floors under it.
+One of the village's three concrete WW2 fortifications: a building of the base map, and the only kind of building a player can go inside. It has a ground floor and three floors under it; the lowest is its command post, and in the **Base** that is the **Intel room**.
 _Avoid_: pillbox, fortification
 
 **Flood wall**:
@@ -312,5 +312,25 @@ A creature of the world that is not a player: a deer, a dog, a cow. It has hit p
 _Avoid_: NPC (alone), mob, critter
 
 **Rozhlas**:
-The village loudspeaker broadcast: a song, the announcement, "OPAKUJEM" (I repeat), then the announcement again, all through the same bad-loudspeaker sound, heard across the village as one shared recording, not one per pole. Baked from clean recordings by `scripts/make_rozhlas.py`; on the air at a clock-derived moment, so every client hears the same thing. Louder and clearer the closer the player is to the nearest megaphone pole, quieter and duller the further; poles next to each other do not add up.
+The village loudspeaker broadcast: a song, the announcement, "OPAKUJEM" (I repeat), then the announcement again, all through the same bad-loudspeaker sound, heard across the village as one shared recording, not one per pole. Baked from clean recordings by `scripts/make_rozhlas.py`; on the air at a clock-derived moment, so every client hears the same thing. Louder and clearer the closer the player is to the nearest megaphone pole, quieter and duller the further; poles next to each other do not add up. An **Event announcement** also starts it, and so does an admin's `/event rozhlas`.
 _Avoid_: PA system, radio, announcer
+
+**Base**:
+The one bunker, named in `intel.json`, that players are told to report to when something is happening. It is an ordinary bunker; what makes it the base is that its command post is the intel room.
+_Avoid_: HQ, headquarters, camp, outpost
+
+**Intel room**:
+The command post (the floor three levels down) of the base, with the intel screen on one wall. The pipeline reserves that wall and keeps furniture off it (`intel` in `bunkers.json`). It is reached like any bunker floor, by the ladders.
+_Avoid_: briefing room, war room, control room
+
+**Intel screen**:
+The big military-styled wall screen in the intel room. For each announced event it shows what it is, when it begins (a countdown, then "under way"), the risks, where (a grid reference and a map of the surroundings; none for an event with no place) and an emblem of its kind. With several events it shows one at a time. With none it says all is quiet. An admin's test event carries a "not a real event" tag. It is a client-only texture; nothing on it can be used or shot.
+_Avoid_: terminal, monitor, TV
+
+**Intel board**:
+The server's list of announced events (each: name, kind, start time, description, risks, an optional place), sent whole to every client at each change and to a joiner. The intel screen draws it. An event is on it from its announcement until it is over. This is the one thing an event gives the announcement; the event itself is none of its business.
+_Avoid_: event list, schedule
+
+**Event announcement**:
+What tells players that something was detected: a toast and a chat line ("Suspicious activity detected. Report to the base for more information.", with the base's grid reference when the map has a sheet) and the **Rozhlas** broadcast. It never says what the event is: that is for the intel screen.
+_Avoid_: alert, notification, warning (the HUD's helicopter warning is another thing)
