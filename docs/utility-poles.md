@@ -135,10 +135,22 @@ crossarm.
 Through MCP a connector cannot be fixed to a wall (`place_object` has no elevation); `connect_poles` accepts
 the id of a connector that exists, e.g. `[pole, connector]`.
 
+### A street at a time
+
+`python -m drycastle_pipeline.house_connections --area village` (`--dry-run` first) places the connectors and their cables
+for every dwelling within `--service-m` (default 40) of a pole, into `edits.json` like the editor would: `objects` with a
+`z`, and `cables` from the pole. A house takes the nearest pole that has room (`--per-pole`, default 4 drops) over a wire
+that does not go through a building. The wire lands on the wall that faces the pole, under the eave and away from the
+corners (a wall hook, or two or four J-hooks); about half the flat-roofed houses get a roof mast near that edge instead,
+turned towards the pole. Sheds, garages, the church and the hand-made overrides are left out, and so is a house that has
+a connector within 6 m already. The choice of kind is seeded by the building id, so a rerun gives the same answer. The
+`z` is the flattened ground under the building (`terrain.json` `building_elevation`) plus the height on it. It adds, it
+never moves what is there: undo with git, or delete the connectors in the editor.
+
 ## Not done yet
 
 - Poles are the 15 fixed variants; a pole of any seed and archetype (a mesh per placed pole) is not possible
   through placed objects.
 - The editor's object list shows `pole` after its own categories (it appends categories it does not know).
 - No headless smoke test drives the Poles tool.
-- House connections are made by hand, one click each; nothing connects the houses of a street by itself.
+- House connections in the editor are made by hand, one click each (a whole street at once: `house_connections`, below).
