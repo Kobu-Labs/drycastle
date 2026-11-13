@@ -1,7 +1,7 @@
 namespace Drycastle.ShooterCore;
 
 /// <summary>Why a player got XP (one per award line, so the post-match summary can list them).</summary>
-public enum XpReason { Kill, Headshot, Roadkill, Assist, StreakKill, MatchWin, MatchTop3 }
+public enum XpReason { Kill, Headshot, Roadkill, Assist, StreakKill, MatchWin, MatchTop3, EventWin }
 
 public readonly record struct XpGrant(ushort Player, int Amount, XpReason Reason);
 

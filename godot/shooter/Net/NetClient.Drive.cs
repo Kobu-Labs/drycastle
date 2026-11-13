@@ -76,6 +76,7 @@ public partial class NetClient
             foreach (var v in _cars.Values)
                 if (v.Driver == _myId && !v.Destroyed && DriveDef(v) != null) { mine = v; break; }
         if (mine == null || !_drives.TryGetValue(mine.Id, out var dv) || !_dec.States.TryGetValue(mine.Id, out var vehicle)) { StopDriving(); return; }
+        if (CarThrown(mine.Id)) { StopDriving(); return; } // the Bigfoot threw it: the server flies it and ignores the driver's input, so it is drawn from the snapshots until it lands (#264)
         var server = DriveRecord.State(vehicle, dv.Rec);
         if (_drive == null || _drive.CarId != mine.Id)
         {

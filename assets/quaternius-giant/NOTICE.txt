@@ -1,0 +1,16 @@
+LICENCE UNVERIFIED (probably CC0, not checked).
+
+giant.glb is the placeholder model of the Bigfoot event (issue #264): "Giant" by Quaternius, a free model that the project owner
+downloaded and provided as a local file on 2026-11-13 ("Giant by Quaternius - BldaiPtyJa.glb", the suffix looks like a poly.pizza
+model id). The file carries no licence text and no author record. Quaternius publishes its free models as CC0, but that was not
+checked against the model's page here, so it is NOT claimed to be CC0. Before any release or public distribution the owner must
+confirm the author, licence and required attribution, then replace this notice with the real licence text (or remove the file and
+change `model` in godot/shooter/data/bigfoot.json).
+
+The file is the download, copied unchanged and renamed to lower case. One skinned mesh (3812 triangles, one texture atlas), one skeleton
+("EnemyArmature", 12 joints: Root, Leg.L, Leg.R, Body, Head, Arm.L, Arm.R and their end bones), 4.53 units tall as Godot imports it (6.5 wide with
+the arms out, 2.3 deep, feet at y 0.03, it faces +Z), and seven clips, each named with a prefix ("EnemyArmature|EnemyArmature|EnemyArmature|Attack"): Attack, Death,
+HitRecieve (sic), Idle, Jump, Run, Walk.
+
+It is not in assets/drycastle-generated-models, whose licence says every file there is original geometry written as code by this
+project; this one is somebody else's work.

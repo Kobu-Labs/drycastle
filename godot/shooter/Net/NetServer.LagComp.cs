@@ -34,6 +34,7 @@ public partial class NetServer
             var valid = o.Car == null && _match.Get(o.Id)?.Life == PlayerLife.Alive;
             o.Poses.Record(_tick, valid, new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw));
         }
+        CaptureBigfootPose();
     }
 
     /// <summary>
@@ -136,6 +137,7 @@ public partial class NetServer
             var d = dummies[i];
             if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
         }
+        if (BigfootTarget() is { } bigfoot) list.Add(BigfootRewound(bigfoot, view)); // the Bigfoot is rewound like a player (issue #264)
         return list;
     }
 

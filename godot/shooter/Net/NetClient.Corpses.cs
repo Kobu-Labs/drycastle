@@ -21,7 +21,10 @@ public partial class NetClient
     sealed class CorpseView
     {
         public Node3D Node = null!;
-        public CharacterView View = null!;
+        /// <summary>The character that lies there; null for the giant (<see cref="Giant"/>).</summary>
+        public CharacterView? View;
+        /// <summary>The Bigfoot's corpse (issue #264): the giant's model in its death pose, no character, no weapon to take.</summary>
+        public bool Giant;
         public string Weapon = "";
         /// <summary>The ragdoll: the spin, limb flail and settling of a body thrown by a blast or a car.</summary>
         public readonly RagdollTumble Tumble = new();
@@ -62,6 +65,7 @@ public partial class NetClient
     void OnCorpseSpawned(WorldReplica.Entity e)
     {
         if (e.Type != CorpseRules.TypeId) return;
+        if (e.State.Owner == BigfootRules.TargetId) { _corpses[e.Id] = MakeGiantCorpse(e); return; }
         var node = new Node3D { Name = $"Corpse{e.Id}" };
         var view = CharacterView.Make();
         if (Appearances.TryGetValue(e.State.Owner, out var look)) view.SetCamo(look, CamoData); // the dead player's look (#203)
@@ -89,6 +93,8 @@ public partial class NetClient
             var s = e.State;
             var p = s.Position;
             var at = new Vector3(p.X, p.Y, p.Z);
+            if (v.Giant) { v.Feet = at; v.Node.GlobalPosition = at; v.Node.Basis = new Basis(Vector3.Up, s.YawRad); continue; }
+            var view = v.View!;
             var flying = s.PitchRad > CorpseRules.FlightPitch * 0.5f; // a thrown body (blast, car): the server flies it, we turn it and flail its limbs
             var t = v.Tumble;
             var wasThrown = t.Thrown;
@@ -96,10 +102,10 @@ public partial class NetClient
             var weapon = WeaponId(s.State);
             if (t.Thrown)
             {
-                if (!wasThrown || weapon != v.Weapon) { v.Weapon = weapon; v.View.ShowThrown(weapon); }
-                v.View.SetRagdoll(true, t.Amount, t.AtRest);
+                if (!wasThrown || weapon != v.Weapon) { v.Weapon = weapon; view.ShowThrown(weapon); }
+                view.SetRagdoll(true, t.Amount, t.AtRest);
             }
-            else if (weapon != v.Weapon) { v.Weapon = weapon; v.View.ShowCorpse(weapon); }
+            else if (weapon != v.Weapon) { v.Weapon = weapon; view.ShowCorpse(weapon); }
             v.Feet = at;
             v.Node.GlobalPosition = at + Vector3.Up * t.PivotHeight;
             v.Node.Basis = t.BasisFor(s.YawRad);
@@ -129,8 +135,11 @@ public partial class NetClient
     /// <summary>The corpse prompt in reach (hidden while the chooser is up); null otherwise.</summary>
     string? CorpsePrompt()
     {
-        if (_near is not { } id || ChooserOpen || GroundItemOwnsKey || CorpseWeapon(id) is not { } w) return null;
+        if (_near is not { } id || ChooserOpen || GroundItemOwnsKey) return null;
         var key = InputBindings.Name("interact");
+        if (IsGiantCorpse(id)) // the Bigfoot's corpse has no weapon to take, only what it carries (#264)
+            return CorpseItems(id).Count switch { 0 => null, 1 => Strings.F("hud.corpse.giant.item", key, ItemName(CorpseItem(id)!)), _ => Strings.F("hud.corpse.giant.items", key) };
+        if (CorpseWeapon(id) is not { } w) return null;
         var hold = CorpseRules.CanReplace(w, CorpseRules.PrimaryPos);
         if (CorpseItems(id).Count > 1) return Strings.F(hold ? "hud.corpse.hold.items" : "hud.corpse.tap.items", key, WeaponName(w.Id)); // a list: its own chooser names them
         if (CorpseItem(id) is { } item) return Strings.F(hold ? "hud.corpse.hold.item" : "hud.corpse.tap.item", key, WeaponName(w.Id), ItemName(item));
@@ -156,8 +165,11 @@ public partial class NetClient
             SendPickUp(id, CorpseRules.PrimaryPos);
             _holdSent = true;
         }
-        if (!use && _useWas && !_holdSent && !ChooserOpen && near is { } tap && CorpseWeapon(tap) is { } tw)
-            OpenChooser(tap, tw);
+        if (!use && _useWas && !_holdSent && !ChooserOpen && near is { } tap)
+        {
+            if (IsGiantCorpse(tap)) OpenChooser(tap, null);
+            else if (CorpseWeapon(tap) is { } tw) OpenChooser(tap, tw);
+        }
         _useWas = use;
     }
 
@@ -165,12 +177,13 @@ public partial class NetClient
     List<ChooserItem> ChooserItems(ushort corpse) =>
         CorpseItems(corpse).Select(h => new ChooserItem(h, ItemIcon(h.Def), ItemName(h.Def))).ToList();
 
-    void OpenChooser(ushort corpse, WeaponDef weapon)
+    /// <summary>Opens the chooser at a corpse. <paramref name="weapon"/> is null for the Bigfoot's corpse, which has none: the Items are all it offers.</summary>
+    void OpenChooser(ushort corpse, WeaponDef? weapon)
     {
         var options = new List<(int Pos, string Text)>();
         foreach (var pos in new[] { CorpseRules.PrimaryPos, CorpseRules.SecondaryPos })
         {
-            if (!CorpseRules.CanReplace(weapon, pos) || pos >= _hotbar.Length) continue;
+            if (weapon == null || !CorpseRules.CanReplace(weapon, pos) || pos >= _hotbar.Length) continue;
             var current = WeaponName(Weapons!.Weapons[_hotbar[pos]].Id);
             options.Add((pos, Strings.F(pos == CorpseRules.PrimaryPos ? "corpse.primary" : "corpse.secondary", current)));
         }
@@ -178,8 +191,8 @@ public partial class NetClient
         if (options.Count == 0 && items.Count == 0) return;
         var title = options.Count == 0 // nothing of the weapon can be taken: the Items are the offer
             ? items.Count == 1 ? Strings.F("corpse.title", items[0].Name) : Strings.T("corpse.title.items")
-            : items.Count == 0 ? Strings.F("corpse.title", WeaponName(weapon.Id))
-            : Strings.F("corpse.title.with_items", WeaponName(weapon.Id));
+            : items.Count == 0 ? Strings.F("corpse.title", WeaponName(weapon!.Id))
+            : Strings.F("corpse.title.with_items", WeaponName(weapon!.Id));
         _chooser.Open(corpse, title, options, items);
     }
 

@@ -187,7 +187,7 @@ public partial class NetClient
     /// <summary>Shows the item a corpse carries on the dead body (and nothing once it is taken or has crumbled). The view may not exist yet: it is dressed when it spawns.</summary>
     void DressCorpse(ushort corpse)
     {
-        if (!_corpses.TryGetValue(corpse, out var v)) return;
+        if (!_corpses.TryGetValue(corpse, out var v) || v.View == null) return; // the giant's corpse draws no worn item
         var items = CorpseItems(corpse);
         for (var s = 0; s < Equipment.SlotCount; s++)
         {

@@ -19,6 +19,8 @@ public class GameData
     public AnimalsFile Animals { get; init; } = new();
     /// <summary>items.json (equippable items: headgear and the event rewards). Empty when the file is absent.</summary>
     public ItemsFile Items { get; init; } = new();
+    /// <summary>bigfoot.json (every number of the Bigfoot event, issue #264). The defaults of the file when it is absent.</summary>
+    public BigfootFile Bigfoot { get; init; } = new();
     /// <summary>turret.json: the sentry turret's tuning (the turret killstreak).</summary>
     public required TurretFile Turret { get; init; }
 
@@ -37,7 +39,7 @@ public class GameData
         """;
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string bigfootJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -56,6 +58,7 @@ public class GameData
             Glass = glassJson == "" ? new() : GlassConfig.Parse(glassJson),
             Animals = animalsJson == "" ? new() : AnimalsFile.Parse(animalsJson),
             Items = itemsJson == "" ? new() : ItemsFile.Parse(itemsJson),
+            Bigfoot = bigfootJson == "" ? new() : BigfootFile.Parse(bigfootJson),
         };
     }
 
@@ -78,6 +81,7 @@ public class GameData
             Glass = File.Exists(Path.Combine(dir, "glass.json")) ? GlassConfig.Load(Path.Combine(dir, "glass.json")) : new(),
             Animals = File.Exists(Path.Combine(dir, "animals.json")) ? AnimalsFile.Load(Path.Combine(dir, "animals.json")) : new(),
             Items = File.Exists(Path.Combine(dir, "items.json")) ? ItemsFile.Load(Path.Combine(dir, "items.json")) : new(),
+            Bigfoot = File.Exists(Path.Combine(dir, "bigfoot.json")) ? BigfootFile.Load(Path.Combine(dir, "bigfoot.json")) : new(),
         };
     }
 }

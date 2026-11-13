@@ -69,6 +69,11 @@ public partial class NetClient
             var me = _me.GlobalPosition; var src = r.Node.GlobalPosition;
             _hud.Damage(HudLogic.DamageAngle(me.X, me.Z, _me.Yaw, src.X, src.Z));
         }
+        else if (h.Victim == _myId && h.Attacker == BigfootRules.TargetId && _me != null && _bigfoots.Values.FirstOrDefault() is { } giant)
+        {
+            var me = _me.GlobalPosition; var src = giant.Node.GlobalPosition; // the Bigfoot's logs, shockwave and launch: the marker points at it (#264)
+            _hud.Damage(HudLogic.DamageAngle(me.X, me.Z, _me.Yaw, src.X, src.Z));
+        }
     }
 
     readonly List<Vector2> _friendDots = new();

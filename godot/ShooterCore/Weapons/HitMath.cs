@@ -5,8 +5,9 @@ namespace Drycastle.ShooterCore;
 /// <summary>
 /// A player as a hit target: feet position, stance (sets the capsule height) and the yaw they face. <paramref name="HeadGuarded"/>: the target wears
 /// an item that makes a headshot a body hit (<see cref="Equipment.HeadGuarded"/>); it is a state of the player, not of the pose, so a rewound target takes the present one.
+/// <paramref name="Scale"/> grows the whole hit volume (height, radius, head) about the feet: 1 for a player and a dummy, 2 for the Bigfoot (twice the player's size).
 /// </summary>
-public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw, bool HeadGuarded = false);
+public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw, bool HeadGuarded = false, float Scale = 1f);
 
 public readonly record struct RayHit(ushort Id, float Distance, bool Head);
 public readonly record struct MeleeHit(ushort Id, bool Backstab, float Distance);
@@ -50,15 +51,19 @@ public static class HitMath
     /// </summary>
     public static (Vector3 A, Vector3 B) Axis(in HitTarget t)
     {
+        var k = t.Scale;
         if (t.Stance == Stance.Prone)
         {
-            var half = PlayerHitBox.StandHeight / 2f - PlayerHitBox.Radius;
-            var up = new Vector3(0, PlayerHitBox.ProneLift, 0);
+            var half = (PlayerHitBox.StandHeight / 2f - PlayerHitBox.Radius) * k;
+            var up = new Vector3(0, PlayerHitBox.ProneLift * k, 0);
             var along = Forward(t.Yaw, 0) * half;
             return (t.Feet + up - along, t.Feet + up + along);
         }
-        return (t.Feet + new Vector3(0, PlayerHitBox.Radius, 0), t.Feet + new Vector3(0, Height(t.Stance) - PlayerHitBox.Radius, 0));
+        return (t.Feet + new Vector3(0, PlayerHitBox.Radius * k, 0), t.Feet + new Vector3(0, (Height(t.Stance) - PlayerHitBox.Radius) * k, 0));
     }
+
+    /// <summary>The radius of the target's hit capsule: the player's, grown by <see cref="HitTarget.Scale"/>.</summary>
+    public static float BodyRadius(in HitTarget t) => PlayerHitBox.Radius * t.Scale;
 
     /// <summary>Centre of the body's hit capsule.</summary>
     public static Vector3 Centre(in HitTarget t)
@@ -70,9 +75,10 @@ public static class HitMath
     /// <summary>Head hit sphere centre: upright, the top of the body minus the head radius; prone, forward of the body centre at the head height.</summary>
     public static Vector3 HeadCenter(in HitTarget t)
     {
+        var k = t.Scale;
         if (t.Stance == Stance.Prone)
-            return t.Feet + Forward(t.Yaw, 0) * PlayerHitBox.ProneHeadOffset + new Vector3(0, PlayerHitBox.ProneLift, 0);
-        return t.Feet + new Vector3(0, Height(t.Stance) - HeadRadius, 0);
+            return t.Feet + Forward(t.Yaw, 0) * (PlayerHitBox.ProneHeadOffset * k) + new Vector3(0, PlayerHitBox.ProneLift * k, 0);
+        return t.Feet + new Vector3(0, (Height(t.Stance) - HeadRadius) * k, 0);
     }
 
     /// <summary>Distance from a point to the body's hit volume (0 inside it), for projectiles and splash.</summary>
@@ -82,7 +88,7 @@ public static class HitMath
         var ab = b - a;
         var len2 = ab.LengthSquared();
         var s = len2 > 1e-8f ? Math.Clamp(Vector3.Dot(p - a, ab) / len2, 0f, 1f) : 0f;
-        return MathF.Max(0, Vector3.Distance(p, a + ab * s) - PlayerHitBox.Radius);
+        return MathF.Max(0, Vector3.Distance(p, a + ab * s) - BodyRadius(t));
     }
 
     /// <summary>Unit view direction for Godot yaw (0 faces -Z, positive turns left) and pitch (positive looks up).</summary>
@@ -209,11 +215,11 @@ public static class HitMath
         {
             if (t.Id == shooter) continue;
             var (p0, p1) = Axis(t);
-            if (RayCapsule(origin, dir, p0, p1, PlayerHitBox.Radius) is not { } d || d > limit) continue;
+            if (RayCapsule(origin, dir, p0, p1, BodyRadius(t)) is not { } d || d > limit) continue;
             if (best is { } b && b.Distance <= d) continue;
             // the head sphere only counts when the ray reaches it soon after entering the body: a shot into the feet or back of
             // a prone player passes the whole body first (an upright head sits inside the capsule, so its entry is within one radius)
-            var head = !t.HeadGuarded && RaySphere(origin, dir, HeadCenter(t), HeadRadius) is { } hd && hd - d <= PlayerHitBox.Radius;
+            var head = !t.HeadGuarded && RaySphere(origin, dir, HeadCenter(t), HeadRadius * t.Scale) is { } hd && hd - d <= BodyRadius(t);
             best = new RayHit(t.Id, d, head);
         }
         return best;
@@ -298,9 +304,10 @@ public static class HitMath
             if (MathF.Abs(to.Y) > MeleeVerticalReach) continue;
             to.Y = 0;
             var len = to.Length();
-            var edge = len - PlayerHitBox.Radius;
+            var radius = BodyRadius(t);
+            var edge = len - radius;
             if (edge > reach) continue;
-            if (len > PlayerHitBox.Radius && Vector3.Dot(to / len, fwd) < cos) continue;
+            if (len > radius && Vector3.Dot(to / len, fwd) < cos) continue;
             if (best is { } b && b.Distance <= edge) continue;
             best = new MeleeHit(t.Id, IsBackstab(attackerFeet, t.Feet, t.Yaw), edge);
         }
