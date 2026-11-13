@@ -126,7 +126,7 @@ public class VehiclesFile : IVersioned
             }
             if (v.Drive is { } dr)
             {
-                if (v.Medium != VehicleMedium.Amphibious) throw new DataFileException($"vehicles.json: {v.Id}: a drive block is for an amphibious vehicle");
+                if (v.Medium is not (VehicleMedium.Amphibious or VehicleMedium.Land)) throw new DataFileException($"vehicles.json: {v.Id}: a drive block is for a land or amphibious vehicle");
                 if (dr.Validate(v) is { } why) throw new DataFileException($"vehicles.json: {v.Id}: drive: {why}");
             }
             if ((v.Medium == VehicleMedium.Air) != (v.Flight != null)) throw new DataFileException($"vehicles.json: {v.Id}: medium air and a flight block go together");
@@ -471,7 +471,7 @@ public class VehicleGlassDef
 }
 
 /// <summary>
-/// The handling of a vehicle its driver's client predicts (vehicles.json "drive", ADR 0010: the amphibious transport): every number
+/// The handling of a vehicle its driver's client predicts (vehicles.json "drive", ADR 0010 and ADR 0014: the amphibious transport and the car): every number
 /// <see cref="DriveModel"/> reads beyond the type's <see cref="VehicleDef.TopSpeed"/>, <see cref="VehicleDef.Acceleration"/>,
 /// <see cref="VehicleDef.Brake"/>, <see cref="VehicleDef.TurnRadius"/>, <see cref="VehicleDef.HighSpeedRadiusFactor"/>,
 /// <see cref="VehicleDef.WaterTopSpeed"/> and <see cref="VehicleDef.WaterAcceleration"/>. Rates are per second, angles degrees. The summaries say
@@ -510,6 +510,7 @@ public class VehicleDriveDef
             return "land: launch_boost at least 1; launch_speed, power_curve, grip, yaw_response, handbrake_decel, handbrake_steer, step_height and snap_down positive; coast_decel and coast_drag not negative";
         if (l.BrakeBite is < 0 or > 1 || l.HandbrakeGrip is <= 0 or > 1 || l.ReverseTopFraction is <= 0 or > 1) return "land: brake_bite 0..1, handbrake_grip and reverse_top_fraction above 0 and at most 1";
         if (l.MaxClimbDeg is <= 0 or >= 80) return "land: max_climb_deg is 1..79";
+        if (!v.CanFloat) return Body.Validate() ?? Camera.Validate(); // a land type never reads the water numbers, so they are not checked
         var w = Water;
         if (w.Draft < 0 || w.FloatDepth <= 0 || w.ReverseThrust is <= 0 or > 1 || w.CoastDrag < 0 || w.TurnRadius <= 0 || w.PropSteer < 0 || w.YawResponse <= 0 || w.SideDrag <= 0
             || w.SternSwing < 0 || w.BuoyancyResponse <= 0 || w.BuoyancyDamping <= 0 || w.ClimbOutRate <= 0)
@@ -779,7 +780,7 @@ public class VehicleDef
     public VehicleFlightDef? Flight { get; set; }
     /// <summary>
     /// The handling of a type its driver's client predicts (vehicles.json "drive", the amphibious transport, ADR 0010): it is stepped by
-    /// <see cref="DriveModel"/> and never by <see cref="CarModel"/>. Null for every other type.
+    /// <see cref="DriveModel"/> and never by <see cref="CarModel"/>. Null for every other type. A land type's block has no water numbers in use (see <see cref="VehicleDriveDef.Validate"/>).
     /// </summary>
     public VehicleDriveDef? Drive { get; set; }
     /// <summary>A single fixed body colour [r, g, b] (sRGB) for a type with one look (olive drab). Replaces the colour variants: such a type has one variant.</summary>

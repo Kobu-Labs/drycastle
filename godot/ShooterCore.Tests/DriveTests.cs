@@ -82,12 +82,12 @@ public class DriveTests
     // ---- data ----
 
     [Fact]
-    public void The_shipped_transport_has_a_drive_block_and_only_it_does()
+    public void The_shipped_drive_blocks_are_the_transports_and_the_cars()
     {
         Assert.NotNull(Car.Drive);
         Assert.Equal(VehicleMedium.Amphibious, Car.Medium);
         Assert.True(Car.WaterTopSpeed < Car.TopSpeed, "it is slower on the water");
-        foreach (var v in Shipped.Vehicles.Where(v => v.Id != "amphibious")) Assert.Null(v.Drive);
+        foreach (var v in Shipped.Vehicles.Where(v => v.Id is not ("amphibious" or "car"))) Assert.Null(v.Drive);
         // the wheels the ground is sampled under are the model's
         var n = AmphibiousModelTests.Nodes(Car.Model);
         Assert.Equal(n["wheel_rl"].Z - n["wheel_fl"].Z, D.Wheelbase, 2);
@@ -107,7 +107,7 @@ public class DriveTests
             return f;
         }
         VehiclesFile.Validate(With(_ => { }));
-        Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Medium = VehicleMedium.Land)));
+        Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Medium = VehicleMedium.Boat)));
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Drive!.ThrottleRise = 0)));
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Drive!.Land.Grip = 0)));
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(With(v => v.Drive!.Land.HandbrakeGrip = 1.5f)));

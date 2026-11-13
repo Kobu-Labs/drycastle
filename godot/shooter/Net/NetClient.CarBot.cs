@@ -115,6 +115,69 @@ public partial class NetClient
 
     int _kind;
 
+    /// <summary>
+    /// --car-loop (perf, ADR 0014): a headless driver on the normal map. It enters the nearest free car that has a drive block, weaves through the
+    /// street at full throttle for <see cref="CarLoopSeconds"/> (backing off and turning when it is stuck), and prints the distance it drove and its
+    /// reconciles. Nothing is checked: it is a load for the measurement (docs/perf-investigation).
+    /// </summary>
+    public bool CarLoop;
+    public double CarLoopSeconds = 120;
+    /// <summary>The pace the loop holds, m/s.</summary>
+    const float CarLoopSpeed = 18f;
+    IEnumerator<int>? _clScript;
+    float _clMoveX, _clMoveY;
+    MoveButtons _clPulse;
+
+    MoveInput CarLoopStep()
+    {
+        try
+        {
+            _clScript ??= CarLoopScript().GetEnumerator();
+            if (!_done && !_clScript.MoveNext()) _clScript = null;
+        }
+        catch (WbAbort e) { GD.PrintErr($"client {PlayerName}: car loop: {e.Message}"); FinishBot(); }
+        var mi = new MoveInput { MoveX = _clMoveX, MoveY = _clMoveY, Yaw = 0, Buttons = Dead ? MoveButtons.None : _clPulse, SpeedScale = 1 };
+        _clPulse = MoveButtons.None;
+        return mi;
+    }
+
+    IEnumerable<int> CarLoopScript()
+    {
+        foreach (var x in WaitFor(() => _gotSelf && _me != null && !Dead && _cars.Values.Any(v => v.Driver == 0 && !v.Destroyed && DriveDef(v) != null), 60, "a free car with a drive block")) yield return x;
+        var me = _me!.State.Position;
+        var car = _cars.Values.Where(v => v.Driver == 0 && !v.Destroyed && DriveDef(v) != null).OrderBy(v => XZ(v.Pos - me)).First();
+        var id = car.Id;
+        var side = car.Pos + new NVec3(2.2f, 0, 0);
+        Teleport(_myId, side);
+        foreach (var x in WaitFor(() => _gotSelf && NearXZ(_me!.State.Position, side) && _me.State.OnFloor, 6, "teleport beside the car")) yield return x;
+        foreach (var x in Wait(0.4)) yield return x;
+        _clPulse = MoveButtons.Use;
+        foreach (var x in WaitFor(() => _driving && _cars.TryGetValue(id, out var cv) && cv.Driver == _myId, 3, "entering the car")) yield return x;
+        GD.Print($"client {PlayerName}: car loop: driving car {id} from ({car.Pos.X:F0},{car.Pos.Z:F0})");
+        var t0 = Now; var driven = 0f; var last = _cars[id].Pos; var stuckSince = -1.0; var reverseUntil = -1.0; var stops = 0;
+        while (Now - t0 < CarLoopSeconds && _driving && _cars.TryGetValue(id, out var now2) && !now2.Destroyed)
+        {
+            var now = Now;
+            var p = _cars[id].Pos;
+            driven += XZ(p - last); last = p;
+            if (reverseUntil > now) { _clMoveY = -1; _clMoveX = -1; }
+            else
+            {
+                // a weave, one period per 8 s, at a steady pace (a P controller on the speed): full throttle runs it into the street's walls
+                var kmh = _cars[id].Kmh;
+                _clMoveY = Math.Clamp((CarLoopSpeed - kmh / 3.6f) * 0.5f, -1f, 1f);
+                _clMoveX = (float)(0.5 * Math.Sin((now - t0) * 2 * Math.PI / 8));
+                if (kmh < 5) { if (stuckSince < 0) stuckSince = now; else if (now - stuckSince > 1.5) { reverseUntil = now + 1.5; stuckSince = -1; stops++; } }
+                else stuckSince = -1;
+            }
+            yield return 0;
+        }
+        _clMoveX = 0; _clMoveY = 0;
+        GD.Print($"client {PlayerName}: car loop: drove {driven:F0} m in {Now - t0:F0} s, stuck {stops} times, still driving {_driving}, reconciles {_recon} (drive {_driveCorrections})");
+        FinishBot();
+        yield break;
+    }
+
     /// <summary>The run-over damage must match the rule at the type's top speed (the run-up is long enough to reach it): within 15 percent below, never above, and a kill exactly when it reaches the cap.</summary>
     void CheckRunOver(float damage, bool kill, string who)
     {

@@ -108,6 +108,10 @@ _Avoid_: ship, watercraft
 An open three-seat vehicle, a boat-shaped hull on four wheels: a driver, an armed seat beside them and a ring gun over the rear. On land it drives (and runs people over there); in a water body it floats and handles as a boat, slower. Nothing covers its riders: all three sit in exposed seats.
 _Avoid_: APC, amphib, Schwimmwagen, duck
 
+**Predicted vehicle**:
+A vehicle whose driver's client steps its own copy with the driver's inputs, so the driver sees it in the present rather than about 100 ms late: the utility helicopter (ADR 0006), the amphibious transport (ADR 0010) and the car (ADR 0014). Everyone else, the riders included, sees a predicted vehicle drawn from the snapshots; the other ground vehicles are drawn from the snapshots for the driver too.
+_Avoid_: client-side vehicle, smooth vehicle
+
 **Armed seat**:
 A passenger seat whose rider keeps their own loadout and fights with it from the seat, in first person, aiming with the view inside the seat's arc. The mouse wheel changes the weapon there, since the number keys are the seat switch. The amphibious transport's front right seat is one; the bus's passenger seats are not.
 _Avoid_: shotgun seat, gunner seat (that seat works the vehicle's own gun), fighting seat
