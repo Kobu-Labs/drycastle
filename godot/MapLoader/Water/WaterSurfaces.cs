@@ -5,10 +5,10 @@ namespace Drycastle.MapLoader;
 
 /// <summary>
 /// The visible water: one flat mesh per water body at its surface height (the outline triangulated, holes cut out).
-/// Each body has its own material with its palette (<see cref="WaterPalettes"/>), wave amplitude and depth texture (the
-/// body's depth grid from water.json); the shader (water_surface.gdshader) does the depth colour, the fade and foam at
-/// the bank and the waves, all per pixel, lit by the scene's own sun and sky. Built once when the map loads (client
-/// only). Reduce motion freezes the waves and the normal maps (<see cref="WaveClock"/> stays 0, the amplitude 0).
+/// Each body has its own material with its palette (<see cref="WaterPalettes"/>) and depth texture (the
+/// body's depth grid from water.json); the shader (water_surface.gdshader) does the low-poly look per pixel: flat
+/// depth bands, a hard foam strip at the bank and facets that rock with the waves, lit by the scene's own sun. Built
+/// once when the map loads (client only). Reduce motion freezes the facets (<see cref="WaveClock"/> stays 0).
 /// </summary>
 public partial class WaterSurfaces : Node3D
 {
@@ -16,7 +16,6 @@ public partial class WaterSurfaces : Node3D
     const string ShaderResource = "water_surface.gdshader";
 
     readonly List<(ShaderMaterial Mat, WaterBody Body)> _surfaces = new();
-    bool _reduceMotionSeen;
 
     /// <summary>Whether reduce motion is on: freezes the waves and normal maps. The shooter points this at its settings; the viewer leaves it off.</summary>
     public static Func<bool> ReduceMotion { get; set; } = () => false;
@@ -46,8 +45,6 @@ public partial class WaterSurfaces : Node3D
     void Build(Water water)
     {
         var shader = LoadShader();
-        var normal = WaterNoiseTexture.Normal();
-        var foam = WaterNoiseTexture.Foam();
         foreach (var body in water.Bodies)
         {
             var mesh = MeshFor(body);
@@ -57,32 +54,19 @@ public partial class WaterSurfaces : Node3D
             var mat = new ShaderMaterial { Shader = shader, RenderPriority = -1 };
             mat.SetShaderParameter("shallow_colour", pal.Shallow);
             mat.SetShaderParameter("deep_colour", pal.Deep);
-            mat.SetShaderParameter("murk_density", pal.MurkDensity);
             mat.SetShaderParameter("flow", pal.Flow);
-            mat.SetShaderParameter("normal_tex", normal);
-            mat.SetShaderParameter("foam_tex", foam);
             mat.SetShaderParameter("depth_tex", DepthTexture(body, out var origin, out var invSize));
             mat.SetShaderParameter("depth_origin", origin);
             mat.SetShaderParameter("depth_inv_size", invSize);
             _surfaces.Add((mat, body));
             AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = mat, Name = $"Water{body.Id}", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
         }
-        _reduceMotionSeen = ReduceMotion();
-        ApplyMotion();
     }
 
     public override void _Process(double delta)
     {
-        var reduce = ReduceMotion();
-        if (reduce != _reduceMotionSeen) { _reduceMotionSeen = reduce; ApplyMotion(); }
         var t = (float)WaveClock;
         foreach (var (mat, _) in _surfaces) mat.SetShaderParameter("wave_time", t);
-    }
-
-    /// <summary>Wave amplitude per body (0 with reduce motion, so the surfaces are flat and still).</summary>
-    void ApplyMotion()
-    {
-        foreach (var (mat, body) in _surfaces) mat.SetShaderParameter("wave_amp", WaterPalettes.WaveAmplitude(body));
     }
 
     static Vector2 ToGodot(System.Numerics.Vector2 p) => new(p.X, p.Y);

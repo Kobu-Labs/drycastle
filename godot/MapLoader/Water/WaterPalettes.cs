@@ -5,10 +5,10 @@ namespace Drycastle.MapLoader;
 
 /// <summary>
 /// The look of one water body: the murky palette (olive shallows with some sediment to dark brown-green deep water),
-/// how far the bed sinks into the deep colour, the wave size and the flow. Read by <see cref="WaterSurfaces"/> (one
+/// the wave size and the flow. Read by <see cref="WaterSurfaces"/> (one
 /// shader material per body) and by the boats' visual bob. Rivers differ slightly from ponds and lakes.
 /// </summary>
-public readonly record struct WaterPalette(Color Shallow, Color Deep, float MurkDensity, float WaveCap, Vector2 Flow);
+public readonly record struct WaterPalette(Color Shallow, Color Deep, float WaveCap, Vector2 Flow);
 
 public static class WaterPalettes
 {
@@ -19,7 +19,6 @@ public static class WaterPalettes
     public static readonly WaterPalette River = new(
         Shallow: new Color(0.50f, 0.47f, 0.24f),
         Deep: new Color(0.15f, 0.13f, 0.07f),
-        MurkDensity: 0.45f,
         WaveCap: 0.10f,
         Flow: Vector2.Zero);
 
@@ -27,7 +26,6 @@ public static class WaterPalettes
     public static readonly WaterPalette Still = new(
         Shallow: new Color(0.44f, 0.45f, 0.22f),
         Deep: new Color(0.12f, 0.12f, 0.06f),
-        MurkDensity: 0.60f,
         WaveCap: 0.05f,
         Flow: Vector2.Zero);
 

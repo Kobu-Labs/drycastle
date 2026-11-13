@@ -1,46 +1,38 @@
 shader_type spatial;
-// Murky water surface (WaterSurfaces.cs sets the palette, wave amplitude, flow and depth texture per body).
-// The mesh is flat: the waves are a per-pixel normal (the WaterWaves sum, mirrored in wave_sum below, plus a seamless
-// noise normal map sampled at two unrelated scales), so no triangle of the surface can show. The water column under a
-// pixel comes from the body's depth grid (water.json) as a texture, not from the depth buffer: depth colour, the fade
-// at the bank and the foam are smooth and do not follow the terrain's triangles. The water is turbid: the bed shows
-// only through the first half metre. Light is Godot's own (sun highlight, reflection of the real sky), so the water
-// follows the day and night cycle. One-sided: swimming is at the surface only, the camera is never under it.
+// Low-poly water surface (WaterSurfaces.cs sets the palette, wave clock, flow and depth texture per body).
+// The look matches the flat-coloured, faceted map: three flat depth bands (shallow, middle, deep) with hard edges, a
+// hard-edged foam strip along the bank, and flat-shaded facets that rock with the waves. The mesh itself is flat; the
+// facets are a regular triangle grid worked out per pixel from the WaterWaves sum (wave_height below), so they are
+// even everywhere and cost no vertices. The water column under a pixel comes from the body's depth grid (water.json)
+// as a texture, not from the depth buffer. The water covers its whole outline, nearly opaque, so the bank is a hard
+// edge where the ground rises out of it. Lit by the scene's sun and ambient light, so it follows the day and night
+// cycle. One-sided: swimming is at the surface only, the camera is never under it.
 render_mode blend_mix, cull_back, depth_draw_never, specular_schlick_ggx;
 
 uniform vec4 shallow_colour : source_color = vec4(0.46, 0.46, 0.24, 1.0);  // olive, with sediment
 uniform vec4 deep_colour : source_color = vec4(0.13, 0.13, 0.07, 1.0);     // dark brown-green
-uniform vec4 foam_colour : source_color = vec4(0.74, 0.74, 0.66, 1.0);
-uniform float murk_density = 0.55;     // per metre of water: how fast the colour goes from shallow to deep
-uniform float opacity_density = 3.0;   // per metre of water: how fast the bed disappears (turbid: about half a metre)
-uniform float shore_m = 0.12;          // m of depth over which the surface fades in from the bank
-uniform float foam_m = 0.28;           // m of depth at the bank where foam forms
-uniform float wave_amp = 0.05;         // m: amplitude of WaterWaves.Height; 0 with reduce motion
+uniform vec4 foam_colour : source_color = vec4(0.80, 0.80, 0.72, 1.0);
+uniform float shallow_m = 0.5;         // m of depth: the shallow band ends here
+uniform float deep_m = 1.6;            // m of depth: the deep band starts here (the middle band lies between)
+uniform float shallow_alpha = 0.82;    // the bed shows faintly through the shallow band only
+uniform float foam_m = 0.16;           // m of depth at the bank under which the foam strip lies
+uniform float facet_m = 3.0;           // m: side of the facet grid's cells (each cell is two triangles)
+uniform float facet_strength = 0.6;    // tilt of the facets (0: a flat sheet)
 uniform float wave_time = 0.0;         // s: the WaterWaves clock (WaterSurfaces sets it; frozen with reduce motion)
 uniform vec2 flow = vec2(0.0);         // m/s: river current, the hook for the flow slice (zero: static water)
-uniform float normal_strength = 0.22;  // slope added by the noise normal map
 uniform vec2 depth_origin = vec2(0.0);    // south-west corner of the depth grid, local metres (x east, y north = -z)
 uniform vec2 depth_inv_size = vec2(0.0);  // 1 / (the grid's width and height in metres)
-uniform sampler2D depth_tex : filter_linear, repeat_disable;             // r: depth in metres (the body's depth grid)
-uniform sampler2D normal_tex : filter_linear_mipmap, repeat_enable;      // seamless noise normal map (rg: tilt)
-uniform sampler2D foam_tex : filter_linear_mipmap, repeat_enable;        // seamless noise (r), breaks up the foam
+uniform sampler2D depth_tex : filter_linear, repeat_disable;  // r: depth in metres (the body's depth grid)
 
 varying vec3 world_pos;
 
-// One travelling wave: adds weight * k * cos(phase) * dir to the gradient g of the height.
-void add_wave(vec2 p, float t, vec2 dir, float k, float omega, float weight, inout vec2 g) {
-	g += weight * k * cos(k * dot(dir, p) - omega * t) * dir;
-}
-
-// Gradient of the four waves of WaterWaves.Waves (direction, wavenumber, angular speed, weight). Keep in step with
-// WaterWaves.cs: WaterWaves.Slope = amplitude * wave_slope.
-vec2 wave_slope(vec2 p, float t) {
-	vec2 g = vec2(0.0);
-	add_wave(p, t, vec2(0.9494, 0.3162), 0.9, 1.1, 0.4, g);
-	add_wave(p, t, vec2(0.3827, -0.9239), 1.6, 1.7, 0.3, g);
-	add_wave(p, t, vec2(-0.7071, 0.7071), 2.7, 2.2, 0.2, g);
-	add_wave(p, t, vec2(0.1961, 0.9806), 4.3, 3.4, 0.1, g);
-	return g;
+// The four waves of WaterWaves.Waves (direction, wavenumber, angular speed, weight), for unit amplitude. Keep in step
+// with WaterWaves.cs: WaterWaves.Height = amplitude * wave_height.
+float wave_height(vec2 p, float t) {
+	return 0.4 * sin(0.9 * dot(vec2(0.9494, 0.3162), p) - 1.1 * t)
+		+ 0.3 * sin(1.6 * dot(vec2(0.3827, -0.9239), p) - 1.7 * t)
+		+ 0.2 * sin(2.7 * dot(vec2(-0.7071, 0.7071), p) - 2.2 * t)
+		+ 0.1 * sin(4.3 * dot(vec2(0.1961, 0.9806), p) - 3.4 * t);
 }
 
 void vertex() {
@@ -51,39 +43,32 @@ void fragment() {
 	vec2 p = world_pos.xz;
 	float depth = texture(depth_tex, (vec2(p.x, -p.y) - depth_origin) * depth_inv_size).r;
 
-	// far away the waves are smaller than a pixel: flatten them there, so the highlight does not shimmer
-	float dist = length(VERTEX);
-	float detail = 1.0 / (1.0 + dist * 0.015);
+	// the facet under this pixel: the cell of a regular grid, split along its diagonal into two triangles; the facet's
+	// slope is that of the plane through the wave heights at its three corners, so the whole triangle shades as one
+	vec2 g = (p - flow * wave_time) / facet_m;
+	vec2 cell = floor(g);
+	vec2 f = g - cell;
+	bool lower = f.x + f.y < 1.0;
+	vec2 a = (lower ? cell : cell + vec2(1.0, 1.0)) * facet_m;
+	vec2 bx = (lower ? cell + vec2(1.0, 0.0) : cell + vec2(0.0, 1.0)) * facet_m;
+	vec2 bz = (lower ? cell + vec2(0.0, 1.0) : cell + vec2(1.0, 0.0)) * facet_m;
+	float ha = wave_height(a, wave_time);
+	vec2 slope = vec2(wave_height(bx, wave_time) - ha, wave_height(bz, wave_time) - ha) * (lower ? 1.0 : -1.0);
+	// far away a facet is smaller than a pixel: flatten them there, so the surface does not shimmer
+	slope *= facet_strength / (1.0 + length(VERTEX) * 0.01);
+	NORMAL = normalize(mat3(VIEW_MATRIX) * normalize(vec3(-slope.x, 1.0, -slope.y)));
 
-	// the surface slope: the shared waves, plus the noise normal map at two unrelated scales (the second one rotated,
-	// so the two never line up into a visible tile), all carried along by the flow
-	vec2 q = p - flow * wave_time;
-	vec2 q2 = vec2(0.7986 * q.x - 0.6018 * q.y, 0.6018 * q.x + 0.7986 * q.y);
-	vec2 n1 = texture(normal_tex, q * 0.131 + vec2(0.021, 0.013) * wave_time).rg * 2.0 - 1.0;
-	vec2 n2 = texture(normal_tex, q2 * 0.037 + vec2(-0.008, 0.011) * wave_time).rg * 2.0 - 1.0;
-	vec2 slope = (wave_amp * wave_slope(q, wave_time) + (n1 * 0.55 + n2 * 0.45) * normal_strength) * detail;
-	vec3 world_n = normalize(vec3(-slope.x, 1.0, -slope.y));
-	NORMAL = normalize(mat3(VIEW_MATRIX) * world_n);
+	// three flat depth bands with hard edges, and a hard foam strip at the bank whose width breathes slowly
+	float mid = step(shallow_m, depth);
+	float deep = step(deep_m, depth);
+	vec3 col = mix(shallow_colour.rgb, mix(shallow_colour.rgb, deep_colour.rgb, 0.5), mid);
+	col = mix(col, deep_colour.rgb, deep);
+	float lap = sin(wave_time * 0.9 + p.x * 0.35) * sin(wave_time * 0.6 - p.y * 0.45);
+	float foam = 1.0 - step(foam_m * (1.0 + 0.3 * lap), depth);
 
-	// murk: olive in the shallows, dark brown-green in the deep; the bed is gone within about half a metre
-	vec3 col = mix(shallow_colour.rgb, deep_colour.rgb, 1.0 - exp(-depth * murk_density));
-	float alpha = 1.0 - exp(-depth * opacity_density);
-	// at a grazing angle the surface is a mirror, whatever the depth
-	float ndv = clamp(dot(NORMAL, normalize(-VERTEX)), 0.0, 1.0);
-	float fresnel = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);
-	alpha = mix(alpha, 1.0, fresnel);
-
-	// foam along the bank, broken up by the noise; its width breathes slowly, as if the water lapped at the bank
-	float fn = texture(foam_tex, q * 0.19 + vec2(0.012, 0.004) * wave_time).r;
-	float lap = 0.5 + 0.5 * sin(wave_time * 0.8 + fn * 6.2832);
-	float band = 1.0 - smoothstep(0.0, foam_m * (0.65 + 0.35 * lap), depth);
-	float foam = band * smoothstep(0.42, 0.68, fn);
-	col = mix(col, foam_colour.rgb, foam * 0.7);
-	alpha = max(alpha, foam * 0.8);
-
-	ALBEDO = col;
-	ALPHA = alpha * smoothstep(0.0, shore_m, depth);
-	ROUGHNESS = mix(0.3, 0.07, detail) + foam * 0.5;
-	SPECULAR = 0.5;
+	ALBEDO = mix(col, foam_colour.rgb, foam);
+	ALPHA = mix(mix(shallow_alpha, 0.94, mid), 0.9, foam);
+	ROUGHNESS = mix(0.35, 0.9, foam);
+	SPECULAR = 0.3;
 	METALLIC = 0.0;
 }

@@ -101,9 +101,9 @@ viewing and headless servers are unaffected):
 ### Water
 
 The viewer and the editor draw the map's water (`water.json`) with the same surfaces as the shooter: a flat mesh per body,
-murky depth colour, a fade and foam at the bank (all from the body's depth grid in `water.json`, as a texture, not
-from the depth buffer), per-pixel waves, lit by the scene's sun and sky (`MapLoader/Water/`: `WaterSurfaces`, `WaterPalettes`,
-`WaterNoiseTexture`, and the shader `water_surface.gdshader`, embedded in the MapLoader assembly so both Godot projects
+low-poly look: three flat depth bands and a hard foam strip at the bank (from the body's depth grid in `water.json`,
+as a texture, not from the depth buffer), flat-shaded facets that rock with the waves, lit by the scene's sun
+(`MapLoader/Water/`: `WaterSurfaces`, `WaterPalettes`, and the shader `water_surface.gdshader`, embedded in the MapLoader assembly so both Godot projects
 use one file). It is read once at load: after changing a water region (`water_y`, `max_depth`) or anything that moves
 the bed, re-export and restart the viewer. The terrain carve is not hot reloaded, and neither is the surface. A water
 region's colour is painted on the carved bed (there is no flat mesh at the surface any more), so with no water drawn
