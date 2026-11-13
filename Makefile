@@ -38,8 +38,8 @@ props:
 detail:
 	cd pipeline && uv run python -m drycastle_pipeline detail --area $(AREA) $(if $(ENGINE),--engine $(ENGINE),)
 
-# Builds the Rust engine of the detail stage (pipeline/rust/detail, PyO3 + GEOS built from source: needs cargo, cmake and a C++
-# compiler) and installs it into the pipeline's venv with maturin. `make setup` (uv sync) removes it again: build it again after.
+# Builds the Rust engine of the detail stage (pipeline/rust/detail, PyO3, linked to the system GEOS: needs cargo and
+# geos-devel, e.g. `sudo dnf install geos-devel`) and installs it into the pipeline's venv with maturin. `make setup` (uv sync) removes it again: build it again after.
 detail-rust-build:
 	cd pipeline && uv pip install --quiet maturin && uv run maturin develop --release --manifest-path rust/detail/Cargo.toml
 

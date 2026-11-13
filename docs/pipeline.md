@@ -381,9 +381,10 @@ point); the Rust engine does the same work on all cores in 7 to 8 s (26 s on one
 (`detail.json`, `detail_patches.npy`, `detail_patches.json`, `detail_meadow.bin`, formats unchanged, so the export and the game read
 them as before). The Python stage stays the reference and the default.
 
-* **Build**: `make detail-rust-build` (maturin into the pipeline venv; needs `cargo`, `cmake` and a C++ compiler, because the
-  geometry engine is GEOS 3.15, the library shapely wraps, built from source and linked in statically through the `geos` crate).
-  The first build takes about a minute, later ones seconds. `make setup` (`uv sync`) removes the module again: build it again after.
+* **Build**: `make detail-rust-build` (maturin into the pipeline venv; needs `cargo` and the GEOS development files, e.g. `sudo dnf install geos-devel`
+  on Fedora or `libgeos-dev` on Debian, because the `geos` crate links the system GEOS, the library shapely wraps; the build is a
+  plain Rust build of about 15 s. Use a GEOS of the same version as shapely's (`python -c "import shapely; print(shapely.geos_version)"`)
+  so the geometry matches the Python stage; the module needs the system `libgeos` at run time too). `make setup` (`uv sync`) removes the module again: build it again after.
   `cd pipeline/rust/detail && cargo test --release` runs the Rust tests.
 * **Switch**: `python -m drycastle_pipeline detail --area village --engine rust`, `make detail AREA=village ENGINE=rust`, or
   `DRYCASTLE_DETAIL_ENGINE=rust` (also for `run-all`). Without any of them the Python stage runs. `DRYCASTLE_DETAIL_THREADS=N` caps the
