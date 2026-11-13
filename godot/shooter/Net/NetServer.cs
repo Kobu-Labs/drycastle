@@ -225,6 +225,7 @@ public partial class NetServer : Node
         _match.Update();
         _match.Entities.Tick((float)delta);
         CitizensTick((float)delta);
+        MassTick((float)delta); // the Holy Mass: its clock, the pastor, the seats
         PerfLap(ServerPerf.Ph.Match);
         StreakTick((float)delta);
         PerfLap(ServerPerf.Ph.Streaks);
@@ -487,6 +488,7 @@ public partial class NetServer : Node
         SendGlassOnJoin(c); // the glass panes that are not whole (ADR 0007)
         SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
         SendIntelOnJoin(c); // the events on the intel screen
+        SendMassOnJoin(c); // the Holy Mass, when one runs
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
         SendWornOnJoin(c); // what the others wear (#266), to draw on their characters
@@ -511,6 +513,7 @@ public partial class NetServer : Node
     {
         StreakLeave(c.Id);
         StatusLeave(c.Id);
+        MassStandUp(c.Id); _seatHint.Remove(c.Id);
         if (c.Car != null) { c.Car.Seat.Exit(c.Id); c.Car = null; }
         foreach (var car in _cars) { car.RemoveCollisionExceptionWith(c.Body); car.Probe?.Unignore(c.Body); car.DriveWorld?.Unignore(c.Body); } // the exception outlives the freed body otherwise (T3-014)
         c.Body.QueueFree();
@@ -606,6 +609,7 @@ public partial class NetServer : Node
                 GD.Print($"server: round over, winners {string.Join(",", _match.Winners)}");
                 break;
             case PhaseChanged { Phase: MatchPhase.Running }:
+                _mass?.End(); // the Holy Mass does not outlive the round
                 _crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
                 ResetCars();
                 LossRoundStart();
@@ -689,6 +693,7 @@ public partial class NetServer : Node
             var streakEdge = streakDown && !c.StreakHeld;
             c.StreakHeld = streakDown;
             if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
+            if (c.Car == null && _sitters.TryGetValue(c.Id, out var sitter)) { SitterInput(c, sitter, i, useEdge); continue; } // seated in the church: no walking, no weapon
             if (streakEdge && !controlled) StreakActivate(c);
             if (c.Car == null && _streaks.ControlOf(c.Id) is { FreezesBody: true }) continue; // controlling a streak entity that holds the body (the missile, a gunship): the body stands still
             if (c.Car != null)
@@ -709,7 +714,7 @@ public partial class NetServer : Node
                 if (useEdge) ExitCar(c);
                 continue;
             }
-            if (useEdge && TryEnterCar(c)) continue;
+            if (useEdge && (MassSit(c) || TryEnterCar(c))) continue;
             c.Body.Yaw = Quant.Yaw(i.Yaw);
             c.Body.Pitch = Quant.Pitch(i.Pitch);
             c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
@@ -807,7 +812,7 @@ public partial class NetServer : Node
     {
         if (o.Car is { } car && car.Def.Seats[o.CarSeat].Exposed) // the seat where the car stood at the shot's view (B-02), or now
             return new HitTarget(o.Id, N(SeatPosAt(car, o.CarSeat, PoseOf(car))), RiderRules.HitStance(car.Def, o.CarSeat, o.Body.State.Stance), o.Body.Yaw, o.Worn.HeadGuarded);
-        return new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw, o.Worn.HeadGuarded);
+        return new HitTarget(o.Id, N(o.Body.GlobalPosition), BodyStanceOf(o), o.Body.Yaw, o.Worn.HeadGuarded);
     }
 
     /// <summary>The player bodies' RIDs for ray exclusion, rebuilt only after a join or a drop (T2-02) instead of per ray.</summary>
@@ -1080,7 +1085,7 @@ public partial class NetServer : Node
         foreach (var c in _byId.Values) // every joined player, bots included
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot,
-                    c.Car != null ? RiderRules.HitStance(c.Car.Def, c.CarSeat, c.Body.State.Stance) : c.Body.State.Stance));
+                    c.Car != null ? RiderRules.HitStance(c.Car.Def, c.CarSeat, c.Body.State.Stance) : BodyStanceOf(c)));
         foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed, car.Lights));
         foreach (var car in _cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model
         foreach (var car in _cars) if (car.Flies) ents.Add(FlightRecord.Make(car.Id, car.Flight)); // a helicopter's velocity, tilt and rotor (ADR 0006)

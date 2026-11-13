@@ -141,6 +141,14 @@ Both are a status, not an Item: no slot, no drop. They survive a round change an
     - transformation: the pastor turns into the demon in an animation with lots of fire, then the demon drops on all fours
 - the church shell stays the code model (it fits the real footprint); Synty props are placed inside it at `church.json` poses
 - Synty is paid: only in gitignored `assets-private/`, never in this public repo (#265); no fallback models, the event needs the pack
+## Implemented (ticket 3: Mass event, pastor, sitting)
+- `/event mass` starts, `/event current end` concludes as if completed (blessing computed), a second `end` removes what is left; `Completed` lasts `completed_seconds`, then everything is removed. Core: `HolyMassEvent` (`ShooterCore/Citizens`), server: `NetServer.Mass.cs`, numbers in `holy_mass.json` `mass`
+- phases `MassPhase`: Idle, Gather, Mass, Completed, Void. Hooks on `NetServer`: `MassPhaseChanged` (doors), `PastorTurns` (demon), `GrantBlessing(playerId)` (status system, stub)
+- pastor and monks are citizen entities with a role (hit-point byte = `role * 2 + alive`); states Standing and Clapping added
+- seats: citizens fill every seat but `player_seats` kept ones; a player takes a kept seat or one no citizen has (a killed citizen's seat after its body is gone); never a citizen's seat, never a standing spot
+- seated player: body and weapon not simulated, look still taken; interact or jump stands up; replicated as a crouch at the seat feet (no sit pose for the player character); shot as a crouching figure
+- Mass time = progress (paused while the pastor is gone); seated time counts only while it progresses; ended early the share is measured against progress so far (none: every seated non-sinner)
+- audio: `chant_sound` loops positionally with a reverb bus, `bells_sound` plays once everywhere; no asset yet, a missing file is skipped and logged once
 ## Tickets
 1. Enterable church (pipeline, ADR, `church.json`)
 2. Citizen NPC entity (walk to seat, sit, die)

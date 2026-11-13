@@ -1,10 +1,10 @@
 {
   "version": 1,
-  // The Holy Mass event. Only the citizens exist so far. Times in seconds, lengths in metres, speeds in metres per second.
+  // The Holy Mass event: the citizens and the Mass. Times in seconds, lengths in metres, speeds in metres per second.
   "citizens": {
     // Most citizens alive or waiting to leave their houses at once (the church's seats limit it further).
-    "max_count": 60,
-    "walk_speed": 1.4,
+    "max_count": 120,
+    "walk_speed": 2.2,
     // Each citizen walks at walk_speed times a random factor within this share either way.
     "speed_jitter": 0.12,
     "turn_rate_deg_per_s": 360,
@@ -28,5 +28,36 @@
       { "file": "peasant_female_01" },
       { "file": "peasant_female_02" }
     ]
+  },
+  "mass": {
+    // The timeline: citizens walk in during the gather, then the Mass runs for mass_seconds of progress (paused while the pastor is gone), then
+    // completed_seconds of standing, clapping and the pastor's flex before everyone is removed. A house 100 m away is 70 s of walking, so with the
+    // stagger every citizen is seated before the gather ends.
+    "gather_seconds": 120,
+    "mass_seconds": 120,
+    "completed_seconds": 12,
+    "stagger_seconds": 25,
+    "house_radius_m": 100,
+    // Seats no citizen is sent to, for players (ground floor, spread along the nave). Players can also take a seat a killed citizen left once its body is gone.
+    "player_seats": 8,
+    "sit_reach_m": 1.6,
+    // Blessing: seated at the end for at least this share of the Mass, and not a sinner.
+    "blessed_share": 0.8,
+    // A killed pastor: the Mass pauses; a new one comes out of the sacristy after replace seconds, and the Mass resumes resume seconds after he arrived.
+    "pastor_replace_seconds": 10,
+    "resume_seconds": 5,
+    "pastor_kills_to_turn": 3,
+    "clap_share": 0.4,
+    "pastor_model": "priest_01",
+    "monk_model": "monk_01",
+    "atlas": "glb/atlas/fantasy_kingdom_01_A.png",
+    // The pastor gestures every few seconds between the praying clips; a shocked monk dabs this share of the time.
+    "gesture_min_seconds": 5,
+    "gesture_max_seconds": 11,
+    "monk_dab_share": 0.03,
+    // Sounds are not made yet: a file that is missing is skipped (logged once). Paths are under the shipped assets.
+    "chant_sound": "audio/holy_mass/chant.ogg",
+    "bells_sound": "audio/holy_mass/bells.ogg",
+    "chant_range_m": 40
   }
 }

@@ -150,7 +150,7 @@ public partial class NetServer
         _botContacts.Clear();
         foreach (var o in _byId.Values)
             if (_match.Get(o.Id)?.Life == PlayerLife.Alive)
-                _botContacts.Add(new BotContact(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, _match.IsProtected(o.Id)));
+                _botContacts.Add(new BotContact(o.Id, N(o.Body.GlobalPosition), BodyStanceOf(o), _match.IsProtected(o.Id)));
         _botWorld ??= new BotWorld(this);
 
         foreach (var b in bots)

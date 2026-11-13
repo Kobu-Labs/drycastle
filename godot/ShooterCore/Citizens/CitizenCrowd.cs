@@ -13,7 +13,7 @@ public interface ICitizenWorld
 }
 
 /// <summary>A citizen was killed: who, which seat it was heading for, where it lay, and whether it was already sitting in it.</summary>
-public readonly record struct CitizenKilled(ushort HitId, ushort Killer, int SeatId, Vector3 Where, bool WasSeated);
+public readonly record struct CitizenKilled(ushort HitId, ushort Killer, int SeatId, Vector3 Where, bool WasSeated, CitizenRole Role = CitizenRole.Citizen);
 
 /// <summary>What a weapon hit on a citizen (the match calls it for a victim id in the citizens' range).</summary>
 public interface ICitizenHits
@@ -39,6 +39,7 @@ public sealed class CitizenCrowd : ICitizenHits
     readonly Random _rng;
     readonly List<Pending> _pending = new();
     readonly HashSet<int> _taken = new();                       // seats of waiting and living citizens
+    readonly HashSet<int> _reserved = new();                    // seats kept for players: no citizen is sent to them
     readonly Dictionary<ushort, Citizen> _byHit = new();
     readonly Dictionary<ushort, ushort> _entityOfHit = new();
     readonly Dictionary<ushort, ushort> _hitOfEntity = new();
@@ -62,10 +63,47 @@ public sealed class CitizenCrowd : ICitizenHits
     /// <summary>Citizens in the world, dead ones lying included.</summary>
     public int Count => _byHit.Count;
     public int Waiting => _pending.Count;
+    /// <summary>Citizens of the pews (not the pastor and monks) in the world or waiting, the number the config's limit applies to.</summary>
+    int CitizenCount => _byHit.Values.Count(c => c.Role == CitizenRole.Citizen);
     public int AliveCount => _byHit.Values.Count(c => c.Alive);
     public int SeatedCount => _byHit.Values.Count(c => c.Seated);
     /// <summary>Seats that have no citizen alive or on the way.</summary>
-    public IEnumerable<int> FreeSeats => _church.Seats.Where(s => !_taken.Contains(s.Id)).Select(s => s.Id);
+    public IEnumerable<int> FreeSeats => _church.Seats.Where(s => IsSeatFree(s.Id)).Select(s => s.Id);
+
+    /// <summary>No citizen is on its way to, in or lying at the seat, and it is not kept for a player.</summary>
+    public bool IsSeatFree(int seatId) => !_taken.Contains(seatId) && !_reserved.Contains(seatId);
+
+    /// <summary>Keeps a seat for players (no citizen is sent to it from now on). False when a citizen has it.</summary>
+    public bool Reserve(int seatId) => !_taken.Contains(seatId) && _reserved.Add(seatId);
+
+    public void Unreserve(int seatId) => _reserved.Remove(seatId);
+
+    /// <summary>The Mass is done: every living citizen in place stands, a share of them clapping (<paramref name="clapFraction"/>). The pastor and monks too.</summary>
+    public void Finish(float clapFraction)
+    {
+        foreach (var c in _byHit.Values) c.Finish(c.Role == CitizenRole.Pastor || _rng.NextDouble() < clapFraction);
+    }
+
+    /// <summary>The living pastor or monks, for the event.</summary>
+    public IEnumerable<Citizen> AliveOfRole(CitizenRole role) => _byHit.Values.Where(c => c.Role == role && c.Alive);
+
+    /// <summary>
+    /// Puts the pastor or a monk in the world: it stands at <paramref name="walk"/>'s last point after walking it (one point: stands there at once).
+    /// Hit like a citizen (one hit). Null when the entity cap is reached.
+    /// </summary>
+    public Citizen? SpawnRole(CitizenRole role, IReadOnlyList<Vector3> walk, float yaw)
+    {
+        var citizen = new Citizen(_cfg, -1, yaw, walk, new[] { walk[^1] }, (ushort)_rng.Next(ushort.MaxValue + 1), 1f) { Role = role };
+        citizen.Settle();
+        var hit = NextHitId();
+        citizen.HitId = hit;
+        citizen.Died += OnDied;
+        if (_entities.Spawn(citizen) is not { } entity) { citizen.Died -= OnDied; return null; }
+        _byHit[hit] = citizen;
+        _entityOfHit[hit] = entity;
+        _hitOfEntity[entity] = hit;
+        return citizen;
+    }
 
     /// <summary>
     /// Sends one citizen to each seat of <paramref name="seatIds"/> that is free, spread evenly over <paramref name="staggerSeconds"/> from houses between
@@ -76,8 +114,8 @@ public sealed class CitizenCrowd : ICitizenHits
         var take = new List<int>();
         foreach (var id in seatIds)
         {
-            if (_pending.Count + Count + take.Count >= _cfg.MaxCount) break;
-            if (_church.Seat(id) == null || _taken.Contains(id) || take.Contains(id)) continue;
+            if (_pending.Count + CitizenCount + take.Count >= _cfg.MaxCount) break;
+            if (_church.Seat(id) == null || !IsSeatFree(id) || take.Contains(id)) continue;
             take.Add(id);
         }
         if (take.Count == 0) return 0;
@@ -104,6 +142,7 @@ public sealed class CitizenCrowd : ICitizenHits
         _pending.Clear();
         foreach (var entity in _hitOfEntity.Keys.ToList()) _entities.Despawn(entity, WorldDespawnReason.Removed);
         _taken.Clear();
+        _reserved.Clear();
     }
 
     /// <summary>Lets the citizens whose time has come leave their houses. The entities are ticked by the world entity manager.</summary>
@@ -144,7 +183,7 @@ public sealed class CitizenCrowd : ICitizenHits
         return (ushort)(CitizenRules.FirstHitId + _nextHit);
     }
 
-    void OnDied(Citizen c, ushort killer) => Killed?.Invoke(new CitizenKilled(c.HitId, killer, c.SeatId, c.Position, c.DiedSeated));
+    void OnDied(Citizen c, ushort killer) => Killed?.Invoke(new CitizenKilled(c.HitId, killer, c.SeatId, c.Position, c.DiedSeated, c.Role));
 
     void OnDespawned(WorldDespawned d)
     {

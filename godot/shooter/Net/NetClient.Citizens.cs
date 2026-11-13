@@ -36,7 +36,7 @@ public partial class NetClient
             GD.PrintErr($"client: citizen {e.Id} but holy_mass.json has no models; not drawn (data files differ from the server's?)");
             return;
         }
-        var view = CitizenView.Make(HolyMassData.Citizens, e.State.Owner);
+        var view = CitizenView.Make(HolyMassData.Citizens, HolyMassData.Mass, e.State.Owner, Citizen.RoleOf(e.State.Hp));
         view.Name = $"Citizen{e.Id}";
         Owned.AddChild(view);
         _citizens[e.Id] = new CitizenNode { View = view };
@@ -61,6 +61,7 @@ public partial class NetClient
                 c.View.Rotation = new Vector3(0, s.Yaw, 0);
             }
             c.View.Show(CitizenRules.StateOf(e.State.State));
+            c.View.SetMass(_massNow.Chanting, _massNow.PastorKills, new Vector3(_massNow.ChantAt.X, _massNow.ChantAt.Y, _massNow.ChantAt.Z));
         }
     }
 }

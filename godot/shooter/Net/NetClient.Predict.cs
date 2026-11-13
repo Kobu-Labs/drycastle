@@ -61,7 +61,7 @@ public partial class NetClient
     /// <summary>Predicts this tick's trigger pull / reload key; plays sounds and own-shot effects at once.</summary>
     void PredictFire(MoveInput mi)
     {
-        if (!PredictionOn || Dead || _driving && !InArmedSeat || _controlling || Ammo is not { } a || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count || a.Slot != _wantSlot) return;
+        if (!PredictionOn || Dead || _massSeated || _driving && !InArmedSeat || _controlling || Ammo is not { } a || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count || a.Slot != _wantSlot) return;
         var w = Weapons.Weapons[a.Slot - 1];
         var now = Now;
         if (_pReloadUntil > 0 && now >= _pReloadUntil) { _pMag = _pMagAfter; _pReloadUntil = 0; }

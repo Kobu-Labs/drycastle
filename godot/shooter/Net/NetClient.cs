@@ -316,6 +316,7 @@ public partial class NetClient : Node
                 OnItemEvent((EventKind)e.Kind, e.Payload); // what the player wears, what a corpse carries, an item crumbling
                 OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
                 OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
+                OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 OnProgressionEvent((EventKind)e.Kind, e.Payload);
@@ -470,6 +471,7 @@ public partial class NetClient : Node
             if (!inCar) { _reconcile = null; _viewFix = Vector3.Zero; _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); _me.EndChase(_carYaw); ClearSeats(); }
             return;
         }
+        if (_massSeated) { _pending.Clear(); _reconcile = null; _me.SetState(new MoveState { Position = sp, OnFloor = true, FallPeakY = sp.Y }); return; } // seated at the Mass: the server holds the body, take its place as is
         if (_driving || _controlling || _gunship != null) { _pending.Clear(); return; }
         if (rec.State == EntityState.Protected) _sawProtected = true;
         if (rec.State == EntityState.Alive && _fireStart > 0 && !_earlyCounted && Now - _fireStart < 0.6 && _fireStart - _spawnAt < _spawnProtection - 1.0) { _earlyEnds++; _earlyCounted = true; }
@@ -600,7 +602,7 @@ public partial class NetClient : Node
         if (_gunship == null) _me.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? _wantSlot : 0), GunnerAim);
         // C-03: a dead body does not move on the server (its input is zero and it is skipped), so it is not predicted either; else each snapshot snapped it back
-        if (!_driving && !_controlling && _gunship == null) { if (!Dead) _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
+        if (!_driving && !_controlling && _gunship == null && !_massSeated) { if (!Dead) _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         PredictFlight(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
         PredictDrive(ni, dt);  // and so does the driver of an amphibious transport
         _pending.Add(new Pending { Input = ni, After = _me.State });
@@ -675,7 +677,7 @@ public partial class NetClient : Node
         var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
         _viewmodel.Show(id);
         var seated = (_driving || _myState == EntityState.InVehicle) && !InArmedSeat; // an armed seat's rider holds their weapon (ADR 0011)
-        _viewmodel.Visible = !Dead && !seated && !_controlling && _gunship == null && _me is not { ZoomFov: > 0 };
+        _viewmodel.Visible = !Dead && !seated && !_massSeated && !_controlling && _gunship == null && _me is not { ZoomFov: > 0 };
     }
 
     /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
