@@ -1,8 +1,8 @@
 using Godot;
-using Suchohrad.ShooterCore;
+using Drycastle.ShooterCore;
 using Num = System.Numerics;
 
-namespace Suchohrad.Shooter;
+namespace Drycastle.Shooter;
 
 /// <summary>
 /// The village loudspeaker (rozhlas): a baked broadcast (rozhlas.json) played from the megaphone poles. Which broadcast is

@@ -28,4 +28,5 @@ pipeline/config/slice.local.yaml
 *.uid
 
 # rozhlas source recordings (large; only the baked ogg is kept)
-assets/suchohrad-rozhlas/source/
+assets/drycastle-rozhlas/source/
+assets/drycastle-rozhlas/parts/

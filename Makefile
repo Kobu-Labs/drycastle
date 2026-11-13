@@ -268,7 +268,7 @@ shooter-nav-spike:
 	dotnet build godot/shooter/shooter.csproj
 	godot --headless --path godot/shooter -- --role server --nav-spike --nav-out $(abspath out/navspike) $(NAV) $(SHOOTER_MAP)
 
-# Bake the rozhlas broadcast from assets/suchohrad-rozhlas/source/{song,announcement,opakujem}.* (scripts/make_rozhlas.py).
+# Bake the rozhlas broadcast from assets/drycastle-rozhlas/source/{song,announcement,opakujem}.* (scripts/make_rozhlas.py).
 rozhlas:
 	python3 -I scripts/make_rozhlas.py
 

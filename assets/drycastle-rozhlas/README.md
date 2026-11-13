@@ -4,7 +4,7 @@
 
 | File in `source/` | What | Licence / provenance |
 |---|---|---|
-| `song.*` | "Slovenské mamičky", downloaded from https://www.youtube.com/watch?v=rXocYjrtryk on 2026-11-12; the first 20 s are used (`--song-start`, `--song-seconds`) | Public domain according to the uploader and the project owner; **unverified**: confirm that the recording itself (not only the composition) is free before release |
+| `song.*` | "Slovenské mamičky", downloaded from https://www.youtube.com/watch?v=rXocYjrtryk on 2026-11-12; the first 60 s are used (`--song-start`, `--song-seconds`) | Public domain according to the uploader and the project owner; **unverified**: confirm that the recording itself (not only the composition) is free before release |
 | `announcement.*` | the spoken announcement, dry and close to the microphone | own recording |
 | `opakujem.*` | the word OPAKUJEM | own recording |
 

@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Suchohrad.ShooterCore;
+namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// rozhlas.json: the village loudspeaker broadcast (a song, a muffled announcement, a clear OPAKUJEM, the announcement again),

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Bakes the village loudspeaker (rozhlas) broadcast: assets/suchohrad-rozhlas/rozhlas_<n>.ogg.
+"""Bakes the village loudspeaker (rozhlas) broadcast: assets/drycastle-rozhlas/rozhlas_<n>.ogg.
 
     song (bad but musical) -> announcement (almost inaudible) -> OPAKUJEM (clear) -> the announcement again
 
-Inputs are clean, dry recordings in assets/suchohrad-rozhlas/source/ (mono or stereo, any format ffmpeg reads):
+Inputs are clean, dry recordings in assets/drycastle-rozhlas/source/ (mono or stereo, any format ffmpeg reads):
 
     song.*          a public-domain song (rhythm and melody stay audible)
     announcement.*  the spoken announcement, recorded close to the microphone with no room sound
@@ -31,13 +31,13 @@ RATE = 44100
 # Song: tinny and a little distorted, but the beat and the tune carry.
 SONG = dict(low=300, high=4000, rate=11025, bits=10, crush_mix=0.4, wobble_hz=4.0, wobble_depth=0.04,
             echo="0.8:0.6:90:0.3", noise=0.015, level_db=-6)
-# Announcement: bandwidth of a cheap horn, hard clipping, a long echo off the houses, pumping and dropouts.
+# Announcement: barely audible, under the hiss, so the words come and go (the voice sits only a little above the noise); bandwidth of a cheap horn, hard clipping, a long echo off the houses, pumping and dropouts.
 VOICE = dict(low=500, high=2200, rate=5000, bits=6, crush_mix=0.7, gain_db=18, clip=0.15, wobble_hz=6.0, wobble_depth=0.15,
-             pump_hz=3.0, pump_depth=0.4, noise=0.06, level_db=-14)
+             pump_hz=3.0, pump_depth=0.4, noise=0.06, level_db=-13)
 # OPAKUJEM: still a loudspeaker, but clear.
 CLEAR = dict(low=300, high=4500, noise=0.01, echo="0.7:0.5:70:0.2", level_db=-1)
-SONG_START_S, SONG_SECONDS, SONG_FADE_S = 0.0, 20.0, 1.5  # the part of the song that is played (a jingle, not the whole song)
-GAP_SONG_S, GAP_VOICE_S, GAP_CLEAR_S = 0.6, 1.0, 1.0
+SONG_START_S, SONG_SECONDS, SONG_FADE_S = 0.0, 60.0, 3.0  # the part of the song that is played (the intro, not the whole song)
+GAP_SONG_S, GAP_VOICE_S, GAP_CLEAR_S = 0.6, 2.0, 2.0  # silence after the song, after the first announcement (before OPAKUJEM), after OPAKUJEM
 
 
 def run(cmd):
@@ -119,8 +119,8 @@ def bake(src, out, seed, tmp, song_start=SONG_START_S, song_seconds=SONG_SECONDS
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--src", type=Path, default=ROOT / "assets/suchohrad-rozhlas/source")
-    ap.add_argument("--out", type=Path, default=ROOT / "assets/suchohrad-rozhlas")
+    ap.add_argument("--src", type=Path, default=ROOT / "assets/drycastle-rozhlas/source")
+    ap.add_argument("--out", type=Path, default=ROOT / "assets/drycastle-rozhlas")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--variants", type=int, default=2)
     ap.add_argument("--song-start", type=float, default=SONG_START_S, help="seconds into the song where the jingle starts")
