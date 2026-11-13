@@ -3,7 +3,7 @@ import pytest
 from drycastle_pipeline import cli
 from drycastle_pipeline.stages import STAGES
 
-EXPECTED_ORDER = ["fetch", "normalise", "parcels", "rules", "terrain", "roads", "props", "detail", "export"]
+EXPECTED_ORDER = ["fetch", "normalise", "ortho", "ortho-trees", "parcels", "rules", "terrain", "roads", "props", "detail", "export"]
 
 
 def test_stage_order() -> None:
@@ -27,7 +27,7 @@ def fake_fetch(monkeypatch: pytest.MonkeyPatch) -> list[bool]:
         return stage
 
     monkeypatch.setitem(STAGES, "fetch", run)
-    for name in ("normalise", "parcels", "rules", "terrain", "roads", "props", "detail", "export"):
+    for name in ("normalise", "ortho", "ortho-trees", "parcels", "rules", "terrain", "roads", "props", "detail", "export"):
         monkeypatch.setitem(STAGES, name, fake_stage(name))
     return calls
 

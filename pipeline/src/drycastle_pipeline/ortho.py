@@ -171,16 +171,11 @@ def build(
     return doc
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="drycastle_pipeline.ortho", description=__doc__.split("\n")[0])
-    p.add_argument("--area", choices=AREAS, default=DEFAULT_AREA)
-    p.add_argument("--level", type=int, default=DEFAULT_LEVEL, help=f"zoom 0..{MAX_LEVEL} (default {DEFAULT_LEVEL})")
-    p.add_argument("--force", action="store_true", help="download the tiles again")
-    args = p.parse_args(argv)
-
-    paths = area_paths(args.area)
+def run_ortho(area: str, level: int = DEFAULT_LEVEL, force: bool = False) -> int:
+    """Download the photo of ``area``; prints one line and returns the exit status."""
+    paths = area_paths(area)
     try:
-        doc = build(paths.raw, paths.raw.parent / "ortho", args.level, PoliteClient(min_interval=0.2), force=args.force)
+        doc = build(paths.raw, paths.raw.parent / "ortho", level, PoliteClient(min_interval=0.2), force=force)
     except FileNotFoundError:
         print("ortho: error: no area.json; run 'make fetch' first")
         return 1
@@ -193,6 +188,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"{w}x{h} px at {doc['pixel_m']:.2f} m -> {paths.raw.parent / 'ortho' / 'ortho.jpg'}"
     )
     return 0
+
+
+def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
+    """The ``ortho`` pipeline stage (after ``normalise``): tiles already on disk are not fetched again."""
+    return run_ortho(area, force=force)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="drycastle_pipeline.ortho", description=__doc__.split("\n")[0])
+    p.add_argument("--area", choices=AREAS, default=DEFAULT_AREA)
+    p.add_argument("--level", type=int, default=DEFAULT_LEVEL, help=f"zoom 0..{MAX_LEVEL} (default {DEFAULT_LEVEL})")
+    p.add_argument("--force", action="store_true", help="download the tiles again")
+    args = p.parse_args(argv)
+    return run_ortho(args.area, args.level, args.force)
 
 
 if __name__ == "__main__":

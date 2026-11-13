@@ -362,18 +362,12 @@ def build(raw_dir: Path, work_dir: Path, ortho_dir: Path, *, retrain: bool = Fal
     return doc
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="drycastle_pipeline.ortho_trees", description=__doc__.split("\n")[0])
-    ap.add_argument("--area", choices=AREAS, default=DEFAULT_AREA)
-    ap.add_argument("--retrain", action="store_true", help="fit the canopy model again (else tree_model.npz is reused)")
-    ap.add_argument("--tau-open", type=float, default=Params.tau_open, help="blob darkness needed in open ground")
-    ap.add_argument("--tau-wooded", type=float, default=Params.tau_wooded, help="... in tree-like surroundings")
-    args = ap.parse_args(argv)
-    paths = area_paths(args.area)
+def run_ortho_trees(area: str, *, retrain: bool = False, params: Params | None = None) -> int:
+    """Detect the trees of ``area`` from its photo; prints one line and returns the exit status."""
+    paths = area_paths(area)
     ortho_dir = paths.raw.parent / "ortho"
     try:
-        doc = build(paths.raw, paths.work, ortho_dir, retrain=args.retrain,
-                    params=Params(tau_open=args.tau_open, tau_wooded=args.tau_wooded))
+        doc = build(paths.raw, paths.work, ortho_dir, retrain=retrain, params=params)
     except FileNotFoundError as exc:
         print(f"ortho-trees: error: missing {Path(str(exc.filename)).name}; run make fetch normalise ortho first")
         return 1
@@ -383,6 +377,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"ortho-trees: canopy {doc['canopy']['fraction'] * 100:.1f}% of the photo, "
           f"{len(doc['standalone'])} standalone trees -> {ortho_dir / 'trees.json'}")
     return 0
+
+
+def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
+    """The ``ortho-trees`` pipeline stage (after ``ortho``). The cached canopy model is reused; ``make ortho-trees RETRAIN=1``
+    trains it again (``force`` is not that: it would make every ``--force`` run spend minutes on training)."""
+    return run_ortho_trees(area)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="drycastle_pipeline.ortho_trees", description=__doc__.split("\n")[0])
+    ap.add_argument("--area", choices=AREAS, default=DEFAULT_AREA)
+    ap.add_argument("--retrain", action="store_true", help="fit the canopy model again (else tree_model.npz is reused)")
+    ap.add_argument("--tau-open", type=float, default=Params.tau_open, help="blob darkness needed in open ground")
+    ap.add_argument("--tau-wooded", type=float, default=Params.tau_wooded, help="... in tree-like surroundings")
+    args = ap.parse_args(argv)
+    return run_ortho_trees(args.area, retrain=args.retrain,
+                           params=Params(tau_open=args.tau_open, tau_wooded=args.tau_wooded))
 
 
 if __name__ == "__main__":

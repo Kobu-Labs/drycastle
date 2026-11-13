@@ -19,7 +19,8 @@ NLC". The tiles are in S-JTSK already, so there is no reprojection: the pixel gr
 it politely (sequential, 0.2 s apart, retries) into `data/AREA/ortho/tiles/LEVEL/ROW_COL.jpg`, and joins them into
 `ortho.jpg` cropped to the area. `ortho.json` holds the absolute S-JTSK bounds, the pixel size, the attribution and the
 "reference only" notice. Tiles already on disk are not fetched again (`--force` does), a 404 tile stays blank, and more than
-4000 tiles stops with a message (use a lower level). Not a map stage: `make run-all` does not run it.
+4000 tiles stops with a message (use a lower level). It is the `ortho` stage of `run-all` (after `normalise`, so `make map` downloads the photo when it is missing and reuses
+the tiles on disk otherwise), still never part of the map. `make ortho` runs it alone and takes `ORTHO_LEVEL`; the stage uses level 11.
 
 ## In the editor
 
@@ -31,10 +32,10 @@ level 11), so it costs some video memory; the lower level is plenty to place thi
 
 ## Trees read from the photo
 
-`make ortho-trees` (after `make ortho`; module `drycastle_pipeline.ortho_trees`) reads where the trees are and writes
+`make ortho-trees` (the `ortho-trees` stage of `run-all`, after `ortho`; module `drycastle_pipeline.ortho_trees`) reads where the trees are and writes
 `data/AREA/ortho/trees.json` and `canopy.png`. It is a local, derived result: only facts read from the photo (positions,
 a mask), never its pixels, and into the gitignored `data/`. Whether the map may use them is the licence judgement made in
-`docs/research/slovak-open-data.md`; nothing reads them yet, and nothing here reaches `out/`.
+`docs/research/slovak-open-data.md`; the props stage plants trees from them (below), and nothing here reaches `out/` itself.
 
 The two kinds of tree look different from above, so there are two detectors:
 
@@ -67,7 +68,7 @@ minus ground) would find trees far more reliably, but only the ground model is s
 The props stage plants **every** tree from `trees.json` and `canopy.png` (`props.ortho_trees`); this is the only tree source.
 There are no rule-based trees, OSM trees or shore rows, and no per-parcel tree settings (see `docs/viewer-and-editor.md`).
 The detector's output is read from `data/<area>/ortho/`; an area without it, or a `parcels.json` without a frame origin,
-has no trees, and `make props` warns. Run `make ortho-trees` first.
+has no trees, and `make props` warns. `make map` runs `ortho` and `ortho-trees` before `props`; alone, run `make ortho-trees` first.
 
 * Each standalone tree is planted where it was found, scale = 2 x crown radius / `canopy_m`, kept within 0.8-3.
 * The canopy is planted so the forest looks closed from above, as in the photo: `props.trees.ortho` in `rules.yaml` gives

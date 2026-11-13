@@ -8,7 +8,7 @@ from drycastle_pipeline.config import AREAS, DEFAULT_AREA
 # Heavy modules (matplotlib, rasterio, trimesh, ...) are imported only by the command that needs
 # them, so that ``parcel-run`` starts fast. ``STAGE_NAMES`` must equal ``list(stages.STAGES)``
 # (checked in tests).
-STAGE_NAMES = ("fetch", "normalise", "parcels", "rules", "terrain", "roads", "props", "detail", "export")
+STAGE_NAMES = ("fetch", "normalise", "ortho", "ortho-trees", "parcels", "rules", "terrain", "roads", "props", "detail", "export")
 RUN_ALL = "run-all"
 PREVIEW = "preview"  # not a map stage: renders PNGs from the work files
 PARCEL_RUN = "parcel-run"  # not a map stage: fences and trees of some parcels, as JSON
@@ -38,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="fetch: ignore the disk cache and download everything again",
+        help="fetch, ortho: ignore the disk cache and download everything again",
     )
     parser.add_argument(
         "--edits",
