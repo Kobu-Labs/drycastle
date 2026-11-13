@@ -149,6 +149,10 @@ public static class MovementStep
     public static bool CanSprint(in MoveInput i, Stance stance, bool transitioning) =>
         i.Has(MoveButtons.Sprint) && stance == Stance.Stand && !transitioning && i.MoveY > 0.1f && !i.Has(MoveButtons.Fire) && !i.Has(MoveButtons.Aim);
 
+    /// <summary>Sprint asked for with the forward intent and nothing cancelling it; from a crouch or prone this stands the body up (see <see cref="UpdateStance"/>).</summary>
+    public static bool WantsSprint(in MoveInput i) =>
+        i.Has(MoveButtons.Sprint) && i.MoveY > 0.1f && !i.Has(MoveButtons.Fire) && !i.Has(MoveButtons.Aim);
+
     /// <summary>Seconds for one stance step (one level up or down).</summary>
     public static float TransitionTime(Stance from, Stance to) => from switch
     {
@@ -173,11 +177,12 @@ public static class MovementStep
 
     /// <summary>
     /// Move the stance toward the goal one step at a time. The goal is prone if latched, else crouch while Crouch is held,
-    /// else stand. Standing up past a level needs headroom: the step waits at zero until the caller clears HeadBlocked.
+    /// else stand; a sprint attempt forces stand. Standing up past a level needs headroom: the step waits at zero until the caller clears HeadBlocked.
     /// </summary>
     static void UpdateStance(ref MoveState s, in MoveInput i, float dt)
     {
-        var goal = s.ProneLatched ? Stance.Prone : i.Has(MoveButtons.Crouch) ? Stance.Crouch : Stance.Stand;
+        if (WantsSprint(i)) s.ProneLatched = false; // trying to sprint stands up, even with Crouch held
+        var goal = WantsSprint(i) ? Stance.Stand : s.ProneLatched ? Stance.Prone : i.Has(MoveButtons.Crouch) ? Stance.Crouch : Stance.Stand;
         if (goal == s.Stance) { s.StepTo = s.Stance; s.StanceTimer = 0; return; }
 
         var next = (Stance)((int)s.Stance + (goal > s.Stance ? 1 : -1));
