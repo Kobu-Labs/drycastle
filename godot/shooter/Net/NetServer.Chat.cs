@@ -166,19 +166,30 @@ public partial class NetServer
         GD.Print($"server: round restarted by {c.Name} #{c.Id}, mode {name}");
     }
 
-    /// <summary>"/event rozhlas": starts the village loudspeaker broadcast on every client now. "/event intel [clear]": the test announcement (<see cref="ChatIntel"/>). Everyone is told who did.</summary>
+    /// <summary>
+    /// "/event rozhlas": starts the village loudspeaker broadcast on every client now. "/event intel [clear]": the test announcement (<see cref="ChatIntel"/>).
+    /// "/event bigfoot": starts the Bigfoot event (<see cref="StartBigfoot"/>); "/event current end" concludes the running event as a win (for testing) and
+    /// "/event current cancel" removes it with no reward (<see cref="ChatCurrentEvent"/>). Everyone is told who did.
+    /// </summary>
     void ChatEvent(Client c, IReadOnlyList<string> args)
     {
-        var clear = args.Count > 1 && args[1] == "clear";
-        if (args.Count > 1 && args[0] != "intel") { ChatTo(c, ChatLineKind.Error, $"/event {args[0]} takes no action. Only /event intel takes clear."); return; }
-        switch (args[0]) // the parser only lets known events through
+        var action = args.Count > 1 ? args[1] : "";
+        var allowed = args[0] switch { "intel" => "clear", "current" => "end or cancel", _ => "" }; // the parser only lets known events and actions through; whether they belong together is checked here
+        if (args[0] == "current") { ChatCurrentEvent(c, action); return; }
+        if (action != "" && (args[0] != "intel" || action != "clear"))
+        {
+            ChatTo(c, ChatLineKind.Error, allowed == "" ? $"/event {args[0]} takes no action." : $"/event {args[0]} takes {allowed}.");
+            return;
+        }
+        switch (args[0])
         {
             case "rozhlas":
                 BroadcastEvent(EventKind.RozhlasStart, Array.Empty<byte>());
                 ChatToAll(ChatLineKind.System, "", $"{c.Name} started the rozhlas.");
                 GD.Print($"server: rozhlas started by {c.Name} #{c.Id}");
                 break;
-            case "intel": ChatIntel(c, clear); break;
+            case "intel": ChatIntel(c, action == "clear"); break;
+            case "bigfoot": StartBigfoot(c); break;
         }
     }
 

@@ -94,6 +94,13 @@ flat-colour materials, no texture, one mesh node, about 1100 triangles. Frame of
 wearer's head (it is not a vehicle). About 0.88 x 1.12 x 0.87 m with the mane, sized to swallow the head of every player body; the game turns it to the
 rig's +Z face and scales it to rig units (`CharacterView.Worn.cs`). Not meant to be placed on the map, though it is listed like the other generated models.
 
+**Unverified, user-provided (2026-11-13):** `quaternius-giant/giant.glb` is the placeholder model of the Bigfoot event (#264, `godot/shooter/data/bigfoot.json`): "Giant" by
+Quaternius, a free rigged model (3812 triangles, one texture atlas, an `EnemyArmature` skeleton of 12 joints) the owner downloaded as a local file. It comes with seven clips
+(Attack, Death, HitRecieve, Idle, Jump, Run, Walk, each prefixed `EnemyArmature|EnemyArmature|EnemyArmature|`). As Godot imports it, it is 4.53 units tall, 6.47 wide with the arms out
+and 2.34 deep, feet at y 0.03, facing +Z (measured with `make assets-check`'s script); the game scales it by 0.8 to the Bigfoot's 3.6 m. Quaternius publishes its free models as CC0, but
+nobody checked this model's page, so it is listed as `UNVERIFIED` under `unverified_models` (`shooter:quaternius-giant/giant`) with a `NOTICE.txt`, like the other user-provided models, and
+**not** among the project's own generated models (whose licence says every file there is original code). The final model and animations are a separate follow-up.
+
 **Unverified, user-provided artwork (2026-11-13):** `welcome-sign/welcome_sign.glb` is the village welcome sign ("VITAJTE V OBCI", coat of arms, village name):
 an arched board between two light-blue posts that bend in to two legs with two cross rails, a cap and a ball on each post (about 1.05 x 3.35 x 0.12 m, origin on
 the ground between the legs, the legs run 0.15 m below it, it faces +Z, the board shows the artwork on both faces). The structure is original geometry written as

@@ -21,6 +21,8 @@ public sealed class XpAwards
     public int MatchWin { get; init; }
     /// <summary>Places 2 and 3 in the match ranking (ties for the win are not top-3 places).</summary>
     public int MatchTop3 { get; init; }
+    /// <summary>Each player credited with winning an event (the Bigfoot, issue #264). Optional in the file: 300 when it is left out.</summary>
+    public int EventWin { get; init; }
     public double AssistWindowSeconds { get; init; }
 }
 
@@ -76,6 +78,7 @@ public sealed class LevelsFile
             Kill = Award(a.Kill, "kill"), Headshot = Award(a.Headshot, "headshot"), Assist = Award(a.Assist, "assist"),
             StreakKill = Award(a.StreakKill, "streak_kill"), Roadkill = Award(a.Roadkill, "roadkill"),
             MatchWin = Award(a.MatchWin, "match_win"), MatchTop3 = Award(a.MatchTop3, "match_top3"),
+            EventWin = a.EventWin is { } ew ? Award(ew, "event_win") : 300,
             AssistWindowSeconds = a.AssistWindowSeconds is { } w && double.IsFinite(w) && w >= 0 ? w
                 : throw new DataFileException($"{F}: awards \"assist_window_seconds\" is required and must be >= 0"),
         };
@@ -181,6 +184,7 @@ public sealed class LevelsFile
         public int? Roadkill { get; set; }
         public int? MatchWin { get; set; }
         public int? MatchTop3 { get; set; }
+        public int? EventWin { get; set; }
         public double? AssistWindowSeconds { get; set; }
     }
 

@@ -4624,6 +4624,21 @@
       "pack": "animated-animals",
       "provided": "2026-11-12",
       "used_for": "animals (#254): species table godot/shooter/data/animals.json; the client draws them, nothing spawns them yet"
+    },
+    {
+      "id": "shooter:quaternius-giant/giant",
+      "name": "Giant (Bigfoot placeholder)",
+      "file": "quaternius-giant/giant.glb",
+      "original_filename": "Giant by Quaternius - BldaiPtyJa.glb",
+      "size_note": "skinned rest mesh, 4.53 units tall as Godot imports it (feet at y 0.03, it faces +Z, 6.47 wide with the arms out, 2.34 deep; measured with asset_check.gd); godot/shooter scales it by data/bigfoot.json model_scale (0.8) to the 3.6 m the Bigfoot stands, twice a player. One 'EnemyArmature' skeleton (12 joints) and seven clips with the prefix 'EnemyArmature|EnemyArmature|EnemyArmature|': Attack, Death, HitRecieve, Idle, Jump, Run, Walk",
+      "materials": [
+        "Atlas.001"
+      ],
+      "licence": "UNVERIFIED",
+      "source": "User-provided free model 'Giant' by Quaternius (the file name looks like a poly.pizza download). Quaternius publishes its free models as CC0, but the model's page and licence were not checked, so it is not claimed to be CC0. The user must confirm the licence and attribution before any release.",
+      "pack": "quaternius-giant",
+      "provided": "2026-11-13",
+      "used_for": "the Bigfoot event (#264): data/bigfoot.json model, drawn by godot/shooter NetClient.Bigfoot.cs; a placeholder until the real animated model arrives"
     }
   ],
   "ui_icons": {

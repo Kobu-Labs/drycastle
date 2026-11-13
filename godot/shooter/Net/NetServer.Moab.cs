@@ -36,7 +36,11 @@ public partial class NetServer
         BroadcastImpact(at, ImpactSize.Plume); // the blast's plume on the ground (ticket #154)
 
         var victims = MoabStreak.Victims(LiveTargets().Select(t => t.Id), owner).ToList();
-        foreach (var id in victims) _match.ApplyDamage(id, owner, MoabWeapon, 9999, ignoreProtection: true);
+        foreach (var id in victims)
+        {
+            if (id == BigfootRules.TargetId) DealBigfoot(owner, MoabWeapon); // the Bigfoot takes it as an explosive hit, not as a kill (issue #264)
+            else _match.ApplyDamage(id, owner, MoabWeapon, 9999, ignoreProtection: true);
+        }
         foreach (var car in _cars.Where(c => !c.Destroyed).ToList()) DamageVehicle(car, car.Hp + 1, owner, MoabWeapon, 0);
         GD.Print($"server: MOAB by #{owner} detonated: {victims.Count} killed, vehicles destroyed");
     }

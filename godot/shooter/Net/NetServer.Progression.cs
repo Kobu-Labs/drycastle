@@ -34,6 +34,7 @@ public partial class NetServer
         _shells.Clear(); // a round reset takes the shells in the air with it
         _flakShells.Clear();
         _xp.Reset();
+        BigfootRoundReset();
         foreach (var c in _clients.Values) c.RoundXp.Clear();
     }
 

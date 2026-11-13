@@ -40,7 +40,7 @@ public partial class NetClient
         Appearances[a.PlayerId] = a.Spec;
         if (_remotes.TryGetValue(a.PlayerId, out var r) && r.View != null) r.View.SetCamo(a.Spec, CamoData);
         foreach (var (id, c) in _corpses) // a look that arrives after the corpse spawned (#203)
-            if (WorldEntities.Entities.TryGetValue(id, out var e) && e.State.Owner == a.PlayerId) c.View.SetCamo(a.Spec, CamoData);
+            if (WorldEntities.Entities.TryGetValue(id, out var e) && e.State.Owner == a.PlayerId) c.View?.SetCamo(a.Spec, CamoData);
         AppearanceChanged?.Invoke(a.PlayerId, a.Spec);
     }
 }

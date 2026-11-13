@@ -69,6 +69,10 @@ public partial class NetServer : Node
         /// <summary>The flak status last sent to this client as the gunner (magazine, reserve, reloading), so only a change is sent; null until the first.</summary>
         public (int Mag, int Reserve, bool Reloading)? FlakSent;
         public bool UseHeld, LightsHeld, Handbrake, StreakHeld;
+        /// <summary>The Bigfoot holds this player (issue #264) through this tick: their input is read and acknowledged but their body stays where it puts them.</summary>
+        public uint HeldUntilTick;
+        /// <summary>Until this server time a launched player's fall damage is the Bigfoot's own (the brain hurts them 2 to 5 on landing).</summary>
+        public double LaunchGraceUntil;
         public float Throttle, Steer;
         public PlayerProfile? Profile;
         public ProfileLoad? Loading;
@@ -177,6 +181,7 @@ public partial class NetServer : Node
         GroundItemRules.Register(WorldEntityRegistry.Shared);
         TurretRules.Register(WorldEntityRegistry.Shared);
         _corpses = new CorpseBook(_match.Entities);
+        InitBigfoot(); // after the corpse book, which follows the same despawns
         InitAircraft();
         BuildCarePackages();
         BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
@@ -217,6 +222,7 @@ public partial class NetServer : Node
         IntelTick(); // a made-up event whose time is up leaves the intel screen
         PerfLap(ServerPerf.Ph.Housekeeping);
         _match.Update();
+        BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
         _match.Entities.Tick((float)delta);
         PerfLap(ServerPerf.Ph.Match);
         StreakTick((float)delta);
@@ -477,6 +483,7 @@ public partial class NetServer : Node
         SendCorpseItemsOnJoin(c); // the items the corpses carry, after the corpses themselves
         SendGlassOnJoin(c); // the glass panes that are not whole (ADR 0007)
         SendIntelOnJoin(c); // the events on the intel screen
+        SendTrailOnJoin(c); // the Bigfoot's footprints, while they last (#264)
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
         SendWornOnJoin(c); // what the others wear (#266), to draw on their characters
@@ -675,8 +682,10 @@ public partial class NetServer : Node
             var streakEdge = streakDown && !c.StreakHeld;
             c.StreakHeld = streakDown;
             if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
+            if (c.Car == null && _tick <= c.HeldUntilTick) continue; // in the Bigfoot's hand: the input is acked, the body is where the Bigfoot puts it (issue #264)
             if (streakEdge && !controlled) StreakActivate(c);
             if (c.Car == null && _streaks.ControlOf(c.Id) is { FreezesBody: true }) continue; // controlling a streak entity that holds the body (the missile, a gunship): the body stands still
+            if (c.Car is { Thrown: not null }) continue; // the Bigfoot threw it: nobody steers, fires or gets out until it lands (issue #264)
             if (c.Car != null)
             {
                 // driving: a helicopter or a predicted ground vehicle is stepped here from the driver's inputs, other cars in StepVehicles; no walking or weapon timers.
@@ -712,7 +721,7 @@ public partial class NetServer : Node
             }
             if (c.W.Changed) SendAmmo(c);
             c.Slot = (byte)(c.W.Slot - 1);
-            if (c.Body.LastFallDamage > 0) _match.ApplyDamage(c.Id, c.Id, SpecialWeapons.Fall, c.Body.LastFallDamage);
+            if (c.Body.LastFallDamage > 0 && _elapsed >= c.LaunchGraceUntil) _match.ApplyDamage(c.Id, c.Id, SpecialWeapons.Fall, c.Body.LastFallDamage); // a launched player lands for the Bigfoot's damage, not the fall's
             if (c.Body.LastDrowningDamage > 0) _match.ApplyDamage(c.Id, c.Id, SpecialWeapons.Drown, c.Body.LastDrowningDamage);
             if (c.Body.GlobalPosition.Y < KillY) GD.Print($"server: {c.Name} fell out of the world at {c.Body.GlobalPosition} (killY {KillY}, spawn {_match.Get(c.Id)?.Position})");
             if (c.Body.GlobalPosition.Y < KillY) _match.ApplyDamage(c.Id, c.Id, SpecialWeapons.Void, 9999, ignoreProtection: true);
@@ -772,6 +781,7 @@ public partial class NetServer : Node
             var d = dummies[i];
             if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
         }
+        if (BigfootTarget() is { } bigfoot) list.Add(bigfoot); // the Bigfoot is a hit target like a player (issue #264)
         PerfCounters.LiveTargetsCalls++; PerfCounters.LiveTargetsElems += list.Count;
         return list;
     }
@@ -946,6 +956,7 @@ public partial class NetServer : Node
     /// <summary>Applies damage through the match and sends the hit event; returns the result (Ignored when absorbed).</summary>
     DamageResult Deal(ushort attackerId, byte weaponIdx, ushort victim, float damage, bool head, bool backstab, KillCause cause = KillCause.Standard)
     {
+        if (victim == BigfootRules.TargetId) return DealBigfoot(attackerId, weaponIdx); // a hit count, not hit points (issue #264)
         if (_streaks.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed

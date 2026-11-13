@@ -9,6 +9,7 @@
     "roadkill": 130,
     "match_win": 250,
     "match_top3": 100,
+    "event_win": 300,
     "assist_window_seconds": 10
   },
   "unlocks": [

@@ -101,7 +101,7 @@ A player whose player token is listed on the server (`--admin-token`). Admins ma
 _Avoid_: operator, moderator, op
 
 **Chat command**:
-A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
+A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/event` (`rozhlas` the loudspeaker, `intel` a test announcement, `bigfoot` starts the Bigfoot Event, `current end` concludes the running Event as a win for testing, `current cancel` removes it with no reward), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
 _Avoid_: console command, cheat
 
 **Care package**:
@@ -374,3 +374,31 @@ _Avoid_: event list, schedule
 **Event announcement**:
 What tells players that something was detected: a toast and a chat line ("Suspicious activity detected. Report to the base for more information.", with the base's grid reference when the map has a sheet) and the **Rozhlas** broadcast. It never says what the event is: that is for the intel screen.
 _Avoid_: alert, notification, warning (the HUD's helicopter warning is another thing)
+
+**Event**:
+A short, time-limited happening in the village with a challenge and a reward, such as the Bigfoot. An Event is started by an admin with `/event <name>` (there is no scheduler yet), and only one runs at a time. It is active until it is **won** (its challenge is beaten: the reward is given) or **despawned** (it timed out or an admin cancelled it: no reward). What it does belongs to its kind; the lifecycle is the same for all (`EventRun`, `EventBook`). It can be announced on the Intel board; the Bigfoot's first version is not.
+_Avoid_: quest, mission, mode (a match mode is another thing), wave
+
+**Bigfoot**:
+The first Event: a giant, twice a player's height, that spawns at a baked point of an area with `event spawn: bigfoot` (or, on a map with none, near a random player as a dev fallback) and hunts the players. It is a **world entity** with its own brain (`Bigfoot`), not a bot: it has no player health or weapons, ignores the navmesh, walks a straight line over the terrain towards the nearest player (trees do not stop it, buildings do), and has a **Hit count** instead of hit points. Its attacks come with its phases: it hurls tree trunks (phase one); stomps and throws vehicles (two); grabs a player, flails with them and launches them, at another player when there is one (three); everything it does to a player is 2 to 5 damage. When it dies the Event is won: players credited get XP, and footsteps lead to a Corpse that carries the Bigfoot head. Every number is in `bigfoot.json`.
+_Avoid_: boss (alone), monster, sasquatch, yeti
+
+**Hit count**:
+How the Bigfoot is killed: not hit points but a number of hits, `hits.per_player` times the participants (at least one), tuned for about a minute. A bullet hit counts 1, with no headshot bonus (a headshot on it is a body hit); an explosive hit (a rocket, the attack missile, the MOAB) and a vehicle-weapon hit count a larger, configurable weight; ramming it counts nothing. The count only goes up while it fights.
+_Avoid_: health, hit points, HP bar
+
+**Participant**:
+A living player within `hits.participant_radius_m` of the Bigfoot. Participants set the Hit count. Credit for the win goes to everyone who hit it at least `reward.credit_min_hits` times and to every participant alive when it fell. If every participant dies it **wipes** the fight: it heals to full and waits where it stands until a player comes near.
+_Avoid_: contributor, attacker
+
+**Bigfoot phase**:
+One of three stages of the Bigfoot's fight, at fractions of the Hit count taken (30 % and 60 %), with an **enrage** past 85 %, when it is faster and its cooldowns shorter. A phase adds attacks and never takes any away.
+_Avoid_: stage, level, form
+
+**Shockwave**:
+The stomp's ring of force running outwards along the ground from the Bigfoot. It knocks back and hurts every player standing on the ground it crosses, once; a player who is in the air as it passes (a jump) is untouched. The stomp's wind-up (its pose and a sound) is the warning.
+_Avoid_: blast, explosion (those have a radius and damage falloff)
+
+**Footsteps**:
+The trail of giant footprints that appears where the Bigfoot fell and leads, a little over a hundred metres, to its corpse. They are drawn on every client for as long as the corpse lasts (`reward.corpse_seconds`, much longer than a player's corpse).
+_Avoid_: tracks, breadcrumbs

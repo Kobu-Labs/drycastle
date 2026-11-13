@@ -73,12 +73,14 @@ public sealed class Corpse : IWorldEntity
 {
     readonly float _yaw;
     float _age;
+    readonly float _lifetime;
 
     readonly List<ItemStack> _items = new();
 
-    public Corpse(ushort owner, Vector3 position, float yaw, int weapon, int rounds, IEnumerable<ItemStack>? items = null)
+    /// <param name="lifetime">How long it lies, seconds: a player's corpse lasts <see cref="CorpseRules.LifetimeSeconds"/>; the Bigfoot's (issue #264) lasts longer, since it has to be found.</param>
+    public Corpse(ushort owner, Vector3 position, float yaw, int weapon, int rounds, IEnumerable<ItemStack>? items = null, float lifetime = CorpseRules.LifetimeSeconds)
     {
-        Owner = owner; _body = new ThrownBody(position); _yaw = yaw; Weapon = weapon; Rounds = rounds;
+        Owner = owner; _body = new ThrownBody(position); _yaw = yaw; Weapon = weapon; Rounds = rounds; _lifetime = lifetime;
         if (items != null) _items.AddRange(items.Take(ItemRules.MaxCarried));
     }
 
@@ -102,7 +104,7 @@ public sealed class Corpse : IWorldEntity
     public void Tick(float dt)
     {
         _age += dt;
-        if (_age >= CorpseRules.LifetimeSeconds) Ended = WorldDespawnReason.Expired;
+        if (_age >= _lifetime) Ended = WorldDespawnReason.Expired;
     }
 
     public void OnDamage(float amount, ushort attacker) { }

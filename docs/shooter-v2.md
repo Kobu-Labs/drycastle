@@ -527,6 +527,52 @@ items, ADR 0018 (#267, protocol 31).
   (u8 slot), 202 `DropItem` (u8 worn or bag, u8 slot or cell) and 203 `TakeGroundItem` (u16 world entity id). World entity type 2 is the ground item.
   Codecs: `ItemEvents`.
 
+## 7c. Events and the Bigfoot (#264)
+
+An **Event** (GLOSSARY) is a short happening with a challenge and a reward. The lifecycle is `EventRun` / `EventBook` (`ShooterCore/Events/EventRun.cs`): active, then won or
+despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: `NetServer.Bigfoot.cs`; client: `NetClient.Bigfoot.cs`; the fight itself is
+`ShooterCore/Events/Bigfoot.cs` (a plain class, tested with a fake world in `BigfootTests`). Every number is in `data/bigfoot.json` (`BigfootFile`).
+
+- **Starting and ending.** An admin's `/event bigfoot` spawns it at a random baked point of an area with `event spawn: bigfoot` (`PickEventSpawn`, #263). A map with no such
+  area (the village has none until one is drawn) gets the dev fallback: `fallback_spawn` metres from a random living player, said to the admin and in the log as a FALLBACK.
+  `/event current end` kills it (a win, for testing), `/event current cancel` removes it with no reward. The first version announces nothing but a system chat line:
+  it does not use the intel board (`AnnounceIntel` is the one call that would).
+- **A world entity, not a bot** (wire type 60). The state byte is the act (`BigfootAct`, bits 0-3), a bit that flips on every hit that did not kill, the phase (bits 5-6) and
+  the enrage (bit 7); the owner field is the player it holds; the hp byte is the hit count left in percent. The client draws the placeholder giant
+  (`quaternius-giant/giant.glb`, `assets/quaternius-giant/NOTICE.txt`) and picks the clip from the act. Idle, Walk, Run, Death and HitRecieve map directly; every attack
+  reuses the Attack clip stretched over the wind-up, plus a procedural lean, rise and wobble of the whole figure (`MoveBigfoot`). The model and the sounds are placeholders
+  (`BigfootSounds` names the sounds the game already has).
+- **Hit count, not hit points.** It dies after `hits.per_player` x participants hits (participants: living players within `participant_radius_m`; the number only goes
+  up while it fights). Shots reach it through the normal pipeline: it is a `HitTarget` (id `BigfootRules.TargetId` 60000) with `Scale` 2, a player capsule twice as tall
+  and as wide, its head guarded (a headshot is a body hit), in `LiveTargets` and, rewound by its own `PoseRing`, in `RewoundTargets` (ADR 0013). `Deal` hands a hit on that
+  id to `DealBigfoot`, which weighs it by its source (`BigfootRules.SourceOf`): a bullet or pellet fan 1, an explosive (a rocket, the attack missile, the MOAB)
+  `explosive_weight`, a vehicle weapon (roof gun, flak, door gun, the aircraft's guns) `vehicle_weapon_weight`, ramming and a vehicle's blast nothing. The shooter gets the Hit event, so the marker shows.
+- **Phases** at 30 % and 60 % of the count, enrage at 85 %: (1) it chases and hurls logs (`TrunkEntity`, wire type 61, an arc aimed ahead of the target, 2-5 damage to the first
+  player it crosses); (2) adds the stomp (a wind-up with a sound, then a `Shockwave` ring that hurts and knocks back each grounded player once; a jump avoids it) and the vehicle
+  throw; (3) adds the grab, a hold with a flail, and a launch at the nearest other player (`Player.AddImpulse` on a ballistic solution) or in a random direction.
+- **The vehicle throw.** A ground vehicle within `contact_m` of it is thrown after a wind-up on a closed-form arc (`VehicleThrow`) to a random spot `min`-`max` metres away that has
+  ground. `ServerCar.Thrown`: the server places the vehicle and its riders each tick (`StepThrownVehicle`), ignores the driver's inputs (and exits, and seat weapons) and skips crash
+  damage, run-over and vehicle contacts for it; it lands exactly where aimed and settles. Nothing aboard takes damage. The driver's client stops predicting that vehicle from the
+  throw event (`BigfootFx` VehicleThrow) until a moment after it lands and draws it from the snapshots. Helicopters are not thrown.
+- **The held player.** The server puts the body at the hand every tick (`Client.HeldUntilTick`) and reads but ignores the input. The client sees its own id in the Bigfoot's owner field
+  and stops predicting (`_heldByBigfoot`: no simulation, no reconcile, the body is the snapshot's). A launched player's fall damage is replaced by the brain's landing damage
+  (2-5) for `launch_grace_seconds`, and the other players the flyer passes within `launch_hit_radius_m` of take 2-5 once each.
+- **Movement and collision.** It ignores the navmesh: a straight line towards the nearest living player (kept `retarget_seconds`), the ground by a ray from above, trees skipped.
+  **Trees are ignored, buildings are solid**: a trunk collider is recognised by the surface meta "wood" (`IsTreeHit`), anything else of the world layer blocks it and it
+  steers round (`BigfootBlocked`, two rays).
+- **Wipe and despawn.** When the last participant dies or leaves the game it heals to full and waits where it stands, until a player is within `wake_radius_m` (or shoots it). With no
+  living player within `despawn_radius_m` for `despawn_minutes` it despawns with no reward.
+- **The reward.** At the kill: the chat line "Event won: ...", XP (`levels.json` awards `event_win`, `XpReason.EventWin`, to everyone credited), the death clip. `death_seconds`
+  later the body is gone and `SpawnBigfootReward` plans footsteps (`BigfootTrail.Plan`, about 120 m over ground, meandering) from where it fell to a corpse that carries the
+  Bigfoot head through the ordinary corpse item path (ADR 0016, 0018). The corpse is owned by id 60000, which is how a client knows to draw the giant lying in its death pose; its
+  weapon is the knife, which nobody can take into a hotbar position, so the chooser offers only the item. Corpse and footsteps last `corpse_seconds` (900 s).
+- **Wire (protocol 32).** World entity types 60 (the Bigfoot, hp byte) and 61 (a log); event kind 210 `BigfootFx` (server to everyone: u8 `BigfootFxKind`, i32 x, y, z, u16 id,
+  u8 extra; the roar, the stomp telegraph and shockwave, a log's release, a vehicle thrown or landed (id, flight in tenths of a second), a grab, a launch, the death), 211
+  `BigfootTrail` (u8 count, then i32 x, y, z and u16 yaw each; 0 clears; to a joiner while it lasts); special weapon id 242 (the kill feed names damage from it), `XpReason.EventWin`.
+  Codecs: `BigfootFxCodec`, `BigfootTrail`.
+- **Not verified in a running game** (no one has run this): the model's scale and facing (measured and assumed from the import), the climbing and sliding on real terrain and round
+  real buildings, the feel of every number in `bigfoot.json`, the throw and the hold on a real client (the prediction hand-off), the footprints on slopes, the sounds.
+
 ## 8. Known gaps (collected from the closed tickets)
 
 Not built:
@@ -583,7 +629,7 @@ usage are listed above the input. A command that cannot be valid is shown with t
 Commands are for admins. The dev server (`make shooter-server`) passes `--admin-all`, so every player is one (`ADMIN=0` turns it off); never pass it on a release server. Otherwise start the server with `--admin-token TOKEN[,TOKEN...]`, where a token is the `player_token` in the `[connect]` section of the client's settings file (Godot user data
 folder, `shooter_settings.cfg`). They run on the server, so they work live: `/bots N` (0 to 64) changes the roster on the next tick (the first time bots are wanted after a start with none, the navigation is
 baked once, and the server pauses for that, the admin is told); `/spawn vehicle` puts a vehicle in front of the admin (up to 32 a run, shared with the sandbox's 8; spawned vehicles are not removed);
-`/time HH:MM|dawn|morning|noon|dusk|night|midnight|freeze|resume` sets the day clock and sends it to every client at once (event 183); `/restart [ffa|tdm]` starts a fresh round now (scores, lives and world entities reset), in the current match mode or, with an argument, in that one (the teams are regrouped, everyone is told; the mode reaches clients in the next scoreboard). `/event rozhlas` starts the village loudspeaker broadcast on every client now (event 184, no payload; each client starts its own copy at once and the scheduled broadcast waits until it ends); `/event intel [clear]` announces a made-up test event (section 8c; `clear` takes it off again); `/give <item> [player]` puts an item of `items.json` on a living player (by name or `#id`) or on the admin, a fresh one with no pickups counted, replacing what was worn in its slot (section 7b); `/help [command]` lists them for anyone.
+`/time HH:MM|dawn|morning|noon|dusk|night|midnight|freeze|resume` sets the day clock and sends it to every client at once (event 183); `/event bigfoot` starts the Bigfoot event, `/event current end` concludes the running event as a win and `/event current cancel` removes it with no reward (section 7c); `/restart [ffa|tdm]` starts a fresh round now (scores, lives and world entities reset), in the current match mode or, with an argument, in that one (the teams are regrouped, everyone is told; the mode reaches clients in the next scoreboard). `/event rozhlas` starts the village loudspeaker broadcast on every client now (event 184, no payload; each client starts its own copy at once and the scheduled broadcast waits until it ends); `/event intel [clear]` announces a made-up test event (section 8c; `clear` takes it off again); `/give <item> [player]` puts an item of `items.json` on a living player (by name or `#id`) or on the admin, a fresh one with no pickups counted, replacing what was worn in its slot (section 7b); `/help [command]` lists them for anyone.
 The grammar, completion and history are pure code in `ShooterCore/Chat` (`ChatCommands`, `ChatCompleter`, `ChatHistory`) with tests in `ChatTests`; `NetServer.Chat.cs` runs the commands, `ChatBox.cs` draws the window.
 
 ## 8c. Event announcements and the intel room (#262, ADR 0017)
@@ -596,7 +642,7 @@ The intel room is the command post (lowest floor) of the bunker named in `data/i
 
 ## 9. Wire protocol
 
-(This section was written at version 24; the later bumps are in the summary on `Wire.ProtocolVersion`. Version 29 added event kind 185, `IntelSync`, section 8c; version 30 added kind 194, `WornItems`, section 7b.)
+(This section was written at version 24; the later bumps are in the summary on `Wire.ProtocolVersion`. Version 29 added event kind 185, `IntelSync`, section 8c; version 30 added kind 194, `WornItems`, section 7b; version 32 the Bigfoot event, section 7c.)
 
 Protocol version: **24** (`Wire.ProtocolVersion`, whose summary lists every bump). The hello carries it; a mismatch is refused with a message naming both
 versions. Version 24 (the amphibious transport, ADR 0010 to 0012): snapshot entity type 6 (Drive: a driven vehicle's speeds along and across its
@@ -656,6 +702,8 @@ Event kinds (`EventKind`, one byte in the event message):
 | | | 201 | UnequipItem (client to server) |
 | | | 202 | DropItem (client to server) |
 | | | 203 | TakeGroundItem (client to server) |
+| | | 210 | BigfootFx (server to everyone: the Bigfoot's one-shot effects, kinds 210-219 are the events, #264) |
+| | | 211 | BigfootTrail (server to everyone, and to a joiner: the footprints to its corpse) |
 
 Message tags (`Wire.T*`): Hello 1, Welcome 2, Join 3, Leave 4, Event 5, Profile 6, SaveLoadout 7, SelectSlot 8, Error 9,
 SaveCamo 10, Input 11, Snapshot 20, WorldSnapshot 21. SaveLoadout is slot, six item strings, name (string), seq (u32 LE).
@@ -664,8 +712,8 @@ Special weapon ids (kill-feed `weapon` byte, `SpecialWeapons`): Ac130 244, Helpe
 Missile 248, Moab 249, VehicleGun 250, Vehicle 252, Debug 253, Void 254, Fall 255, Drown 251. Killstreak ids (`StreakWeapons`)
 are 244-249.
 
-World entity types (`WorldEntityRegistry`, one byte per entity): corpse 1, attack missile 10, turret 20, care package 30,
-aircraft 40. Players and vehicles keep their own snapshot code.
+World entity types (`WorldEntityRegistry`, one byte per entity): corpse 1, ground item 2, attack missile 10, turret 20, care package 30,
+aircraft 40, animal 50, Bigfoot 60, its log 61. Players and vehicles keep their own snapshot code.
 
 Move buttons (`MoveButtons`, bits in the input message): Jump 1, Sprint 2, Crouch 4, Fire 8, Aim 16, Reload 32, Use 64,
 Switch 128, Headlights 256, Prone 512, Killstreak 1024.
@@ -682,7 +730,7 @@ Database migrations (`godot/ShooterServer.Persistence/migrations`, applied in or
 stats, weapon_kills), 0002 roadkills, 0003 camo, 0004 loadout camo, 0005 loadout name (`loadouts.name`, empty for rows
 from before #145; the server gives those "Class N" on load).
 
-Data file versions: weapons 2, every other file 1 (`items.json` included).
+Data file versions: weapons 2, every other file 1 (`items.json` and `bigfoot.json` included).
 
 ## 10. Open design questions
 

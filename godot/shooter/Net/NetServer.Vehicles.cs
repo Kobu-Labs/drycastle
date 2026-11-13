@@ -351,6 +351,7 @@ public partial class NetServer
             // seats of players who have gone (disconnect, death) are freed; the driver is seat 0 and only the driver steers
             for (var s = 0; s < car.Seat.Count; s++) if (car.Seat.Occupant(s) != 0 && OccupantAt(car, s) == null) car.Seat.Clear(s);
             SendSeatState(car);
+            if (car.Thrown != null) { StepThrownVehicle(car, dt); continue; } // flying on the Bigfoot's arc: no driving, no crash, no run-over (issue #264)
             var driver = OccupantAt(car, 0);
             var occupied = car.Seat.Occupied;
             if (occupied) car.Wake(); // somebody aboard: the vehicle is stepped every tick until it is empty and rests again
@@ -401,11 +402,11 @@ public partial class NetServer
         for (var i = 0; i < _cars.Count; i++)
         {
             var a = _cars[i];
-            if (a.Destroyed) continue;
+            if (a.Destroyed || a.Thrown != null) continue; // a thrown vehicle bumps nothing, and is bumped by nothing
             for (var j = i + 1; j < _cars.Count; j++)
             {
                 var b = _cars[j];
-                if (b.Destroyed) continue;
+                if (b.Destroyed || b.Thrown != null) continue;
                 if (_contactAt[i].DistanceSquaredTo(_contactAt[j]) > range2) continue;
                 var shapeA = a.ContactShape(); var shapeB = b.ContactShape();
                 if (VehicleContact.Test(shapeA, shapeB, a.Flies || b.Flies) is not { } hit) continue;

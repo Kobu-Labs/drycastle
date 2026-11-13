@@ -292,6 +292,48 @@ public partial class ServerCar : CharacterBody3D
     public bool Afloat;
 
     /// <summary>
+    /// The Bigfoot's throw (issue #264) while the vehicle flies: a scripted arc that nobody steers and nothing damages. The server moves the vehicle along
+    /// it (<see cref="PlaceThrown"/>) instead of stepping it, and ignores its driver's input, until it lands (<see cref="EndThrow"/>). Null otherwise.
+    /// </summary>
+    public VehicleThrow? Thrown;
+
+    /// <summary>Puts the thrown vehicle at <paramref name="pos"/> turned to <paramref name="yaw"/>, flying at <paramref name="verticalSpeed"/>. No speed along the ground, no steering, no contact damage.</summary>
+    public void PlaceThrown(Vector3 pos, float yaw, float verticalSpeed)
+    {
+        if (Drives)
+        {
+            Drive.Position = new System.Numerics.Vector3(pos.X, pos.Y, pos.Z);
+            Drive.Yaw = FlightMath.Wrap(yaw);
+            Drive.Speed = 0; Drive.Slip = 0; Drive.YawRate = 0; Drive.Throttle = 0; Drive.Steer = 0; Drive.Pitch = 0; Drive.Roll = 0; Drive.Sink = 0; Drive.Afloat = false;
+            Drive.VerticalSpeed = verticalSpeed; Drive.Airborne = true; Drive.Impact = 0;
+            DriveImpact = 0;
+            FollowDrive();
+            return;
+        }
+        GlobalPosition = pos;
+        State.Yaw = FlightMath.Wrap(yaw); State.Speed = 0; State.YawRate = 0;
+        Rotation = new Vector3(0, State.Yaw, 0);
+        Velocity = Vector3.Zero;
+        LastImpact = 0;
+    }
+
+    /// <summary>The throw is over: the vehicle stands where it landed, at rest, with the damage of the throw none (the crash rules read nothing from it).</summary>
+    public void EndThrow(Vector3 landing)
+    {
+        Thrown = null;
+        PlaceThrown(landing, State.Yaw, 0);
+        if (Drives)
+        {
+            DriveModel.Settle(ref Drive, Def, DriveWorld!);
+            DriveTick = 0;
+            FollowDrive();
+        }
+        TickEndPos = GlobalPosition;
+        LastImpact = 0; DriveImpact = 0;
+        Wake();
+    }
+
+    /// <summary>
     /// A parked car (no driver) rests once a driverless step leaves it where it stood (<see cref="ParkedRules"/>): the server then skips it until
     /// <see cref="Wake"/> (a rider, a hit, a bump, a blast, a reset).
     /// </summary>
