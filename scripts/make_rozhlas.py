@@ -19,6 +19,7 @@ list them all in godot/shooter/data/rozhlas.json. The levels are the SONG and VO
 """
 import argparse
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -35,6 +36,7 @@ SONG = dict(low=300, high=4000, rate=11025, bits=10, crush_mix=0.4, wobble_hz=4.
 VOICE = dict(low=500, high=2200, rate=5000, bits=6, crush_mix=0.7, gain_db=18, clip=0.15, wobble_hz=6.0, wobble_depth=0.15,
              pump_hz=3.0, pump_depth=0.4, noise=0.0, level_db=-5.5)
 SONG_START_S, SONG_SECONDS, SONG_FADE_S = 0.0, 60.0, 3.0  # the part of the song that is played (the intro, not the whole song)
+PEAK_DB = -1.0  # the baked file's loudest peak: the sounds of the game peak near 0 dBFS, and the distance in rozhlas.json does the quieting
 FADE_S, BED_NOISE = 0.5, 0.0  # every part fades in and out; BED_NOISE is a faint hiss under the whole broadcast (0 = none)
 GAP_SONG_S, GAP_VOICE_S, GAP_CLEAR_S = 0.6, 1.0, 0.0  # silence after the song, after the first announcement (before OPAKUJEM), after OPAKUJEM
 
@@ -110,8 +112,12 @@ def bake(src, out, seed, tmp, song_start=SONG_START_S, song_seconds=SONG_SECONDS
     joined = "".join(f"[p{i}]" for i in range(len(order)))
     graph = (labels + f"{joined}concat=n={len(order)}:v=0:a=1[c];[{len(order)}:a]volume={BED_NOISE}[b];"
              f"[c][b]amix=inputs=2:duration=first:normalize=0,afade=t=out:st={max(0.0, total - 1.0):.3f}:d=1.0[o]")
-    cmd += ["-filter_complex", graph, "-map", "[o]", "-ar", str(RATE), "-ac", "1", "-c:a", "libvorbis", "-q:a", "4", str(out)]
+    mixed = tmp / "mixed.wav"
+    cmd += ["-filter_complex", graph, "-map", "[o]", "-ar", str(RATE), "-ac", "1", str(mixed)]
     run(cmd)
+    # one gain over the whole broadcast (the balance between the parts stays as tuned) up to PEAK_DB, then to ogg
+    peak = float(re.search(r"max_volume: (-?[\d.]+) dB", subprocess.run(["ffmpeg", "-hide_banner", "-i", str(mixed), "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True).stderr).group(1))
+    run(["ffmpeg", "-y", "-v", "error", "-i", str(mixed), "-af", f"volume={PEAK_DB - peak:.2f}dB", "-c:a", "libvorbis", "-q:a", "4", str(out)])
     return duration(out)
 
 
