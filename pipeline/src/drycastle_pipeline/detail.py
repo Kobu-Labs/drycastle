@@ -30,7 +30,6 @@ import functools
 import hashlib
 import json
 import math
-import os
 import random
 import sys
 import time
@@ -1379,26 +1378,16 @@ def patch_meshes(res: DetailResult, terrain: Terrain, lift_m: float, tally: dict
 # --- the stage ------------------------------------------------------------------------------
 
 
-ENGINES = ("python", "rust")
+def run(force: bool = False, area: str = DEFAULT_AREA, edits: str | None = None, work: str | None = None, **_options: object) -> int:
+    """The stage runs on the Rust engine (:mod:`detail_rust`) only. :func:`run_reference` is this module's own, slow build,
+    kept as the reference the tests compare the engine with."""
+    from drycastle_pipeline import detail_rust
+
+    return detail_rust.run(force=force, area=area, edits=edits, work=work, **_options)
 
 
-def engine_name(engine: str | None = None) -> str:
-    """``python`` (this module, the reference) or ``rust`` (:mod:`detail_rust`): the ``engine`` option, else the
-    ``DRYCASTLE_DETAIL_ENGINE`` environment variable, else python."""
-    name = engine or os.environ.get("DRYCASTLE_DETAIL_ENGINE") or "python"
-    if name not in ENGINES:
-        raise ValueError(f"unknown detail engine {name!r}; choose one of {', '.join(ENGINES)}")
-    return name
-
-
-def run(
-    force: bool = False, area: str = DEFAULT_AREA, edits: str | None = None, work: str | None = None,
-    engine: str | None = None, **_options: object,
-) -> int:
-    if engine_name(engine) == "rust":
-        from drycastle_pipeline import detail_rust
-
-        return detail_rust.run(force=force, area=area, edits=edits, work=work, **_options)
+def run_reference(area: str = DEFAULT_AREA, edits: str | None = None, work: str | None = None) -> int:
+    """The Python reference build (minutes on the village map). Not a stage: nothing in the pipeline or the Makefile calls it."""
     edits_path = Path(edits) if edits else DEFAULT_EDITS
     work_dir = Path(work) if work else area_paths(area).work
     try:

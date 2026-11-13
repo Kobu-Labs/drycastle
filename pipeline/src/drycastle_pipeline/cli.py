@@ -101,13 +101,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="detail, export, parcel-run: read this work directory instead of data/work (experiments; detail also writes its files there)",
     )
     parser.add_argument(
-        "--engine",
-        choices=("python", "rust"),
-        default=None,
-        help="detail: python (the reference, default) or rust (pipeline/rust/detail, `make detail-rust-build`); "
-        "the DRYCASTLE_DETAIL_ENGINE environment variable sets the default",
-    )
-    parser.add_argument(
         "--glb",
         metavar="PATH",
         default=None,
@@ -159,7 +152,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         from drycastle_pipeline import preview
 
         return preview.run(exaggeration=args.exaggeration, area=args.area)
-    options = {"engine": args.engine} if args.stage == "detail" else {}
     return STAGES[args.stage](
         force=args.force,
         report=args.report,
@@ -167,5 +159,4 @@ def main(argv: Sequence[str] | None = None) -> int:
         edits=args.edits,
         out=args.out,
         work=args.work,
-        **options,
     )

@@ -106,10 +106,11 @@ def test_nothing_on_buildings_and_clutter_stands_on_the_ground(ws, tmp_path) -> 
     assert not any(building.contains(Point(x, y)) for x, y in zip(cx, cy, strict=True))
 
 
-def test_engine_switch(monkeypatch) -> None:
-    assert D.engine_name(None) == "python"
-    monkeypatch.setenv("DRYCASTLE_DETAIL_ENGINE", "rust")
-    assert D.engine_name(None) == "rust"
-    assert D.engine_name("python") == "python"
-    with pytest.raises(ValueError):
-        D.engine_name("fortran")
+def test_stage_runs_rust_only(monkeypatch) -> None:
+    from drycastle_pipeline import detail_rust
+
+    called = {}
+    monkeypatch.setattr(detail_rust, "run", lambda **kw: called.update(kw) or 0)
+    monkeypatch.setenv("DRYCASTLE_DETAIL_ENGINE", "python")  # the old switch is gone: it changes nothing
+    assert D.run(area="slice") == 0
+    assert called["area"] == "slice"

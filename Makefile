@@ -34,9 +34,9 @@ props:
 
 # Ground detail: draped patches (dirt, gravel, leaf litter, beds, furrows, verges) and clutter instances (tufts, pebbles, ...)
 # for every parcel; writes data/work/detail*.{json,npy}. Needs props. See docs/pipeline.md "Detail".
-# ENGINE=rust (or DRYCASTLE_DETAIL_ENGINE=rust) runs the Rust engine, built by detail-rust-build; without it the Python stage runs.
-detail:
-	cd pipeline && uv run python -m drycastle_pipeline detail --area $(AREA) $(if $(ENGINE),--engine $(ENGINE),)
+# Runs on the Rust engine only, which detail-rust-build builds first (an unchanged engine is a few seconds).
+detail: detail-rust-build
+	cd pipeline && uv run python -m drycastle_pipeline detail --area $(AREA)
 
 # Builds the Rust engine of the detail stage (pipeline/rust/detail, PyO3, linked to the system GEOS: needs cargo and
 # geos-devel, e.g. `sudo dnf install geos-devel`) and installs it into the pipeline's venv with maturin. `make setup` (uv sync) removes it again: build it again after.
@@ -95,7 +95,7 @@ floodwall-preview:
 floodwall-manifest:
 	cd pipeline && uv run python -m drycastle_pipeline.floodwall_preview --sync-manifest
 
-map:
+map: detail-rust-build
 	cd pipeline && uv run python -m drycastle_pipeline run-all --area $(AREA)
 
 MAP_ARG = $(if $(MAP),--map $(abspath $(MAP)),)

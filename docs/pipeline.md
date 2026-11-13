@@ -425,15 +425,16 @@ one parcel top-down from the real patches, textures and clutter meshes into `out
 ground areas and the dike are most of it: shapely calls on 100 ha polygons, a Poisson-disc sweep and point-in-polygon tests per
 point); the Rust engine does the same work on all cores in 7 to 8 s (26 s on one core) and writes the same four files
 (`detail.json`, `detail_patches.npy`, `detail_patches.json`, `detail_meadow.bin`, formats unchanged, so the export and the game read
-them as before). The Python stage stays the reference and the default.
+them as before). The stage runs on the Rust engine only; the Python build (`detail.run_reference`, `build_village_detail`) stays as the
+reference the tests compare it with and is not a stage.
 
 * **Build**: `make detail-rust-build` (maturin into the pipeline venv; needs `cargo` and the GEOS development files, e.g. `sudo dnf install geos-devel`
   on Fedora or `libgeos-dev` on Debian, because the `geos` crate links the system GEOS, the library shapely wraps; the build is a
   plain Rust build of about 15 s. Use a GEOS of the same version as shapely's (`python -c "import shapely; print(shapely.geos_version)"`)
   so the geometry matches the Python stage; the module needs the system `libgeos` at run time too). `make setup` (`uv sync`) removes the module again: build it again after.
   `cd pipeline/rust/detail && cargo test --release` runs the Rust tests.
-* **Switch**: `python -m drycastle_pipeline detail --area village --engine rust`, `make detail AREA=village ENGINE=rust`, or
-  `DRYCASTLE_DETAIL_ENGINE=rust` (also for `run-all`). Without any of them the Python stage runs. `DRYCASTLE_DETAIL_THREADS=N` caps the
+* **Running it**: `make detail` and `make map` build the engine first (`detail-rust-build`), then run it; a stage run without the
+  module fails with the build hint. There is no engine switch. `DRYCASTLE_DETAIL_THREADS=N` caps the
   threads (default: all cores); the result is byte-identical for any thread count. Nothing in `rules.yaml` changed: the engine reads the
   same `detail` section (including the `ground.types.<type>.detail` overlays, which Python lays over the recipe section and hands over).
 * **What runs where**: Python reads the work files, the rules, the ground types and `edits.json` (regions, placed-object clearance
