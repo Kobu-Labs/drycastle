@@ -23,7 +23,8 @@ public partial class IntelScreen : Node3D
 
     readonly IntelAnchor _anchor;
     readonly IntelFile _cfg;
-    readonly MapBase? _mapBase;
+    readonly Drycastle.MapLoader.MapLoader _loader;
+    MapBase? _mapBase;
     SubViewport? _vp;
     IntelScreenView? _view;
     Node3D? _rig;
@@ -34,11 +35,11 @@ public partial class IntelScreen : Node3D
 
     const string DataPath = "res://data/intel.json";
 
-    IntelScreen(IntelAnchor anchor, IntelFile cfg, MapBase? mapBase)
+    IntelScreen(IntelAnchor anchor, IntelFile cfg, Drycastle.MapLoader.MapLoader loader)
     {
         _anchor = anchor;
         _cfg = cfg;
-        _mapBase = mapBase;
+        _loader = loader;
         Name = "IntelScreen";
     }
 
@@ -58,11 +59,14 @@ public partial class IntelScreen : Node3D
             GD.Print($"intel: bunker '{cfg.BaseBunker}' has no wall for an intel screen in this map (export the map again); no intel room, announcements still work");
             return null;
         }
-        return new IntelScreen(anchor, cfg, MapBase.For(map));
+        return new IntelScreen(anchor, cfg, map);
     }
 
     /// <summary>The grid reference of the base on the tactical map sheet ("F7"), or null when there is no map to say it on. The announcement names it.</summary>
-    public string? BaseReference => _mapBase is { } b ? TacticalMapMath.ReferenceOf(_anchor.At, b.Origin.X, b.SouthZ, b.SideMetres) : null;
+    public string? BaseReference => Base is { } b ? TacticalMapMath.ReferenceOf(_anchor.At, b.Origin.X, b.SouthZ, b.SideMetres) : null;
+
+    /// <summary>The shared map base (the minimap's and the tactical map's), taken on first use: only a loaded map can make one, and it is remembered for the map's lifetime, so it is not asked for while loading.</summary>
+    MapBase? Base => _mapBase ??= MapBase.For(_loader);
 
     public override void _Ready()
     {
@@ -70,7 +74,7 @@ public partial class IntelScreen : Node3D
         if (DisplayServer.GetName() == "headless") { SetProcess(false); return; }
         var width = Math.Max(64, (int)MathF.Round(_anchor.Width * IntelScreenView.PxPerMetre));
         var height = Math.Max(64, (int)MathF.Round(_anchor.Height * IntelScreenView.PxPerMetre));
-        _vp = new SubViewport { Size = new Vector2I(width, height), RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled, TransparentBg = false, GuiDisableInput = true };
+        _vp = new SubViewport { Size = new Vector2I(width, height), RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled, TransparentBg = false, Disable3D = true, GuiDisableInput = true };
         AddChild(_vp);
         _view = new IntelScreenView(width);
         _vp.AddChild(_view);
@@ -125,7 +129,7 @@ public partial class IntelScreen : Node3D
         {
             var events = Board.Events;
             var featured = events.Count == 0 ? 0 : (int)(Math.Floor(now / _cfg.RotateSeconds) % events.Count);
-            _view.Show(events, featured, now, _mapBase, Board.Version);
+            _view.Show(events, featured, now, Base, Board.Version);
             _shownVersion = Board.Version;
             _nextRefresh = Math.Floor(now) + 1.0; // on the second, so the countdown does not skip a number
             _renders = 3;
