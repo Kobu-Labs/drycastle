@@ -34,11 +34,15 @@ def main():
     ap.add_argument("--timeout", type=int, default=900)
     ap.add_argument("--gpu-index", type=int, default=-1, help="Godot --gpu-index (pick the adapter: 0/1)")
     ap.add_argument("--repeat", type=int, default=1)
+    ap.add_argument("--keep-profile", action="store_true", help="use the real saved settings (default: a fresh profile = new install)")
     ap.add_argument("--blasts", type=float, default=0, help="bench: rocket explosions per second around the camera (--perf-blasts)")
     a = ap.parse_args()
     for v in [x for _ in range(a.repeat) for x in a.variants.split(",")]:
         d = out_dir(f"{a.tag}-{a.gpu}{a.gpu_index if a.gpu_index >= 0 else ''}-{v}-{int(time.time()) % 100000}")
         env = dict(os.environ)
+        if not a.keep_profile:  # a new install: no saved settings file, so game defaults (MSAA etc.) apply
+            import tempfile
+            env["XDG_DATA_HOME"] = tempfile.mkdtemp(prefix="drycastle-fresh-profile-")
         if a.gpu == "nvidia":
             env.update({"__NV_PRIME_RENDER_OFFLOAD": "1", "__GLX_VENDOR_LIBRARY_NAME": "nvidia", "__VK_LAYER_NV_optimus": "NVIDIA_only", "DRI_PRIME": "1"})
         args = [GODOT, "--path", str(SHOOTER), "--resolution", a.res, "--windowed"] + (["--gpu-index", str(a.gpu_index)] if a.gpu_index >= 0 else []) + RENDERER.get(v, []) + ["--", "--role", "client", "--offline", "--map", a.map, "--perf-route", "--perf-out", str(d),
