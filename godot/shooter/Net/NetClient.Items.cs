@@ -14,8 +14,8 @@ public readonly record struct HeldItem(int Index, ItemDef Def, int Pickups)
 }
 
 /// <summary>
-/// Items on the client (issues #261, #267): what the local player wears and carries in the bag (the server's <see cref="EventKind.Equipment"/>:
-/// <see cref="WornItems"/>, <see cref="BagContents"/>, drawn as the HUD's headgear chip and by the Equipment screen), the items each corpse carries
+/// Items on the client (issues #261, #267, #268): what the local player wears and carries in the bag (the server's <see cref="EventKind.Equipment"/>:
+/// <see cref="WornItems"/>, <see cref="BagContents"/>, drawn by the Equipment screen; nothing on the HUD shows Items), the items each corpse carries
 /// (<see cref="EventKind.CorpseItems"/>: <see cref="CorpseItems"/>) and the notices (an item crumbles, the bag is full). The server decides
 /// everything; the client sends only wishes (the <c>Request...</c> methods), and what it shows is what the server last said. Screens read the state
 /// through the public members below and redraw on <see cref="ItemsChanged"/> and <see cref="CorpseItemsChanged"/>. The items on the ground are
@@ -38,9 +38,6 @@ public partial class NetClient
     /// <summary>The views the screens read, rebuilt once per Equipment event (not per frame, not per read).</summary>
     IReadOnlyList<HeldItem?> _wornView = Array.AsReadOnly(new HeldItem?[Equipment.SlotCount]);
     IReadOnlyList<HeldItem?> _bagView = Array.AsReadOnly(new HeldItem?[Bag.Cells]);
-
-    /// <summary>The name of what the local player wears in the headgear slot, for the HUD chip (worded once per Equipment event, not per frame); null for nothing.</summary>
-    string? _headgearName;
 
     /// <summary>The items each corpse carries, by corpse id. Only corpses that carry some are in it.</summary>
     readonly Dictionary<ushort, IReadOnlyList<HeldItem>> _corpseItems = new();
@@ -83,6 +80,15 @@ public partial class NetClient
 
     /// <summary>The item lying on the ground within reach from the last render (a world entity id for <see cref="RequestTakeGroundItem"/>), or null.</summary>
     public ushort? GroundItemInReach => _groundNear;
+
+    IconRegistry? _itemIcons;
+
+    /// <summary>The icon of an item (<c>ui/icons/items/&lt;id&gt;.png</c>, else the generic item icon), for the cells of the Equipment screen and the corpse chooser.</summary>
+    public Texture2D? ItemIcon(ItemDef def)
+    {
+        _itemIcons ??= new IconRegistry(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), ItemData.Items.Select(i => i.Id));
+        return ResourceLoader.Load<Texture2D>(_itemIcons.Resolve(IconKind.Item, def.Id, p => ResourceLoader.Exists(p)));
+    }
 
     /// <summary>The name a player reads for an item: the translation (<c>item.id</c>), else the name in items.json.</summary>
     public string ItemName(ItemDef def)
@@ -130,7 +136,6 @@ public partial class NetClient
                 _bagItems = bag;
                 _wornView = View(worn);
                 _bagView = View(bag);
-                _headgearName = WornHeadgear is { } head ? ItemName(head) : null;
                 SetWornOf(_myId, worn.Select(w => (int?)w?.Item).ToArray()); // the seat view of the local player
                 ItemsChanged?.Invoke();
                 break;
@@ -157,8 +162,6 @@ public partial class NetClient
 
     /// <summary>The definition of what the local player wears in a slot, or null.</summary>
     ItemDef? WornIn(EquipSlot slot) => Worn(slot)?.Def;
-
-    ItemDef? WornHeadgear => WornIn(EquipSlot.Headgear);
 
     /// <summary>Records what a player wears and dresses their character (a remote player's, or the local player's in a vehicle seat) when it exists.</summary>
     void SetWornOf(ushort player, int?[] slots)

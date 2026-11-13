@@ -103,7 +103,6 @@ public partial class Hud : CanvasLayer
         BuildCrosshair();
         BuildBreath();
         BuildHealth();
-        BuildHeadgear();
         BuildAir();
         BuildAmmo();
         BuildSeats(); // the vehicle seat schematic above the vehicle readout
@@ -615,6 +614,7 @@ public partial class Hud : CanvasLayer
         UpdateCrosshair();
         UpdateBreath();
         UpdateTacticalMap();
+        UpdateEquipment();
         var want = (Input.IsActionPressed("scoreboard") && !ChatOpen) || _phase == MatchPhase.Ending; // Tab completes in the chat box
         if (want != _boardShown || (want && _boardDirty)) UpdateBoard(want);
     }

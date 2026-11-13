@@ -843,6 +843,7 @@ public partial class NetClient : Node
     {
         if (HandleChatInput(e)) return; // T or "/": the chat box
         if (HandleMapInput(e)) return; // M: the tactical map
+        if (HandleEquipmentInput(e)) return; // F: the Equipment screen (#268)
         if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
         if (HandleSeatInput(e)) return; // a number key while seated takes that seat
         if (HandleViewInput(e)) return; // the vehicle view key while driving: chase camera or cockpit

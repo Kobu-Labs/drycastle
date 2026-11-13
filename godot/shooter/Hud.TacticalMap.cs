@@ -35,6 +35,7 @@ public partial class Hud
         if (ChatOpen) return false; // the key is typing
         if (_tacticalMap.IsOpen) { _tacticalMap.Close(); return true; }
         if (MapBlocked) return false;
+        _equipment?.Close(); // the two overlays never show together
         _tacticalMap.Open(_minimap.Base);
         return true;
     }

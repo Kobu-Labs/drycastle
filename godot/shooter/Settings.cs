@@ -218,6 +218,7 @@ public static class InputBindings
         ("sandbox_panel", Binding.Key((int)Key.F4)),
         ("chat", Binding.Key((int)Key.T)),
         ("map", Binding.Key((int)Key.M)),
+        ("inventory", Binding.Key((int)Key.F)),
     };
 
     public static BindingMap NewMap() => new(Defaults);

@@ -16,6 +16,9 @@ public partial class NetClient
     /// <summary>The latest look per player id.</summary>
     public readonly Dictionary<ushort, CamoSpec> Appearances = new();
 
+    /// <summary>The local player's own Camouflage as the server last announced it, or null before that (the Equipment screen's figure).</summary>
+    public CamoSpec? OwnLook => Appearances.TryGetValue(_myId, out var look) ? look : null;
+
     /// <summary>Fired when a player's look arrives or changes (including this player's own).</summary>
     public event Action<ushort, CamoSpec>? AppearanceChanged;
 

@@ -22,6 +22,15 @@ public static class ShooterTheme
     /// <summary>Opacity of a form row whose control is disabled (the customiser's inert rows): dimmed, still readable.</summary>
     public const float DisabledAlpha = 0.45f;
 
+    // item cells (Equipment screen, corpse chooser): the cell, the icon in it, the pickup pips under the icon, the figure in the Equipment screen
+    public const int Cell = 10 * Space, CellIcon = 7 * Space, CellGap = Space + Space / 2, Pip = Space;
+    public const int AvatarWidth = 45 * Space, AvatarHeight = 60 * Space;
+    /// <summary>Seconds a refused cell shakes, how far it moves (pixels at the reference size) and how many swings it makes.</summary>
+    public const float ShakeSeconds = 0.3f;
+    public const int ShakeReach = Space / 2, ShakeSwings = 3;
+    /// <summary>The drag preview's opacity and the opacity of a cell that is the source of a drag or cannot take the item being dragged.</summary>
+    public const float DragPreviewAlpha = 0.85f, DragDimAlpha = 0.45f;
+
     // text sizes (five); body text is 20 and nothing is under 16 at 1080p
     public const int FontSmall = 16, FontBody = 20, FontHead = 24, FontBig = 32, FontDisplay = 48;
 
@@ -163,6 +172,8 @@ public static class ShooterTheme
         t.SetConstant("h_separation", "IntelFlow", Space);
         t.SetConstant("v_separation", "IntelFlow", Space);
 
+        ItemCellStyles(t);
+
         t.SetStylebox("background", "ProgressBar", Box(new Color(0, 0, 0, 0.55f), 0, Line));
         Bar(t, "HealthBar", Good);
         Bar(t, "HealthBarLow", Danger);
@@ -171,6 +182,36 @@ public static class ShooterTheme
         Bar(t, "StatBarSaved", Dim);     // loadout editor: the saved item's stat, for comparison
         t.SetFontSize("font_size", "ProgressBar", FontSmall);
         Menu(t);
+    }
+
+    /// <summary>
+    /// The item cell (the Equipment screen's slots and bag, the corpse chooser's list): every state has its own box. Hover, pressed and the valid drop
+    /// target change the border width and the fill, not only the colour; the cell that is the source of a drag, or cannot take the dragged item, is dimmed.
+    /// The pips (pickups used of the limit: filled for used, hollow for left, the warn colour when the next take makes the item crumble) and the ghost
+    /// icon of an empty slot take their colours from here too.
+    /// </summary>
+    static void ItemCellStyles(Theme t)
+    {
+        const string c = "ItemCell";
+        t.SetStylebox("normal", c, Box(Raised, 0, Line));
+        t.SetStylebox("hover", c, Box(Hover, 0, Accent));
+        t.SetStylebox("pressed", c, Box(Active, 0, Accent, BorderStrong));
+        t.SetStylebox("disabled", c, Box(Surface, 0, new Color(Line, 0.4f)));
+        t.SetStylebox("drag", c, Box(Surface, 0, Dim));
+        t.SetStylebox("target", c, Box(Active, 0, Good, BorderStrong));
+        t.SetStylebox("focus", c, Ring(0));
+        var frame = new StyleBoxFlat { DrawCenter = false, BorderColor = Good };
+        frame.SetBorderWidthAll(BorderStrong);
+        frame.SetCornerRadiusAll(Radius);
+        t.SetStylebox("target_frame", c, frame); // a valid drop target that is not a cell (the avatar): outlined, not filled, so the figure stays visible
+        t.SetColor("pip_used", c, Accent);
+        t.SetColor("pip_last", c, Warn);
+        t.SetColor("pip_left", c, Dim);
+        t.SetColor("ghost", c, new Color(Dim, 0.55f));
+        t.SetConstant("pip_size", c, Pip);
+        t.SetConstant("icon_size", c, CellIcon);
+        PanelVariation(t, "ItemTip", Box(Raised with { A = 0.97f }, Space, Line));
+        PanelVariation(t, "KeyCap", Box(Raised, Space / 2, Line));
     }
 
     static StyleBoxFlat Ring(int pad = Space * 1) => new StyleBoxFlat { DrawCenter = false, BorderColor = Accent }.With(b => { b.SetBorderWidthAll(BorderStrong); b.SetCornerRadiusAll(Radius); b.SetContentMarginAll(pad); });

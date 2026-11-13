@@ -31,6 +31,7 @@ public partial class NetClient
         AddChild(_hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
         _hud.SetSandbox(SandboxGranted, SandboxHeldStreak, SandboxTakesDamage); // the SANDBOX badge (#156)
         WireLoadoutHud(_hud);
+        _hud.AttachEquipment(this); // F (#268)
         _hud.Minimap.Build(Map); // once per connection; the texture comes from the map's parcels and roads (ticket #119)
     }
 
@@ -76,7 +77,8 @@ public partial class NetClient
     {
         _hud?.SetControlMode(_gunship != null || _controlling); // one mode switch: a turret or the missile owns the screen (ticket #152)
         _hud?.SetHealth(Mathf.CeilToInt(_me?.Health ?? 100));
-        _hud?.SetHeadgear(_headgearName);
+        if (_me != null) _me.MoveWithFreeMouse = _hud?.EquipmentOpen ?? false; // the Equipment screen frees the mouse, not the legs (#268)
+        if (_hud is { EquipmentOpen: true } && (MenuOpen?.Invoke() == true || ChooserOpen)) _hud.CloseEquipment(); // a menu or the corpse chooser takes the screen
         UavTick();
         if (_me != null) Rozhlas.Current?.SetListener(_me.GlobalPosition); // the loudspeaker is heard where the player is, not where a vehicle's orbiting camera is
         if (_me != null) _hud?.SetBreath(Breath.AirLeft(_me.State), _me.HeadUnder);

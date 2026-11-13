@@ -488,7 +488,20 @@ items, ADR 0018 (#267, protocol 31).
   toast "The item crumbles in your hands". Other items set their own limit or none (no limit: it never crumbles).
 - **What lasts.** Nothing is stored (ADR 0003's profile is untouched). A death drops everything on the corpse; leaving the match loses it; a new round
   keeps it on the player (the round's corpses and ground items, and any item on them, go); a reconnect starts bare.
-- **HUD.** A "Headgear / name" chip sits beside the health bar while an item is worn, and is hidden otherwise.
+- **HUD.** Nothing on the HUD shows Items (the "Headgear / name" chip beside the health bar is gone): what is worn and carried is the Equipment screen's.
+- **The Equipment screen (#268).** F (rebindable action `inventory`, default F, saved with the other controls) opens it; F and Esc close it. A non-pausing
+  overlay in the HUD like the tactical map (`EquipmentScreen`, `Hud.Equipment.cs`): the mouse is released, the movement keys still work
+  (`Player.MoveWithFreeMouse`: move, jump, sprint, crouch, prone), firing and the other keys do not. It opens on foot and in a vehicle seat, never in a turret or
+  missile view, and closes on death, at the end of the match and when a menu or the corpse chooser opens. No title, labels, buttons or explanation text.
+  The figure (`CamoPreview`, the player's Camouflage, worn Items drawn) is in the middle, the headgear slot above its head (an empty slot shows the ghost
+  of its type), the bag as three columns of two on the right, one glyph-only hint row (F, Enter, Delete; the pad's Y, A, X on a gamepad) under the figure.
+  A cell (`ItemCell`) is an icon with its pickup pips (a pip per allowed pickup, filled for the ones used; none for an item with no limit) and a name-only
+  tooltip on hover or focus. Controls: click or Enter on a worn item takes it off into the first free bag cell (with a full bag the cell shakes, the error
+  sound plays and the toast says so, and nothing is sent), on a bagged item puts it on, swapping what was worn into its cell; drag between the bag, a slot and
+  the figure (valid targets highlight, the others dim; a worn item dropped on a bag cell goes to the first free one); drag out of the panel or press Delete to
+  drop on the ground (no confirm: picking it up again costs a pickup); the arrows move focus; the head slot, hovered or focused, frames the figure's head. Every
+  move is a request (`RequestEquip` and the others); the cells redraw only on the server's next Equipment event, and further requests wait for it (at most 0.6 s).
+  Rules and focus order are pure (`ShooterCore/Items/EquipmentScreenLogic.cs`, `EquipmentScreenTests`).
 - **Drawn on the character (#266).** `items.json` `model` names the item's model (`assets/`, authored in the slot's frame: metres, facing -Z, for headgear
   the origin is the middle of the head). `CharacterView.SetWorn(slot, item)` (`CharacterView.Worn.cs`) hangs it on the head bone, so it follows every
   clip, stance, the prone roll and the ragdoll, and hides what it replaces: the helmet and the hair, the head's foliage and the face paint. The same call

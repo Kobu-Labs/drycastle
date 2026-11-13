@@ -45,6 +45,11 @@ public partial class Player : CharacterBody3D
     /// <summary>When set, replaces keyboard/mouse input (smoke test).</summary>
     public MoveInput? InputOverride { get; set; }
     public bool CaptureMouse { get; set; } = true;
+    /// <summary>
+    /// The movement keys (and jump, sprint, crouch and prone) still work while the mouse is released: the Equipment screen (#268) is open and the player
+    /// walks, drives or flies on. Everything else (firing, aiming, reload, use) and the look stay with the captured mouse.
+    /// </summary>
+    public bool MoveWithFreeMouse { get; set; }
     /// <summary>False on the dedicated server (no camera node).</summary>
     public bool UseCamera { get; set; } = true;
     /// <summary>The first-person camera (viewmodel parent).</summary>
@@ -402,12 +407,13 @@ public partial class Player : CharacterBody3D
         if (Input.IsActionPressed("killstreak")) b |= MoveButtons.Killstreak;
         if (_state.HeadUnder || _state.OnLadder) b &= ~MoveButtons.Fire; // no firing with the head under water, nor with both hands on a ladder
         var captured = Input.MouseMode == Input.MouseModeEnum.Captured;
+        var moves = captured || MoveWithFreeMouse;
         return new MoveInput
         {
-            MoveX = captured ? (Input.IsActionPressed("move_right") ? 1 : 0) - (Input.IsActionPressed("move_left") ? 1 : 0) : 0,
-            MoveY = captured ? (Input.IsActionPressed("move_forward") ? 1 : 0) - (Input.IsActionPressed("move_back") ? 1 : 0) : 0,
+            MoveX = moves ? (Input.IsActionPressed("move_right") ? 1 : 0) - (Input.IsActionPressed("move_left") ? 1 : 0) : 0,
+            MoveY = moves ? (Input.IsActionPressed("move_forward") ? 1 : 0) - (Input.IsActionPressed("move_back") ? 1 : 0) : 0,
             Yaw = _yaw,
-            Buttons = captured ? b : MoveButtons.None,
+            Buttons = captured ? b : MoveWithFreeMouse ? b & (MoveButtons.Jump | MoveButtons.Sprint | MoveButtons.Crouch | MoveButtons.Prone) : MoveButtons.None,
             SpeedScale = 1,
         };
     }
