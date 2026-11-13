@@ -23,6 +23,8 @@ public sealed class CamoPreview
     public enum Framing { Body, Head }
     static readonly Vector3 BodyTarget = new(0, 0.95f, 0), HeadTarget = new(0, PlayerHitBox.ModelHeadHeight * PlayerHitBox.DrawScale, 0), ProneTarget = new(0, 0.35f, 0);
     const float BodyDistance = 3.3f, HeadDistance = 1.25f;
+    /// <summary>The head close-up's distance while a headgear Item is worn: the Bigfoot head is a good deal bigger than the head it covers.</summary>
+    const float HeadDistanceWorn = 1.7f;
 
     /// <summary>The control to add to the menu. Its size is the preview's size.</summary>
     public readonly Control Root;
@@ -83,6 +85,17 @@ public sealed class CamoPreview
     /// <summary>Shows a look. A look that camo.json rejects leaves the previous one on screen.</summary>
     public void Show(CamoSpec spec, CamoFile data) => _view?.SetCamo(spec, data);
 
+    /// <summary>
+    /// Shows <paramref name="item"/> worn in <paramref name="slot"/>, or nothing with null (#266), replacing what the figure wore there. An Item that does
+    /// not belong to the slot is not drawn. A headgear Item replaces the helmet (hidden while it is on) and rides the head in every pose;
+    /// <see cref="Frame"/> with <see cref="Framing.Head"/> shows it close up. Safe to call again with what the player wears now: the same Item changes nothing.
+    /// </summary>
+    public void ShowWorn(EquipSlot slot, ItemDef? item)
+    {
+        _view?.SetWorn(slot, item);
+        if (_framing == Framing.Head) MoveCamera(); // the head close-up steps back for a big headgear Item
+    }
+
     public void SetProne(bool prone)
     {
         _prone = prone;
@@ -128,7 +141,9 @@ public sealed class CamoPreview
 
     /// <summary>Where the current framing wants the camera. Lying prone there is no head-height close-up: the whole figure is framed.</summary>
     (Vector3 Target, float Distance) Wanted() =>
-        _prone ? (ProneTarget, BodyDistance) : _framing == Framing.Head ? (HeadTarget, HeadDistance) : (BodyTarget, BodyDistance);
+        _prone ? (ProneTarget, BodyDistance)
+        : _framing == Framing.Head ? (HeadTarget, _view?.WornIn(EquipSlot.Headgear) != null ? HeadDistanceWorn : HeadDistance)
+        : (BodyTarget, BodyDistance);
 
     void MoveCamera()
     {

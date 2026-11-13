@@ -69,6 +69,27 @@ public static class ItemEvents
         return true;
     }
 
+    /// <summary>
+    /// Server to everyone but the wearer, <see cref="EventKind.WornItems"/>: u16 player id, then the same slots as <see cref="EncodeEquipment"/> (u8 count, one u8 item per
+    /// slot, 0 none). Sent when what a player wears changes, and to a joiner for each player who wears something, so every client can draw it.
+    /// </summary>
+    public static byte[] EncodeWorn(ushort player, Equipment worn)
+    {
+        var b = new byte[2 + 1 + worn.Slots.Count];
+        BinaryPrimitives.WriteUInt16LittleEndian(b, player);
+        b[2] = (byte)worn.Slots.Count;
+        for (var i = 0; i < worn.Slots.Count; i++) b[3 + i] = ToWire(worn.Slots[i]?.Item);
+        return b;
+    }
+
+    public static bool TryDecodeWorn(ReadOnlySpan<byte> p, out ushort player, out int?[] slots)
+    {
+        player = 0; slots = Array.Empty<int?>();
+        if (p.Length < 3 || p.Length != 3 + p[2]) return false;
+        player = BinaryPrimitives.ReadUInt16LittleEndian(p);
+        return TryDecodeEquipment(p[2..], out slots);
+    }
+
     /// <summary>Server to one player, <see cref="EventKind.ItemNotice"/>: u8 <see cref="ItemNoticeKind"/>.</summary>
     public static byte[] EncodeNotice(ItemNoticeKind kind) => new[] { (byte)kind };
 

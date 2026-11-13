@@ -216,6 +216,12 @@ public partial class Shooter : Node3D
         var steps = new List<Action>();
         foreach (var f in WeaponFx.ModelFiles) { var file = f; steps.Add(() => ModelLib.Warm(file)); }
         steps.Add(() => ModelLib.Warm(CharacterView.DefaultModel));
+        foreach (var item in _data!.Items.Items)
+        {
+            if (item.Model == "") continue;
+            var model = item.Model;
+            steps.Add(() => ModelLib.Warm(model)); // a worn item (#266) is on screen the moment someone puts it on
+        }
         foreach (var v in _data!.Vehicles.Vehicles)
         {
             if (v.Model == "") continue;

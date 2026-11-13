@@ -4,9 +4,12 @@
   // killstreak: event rewards come here. The wire names an item by its position in this list (u8, 0 = none, so item n is sent as n + 1),
   // so append new items at the end and do not reorder or remove them (the same rule as the species in animals.json).
   //   slot            the equipment slot it goes into: "headgear" (instead of the camouflage helmet; one item per slot)
+  //   model           the model a character wears, relative to the asset library (assets/), authored in the slot's frame: metres, facing -Z,
+  //                   for headgear the origin is the middle of the head (see CharacterView.Worn.cs). Leave out to wear it without drawing it
   //   pickup_limit    how many times it can be taken from a corpse over its whole life; the next attempt makes it crumble. Leave out for no limit
   //   headshot_immune a headshot on its wearer is resolved as a body hit: no headshot multiplier, no headshot marker, no headshot bonus XP
+  // Icons: ui/icons/items/<id>.png (tools/render_icons.gd renders it from `model`); an item without one shows the generic item icon.
   "items": [
-    { "id": "bigfoot_head", "name": "Bigfoot head", "slot": "headgear", "pickup_limit": 3, "headshot_immune": true }
+    { "id": "bigfoot_head", "name": "Bigfoot head", "slot": "headgear", "model": "drycastle-generated-models/bigfoot_head.glb", "pickup_limit": 3, "headshot_immune": true }
   ]
 }

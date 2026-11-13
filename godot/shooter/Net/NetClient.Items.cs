@@ -23,6 +23,13 @@ public partial class NetClient
     /// <summary>The item each corpse carries (items.json position), by corpse id. Only corpses that carry one are in it.</summary>
     readonly Dictionary<ushort, int> _corpseItems = new();
 
+    /// <summary>
+    /// What every player wears (items.json position per <see cref="EquipSlot"/>), by player id, for the characters to draw (#266): the others from
+    /// <see cref="EventKind.WornItems"/>, the local player from <see cref="EventKind.Equipment"/>. Kept after the character is made, so a view made
+    /// later is dressed at once; a player who leaves is forgotten.
+    /// </summary>
+    readonly Dictionary<ushort, int?[]> _wornBy = new();
+
     void OnItemEvent(EventKind kind, byte[] payload)
     {
         switch (kind)
@@ -30,9 +37,14 @@ public partial class NetClient
             case EventKind.Equipment when ItemEvents.TryDecodeEquipment(payload, out var slots):
                 _wornItems = slots;
                 _headgearName = WornHeadgear is { } worn ? ItemName(worn) : null;
+                SetWornOf(_myId, slots); // the seat view of the local player
+                break;
+            case EventKind.WornItems when ItemEvents.TryDecodeWorn(payload, out var player, out var others):
+                SetWornOf(player, others);
                 break;
             case EventKind.CorpseItem when ItemEvents.TryDecodeCorpseItem(payload, out var corpse, out var item):
                 if (item is { } i) _corpseItems[corpse] = i; else _corpseItems.Remove(corpse);
+                DressCorpse(corpse);
                 break;
             case EventKind.ItemNotice when ItemEvents.TryDecodeNotice(payload, out var notice):
                 if (notice == ItemNoticeKind.Crumbled) UiShell.Instance?.Toast(Strings.T("toast.item.crumbled"), ToastKind.Warn);
@@ -55,6 +67,35 @@ public partial class NetClient
     ItemDef? WornIn(EquipSlot slot) => (int)slot < _wornItems.Length && _wornItems[(int)slot] is { } i ? ItemData.At(i) : null;
 
     ItemDef? WornHeadgear => WornIn(EquipSlot.Headgear);
+
+    /// <summary>Records what a player wears and dresses their character (a remote player's, or the local player's in a vehicle seat) when it exists.</summary>
+    void SetWornOf(ushort player, int?[] slots)
+    {
+        _wornBy[player] = slots;
+        if (_remotes.TryGetValue(player, out var r) && r.View != null) Dress(r.View, slots);
+        if (player == _myId && _selfView != null) Dress(_selfView, slots);
+    }
+
+    /// <summary>Forgets a player who left.</summary>
+    void ForgetWorn(ushort player) => _wornBy.Remove(player);
+
+    /// <summary>The items.json positions of a player's equipment on a character: every slot is set, so an empty one takes off what was worn.</summary>
+    void Dress(CharacterView view, int?[]? slots)
+    {
+        for (var s = 0; s < Equipment.SlotCount; s++)
+            view.SetWorn((EquipSlot)s, slots != null && s < slots.Length && slots[s] is { } i ? ItemData.At(i) : null);
+    }
+
+    /// <summary>Dresses a new character of a player with what they wear.</summary>
+    void DressPlayer(CharacterView view, ushort player) => Dress(view, _wornBy.GetValueOrDefault(player));
+
+    /// <summary>Shows the item a corpse carries on the dead body (and nothing once it is taken or has crumbled). The view may not exist yet: it is dressed when it spawns.</summary>
+    void DressCorpse(ushort corpse)
+    {
+        if (!_corpses.TryGetValue(corpse, out var v)) return;
+        var item = CorpseItem(corpse);
+        for (var s = 0; s < Equipment.SlotCount; s++) v.View.SetWorn((EquipSlot)s, item is { } d && (int)d.Slot == s ? d : null);
+    }
 
     void SendPickUpItem(ushort corpse) =>
         Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.PickUpCorpseItem, ItemEvents.EncodePickUp(corpse))), (int)ENetPacketPeer.FlagReliable);

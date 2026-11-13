@@ -474,6 +474,7 @@ public partial class NetServer : Node
         SendIntelOnJoin(c); // the events on the intel screen
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
+        SendWornOnJoin(c); // what the others wear (#266), to draw on their characters
         _match.AddPlayer(c.Id, c.Name, c.Sandbox); // spawns the player (event) and broadcasts the scoreboard
         SandboxAnnounce(c); // sandbox name tags both ways, and the held streak (#156)
         _host.Flush();

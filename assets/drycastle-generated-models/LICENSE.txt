@@ -5,3 +5,4 @@ flak.glb  built by scripts/make_flak_model.py (python3 -I scripts/make_flak_mode
 bus.glb  built by scripts/make_bus_model.py (python3 -I scripts/make_bus_model.py; standard library only, deterministic)
 utility_helicopter.glb  built by scripts/make_utility_helicopter_model.py (python3 -I scripts/make_utility_helicopter_model.py; standard library only, deterministic)
 amphibious_transport.glb  built by scripts/make_amphibious_model.py (python3 -I scripts/make_amphibious_model.py; standard library only, deterministic)
+bigfoot_head.glb  built by scripts/make_bigfoot_head_model.py (python3 -I scripts/make_bigfoot_head_model.py; standard library only, deterministic)

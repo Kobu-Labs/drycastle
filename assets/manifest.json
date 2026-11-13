@@ -3583,6 +3583,27 @@
       "used_for": "godot/shooter vehicle id amphibious (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground at the centre, metres), separate nodes for hull, the four wheels, the two front steering pivots, propeller, gun_mount, gun, barrel"
       },
       {
+      "id": "pack:drycastle-generated-models/bigfoot_head",
+      "category": "other",
+      "name": "Bigfoot head (faceted ape-like headgear with a crest, mane and amber eyes)",
+      "file": "drycastle-generated-models/bigfoot_head.glb",
+      "size_m": [
+        0.88,
+        1.12,
+        0.87
+      ],
+      "tags": [
+        "shooter",
+        "worn-item",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_bigfoot_head_model.py (original geometry written as code; python3 -I scripts/make_bigfoot_head_model.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "godot/shooter item id bigfoot_head (data/items.json `model`), worn by CharacterView on the head bone and rendered into ui/icons/items/bigfoot_head.png; authored in the headgear slot frame (forward -Z, origin at the middle of the head, metres), one mesh node, 8 flat-colour materials"
+      },
+      {
       "id": "pack:welcome-sign/welcome_sign",
       "category": "other",
       "name": "Welcome sign (VITAJTE V OBCI)",
@@ -4626,6 +4647,12 @@
         "what": "flat white glyphs authored as SVG in godot/shooter/ui/icons/src/ by godot/shooter/tools/make_icons.py; no third-party art, no downloaded icon pack",
         "licence": "same as the repository (original work)",
         "source": "authored in this repository (#146)"
+      },
+      {
+        "files": "items/<id>.png (1, 128x128, colour), item_fallback.png (white glyph)",
+        "what": "items/ are renders of the item's worn model (items.json model, here drycastle-generated-models/bigfoot_head.glb) by godot/shooter/tools/render_icons.gd; item_fallback.png is a flat white glyph authored as SVG by godot/shooter/tools/make_icons.py",
+        "licence": "same as the repository (original work, CC0 models)",
+        "source": "authored in this repository (#266)"
       }
     ],
     "generated": "2026-11-11",

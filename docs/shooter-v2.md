@@ -476,12 +476,22 @@ there is one slot, headgear, and one item, the Bigfoot head. Decisions: ADR 0016
   toast "The item crumbles in your hands". Other items set their own limit or none (no limit: it never crumbles).
 - **What lasts.** Nothing is stored (ADR 0003's profile is untouched). A death drops the item on the corpse; leaving the match loses it; a new round
   keeps it on the player (the round's corpses, and any item on them, go); a reconnect starts bare.
-- **HUD.** A "Headgear / name" chip sits beside the health bar while an item is worn, and is hidden otherwise. There is no model for the Bigfoot head
-  yet, so other players still see the helmet; only the wearer's server-side hit rule and HUD chip change.
+- **HUD.** A "Headgear / name" chip sits beside the health bar while an item is worn, and is hidden otherwise.
+- **Drawn on the character (#266).** `items.json` `model` names the item's model (`assets/`, authored in the slot's frame: metres, facing -Z, for headgear
+  the origin is the middle of the head). `CharacterView.SetWorn(slot, item)` (`CharacterView.Worn.cs`) hangs it on the head bone, so it follows every
+  clip, stance, the prone roll and the ragdoll, and hides what it replaces: the helmet and the hair, the head's foliage and the face paint. The same call
+  dresses remote players (from event 194), the local player's seat view, a corpse that carries the item (from event 191: gone again once taken or crumbled)
+  and the menu figure (`CamoPreview.ShowWorn(slot, item)`). The Bigfoot head is `scripts/make_bigfoot_head_model.py` (a faceted ape-like head, 1142
+  triangles, about 30 % bigger than the head it covers). An item without a model is worn but not drawn.
+- **Icons.** `IconRegistry` has `IconKind.Item`: `ui/icons/items/<id>.png` (128x128, a render of `model` from `tools/render_icons.gd`); an item without a
+  file shows `item_fallback.png` (a plain box glyph from `make_icons.py`), not the crossed placeholder.
 - **Granting it for tests.** An admin's `/give <item> [player]` puts a fresh item (no pickups counted) on a living player, or on the admin.
 - **Wire (protocol 28).** Event kinds 190 `PickUpCorpseItem` (client to server, u16 corpse), 191 `CorpseItem` (server to everyone: u16 corpse, u8 item or
   0; sent when a corpse that carries one spawns, when it changes, and to a joiner for each corpse that carries one), 192 `Equipment` (server to the
   wearer: u8 count, one u8 item per slot) and 193 `ItemNotice` (server to one player: u8 reason, 1 = crumbled). Codecs: `ItemEvents`.
+- **Wire (protocol 30).** Event kind 194 `WornItems` (server to everyone but the wearer: u16 player id, then the slots as in 192; sent whenever 192 is, and
+  to a joiner for each player who wears something). A client keeps the slots by player id, dresses the character when it exists or is made, and forgets
+  the player on leave. Pickup counts never leave the server.
 
 ## 8. Known gaps (collected from the closed tickets)
 
@@ -552,7 +562,7 @@ The intel room is the command post (lowest floor) of the bunker named in `data/i
 
 ## 9. Wire protocol
 
-(This section was written at version 24; the later bumps are in the summary on `Wire.ProtocolVersion`. Version 29 added event kind 185, `IntelSync`, section 8c.)
+(This section was written at version 24; the later bumps are in the summary on `Wire.ProtocolVersion`. Version 29 added event kind 185, `IntelSync`, section 8c; version 30 added kind 194, `WornItems`, section 7b.)
 
 Protocol version: **24** (`Wire.ProtocolVersion`, whose summary lists every bump). The hello carries it; a mismatch is refused with a message naming both
 versions. Version 24 (the amphibious transport, ADR 0010 to 0012): snapshot entity type 6 (Drive: a driven vehicle's speeds along and across its
@@ -607,6 +617,7 @@ Event kinds (`EventKind`, one byte in the event message):
 | | | 191 | CorpseItem (server to everyone, and to a joiner) |
 | | | 192 | Equipment (server to the wearer) |
 | | | 193 | ItemNotice (server to one player) |
+| | | 194 | WornItems (server to everyone but the wearer, and to a joiner, #266) |
 
 Message tags (`Wire.T*`): Hello 1, Welcome 2, Join 3, Leave 4, Event 5, Profile 6, SaveLoadout 7, SelectSlot 8, Error 9,
 SaveCamo 10, Input 11, Snapshot 20, WorldSnapshot 21. SaveLoadout is slot, six item strings, name (string), seq (u32 LE).

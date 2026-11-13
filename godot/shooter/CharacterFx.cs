@@ -65,6 +65,7 @@ public sealed partial class CharacterView : Node3D
         _held = null;
         _heldId = "";
         ClearCamo();
+        Array.Clear(_wornNodes); // they hang on the old skeleton, which goes with the old model
         _model?.QueueFree();
         _modelPath = path;
         HasModel = true;
@@ -83,6 +84,7 @@ public sealed partial class CharacterView : Node3D
             PrepareMesh(_mesh, path);
             BuildHandSlot(_skeleton, _mesh.Skin);
             BuildEyes(_skeleton, _mesh);
+            RebuildWorn(); // what is worn goes on the new body
         }
         _flail = _skeleton != null ? RagdollFlail.Create(_skeleton) : null;
         if (_flail != null) { _skeleton!.AddChild(_flail); ApplyFlail(); }

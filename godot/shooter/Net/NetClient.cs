@@ -300,6 +300,7 @@ public partial class NetClient : Node
             case LeaveMsg l:
                 _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
                 if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
+                ForgetWorn(l.PlayerId);
                 break;
             case EventMsg e:
                 if ((EventKind)e.Kind == EventKind.TargetRoster) OnTargetRoster(e.Payload); // target dummies' names (#148)
@@ -427,6 +428,7 @@ public partial class NetClient : Node
         var node = new Node3D { Name = $"Remote{id}" };
         var view = CharacterView.Make();
         if (Appearances.TryGetValue(id, out var look)) view.SetCamo(look, CamoData); // the look may arrive before the first snapshot (#140)
+        DressPlayer(view, id); // what they wear (#266), likewise
         node.AddChild(view);
         node.AddChild(new Label3D
         {

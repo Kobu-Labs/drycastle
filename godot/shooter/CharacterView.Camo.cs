@@ -59,11 +59,22 @@ public sealed partial class CharacterView
         if (_model == null || _mesh == null || _skeleton == null) return;
         if (_shownSpec == spec && ReferenceEquals(_shownData, data)) return; // already drawn (the loadout screen asks again on every sync)
         _bodyDef = body;
+        DrawCamo(spec, data, body);
+    }
+
+    void DrawCamo(CamoSpec spec, CamoFile data, CamoBody body)
+    {
         ClearCamo();
         _shownSpec = spec; _shownData = data;
         ApplySurfaces(spec, data, body);
         BuildTufts(spec, data, body);
         BuildFacePaint(spec);
+    }
+
+    /// <summary>Draws the look again with what is worn now (<see cref="SetWorn"/>): a headgear Item hides the helmet and hair and takes the head's foliage and face paint away.</summary>
+    void ReapplyCamo()
+    {
+        if (_shownSpec is { } spec && _shownData is { } data && _bodyDef is { } body && _mesh != null) DrawCamo(spec, data, body);
     }
 
     void ClearCamo()
@@ -131,7 +142,8 @@ public sealed partial class CharacterView
             else if (name == "Face") m = face;
             else if (body.Suit.Contains(name)) m = suit;
             else if (body.Gear.Contains(name)) m = gear;
-            else if (body.Headgear.Contains(name)) m = spec.Headgear switch { 1 => suit, 2 => HiddenMaterial(), _ => null };
+            else if (body.Headgear.Contains(name)) m = HeadCovered ? HiddenMaterial() : spec.Headgear switch { 1 => suit, 2 => HiddenMaterial(), _ => null };
+            else if (HeadCovered && body.Hair.Contains(name)) m = HiddenMaterial(); // a worn headgear Item covers the hair too
             _mesh.SetSurfaceOverrideMaterial(i, m);
         }
     }
@@ -270,6 +282,7 @@ public sealed partial class CharacterView
         var density = new[] { spec.TuftHead, spec.TuftChest, spec.TuftArms, spec.TuftLegs };
         for (var region = 0; region < regions.Length; region++)
         {
+            if (region == 0 && HeadCovered) continue; // the head is under a worn Item: foliage there would sit inside it
             var pool = regions[region];
             var areaM2 = pool.Area * Scale * Scale;
             var count = Math.Min(MaxTuftsPerRegion, (int)Math.Round(density[region] / 255f * areaM2 * TuftsPerSquareMetre));
@@ -366,7 +379,7 @@ public sealed partial class CharacterView
 
     void BuildFacePaint(CamoSpec spec)
     {
-        if (spec.FaceCoverage == 0 || _skeleton == null) return;
+        if (spec.FaceCoverage == 0 || _skeleton == null || HeadCovered) return; // a worn headgear Item covers the face (and a decal would paint on the item)
         var head = _skeleton.FindBone("Head");
         if (FacePlate() is not { } plate || head < 0 || !_bind.ContainsKey(head)) return;
         var tex = ImageTexture.CreateFromImage(FaceImage(spec));

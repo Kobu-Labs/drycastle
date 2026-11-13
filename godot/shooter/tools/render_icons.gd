@@ -1,10 +1,14 @@
-# Renders the weapon icons (ui/icons/weapons/<id>.png, 512x256, transparent) from the same held models as WeaponFx.cs.
-# Run by `make shooter-icons` (see Makefile). Side-on orthographic camera, flat ambient light, auto-fit to the model.
-# The MODELS table mirrors WeaponFx.Models; keep the two in step when a weapon is added.
+# Renders the weapon icons (ui/icons/weapons/<id>.png, 512x256, transparent) from the same held models as WeaponFx.cs,
+# and the item icons (ui/icons/items/<id>.png, 128x128, transparent) from the worn models of items.json.
+# Run by `make shooter-icons` (see Makefile). Orthographic camera, flat ambient light, auto-fit to the model. Weapons are shot side-on;
+# items from the front, a little from the side and above (a worn model faces -Z, so the camera is on the -Z side).
+# `godot --path godot/shooter --script res://tools/render_icons.gd -- items` renders only the items (the weapons are left as they are).
+# The MODELS table mirrors WeaponFx.Models, the ITEMS table the `model` of items.json; keep each in step when one is added.
 extends SceneTree
 
 const OUT_W := 512
 const OUT_H := 256
+const ITEM_SIZE := 128
 const PACK := "quaternius-ultimate-gun-pack/"
 # id -> [file in assets/quaternius-ultimate-gun-pack/, longest edge in metres]
 const MODELS := {
@@ -32,6 +36,11 @@ const MODELS := {
 	"awm": ["sniper-rifle-3.glb", 1.2],
 	"svd": ["sniper-rifle-4.glb", 1.2],
 	"bazooka": ["", 0.0],
+}
+
+# id -> [model in assets/ (items.json `model`), yaw degrees to the right of the item's front, pitch degrees above it]
+const ITEMS := {
+	"bigfoot_head": ["drycastle-generated-models/bigfoot_head.glb", 20.0, 10.0],
 }
 
 var _vp: SubViewport
@@ -74,7 +83,8 @@ func _initialize() -> void:
 
 	await process_frame
 	var failures := 0
-	for id in MODELS:
+	var only_items := OS.get_cmdline_user_args().has("items")
+	for id in ([] if only_items else MODELS.keys()):
 		var spec: Array = MODELS[id]
 		var holder := Node3D.new()
 		_world.add_child(holder)
@@ -114,8 +124,50 @@ func _initialize() -> void:
 			print("rendered ", id)
 		holder.queue_free()
 		await process_frame
+	failures += await _render_items(repo_assets)
 	print("done, failures: ", failures)
 	quit(1 if failures > 0 else 0)
+
+
+# One square render per item: the model auto-fitted, seen from the front, a little from the side and above.
+func _render_items(repo_assets: String) -> int:
+	var out_dir := ProjectSettings.globalize_path("res://ui/icons/items/")
+	DirAccess.make_dir_recursive_absolute(out_dir)
+	_vp.size = Vector2i(ITEM_SIZE, ITEM_SIZE)
+	var failures := 0
+	for id in ITEMS:
+		var spec: Array = ITEMS[id]
+		var model := _load_glb(repo_assets + String(spec[0]))
+		if model == null:
+			printerr("skip item ", id, ": ", spec[0])
+			failures += 1
+			continue
+		var holder := Node3D.new()
+		_world.add_child(holder)
+		holder.add_child(model)
+		await process_frame
+		var box := _world_box(holder)
+		var c := box.get_center()
+		var yaw := deg_to_rad(float(spec[1]))
+		var pitch := deg_to_rad(float(spec[2]))
+		# the front of a worn model is -Z: the camera stands on that side
+		var dir := Vector3(sin(yaw) * cos(pitch), sin(pitch), -cos(yaw) * cos(pitch))
+		_cam.look_at_from_position(c + dir * 5.0, c, Vector3.UP)
+		# a square view that holds the whole model from any side: the box's diagonal, with a little air
+		_cam.size = box.size.length() * 0.8
+		await process_frame
+		await process_frame
+		var img := _vp.get_texture().get_image()
+		img.convert(Image.FORMAT_RGBA8)
+		var path: String = out_dir + id + ".png"
+		if img.save_png(path) != OK:
+			printerr("save failed: ", path)
+			failures += 1
+		else:
+			print("rendered item ", id)
+		holder.queue_free()
+		await process_frame
+	return failures
 
 
 func _load_glb(path: String) -> Node3D:

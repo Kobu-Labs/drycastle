@@ -86,6 +86,14 @@ Z), `gun_mount` (the ring's carriage, yaw about Y from the ring centre, all the 
 `seat_gunner`, the lights (`light_head_l`/`_r`, `light_tail_l`/`_r`), `smoke_engine` (the engine is in the stern) and the wake points at the waterline
 (`wake_bow`, `wake_stern_l`/`_r`; the waterline afloat is 0.56 m above the origin, under the cockpit floor).
 
+`drycastle-generated-models/bigfoot_head.glb` (2026-11-13) is the Bigfoot head, the headgear item of the Bigfoot event (`godot/shooter` item id `bigfoot_head`,
+`data/items.json` `model`): a faceted, ape-like head with a sagittal crest, a heavy arched brow, a dark face plate with amber eyes, nose and bared teeth, and a
+shaggy mane of spikes round the back, cheeks and jaw. Original geometry written as code in `scripts/make_bigfoot_head_model.py` (standard library only; it
+loads the flak script's mesh helpers from the file beside it; `python3 -I scripts/make_bigfoot_head_model.py` rebuilds the file byte for byte), CC0, 8
+flat-colour materials, no texture, one mesh node, about 1100 triangles. Frame of a worn headgear item: metres, forward -Z, origin at the middle of the
+wearer's head (it is not a vehicle). About 0.88 x 1.12 x 0.87 m with the mane, sized to swallow the head of every player body; the game turns it to the
+rig's +Z face and scales it to rig units (`CharacterView.Worn.cs`). Not meant to be placed on the map, though it is listed like the other generated models.
+
 **Unverified, user-provided artwork (2026-11-13):** `welcome-sign/welcome_sign.glb` is the village welcome sign ("VITAJTE V OBCI", coat of arms, village name):
 an arched board between two light-blue posts that bend in to two legs with two cross rails, a cap and a ball on each post (about 1.05 x 3.35 x 0.12 m, origin on
 the ground between the legs, the legs run 0.15 m below it, it faces +Z, the board shows the artwork on both faces). The structure is original geometry written as
@@ -219,8 +227,8 @@ section 0.5 m wide); the editor needs to scale them. Sizes in the manifest are t
 ## Shooter UI icons (#146)
 
 Loadout and HUD icons live in `godot/shooter/ui/icons/` (not in this library, not placeable). `IconRegistry`
-(`godot/ShooterCore/Icons`) maps each weapon, category, perk and killstreak id to its file; a missing id gets
-`placeholder.png`. Regenerate with `make shooter-icons`. The weapon renders need a rendering device (a display, `DISPLAY` set); the
+(`godot/ShooterCore/Icons`) maps each weapon, category, perk, killstreak and item id to its file; a missing id gets
+`placeholder.png` (a missing item gets `item_fallback.png`, a plain box). Regenerate with `make shooter-icons`. The weapon renders need a rendering device (a display, `DISPLAY` set); the
 other icons only need ImageMagick and Pillow.
 
 - `weapons/<id>.png` (512x256): side-on renders of the held models in the Quaternius gun pack (CC0), by
@@ -229,8 +237,10 @@ other icons only need ImageMagick and Pillow.
   `godot/shooter/tools/make_icons.py`. Derived from the same CC0 pack.
 - `perks/`, `streaks/`, `placeholder.png` (128x128): flat white glyphs drawn as SVG (sources in `ui/icons/src/`) by
   `godot/shooter/tools/make_icons.py`. Original work of this repository; no third-party pack was downloaded.
+- `items/<id>.png` (128x128, colour): renders of an item's worn model (`items.json` `model`) from the front, a little from the side and above, by
+  `render_icons.gd` (`-- items` renders only these and leaves the weapons alone). `item_fallback.png` is a white glyph drawn by `make_icons.py`.
 
-Icons are white on transparent so the theme can tint them. The licence record is the top-level `ui_icons` entry in
+The glyph icons are white on transparent so the theme can tint them; the weapon and item renders are in colour. The licence record is the top-level `ui_icons` entry in
 `manifest.json`.
 
 ## Adding assets

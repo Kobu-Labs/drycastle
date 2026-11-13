@@ -14,6 +14,11 @@ public sealed class ItemDef
     /// <summary>What the player reads (HUD, prompts, toasts).</summary>
     public string Name { get; set; } = "";
     public EquipSlot Slot { get; set; } = EquipSlot.Headgear;
+    /// <summary>
+    /// The model a character wears for this item, relative to the asset library (assets/), or empty for none (the item is worn but not drawn). Authored in
+    /// the slot's frame, in metres, facing -Z (the game's forward): for headgear the origin is the middle of the head.
+    /// </summary>
+    public string Model { get; set; } = "";
     /// <summary>How many times the item can be taken from a corpse over its whole life, or null for any number. The attempt after the last makes it crumble.</summary>
     public int? PickupLimit { get; set; }
     /// <summary>A headshot on the wearer is a body hit (<see cref="HitTarget.HeadGuarded"/>).</summary>
@@ -59,6 +64,8 @@ public sealed class ItemsFile : IVersioned
             if (!seen.Add(i.Id)) throw new DataFileException($"{F}: item id {i.Id} appears twice");
             if (i.Name == "") throw new DataFileException($"{F}: {i.Id}: name is empty");
             if (!Enum.IsDefined(i.Slot)) throw new DataFileException($"{F}: {i.Id}: unknown slot");
+            if (i.Model != "" && (!i.Model.EndsWith(".glb", StringComparison.Ordinal) || i.Model.StartsWith('/') || i.Model.Contains("..", StringComparison.Ordinal)))
+                throw new DataFileException($"{F}: {i.Id}: model is a .glb path inside the asset library");
             if (i.PickupLimit is < 1) throw new DataFileException($"{F}: {i.Id}: pickup_limit is at least 1 (leave it out for no limit)");
         }
         return f;

@@ -15,11 +15,26 @@ public partial class NetServer
     /// <summary>items.json: the equippable items. Empty when the data directory has none.</summary>
     public ItemsFile Items = new();
 
-    /// <summary>Tells a player what they wear now (the HUD's headgear chip).</summary>
+    /// <summary>
+    /// Tells a player what they wear now (the HUD's headgear chip) and everyone else too, so their clients draw it on that player's character
+    /// (<see cref="EventKind.WornItems"/>, issue #266). The pickup count stays on the server in both.
+    /// </summary>
     void SendEquipment(Client c)
     {
         c.Worn.Changed = false;
         Send(c, new EventMsg((byte)EventKind.Equipment, ItemEvents.EncodeEquipment(c.Worn)));
+        var worn = WornEvent(c);
+        foreach (var o in _byId.Values)
+            if (o != c) Send(o, worn);
+    }
+
+    EventMsg WornEvent(Client c) => new((byte)EventKind.WornItems, ItemEvents.EncodeWorn(c.Id, c.Worn));
+
+    /// <summary>A joiner learns what everyone already in the match wears (nobody else needs to be told: the joiner wears nothing).</summary>
+    void SendWornOnJoin(Client c)
+    {
+        foreach (var o in _byId.Values)
+            if (o != c && o.Worn.Slots.Any(s => s != null)) Send(c, WornEvent(o));
     }
 
     /// <summary>Tells everyone what a corpse carries now (nothing, after a pickup that emptied it or an item that crumbled).</summary>

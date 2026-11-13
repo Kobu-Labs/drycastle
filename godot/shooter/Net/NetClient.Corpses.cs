@@ -62,6 +62,7 @@ public partial class NetClient
         node.AddChild(view);
         Owned.AddChild(node);
         _corpses[e.Id] = new CorpseView { Node = node, View = view };
+        DressCorpse(e.Id); // the item the corpse carries, when its event came first (#266)
     }
 
     void OnCorpseDespawned(ushort id)

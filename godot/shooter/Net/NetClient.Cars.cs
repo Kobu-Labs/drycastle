@@ -247,6 +247,7 @@ public partial class NetClient
             _selfView?.QueueFree();
             _selfView = CharacterView.Make();
             if (Appearances.TryGetValue(_myId, out var look)) _selfView.SetCamo(look, CamoData);
+            Dress(_selfView, _wornItems); // the headgear shows in the seat too (#266)
             _selfView.SetStance(Stance.Crouch); // seated: there is no sitting animation, the crouch squash is the closest pose
             anchor.AddChild(_selfView);
         }
