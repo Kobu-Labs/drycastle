@@ -89,6 +89,7 @@ public static class ChatCommands
         new("restart", "Restart the round now, optionally in another mode (ffa or tdm)", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
         new("event", "Trigger a village event now", new[] { new ChatArg("event", ChatArgKind.Choice), new ChatArg("action", ChatArgKind.Choice, false) }),
         new("citizens", "Send citizens to the church to sit on its pews (a number), or remove them all (clear)", new[] { new ChatArg("count", ChatArgKind.IntOrChoice, true, 1, MaxCitizens) }),
+        new("church", "TEST: open or close the church doors, or show whether they are open", new[] { new ChatArg("action", ChatArgKind.Choice, false) }),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
     };
 
@@ -115,6 +116,7 @@ public static class ChatCommands
                 ("intel", "TEST: announce a made-up event and put it on the intel screen at the base"),
             },
             ChatArgKind.Choice when cmd.Name == "event" => new[] { ("clear", "take the test event off the intel screen again (with intel)") },
+            ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },
             ChatArgKind.IntOrChoice when cmd.Name == "citizens" => new[] { ("clear", "remove every citizen") },
             ChatArgKind.Choice when cmd.Name == "help" => Visible(ctx).Select(c => (c.Name, c.Summary)).ToList(),
             _ => Array.Empty<(string, string)>(),

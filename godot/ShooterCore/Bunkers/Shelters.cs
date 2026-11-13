@@ -84,8 +84,20 @@ public sealed class Shelters
         return -1;
     }
 
-    /// <summary>Does a blast at <paramref name="blast"/> reach a body whose centre is at <paramref name="body"/>?</summary>
-    public bool Reaches(Vector3 blast, Vector3 body) => Rooms.Count == 0 || RoomAt(blast) == RoomAt(body);
+    /// <summary>
+    /// Does a blast at <paramref name="blast"/> reach a body whose centre is at <paramref name="body"/>? Rooms of the same bunker and level
+    /// (the nave and the chancel of the church) are one room.
+    /// </summary>
+    public bool Reaches(Vector3 blast, Vector3 body)
+    {
+        if (Rooms.Count == 0) return true;
+        int a = RoomAt(blast), b = RoomAt(body);
+        return a == b || (a >= 0 && b >= 0 && Rooms[a].BunkerId == Rooms[b].BunkerId && Rooms[a].Level == Rooms[b].Level);
+    }
+
+    /// <summary>These shelters with the rooms of the church added (ADR 0019): same rules, same exceptions; the doors do not change them.</summary>
+    public Shelters WithChurch(ChurchShell? church) =>
+        church == null || church.Rooms.Count == 0 ? this : new Shelters(Rooms.Concat(church.Rooms).ToList(), Ladders, IntelScreens);
 
     /// <summary>
     /// Parse bunkers.json: <c>{"version": 1, "bunkers": [{"id", "parcel", "floors": [{"level", "polygon": ring, "z0", "z1"}],

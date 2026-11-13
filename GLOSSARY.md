@@ -329,8 +329,12 @@ How a player moves between the floors of a bunker: they get on with the interact
 _Avoid_: stairs, climbing (that is the verb)
 
 **Shelter**:
-What a bunker's room gives the players in it: a blast outside the room does not hurt them, and a blast inside it hurts nobody outside. The MOAB is not stopped.
+What a bunker's room, or the church, gives the players in it: a blast outside the room does not hurt them, and a blast inside it hurts nobody outside. The MOAB is not stopped.
 _Avoid_: blast cover, shot-only cover (that stops shots, not blasts), protection (that is spawn protection)
+
+**Church doors**:
+The double doors in the doorway of the church: closed (solid, drawn as dark wooden leaves) or open (leaves swung inward, nothing solid). Closed unless the Holy Mass event opens them. The church rooms shelter whether they are open or not.
+_Avoid_: church gate, church entrance (that is the doorway)
 
 **Match mode**:
 How a round is scored and won, set by `mode` in `match.json` at server start, or by an admin's `/restart`: free-for-all (`ffa`, the default: every player alone) or team deathmatch (`tdm`).

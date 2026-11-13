@@ -313,6 +313,7 @@ public partial class NetClient : Node
                 OnChatEvent((EventKind)e.Kind, e.Payload); // chat lines, the admin flag, the day clock
                 OnItemEvent((EventKind)e.Kind, e.Payload); // what the player wears, what a corpse carries, an item crumbling
                 OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
+                OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 OnProgressionEvent((EventKind)e.Kind, e.Payload);

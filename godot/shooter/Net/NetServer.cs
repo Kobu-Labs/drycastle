@@ -478,6 +478,7 @@ public partial class NetServer : Node
         foreach (var w in _match.Entities.Snapshot()) Send(c, new EventMsg((byte)EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State)));
         SendCorpseItemsOnJoin(c); // the items the corpses carry, after the corpses themselves
         SendGlassOnJoin(c); // the glass panes that are not whole (ADR 0007)
+        SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
         SendIntelOnJoin(c); // the events on the intel screen
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone

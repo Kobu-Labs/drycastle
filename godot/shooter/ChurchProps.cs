@@ -11,6 +11,20 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class ChurchProps : Node3D
 {
+    bool _draw;
+
+    // the furniture is hidden while the doors are shut and nobody is inside (ChurchInterior); its boxes stay (hiding a node does not turn its collision off)
+    public override void _Ready()
+    {
+        if (!_draw) return;
+        Visible = ChurchInterior.Visible;
+        ChurchInterior.Changed += OnInterior;
+    }
+
+    public override void _ExitTree() => ChurchInterior.Changed -= OnInterior;
+
+    void OnInterior(bool visible) => Visible = visible;
+
     /// <summary>Model, atlas, box (x across, y up, z deep, metres) and where the model's own origin sits across its width (a pew's is at one end).</summary>
     static readonly Dictionary<string, (string Model, string Atlas, Vector3 Box, float OriginX)> Kinds = new()
     {
@@ -27,7 +41,7 @@ public partial class ChurchProps : Node3D
         if (!File.Exists(path)) return null;
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
         if (!doc.RootElement.TryGetProperty("props", out var props)) return null;
-        var node = new ChurchProps { Name = "ChurchProps" };
+        var node = new ChurchProps { Name = "ChurchProps", _draw = draw };
         foreach (var p in props.EnumerateArray())
         {
             var kind = p.GetProperty("kind").GetString() ?? "";
