@@ -36,9 +36,11 @@ BUSH = "pack:quaternius-stylized-nature-megakit/Bush_Common_Flowers"
 CLEARANCE = 4.5
 
 
-def text(parcels: dict, groups: dict) -> str:
-    """Exactly what edits.dump_text writes."""
+def text(parcels: dict, groups: dict, objects: list | None = None) -> str:
+    """Exactly what edits.dump_text writes: the top-level objects list (only when there are some) sorted by id."""
     doc = {"version": 1, "parcels": parcels, "groups": groups}
+    if objects:
+        doc["objects"] = sorted(objects, key=lambda o: o["id"])
     return json.dumps(doc, sort_keys=True, indent=1, ensure_ascii=False) + "\n"
 
 
@@ -133,30 +135,28 @@ def main() -> int:
     stale = {"P-9999": {"fence": {"mode": "none"}}}
     seed_obj = obj("car-1", POT, cx, cy, 0.0)
 
-    state = {"parcels": {**copy.deepcopy(stale), c_id: {"objects": [seed_obj]}}, "groups": {}}
-    steps: dict[str, str] = {"seed": text(state["parcels"], state["groups"])}
+    # objects belong to no parcel: one top-level list (written sorted by id), whichever parcel they stand in
+    state = {"parcels": copy.deepcopy(stale), "objects": [seed_obj], "groups": {}}
+    steps: dict[str, str] = {"seed": text(state["parcels"], state["groups"], state["objects"])}
 
-    def lst(pid: str) -> list:
-        return state["parcels"].setdefault(pid, {}).setdefault("objects", [])
+    def lst() -> list:
+        return state["objects"]
 
-    def find(oid: str) -> tuple[str, dict]:
-        for pid, entry in state["parcels"].items():
-            for o in entry.get("objects", []):
-                if o["id"] == oid:
-                    return pid, o
+    def find(oid: str) -> tuple[None, dict]:
+        for o in state["objects"]:
+            if o["id"] == oid:
+                return None, o
         raise KeyError(oid)
 
     def commit(name: str) -> None:
-        for pid in [p for p, e in state["parcels"].items() if not e]:
-            del state["parcels"][pid]
-        steps[name] = text(state["parcels"], state["groups"])
+        steps[name] = text(state["parcels"], state["groups"], state["objects"])
 
     o1 = obj("o-0001", CAR, ax, ay, 0.0)
-    lst(a_id).append(o1)
+    lst().append(o1)
     commit("t1")
-    lst(a_id).append(obj("o-0002", SLAB, ax + 2.0, ay + 1.5, 30.0))
+    lst().append(obj("o-0002", SLAB, ax + 2.0, ay + 1.5, 30.0))
     commit("t2")
-    lst(b_id).append(obj("o-0003", SLAB, bx, by, 30.0))
+    lst().append(obj("o-0003", SLAB, bx, by, 30.0))
     commit("t3")
     _, o = find("o-0001")
     px, py = ax + 2.5, ay + 1.0
@@ -172,13 +172,9 @@ def main() -> int:
     commit("t7")
     o["rotation_deg"] = 112.6
     commit("t8")
-    # cross-parcel move: out of A's list, appended to B's
-    lst(a_id).remove(o)
-    if not state["parcels"][a_id]["objects"]:
-        del state["parcels"][a_id]["objects"]
+    # a move across a parcel boundary: only the position changes (the object belongs to no parcel)
     px, py = bx + 1.0, by + 1.0
     o["position"] = [px, py]
-    lst(b_id).append(o)
     commit("t9")
     px += 2.0
     o["position"] = [px, py]
@@ -200,9 +196,9 @@ def main() -> int:
     dup = copy.deepcopy(o)
     dup["id"] = "o-0004"
     dup["position"] = [round(px + 1.0, 3), round(py, 3)]
-    lst(b_id).append(dup)
+    lst().append(dup)
     commit("t20")
-    lst(b_id).remove(dup)
+    lst().remove(dup)
     commit("t21")
     members = sorted([a_id, b_id])
     state["groups"]["G-0001"] = {"parcels": members}
@@ -212,11 +208,11 @@ def main() -> int:
     commit("t23")
     state["groups"]["G-0001"]["fence"] = {"mode": "none"}
     commit("t24")
-    lst(a_id).append(obj("o-0004", CAR, ax - 1.0, ay - 1.5, 30.0))
+    lst().append(obj("o-0004", CAR, ax - 1.0, ay - 1.5, 30.0))
     commit("t25")
     # (the smoke undoes t25 and places a slab instead: it becomes o-0004 of the earlier state)
-    last = state["parcels"][a_id]["objects"].pop()
-    lst(a_id).append(obj("o-0004", SLAB, ax + 2.0, ay - 1.5, 30.0))
+    last = state["objects"].pop()
+    lst().append(obj("o-0004", SLAB, ax + 2.0, ay - 1.5, 30.0))
     commit("t26")
     del last
 
@@ -312,22 +308,22 @@ def shots(args, scratch: Path, origin, a_id: str, a_base, b_base) -> int:
     lx, ly = ax - origin[0], ay - origin[1]
     runs = [
         ("objects_car_selected.png",
-         {a_id: {"objects": [obj("o-0001", CAR, ax, ay, 30.0), obj("o-0002", SLAB, ax + 3.0, ay + 1.5, 0.0),
-                             obj("o-0003", "pack:kenney-car-kit/van", ax - 2.5, ay - 4.0, 340.0)]}},
+         [obj("o-0001", CAR, ax, ay, 30.0), obj("o-0002", SLAB, ax + 3.0, ay + 1.5, 0.0),
+          obj("o-0003", "pack:kenney-car-kit/van", ax - 2.5, ay - 4.0, 340.0)],
          ["--shot-object", "o-0001", "--shot-open", "car", "--shot-collapse", "Group,Fence,Trees", "--shot-dist", "16",
           "--shot-focus", f"{lx:.2f},{ly:.2f}"]),
         ("objects_pot_slab_bush.png",
-         {a_id: {"objects": [obj("o-0001", POT, ax - 1.0, ay + 1.0, 0.0), obj("o-0002", POT, ax - 0.5, ay + 1.0, 0.0),
-                             obj("o-0003", SLAB, ax + 1.0, ay - 0.5, 0.0), obj("o-0004", SLAB, ax + 2.0, ay - 0.5, 0.0),
-                             obj("o-0005", SLAB, ax + 3.0, ay - 0.5, 0.0),
-                             obj("o-0006", BUSH, ax - 3.0, ay + 2.0, 20.0)]}},
+         [obj("o-0001", POT, ax - 1.0, ay + 1.0, 0.0), obj("o-0002", POT, ax - 0.5, ay + 1.0, 0.0),
+          obj("o-0003", SLAB, ax + 1.0, ay - 0.5, 0.0), obj("o-0004", SLAB, ax + 2.0, ay - 0.5, 0.0),
+          obj("o-0005", SLAB, ax + 3.0, ay - 0.5, 0.0),
+          obj("o-0006", BUSH, ax - 3.0, ay + 2.0, 20.0)],
          ["--shot-arm", "pack:quaternius-stylized-nature-megakit/Bush_Common_Flowers", "--shot-ghost", f"{lx + 2.0:.2f},{ly + 3.0:.2f}",
           "--shot-ghost-rot", "45", "--shot-open", "pot,slab,bush", "--shot-collapse", "Group,Fence,Trees", "--shot-dist", "14",
           "--shot-focus", f"{lx:.2f},{ly + 0.5:.2f}"]),
     ]
-    for name, parcels, extra in runs:
+    for name, objects, extra in runs:
         shot_edits = scratch / (name + ".edits.json")
-        shot_edits.write_text(text(parcels, {}))
+        shot_edits.write_text(text({}, {}, objects))
         edits = scratch / "edits_shot.json"
         edits.write_text(text({}, {}))
         cmd = [args.godot, "--path", str(REPO / "godot/viewer"), "--", "--map", str(scratch / "map"), "--area", "slice",

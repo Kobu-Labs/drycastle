@@ -92,15 +92,23 @@ public partial class Viewer
 
         static double Yaw(Node3D n) { var x = n.GlobalBasis.X; return Math.Atan2(-x.Z, x.X) * 180.0 / Math.PI; }
 
-        // every object of the file has its node, where and how the file says; nothing else (but the untouched parcel C's)
+        // the group node an object sits in: the parcel it stands in (an object belongs to no parcel), else "_none"
+        string GroupOf(SortedDictionary<string, object?> o)
+        {
+            var (x, y) = ObjectEdits.Position(o);
+            return _map.ParcelAt((float)(x - ox), (float)-(y - oy))?.Id ?? Drycastle.MapLoader.PlacedObject.NoParcelGroup;
+        }
+
+        // every object of the file has its node, where and how the file says; nothing else (but the seed's, which stands in parcel C and is never touched)
         void SceneMatches(string what)
         {
             var root = EditsFile.Load(editsPath);
-            var want = ObjectEdits.All(root).Where(t => t.pid != C).ToList();
+            var want = ObjectEdits.All(root).Where(t => GroupOf(t.obj) != C).ToList();
             var bad = new List<string>();
-            foreach (var (pid, _, o) in want)
+            foreach (var (_, o) in want)
             {
                 var id = (string)o["id"]!;
+                var pid = GroupOf(o);
                 if (!_map.ObjectNodes.TryGetValue(id, out var node)) { bad.Add($"{id} has no node"); continue; }
                 var (x, y) = ObjectEdits.Position(o);
                 var pos = node.GlobalPosition;
@@ -163,9 +171,8 @@ public partial class Viewer
         Check(ed.GhostAbsolute is { } gf && Math.Abs(gf.x - Math.Round(ox + freePick.X, 3)) < 1e-9 && Math.Abs(gf.x - gabs[0]) > 0.05,
             $"Ctrl (free) skips the snapping: {ed.GhostAbsolute}");
         ed.UpdateGhost(Gp("outside"), false);
-        Check(!ed.GhostInParcel, "the ghost turns red outside every parcel");
+        Check(ed.Ghost!.Visible, "the ghost follows the cursor outside every parcel too (an object belongs to no parcel)");
         ed.UpdateGhost(pick, false);
-        Check(ed.GhostInParcel, "and normal again in a parcel");
         Key_(Key.R); await Frame();
         Check(Math.Abs(ed.GhostRotation - 15) < 1e-9 && Math.Abs(ed.Ghost!.RotationDegrees.Y - 15) < 1e-3, "R rotates the ghost +15");
         Key_(Key.R); await Frame();
@@ -176,8 +183,6 @@ public partial class Viewer
         Key_(Key.R); await Frame();
         Check(Math.Abs(ed.GhostRotation) < 1e-9, "back at 0");
 
-        Check(!ed.PlaceAt(Gp("outside")) && ed.StatusMessage.Contains("no parcel") && Disk() == saves[0].Text && ed.SaveCount == 0,
-            $"placing outside every parcel is refused with a message, nothing written ('{ed.StatusMessage}')");
         await Op("t1", () => ed.PlaceAt(pick));
         Check(ed.PlacementAsset == CAR && ed.Ghost != null, "placement stays armed after placing");
         Check(_map.ObjectNodes.ContainsKey("o-0001") && _map.ObjectNodes["o-0001"].GetChild(0).GetChildCount() > 0, "o-0001 (a pack model) is instanced with the model's meshes");
@@ -247,15 +252,8 @@ public partial class Viewer
         ed.StartMove("o-0001", GOf("o-0001"));
         ed.DragTo(Gp("b_base", 1.1, 0.9), false);
         await Op("t9", () => ed.EndDrag());
-        Check(_map.ObjectNodes["o-0001"].GetParent().Name == $"objects_{B}", "after the move the node sits under the new parcel's container (moved, not duplicated)");
+        Check(_map.ObjectNodes["o-0001"].GetParent().Name == $"objects_{B}", "after the move the node sits under the container of the parcel it now stands in (moved, not duplicated)");
         SceneMatches("after the cross-parcel move");
-        ed.StartMove("o-0001", GOf("o-0001"));
-        var homePos = _map.ObjectNodes["o-0001"].GlobalPosition;
-        ed.DragTo(Gp("outside"), false);
-        var s2 = ed.SaveCount; var t9 = Disk();
-        Check(!ed.EndDrag() && ed.StatusMessage.Contains("no parcel") && Disk() == t9 && ed.SaveCount == s2, $"a move to a point in no parcel is refused ('{ed.StatusMessage}'), file untouched");
-        await Frame(3);
-        Check(_map.ObjectNodes["o-0001"].GlobalPosition.DistanceTo(homePos) < 0.01, "and the object snaps back");
 
         // ---- 7. field edits (one save each), through the real controls where it counts ----
         var cur = ed.ObjectData("o-0001")!;
@@ -400,7 +398,7 @@ public partial class Viewer
         // an external writer (MCP, text editor): found by the poll, at most 0.5 s plus the same update
         {
             var root = EditsFile.Load(editsPath);
-            ObjectEdits.Add(root, A, ObjectEdits.Make("o-9001", CAR, ox + D("a_base")[0] + 0.0, oy + D("a_base")[1] + 4.0, 10.0));
+            ObjectEdits.Add(root, ObjectEdits.Make("o-9001", CAR, ox + D("a_base")[0] + 0.0, oy + D("a_base")[1] + 4.0, 10.0));
             var text = EditsFile.Dump(root);
             var t0 = Time.GetTicksMsec();
             var inst0 = _watcher.InstantCount; var runs0 = _watcher.RunCount;
@@ -409,6 +407,29 @@ public partial class Viewer
             var ms = Time.GetTicksMsec() - t0;
             GD.Print($"latency: external write to visible object {ms} ms (poll 500 ms + update {_watcher.LastInstantMs:F1} ms)");
             Check(seen && ms < 800 && _watcher.InstantCount == inst0 + 1 && _watcher.RunCount == runs0, $"an external objects-only write shows within the poll interval and needs no parcel-run ({ms} ms)");
+        }
+
+        // ---- 14. an object belongs to no parcel: it can stand, move and go on ground that is none ----
+        {
+            const string NoGroup = Drycastle.MapLoader.PlacedObject.NoParcelGroup;
+            var idsBefore = ObjectEdits.All(EditsFile.Load(editsPath)).Select(t => (string)t.obj["id"]!).ToHashSet();
+            var runsOut = _watcher.RunCount;
+            ed.ArmPlacement(SLAB);
+            Check(ed.PlaceAt(Gp("outside")), $"placing outside every parcel works ('{ed.StatusMessage}')");
+            ed.DisarmPlacement();
+            var after = EditsFile.Load(editsPath);
+            var outId = ObjectEdits.All(after).Select(t => (string)t.obj["id"]!).FirstOrDefault(id => !idsBefore.Contains(id)) ?? "";
+            Check(outId != "" && ed.ObjectData(outId) is { Parcel: "" }, $"the new object {outId} is in the top-level list and stands in no parcel");
+            Check(!ObjectEdits.Parcels(after).Values.OfType<SortedDictionary<string, object?>>().Any(e => e.ContainsKey("objects")), "and nothing is listed under a parcel entry");
+            await WaitIdle(10);
+            Check(_map.ObjectNodes.TryGetValue(outId, out var outNode) && outNode.GetParent().Name == $"objects_{NoGroup}",
+                "it is instanced at once, under the container for objects on no parcel");
+            Check(_watcher.RunCount == runsOut, "and that needed no parcel-run");
+            ed.SelectObject(outId);
+            ed.StartMove(outId, GOf(outId));
+            ed.DragTo(Gp("outside", 3.0, 0.0), false);
+            Check(ed.EndDrag() && ed.ObjectData(outId) is { Parcel: "" }, "dragging it to another spot that is no parcel works too");
+            Check(ed.DeleteSelected() && ObjectEdits.Find(EditsFile.Load(editsPath), outId) == null, "and so does deleting it");
         }
 
         Check(await WaitIdle(60) && _watcher.FailedCount == 0, $"watcher settled, no failed parcel-run ({_watcher.FailedCount}); parcel-runs started in total: {_watcher.RunCount}, instant object updates: {_watcher.InstantCount}");

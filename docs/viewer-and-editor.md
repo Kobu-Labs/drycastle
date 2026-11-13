@@ -34,7 +34,8 @@ stage from `pipeline/config/edits.json`; `files.objects` in `manifest.json`) and
 flat-colour GLB per `prim:` primitive (`prims` in the manifest; same axes as the chunk files, standing on
 y = 0). The loader instances every object: `pack:<pack>/<model>` from `assets/manifest.json` (`file`,
 resolved against the assets directory), `prim:<name>` from `<map>/prims`. Each object is a node
-`Objects/objects_<parcel>/object_<id>` with position (x east, z = -north, y = `z` or the terrain height
+`Objects/objects_<parcel>/object_<id>` (`<parcel>` is the parcel it stands in, `_none` on ground that is no
+parcel: an object belongs to no parcel, it is only a position) with position (x east, z = -north, y = `z` or the terrain height
 under it when `z` is null), `rotation_deg` counter-clockwise seen from above, uniform `scale` and an optional
 `colour` (material override). Unknown or missing assets give a warning and a magenta placeholder box.
 Objects have no collision in v1.
@@ -226,10 +227,11 @@ The Objects section holds Undo / Redo buttons, the **selected object** (below) a
 fence, other; groups start collapsed), plus a filter box (name, id or category; groups without a match hide,
 the others open).
 
-* **Placing**: choosing an asset arms placement. A semi-transparent cyan **ghost** (red when the point is in no
-  parcel) follows the cursor on the ground, snapped to 0.5 m in absolute S-JTSK metres, or free while Ctrl is held.
-  `R` / `Shift+R` rotate the ghost +-15 degrees, a left click places it (appended to the `objects` of the parcel
-  under the point; refused with a status message when there is none), and placement stays armed. Esc or a right
+* **Placing**: choosing an asset arms placement. A semi-transparent cyan **ghost** follows the cursor on the
+  ground, snapped to 0.5 m in absolute S-JTSK metres, or free while Ctrl is held. Any ground will do, a parcel is
+  not needed (a pole beside a road is placed like a car in a yard).
+  `R` / `Shift+R` rotate the ghost +-15 degrees, a left click places it (appended to the top-level `objects` list
+  of `edits.json`, which is written sorted by id), and placement stays armed. Esc or a right
   click without a look drag disarms. New ids are `o-0001`, `o-0002`, ... (one above the highest `o-NNNN` in the file;
   other id forms in the file are left alone). A placed entry is `id`, `asset`, `position` [x, y] (3 decimals),
   `rotation_deg`; `scale` and `colour` appear only when set, `z` never (the terrain height is used).
@@ -239,26 +241,27 @@ the others open).
   grid, Ctrl = free; the grab point keeps its offset), drag the ring to rotate (15 degree steps, Ctrl = free,
   angle counter-clockwise from east like `rotation_deg`). Arrow keys nudge 0.5 m in the camera's screen directions
   (snapped to the map axes) while the mouse is over the viewport; `Delete` removes, `Ctrl+D` duplicates 1 m east
-  and selects the copy, `R` / `Shift+R` rotate the selected object by 15 degrees. Moving an object over a parcel
-  boundary re-homes it to the parcel it is in now (its entry moves to that parcel's `objects`); a move to a point
-  in no parcel is refused and the object snaps back.
+  and selects the copy, `R` / `Shift+R` rotate the selected object by 15 degrees. An object may be moved anywhere:
+  across a parcel boundary or onto ground that is no parcel (only its position changes; the inspector names the
+  parcel it stands in, if any).
 * **Fields**: asset (read-only), `x` / `y` in S-JTSK metres (3 decimals), `rotation`, `scale` (> 0), a `colour`
   with a `set` box (committed when the picker closes), [Duplicate], [Delete]. Each committed edit is one save.
 * **One gesture, one save**: place, drag end, field commit, nudge, delete and duplicate each reload the file,
   apply, validate with the Python validator's rules (`ObjectEdits.ValidateDocument`, it never writes a file
   `edits.validate` rejects), and write it atomically in the canonical format.
-* **Instant objects**: when the watcher sees that, for the changed parcels, only the `objects` entries changed (no
-  fence, trees or group change), it does not run `parcel-run`: `MapLoader.ApplyObjects` re-instances those parcels'
-  objects straight from the file (S-JTSK minus `origin_epsg5514`, terrain height when `z` is absent), with the
-  same node names (`objects_<parcel>/object_<id>`) and ownership as a fragment, so a later fragment swap stays
-  consistent. The editor calls it right after saving (`EditsWatcher.NotifySaved`, about 1 to 3 ms from reading the
+* **Instant objects**: when the watcher sees that only placed objects changed (no fence or group changed, no
+  region), it does not run `parcel-run`: `MapLoader.ApplyObjectChanges` removes the objects that are gone and
+  re-instances the ones that are new or differ, straight from the file (S-JTSK minus `origin_epsg5514`, terrain height
+  when `z` is absent), with the same node names (`objects_<parcel>/object_<id>`) and grouping as a fragment, so a
+  later fragment swap stays consistent. The same happens for the objects of a save that also needs a run. The editor calls it right after saving (`EditsWatcher.NotifySaved`, about 1 to 3 ms from reading the
   file to the nodes being in the tree); an external writer (MCP, a text editor) is picked up by the poll (at most
   0.5 s). The watcher recognises its own write: the new state is the applied state, so nothing runs twice. Mixed
   changes still go through `parcel-run`. Generated trees avoid placed objects, so a tree under a new object
   only disappears at the next regeneration of that parcel (a fence Apply, or a restart).
 * **Session undo/redo**: `Ctrl+Z`, `Ctrl+Y` / `Ctrl+Shift+Z` (or the buttons) undo and redo every save the
   editor made since it opened: objects, group operations, Apply of fence. Each save records the before
-  and after content of the top-level entries it touched (`parcels.<ID>`, `groups.<ID>`, absent included). Undo
+  and after content of the top-level entries it touched (`groups.<ID>`, `parcels.<ID>.fence`, each object by id,
+  absent included). Undo
   reloads the file from disk, writes the before-entries back (absent deletes the entry), validates and saves; the
   watcher (or the instant path) applies the effect. **Entries somebody else changed in the meantime are
   overwritten only if this operation touched them**; everything else in the file stays. A new edit clears the
@@ -269,8 +272,8 @@ the others open).
 a scratch export, through the editor APIs and key events: the palette against the manifest, the exact text of
 `edits.json` after each of 26 saves (checked again with `edits.validate`, `dump_text` and `plan_edits`), no
 `parcel-run` for object edits (the watcher counts them: `RunCount`, `InstantCount`), scene nodes against the file,
-objects still right after a group and a fence Apply, drag and rotate with snapping, cross-parcel re-homing,
-refusals, field edits, nudge, duplicate, delete, undo and redo of the whole sequence byte for byte, the 200 cap and
+objects still right after a group and a fence Apply, drag and rotate with snapping, moves across parcels and onto
+ground that is no parcel, refusals, field edits, nudge, duplicate, delete, undo and redo of the whole sequence byte for byte, the 200 cap and
 the latency. Screenshot options: `--shot-object ID --shot-arm ASSET --shot-ghost X,Y --shot-ghost-rot DEG
 --shot-filter TEXT --shot-open car,pot` next to the `--editor-shot` ones.
 

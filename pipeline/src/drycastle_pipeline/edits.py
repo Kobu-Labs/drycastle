@@ -5,7 +5,8 @@ developer's deliberate choices, so it survives every pipeline re-run. Keys are s
 formatting is fixed, so git diffs stay small. Version 1::
 
     {"version": 1,
-     "parcels": {"P-0412": {"fence": {...}, "objects": [...]}},
+     "parcels": {"P-0412": {"fence": {...}}},
+     "objects": [{"id": "o-0001", "asset": "prim:pole_lamp_1", "position": [x, y], "rotation_deg": 0}],
      "groups":  {"G-0001": {"parcels": ["P-0412", "P-0413"], "fence": {...}}},
      "regions": {"R-0001": {"colour": "#8a7a5c", "polygon": [[x, y], ...]}},
      "cables":  {"C-0001": {"from": "o-0012", "to": "o-0015"}},
@@ -32,7 +33,11 @@ formatting is fixed, so git diffs stay small. Version 1::
                       the boundary, centred on the nearest boundary point to ``at``. ``at`` is
                       absolute EPSG:5514 (S-JTSK) metres, the same frame as objects.
 
-``objects`` (list; placed objects, emitted to objects.json, not instanced in props.json)
+``objects`` (top level, a list; placed objects, emitted to objects.json, not instanced in props.json). An object
+    belongs to no parcel: it only needs its absolute position, so a pole beside a road (ground, not a parcel)
+    is as good as a car in a yard. Files written before this kept the list under ``parcels.<ID>.objects``;
+    :func:`parse` still reads that and moves the objects here, the next write uses the new shape. The list is
+    written sorted by id (so an undone removal or an edit never reorders the file).
     id                  str, unique within the whole file.
     asset               "pack:<pack>/<model>" or "prim:<name>".
     position            [x, y] absolute EPSG:5514 metres.
@@ -40,8 +45,8 @@ formatting is fixed, so git diffs stay small. Version 1::
     rotation_deg        number, default 0.
     scale               number > 0, default 1.
     colour              optional "#rrggbb" override.
-    (objects.json entries also carry ``parcel`` (the parcel containing the object, or null),
-    ``owner`` (the parcel entry that lists it) and ``chunk``; both are derived.)
+    (objects.json entries also carry ``parcel`` (the parcel containing the object, or null) and
+    ``chunk``; both are derived.)
 
 ``groups`` (a property group: parcels that share one fence around their combined outer edge)
     parcels             non-empty list of unique parcel IDs. A parcel is in at most one group.
@@ -130,8 +135,8 @@ FENCE_TYPES: dict[str, dict[str, float | str]] = {
 # Columns a fence can be given instead of its type's own (fencestyles.COLUMN_STYLES).
 COLUMN_TYPES = ("none", "wood_post", "metal_post", "brick_red", "brick_white", "stone", "concrete")
 
-TOP_KEYS = ("version", "parcels", "groups", "regions", "cables", "ground_types")
-PARCEL_KEYS = ("fence", "objects")
+TOP_KEYS = ("version", "parcels", "objects", "groups", "regions", "cables", "ground_types")
+PARCEL_KEYS = ("fence", "objects")  # "objects" only so a file of the old shape still validates; see parse()
 FENCE_KEYS = ("mode", "type", "column", "height_m", "thickness_m", "colour", "gaps")
 CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "gaps")
 GAP_KEYS = ("at", "width_m")
@@ -168,9 +173,10 @@ class EditsError(ValueError):
 
 @dataclass
 class Edits:
-    """A validated edits document. ``parcels``, ``groups``, ``regions``, ``cables`` and ``ground_types`` are JSON-native, as written."""
+    """A validated edits document. ``parcels``, ``objects``, ``groups``, ``regions``, ``cables`` and ``ground_types`` are JSON-native, as written."""
 
     parcels: dict[str, dict] = field(default_factory=dict)
+    objects: list[dict] = field(default_factory=list)
     groups: dict[str, dict] = field(default_factory=dict)
     regions: dict[str, dict] = field(default_factory=dict)
     cables: dict[str, dict] = field(default_factory=dict)
@@ -305,8 +311,7 @@ def _check_objects(v: object, path: str, errors: list[str], seen: dict[str, str]
             _check_colour(obj["colour"], f"{opath}.colour", errors)
 
 
-def _check_parcels(parcels: dict, errors: list[str]) -> None:
-    seen: dict[str, str] = {}
+def _check_parcels(parcels: dict, errors: list[str], seen: dict[str, str]) -> None:
     for pid, entry in parcels.items():
         path = f"parcels.{pid}"
         if not _PARCEL_ID.fullmatch(pid):
@@ -518,9 +523,12 @@ def validate(doc: object) -> list[str]:
     version = doc.get("version")
     if not (_is_int(version) and version == EDITS_VERSION):
         errors.append(f"version: must be {EDITS_VERSION}")
+    seen: dict[str, str] = {}  # object id -> where it first appears (ids are unique across the whole file)
+    if "objects" in doc:
+        _check_objects(doc["objects"], "objects", errors, seen)
     parcels = doc.get("parcels", {})
     if _is_dict(parcels, "parcels", errors):
-        _check_parcels(parcels, errors)
+        _check_parcels(parcels, errors, seen)
     groups = doc.get("groups", {})
     if _is_dict(groups, "groups", errors):
         _check_groups(groups, errors)
@@ -542,8 +550,19 @@ def parse(doc: object) -> Edits:
     if errors:
         raise EditsError(errors)
     assert isinstance(doc, dict)
+    parcels = copy.deepcopy(doc.get("parcels", {}))
+    objects = copy.deepcopy(doc.get("objects", []))
+    legacy: list[dict] = []  # the old shape: objects listed under their parcel
+    for pid in list(parcels):
+        listed = parcels[pid].pop("objects", None)
+        if listed is not None:
+            legacy.extend(listed)
+            if not parcels[pid]:
+                del parcels[pid]
+    objects += sorted(legacy, key=lambda o: o["id"])
     return Edits(
-        parcels=copy.deepcopy(doc.get("parcels", {})),
+        parcels=parcels,
+        objects=objects,
         groups=copy.deepcopy(doc.get("groups", {})),
         regions=copy.deepcopy(doc.get("regions", {})),
         cables=copy.deepcopy(doc.get("cables", {})),
@@ -568,6 +587,8 @@ def load_edits(path: Path = DEFAULT_EDITS) -> Edits:
 def dump_text(edits: Edits) -> str:
     """The canonical text of an edits document (sorted keys, indent 1, trailing newline)."""
     doc: dict = {"version": EDITS_VERSION, "parcels": edits.parcels, "groups": edits.groups}
+    if edits.objects:  # omitted when empty, so files without objects keep their bytes; sorted by id, so no edit reorders them
+        doc["objects"] = sorted(edits.objects, key=lambda o: o["id"])
     if edits.regions:  # omitted when empty, so files without regions keep their bytes
         doc["regions"] = edits.regions
     if edits.cables:  # likewise

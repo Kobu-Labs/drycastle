@@ -15,11 +15,10 @@ public sealed class PlacedObject
     public float RotationDeg { get; init; }
     public float Scale { get; init; } = 1f;
     public string? Colour { get; init; }
-    /// <summary>Parcel containing the object (null: outside every parcel).</summary>
+    /// <summary>Parcel containing the object (null: outside every parcel). An object belongs to no parcel; this is where it happens to stand.</summary>
     public string? Parcel { get; init; }
-    /// <summary>Parcel entry that lists the object; the removal group. Falls back to Parcel.</summary>
-    public string? Owner { get; init; }
-    public string Group => Owner ?? Parcel ?? NoParcelGroup;
+    /// <summary>The group node the object sits in (and is removed with): its containing parcel, else <see cref="NoParcelGroup"/>.</summary>
+    public string Group => Parcel ?? NoParcelGroup;
     public const string NoParcelGroup = "_none";
 }
 
@@ -130,7 +129,6 @@ public sealed partial class MapLoader
                 Scale = o.TryGetProperty("scale", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetSingle() : 1f,
                 Colour = o.TryGetProperty("colour", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null,
                 Parcel = o.TryGetProperty("parcel", out var pa) && pa.ValueKind == JsonValueKind.String ? pa.GetString() : null,
-                Owner = o.TryGetProperty("owner", out var ow) && ow.ValueKind == JsonValueKind.String ? ow.GetString() : null,
             });
         }
         return list;
@@ -228,16 +226,16 @@ public sealed partial class MapLoader
     }
 
     /// <summary>
-    /// Instant path for placed objects (no pipeline run): drop every object listed under the given parcels
-    /// (<see cref="PlacedObject.Owner"/>) and instance <paramref name="objects"/> in their place, with the same
-    /// node names and ownership as <see cref="ApplyFragment"/>, so a later fragment swap stays consistent. An object
-    /// whose id exists under another owner is moved (its node is replaced), never duplicated.
+    /// Instant path for placed objects (no pipeline run): drop the objects with the ids in <paramref name="removed"/> and
+    /// instance <paramref name="upserts"/>, with the same node names and grouping as <see cref="ApplyFragment"/>, so a
+    /// later fragment swap stays consistent. An object whose id is already placed (it moved, turned, changed asset or
+    /// colour, or now stands in another parcel) has its node replaced, never duplicated.
     /// </summary>
-    public int ApplyObjects(IEnumerable<string> parcels, IEnumerable<PlacedObject> objects)
+    public int ApplyObjectChanges(IEnumerable<string> removed, IEnumerable<PlacedObject> upserts)
     {
-        foreach (var id in parcels) RemoveGroupObjects(id);
+        foreach (var id in removed) RemoveObject(id);
         var n = 0;
-        foreach (var o in objects) { AddObject(o); n++; }
+        foreach (var o in upserts) { AddObject(o); n++; }
         if (_cables.Count > 0) RebuildCables(); // poles may have moved, come or gone
         return n;
     }

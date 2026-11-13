@@ -6,7 +6,8 @@ using System.Text.RegularExpressions;
 using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 
 /// <summary>
-/// Placed objects in an edits.json tree (see EditsFile): ids, entries, adding, removing, and a C# mirror of the
+/// Placed objects in an edits.json tree (see EditsFile): the top-level `objects` list (an object belongs to no parcel, it
+/// is only a position), ids, entries, adding, removing, and a C# mirror of the
 /// Python validator (edits.py `validate`) over the whole document, so the editor never writes a file the pipeline
 /// would reject. Entries are written as `id`, `asset`, `position` [x, y] in absolute S-JTSK metres (3 decimals),
 /// `rotation_deg` (always), and `scale` / `colour` only when they differ from the defaults (1 / none); `z` is
@@ -27,16 +28,18 @@ public static class ObjectEdits
 
     public static double? Number(object? v) => FenceDraft.Number(v);
 
-    /// <summary>Every object in the document with the parcel entry that lists it and its index there.</summary>
-    public static IEnumerable<(string pid, int index, Obj obj)> All(Obj root)
+    /// <summary>The top-level objects list, or null when the document has none.</summary>
+    public static List<object?>? Items(Obj root) => root.GetValueOrDefault("objects") as List<object?>;
+
+    /// <summary>Every object in the document with its index in the list.</summary>
+    public static IEnumerable<(int index, Obj obj)> All(Obj root)
     {
-        foreach (var (pid, entry) in Parcels(root))
-            if (entry is Obj e && e.GetValueOrDefault("objects") is List<object?> list)
-                for (var i = 0; i < list.Count; i++)
-                    if (list[i] is Obj o) yield return (pid, i, o);
+        if (Items(root) is not { } list) yield break;
+        for (var i = 0; i < list.Count; i++)
+            if (list[i] is Obj o) yield return (i, o);
     }
 
-    public static (string pid, int index, Obj obj)? Find(Obj root, string id)
+    public static (int index, Obj obj)? Find(Obj root, string id)
     {
         foreach (var t in All(root)) if (t.obj.GetValueOrDefault("id") as string == id) return t;
         return null;
@@ -46,7 +49,7 @@ public static class ObjectEdits
     public static string NextId(Obj root)
     {
         var max = 0;
-        foreach (var (_, _, o) in All(root))
+        foreach (var (_, o) in All(root))
             if (o.GetValueOrDefault("id") is string s && IdRx.Match(s) is { Success: true } m && int.TryParse(m.Groups[1].Value, out var n))
                 max = Math.Max(max, n);
         return $"{IdPrefix}{max + 1:0000}";
@@ -67,25 +70,21 @@ public static class ObjectEdits
     /// <summary>Fix the object at an elevation (map metres, the terrain's datum) instead of on the ground: a connector on a wall or roof.</summary>
     public static void SetZ(Obj o, double z) => o["z"] = N3(z);
 
-    public static void Add(Obj root, string pid, Obj o)
+    /// <summary>Append an object to the top-level list (made when the file has none yet).</summary>
+    public static void Add(Obj root, Obj o)
     {
-        var parcels = Parcels(root);
-        if (parcels.TryGetValue(pid, out var existing) && existing is not Obj) throw new InvalidOperationException($"parcels.{pid} in the file is not an object");
-        if (existing is not Obj entry) parcels[pid] = entry = EditsFile.NewObject();
-        if (entry.TryGetValue("objects", out var existingList) && existingList is not List<object?>) throw new InvalidOperationException($"parcels.{pid}.objects in the file is not a list");
-        if (existingList is not List<object?> list) entry["objects"] = list = new List<object?>();
+        if (root.TryGetValue("objects", out var existing) && existing is not List<object?>) throw new InvalidOperationException("objects in the file is not a list");
+        if (existing is not List<object?> list) root["objects"] = list = new List<object?>();
         list.Add(o);
     }
 
-    /// <summary>Remove the object; an emptied objects list and an emptied parcel entry go away with it.</summary>
+    /// <summary>Remove the object; an emptied list goes away with it (the key is only written when there are objects).</summary>
     public static bool Remove(Obj root, string id)
     {
         if (Find(root, id) is not { } f) return false;
-        var entry = (Obj)Parcels(root)[f.pid]!;
-        var list = (List<object?>)entry["objects"]!;
+        var list = Items(root)!;
         list.RemoveAt(f.index);
-        if (list.Count == 0) entry.Remove("objects");
-        if (entry.Count == 0) Parcels(root).Remove(f.pid);
+        if (list.Count == 0) root.Remove("objects");
         return true;
     }
 
@@ -164,8 +163,9 @@ public static class ObjectEdits
     {
         var errs = new List<string>();
         if (!(root.GetValueOrDefault("version") is EditsFile.Num v && v.Text == "1")) errs.Add("version: must be 1");
-        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "groups" or "regions" or "cables" or "ground_types")) errs.Add($"{k}: unknown key");
-        var seen = new Dictionary<string, string>();
+        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "objects" or "groups" or "regions" or "cables" or "ground_types")) errs.Add($"{k}: unknown key");
+        var seen = new Dictionary<string, string>(); // object id -> where it first appears, unique across the whole file
+        if (root.TryGetValue("objects", out var top)) errs.AddRange(CheckObjects(top, "objects", seen));
         foreach (var (pid, entry) in Parcels(root))
         {
             var path = $"parcels.{pid}";

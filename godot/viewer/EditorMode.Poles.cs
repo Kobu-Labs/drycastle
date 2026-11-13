@@ -172,7 +172,7 @@ public partial class EditorMode
             var id = ObjectEdits.NextId(root);
             var o = ObjectEdits.Make(id, asset, x, y, rot);
             ObjectEdits.SetZ(o, z);
-            ObjectEdits.Add(root, parcel, o);
+            ObjectEdits.Add(root, o);
             var (strung, msg, cable) = EditsFile.Connect(root, from, id);
             if (!strung) return (false, msg);
             newId = id;

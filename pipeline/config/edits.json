@@ -2662,6 +2662,2204 @@
    ]
   }
  },
+ "objects": [
+  {
+   "asset": "pack:kenney-city-kit-suburban/driveway-long",
+   "id": "o-0026",
+   "position": [
+    -589059.5,
+    -1250145.0
+   ],
+   "rotation_deg": 285.0
+  },
+  {
+   "asset": "pack:kenney-city-kit-suburban/driveway-long",
+   "id": "o-0027",
+   "position": [
+    -589059.5,
+    -1250145.5
+   ],
+   "rotation_deg": 285.0
+  },
+  {
+   "asset": "pack:kenney-city-kit-suburban/driveway-long",
+   "id": "o-0028",
+   "position": [
+    -589060.0,
+    -1250145.0
+   ],
+   "rotation_deg": 135.0
+  },
+  {
+   "asset": "pack:kenney-city-kit-suburban/driveway-long",
+   "id": "o-0029",
+   "position": [
+    -589060.0,
+    -1250145.5
+   ],
+   "rotation_deg": 285.0
+  },
+  {
+   "asset": "pack:kenney-city-kit-suburban/driveway-long",
+   "id": "o-0030",
+   "position": [
+    -589060.5,
+    -1250145.0
+   ],
+   "rotation_deg": 285.0
+  },
+  {
+   "asset": "pack:kenney-city-kit-suburban/driveway-long",
+   "id": "o-0031",
+   "position": [
+    -589060.5,
+    -1250145.5
+   ],
+   "rotation_deg": 285.0
+  },
+  {
+   "asset": "pack:kenney-city-kit-suburban/driveway-long",
+   "id": "o-0032",
+   "position": [
+    -589061.0,
+    -1250145.0
+   ],
+   "rotation_deg": 285.0
+  },
+  {
+   "asset": "pack:kenney-city-kit-suburban/driveway-long",
+   "id": "o-0033",
+   "position": [
+    -589061.0,
+    -1250145.5
+   ],
+   "rotation_deg": 285.0
+  },
+  {
+   "asset": "pack:kenney-city-kit-suburban/path-long",
+   "id": "o-0034",
+   "position": [
+    -589060.5,
+    -1250143.5
+   ],
+   "rotation_deg": 285.0
+  },
+  {
+   "asset": "pack:kenney-city-kit-suburban/path-long",
+   "id": "o-0035",
+   "position": [
+    -589060.5,
+    -1250144.0
+   ],
+   "rotation_deg": 285.0
+  },
+  {
+   "asset": "prim:slab",
+   "id": "o-0036",
+   "position": [
+    -589061.5,
+    -1250142.0
+   ],
+   "rotation_deg": 285.0
+  },
+  {
+   "asset": "prim:radio_tower",
+   "id": "o-0072",
+   "position": [
+    -589200.5,
+    -1249679.4
+   ],
+   "rotation_deg": 81.94
+  },
+  {
+   "asset": "prim:connector_wall_hook",
+   "id": "o-0085",
+   "position": [
+    -589127.399,
+    -1250040.209
+   ],
+   "rotation_deg": 30.6,
+   "z": 193.587
+  },
+  {
+   "asset": "prim:connector_roof_mast_2",
+   "id": "o-0086",
+   "position": [
+    -589128.333,
+    -1250041.329
+   ],
+   "rotation_deg": 94.1,
+   "z": 194.999
+  },
+  {
+   "asset": "prim:connector_roof_mast_hook",
+   "id": "o-0087",
+   "position": [
+    -589134.817,
+    -1250031.522
+   ],
+   "rotation_deg": 355.3,
+   "z": 194.616
+  },
+  {
+   "asset": "prim:connector_roof_mast_4",
+   "id": "o-0088",
+   "position": [
+    -589134.62,
+    -1250029.338
+   ],
+   "rotation_deg": 334.7,
+   "z": 194.616
+  },
+  {
+   "asset": "prim:connector_roof_mast_hook",
+   "id": "o-0089",
+   "position": [
+    -589137.315,
+    -1250033.238
+   ],
+   "rotation_deg": 8.5,
+   "z": 194.616
+  },
+  {
+   "asset": "prim:connector_roof_mast_4",
+   "id": "o-0091",
+   "position": [
+    -589056.217,
+    -1250161.962
+   ],
+   "rotation_deg": 123.2,
+   "z": 191.854
+  },
+  {
+   "asset": "prim:connector_wall_hook",
+   "id": "o-0092",
+   "position": [
+    -589059.737,
+    -1250143.179
+   ],
+   "rotation_deg": 197.1,
+   "z": 193.713
+  },
+  {
+   "asset": "prim:connector_roof_mast_2",
+   "id": "o-0100",
+   "position": [
+    -589220.897,
+    -1249910.358
+   ],
+   "rotation_deg": 336.9,
+   "z": 193.743
+  },
+  {
+   "asset": "prim:connector_roof_mast_2",
+   "id": "o-0101",
+   "position": [
+    -589195.417,
+    -1249898.673
+   ],
+   "rotation_deg": 208.8,
+   "z": 195.31
+  },
+  {
+   "asset": "prim:connector_wall_4",
+   "id": "o-0102",
+   "position": [
+    -589223.87,
+    -1249884.217
+   ],
+   "rotation_deg": 318.9,
+   "z": 191.261
+  },
+  {
+   "asset": "prim:connector_roof_mast_4",
+   "id": "o-0103",
+   "position": [
+    -589244.245,
+    -1249868.75
+   ],
+   "rotation_deg": 225.0,
+   "z": 196.235
+  },
+  {
+   "asset": "prim:connector_wall_4",
+   "id": "o-0117",
+   "position": [
+    -589334.882,
+    -1249857.785
+   ],
+   "rotation_deg": 172.6,
+   "z": 191.747
+  },
+  {
+   "asset": "prim:connector_wall_4",
+   "id": "o-0118",
+   "position": [
+    -589322.777,
+    -1249859.552
+   ],
+   "rotation_deg": 168.6,
+   "z": 192.834
+  },
+  {
+   "asset": "prim:connector_roof_mast_4",
+   "id": "o-0119",
+   "position": [
+    -589295.61,
+    -1249819.247
+   ],
+   "rotation_deg": 175.8,
+   "z": 195.932
+  },
+  {
+   "asset": "prim:connector_roof_mast_hook",
+   "id": "o-0120",
+   "position": [
+    -589303.635,
+    -1249802.936
+   ],
+   "rotation_deg": 234.0,
+   "z": 198.029
+  },
+  {
+   "asset": "prim:connector_roof_mast_2",
+   "id": "o-0121",
+   "position": [
+    -589318.358,
+    -1249820.862
+   ],
+   "rotation_deg": 48.1,
+   "z": 196.676
+  },
+  {
+   "asset": "prim:connector_roof_mast_hook",
+   "id": "o-0122",
+   "position": [
+    -589320.034,
+    -1249820.389
+   ],
+   "rotation_deg": 41.7,
+   "z": 196.676
+  },
+  {
+   "asset": "prim:connector_wall_hook",
+   "id": "o-0128",
+   "position": [
+    -589402.344,
+    -1249786.532
+   ],
+   "rotation_deg": 70.7,
+   "z": 196.3
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0129",
+   "position": [
+    -589466.5,
+    -1249960.0
+   ],
+   "rotation_deg": 0.0
+  },
+  {
+   "asset": "prim:floodwall_gate",
+   "id": "o-0137",
+   "position": [
+    -589550.25,
+    -1249925.25
+   ],
+   "rotation_deg": 113.199
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0138",
+   "position": [
+    -589549.068,
+    -1249928.007
+   ],
+   "rotation_deg": 117.966
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0139",
+   "position": [
+    -589547.987,
+    -1249929.69
+   ],
+   "rotation_deg": 122.734
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0140",
+   "position": [
+    -589545.824,
+    -1249933.055
+   ],
+   "rotation_deg": 122.734
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0141",
+   "position": [
+    -589543.661,
+    -1249936.419
+   ],
+   "rotation_deg": 122.734
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0142",
+   "position": [
+    -589541.498,
+    -1249939.784
+   ],
+   "rotation_deg": 122.734
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0143",
+   "position": [
+    -589539.335,
+    -1249943.149
+   ],
+   "rotation_deg": 122.734
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0144",
+   "position": [
+    -589537.172,
+    -1249946.514
+   ],
+   "rotation_deg": 122.734
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0145",
+   "position": [
+    -589535.009,
+    -1249949.878
+   ],
+   "rotation_deg": 122.734
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0146",
+   "position": [
+    -589532.846,
+    -1249953.243
+   ],
+   "rotation_deg": 122.734
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0147",
+   "position": [
+    -589530.683,
+    -1249956.608
+   ],
+   "rotation_deg": 122.734
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0148",
+   "position": [
+    -589528.52,
+    -1249959.973
+   ],
+   "rotation_deg": 122.734
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0149",
+   "position": [
+    -589526.357,
+    -1249963.337
+   ],
+   "rotation_deg": 122.734
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0150",
+   "position": [
+    -589524.194,
+    -1249966.702
+   ],
+   "rotation_deg": 122.734
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0151",
+   "position": [
+    -589522.031,
+    -1249970.067
+   ],
+   "rotation_deg": 122.734
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0152",
+   "position": [
+    -589519.799,
+    -1249973.385
+   ],
+   "rotation_deg": 125.126
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0153",
+   "position": [
+    -589517.498,
+    -1249976.657
+   ],
+   "rotation_deg": 125.126
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0154",
+   "position": [
+    -589515.196,
+    -1249979.928
+   ],
+   "rotation_deg": 125.126
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0155",
+   "position": [
+    -589512.895,
+    -1249983.2
+   ],
+   "rotation_deg": 125.126
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0156",
+   "position": [
+    -589510.593,
+    -1249986.471
+   ],
+   "rotation_deg": 125.126
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0157",
+   "position": [
+    -589509.442,
+    -1249988.107
+   ],
+   "rotation_deg": 128.963
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0158",
+   "position": [
+    -589508.083,
+    -1249989.575
+   ],
+   "rotation_deg": 132.801
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0159",
+   "position": [
+    -589505.366,
+    -1249992.509
+   ],
+   "rotation_deg": 132.801
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0160",
+   "position": [
+    -589502.648,
+    -1249995.444
+   ],
+   "rotation_deg": 132.801
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0161",
+   "position": [
+    -589499.93,
+    -1249998.379
+   ],
+   "rotation_deg": 132.801
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0162",
+   "position": [
+    -589497.212,
+    -1250001.314
+   ],
+   "rotation_deg": 132.801
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0163",
+   "position": [
+    -589494.421,
+    -1250004.177
+   ],
+   "rotation_deg": 135.742
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0164",
+   "position": [
+    -589491.556,
+    -1250006.969
+   ],
+   "rotation_deg": 135.742
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0165",
+   "position": [
+    -589489.407,
+    -1250009.063
+   ],
+   "rotation_deg": 135.742
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0166",
+   "position": [
+    -589487.217,
+    -1250011.112
+   ],
+   "rotation_deg": 137.483
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0167",
+   "position": [
+    -589484.269,
+    -1250013.815
+   ],
+   "rotation_deg": 137.483
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0168",
+   "position": [
+    -589481.321,
+    -1250016.519
+   ],
+   "rotation_deg": 137.483
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0169",
+   "position": [
+    -589478.372,
+    -1250019.222
+   ],
+   "rotation_deg": 137.483
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0170",
+   "position": [
+    -589475.424,
+    -1250021.925
+   ],
+   "rotation_deg": 137.483
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0171",
+   "position": [
+    -589472.414,
+    -1250024.558
+   ],
+   "rotation_deg": 140.156
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0172",
+   "position": [
+    -589469.343,
+    -1250027.121
+   ],
+   "rotation_deg": 140.156
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0173",
+   "position": [
+    -589467.04,
+    -1250029.043
+   ],
+   "rotation_deg": 140.156
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0174",
+   "position": [
+    -589464.694,
+    -1250030.913
+   ],
+   "rotation_deg": 142.073
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0175",
+   "position": [
+    -589461.539,
+    -1250033.372
+   ],
+   "rotation_deg": 142.073
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0176",
+   "position": [
+    -589459.173,
+    -1250035.216
+   ],
+   "rotation_deg": 142.073
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0177",
+   "position": [
+    -589458.384,
+    -1250035.83
+   ],
+   "rotation_deg": 143.801
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0178",
+   "position": [
+    -589456.735,
+    -1250036.962
+   ],
+   "rotation_deg": 145.529
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0179",
+   "position": [
+    -589453.438,
+    -1250039.226
+   ],
+   "rotation_deg": 145.529
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0180",
+   "position": [
+    -589450.14,
+    -1250041.49
+   ],
+   "rotation_deg": 145.529
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0181",
+   "position": [
+    -589448.491,
+    -1250042.622
+   ],
+   "rotation_deg": 147.412
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0182",
+   "position": [
+    -589446.771,
+    -1250043.644
+   ],
+   "rotation_deg": 149.295
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0183",
+   "position": [
+    -589443.332,
+    -1250045.686
+   ],
+   "rotation_deg": 149.295
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0184",
+   "position": [
+    -589439.893,
+    -1250047.728
+   ],
+   "rotation_deg": 149.295
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0185",
+   "position": [
+    -589436.454,
+    -1250049.771
+   ],
+   "rotation_deg": 149.295
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0186",
+   "position": [
+    -589433.015,
+    -1250051.813
+   ],
+   "rotation_deg": 149.295
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0187",
+   "position": [
+    -589430.435,
+    -1250053.345
+   ],
+   "rotation_deg": 149.295
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0188",
+   "position": [
+    -589429.575,
+    -1250053.856
+   ],
+   "rotation_deg": 151.103
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0189",
+   "position": [
+    -589427.795,
+    -1250054.767
+   ],
+   "rotation_deg": 152.912
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0190",
+   "position": [
+    -589424.234,
+    -1250056.588
+   ],
+   "rotation_deg": 152.912
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0191",
+   "position": [
+    -589420.672,
+    -1250058.41
+   ],
+   "rotation_deg": 152.912
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0192",
+   "position": [
+    -589417.111,
+    -1250060.231
+   ],
+   "rotation_deg": 152.912
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0193",
+   "position": [
+    -589413.55,
+    -1250062.053
+   ],
+   "rotation_deg": 152.912
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0194",
+   "position": [
+    -589410.879,
+    -1250063.419
+   ],
+   "rotation_deg": 152.912
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0195",
+   "position": [
+    -589408.184,
+    -1250064.736
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0196",
+   "position": [
+    -589404.574,
+    -1250066.46
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0197",
+   "position": [
+    -589400.965,
+    -1250068.183
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0198",
+   "position": [
+    -589397.355,
+    -1250069.907
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0199",
+   "position": [
+    -589393.746,
+    -1250071.631
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0200",
+   "position": [
+    -589390.136,
+    -1250073.354
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0201",
+   "position": [
+    -589386.527,
+    -1250075.078
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0202",
+   "position": [
+    -589382.917,
+    -1250076.802
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0203",
+   "position": [
+    -589379.307,
+    -1250078.525
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0204",
+   "position": [
+    -589375.698,
+    -1250080.249
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0205",
+   "position": [
+    -589372.088,
+    -1250081.973
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0206",
+   "position": [
+    -589368.479,
+    -1250083.696
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0207",
+   "position": [
+    -589364.869,
+    -1250085.42
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0208",
+   "position": [
+    -589361.26,
+    -1250087.144
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0209",
+   "position": [
+    -589357.65,
+    -1250088.867
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0210",
+   "position": [
+    -589354.041,
+    -1250090.591
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0211",
+   "position": [
+    -589350.431,
+    -1250092.315
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0212",
+   "position": [
+    -589346.821,
+    -1250094.038
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0213",
+   "position": [
+    -589343.212,
+    -1250095.762
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0214",
+   "position": [
+    -589339.602,
+    -1250097.486
+   ],
+   "rotation_deg": 154.474
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0230",
+   "position": [
+    -589551.743,
+    -1249920.517
+   ],
+   "rotation_deg": 98.957
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0231",
+   "position": [
+    -589552.366,
+    -1249916.566
+   ],
+   "rotation_deg": 98.957
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0232",
+   "position": [
+    -589552.989,
+    -1249912.615
+   ],
+   "rotation_deg": 98.957
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0233",
+   "position": [
+    -589553.612,
+    -1249908.663
+   ],
+   "rotation_deg": 98.957
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0234",
+   "position": [
+    -589553.923,
+    -1249906.688
+   ],
+   "rotation_deg": 100.458
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0235",
+   "position": [
+    -589554.337,
+    -1249904.731
+   ],
+   "rotation_deg": 101.959
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0236",
+   "position": [
+    -589555.166,
+    -1249900.818
+   ],
+   "rotation_deg": 101.959
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0237",
+   "position": [
+    -589555.995,
+    -1249896.905
+   ],
+   "rotation_deg": 101.959
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0238",
+   "position": [
+    -589556.824,
+    -1249892.992
+   ],
+   "rotation_deg": 101.959
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0239",
+   "position": [
+    -589557.653,
+    -1249889.078
+   ],
+   "rotation_deg": 101.959
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0240",
+   "position": [
+    -589558.481,
+    -1249885.165
+   ],
+   "rotation_deg": 101.959
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0241",
+   "position": [
+    -589558.896,
+    -1249883.209
+   ],
+   "rotation_deg": 99.901
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0242",
+   "position": [
+    -589559.169,
+    -1249881.227
+   ],
+   "rotation_deg": 97.842
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0243",
+   "position": [
+    -589559.715,
+    -1249877.265
+   ],
+   "rotation_deg": 97.842
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0244",
+   "position": [
+    -589560.26,
+    -1249873.302
+   ],
+   "rotation_deg": 97.842
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0245",
+   "position": [
+    -589560.533,
+    -1249871.321
+   ],
+   "rotation_deg": 95.619
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0246",
+   "position": [
+    -589560.652,
+    -1249869.324
+   ],
+   "rotation_deg": 93.396
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0247",
+   "position": [
+    -589560.77,
+    -1249867.328
+   ],
+   "rotation_deg": 90.413
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0248",
+   "position": [
+    -589560.681,
+    -1249865.33
+   ],
+   "rotation_deg": 87.43
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0249",
+   "position": [
+    -589560.501,
+    -1249861.334
+   ],
+   "rotation_deg": 87.43
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0250",
+   "position": [
+    -589560.322,
+    -1249857.338
+   ],
+   "rotation_deg": 87.43
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0251",
+   "position": [
+    -589560.187,
+    -1249854.341
+   ],
+   "rotation_deg": 87.43
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0252",
+   "position": [
+    -589560.142,
+    -1249853.342
+   ],
+   "rotation_deg": 84.103
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0253",
+   "position": [
+    -589559.822,
+    -1249851.368
+   ],
+   "rotation_deg": 80.777
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0254",
+   "position": [
+    -589559.181,
+    -1249847.419
+   ],
+   "rotation_deg": 80.777
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0255",
+   "position": [
+    -589558.7,
+    -1249844.458
+   ],
+   "rotation_deg": 80.777
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0256",
+   "position": [
+    -589558.192,
+    -1249841.502
+   ],
+   "rotation_deg": 79.987
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0257",
+   "position": [
+    -589557.67,
+    -1249838.547
+   ],
+   "rotation_deg": 79.987
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0258",
+   "position": [
+    -589557.496,
+    -1249837.563
+   ],
+   "rotation_deg": 77.187
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0259",
+   "position": [
+    -589556.958,
+    -1249835.636
+   ],
+   "rotation_deg": 74.387
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0260",
+   "position": [
+    -589555.882,
+    -1249831.784
+   ],
+   "rotation_deg": 74.387
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0261",
+   "position": [
+    -589554.805,
+    -1249827.932
+   ],
+   "rotation_deg": 74.387
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0262",
+   "position": [
+    -589553.729,
+    -1249824.079
+   ],
+   "rotation_deg": 74.387
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0263",
+   "position": [
+    -589552.921,
+    -1249821.19
+   ],
+   "rotation_deg": 74.387
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0264",
+   "position": [
+    -589552.652,
+    -1249820.227
+   ],
+   "rotation_deg": 71.45
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0265",
+   "position": [
+    -589551.919,
+    -1249818.366
+   ],
+   "rotation_deg": 68.513
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0266",
+   "position": [
+    -589550.454,
+    -1249814.644
+   ],
+   "rotation_deg": 68.513
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0267",
+   "position": [
+    -589548.989,
+    -1249810.922
+   ],
+   "rotation_deg": 68.513
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0268",
+   "position": [
+    -589547.524,
+    -1249807.2
+   ],
+   "rotation_deg": 68.513
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0269",
+   "position": [
+    -589546.425,
+    -1249804.408
+   ],
+   "rotation_deg": 68.513
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0270",
+   "position": [
+    -589546.059,
+    -1249803.478
+   ],
+   "rotation_deg": 65.301
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0271",
+   "position": [
+    -589545.122,
+    -1249801.71
+   ],
+   "rotation_deg": 62.089
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0272",
+   "position": [
+    -589543.25,
+    -1249798.176
+   ],
+   "rotation_deg": 62.089
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0273",
+   "position": [
+    -589541.378,
+    -1249794.641
+   ],
+   "rotation_deg": 62.089
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0274",
+   "position": [
+    -589539.505,
+    -1249791.106
+   ],
+   "rotation_deg": 62.089
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0275",
+   "position": [
+    -589538.101,
+    -1249788.455
+   ],
+   "rotation_deg": 62.089
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0276",
+   "position": [
+    -589537.633,
+    -1249787.572
+   ],
+   "rotation_deg": 57.691
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0277",
+   "position": [
+    -589536.437,
+    -1249785.968
+   ],
+   "rotation_deg": 53.292
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0278",
+   "position": [
+    -589534.047,
+    -1249782.761
+   ],
+   "rotation_deg": 53.292
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0279",
+   "position": [
+    -589531.656,
+    -1249779.555
+   ],
+   "rotation_deg": 53.292
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0280",
+   "position": [
+    -589529.265,
+    -1249776.348
+   ],
+   "rotation_deg": 53.292
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0281",
+   "position": [
+    -589528.069,
+    -1249774.744
+   ],
+   "rotation_deg": 51.244
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0282",
+   "position": [
+    -589526.762,
+    -1249773.231
+   ],
+   "rotation_deg": 49.195
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0283",
+   "position": [
+    -589524.148,
+    -1249770.203
+   ],
+   "rotation_deg": 49.195
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0284",
+   "position": [
+    -589521.534,
+    -1249767.175
+   ],
+   "rotation_deg": 49.195
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0285",
+   "position": [
+    -589518.92,
+    -1249764.147
+   ],
+   "rotation_deg": 49.195
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0286",
+   "position": [
+    -589516.96,
+    -1249761.877
+   ],
+   "rotation_deg": 49.195
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0287",
+   "position": [
+    -589516.306,
+    -1249761.12
+   ],
+   "rotation_deg": 44.677
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0288",
+   "position": [
+    -589514.778,
+    -1249759.83
+   ],
+   "rotation_deg": 40.16
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0289",
+   "position": [
+    -589513.249,
+    -1249758.54
+   ],
+   "rotation_deg": 36.167
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0290",
+   "position": [
+    -589511.557,
+    -1249757.475
+   ],
+   "rotation_deg": 32.174
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0291",
+   "position": [
+    -589508.171,
+    -1249755.345
+   ],
+   "rotation_deg": 32.174
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0292",
+   "position": [
+    -589504.785,
+    -1249753.215
+   ],
+   "rotation_deg": 32.174
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0293",
+   "position": [
+    -589503.092,
+    -1249752.15
+   ],
+   "rotation_deg": 25.194
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0294",
+   "position": [
+    -589501.192,
+    -1249751.525
+   ],
+   "rotation_deg": 18.214
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0295",
+   "position": [
+    -589498.343,
+    -1249750.587
+   ],
+   "rotation_deg": 18.214
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0296",
+   "position": [
+    -589497.393,
+    -1249750.275
+   ],
+   "rotation_deg": 16.252
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0297",
+   "position": [
+    -589495.455,
+    -1249749.781
+   ],
+   "rotation_deg": 14.29
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0298",
+   "position": [
+    -589491.578,
+    -1249748.794
+   ],
+   "rotation_deg": 14.29
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0299",
+   "position": [
+    -589488.671,
+    -1249748.053
+   ],
+   "rotation_deg": 14.29
+  },
+  {
+   "asset": "prim:floodwall_access",
+   "id": "o-0300",
+   "position": [
+    -589485.764,
+    -1249747.313
+   ],
+   "rotation_deg": 14.29
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0301",
+   "position": [
+    -589483.826,
+    -1249746.819
+   ],
+   "rotation_deg": 21.887
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0302",
+   "position": [
+    -589482.955,
+    -1249746.327
+   ],
+   "rotation_deg": 29.484
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0303",
+   "position": [
+    -589482.085,
+    -1249745.835
+   ],
+   "rotation_deg": 38.805
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0304",
+   "position": [
+    -589480.75,
+    -1249744.346
+   ],
+   "rotation_deg": 48.126
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0305",
+   "position": [
+    -589478.08,
+    -1249741.367
+   ],
+   "rotation_deg": 48.126
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0306",
+   "position": [
+    -589476.745,
+    -1249739.878
+   ],
+   "rotation_deg": 42.799
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0307",
+   "position": [
+    -589475.158,
+    -1249738.661
+   ],
+   "rotation_deg": 37.473
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0308",
+   "position": [
+    -589471.983,
+    -1249736.228
+   ],
+   "rotation_deg": 37.473
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0309",
+   "position": [
+    -589468.809,
+    -1249733.794
+   ],
+   "rotation_deg": 37.473
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0310",
+   "position": [
+    -589465.634,
+    -1249731.361
+   ],
+   "rotation_deg": 37.473
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0311",
+   "position": [
+    -589462.42,
+    -1249728.98
+   ],
+   "rotation_deg": 35.584
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0312",
+   "position": [
+    -589459.167,
+    -1249726.653
+   ],
+   "rotation_deg": 35.584
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0313",
+   "position": [
+    -589455.914,
+    -1249724.325
+   ],
+   "rotation_deg": 35.584
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0314",
+   "position": [
+    -589452.661,
+    -1249721.997
+   ],
+   "rotation_deg": 35.584
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0315",
+   "position": [
+    -589449.408,
+    -1249719.67
+   ],
+   "rotation_deg": 35.584
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0316",
+   "position": [
+    -589446.155,
+    -1249717.342
+   ],
+   "rotation_deg": 35.584
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0317",
+   "position": [
+    -589442.902,
+    -1249715.015
+   ],
+   "rotation_deg": 35.584
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0318",
+   "position": [
+    -589440.462,
+    -1249713.269
+   ],
+   "rotation_deg": 35.584
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0319",
+   "position": [
+    -589438.067,
+    -1249711.463
+   ],
+   "rotation_deg": 37.751
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0320",
+   "position": [
+    -589434.905,
+    -1249709.014
+   ],
+   "rotation_deg": 37.751
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0321",
+   "position": [
+    -589431.742,
+    -1249706.565
+   ],
+   "rotation_deg": 37.751
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0322",
+   "position": [
+    -589428.579,
+    -1249704.116
+   ],
+   "rotation_deg": 37.751
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0323",
+   "position": [
+    -589425.417,
+    -1249701.667
+   ],
+   "rotation_deg": 37.751
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0324",
+   "position": [
+    -589422.254,
+    -1249699.218
+   ],
+   "rotation_deg": 37.751
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0325",
+   "position": [
+    -589419.091,
+    -1249696.769
+   ],
+   "rotation_deg": 37.751
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0326",
+   "position": [
+    -589415.928,
+    -1249694.32
+   ],
+   "rotation_deg": 37.751
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0327",
+   "position": [
+    -589412.766,
+    -1249691.871
+   ],
+   "rotation_deg": 37.751
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0328",
+   "position": [
+    -589409.603,
+    -1249689.422
+   ],
+   "rotation_deg": 37.751
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0329",
+   "position": [
+    -589406.44,
+    -1249686.973
+   ],
+   "rotation_deg": 37.751
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0330",
+   "position": [
+    -589404.859,
+    -1249685.749
+   ],
+   "rotation_deg": 35.869
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0331",
+   "position": [
+    -589403.201,
+    -1249684.631
+   ],
+   "rotation_deg": 33.988
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0332",
+   "position": [
+    -589400.713,
+    -1249682.954
+   ],
+   "rotation_deg": 33.988
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0333",
+   "position": [
+    -589399.884,
+    -1249682.395
+   ],
+   "rotation_deg": 30.433
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0334",
+   "position": [
+    -589398.1,
+    -1249681.491
+   ],
+   "rotation_deg": 26.879
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0335",
+   "position": [
+    -589395.424,
+    -1249680.134
+   ],
+   "rotation_deg": 26.879
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0336",
+   "position": [
+    -589394.532,
+    -1249679.682
+   ],
+   "rotation_deg": 20.306
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0337",
+   "position": [
+    -589392.589,
+    -1249679.207
+   ],
+   "rotation_deg": 13.732
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0338",
+   "position": [
+    -589389.675,
+    -1249678.495
+   ],
+   "rotation_deg": 13.732
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0339",
+   "position": [
+    -589388.704,
+    -1249678.258
+   ],
+   "rotation_deg": 11.208
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0340",
+   "position": [
+    -589386.727,
+    -1249677.956
+   ],
+   "rotation_deg": 8.683
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0341",
+   "position": [
+    -589382.772,
+    -1249677.352
+   ],
+   "rotation_deg": 8.683
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0342",
+   "position": [
+    -589378.818,
+    -1249676.748
+   ],
+   "rotation_deg": 8.683
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0343",
+   "position": [
+    -589375.853,
+    -1249676.295
+   ],
+   "rotation_deg": 8.683
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0344",
+   "position": [
+    -589374.864,
+    -1249676.144
+   ],
+   "rotation_deg": 11.644
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0345",
+   "position": [
+    -589372.929,
+    -1249675.64
+   ],
+   "rotation_deg": 14.605
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0346",
+   "position": [
+    -589370.026,
+    -1249674.883
+   ],
+   "rotation_deg": 14.605
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0347",
+   "position": [
+    -589369.058,
+    -1249674.631
+   ],
+   "rotation_deg": 23.565
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0348",
+   "position": [
+    -589367.372,
+    -1249673.556
+   ],
+   "rotation_deg": 32.525
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0349",
+   "position": [
+    -589335.953,
+    -1250099.123
+   ],
+   "rotation_deg": 157.21
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0350",
+   "position": [
+    -589334.109,
+    -1250099.897
+   ],
+   "rotation_deg": 159.14
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0351",
+   "position": [
+    -589332.218,
+    -1250100.546
+   ],
+   "rotation_deg": 161.069
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0352",
+   "position": [
+    -589330.326,
+    -1250101.195
+   ],
+   "rotation_deg": 162.772
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0353",
+   "position": [
+    -589328.399,
+    -1250101.73
+   ],
+   "rotation_deg": 164.475
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0354",
+   "position": [
+    -589324.545,
+    -1250102.801
+   ],
+   "rotation_deg": 164.475
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0355",
+   "position": [
+    -589320.691,
+    -1250103.872
+   ],
+   "rotation_deg": 164.475
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0356",
+   "position": [
+    -589318.764,
+    -1250104.407
+   ],
+   "rotation_deg": 162.97
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0357",
+   "position": [
+    -589316.867,
+    -1250105.043
+   ],
+   "rotation_deg": 161.464
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0358",
+   "position": [
+    -589314.971,
+    -1250105.678
+   ],
+   "rotation_deg": 159.919
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0359",
+   "position": [
+    -589313.112,
+    -1250106.416
+   ],
+   "rotation_deg": 158.374
+  },
+  {
+   "asset": "prim:floodwall_joint",
+   "id": "o-0360",
+   "position": [
+    -589311.253,
+    -1250107.153
+   ],
+   "rotation_deg": 154.956
+  },
+  {
+   "asset": "prim:floodwall_straight_4",
+   "id": "o-0361",
+   "position": [
+    -589309.494,
+    -1250108.106
+   ],
+   "rotation_deg": 151.539
+  },
+  {
+   "asset": "prim:floodwall_straight_2",
+   "id": "o-0362",
+   "position": [
+    -589306.857,
+    -1250109.535
+   ],
+   "rotation_deg": 151.539
+  }
+ ],
  "parcels": {
   "P-0002": {
    "fence": {
@@ -2692,133 +4890,6 @@
    "fence": {
     "mode": "none"
    }
-  },
-  "P-0023": {
-   "objects": [
-    {
-     "asset": "prim:connector_roof_mast_4",
-     "id": "o-0091",
-     "position": [
-      -589056.217,
-      -1250161.962
-     ],
-     "rotation_deg": 123.2,
-     "z": 191.854
-    }
-   ]
-  },
-  "P-0029": {
-   "objects": [
-    {
-     "asset": "pack:kenney-city-kit-suburban/driveway-long",
-     "id": "o-0026",
-     "position": [
-      -589059.5,
-      -1250145.0
-     ],
-     "rotation_deg": 285.0
-    },
-    {
-     "asset": "pack:kenney-city-kit-suburban/driveway-long",
-     "id": "o-0027",
-     "position": [
-      -589059.5,
-      -1250145.5
-     ],
-     "rotation_deg": 285.0
-    },
-    {
-     "asset": "pack:kenney-city-kit-suburban/driveway-long",
-     "id": "o-0028",
-     "position": [
-      -589060.0,
-      -1250145.0
-     ],
-     "rotation_deg": 135.0
-    },
-    {
-     "asset": "pack:kenney-city-kit-suburban/driveway-long",
-     "id": "o-0029",
-     "position": [
-      -589060.0,
-      -1250145.5
-     ],
-     "rotation_deg": 285.0
-    },
-    {
-     "asset": "pack:kenney-city-kit-suburban/driveway-long",
-     "id": "o-0030",
-     "position": [
-      -589060.5,
-      -1250145.0
-     ],
-     "rotation_deg": 285.0
-    },
-    {
-     "asset": "pack:kenney-city-kit-suburban/driveway-long",
-     "id": "o-0031",
-     "position": [
-      -589060.5,
-      -1250145.5
-     ],
-     "rotation_deg": 285.0
-    },
-    {
-     "asset": "pack:kenney-city-kit-suburban/driveway-long",
-     "id": "o-0032",
-     "position": [
-      -589061.0,
-      -1250145.0
-     ],
-     "rotation_deg": 285.0
-    },
-    {
-     "asset": "pack:kenney-city-kit-suburban/driveway-long",
-     "id": "o-0033",
-     "position": [
-      -589061.0,
-      -1250145.5
-     ],
-     "rotation_deg": 285.0
-    },
-    {
-     "asset": "pack:kenney-city-kit-suburban/path-long",
-     "id": "o-0034",
-     "position": [
-      -589060.5,
-      -1250143.5
-     ],
-     "rotation_deg": 285.0
-    },
-    {
-     "asset": "pack:kenney-city-kit-suburban/path-long",
-     "id": "o-0035",
-     "position": [
-      -589060.5,
-      -1250144.0
-     ],
-     "rotation_deg": 285.0
-    },
-    {
-     "asset": "prim:slab",
-     "id": "o-0036",
-     "position": [
-      -589061.5,
-      -1250142.0
-     ],
-     "rotation_deg": 285.0
-    },
-    {
-     "asset": "prim:connector_wall_hook",
-     "id": "o-0092",
-     "position": [
-      -589059.737,
-      -1250143.179
-     ],
-     "rotation_deg": 197.1,
-     "z": 193.713
-    }
-   ]
   },
   "P-0030": {
    "fence": {
@@ -3044,39 +5115,7 @@
   "P-0127": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:connector_roof_mast_hook",
-     "id": "o-0087",
-     "position": [
-      -589134.817,
-      -1250031.522
-     ],
-     "rotation_deg": 355.3,
-     "z": 194.616
-    },
-    {
-     "asset": "prim:connector_roof_mast_4",
-     "id": "o-0088",
-     "position": [
-      -589134.62,
-      -1250029.338
-     ],
-     "rotation_deg": 334.7,
-     "z": 194.616
-    },
-    {
-     "asset": "prim:connector_roof_mast_hook",
-     "id": "o-0089",
-     "position": [
-      -589137.315,
-      -1250033.238
-     ],
-     "rotation_deg": 8.5,
-     "z": 194.616
-    }
-   ]
+   }
   },
   "P-0129": {
    "fence": {
@@ -3101,29 +5140,7 @@
   "P-0141": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:connector_wall_hook",
-     "id": "o-0085",
-     "position": [
-      -589127.399,
-      -1250040.209
-     ],
-     "rotation_deg": 30.6,
-     "z": 193.587
-    },
-    {
-     "asset": "prim:connector_roof_mast_2",
-     "id": "o-0086",
-     "position": [
-      -589128.333,
-      -1250041.329
-     ],
-     "rotation_deg": 94.1,
-     "z": 194.999
-    }
-   ]
+   }
   },
   "P-0142": {
    "fence": {
@@ -3259,20 +5276,6 @@
    "fence": {
     "mode": "none"
    }
-  },
-  "P-0223": {
-   "objects": [
-    {
-     "asset": "prim:connector_roof_mast_hook",
-     "id": "o-0120",
-     "position": [
-      -589303.635,
-      -1249802.936
-     ],
-     "rotation_deg": 234.0,
-     "z": 198.029
-    }
-   ]
   },
   "P-0226": {
    "fence": {
@@ -3487,48 +5490,12 @@
   "P-0337": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:connector_roof_mast_4",
-     "id": "o-0119",
-     "position": [
-      -589295.61,
-      -1249819.247
-     ],
-     "rotation_deg": 175.8,
-     "z": 195.932
-    }
-   ]
+   }
   },
   "P-0338": {
    "fence": {
     "mode": "none"
    }
-  },
-  "P-0340": {
-   "objects": [
-    {
-     "asset": "prim:connector_roof_mast_2",
-     "id": "o-0121",
-     "position": [
-      -589318.358,
-      -1249820.862
-     ],
-     "rotation_deg": 48.1,
-     "z": 196.676
-    },
-    {
-     "asset": "prim:connector_roof_mast_hook",
-     "id": "o-0122",
-     "position": [
-      -589320.034,
-      -1249820.389
-     ],
-     "rotation_deg": 41.7,
-     "z": 196.676
-    }
-   ]
   },
   "P-0342": {
    "fence": {
@@ -3743,19 +5710,7 @@
   "P-0412": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:connector_wall_hook",
-     "id": "o-0128",
-     "position": [
-      -589402.344,
-      -1249786.532
-     ],
-     "rotation_deg": 70.7,
-     "z": 196.3
-    }
-   ]
+   }
   },
   "P-0415": {
    "fence": {
@@ -3930,18 +5885,7 @@
   "P-0510": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:radio_tower",
-     "id": "o-0072",
-     "position": [
-      -589200.5,
-      -1249679.4
-     ],
-     "rotation_deg": 81.94
-    }
-   ]
+   }
   },
   "P-0517": {
    "fence": {
@@ -4093,19 +6037,6 @@
     "mode": "none"
    }
   },
-  "P-0617": {
-   "objects": [
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0129",
-     "position": [
-      -589466.5,
-      -1249960.0
-     ],
-     "rotation_deg": 0.0
-    }
-   ]
-  },
   "P-0620": {
    "fence": {
     "mode": "none"
@@ -4184,36 +6115,12 @@
   "P-0653": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:connector_wall_4",
-     "id": "o-0117",
-     "position": [
-      -589334.882,
-      -1249857.785
-     ],
-     "rotation_deg": 172.6,
-     "z": 191.747
-    }
-   ]
+   }
   },
   "P-0654": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:connector_wall_4",
-     "id": "o-0118",
-     "position": [
-      -589322.777,
-      -1249859.552
-     ],
-     "rotation_deg": 168.6,
-     "z": 192.834
-    }
-   ]
+   }
   },
   "P-0655": {
    "fence": {
@@ -4268,19 +6175,7 @@
   "P-0684": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:connector_roof_mast_2",
-     "id": "o-0100",
-     "position": [
-      -589220.897,
-      -1249910.358
-     ],
-     "rotation_deg": 336.9,
-     "z": 193.743
-    }
-   ]
+   }
   },
   "P-0686": {
    "fence": {
@@ -4550,203 +6445,17 @@
   "P-0806": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0329",
-     "position": [
-      -589406.44,
-      -1249686.973
-     ],
-     "rotation_deg": 37.751
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0330",
-     "position": [
-      -589404.859,
-      -1249685.749
-     ],
-     "rotation_deg": 35.869
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0331",
-     "position": [
-      -589403.201,
-      -1249684.631
-     ],
-     "rotation_deg": 33.988
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0332",
-     "position": [
-      -589400.713,
-      -1249682.954
-     ],
-     "rotation_deg": 33.988
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0333",
-     "position": [
-      -589399.884,
-      -1249682.395
-     ],
-     "rotation_deg": 30.433
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0334",
-     "position": [
-      -589398.1,
-      -1249681.491
-     ],
-     "rotation_deg": 26.879
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0335",
-     "position": [
-      -589395.424,
-      -1249680.134
-     ],
-     "rotation_deg": 26.879
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0336",
-     "position": [
-      -589394.532,
-      -1249679.682
-     ],
-     "rotation_deg": 20.306
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0337",
-     "position": [
-      -589392.589,
-      -1249679.207
-     ],
-     "rotation_deg": 13.732
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0338",
-     "position": [
-      -589389.675,
-      -1249678.495
-     ],
-     "rotation_deg": 13.732
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0339",
-     "position": [
-      -589388.704,
-      -1249678.258
-     ],
-     "rotation_deg": 11.208
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0340",
-     "position": [
-      -589386.727,
-      -1249677.956
-     ],
-     "rotation_deg": 8.683
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0341",
-     "position": [
-      -589382.772,
-      -1249677.352
-     ],
-     "rotation_deg": 8.683
-    }
-   ]
+   }
   },
   "P-0807": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0327",
-     "position": [
-      -589412.766,
-      -1249691.871
-     ],
-     "rotation_deg": 37.751
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0328",
-     "position": [
-      -589409.603,
-      -1249689.422
-     ],
-     "rotation_deg": 37.751
-    }
-   ]
+   }
   },
   "P-0808": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0322",
-     "position": [
-      -589428.579,
-      -1249704.116
-     ],
-     "rotation_deg": 37.751
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0323",
-     "position": [
-      -589425.417,
-      -1249701.667
-     ],
-     "rotation_deg": 37.751
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0324",
-     "position": [
-      -589422.254,
-      -1249699.218
-     ],
-     "rotation_deg": 37.751
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0325",
-     "position": [
-      -589419.091,
-      -1249696.769
-     ],
-     "rotation_deg": 37.751
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0326",
-     "position": [
-      -589415.928,
-      -1249694.32
-     ],
-     "rotation_deg": 37.751
-    }
-   ]
+   }
   },
   "P-0809": {
    "fence": {
@@ -4756,45 +6465,7 @@
   "P-0810": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0318",
-     "position": [
-      -589440.462,
-      -1249713.269
-     ],
-     "rotation_deg": 35.584
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0319",
-     "position": [
-      -589438.067,
-      -1249711.463
-     ],
-     "rotation_deg": 37.751
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0320",
-     "position": [
-      -589434.905,
-      -1249709.014
-     ],
-     "rotation_deg": 37.751
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0321",
-     "position": [
-      -589431.742,
-      -1249706.565
-     ],
-     "rotation_deg": 37.751
-    }
-   ]
+   }
   },
   "P-0811": {
    "fence": {
@@ -4809,1397 +6480,12 @@
   "P-0813": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0312",
-     "position": [
-      -589459.167,
-      -1249726.653
-     ],
-     "rotation_deg": 35.584
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0313",
-     "position": [
-      -589455.914,
-      -1249724.325
-     ],
-     "rotation_deg": 35.584
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0314",
-     "position": [
-      -589452.661,
-      -1249721.997
-     ],
-     "rotation_deg": 35.584
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0315",
-     "position": [
-      -589449.408,
-      -1249719.67
-     ],
-     "rotation_deg": 35.584
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0316",
-     "position": [
-      -589446.155,
-      -1249717.342
-     ],
-     "rotation_deg": 35.584
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0317",
-     "position": [
-      -589442.902,
-      -1249715.015
-     ],
-     "rotation_deg": 35.584
-    }
-   ]
+   }
   },
   "P-0814": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0291",
-     "position": [
-      -589508.171,
-      -1249755.345
-     ],
-     "rotation_deg": 32.174
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0292",
-     "position": [
-      -589504.785,
-      -1249753.215
-     ],
-     "rotation_deg": 32.174
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0293",
-     "position": [
-      -589503.092,
-      -1249752.15
-     ],
-     "rotation_deg": 25.194
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0294",
-     "position": [
-      -589501.192,
-      -1249751.525
-     ],
-     "rotation_deg": 18.214
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0295",
-     "position": [
-      -589498.343,
-      -1249750.587
-     ],
-     "rotation_deg": 18.214
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0296",
-     "position": [
-      -589497.393,
-      -1249750.275
-     ],
-     "rotation_deg": 16.252
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0297",
-     "position": [
-      -589495.455,
-      -1249749.781
-     ],
-     "rotation_deg": 14.29
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0298",
-     "position": [
-      -589491.578,
-      -1249748.794
-     ],
-     "rotation_deg": 14.29
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0299",
-     "position": [
-      -589488.671,
-      -1249748.053
-     ],
-     "rotation_deg": 14.29
-    },
-    {
-     "asset": "prim:floodwall_access",
-     "id": "o-0300",
-     "position": [
-      -589485.764,
-      -1249747.313
-     ],
-     "rotation_deg": 14.29
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0301",
-     "position": [
-      -589483.826,
-      -1249746.819
-     ],
-     "rotation_deg": 21.887
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0302",
-     "position": [
-      -589482.955,
-      -1249746.327
-     ],
-     "rotation_deg": 29.484
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0303",
-     "position": [
-      -589482.085,
-      -1249745.835
-     ],
-     "rotation_deg": 38.805
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0304",
-     "position": [
-      -589480.75,
-      -1249744.346
-     ],
-     "rotation_deg": 48.126
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0305",
-     "position": [
-      -589478.08,
-      -1249741.367
-     ],
-     "rotation_deg": 48.126
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0306",
-     "position": [
-      -589476.745,
-      -1249739.878
-     ],
-     "rotation_deg": 42.799
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0307",
-     "position": [
-      -589475.158,
-      -1249738.661
-     ],
-     "rotation_deg": 37.473
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0308",
-     "position": [
-      -589471.983,
-      -1249736.228
-     ],
-     "rotation_deg": 37.473
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0309",
-     "position": [
-      -589468.809,
-      -1249733.794
-     ],
-     "rotation_deg": 37.473
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0310",
-     "position": [
-      -589465.634,
-      -1249731.361
-     ],
-     "rotation_deg": 37.473
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0311",
-     "position": [
-      -589462.42,
-      -1249728.98
-     ],
-     "rotation_deg": 35.584
-    }
-   ]
-  },
-  "P-0815": {
-   "objects": [
-    {
-     "asset": "prim:floodwall_gate",
-     "id": "o-0137",
-     "position": [
-      -589550.25,
-      -1249925.25
-     ],
-     "rotation_deg": 113.199
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0138",
-     "position": [
-      -589549.068,
-      -1249928.007
-     ],
-     "rotation_deg": 117.966
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0139",
-     "position": [
-      -589547.987,
-      -1249929.69
-     ],
-     "rotation_deg": 122.734
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0140",
-     "position": [
-      -589545.824,
-      -1249933.055
-     ],
-     "rotation_deg": 122.734
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0141",
-     "position": [
-      -589543.661,
-      -1249936.419
-     ],
-     "rotation_deg": 122.734
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0142",
-     "position": [
-      -589541.498,
-      -1249939.784
-     ],
-     "rotation_deg": 122.734
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0143",
-     "position": [
-      -589539.335,
-      -1249943.149
-     ],
-     "rotation_deg": 122.734
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0144",
-     "position": [
-      -589537.172,
-      -1249946.514
-     ],
-     "rotation_deg": 122.734
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0145",
-     "position": [
-      -589535.009,
-      -1249949.878
-     ],
-     "rotation_deg": 122.734
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0146",
-     "position": [
-      -589532.846,
-      -1249953.243
-     ],
-     "rotation_deg": 122.734
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0147",
-     "position": [
-      -589530.683,
-      -1249956.608
-     ],
-     "rotation_deg": 122.734
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0148",
-     "position": [
-      -589528.52,
-      -1249959.973
-     ],
-     "rotation_deg": 122.734
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0149",
-     "position": [
-      -589526.357,
-      -1249963.337
-     ],
-     "rotation_deg": 122.734
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0150",
-     "position": [
-      -589524.194,
-      -1249966.702
-     ],
-     "rotation_deg": 122.734
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0151",
-     "position": [
-      -589522.031,
-      -1249970.067
-     ],
-     "rotation_deg": 122.734
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0152",
-     "position": [
-      -589519.799,
-      -1249973.385
-     ],
-     "rotation_deg": 125.126
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0153",
-     "position": [
-      -589517.498,
-      -1249976.657
-     ],
-     "rotation_deg": 125.126
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0154",
-     "position": [
-      -589515.196,
-      -1249979.928
-     ],
-     "rotation_deg": 125.126
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0155",
-     "position": [
-      -589512.895,
-      -1249983.2
-     ],
-     "rotation_deg": 125.126
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0156",
-     "position": [
-      -589510.593,
-      -1249986.471
-     ],
-     "rotation_deg": 125.126
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0157",
-     "position": [
-      -589509.442,
-      -1249988.107
-     ],
-     "rotation_deg": 128.963
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0158",
-     "position": [
-      -589508.083,
-      -1249989.575
-     ],
-     "rotation_deg": 132.801
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0159",
-     "position": [
-      -589505.366,
-      -1249992.509
-     ],
-     "rotation_deg": 132.801
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0160",
-     "position": [
-      -589502.648,
-      -1249995.444
-     ],
-     "rotation_deg": 132.801
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0161",
-     "position": [
-      -589499.93,
-      -1249998.379
-     ],
-     "rotation_deg": 132.801
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0162",
-     "position": [
-      -589497.212,
-      -1250001.314
-     ],
-     "rotation_deg": 132.801
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0163",
-     "position": [
-      -589494.421,
-      -1250004.177
-     ],
-     "rotation_deg": 135.742
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0164",
-     "position": [
-      -589491.556,
-      -1250006.969
-     ],
-     "rotation_deg": 135.742
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0165",
-     "position": [
-      -589489.407,
-      -1250009.063
-     ],
-     "rotation_deg": 135.742
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0166",
-     "position": [
-      -589487.217,
-      -1250011.112
-     ],
-     "rotation_deg": 137.483
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0167",
-     "position": [
-      -589484.269,
-      -1250013.815
-     ],
-     "rotation_deg": 137.483
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0168",
-     "position": [
-      -589481.321,
-      -1250016.519
-     ],
-     "rotation_deg": 137.483
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0169",
-     "position": [
-      -589478.372,
-      -1250019.222
-     ],
-     "rotation_deg": 137.483
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0170",
-     "position": [
-      -589475.424,
-      -1250021.925
-     ],
-     "rotation_deg": 137.483
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0171",
-     "position": [
-      -589472.414,
-      -1250024.558
-     ],
-     "rotation_deg": 140.156
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0172",
-     "position": [
-      -589469.343,
-      -1250027.121
-     ],
-     "rotation_deg": 140.156
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0173",
-     "position": [
-      -589467.04,
-      -1250029.043
-     ],
-     "rotation_deg": 140.156
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0174",
-     "position": [
-      -589464.694,
-      -1250030.913
-     ],
-     "rotation_deg": 142.073
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0175",
-     "position": [
-      -589461.539,
-      -1250033.372
-     ],
-     "rotation_deg": 142.073
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0178",
-     "position": [
-      -589456.735,
-      -1250036.962
-     ],
-     "rotation_deg": 145.529
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0179",
-     "position": [
-      -589453.438,
-      -1250039.226
-     ],
-     "rotation_deg": 145.529
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0180",
-     "position": [
-      -589450.14,
-      -1250041.49
-     ],
-     "rotation_deg": 145.529
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0181",
-     "position": [
-      -589448.491,
-      -1250042.622
-     ],
-     "rotation_deg": 147.412
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0182",
-     "position": [
-      -589446.771,
-      -1250043.644
-     ],
-     "rotation_deg": 149.295
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0183",
-     "position": [
-      -589443.332,
-      -1250045.686
-     ],
-     "rotation_deg": 149.295
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0184",
-     "position": [
-      -589439.893,
-      -1250047.728
-     ],
-     "rotation_deg": 149.295
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0185",
-     "position": [
-      -589436.454,
-      -1250049.771
-     ],
-     "rotation_deg": 149.295
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0186",
-     "position": [
-      -589433.015,
-      -1250051.813
-     ],
-     "rotation_deg": 149.295
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0187",
-     "position": [
-      -589430.435,
-      -1250053.345
-     ],
-     "rotation_deg": 149.295
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0188",
-     "position": [
-      -589429.575,
-      -1250053.856
-     ],
-     "rotation_deg": 151.103
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0189",
-     "position": [
-      -589427.795,
-      -1250054.767
-     ],
-     "rotation_deg": 152.912
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0190",
-     "position": [
-      -589424.234,
-      -1250056.588
-     ],
-     "rotation_deg": 152.912
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0191",
-     "position": [
-      -589420.672,
-      -1250058.41
-     ],
-     "rotation_deg": 152.912
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0192",
-     "position": [
-      -589417.111,
-      -1250060.231
-     ],
-     "rotation_deg": 152.912
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0193",
-     "position": [
-      -589413.55,
-      -1250062.053
-     ],
-     "rotation_deg": 152.912
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0194",
-     "position": [
-      -589410.879,
-      -1250063.419
-     ],
-     "rotation_deg": 152.912
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0195",
-     "position": [
-      -589408.184,
-      -1250064.736
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0196",
-     "position": [
-      -589404.574,
-      -1250066.46
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0197",
-     "position": [
-      -589400.965,
-      -1250068.183
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0198",
-     "position": [
-      -589397.355,
-      -1250069.907
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0199",
-     "position": [
-      -589393.746,
-      -1250071.631
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0200",
-     "position": [
-      -589390.136,
-      -1250073.354
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0201",
-     "position": [
-      -589386.527,
-      -1250075.078
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0202",
-     "position": [
-      -589382.917,
-      -1250076.802
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0203",
-     "position": [
-      -589379.307,
-      -1250078.525
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0230",
-     "position": [
-      -589551.743,
-      -1249920.517
-     ],
-     "rotation_deg": 98.957
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0231",
-     "position": [
-      -589552.366,
-      -1249916.566
-     ],
-     "rotation_deg": 98.957
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0232",
-     "position": [
-      -589552.989,
-      -1249912.615
-     ],
-     "rotation_deg": 98.957
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0233",
-     "position": [
-      -589553.612,
-      -1249908.663
-     ],
-     "rotation_deg": 98.957
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0234",
-     "position": [
-      -589553.923,
-      -1249906.688
-     ],
-     "rotation_deg": 100.458
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0235",
-     "position": [
-      -589554.337,
-      -1249904.731
-     ],
-     "rotation_deg": 101.959
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0236",
-     "position": [
-      -589555.166,
-      -1249900.818
-     ],
-     "rotation_deg": 101.959
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0237",
-     "position": [
-      -589555.995,
-      -1249896.905
-     ],
-     "rotation_deg": 101.959
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0238",
-     "position": [
-      -589556.824,
-      -1249892.992
-     ],
-     "rotation_deg": 101.959
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0239",
-     "position": [
-      -589557.653,
-      -1249889.078
-     ],
-     "rotation_deg": 101.959
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0240",
-     "position": [
-      -589558.481,
-      -1249885.165
-     ],
-     "rotation_deg": 101.959
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0241",
-     "position": [
-      -589558.896,
-      -1249883.209
-     ],
-     "rotation_deg": 99.901
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0242",
-     "position": [
-      -589559.169,
-      -1249881.227
-     ],
-     "rotation_deg": 97.842
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0243",
-     "position": [
-      -589559.715,
-      -1249877.265
-     ],
-     "rotation_deg": 97.842
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0244",
-     "position": [
-      -589560.26,
-      -1249873.302
-     ],
-     "rotation_deg": 97.842
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0245",
-     "position": [
-      -589560.533,
-      -1249871.321
-     ],
-     "rotation_deg": 95.619
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0246",
-     "position": [
-      -589560.652,
-      -1249869.324
-     ],
-     "rotation_deg": 93.396
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0247",
-     "position": [
-      -589560.77,
-      -1249867.328
-     ],
-     "rotation_deg": 90.413
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0248",
-     "position": [
-      -589560.681,
-      -1249865.33
-     ],
-     "rotation_deg": 87.43
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0249",
-     "position": [
-      -589560.501,
-      -1249861.334
-     ],
-     "rotation_deg": 87.43
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0250",
-     "position": [
-      -589560.322,
-      -1249857.338
-     ],
-     "rotation_deg": 87.43
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0251",
-     "position": [
-      -589560.187,
-      -1249854.341
-     ],
-     "rotation_deg": 87.43
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0252",
-     "position": [
-      -589560.142,
-      -1249853.342
-     ],
-     "rotation_deg": 84.103
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0253",
-     "position": [
-      -589559.822,
-      -1249851.368
-     ],
-     "rotation_deg": 80.777
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0254",
-     "position": [
-      -589559.181,
-      -1249847.419
-     ],
-     "rotation_deg": 80.777
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0255",
-     "position": [
-      -589558.7,
-      -1249844.458
-     ],
-     "rotation_deg": 80.777
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0256",
-     "position": [
-      -589558.192,
-      -1249841.502
-     ],
-     "rotation_deg": 79.987
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0257",
-     "position": [
-      -589557.67,
-      -1249838.547
-     ],
-     "rotation_deg": 79.987
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0258",
-     "position": [
-      -589557.496,
-      -1249837.563
-     ],
-     "rotation_deg": 77.187
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0259",
-     "position": [
-      -589556.958,
-      -1249835.636
-     ],
-     "rotation_deg": 74.387
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0260",
-     "position": [
-      -589555.882,
-      -1249831.784
-     ],
-     "rotation_deg": 74.387
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0261",
-     "position": [
-      -589554.805,
-      -1249827.932
-     ],
-     "rotation_deg": 74.387
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0262",
-     "position": [
-      -589553.729,
-      -1249824.079
-     ],
-     "rotation_deg": 74.387
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0263",
-     "position": [
-      -589552.921,
-      -1249821.19
-     ],
-     "rotation_deg": 74.387
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0264",
-     "position": [
-      -589552.652,
-      -1249820.227
-     ],
-     "rotation_deg": 71.45
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0265",
-     "position": [
-      -589551.919,
-      -1249818.366
-     ],
-     "rotation_deg": 68.513
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0266",
-     "position": [
-      -589550.454,
-      -1249814.644
-     ],
-     "rotation_deg": 68.513
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0267",
-     "position": [
-      -589548.989,
-      -1249810.922
-     ],
-     "rotation_deg": 68.513
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0268",
-     "position": [
-      -589547.524,
-      -1249807.2
-     ],
-     "rotation_deg": 68.513
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0269",
-     "position": [
-      -589546.425,
-      -1249804.408
-     ],
-     "rotation_deg": 68.513
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0270",
-     "position": [
-      -589546.059,
-      -1249803.478
-     ],
-     "rotation_deg": 65.301
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0271",
-     "position": [
-      -589545.122,
-      -1249801.71
-     ],
-     "rotation_deg": 62.089
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0272",
-     "position": [
-      -589543.25,
-      -1249798.176
-     ],
-     "rotation_deg": 62.089
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0273",
-     "position": [
-      -589541.378,
-      -1249794.641
-     ],
-     "rotation_deg": 62.089
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0274",
-     "position": [
-      -589539.505,
-      -1249791.106
-     ],
-     "rotation_deg": 62.089
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0275",
-     "position": [
-      -589538.101,
-      -1249788.455
-     ],
-     "rotation_deg": 62.089
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0276",
-     "position": [
-      -589537.633,
-      -1249787.572
-     ],
-     "rotation_deg": 57.691
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0277",
-     "position": [
-      -589536.437,
-      -1249785.968
-     ],
-     "rotation_deg": 53.292
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0278",
-     "position": [
-      -589534.047,
-      -1249782.761
-     ],
-     "rotation_deg": 53.292
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0279",
-     "position": [
-      -589531.656,
-      -1249779.555
-     ],
-     "rotation_deg": 53.292
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0280",
-     "position": [
-      -589529.265,
-      -1249776.348
-     ],
-     "rotation_deg": 53.292
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0281",
-     "position": [
-      -589528.069,
-      -1249774.744
-     ],
-     "rotation_deg": 51.244
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0282",
-     "position": [
-      -589526.762,
-      -1249773.231
-     ],
-     "rotation_deg": 49.195
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0283",
-     "position": [
-      -589524.148,
-      -1249770.203
-     ],
-     "rotation_deg": 49.195
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0284",
-     "position": [
-      -589521.534,
-      -1249767.175
-     ],
-     "rotation_deg": 49.195
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0285",
-     "position": [
-      -589518.92,
-      -1249764.147
-     ],
-     "rotation_deg": 49.195
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0286",
-     "position": [
-      -589516.96,
-      -1249761.877
-     ],
-     "rotation_deg": 49.195
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0287",
-     "position": [
-      -589516.306,
-      -1249761.12
-     ],
-     "rotation_deg": 44.677
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0288",
-     "position": [
-      -589514.778,
-      -1249759.83
-     ],
-     "rotation_deg": 40.16
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0289",
-     "position": [
-      -589513.249,
-      -1249758.54
-     ],
-     "rotation_deg": 36.167
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0290",
-     "position": [
-      -589511.557,
-      -1249757.475
-     ],
-     "rotation_deg": 32.174
-    }
-   ]
+   }
   },
   "P-0816": {
    "fence": {
@@ -6209,361 +6495,37 @@
   "P-0817": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0204",
-     "position": [
-      -589375.698,
-      -1250080.249
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0205",
-     "position": [
-      -589372.088,
-      -1250081.973
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0206",
-     "position": [
-      -589368.479,
-      -1250083.696
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0207",
-     "position": [
-      -589364.869,
-      -1250085.42
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0208",
-     "position": [
-      -589361.26,
-      -1250087.144
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0209",
-     "position": [
-      -589357.65,
-      -1250088.867
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0210",
-     "position": [
-      -589354.041,
-      -1250090.591
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0211",
-     "position": [
-      -589350.431,
-      -1250092.315
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0212",
-     "position": [
-      -589346.821,
-      -1250094.038
-     ],
-     "rotation_deg": 154.474
-    }
-   ]
+   }
   },
   "P-0818": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0213",
-     "position": [
-      -589343.212,
-      -1250095.762
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0214",
-     "position": [
-      -589339.602,
-      -1250097.486
-     ],
-     "rotation_deg": 154.474
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0349",
-     "position": [
-      -589335.953,
-      -1250099.123
-     ],
-     "rotation_deg": 157.21
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0350",
-     "position": [
-      -589334.109,
-      -1250099.897
-     ],
-     "rotation_deg": 159.14
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0351",
-     "position": [
-      -589332.218,
-      -1250100.546
-     ],
-     "rotation_deg": 161.069
-    }
-   ]
+   }
   },
   "P-0819": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0352",
-     "position": [
-      -589330.326,
-      -1250101.195
-     ],
-     "rotation_deg": 162.772
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0353",
-     "position": [
-      -589328.399,
-      -1250101.73
-     ],
-     "rotation_deg": 164.475
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0354",
-     "position": [
-      -589324.545,
-      -1250102.801
-     ],
-     "rotation_deg": 164.475
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0362",
-     "position": [
-      -589306.857,
-      -1250109.535
-     ],
-     "rotation_deg": 151.539
-    }
-   ]
+   }
   },
   "P-0820": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0355",
-     "position": [
-      -589320.691,
-      -1250103.872
-     ],
-     "rotation_deg": 164.475
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0356",
-     "position": [
-      -589318.764,
-      -1250104.407
-     ],
-     "rotation_deg": 162.97
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0357",
-     "position": [
-      -589316.867,
-      -1250105.043
-     ],
-     "rotation_deg": 161.464
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0358",
-     "position": [
-      -589314.971,
-      -1250105.678
-     ],
-     "rotation_deg": 159.919
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0359",
-     "position": [
-      -589313.112,
-      -1250106.416
-     ],
-     "rotation_deg": 158.374
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0360",
-     "position": [
-      -589311.253,
-      -1250107.153
-     ],
-     "rotation_deg": 154.956
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0361",
-     "position": [
-      -589309.494,
-      -1250108.106
-     ],
-     "rotation_deg": 151.539
-    }
-   ]
-  },
-  "P-0821": {
-   "objects": [
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0347",
-     "position": [
-      -589369.058,
-      -1249674.631
-     ],
-     "rotation_deg": 23.565
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0348",
-     "position": [
-      -589367.372,
-      -1249673.556
-     ],
-     "rotation_deg": 32.525
-    }
-   ]
+   }
   },
   "P-0823": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0176",
-     "position": [
-      -589459.173,
-      -1250035.216
-     ],
-     "rotation_deg": 142.073
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0177",
-     "position": [
-      -589458.384,
-      -1250035.83
-     ],
-     "rotation_deg": 143.801
-    }
-   ]
+   }
   },
   "P-0824": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0346",
-     "position": [
-      -589370.026,
-      -1249674.883
-     ],
-     "rotation_deg": 14.605
-    }
-   ]
+   }
   },
   "P-0825": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0342",
-     "position": [
-      -589378.818,
-      -1249676.748
-     ],
-     "rotation_deg": 8.683
-    },
-    {
-     "asset": "prim:floodwall_straight_2",
-     "id": "o-0343",
-     "position": [
-      -589375.853,
-      -1249676.295
-     ],
-     "rotation_deg": 8.683
-    },
-    {
-     "asset": "prim:floodwall_joint",
-     "id": "o-0344",
-     "position": [
-      -589374.864,
-      -1249676.144
-     ],
-     "rotation_deg": 11.644
-    },
-    {
-     "asset": "prim:floodwall_straight_4",
-     "id": "o-0345",
-     "position": [
-      -589372.929,
-      -1249675.64
-     ],
-     "rotation_deg": 14.605
-    }
-   ]
+   }
   },
   "P-0829": {
    "fence": {
@@ -7198,19 +7160,7 @@
   "P-1122": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:connector_roof_mast_2",
-     "id": "o-0101",
-     "position": [
-      -589195.417,
-      -1249898.673
-     ],
-     "rotation_deg": 208.8,
-     "z": 195.31
-    }
-   ]
+   }
   },
   "P-1124": {
    "fence": {
@@ -7225,29 +7175,7 @@
   "P-1135": {
    "fence": {
     "mode": "none"
-   },
-   "objects": [
-    {
-     "asset": "prim:connector_wall_4",
-     "id": "o-0102",
-     "position": [
-      -589223.87,
-      -1249884.217
-     ],
-     "rotation_deg": 318.9,
-     "z": 191.261
-    },
-    {
-     "asset": "prim:connector_roof_mast_4",
-     "id": "o-0103",
-     "position": [
-      -589244.245,
-      -1249868.75
-     ],
-     "rotation_deg": 225.0,
-     "z": 196.235
-    }
-   ]
+   }
   },
   "P-1138": {
    "fence": {

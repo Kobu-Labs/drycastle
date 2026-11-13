@@ -492,7 +492,6 @@ class EditPlan:
     groups: dict[str, list[str]] = field(default_factory=dict)  # valid member parcels only
     objects: list[dict] = field(default_factory=list)  # objects.json entries, sorted by id
     cables: list[dict] = field(default_factory=list)  # {"id", "from", "to"} between placed poles and connectors, by id
-    object_owner: dict[str, str] = field(default_factory=dict)  # object id -> parcel listing it
     warnings: list[str] = field(default_factory=list)
     water_regions: list[tuple[Polygon, float]] = field(default_factory=list)  # (outline in local metres, water_y)
 
@@ -509,10 +508,9 @@ def plan_edits(
     """Resolve the edits against this run's parcels.
 
     Entries for parcels that no longer exist (parcel entries, group members) are skipped with a
-    warning, except the objects of such an entry: they are placed all the same (an object only needs
-    its position, so dropping a parcel, see ground.py, loses no placed object). An object outside every
-    parcel, or outside the parcel it is listed under, is still placed, with a warning; its ``parcel`` is
-    the parcel containing it, or null. A cable is
+    warning. Every object is placed: an object belongs to no parcel and only needs its position (so a
+    pole on a road, or on land a dropped parcel left as ground, is as normal as a car in a yard); its
+    ``parcel`` in objects.json is the parcel containing it, or null. A cable is
     kept when both its ends are placed utility poles or house connectors, else skipped with a warning.
     """
     plan = EditPlan()
@@ -532,7 +530,7 @@ def plan_edits(
     for pid in sorted(edits.parcels):
         if pid not in polys:
             kept = [k for k in ("fence",) if k in edits.parcels[pid]]
-            if kept:  # the objects of the entry are still placed (below)
+            if kept:
                 plan.warnings.append(f"parcels.{pid}: parcel not found; {', '.join(kept)} skipped")
     for pid in sorted(polys):
         entry = edits.parcels.get(pid, {})
@@ -541,34 +539,22 @@ def plan_edits(
             spec = resolve_fence(entry.get("fence"), group_fence)
             gaps = tuple((*_local_xy(x, y, origin), w) for x, y, w in spec.gaps)
             plan.specs[pid] = replace(spec, gaps=gaps)
-    for pid in sorted(edits.parcels):
-        for obj in edits.parcels[pid].get("objects", []):
-            lx, ly = _local_xy(*obj["position"], origin)
-            hits = sorted(q for q, g in polys.items() if g.covers(Point(lx, ly)))
-            inside = hits[0] if hits else None
-            if pid not in polys:
-                pass  # listed under a parcel that is not kept: ground, an object there is normal
-            elif inside is None:
-                plan.warnings.append(f"objects {obj['id']}: outside every parcel; placed anyway")
-            elif inside != pid:
-                plan.warnings.append(
-                    f"objects {obj['id']}: outside its parcel {pid} (inside {inside}); placed anyway"
-                )
-            plan.object_owner[obj["id"]] = pid
-            plan.objects.append(
-                {
-                    "id": obj["id"],
-                    "asset": obj["asset"],
-                    "position": [_r3(lx), _r3(ly)],
-                    "z": obj.get("z"),
-                    "rotation_deg": float(obj.get("rotation_deg", 0)),
-                    "scale": float(obj.get("scale", 1)),
-                    "colour": obj.get("colour"),
-                    "parcel": inside,
-                    "owner": pid,  # the parcel entry that lists it (may differ from "parcel")
-                    "chunk": chunk_of(lx, ly, chunk_m),
-                }
-            )
+    for obj in edits.objects:
+        lx, ly = _local_xy(*obj["position"], origin)
+        hits = sorted(q for q, g in polys.items() if g.covers(Point(lx, ly)))
+        plan.objects.append(
+            {
+                "id": obj["id"],
+                "asset": obj["asset"],
+                "position": [_r3(lx), _r3(ly)],
+                "z": obj.get("z"),
+                "rotation_deg": float(obj.get("rotation_deg", 0)),
+                "scale": float(obj.get("scale", 1)),
+                "colour": obj.get("colour"),
+                "parcel": hits[0] if hits else None,
+                "chunk": chunk_of(lx, ly, chunk_m),
+            }
+        )
     plan.objects.sort(key=lambda o: o["id"])
     assets = {o["id"]: o["asset"] for o in plan.objects}
     for cid in sorted(edits.cables):

@@ -385,7 +385,7 @@ def test_concurrent_writers_do_not_lose_updates(tools, env):
     def work(parcel: str) -> None:
         try:
             for _ in range(8):
-                tools.place_object(parcel, "prim:slab", anchor="centre")
+                tools.place_object("prim:slab", parcel, anchor="centre")
         except Exception as exc:  # noqa: BLE001  # pragma: no cover - reported below
             errors.append(exc)
 
@@ -396,7 +396,7 @@ def test_concurrent_writers_do_not_lose_updates(tools, env):
         t.join()
     assert not errors
     edits = load_edits(settings.edits_path)
-    ids = [o["id"] for e in edits.parcels.values() for o in e["objects"]]
+    ids = [o["id"] for o in edits.objects]
     assert len(ids) == 32 and len(set(ids)) == 32
     canonical(settings)
     assert not list(settings.edits_path.parent.glob("edits.json.*.tmp"))
@@ -499,7 +499,7 @@ def test_region_errors_leave_file_untouched(env):
 
 def test_region_overlap_warning_and_coexistence(env):
     tools, settings, _ = env
-    tools.place_object("P-0001", CAR)
+    tools.place_object(CAR, "P-0001")
     tools.create_region("#111111", polygon=SQUARE)
     out = tools.create_region("#222222", polygon=[[OX + 15, OY + 15], [OX + 30, OY + 15], [OX + 30, OY + 30]])
     assert out["warnings"] and "R-0002 wins" in out["warnings"][0]
@@ -550,7 +550,7 @@ def test_through_mcp_session(env):
             }
             tool = next(t for t in (await client.list_tools()).tools if t.name == "place_object")
             assert {"parcel", "asset", "anchor", "offset_m", "position"} <= set(tool.input_schema["properties"])
-            assert tool.input_schema["required"] == ["parcel", "asset"]
+            assert tool.input_schema["required"] == ["asset"]  # an object needs no parcel
             ok = await client.call_tool("place_object", {"parcel": "P-0001", "asset": CAR, "anchor": "front"})
             assert not ok.is_error
             payload = ok.structured_content or json.loads(ok.content[0].text)
@@ -608,10 +608,10 @@ POLE = "prim:pole_lamp_1"
 
 def test_connect_poles_strings_a_chain_and_refuses_what_is_not_a_pole(tools, env):
     settings = env[1]
-    a = tools.place_object("P-0001", POLE, anchor="front")["id"]
-    b = tools.place_object("P-0001", POLE, anchor="centre")["id"]
-    c = tools.place_object("P-0001", "prim:pole_plain_1", anchor="back")["id"]
-    car = tools.place_object("P-0001", CAR, anchor="left")["id"]
+    a = tools.place_object(POLE, "P-0001", anchor="front")["id"]
+    b = tools.place_object(POLE, "P-0001", anchor="centre")["id"]
+    c = tools.place_object("prim:pole_plain_1", "P-0001", anchor="back")["id"]
+    car = tools.place_object(CAR, "P-0001", anchor="left")["id"]
     out = tools.connect_poles([a, b, c])
     assert [(x["id"], x["from"], x["to"]) for x in out["cables"]] == [("C-0001", a, b), ("C-0002", b, c)]
     assert all(x["length_m"] > 0 for x in out["cables"]) and out["warnings"] == []
@@ -621,7 +621,7 @@ def test_connect_poles_strings_a_chain_and_refuses_what_is_not_a_pole(tools, env
     assert again["cables"] == [] and "already joined by C-0001" in again["warnings"][0]
     with pytest.raises(ToolError, match="not a utility pole or a house connector"):
         tools.connect_poles([a, car])
-    wall = tools.place_object("P-0001", "prim:connector_wall_2", anchor="right")["id"]
+    wall = tools.place_object("prim:connector_wall_2", "P-0001", anchor="right")["id"]
     house = tools.connect_poles([c, wall])  # a cable can end on a house connector
     assert [(x["from"], x["to"]) for x in house["cables"]] == [(c, wall)]
     assert [x["id"] for x in tools.list_cables()["connectors"]] == [wall]
@@ -639,7 +639,7 @@ def test_connect_poles_strings_a_chain_and_refuses_what_is_not_a_pole(tools, env
 
 def test_disconnect_poles_and_removing_a_pole_takes_its_cables(tools, env):
     settings = env[1]
-    ids = [tools.place_object("P-0001", POLE, anchor=a)["id"] for a in ("front", "centre", "back")]
+    ids = [tools.place_object(POLE, "P-0001", anchor=a)["id"] for a in ("front", "centre", "back")]
     tools.connect_poles(ids)
     with pytest.raises(ToolError, match="either cable"):
         tools.disconnect_poles()
@@ -742,3 +742,42 @@ def test_delete_ground_type(env):
     assert "it was deleted" in tools.reset_ground_type("orchard")["summary"]
     assert load_edits(settings.edits_path).ground_types == {}
     assert '"ground_types"' not in settings.edits_path.read_text()
+
+
+# --- objects belong to no parcel ----------------------------------------------------------
+
+
+def test_a_pole_needs_no_parcel(env):
+    tools, settings, _ = env
+    far = [OX + 900, OY + 900]  # on no parcel at all: ground
+    placed = tools.place_object("prim:pole_lamp_1", position=far)
+    assert placed["position"] == far and placed["rotation_deg"] == 0.0 and placed["warnings"] == []
+    assert "parcel" not in placed
+    canonical(settings)
+    edits = load_edits(settings.edits_path)
+    assert [o["id"] for o in edits.objects] == [placed["id"]]
+    assert not any("objects" in e for e in edits.parcels.values())  # nothing is listed under a parcel
+
+    moved = tools.move_object(placed["id"], position=[far[0] + 5, far[1]], rotation_deg=90)
+    assert moved["entry"]["position"] == [far[0] + 5, far[1]] and moved["entry"]["rotation_deg"] == 90.0
+    assert [o["id"] for o in load_edits(settings.edits_path).objects] == [placed["id"]]
+
+    assert "removed" in tools.remove_object(placed["id"])["summary"]
+    assert load_edits(settings.edits_path).objects == []
+    assert '"objects"' not in settings.edits_path.read_text()  # only written when there are some
+
+
+def test_an_anchor_needs_a_parcel_but_an_exact_position_does_not(env):
+    tools, _, _ = env
+    with pytest.raises(ToolError, match="exact `position`"):
+        tools.place_object("prim:pole_lamp_1", anchor="front")
+    with pytest.raises(ToolError, match="exact `position`"):
+        tools.place_object("prim:pole_lamp_1")
+
+
+def test_get_parcel_lists_the_objects_standing_in_it(env):
+    tools, _, _ = env
+    inside = tools.place_object(CAR, "P-0001", anchor="centre")
+    tools.place_object("prim:pole_lamp_1", position=[OX + 900, OY + 900])
+    assert [o["id"] for o in tools.get_parcel("P-0001")["edits"]["objects"]] == [inside["id"]]
+    assert tools.get_parcel("P-0002")["edits"]["objects"] == []

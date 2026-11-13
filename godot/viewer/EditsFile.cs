@@ -40,12 +40,27 @@ public static class EditsFile
         return Convert(doc.RootElement);
     }
 
-    /// <summary>Make sure version, parcels and groups exist, as dump_text always writes them.</summary>
+    /// <summary>
+    /// Make sure version, parcels and groups exist, as dump_text always writes them, and take the objects of a file in the
+    /// old shape (listed under <c>parcels.&lt;ID&gt;.objects</c>) up to the top-level <c>objects</c> list, sorted by id like
+    /// edits.py `parse` does. An object belongs to no parcel; a parcel entry that held only objects goes.
+    /// </summary>
     public static void Normalise(SortedDictionary<string, object?> root)
     {
         if (!root.ContainsKey("version")) root["version"] = new Num("1");
-        if (root.GetValueOrDefault("parcels") is not SortedDictionary<string, object?>) root["parcels"] = NewObject();
+        if (root.GetValueOrDefault("parcels") is not SortedDictionary<string, object?> parcels) root["parcels"] = parcels = NewObject();
         if (root.GetValueOrDefault("groups") is not SortedDictionary<string, object?>) root["groups"] = NewObject();
+        var legacy = new List<SortedDictionary<string, object?>>();
+        foreach (var pid in parcels.Keys.ToList())
+            if (parcels[pid] is SortedDictionary<string, object?> entry && entry.TryGetValue("objects", out var listed) && listed is List<object?> list)
+            {
+                legacy.AddRange(list.OfType<SortedDictionary<string, object?>>());
+                entry.Remove("objects");
+                if (entry.Count == 0) parcels.Remove(pid);
+            }
+        if (legacy.Count == 0) return;
+        if (root.GetValueOrDefault("objects") is not List<object?> top) root["objects"] = top = new List<object?>();
+        top.AddRange(legacy.OrderBy(o => o.GetValueOrDefault("id") as string ?? "", StringComparer.Ordinal));
     }
 
     static object? Convert(JsonElement e)
@@ -78,6 +93,10 @@ public static class EditsFile
 
     static void Indent(StringBuilder sb, int depth) => sb.Append(' ', depth);
 
+    /// <summary>The top-level objects as dump_text writes them: sorted by id (ordinal; a stable sort, ids are unique).</summary>
+    static List<object?> SortedById(List<object?> objects)
+        => objects.OrderBy(o => (o as SortedDictionary<string, object?>)?.GetValueOrDefault("id") as string ?? "", StringComparer.Ordinal).ToList();
+
     static void Write(StringBuilder sb, object? v, int depth)
     {
         switch (v)
@@ -92,14 +111,16 @@ public static class EditsFile
                 var first = true;
                 foreach (var kv in o)
                 {
-                    // like dump_text: the regions, cables and ground_types keys are only written when there are any
+                    // like dump_text: the regions, cables and ground_types keys are only written when there are any, objects likewise
                     if (depth == 0 && kv.Key is "regions" or "cables" or "ground_types" && kv.Value is SortedDictionary<string, object?> { Count: 0 }) continue;
+                    if (depth == 0 && kv.Key == "objects" && kv.Value is List<object?> { Count: 0 }) continue;
+                    var value = depth == 0 && kv.Key == "objects" && kv.Value is List<object?> objs ? SortedById(objs) : kv.Value;
                     if (!first) sb.Append(",\n");
                     first = false;
                     Indent(sb, depth + 1);
                     WriteString(sb, kv.Key);
                     sb.Append(": ");
-                    Write(sb, kv.Value, depth + 1);
+                    Write(sb, value, depth + 1);
                 }
                 sb.Append('\n');
                 Indent(sb, depth);
@@ -344,11 +365,9 @@ public static class EditsFile
     public static Dictionary<string, string> ObjectAssets(SortedDictionary<string, object?> root)
     {
         var assets = new Dictionary<string, string>();
-        foreach (var (_, entry) in (SortedDictionary<string, object?>)root["parcels"]!)
-            if (entry is SortedDictionary<string, object?> e && e.GetValueOrDefault("objects") is List<object?> objs)
-                foreach (var o in objs)
-                    if (o is SortedDictionary<string, object?> ob && ob.GetValueOrDefault("id") is string id && ob.GetValueOrDefault("asset") is string asset)
-                        assets[id] = asset;
+        foreach (var o in root.GetValueOrDefault("objects") as List<object?> ?? new List<object?>())
+            if (o is SortedDictionary<string, object?> ob && ob.GetValueOrDefault("id") is string id && ob.GetValueOrDefault("asset") is string asset)
+                assets[id] = asset;
         return assets;
     }
 

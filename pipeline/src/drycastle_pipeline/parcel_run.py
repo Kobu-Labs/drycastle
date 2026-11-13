@@ -180,11 +180,7 @@ def compute_fragment(
 
     trees: list[dict] = []  # trees come from the orthophoto only: not per parcel, a full props run places them
 
-    objects = [
-        o
-        for o in plan.objects
-        if o["parcel"] in target_set or plan.object_owner.get(o["id"]) in target_set
-    ]
+    objects = [o for o in plan.objects if o["parcel"] in target_set]
     return {"fences": fences, "trees": trees, "objects": objects}
 
 

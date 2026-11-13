@@ -34,7 +34,11 @@ Several parcels that belong to one owner and are treated as one property, sharin
 _Avoid_: merged parcel, estate
 
 **Hand edit**:
-A deliberate, developer-made change to a parcel's or property group's contents (fence, trees, placed objects) that survives every pipeline re-run.
+A deliberate, developer-made change to a parcel's or property group's fence, or a placed object, that survives every pipeline re-run.
+
+**Placed object**:
+A car, pole, wall piece or other asset put on the map by hand, at an absolute position, listed in the top-level `objects` of `edits.json`. It belongs to no parcel: a pole beside a road stands on ground, which is no parcel, as well as a car in a yard. The parcel it stands in is derived from its position and only names its group node in the game.
+_Avoid_: parcel object, prop (a prop is generated: a fence or a tree)
 
 **Loadout**:
 One of a player's five saved sets: a primary weapon, a secondary weapon, a perk and three killstreaks. Edited in game and switched on death.

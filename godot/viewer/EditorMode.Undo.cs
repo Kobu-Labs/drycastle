@@ -4,8 +4,8 @@ using System.Linq;
 using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 
 /// <summary>
-/// Session undo/redo of every save the editor made since it opened (objects, group operations, Apply of fence). Each save records the before and after content of what it touched: `groups.&lt;ID&gt;`, `regions.&lt;ID&gt;` and `cables.&lt;ID&gt;`
-/// as whole entries, a parcel at key level (`parcels.&lt;ID&gt;.fence` and each object by id), with "absent" as a value.
+/// Session undo/redo of every save the editor made since it opened (objects, group operations, Apply of fence). Each save records the before and after content of what it touched: `groups.&lt;ID&gt;`, `regions.&lt;ID&gt;`, `cables.&lt;ID&gt;`
+/// and each object (by id, in the top-level `objects` list) as whole entries, a parcel at key level (`parcels.&lt;ID&gt;.fence`), with "absent" as a value.
 /// Undo reloads the file from disk, writes the before-values back (absent deletes), validates and saves; the watcher
 /// (or the instant objects path) applies the effect. Only the keys this operation touched are overwritten; everything
 /// else in the file, including other keys of the same parcel changed by another writer, stays as it is. Redo mirrors that with the after-entries. A new edit clears the redo stack. The
@@ -15,10 +15,10 @@ public partial class EditorMode
 {
     public const int UndoCap = 200;
 
-    /// <summary>One touched entry: kind is "parcels", "groups", "regions", "cables" or "ground_types"; Before/After null means absent.</summary>
+    /// <summary>One touched entry: kind is "parcels", "objects", "groups", "regions", "cables" or "ground_types"; Before/After null means absent.</summary>
     /// <summary>
-    /// Key is null for the whole entry (groups, regions, cables). For a parcel it names the part that changed: "fence",
-    /// or "objects/&lt;object id&gt;", so undo leaves the parcel's other keys (and other writers' edits) alone.
+    /// Key is null for the whole entry (objects by id, groups, regions, cables). For a parcel it names the part that changed:
+    /// "fence", so undo leaves the parcel's other keys (and other writers' edits) alone.
     /// </summary>
     public sealed record EntryChange(string Kind, string Id, Obj? Before, Obj? After, string? Key = null);
     /// <summary>A step that changed the sketch (EditorMode.Sketch.cs) carries its two states and no file changes: nothing is written.</summary>
@@ -33,10 +33,13 @@ public partial class EditorMode
 
     static Obj? Entry(Obj root, string kind, string id) => ((Obj)root[kind]!).GetValueOrDefault(id) as Obj;
 
-    /// <summary>The entries (parcels: fence and objects by id) whose content differs between two documents.</summary>
+    /// <summary>The entries (parcels: the fence; every object by id) whose content differs between two documents.</summary>
     static List<EntryChange> DiffEntries(Obj before, Obj after)
     {
         var list = new List<EntryChange>();
+        var ox = ObjectsById(before); var oy = ObjectsById(after);
+        foreach (var oid in ox.Keys.Union(oy.Keys).OrderBy(k => k, StringComparer.Ordinal))
+            Add(list, "objects", oid, null, ox.GetValueOrDefault(oid), oy.GetValueOrDefault(oid));
         foreach (var kind in new[] { "parcels", "groups", "regions", "cables", "ground_types" })
         {
             var a = before.GetValueOrDefault(kind) as Obj ?? EditsFile.NewObject(); var b = after.GetValueOrDefault(kind) as Obj ?? EditsFile.NewObject();
@@ -57,11 +60,10 @@ public partial class EditorMode
         list.Add(new EntryChange(kind, id, x == null ? null : ObjectEdits.CloneObj(x), y == null ? null : ObjectEdits.CloneObj(y), key));
     }
 
-    static Dictionary<string, Obj> ObjectsById(Obj? parcel)
+    static Dictionary<string, Obj> ObjectsById(Obj root)
     {
         var d = new Dictionary<string, Obj>();
-        if (parcel?.GetValueOrDefault("objects") is List<object?> l)
-            foreach (var o in l) if (o is Obj ob && ob.GetValueOrDefault("id") is string s) d[s] = ob;
+        foreach (var (_, o) in ObjectEdits.All(root)) if (o.GetValueOrDefault("id") is string s) d[s] = o;
         return d;
     }
 
@@ -69,14 +71,26 @@ public partial class EditorMode
     {
         foreach (var key in new[] { "fence" })
             Add(list, "parcels", id, key, x?.GetValueOrDefault(key) as Obj, y?.GetValueOrDefault(key) as Obj);
-        var ox = ObjectsById(x); var oy = ObjectsById(y);
-        foreach (var oid in ox.Keys.Union(oy.Keys).OrderBy(k => k, StringComparer.Ordinal))
-            Add(list, "parcels", id, "objects/" + oid, ox.GetValueOrDefault(oid), oy.GetValueOrDefault(oid));
+    }
+
+    /// <summary>Write one object (null = absent) into the top-level list: replace the one with its id, append a new one, drop a removed one.</summary>
+    static void ApplyObject(Obj root, string oid, Obj? target)
+    {
+        var list = ObjectEdits.Items(root);
+        var idx = list == null ? -1 : list.FindIndex(o => o is Obj ob && ob.GetValueOrDefault("id") as string == oid);
+        if (target == null)
+        {
+            if (idx >= 0) { list!.RemoveAt(idx); if (list.Count == 0) root.Remove("objects"); }
+            return;
+        }
+        if (list == null) root["objects"] = list = new List<object?>();
+        if (idx >= 0) list[idx] = ObjectEdits.CloneObj(target); else list.Add(ObjectEdits.CloneObj(target));
     }
 
     /// <summary>Write one recorded value (null = absent) into the document at its key.</summary>
     static void ApplyChange(Obj root, EntryChange c, Obj? target)
     {
+        if (c.Kind == "objects") { ApplyObject(root, c.Id, target); return; }
         if (root.GetValueOrDefault(c.Kind) is not Obj map) root[c.Kind] = map = EditsFile.NewObject(); // regions may be absent
         if (c.Key == null)
         {
@@ -84,24 +98,7 @@ public partial class EditorMode
             return;
         }
         var entry = map.GetValueOrDefault(c.Id) as Obj;
-        if (c.Key.StartsWith("objects/", StringComparison.Ordinal))
-        {
-            var oid = c.Key["objects/".Length..];
-            var objs = entry?.GetValueOrDefault("objects") as List<object?>;
-            var idx = objs == null ? -1 : objs.FindIndex(o => o is Obj ob && ob.GetValueOrDefault("id") as string == oid);
-            if (target == null)
-            {
-                if (idx >= 0) objs!.RemoveAt(idx);
-            }
-            else
-            {
-                if (entry == null) map[c.Id] = entry = EditsFile.NewObject();
-                if (objs == null) entry["objects"] = objs = new List<object?>();
-                if (idx >= 0) objs[idx] = ObjectEdits.CloneObj(target); else objs.Add(ObjectEdits.CloneObj(target));
-            }
-            if (entry != null && objs != null && objs.Count == 0) entry.Remove("objects");
-        }
-        else if (target == null) entry?.Remove(c.Key);
+        if (target == null) entry?.Remove(c.Key);
         else
         {
             if (entry == null) map[c.Id] = entry = EditsFile.NewObject();

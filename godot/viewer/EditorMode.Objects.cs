@@ -21,6 +21,7 @@ public partial class EditorMode
     public static readonly string[] IconOnlyCategories = { "pole", "connector" };
     const float PickMargin = 0.15f, RingBand = 0.45f;
 
+    /// <summary>A placed object. <c>Parcel</c> is the parcel the object stands in ("" on ground that is no parcel): derived from its position, an object belongs to none.</summary>
     public sealed record ObjectInfo(string Id, string Parcel, string Asset, double X, double Y, double Rotation, double Scale, string? Colour);
     public sealed record PaletteEntry(string Category, string Id, string Name, bool Visible);
 
@@ -63,17 +64,17 @@ public partial class EditorMode
 
     /// <summary>Objects of the file (the editor's view of the disk).</summary>
     public IReadOnlyList<ObjectInfo> AllObjects()
-        => ObjectEdits.All(Disk()).Select(t => ToInfo(t.pid, t.obj)).OrderBy(o => o.Id, StringComparer.Ordinal).ToList();
+        => ObjectEdits.All(Disk()).Select(t => ToInfo(t.obj)).OrderBy(o => o.Id, StringComparer.Ordinal).ToList();
 
-    static ObjectInfo ToInfo(string pid, Obj o)
+    ObjectInfo ToInfo(Obj o)
     {
         var (x, y) = ObjectEdits.Position(o);
-        return new ObjectInfo(o.GetValueOrDefault("id") as string ?? "", pid, o.GetValueOrDefault("asset") as string ?? "", x, y,
+        return new ObjectInfo(o.GetValueOrDefault("id") as string ?? "", Map.OriginEpsg5514 == null ? "" : ParcelAtAbs(x, y)?.Id ?? "", o.GetValueOrDefault("asset") as string ?? "", x, y,
             ObjectEdits.Rotation(o), ObjectEdits.Scale(o), o.GetValueOrDefault("colour") as string);
     }
 
     public ObjectInfo? ObjectData(string id)
-        => ObjectEdits.Find(Disk(), id) is { } f ? ToInfo(f.pid, f.obj) : null;
+        => ObjectEdits.Find(Disk(), id) is { } f ? ToInfo(f.obj) : null;
 
     public ObjectInfo? SelectedObject => SelectedObjectId == null ? null : ObjectData(SelectedObjectId);
 
@@ -84,12 +85,10 @@ public partial class EditorMode
     public Node3D? Ghost => _ghost;
     /// <summary>Absolute S-JTSK position the ghost last snapped to; null before the first update.</summary>
     public (double x, double y)? GhostAbsolute { get; private set; }
-    public bool GhostInParcel { get; private set; }
     /// <summary>When set the ghost stays where UpdateGhost put it instead of following the mouse (smoke, screenshots).</summary>
     public bool GhostPinned { get; set; }
     Node3D? _ghost;
-    StandardMaterial3D _ghostOk = null!, _ghostBad = null!;
-    bool? _ghostTint;
+    StandardMaterial3D _ghostOk = null!;
 
     /// <summary>Choose an asset from the palette: placement mode on (a ghost follows the cursor, a click places).</summary>
     public bool ArmPlacement(string asset)
@@ -102,7 +101,6 @@ public partial class EditorMode
         StopConnecting(false);
         StopPlanning(false);
         PlacementAsset = asset;
-        _ghostTint = null;
         _ghost = new Node3D { Name = "Ghost", Visible = false };
         var model = Map.CreateObjectModel(asset, null, out _);
         _ghost.AddChild(model);
@@ -137,7 +135,7 @@ public partial class EditorMode
         _panelDirty = true;
     }
 
-    /// <summary>Move the ghost to a ground point (snapped to 0.5 m unless free); red when the point is in no parcel.</summary>
+    /// <summary>Move the ghost to a ground point (snapped to 0.5 m unless free). Any ground will do: an object belongs to no parcel.</summary>
     public void UpdateGhost(Vector3 ground, bool free)
     {
         if (_ghost == null || Map.OriginEpsg5514 == null) return;
@@ -147,31 +145,22 @@ public partial class EditorMode
         _ghost.Position = new Vector3(l.X, Map.GroundHeightOrMean(l.X, l.Y), l.Y);
         _ghost.RotationDegrees = new Vector3(0, (float)GhostRotation, 0);
         _ghost.Visible = true;
-        var inParcel = Map.ParcelAt(l.X, l.Y) != null;
-        if (_ghostTint != inParcel)
-        {
-            _ghostTint = inParcel;
-            GhostInParcel = inParcel;
-            foreach (var mi in Meshes(_ghost)) mi.MaterialOverride = inParcel ? _ghostOk : _ghostBad;
-        }
     }
 
-    /// <summary>Left click while armed: append the asset to the objects of the parcel under the point.</summary>
+    /// <summary>Left click while armed: append the asset to the objects of the file, at the point (a parcel is not needed).</summary>
     public bool PlaceAt(Vector3 ground, bool free = false)
     {
         if (PlacementAsset == null) { Say("choose an asset in the palette first", true); return false; }
         if (Map.OriginEpsg5514 == null) { Say("this map has no origin_epsg5514", true); return false; }
         var (x, y) = SnapAbs(ground, free);
-        var parcel = ParcelAtAbs(x, y);
-        if (parcel == null) { Say("cannot place here: the point is in no parcel", true); return false; }
         var asset = PlacementAsset;
         var rot = GhostRotation;
         var name = AssetName(asset);
         return Mutate(root =>
         {
             var id = ObjectEdits.NextId(root);
-            ObjectEdits.Add(root, parcel.Id, ObjectEdits.Make(id, asset, x, y, rot));
-            return (true, $"placed {id} ({name}) on {parcel.Id}");
+            ObjectEdits.Add(root, ObjectEdits.Make(id, asset, x, y, rot));
+            return (true, $"placed {id} ({name})");
         }, $"place {name}");
     }
 
@@ -379,7 +368,6 @@ public partial class EditorMode
             double x = gx + _grab.dx, y = gy + _grab.dy;
             if (!free) { x = Snap(x, MoveSnap); y = Snap(y, MoveSnap); }
             _dragNow = (Math.Round(x, 3), Math.Round(y, 3), _dragStart.rot);
-            TintDrag(ParcelAtAbs(_dragNow.x, _dragNow.y) != null);
         }
         else
         {
@@ -389,26 +377,6 @@ public partial class EditorMode
         }
         if (_dragNow != _dragStart) _dragMoved = true;
         PreviewObject(_dragId, _dragNow.x, _dragNow.y, _dragNow.rot);
-    }
-
-    Dictionary<MeshInstance3D, Material?>? _dragTint;
-
-    /// <summary>Red while the dragged object is over no parcel (release would refuse), like the placement ghost; the object's own materials come back when valid.</summary>
-    void TintDrag(bool valid)
-    {
-        if (_dragId == null || !Map.ObjectNodes.TryGetValue(_dragId, out var node) || !GodotObject.IsInstanceValid(node)) return;
-        if (valid) { RestoreDragTint(); return; }
-        if (_dragTint != null) return;
-        _dragTint = new();
-        foreach (var mi in Meshes(node)) { _dragTint[mi] = mi.MaterialOverride; mi.MaterialOverride = _ghostBad; }
-        Say("no parcel here: releasing will not move the object", true);
-    }
-
-    void RestoreDragTint()
-    {
-        if (_dragTint == null) return;
-        foreach (var (mi, mat) in _dragTint) if (GodotObject.IsInstanceValid(mi)) mi.MaterialOverride = mat;
-        _dragTint = null;
     }
 
     void PreviewObject(string id, double x, double y, double rot)
@@ -426,7 +394,6 @@ public partial class EditorMode
     {
         if (_drag == DragKind.None || _dragId == null) return false;
         var kind = _drag; var id = _dragId; var now = _dragNow; var start = _dragStart; var moved = _dragMoved;
-        RestoreDragTint();
         _drag = DragKind.None; _dragId = null;
         if (!moved) return false;
         var ok = kind == DragKind.Move ? MoveObject(id, now.x, now.y) : SetObjectRotation(now.rot, id);
@@ -437,26 +404,21 @@ public partial class EditorMode
     public void CancelDrag()
     {
         if (_drag == DragKind.None || _dragId == null) return;
-        RestoreDragTint();
         PreviewObject(_dragId, _dragStart.x, _dragStart.y, _dragStart.rot);
         _drag = DragKind.None; _dragId = null;
     }
 
     // ---- saved edits of one object ----
 
-    /// <summary>Set the position (absolute S-JTSK metres). The object goes to the parcel now under it; refused when there is none.</summary>
+    /// <summary>Set the position (absolute S-JTSK metres). Anywhere will do: an object belongs to no parcel.</summary>
     public bool MoveObject(string id, double x, double y)
     {
         if (Map.OriginEpsg5514 == null) { Say("this map has no origin_epsg5514", true); return false; }
-        var parcel = ParcelAtAbs(x, y);
-        if (parcel == null) { Say("cannot move there: the point is in no parcel", true); return false; }
         return Mutate(root =>
         {
             if (ObjectEdits.Find(root, id) is not { } f) return (false, $"object {id} no longer exists");
             ObjectEdits.SetPosition(f.obj, x, y);
-            var home = f.pid != parcel.Id;
-            if (home) { ObjectEdits.Remove(root, id); ObjectEdits.Add(root, parcel.Id, f.obj); }
-            return (true, $"moved {id}" + (home ? $" to {parcel.Id}" : ""));
+            return (true, $"moved {id}");
         }, $"move {id}");
     }
 
@@ -517,14 +479,12 @@ public partial class EditorMode
         return ok;
     }
 
-    /// <summary>Copy the selected object 1 m east (into the parcel under the copy) and select the copy.</summary>
+    /// <summary>Copy the selected object 1 m east and select the copy.</summary>
     public bool DuplicateSelected()
     {
         var o = SelectedObject;
         if (o == null) { Say("no object selected", true); return false; }
         var x = o.X + DuplicateOffset;
-        var parcel = ParcelAtAbs(x, o.Y);
-        if (parcel == null) { Say("cannot duplicate there: the copy would be in no parcel", true); return false; }
         string? newId = null;
         var ok = Mutate(root =>
         {
@@ -533,7 +493,7 @@ public partial class EditorMode
             newId = ObjectEdits.NextId(root);
             copy["id"] = newId;
             ObjectEdits.SetPosition(copy, x, o.Y);
-            ObjectEdits.Add(root, parcel.Id, copy);
+            ObjectEdits.Add(root, copy);
             return (true, $"duplicated {o.Id} as {newId}");
         }, $"duplicate {o.Id}");
         if (ok && newId != null) { SelectedObjectId = null; SelectObject(newId); }
@@ -603,11 +563,6 @@ public partial class EditorMode
         {
             AlbedoColor = new Color(0.35f, 0.95f, 1f, 0.55f), Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
             Emission = new Color(0.05f, 0.25f, 0.3f), EmissionEnabled = true,
-        };
-        _ghostBad = new StandardMaterial3D
-        {
-            AlbedoColor = new Color(1f, 0.25f, 0.2f, 0.55f), Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            Emission = new Color(0.3f, 0.04f, 0.03f), EmissionEnabled = true,
         };
         BuildGizmo();
 
@@ -788,7 +743,7 @@ public partial class EditorMode
             _syncing = true;
             try
             {
-                _objAsset.Text = $"{o.Id}  {AssetName(o.Asset)}\n{o.Asset}\nparcel entry {o.Parcel}";
+                _objAsset.Text = $"{o.Id}  {AssetName(o.Asset)}\n{o.Asset}\n{(o.Parcel == "" ? "on no parcel" : $"in {o.Parcel}")}";
                 _objX.SetValueNoSignal(o.X); _objY.SetValueNoSignal(o.Y);
                 _objRot.SetValueNoSignal(o.Rotation); _objScale.SetValueNoSignal(o.Scale);
                 _objColourReset.Visible = o.Colour != null;
@@ -807,7 +762,7 @@ public partial class EditorMode
         var parcels = Selection.ToList();
         _objCount.Text = parcels.Count == 0
             ? $"{ObjectEdits.All(Disk()).Count()} placed objects in the file"
-            : $"{ObjectEdits.All(Disk()).Count(t => parcels.Contains(t.pid))} placed objects on {(parcels.Count == 1 ? parcels[0] : "the selection")}, {ObjectEdits.All(Disk()).Count()} in the file";
+            : $"{AllObjects().Count(o => parcels.Contains(o.Parcel))} placed objects on {(parcels.Count == 1 ? parcels[0] : "the selection")}, {ObjectEdits.All(Disk()).Count()} in the file";
         _hintLabel.Text = Tool == EditorTool.Ground ? GroundHintText() : Tool == EditorTool.Region ? RegionHintText() : Tool == EditorTool.Sketch ? SketchHintText() : Tool == EditorTool.Poles && PlacementAsset == null ? PolesHintText() : Tool == EditorTool.Group && PlacementAsset == null
             ? "marking parcels: click a parcel to mark or unmark it, Enter groups the marked ones, Esc clears the marks"
             : PlacementAsset != null

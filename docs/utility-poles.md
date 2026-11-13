@@ -62,7 +62,7 @@ category is `pole`: in the shooter only the column is solid (a 0.4 m box as high
 around the lamp arm. `rotation_deg` turns the line direction; 0 = wires east-west, lamp to the south.
 
 In the editor the **Poles tool** (rail icon, key 7) has the poles as renders, the cables and a plan mode that
-places and connects a whole line along the roads; see `docs/viewer-and-editor.md`. Through MCP: `place_object` with a pole asset, then `connect_poles`.
+places and connects a whole line along the roads; see `docs/viewer-and-editor.md`. Through MCP: `place_object` with a pole asset and an exact `position`, then `connect_poles`. A pole belongs to no parcel (it is only a position), so one beside a road, on land that is no parcel, is placed like any other.
 
 After changing the variants or any part, run `make poles-manifest` (a test compares the manifest with the
 generator) and `make poles-preview` to look at the result.

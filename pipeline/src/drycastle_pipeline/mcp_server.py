@@ -364,6 +364,8 @@ def _read_edits(path: Path) -> Edits:
 def _edits_doc(edits: Edits) -> dict:
     """The edits as the document ``validate`` checks (regions included when present)."""
     doc: dict = {"version": 1, "parcels": edits.parcels, "groups": edits.groups}
+    if edits.objects:
+        doc["objects"] = edits.objects
     if edits.regions:
         doc["regions"] = edits.regions
     if edits.cables:
@@ -387,8 +389,9 @@ def _next_id(prefix: str, ids: list[str]) -> str:
     return f"{prefix}-{top + 1:04d}"
 
 
-def _all_objects(edits: Edits) -> list[tuple[str, dict]]:
-    return [(pid, o) for pid, e in sorted(edits.parcels.items()) for o in e.get("objects", [])]
+def _all_objects(edits: Edits) -> list[dict]:
+    """Every placed object (they belong to no parcel; see edits.py)."""
+    return edits.objects
 
 
 # --- geometry helpers -----------------------------------------------------------------------
@@ -1046,7 +1049,11 @@ class ParcelEditTools:
             "neighbours": neighbours,
             "edits": {
                 "fence": entry.get("fence"),
-                "objects": entry.get("objects", []),
+                # objects belong to no parcel: these are the ones whose position lies inside this one
+                "objects": [
+                    o for o in edits.objects
+                    if self.map.polys[pid].covers(Point(*self.map.to_local(*o["position"])))
+                ],
                 "group_fence": group_fence,
             },
             "effective_fence": {
@@ -1203,17 +1210,17 @@ class ParcelEditTools:
     # objects -------------------------------------------------------------------------------
     def _place_point(
         self,
-        pid: str,
+        pid: str | None,
         anchor: str | None,
         offset_m: dict | None,
         position: list[float] | None,
         warnings: list[str],
-    ) -> tuple[float, float, Frame]:
-        """Local position for an anchor or exact position; the frame is the parcel's."""
+    ) -> tuple[float, float, Frame | None]:
+        """Local position for an anchor or exact position; the frame is the parcel's (None without a parcel).
+
+        An exact position needs no parcel. An anchor is a spot relative to a parcel's front edge, so it does.
+        """
         m = self.map
-        poly = m.polys[pid]
-        frame, fw = m.frame(pid)
-        warnings.extend(fw)
         if position is not None:
             if anchor is not None or offset_m is not None:
                 raise ToolError("give either position or anchor/offset_m, not both")
@@ -1221,7 +1228,16 @@ class ParcelEditTools:
                 raise ToolError("position must be [x, y] in absolute S-JTSK metres")
             px = _check_num("position[0]", position[0])
             py = _check_num("position[1]", position[1])
+            frame = None
+            if pid is not None:
+                frame, fw = m.frame(pid)
+                warnings.extend(fw)
             return (*m.to_local(px, py), frame)
+        if pid is None:
+            raise ToolError("give an exact `position` [x, y] (S-JTSK metres), or a `parcel` for an anchor")
+        poly = m.polys[pid]
+        frame, fw = m.frame(pid)
+        warnings.extend(fw)
         anchor = anchor or "centre"
         if anchor not in ANCHORS:
             raise ToolError(f"anchor must be one of {', '.join(ANCHORS)} (got {anchor!r})")
@@ -1286,7 +1302,7 @@ class ParcelEditTools:
 
     def _placement_warnings(
         self,
-        pid: str,
+        pid: str | None,
         xy: tuple[float, float],
         asset: dict,
         rotation: float,
@@ -1297,7 +1313,7 @@ class ParcelEditTools:
         m = self.map
         warnings: list[str] = []
         pt = Point(xy)
-        if not m.polys[pid].covers(pt):
+        if pid is not None and not m.polys[pid].covers(pt):  # only when a parcel was named as the reference
             inside = m.parcel_at(*xy)
             where = f"inside {inside}" if inside else "outside every parcel"
             warnings.append(f"position is outside {pid} ({where}); placed anyway as requested")
@@ -1307,7 +1323,7 @@ class ParcelEditTools:
                 f"overlaps building {bid} (approximate footprint of {asset['id']} at this "
                 "rotation and scale)"
             )
-        for opid, other in _all_objects(edits):
+        for other in _all_objects(edits):
             if other["id"] == skip_id:
                 continue
             ox, oy = m.to_local(*other["position"])
@@ -1320,7 +1336,7 @@ class ParcelEditTools:
                 (ox, oy), osz, float(other.get("rotation_deg", 0)), float(other.get("scale", 1))
             )
             if fp.intersects(ofp):
-                warnings.append(f"overlaps placed object {other['id']} ({other['asset']}, in {opid})")
+                warnings.append(f"overlaps placed object {other['id']} ({other['asset']})")
         size = asset.get("size_m") or [1, 1, 1]
         if max(size) < 1.0 and scale == 1.0:
             warnings.append(
@@ -1331,8 +1347,8 @@ class ParcelEditTools:
 
     def place_object(
         self,
-        parcel: str,
         asset: str,
+        parcel: str | None = None,
         anchor: str | None = None,
         offset_m: dict | None = None,
         position: list[float] | None = None,
@@ -1340,8 +1356,8 @@ class ParcelEditTools:
         scale: float | None = None,
         colour: str | None = None,
     ) -> dict:
-        """Place an object on a parcel (see the registered tool description)."""
-        pid = self.map.need(parcel)
+        """Place an object (see the registered tool description). It belongs to no parcel."""
+        pid = self.map.need(parcel) if parcel is not None else None
         info = self._asset(asset)
         if scale is not None:
             _check_num("scale", scale, positive=True)
@@ -1351,27 +1367,29 @@ class ParcelEditTools:
             raise ToolError(f'colour must look like "#rrggbb" (got {colour!r})')
         warnings: list[str] = []
         x, y, frame = self._place_point(pid, anchor, offset_m, position, warnings)
-        rot = _norm_deg(rotation_deg) if rotation_deg is not None else _facing_rotation(frame.side.normal)
+        if rotation_deg is not None:
+            rot = _norm_deg(rotation_deg)
+        else:
+            rot = _facing_rotation(frame.side.normal) if frame is not None else 0.0
         scl = float(scale) if scale is not None else 1.0
         absolute = self.map.to_abs(x, y)
 
         def change(edits: Edits) -> dict:
-            oid = _next_id("o", [o["id"] for _, o in _all_objects(edits)])
+            oid = _next_id("o", [o["id"] for o in _all_objects(edits)])
             entry: dict = {"id": oid, "asset": asset, "position": absolute, "rotation_deg": rot}
             if scale is not None:
                 entry["scale"] = scl
             if colour is not None:
                 entry["colour"] = colour
             warnings.extend(self._placement_warnings(pid, (x, y), info, rot, scl, edits, None))
-            edits.parcels.setdefault(pid, {}).setdefault("objects", []).append(entry)
+            edits.objects.append(entry)
             return entry
 
         entry = self._write(change)
         return {
-            "summary": f"placed {entry['id']} ({asset}) on {pid} at {absolute}, rotation {rot} deg"
+            "summary": f"placed {entry['id']} ({asset}) at {absolute}, rotation {rot} deg"
             + (f", {len(warnings)} warning(s)" if warnings else ""),
             "id": entry["id"],
-            "parcel": pid,
             "position": absolute,
             "rotation_deg": rot,
             "scale": scl,
@@ -1383,33 +1401,28 @@ class ParcelEditTools:
         """Remove a placed object by ID; the cables hanging from it (a utility pole) go with it."""
         dropped: list[str] = []
 
-        def change(edits: Edits) -> str:
-            for pid, e in edits.parcels.items():
-                objs = e.get("objects", [])
-                for o in objs:
-                    if o["id"] == id:
-                        objs.remove(o)
-                        if not objs:
-                            del e["objects"]
-                        for cid in [c for c, cb in edits.cables.items() if id in (cb["from"], cb["to"])]:
-                            dropped.append(cid)
-                            del edits.cables[cid]
-                        return pid
-            known = [o["id"] for _, o in _all_objects(edits)]
+        def change(edits: Edits) -> None:
+            for o in edits.objects:
+                if o["id"] == id:
+                    edits.objects.remove(o)
+                    for cid in [c for c, cb in edits.cables.items() if id in (cb["from"], cb["to"])]:
+                        dropped.append(cid)
+                        del edits.cables[cid]
+                    return
+            known = [o["id"] for o in _all_objects(edits)]
             raise ToolError(
                 f"no placed object {id!r}. Existing ids: {known[:20] if known else 'none'}. "
-                "get_parcel lists a parcel's objects."
+                "get_parcel lists the objects inside a parcel."
             )
 
-        pid = self._write(change)
+        self._write(change)
         note = f" and its cable{'s' if len(dropped) > 1 else ''} {', '.join(dropped)}" if dropped else ""
-        return {"summary": f"removed {id} from {pid}{note}", "id": id, "parcel": pid,
-                "cables_removed": dropped, "warnings": []}
+        return {"summary": f"removed {id}{note}", "id": id, "cables_removed": dropped, "warnings": []}
 
     # cables ----------------------------------------------------------------------------------
     def _pole(self, edits: Edits, oid: object) -> dict:
         """The placed utility pole or house connector with this id (what a cable can end on)."""
-        for _, o in _all_objects(edits):
+        for o in _all_objects(edits):
             if o["id"] == oid:
                 if not o["asset"].startswith(WIRE_ASSET_PREFIXES):
                     raise ToolError(
@@ -1418,12 +1431,12 @@ class ParcelEditTools:
                         f"connectors (category \"connector\", placed in the editor's Poles tool)."
                     )
                 return o
-        poles = [o["id"] for _, o in _all_objects(edits) if o["asset"].startswith(POLE_ASSET_PREFIX)]
+        poles = [o["id"] for o in _all_objects(edits) if o["asset"].startswith(POLE_ASSET_PREFIX)]
         raise ToolError(f"no placed object {oid!r}. Placed poles: {poles[:30] if poles else 'none'}.")
 
     @staticmethod
     def _cable_row(cid: str, cable: dict, edits: Edits) -> dict:
-        pos = {o["id"]: o["position"] for _, o in _all_objects(edits)}
+        pos = {o["id"]: o["position"] for o in _all_objects(edits)}
         a, b = pos.get(cable["from"]), pos.get(cable["to"])
         length = _r3(math.hypot(a[0] - b[0], a[1] - b[1])) if a and b else None
         return {"id": cid, "from": cable["from"], "to": cable["to"], "length_m": length}
@@ -1485,7 +1498,7 @@ class ParcelEditTools:
         edits = _read_edits(self.settings.edits_path)
         rows = [self._cable_row(cid, cb, edits) for cid, cb in sorted(edits.cables.items())
                 if pole is None or pole in (cb["from"], cb["to"])]
-        placed = {o["id"]: o for _, o in _all_objects(edits)}
+        placed = {o["id"]: o for o in _all_objects(edits)}
         warnings = [f"{r['id']}: {end} is not a placed utility pole (the cable is skipped)"
                     for r in rows for end in (r["from"], r["to"])
                     if not placed.get(end, {}).get("asset", "").startswith(WIRE_ASSET_PREFIXES)]
@@ -1525,18 +1538,20 @@ class ParcelEditTools:
         path = self.settings.edits_path
         with edits_lock(path):
             edits = _read_edits(path)
-            owner = next((p for p, o in _all_objects(edits) if o["id"] == id), None)
-            if owner is None:
-                raise ToolError(f"no placed object {id!r}; get_parcel lists a parcel's objects.")
-            obj = next(o for o in edits.parcels[owner]["objects"] if o["id"] == id)
-            target = self.map.need(parcel) if parcel else owner
+            obj = next((o for o in _all_objects(edits) if o["id"] == id), None)
+            if obj is None:
+                raise ToolError(f"no placed object {id!r}; get_parcel lists the objects inside a parcel.")
+            # a parcel is only the frame an anchor is measured in; the object keeps belonging to none
+            target = self.map.need(parcel) if parcel else None
             new = dict(obj)
             if relocate:
                 if position is None and anchor is None and offset_m is not None:
                     anchor = "centre"
+                if position is None and target is None:  # an anchor, no parcel named: the one it stands in
+                    target = self.map.parcel_at(*self.map.to_local(*obj["position"]))
                 x, y, frame = self._place_point(target, anchor, offset_m, position, warnings)
                 new["position"] = self.map.to_abs(x, y)
-                if rotation_deg is None and (anchor is not None or parcel is not None):
+                if rotation_deg is None and frame is not None and (anchor is not None or parcel is not None):
                     new["rotation_deg"] = _facing_rotation(frame.side.normal)
             if rotation_deg is not None:
                 new["rotation_deg"] = _norm_deg(rotation_deg)
@@ -1552,13 +1567,7 @@ class ParcelEditTools:
                     float(new.get("scale", 1)), edits, id,
                 )
             )
-            if target != owner:
-                edits.parcels[owner]["objects"].remove(obj)
-                if not edits.parcels[owner]["objects"]:
-                    del edits.parcels[owner]["objects"]
-                edits.parcels.setdefault(target, {}).setdefault("objects", []).append(new)
-            else:
-                edits.parcels[owner]["objects"][edits.parcels[owner]["objects"].index(obj)] = new
+            edits.objects[edits.objects.index(obj)] = new
             _empty_parcel_cleanup(edits)
             errors = validate(_edits_doc(edits))
             if errors:
@@ -1568,10 +1577,9 @@ class ParcelEditTools:
                 )
             dump_edits(edits, path)
         return {
-            "summary": f"moved {id} on {target} to {new['position']}, rotation {new.get('rotation_deg', 0)} deg"
+            "summary": f"moved {id} to {new['position']}, rotation {new.get('rotation_deg', 0)} deg"
             + (f", {len(warnings)} warning(s)" if warnings else ""),
             "id": id,
-            "parcel": target,
             "entry": new,
             "warnings": warnings,
         }
@@ -2264,22 +2272,25 @@ def build_server(settings: Settings) -> Any:
         return tools.reset_fence(target)
 
     @server.tool(description=(
-        "Place an asset (see list_assets) on a parcel. Position is either `anchor` = front | back "
+        "Place an asset (see list_assets). An object belongs to no parcel, it only has a position: "
+        "give an exact `position` [x, y] in S-JTSK metres (nothing else is needed, so a pole by a "
+        "road is fine), or name a `parcel` and an `anchor` = front | back "
         "| left | right | centre | near_building (default centre) plus optional `offset_m` "
-        "{\"along\": m, \"inward\": m}, or an exact `position` [x, y] in S-JTSK metres. Anchors "
+        "{\"along\": m, \"inward\": m}. Anchors "
         "are relative to the parcel's front edge (the side nearest a road; see get_parcel): "
         "left/right as seen standing on the front edge looking into the parcel, along > 0 = "
         "further right, inward > 0 = further from the road. `near_building` is between the "
         "building and the front edge. An anchor-based point is kept inside the parcel (moved to "
-        "the nearest interior point with a warning). Default rotation turns the object's front "
-        "toward the road (right for a car parked in front of the house); `rotation_deg` is "
+        "the nearest interior point with a warning). Default rotation, with a parcel, turns the "
+        "object's front toward the road (right for a car parked in front of the house), else 0; "
+        "`rotation_deg` is "
         "counter-clockwise seen from above, absolute. `scale` is uniform, default 1 (small pack "
         "models may need it); `colour` is \"#rrggbb\". Unknown asset/parcel and bad values are "
-        "errors; overlaps with buildings or other objects and positions outside the parcel are "
+        "errors; overlaps with buildings or other objects and positions outside a named parcel are "
         "applied and reported in `warnings`. Returns the new object's id, final position, rotation."))
     def place_object(
-        parcel: str,
         asset: str,
+        parcel: str | None = None,
         anchor: str | None = None,
         offset_m: dict | None = None,
         position: list[float] | None = None,
@@ -2288,7 +2299,7 @@ def build_server(settings: Settings) -> Any:
         colour: str | None = None,
     ) -> dict:
         return tools.place_object(
-            parcel, asset, anchor, offset_m, position, rotation_deg, scale, colour
+            asset, parcel, anchor, offset_m, position, rotation_deg, scale, colour
         )
 
     @server.tool(description="Remove a placed object by its id (e.g. o-0003). The cables hanging from a "
@@ -2318,10 +2329,10 @@ def build_server(settings: Settings) -> Any:
         return tools.list_cables(pole)
 
     @server.tool(description=(
-        "Change a placed object: new position (`anchor` + `offset_m` relative to `parcel`, "
-        "default the parcel that lists it, or an exact `position`), `rotation_deg`, `scale` or "
+        "Change a placed object: new position (an exact `position` [x, y], or `anchor` + `offset_m` "
+        "relative to `parcel`, default the parcel the object stands in), `rotation_deg`, `scale` or "
         "`colour`. With a new anchor and no rotation_deg the object turns to face the road "
-        "again; a new `parcel` re-lists the object under that parcel."))
+        "again. An object belongs to no parcel; `parcel` is only the frame an anchor is measured in."))
     def move_object(
         id: str,
         parcel: str | None = None,
