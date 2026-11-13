@@ -469,7 +469,7 @@ public partial class NetServer
     const uint DriveStarveTicks = 6;
 
     /// <summary>
-    /// The tick of a driven vehicle (the amphibious transport, ADR 0010). With a driver, it was already stepped in <see cref="SimulateClient"/>, once
+    /// The tick of a driven vehicle (the amphibious transport, ADR 0010; the car, ADR 0014). With a driver, it was already stepped in <see cref="SimulateClient"/>, once
     /// for each of the driver's inputs (that is what lets the driver's client predict it), so there is nothing to step here unless the inputs have
     /// stopped arriving. With nobody at the wheel it is stepped hands off every tick: it coasts to a stop, on its wheels or on the water. The hardest
     /// impact since the last tick goes to the crash damage rules.

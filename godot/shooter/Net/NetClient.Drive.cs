@@ -45,6 +45,11 @@ public partial class NetClient
     readonly Dictionary<ushort, DriveView> _drives = new();
     Driving? _drive;
     int _driveCorrections;
+    /// <summary>
+    /// The newest snapshot's acknowledgement and server state, waiting for the next physics tick (C-02): a reconcile replays the unacknowledged
+    /// inputs with the steps the server runs, so it runs where they run. A newer snapshot replaces an older one that has not been applied yet.
+    /// </summary>
+    (ushort Ack, DriveState Server)? _driveReconcile;
 
     void OnDriveState(EntityRecord rec, uint tick)
     {
@@ -82,15 +87,29 @@ public partial class NetClient
             _drive.Smooth = mine.Node.GlobalPosition - new Vector3(server.Position.X, server.Position.Y, server.Position.Z);
             return;
         }
+        _driveReconcile = (ack, server); // applied in the next physics tick (ReplayDriveReconcile)
+    }
+
+    /// <summary>
+    /// The reconcile of the latest snapshot, run in the physics tick with the inputs' own steps (C-02, as the on-foot replay in ReplayReconcile). A
+    /// correction moves the picture by the difference, faded out over a few frames.
+    /// </summary>
+    void ReplayDriveReconcile()
+    {
+        if (_driveReconcile is not { } r) return;
+        _driveReconcile = null;
+        if (_drive == null) return;
         var before = _drive.Predict.State.Position;
-        if (!_drive.Predict.Reconcile(ack, server, 1f / Wire.TickRate)) return;
+        if (!_drive.Predict.Reconcile(r.Ack, r.Server, 1f / Wire.TickRate)) return;
         _driveCorrections++;
+        _recon++;
         var moved = before - _drive.Predict.State.Position;
         _drive.Smooth += new Vector3(moved.X, moved.Y, moved.Z);
     }
 
     void StopDriving()
     {
+        _driveReconcile = null;
         if (_drive == null) return;
         if (GodotObject.IsInstanceValid(_drive.Probe)) _drive.Probe.QueueFree();
         _drive = null;
@@ -103,8 +122,19 @@ public partial class NetClient
     void PredictDrive(in NetInput ni, float dt)
     {
         if (_drive == null || Dead) return;
-        _drive.Predict.Step(ni.Seq, DriverInput(ni), dt);
+        var input = DriverInput(ni);
+        if (input.Throttle != _latKeys.Throttle || input.Steer != _latKeys.Steer || input.Handbrake != _latKeys.Handbrake)
+        {
+            _latKeys = input; _latSeq = ni.Seq; _latAt = Now; // the first input with new keys: its drawn change is timed below
+        }
+        _drive.Predict.Step(ni.Seq, input, dt);
     }
+
+    /// <summary>Input-to-visible latency of the predicted car (a log line, not on the wire): the input seq whose keys changed, and when it was sent.</summary>
+    DriveInput _latKeys;
+    int _latSeq = -1;
+    double _latAt;
+    float _latSpeed, _latYaw;
 
     /// <summary>
     /// Where a driven vehicle is drawn this frame, and how its body lies. The one the local player drives: the predicted state, stepped on by the
@@ -124,6 +154,12 @@ public partial class NetClient
                 var now = NetInput.From(0, _me.Sample(), 0, 0);
                 DriveModel.Step(ref s, _drive.Def, DriverInput(now), ahead / Wire.TickRate, _drive.Probe);
             }
+            if (_latSeq >= 0 && (MathF.Abs(s.Speed - _latSpeed) > 1e-3f || MathF.Abs(FlightMath.Wrap(s.Yaw - _latYaw)) > 1e-4f))
+            {
+                GD.Print($"client {PlayerName}: drive input seq {_latSeq} to first rendered change {(Now - _latAt) * 1000:F1} ms");
+                _latSeq = -1;
+            }
+            _latSpeed = s.Speed; _latYaw = s.Yaw;
             _drive.Smooth *= Mathf.Exp(-CorrectionFade * dt);
             if (_drive.Smooth.LengthSquared() > 400f) _drive.Smooth = Vector3.Zero; // a teleport (a return to its origin), not a correction: do not glide there
             p = new Vector3(s.Position.X, s.Position.Y, s.Position.Z) + _drive.Smooth;

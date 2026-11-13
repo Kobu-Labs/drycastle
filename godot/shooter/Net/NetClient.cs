@@ -505,6 +505,7 @@ public partial class NetClient : Node
         else if (Bot && _elapsed >= BotSeconds) { if (CarBot != "") CarResult(false, "timeout"); else if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
         if (!_gotSelf) return; // wait for our spawn position
         ReplayReconcile(); // C-02: a snapshot's reconcile replays here, with the physics step (see OnSelf)
+        ReplayDriveReconcile(); // and so does a predicted vehicle's (ADR 0010, ADR 0014)
         var dt = (float)delta;
         MoveInput mi;
         if (Bot && MatchBot != "")
@@ -522,6 +523,7 @@ public partial class NetClient : Node
         }
         else if (Bot && LossBot != "") mi = LossBotStep();
         else if (Bot && CarBot != "") mi = CarBotStep();
+        else if (Bot && CarLoop) mi = CarLoopStep();
         else if (Bot && WeaponsBot != "") mi = WeaponsBotStep();
         else if (Bot)
         {
