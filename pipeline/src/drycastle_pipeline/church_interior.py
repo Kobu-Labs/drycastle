@@ -18,7 +18,10 @@ IU0, IU1, IV0, IV1 = NX0 + T, NX1 - T, NV0 + T, NV1 - T  # nave, inside
 AX0, AX1, AV0, ZA = -1.28, 4.96, -14.25, 5.2  # apse block, outside
 CU0, CU1, CV0 = AX0 + T, 2 * CU - (AX0 + T), AV0 + T  # chancel, inside (symmetric about CU)
 DOOR_W, DOOR_TOP = 2.0, 2.9
-Z_SPRING, VAULT_RISE = 4.9, 2.05  # the vault stays under the eave
+Z_SPRING, VAULT_RISE = 6.4, 0.55  # a shallow vault over the clerestory windows, under the eave
+# real openings with a glass pane: the clerestory (above the aisle roofs) in each bay, two in the chancel's rear wall
+WIN_V, WIN_W, WIN_Z0, WIN_Z1 = (-4.85, -0.75, 3.35, 7.45, 11.55), 0.9, 5.35, 6.3
+CWIN_DU, CWIN_W, CWIN_Z0, CWIN_Z1 = 1.58, 0.45, 2.2, 4.0
 GV0, GZ = 9.6, 3.6  # gallery: front edge, floor
 STAIR_W, STAIR_V0, STEPS = 0.9, 3.6, 17  # along the left wall, up towards the gallery
 BAYS = (-2.8, 1.3, 5.4, 9.5)  # pilasters and ribs
@@ -30,8 +33,7 @@ SEAT_H, SEATS_PER_PEW, SEAT_GAP = 0.51, 3, 0.6  # the Synty pew's seat is 0.51 m
 STANDING = ((-0.9, 4.6, 3.1), (-0.3, 5.8, 3.1), (-0.9, 7.0, 3.1), (-0.3, 8.2, 3.1), (-1.7, -5.6, -5.6), (3.65, -5.6, -5.6))
 
 CREAM, MARBLE, RIB, WOOD, CARPET = "#efe6d2", "#d9a99a", "#faf6ee", "#4a2e1c", "#8e1b1f"
-FLOOR, GOLD, PIPE, PANE, CANVAS = "#d8cdb4", "#c9a03c", "#b9bcc4", "#bcd3e6", "#3b3027"
-BAR = "#5b6470"
+FLOOR, GOLD, PIPE, CANVAS = "#d8cdb4", "#c9a03c", "#b9bcc4", "#3b3027"
 
 
 def pews() -> list[tuple[float, float, int]]:
@@ -74,7 +76,7 @@ def build_shell(S, detail: bool, yellow, plinth) -> None:
     from drycastle_pipeline.landmarks import _arch, _rect
 
     cream, marble, rib, wood, carpet = (hex_to_rgb(c) for c in (CREAM, MARBLE, RIB, WOOD, CARPET))
-    floor, gold, pipe, pane, canvas = (hex_to_rgb(c) for c in (FLOOR, GOLD, PIPE, PANE, CANVAS))
+    floor, gold, pipe, canvas = (hex_to_rgb(c) for c in (FLOOR, GOLD, PIPE, CANVAS))
 
     def wall(x0, x1, y0, y1, z0, z1, inside: str) -> None:
         """Yellow outside, cream inside; ``inside`` is the side the room is on (+x, -x, +y, -y)."""
@@ -91,9 +93,35 @@ def build_shell(S, detail: bool, yellow, plinth) -> None:
         if z0 == 0.0:
             S.box(*base, 0.0, 0.6, plinth)
 
-    # nave: side walls, front wall round the doorway, rear wall round the chancel arch
-    wall(NX0, IU0, NV0, NV1, 0.0, ZE, "+x")
-    wall(IU1, NX1, NV0, NV1, 0.0, ZE, "-x")
+    def pierced(x0, x1, y0, y1, z0, z1, inside, holes, za, zb) -> None:
+        """A wall with window openings ``holes`` (lo, hi along the wall) between heights za and zb, each lined with a white frame."""
+        along_y = inside in ("+x", "-x")
+        lo, hi = (y0, y1) if along_y else (x0, x1)
+
+        def piece(a, b, p0, p1) -> None:
+            if along_y:
+                wall(x0, x1, a, b, p0, p1, inside)
+            else:
+                wall(a, b, y0, y1, p0, p1, inside)
+
+        piece(lo, hi, z0, za)
+        piece(lo, hi, zb, z1)
+        edges = [lo] + [e for h in sorted(holes) for e in h] + [hi]
+        for a, b in zip(edges[::2], edges[1::2], strict=True):
+            piece(a, b, za, zb)
+        if not detail:
+            return
+        for a, b in holes:
+            for fa, fb, f0, f1 in ((a, b, za, za + 0.06), (a, b, zb - 0.06, zb), (a, a + 0.06, za, zb), (b - 0.06, b, za, zb)):
+                if along_y:
+                    S.box(x0 - 0.04, x1 + 0.04, fa, fb, f0, f1, rib)
+                else:
+                    S.box(fa, fb, y0 - 0.04, y1 + 0.04, f0, f1, rib)
+
+    # nave: side walls with the clerestory openings, front wall round the doorway, rear wall round the chancel arch
+    side = [(v - WIN_W / 2, v + WIN_W / 2) for v in WIN_V]
+    pierced(NX0, IU0, NV0, NV1, 0.0, ZE, "+x", side, WIN_Z0, WIN_Z1)
+    pierced(IU1, NX1, NV0, NV1, 0.0, ZE, "-x", side, WIN_Z0, WIN_Z1)
     wall(IU0, CU - DOOR_W / 2, IV1, NV1, 0.0, ZE, "-y")
     wall(CU + DOOR_W / 2, IU1, IV1, NV1, 0.0, ZE, "-y")
     wall(CU - DOOR_W / 2, CU + DOOR_W / 2, IV1, NV1, DOOR_TOP, ZE, "-y")
@@ -103,7 +131,8 @@ def build_shell(S, detail: bool, yellow, plinth) -> None:
     # chancel in the apse block
     wall(AX0, CU0, AV0, NV0, 0.0, ZA, "+x")
     wall(CU1, AX1, AV0, NV0, 0.0, ZA, "-x")
-    wall(CU0, CU1, AV0, CV0, 0.0, ZA, "+y")
+    rear = [(CU + d - CWIN_W / 2, CU + d + CWIN_W / 2) for d in (-CWIN_DU, CWIN_DU)]
+    pierced(CU0, CU1, AV0, CV0, 0.0, ZA, "+y", rear, CWIN_Z0, CWIN_Z1)
     S.box(CU0, CU1, CV0, NV0, ZA - 0.2, ZA, cream)
     # floors
     S.box(IU0, IU1, NV0, NV1, 0.0, F, floor)
@@ -140,19 +169,6 @@ def build_shell(S, detail: bool, yellow, plinth) -> None:
     if not detail:
         return
 
-    def window(face, plane, at, w, z0, z1, rise) -> None:
-        """Arched window: a white surround, the glass set in it, dark glazing bars."""
-        S.plate(face, plane, at, _arch(w + 0.24, z0 - 0.12, z1, rise + 0.12), 0.05, rib)
-        S.plate(face, plane, at, _arch(w, z0, z1, rise), 0.08, pane)
-        bar = hex_to_rgb(BAR)
-        for k in range(1, 3 if w > 0.6 else 2):  # uprights
-            a = -w / 2 + w * k / (3 if w > 0.6 else 2)
-            S.plate(face, plane, at + a, _rect(0.03, z0, z1 + rise * 0.6), 0.1, bar)
-        z = z0 + 0.45
-        while z < z1 + 0.01:  # cross bars
-            S.plate(face, plane, at, _rect(w, z - 0.015, z + 0.015), 0.1, bar)
-            z += 0.45
-
     # vault, ribs over pilasters, ridge rib
     _arc(IV0, IV1, 0.0, 0.1, S, cream)
     c = (IU0 + IU1) / 2
@@ -161,16 +177,13 @@ def build_shell(S, detail: bool, yellow, plinth) -> None:
         _arc(v - 0.15, v + 0.15, -0.14, 0.14, S, rib)
         for x0, x1, cap in ((IU0, IU0 + 0.2, IU0 + 0.28), (IU1 - 0.2, IU1, IU1 - 0.28)):
             S.box(min(x0, cap), max(x1, cap), v - 0.38, v + 0.38, Z_SPRING - 0.4, Z_SPRING, rib)
-    # windows and paintings between the pilasters
+    # paintings between the pilasters
     for k, v in enumerate((-4.85, -0.75, 3.35, 7.45, 11.55)):
         for face, plane in (("right", IU0), ("left", IU1)):
-            window(face, plane, v, 0.9, 2.7, 4.0, 0.6)
             if k < 2 or (face == "left" and k < 4):
                 S.plate(face, plane, v, _rect(1.1, 1.1, 2.4), 0.05, gold)
                 S.plate(face, plane, v, _rect(0.9, 1.2, 2.3), 0.07, canvas)
-    # chancel: windows, sacristy door, high altar; side altars by the arch
-    for dx in (-1.58, 1.58):
-        window("front", CV0, CU + dx, 0.45, 2.2, 3.8, 0.3)
+    # chancel: sacristy door, high altar; side altars by the arch
     S.plate("right", CU0, -9.9, _rect(1.1, F, F + 2.1), 0.05, wood)
     S.plate("front", CV0 + 0.4, CU, _arch(1.4, F + 1.1, 3.0, 0.5), 0.05, gold)
     S.plate("front", CV0 + 0.4, CU, _arch(1.0, F + 1.3, 2.8, 0.4), 0.08, canvas)
@@ -263,3 +276,34 @@ def church_info(b: dict, dz: float = 0.0) -> dict:
         "anchors": anchors,
         "rooms": [room(NX0 + 0.2, NX1 - 0.2, NV0, NV1 - 0.2, ZE), room(AX0 + 0.2, AX1 - 0.2, AV0 + 0.2, NV0, ZA)],
     }
+
+
+def church_panes(b: dict) -> list[tuple[str, list, dict]]:
+    """The glass of the window openings, one pane each: (node name, two-sided quad as triangles in map metres standing on
+    the building base, the ``windows.json`` entry). The game makes them see-through and breakable like every tagged pane."""
+    ex = b["footprint"]["exterior"]
+    ox, oy = (sum(p[k] for p in ex) / len(ex) for k in (0, 1))
+    a = float(b["model_axis"])
+    vx, vy = math.cos(a), math.sin(a)
+
+    def pt(u, v, z):
+        return (ox + u * vy + v * vx, oy - u * vx + v * vy, z)
+
+    panes = []  # centre u, v; outward normal (du, dv); along the wall (du, dv); width, z0, z1
+    for v in WIN_V:
+        panes.append(((NX0 + IU0) / 2, v, (-1, 0), (0, 1), WIN_W, WIN_Z0, WIN_Z1))
+        panes.append(((IU1 + NX1) / 2, v, (1, 0), (0, 1), WIN_W, WIN_Z0, WIN_Z1))
+    for d in (-CWIN_DU, CWIN_DU):
+        panes.append((CU + d, (AV0 + CV0) / 2, (0, -1), (1, 0), CWIN_W, CWIN_Z0, CWIN_Z1))
+    out = []
+    for k, (u, v, (nu, nv), (au, av), w, z0, z1) in enumerate(panes):
+        c = [pt(u + s * au * w / 2, v + s * av * w / 2, z) for s, z in ((-1, z0), (1, z0), (1, z1), (-1, z1))]
+        tris = [[c[0], c[1], c[2]], [c[0], c[2], c[3]], [c[0], c[2], c[1]], [c[0], c[3], c[2]]]
+        centre = pt(u, v, (z0 + z1) / 2)
+        node = f"window_{b.get('id', 'church')}_c{k:02d}"
+        out.append((node, tris, {
+            "building": b.get("id", "church"), "id": f"c{k:02d}", "node": node, "kind": "window", "breakable": True,
+            "confidence": "high", "width_m": w, "height_m": round(z1 - z0, 3),
+            "centre": [round(x, 3) for x in centre], "normal": [round(nu * vy + nv * vx, 4), round(-nu * vx + nv * vy, 4)],
+        }))  # fmt: skip
+    return out

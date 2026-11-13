@@ -14,15 +14,16 @@ import numpy as np
 import shapely
 from shapely.geometry import Polygon
 
+from drycastle_pipeline.building_detail import GLASS as PANE_GLASS
 from drycastle_pipeline.building_detail import build_detail, load_details
 from drycastle_pipeline.buildings import hex_to_rgb
 from drycastle_pipeline.bunker import bunker_rooms
 from drycastle_pipeline.detail import load_patches, patches_by_chunk
 from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits
+from drycastle_pipeline.ground import ground_types, ground_units, type_colours
 from drycastle_pipeline.landmarks import build_landmark
 from drycastle_pipeline.meshes import Mesh, building_mesh, collision_mesh
 from drycastle_pipeline.propmeshes import fence_mesh, fence_meshes, parcel_props_meshes, trees_mesh
-from drycastle_pipeline.ground import ground_types, ground_units, type_colours
 from drycastle_pipeline.regions import node_name, plan_regions, region_meshes
 from drycastle_pipeline.roads import road_mesh
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
@@ -156,9 +157,15 @@ def build_scene(
                 elif b.get("model"):  # hand-modelled landmark: detailed visual, plain-massing collision
                     m = build_landmark(b, detail=fn is building_mesh)
                     if b["model"] == "church" and fn is building_mesh:
-                        from drycastle_pipeline.church_interior import church_info
+                        from drycastle_pipeline.church_interior import church_info, church_panes
 
                         scene.church = {"id": bid, "parcel": p["id"], **church_info(b, dz)}
+                        for node, tris, meta in church_panes({**b, "id": bid}):  # see-through, breakable glass
+                            meta["centre"][2] = round(meta["centre"][2] + dz, 3)
+                            scene.windows.append({**meta, "parcel": p["id"]})
+                            scene.nodes.setdefault(tuple(p["chunk"]), {})[node] = Mesh(
+                                np.array(tris, float) + [0, 0, dz], np.array([PANE_GLASS] * len(tris), np.uint8)
+                            )
                     if b["model"] == "bunker" and fn is building_mesh:
                         a = float(b["model_axis"])
                         rooms = bunker_rooms(b["footprint"]["exterior"], (math.cos(a), math.sin(a)))

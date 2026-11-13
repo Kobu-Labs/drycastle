@@ -268,10 +268,7 @@ def church_solids(detail: bool = True) -> _Solids:
     mid = (ty0 + ty1) / 2
     S.plate("left", tx0, mid, _rect(0.75, z_belfry + 0.5, z_cornice - 0.3), 0.06, gl)
     S.plate("right", tx1, mid, _rect(0.75, z_belfry + 0.5, z_cornice - 0.3), 0.06, gl)
-    for k in range(7):  # arched windows in the nave walls above the aisle roofs
-        v = -5.0 + 2.5 * k
-        S.plate("left", nx0, v, _arch(0.8, 5.6, 6.7, 0.55), 0.06, gl)
-        S.plate("right", nx1, v, _arch(0.8, 5.6, 6.7, 0.55), 0.06, gl)
+    # (the nave's clerestory windows are real openings with glass panes, see church_interior)
     for k in range(5):  # aisle walls: arched windows on one side, round windows on the other
         v = -3.0 + 3.0 * k
         S.plate("left", -5.87, v, _arch(0.7, 1.4, 2.8, 0.5), 0.06, gl)
