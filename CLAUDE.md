@@ -11,3 +11,10 @@ Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agen
 ### UI/UX standard
 
 All UI, including the map editor, meets `docs/standards/ui-ux.md` (non-negotiable). Invoke the `ui-work` skill before writing or changing UI.
+
+## Communication & Brevity
+
+- In all interactions, plans, and commit messages, be extremely concise. Sacrifice grammar for the sake of concision.
+- Eliminate conversational filler, pleasantries, and introductory/concluding fluff.
+- Use dense, scannable bullet points and code snippets instead of prose paragraphs.
+- In plan mode or when requirements are ambiguous, list any unresolved questions at the very end, if any.
