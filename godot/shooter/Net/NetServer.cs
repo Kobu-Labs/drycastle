@@ -515,8 +515,10 @@ public partial class NetServer : Node
         ReliableMsg m = new EventMsg((byte)kind, payload);
         PerfEventSent(kind, payload);
         var bytes = Wire.Encode(m); // encoded once: every recipient gets the same bytes (Tx copies them into the packet)
+        // effects that may be lost go unreliable on their own channel, so they never hold back the reliable events (A-03)
+        var effect = Wire.IsEffect(kind);
         foreach (var c in _clients.Values)
-            if (c.Joined) Tx(c.Peer!, Wire.ChanReliable, bytes, (int)ENetPacketPeer.FlagReliable);
+            if (c.Joined) Tx(c.Peer!, effect ? Wire.ChanEffects : Wire.ChanReliable, bytes, effect ? 0 : (int)ENetPacketPeer.FlagReliable);
     }
 
     void OnDebug(Client c, byte[] payload)

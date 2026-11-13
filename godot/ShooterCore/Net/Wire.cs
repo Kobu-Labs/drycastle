@@ -143,7 +143,7 @@ public sealed record SaveCamoMsg(int Slot, CamoSpec Spec) : ReliableMsg;
 public sealed record ErrorMsg(string Reason) : ReliableMsg;
 
 /// <summary>
-/// Wire format (little-endian). Channel 0 is reliable (control + events), channel 1 is unreliable-sequenced (input, snapshots).
+/// Wire format (little-endian). Channel 0 is reliable (control + events), channel 1 is unreliable-sequenced (input, snapshots), channel 2 is unreliable (effects, <see cref="IsEffect"/>).
 ///
 /// ch0 messages: u8 type, then
 ///   Hello(1):   u8 version, u8 nameLen, name utf8, u8 tokenLen, token utf8, u8 flags (v10, see HelloFlags)
@@ -182,7 +182,15 @@ public static class Wire
     /// <summary>"No tick": the snapshot tick of an input before the first commit, and the baseline of a full set.</summary>
     public const uint NoTick = uint.MaxValue;
     public const byte TickRate = 30;
-    public const int ChanReliable = 0, ChanData = 1, Channels = 2;
+    /// <summary>Channel 0 reliable ordered (control, state events), 1 unreliable-sequenced (inputs, snapshots), 2 unreliable effects (<see cref="IsEffect"/>, A-03).</summary>
+    public const int ChanReliable = 0, ChanData = 1, ChanEffects = 2, Channels = 3;
+
+    /// <summary>
+    /// Effects that may be lost: a missing one costs a tracer, a puff or a flash, never state. They ride <see cref="ChanEffects"/> unreliable,
+    /// so a lost datagram cannot hold back the reliable channel (head-of-line blocking, A-03). Hit, Kill, Death, Explosion, Launch, the
+    /// gunship blasts (their hit markers) and every other event stay reliable. The client dispatches by the first byte, not the channel.
+    /// </summary>
+    public static bool IsEffect(EventKind kind) => kind is EventKind.Shot or EventKind.PelletFan or EventKind.ImpactFx or EventKind.GunshipShots or EventKind.GunshipImpacts;
     public const int KeyEvery = 30;
     public const int MaxInputsPerPacket = 3;
     public const int MaxNameBytes = 24;
