@@ -186,10 +186,10 @@ def ground_units(doc: dict) -> list[dict]:
 # --- the type table -------------------------------------------------------------------------
 
 
-def rules_ground_types(rules_path: Path = DEFAULT_RULES, area: str | None = None) -> dict[str, dict]:
-    """``ground.types`` of the rules by name (with the map area's overlay, ``areas.<area>.ground``), every entry a
+def rules_ground_types(rules_path: Path = DEFAULT_RULES) -> dict[str, dict]:
+    """``ground.types`` of the rules by name, every entry a
     dict; the user's overrides of ``edits.json`` are not in it (see :func:`ground_types`)."""
-    return {name: spec or {} for name, spec in load_section("ground", rules_path, area)["types"].items()}
+    return {name: spec or {} for name, spec in load_section("ground", rules_path)["types"].items()}
 
 
 def merge_ground_types(rules: dict[str, dict], edited: dict[str, dict]) -> dict[str, dict]:
@@ -213,10 +213,10 @@ def merge_ground_types(rules: dict[str, dict], edited: dict[str, dict]) -> dict[
     return out
 
 
-def ground_types(rules_path: Path = DEFAULT_RULES, area: str | None = None, edits_path: Path | None = None) -> dict[str, dict]:
-    """The effective ground types by name: those of ``rules.yaml`` (with the area overlay) and, when ``edits_path`` is
+def ground_types(rules_path: Path = DEFAULT_RULES, edits_path: Path | None = None) -> dict[str, dict]:
+    """The effective ground types by name: those of ``rules.yaml`` and, when ``edits_path`` is
     given, the user's overrides and additions of that edits file laid over them (:func:`merge_ground_types`)."""
-    types = rules_ground_types(rules_path, area)
+    types = rules_ground_types(rules_path)
     if edits_path is None:
         return types
     from drycastle_pipeline.edits import load_edits

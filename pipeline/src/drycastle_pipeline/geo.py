@@ -1,4 +1,4 @@
-"""Bounding-box maths for the slice and the village."""
+"""Bounding-box maths for the map."""
 
 import functools
 from dataclasses import dataclass
@@ -6,30 +6,14 @@ from dataclasses import dataclass
 from shapely.geometry import LineString, MultiPoint, Polygon
 
 # DMR 5.0 is served in ETRS89-TM34. It is also a metric CRS that is accurate enough
-# at village scale to turn "radius in metres" into a box.
+# at village scale for the map's extent.
 METRIC_CRS = "EPSG:3046"
 WGS84 = "EPSG:4326"
 
 
-
-@functools.cache
-def _to_metric():
-    """WGS84 -> metric CRS; pyproj is imported on first use because it is slow to import."""
-    from pyproj import Transformer
-
-    return Transformer.from_crs(WGS84, METRIC_CRS, always_xy=True)
-
-
-@functools.cache
-def _to_wgs84():
-    from pyproj import Transformer
-
-    return Transformer.from_crs(METRIC_CRS, WGS84, always_xy=True)
-
-
 @dataclass(frozen=True)
 class Bbox:
-    """Box around the area (a square, or the bounds of a polygon), in WGS84 and EPSG:3046."""
+    """Box around the map, in WGS84 and EPSG:3046."""
 
     west: float
     south: float
@@ -65,31 +49,6 @@ def centroid_of_geometry(points: list[tuple[float, float]]) -> tuple[float, floa
     else:
         c = MultiPoint(points).centroid
     return (c.x, c.y)
-
-
-def compute_bbox(lon: float, lat: float, radius_m: float, margin_m: float = 0.0) -> Bbox:
-    """Box of half-side ``radius_m + margin_m`` metres around (lon, lat)."""
-    if radius_m <= 0 or margin_m < 0:
-        raise ValueError("radius_m must be > 0 and margin_m >= 0")
-    half = radius_m + margin_m
-    e, n = _to_metric().transform(lon, lat)
-    min_e, min_n, max_e, max_n = e - half, n - half, e + half, n + half
-    corners = [
-        _to_wgs84().transform(x, y)
-        for x, y in ((min_e, min_n), (min_e, max_n), (max_e, min_n), (max_e, max_n))
-    ]
-    lons = [c[0] for c in corners]
-    lats = [c[1] for c in corners]
-    return Bbox(
-        west=min(lons),
-        south=min(lats),
-        east=max(lons),
-        north=max(lats),
-        min_e=min_e,
-        min_n=min_n,
-        max_e=max_e,
-        max_n=max_n,
-    )
 
 
 @functools.cache

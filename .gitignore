@@ -21,7 +21,7 @@ obj/
 answers.md
 .claude/worktrees/
 .claude/settings.local.json
-pipeline/config/slice.local.yaml
+pipeline/config/map.local.yaml
 
 # local secrets
 .env

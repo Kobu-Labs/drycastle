@@ -21,7 +21,7 @@ TERRAIN = "terrain"
 ANY = "any"
 UNION = "union"
 
-#: The events an ``event_spawn`` attribute can name (docs/events/README.md). Only an area that carries the event can spawn it.
+#: The events an ``event_spawn`` attribute can name (docs/events/README.md). Only a ground area that carries the event can spawn it.
 EVENTS = ("bigfoot",)
 
 #: The recipes a ground type can name (``detail.RECIPES`` without the parcel recipe ``garden``).

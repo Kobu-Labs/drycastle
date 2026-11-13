@@ -126,7 +126,7 @@ def test_a_tree_in_dark_scrub_is_found_next_to_woods_but_not_in_open_meadow() ->
 # --- training and the files ---
 
 
-def area(tmp_path: Path, model: dict | None) -> tuple[Path, Path, Path]:
+def village(tmp_path: Path, model: dict | None) -> tuple[Path, Path, Path]:
     raw, work, ortho = tmp_path / "raw", tmp_path / "work", tmp_path / "ortho"
     for d in (raw, work / "normalised", ortho):
         d.mkdir(parents=True)
@@ -135,7 +135,7 @@ def area(tmp_path: Path, model: dict | None) -> tuple[Path, Path, Path]:
         "file": "ortho.png", "pixel_m": RES, "bounds_epsg5514": [0.0, 0.0, SIZE * RES, SIZE * RES],
         "attribution": "test"}))
     (work / "frame.json").write_text(json.dumps({"origin_epsg5514": [0.0, 0.0]}))
-    (raw / "area.json").write_text(json.dumps({"polygon_epsg5514": None}))
+    (raw / "area.json").write_text(json.dumps({"polygon_epsg5514": [[-10, -10], [200, -10], [200, 200], [-10, 200]]}))
     feat = lambda g, **p: {"type": "Feature", "geometry": mapping(g), "properties": p}
     coll = lambda fs: json.dumps({"type": "FeatureCollection", "features": fs})
     (work / "normalised" / "landuse.geojson").write_text(coll([
@@ -150,7 +150,7 @@ def area(tmp_path: Path, model: dict | None) -> tuple[Path, Path, Path]:
 
 
 def test_the_model_learns_forest_from_the_landuse_labels(tmp_path: Path) -> None:
-    _, work, ortho = area(tmp_path, None)
+    _, work, ortho = village(tmp_path, None)
     model = ot.train(Image.open(ortho / "ortho.png"), GRID, work, ot.Params(), n_per=1500)
     p = ot.predict(model, ot.expand(ot.features(scene())))
     assert p[100:200, 30:70].mean() > 0.8  # forest block
@@ -158,7 +158,7 @@ def test_the_model_learns_forest_from_the_landuse_labels(tmp_path: Path) -> None
 
 
 def test_build_writes_trees_and_canopy(tmp_path: Path) -> None:
-    raw, work, ortho = area(tmp_path, handmade_model())
+    raw, work, ortho = village(tmp_path, handmade_model())
     doc = ot.build(raw, work, ortho)
     assert (ortho / "trees.json").is_file() and (ortho / "canopy.png").is_file()
     on_disk = json.loads((ortho / "trees.json").read_text())
@@ -174,8 +174,8 @@ def test_build_writes_trees_and_canopy(tmp_path: Path) -> None:
     assert again["standalone"] == doc["standalone"]
 
 
-def test_a_polygon_outline_clips_the_trees_and_the_canopy(tmp_path: Path) -> None:
-    raw, work, ortho = area(tmp_path, handmade_model())
+def test_the_outline_clips_the_trees_and_the_canopy(tmp_path: Path) -> None:
+    raw, work, ortho = village(tmp_path, handmade_model())
     (raw / "area.json").write_text(json.dumps({"polygon_epsg5514": [[0, 0], [90, 0], [90, 180], [0, 180]]}))
     doc = ot.build(raw, work, ortho)
     assert not any(t["x"] > 100 for t in doc["standalone"])  # the lawn trees lie east of x = 90, outside
@@ -183,6 +183,6 @@ def test_a_polygon_outline_clips_the_trees_and_the_canopy(tmp_path: Path) -> Non
 
 
 def test_missing_inputs_give_a_clear_error(tmp_path: Path) -> None:
-    assert ot.main(["--area", "slice"]) in (0, 1)  # no data in the test tree is fine: an error code, never a crash
+    assert ot.main([]) in (0, 1)  # no data in the test tree is fine: an error code, never a crash
     with pytest.raises(FileNotFoundError):
         ot.build(tmp_path, tmp_path, tmp_path)

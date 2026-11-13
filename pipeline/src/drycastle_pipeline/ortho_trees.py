@@ -1,11 +1,11 @@
-"""Where the trees are, read from the orthophoto -> ``data/<area>/ortho/{trees.json,canopy.png}``.
+"""Where the trees are, read from the orthophoto -> ``data/village/ortho/{trees.json,canopy.png}``.
 
 A derived, local result, not a map stage and not yet an input of the map: ``make ortho`` must have
 downloaded the photo. The licence of the photo forbids redistributing and altering it, so only facts
 read from it (tree positions, a canopy mask) are written, into the gitignored ``data/``, never to
 ``out/``. See docs/ortho.md.
 
-    python -m drycastle_pipeline.ortho_trees --area village
+    python -m drycastle_pipeline.ortho_trees
 
 Two detectors, because the two kinds of tree look different from above:
 
@@ -35,7 +35,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 from shapely.geometry import Point, Polygon, shape
 
-from drycastle_pipeline.config import AREAS, DEFAULT_AREA, area_paths
+from drycastle_pipeline.config import map_paths
 
 FORMAT_VERSION = 1
 N_FEATURES = 17  # of ``features``; the model sees them and their squares
@@ -362,9 +362,9 @@ def build(raw_dir: Path, work_dir: Path, ortho_dir: Path, *, retrain: bool = Fal
     return doc
 
 
-def run_ortho_trees(area: str, *, retrain: bool = False, params: Params | None = None) -> int:
-    """Detect the trees of ``area`` from its photo; prints one line and returns the exit status."""
-    paths = area_paths(area)
+def run_ortho_trees(*, retrain: bool = False, params: Params | None = None) -> int:
+    """Detect the trees of the map from its photo; prints one line and returns the exit status."""
+    paths = map_paths()
     ortho_dir = paths.raw.parent / "ortho"
     try:
         doc = build(paths.raw, paths.work, ortho_dir, retrain=retrain, params=params)
@@ -379,20 +379,19 @@ def run_ortho_trees(area: str, *, retrain: bool = False, params: Params | None =
     return 0
 
 
-def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
+def run(force: bool = False, **_options: object) -> int:
     """The ``ortho-trees`` pipeline stage (after ``ortho``). The cached canopy model is reused; ``make ortho-trees RETRAIN=1``
     trains it again (``force`` is not that: it would make every ``--force`` run spend minutes on training)."""
-    return run_ortho_trees(area)
+    return run_ortho_trees()
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="drycastle_pipeline.ortho_trees", description=__doc__.split("\n")[0])
-    ap.add_argument("--area", choices=AREAS, default=DEFAULT_AREA)
     ap.add_argument("--retrain", action="store_true", help="fit the canopy model again (else tree_model.npz is reused)")
     ap.add_argument("--tau-open", type=float, default=Params.tau_open, help="blob darkness needed in open ground")
     ap.add_argument("--tau-wooded", type=float, default=Params.tau_wooded, help="... in tree-like surroundings")
     args = ap.parse_args(argv)
-    return run_ortho_trees(args.area, retrain=args.retrain,
+    return run_ortho_trees(retrain=args.retrain,
                            params=Params(tau_open=args.tau_open, tau_wooded=args.tau_wooded))
 
 

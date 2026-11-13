@@ -161,8 +161,8 @@ def test_get_sketch(env):
     assert one["count"] == 1 and one["points"] == [] and one["lines"][0]["id"] == "L2"
     with pytest.raises(ToolError, match="has no 'L9'; marks: A, B, L1, L2; sketches: DEFAULT"):
         tools.get_sketch("L9")
-    # a mark off the map alone: answered, with a warning about the area
-    assert "another area" in tools.get_sketch("B")["warnings"][0]
+    # a mark off the map alone: answered, with a warning about the parcels
+    assert "no mark lies on a parcel" in tools.get_sketch("B")["warnings"][0]
     # a self-crossing area is returned without parcels, and said so
     bow = {"closed": True, "id": "L1", "points": absolute([(50, 50), (60, 60), (60, 50), (50, 60)])}
     settings.state_path.write_text(json.dumps({**state, "sketch": {**sketch, "lines": [bow]}}))
@@ -479,7 +479,7 @@ def test_region_errors_leave_file_untouched(env):
     tools.create_region("#123456", polygon=SQUARE)
     before = settings.edits_path.read_bytes()
     with pytest.raises(ToolError, match="nothing was written"):
-        tools.move_region_point("R-0001", 2, position=[OX + 10, OY + 10])  # collapses the square
+        tools.move_region_point("R-0001", 2, position=[OX + 10, OY + 10])  # collapses the region
     with pytest.raises(ToolError, match="nothing was written"):
         tools.move_region_point("R-0001", 1, position=[OX + 10, OY + 20])  # bow tie via touch
     with pytest.raises(ToolError, match="out of range"):
@@ -518,10 +518,10 @@ def test_object_polygon_orientation():
 
 
 def test_parse_args(tmp_path):
-    s = parse_args(["--area", "village", "--edits", str(tmp_path / "e.json"), "--state", str(tmp_path / "s.json")])
-    assert s.area == "village" and s.edits_path == tmp_path / "e.json" and s.work.parts[-2:] == ("village", "work")
+    s = parse_args(["--edits", str(tmp_path / "e.json"), "--state", str(tmp_path / "s.json")])
+    assert s.edits_path == tmp_path / "e.json" and s.work.parts[-2:] == ("village", "work")
     d = parse_args([])
-    assert d.area == "slice" and d.edits_path.name == "edits.json" and d.state_path.name == "editor-state.json"
+    assert d.edits_path.name == "edits.json" and d.state_path.name == "editor-state.json"
 
 
 def test_missing_map_data_error(tmp_path):

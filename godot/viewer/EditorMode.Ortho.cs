@@ -5,7 +5,7 @@ using System.Text.Json;
 using Godot;
 
 /// <summary>
-/// The aerial photo layer: the orthophoto the pipeline downloads (`make ortho`, data/AREA/ortho) draped on the terrain
+/// The aerial photo layer: the orthophoto the pipeline downloads (`make ortho`, data/village/ortho) draped on the terrain
 /// under everything the editor draws, to paint regions and place things by eye. A reference only: it is read from the
 /// gitignored data folder, never written to the map or exported, and its licence forbids redistributing or altering it.
 /// O toggles it, the View page has the switch and an opacity slider; both are remembered (editor_ui.cfg).
@@ -25,10 +25,10 @@ public partial class EditorMode
 
     public bool OrthoShown => _orthoOn;
 
-    /// <summary>The folder `make ortho` writes, or null when the editor does not know the area (no watcher).</summary>
+    /// <summary>The folder `make ortho` writes, or null when the editor does not know the pipeline (no watcher).</summary>
     string? OrthoDir => Watcher == null || Watcher.PipelineDir == ""
         ? null
-        : Path.GetFullPath(Path.Combine(Watcher.PipelineDir, "..", "data", Watcher.Area, "ortho"));
+        : Path.GetFullPath(Path.Combine(Watcher.PipelineDir, "..", "data", "village", "ortho"));
 
     public void ToggleOrtho() => SetOrtho(!_orthoOn);
 
@@ -67,7 +67,7 @@ public partial class EditorMode
         var info = dir == null ? null : Path.Combine(dir, "ortho.json");
         if (info == null || !File.Exists(info))
         {
-            OrthoFail($"no aerial photo yet: run  make ortho AREA={Watcher?.Area ?? "village"}  and open the editor again");
+            OrthoFail($"no aerial photo yet: run  make ortho  and open the editor again");
             return false;
         }
         if (Map.OriginEpsg5514 == null) { OrthoFail("this map has no origin_epsg5514 (export it again, map 0.4.0+); the photo cannot be placed"); return false; }

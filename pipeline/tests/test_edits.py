@@ -575,7 +575,7 @@ def test_missing_origin_fails_only_when_objects_or_gaps_need_it(ws, tmp_path) ->
 
 
 def test_parcel_geometry_fixture_is_as_described(ws) -> None:
-    # the group and gap tests rely on these exact edges of the synthetic slice
+    # the group and gap tests rely on these exact edges of the synthetic map
     polys = {p["id"]: shape(p["polygon"]) for p in ws["parcels"]}
     assert polys["P-0001"].bounds == (40, 40, 95, 100)
     assert polys["P-0002"].bounds == (95, 40, 140, 100)

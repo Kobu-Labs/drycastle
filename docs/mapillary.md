@@ -14,11 +14,11 @@ Not an input of the generated map (see `pipeline/src/drycastle_pipeline/mapillar
 
 ```
 cd pipeline
-uv run python -m drycastle_pipeline.mapillary --area village             # image index only
-uv run python -m drycastle_pipeline.mapillary --area village --download  # + 2048 px photos
+uv run python -m drycastle_pipeline.mapillary             # image index only
+uv run python -m drycastle_pipeline.mapillary --download  # + 2048 px photos
 uv run python -m drycastle_pipeline.mapillary --near 16.8601,48.4044 --radius 40 --download
 ```
 
-Output goes to `data/<area>/mapillary/` (`images.json`, `photos/<id>.jpg`; gitignored). The index
+Output goes to `data/village/mapillary/` (`images.json`, `photos/<id>.jpg`; gitignored). The index
 holds position, compass angle and creator per image, so a photo can be matched to the nearest
 building. Images are CC BY-SA 4.0: keep the creator when a photo informs a model.

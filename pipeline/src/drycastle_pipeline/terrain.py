@@ -1,6 +1,6 @@
 """Terrain stage: DMR 5.0 -> regular height grid in the local frame, flattened under buildings.
 
-Writes ``data/work/terrain.json`` (grid description, coverage polygon, building elevations),
+Writes ``data/village/work/terrain.json`` (grid description, coverage polygon, building elevations),
 ``terrain_heights.npy`` and ``terrain_valid.npy``. Meshes are built from these at export.
 
 Grid: vertices at (i * step, j * step) in local metres, with step = chunk size / n and n an even
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     import rasterio
 
 from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import DEFAULT_AREA, DEFAULT_RAW_DIR, area_paths
+from drycastle_pipeline.config import DEFAULT_RAW_DIR, map_paths
 from drycastle_pipeline.meshes import Mesh, triangulate
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
@@ -414,8 +414,8 @@ def build_terrain(
     return t, elevations
 
 
-def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
-    paths = area_paths(area)
+def run(force: bool = False, **_options: object) -> int:
+    paths = map_paths()
     try:
         t, elevations = build_terrain(paths.work, paths.raw)
     except FileNotFoundError as exc:

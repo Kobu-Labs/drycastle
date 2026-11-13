@@ -1,4 +1,4 @@
-"""Rules stage: heights, roofs and colours for every building -> ``data/work/buildings.json``.
+"""Rules stage: heights, roofs and colours for every building -> ``data/village/work/buildings.json``.
 
 Order of precedence (see ``config/rules.yaml``): overrides.yaml > OSM tags > building type class >
 footprint-area class. Colours and the few random choices come from a generator seeded with
@@ -20,7 +20,7 @@ from shapely.affinity import rotate
 from shapely.geometry import MultiPolygon, Polygon, shape
 from shapely.geometry.polygon import orient
 
-from drycastle_pipeline.config import DEFAULT_AREA, PIPELINE_DIR, area_paths
+from drycastle_pipeline.config import PIPELINE_DIR, map_paths
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.rules import DEFAULT_RULES
 
@@ -388,9 +388,9 @@ def write_buildings(work_dir: Path, result: BuildingsResult) -> Path:
 
 
 def run(
-    force: bool = False, report: bool = False, area: str = DEFAULT_AREA, **_options: object
+    force: bool = False, report: bool = False, **_options: object
 ) -> int:
-    work_dir = area_paths(area).work
+    work_dir = map_paths().work
     try:
         result = build_buildings(work_dir)
     except FileNotFoundError as exc:

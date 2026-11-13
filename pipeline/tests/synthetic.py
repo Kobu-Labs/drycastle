@@ -1,4 +1,4 @@
-"""Synthetic slice shared by the terrain, roads, props and export tests (no real data)."""
+"""Synthetic map shared by the terrain, roads, props and export tests (no real data)."""
 
 import json
 from pathlib import Path
@@ -12,8 +12,14 @@ from drycastle_pipeline.rules import load_section
 from drycastle_pipeline.terrain import flatten_buildings, grid_from_samples, save_terrain
 
 COVERAGE = box(10, 10, 210, 200)
-# Absolute S-JTSK position of the local origin (0, 0) of the synthetic slice.
+# Absolute S-JTSK position of the local origin (0, 0) of the synthetic map.
 SYNTHETIC_ORIGIN = (-500000.0, -1100000.0)
+
+
+def _outline() -> list[list[float]]:
+    """The map outline of the synthetic map: a ring around the local extent (absolute S-JTSK)."""
+    ox, oy = SYNTHETIC_ORIGIN
+    return [[ox - 50, oy - 50], [ox + 1100, oy - 50], [ox + 1100, oy + 1100], [ox - 50, oy + 1100], [ox - 50, oy - 50]]
 
 
 def plane(x, y):
@@ -85,6 +91,7 @@ def make_workspace(tmp: Path) -> dict[str, Path]:
             {
                 "crs": "synthetic",
                 "origin_epsg5514": list(SYNTHETIC_ORIGIN),
+                "area_polygon_epsg5514": _outline(),
                 "chunk_size_m": 250.0,
                 "parcels": parcels,
             }

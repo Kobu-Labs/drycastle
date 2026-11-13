@@ -20,7 +20,7 @@ import numpy as np
 
 from drycastle_pipeline import detail as D
 from drycastle_pipeline.assets import ASSETS_DIR, load_manifest
-from drycastle_pipeline.config import DEFAULT_AREA, area_paths
+from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.detail_meshes import KINDS, TINTABLE
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
 from drycastle_pipeline.ground import ground_types, ground_units, type_colours, water_kinds
@@ -51,12 +51,12 @@ def _polys(geom) -> list[dict]:
             for p in parts if not p.is_empty]
 
 
-def build_input(work_dir: Path, rules_path: Path, area: str | None, edits_path: Path) -> tuple[dict, np.ndarray, np.ndarray, tuple[int, int, bytes], list[str]]:
+def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dict, np.ndarray, np.ndarray, tuple[int, int, bytes], list[str]]:
     """The input document of the engine, the terrain arrays, the dike texture (width, height, rgb bytes) and the warnings."""
     from drycastle_pipeline.scene import ParcelColours  # heavy imports, only for the stage
 
-    cfg = load_section("detail", rules_path, area)
-    tree_cfg = load_section("props", rules_path, area)["trees"]
+    cfg = load_section("detail", rules_path)
+    tree_cfg = load_section("props", rules_path)["trees"]
     terrain, _ = load_terrain(work_dir)
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     units = ground_units(parcels_doc)
@@ -65,7 +65,7 @@ def build_input(work_dir: Path, rules_path: Path, area: str | None, edits_path: 
     graph = json.loads((work_dir / "roads.json").read_text())
     objects_path = work_dir / "objects.json"
     objects = json.loads(objects_path.read_text())["objects"] if objects_path.is_file() else []
-    types = ground_types(rules_path, area)
+    types = ground_types(rules_path)
     colours = ParcelColours(units, {**load_section("terrain", rules_path)["colours"], **type_colours(types)})
 
     # the unit table: recipe (None: no detail), terrain colour, whether the whole unit is the dike
@@ -131,24 +131,24 @@ def build_input(work_dir: Path, rules_path: Path, area: str | None, edits_path: 
 
 
 def run_engine(
-    work_dir: Path, rules_path: Path = DEFAULT_RULES, area: str | None = None, edits_path: Path = DEFAULT_EDITS,
+    work_dir: Path, rules_path: Path = DEFAULT_RULES, edits_path: Path = DEFAULT_EDITS,
     threads: int = 0, only: list[str] | None = None, write: bool = True, out_dir: Path | None = None,
 ) -> tuple[dict, list[str]]:
     """Runs the engine; returns its statistics and the warnings of the regions."""
     mod = load_module()
-    doc, heights, valid, image, warnings = build_input(work_dir, rules_path, area, edits_path)
+    doc, heights, valid, image, warnings = build_input(work_dir, rules_path, edits_path)
     stats = json.loads(mod.run(json.dumps(doc), heights.tobytes(), valid.tobytes(), image[2], (image[0], image[1]),
                                str(out_dir or work_dir), threads, only, write))
     return stats, warnings
 
 
-def run(force: bool = False, area: str = DEFAULT_AREA, edits: str | None = None, work: str | None = None, **options: object) -> int:
+def run(force: bool = False, edits: str | None = None, work: str | None = None, **options: object) -> int:
     edits_path = Path(edits) if edits else DEFAULT_EDITS
-    work_dir = Path(work) if work else area_paths(area).work
+    work_dir = Path(work) if work else map_paths().work
     threads = int(options.get("threads") or os.environ.get("DRYCASTLE_DETAIL_THREADS") or 0)
     t0 = time.time()
     try:
-        stats, warnings = run_engine(work_dir, area=area, edits_path=edits_path, threads=threads)
+        stats, warnings = run_engine(work_dir, edits_path=edits_path, threads=threads)
     except RustEngineMissing as exc:
         print(f"detail: error: {exc}", file=sys.stderr)
         return 1

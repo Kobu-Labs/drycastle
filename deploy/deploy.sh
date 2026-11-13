@@ -11,7 +11,7 @@ SSH="ssh ${SSH_OPTS:-}"
 export_dir="$here/../out/shooter/linux-server"
 
 [ -x "$export_dir/drycastle-server.x86_64" ] || { echo "no server export: run 'make shooter-export' first"; exit 1; }
-[ -d "$export_dir/map" ] || { echo "export has no map/: run 'make map AREA=village' and export again"; exit 1; }
+[ -d "$export_dir/map" ] || { echo "export has no map/: run 'make map' and export again"; exit 1; }
 
 $SSH "$host" "mkdir -p '$dir/out/shooter/linux-server' '$dir/deploy'"
 rsync -az -e "$SSH" --delete "$export_dir/" "$host:$dir/out/shooter/linux-server/"

@@ -33,12 +33,12 @@ public static class GamePaths
         return Path.GetFullPath(Exported ? Path.Combine(ExeDir, "assets") : ProjectSettings.GlobalizePath("res://") + "../../assets");
     }
 
-    /// <summary>Map folder: the explicit value (flag), else DRYCASTLE_MAP, else <c>map/</c> next to the executable (export) or out/map (source).</summary>
+    /// <summary>Map folder: the explicit value (flag), else DRYCASTLE_MAP, else <c>map/</c> next to the executable (export) or out/village/map (source).</summary>
     public static string Map(string? explicitDir)
     {
         if (!string.IsNullOrEmpty(explicitDir)) return explicitDir;
         var env = OS.GetEnvironment("DRYCASTLE_MAP");
         if (!string.IsNullOrEmpty(env)) return env;
-        return Exported ? Path.Combine(ExeDir, "map") : ProjectSettings.GlobalizePath("res://") + "../../out/map";
+        return Exported ? Path.Combine(ExeDir, "map") : ProjectSettings.GlobalizePath("res://") + "../../out/village/map";
     }
 }

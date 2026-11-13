@@ -137,7 +137,7 @@ the id of a connector that exists, e.g. `[pole, connector]`.
 
 ### A street at a time
 
-`python -m drycastle_pipeline.house_connections --area village` (`--dry-run` first) places the connectors and their cables
+`python -m drycastle_pipeline.house_connections` (`--dry-run` first) places the connectors and their cables
 for every dwelling within `--service-m` (default 40) of a pole, into `edits.json` like the editor would: `objects` with a
 `z`, and `cables` from the pole. A house takes the nearest pole that has room (`--per-pole`, default 4 drops) over a wire
 that does not go through a building. The wire lands on the wall that faces the pole, under the eave and away from the

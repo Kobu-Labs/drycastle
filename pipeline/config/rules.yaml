@@ -102,12 +102,12 @@ ground:
 
 # --- Chunking -------------------------------------------------------------------------------
 chunking:
-  # Edge of a square chunk in metres, on a grid anchored at the local origin (slice centre).
+  # Edge of a square chunk in metres, on a grid anchored at the local origin (map centre).
   # A parcel belongs to the chunk containing its anchor point.
   size_m: 250
 
 # --- Buildings (rules stage) ----------------------------------------------------------------
-# One entry per building in data/work/buildings.json. Order of precedence for every value:
+# One entry per building in data/village/work/buildings.json. Order of precedence for every value:
 #   1. pipeline/config/overrides.yaml (see there)
 #   2. OSM tags: height, building:levels, roof:shape, roof:levels
 #   3. `types`: class chosen by the OSM building=<value> tag
@@ -172,7 +172,7 @@ buildings:
     flat_roofs: ["#6a6a6e", "#7c7f86", "#8a8478", "#5c5f66"]
 
 # --- Terrain (terrain stage) ----------------------------------------------------------------
-# data/raw/dmr5.tif (DMR 5.0, EPSG:3046) is resampled bilinearly into a regular grid in the local
+# data/village/raw/dmr5.tif (DMR 5.0, EPSG:3046) is resampled bilinearly into a regular grid in the local
 # frame. Chunk edges are grid lines, so neighbouring chunks share their border vertices exactly.
 # Terrain exists only where the DMR raster covers: a grid cell is meshed only when all four of
 # its corners lie inside the raster (no clamping, no invented ground); chunks without such cells
@@ -253,11 +253,11 @@ props:
     kinds: [building_plot, garden]
     garden_near_building_m: 25
     # Fraction of eligible parcels that get a fence (seeded per parcel).
-    probability: 0.75
+    probability: 0.5
     height_m: 1.2
     thickness_m: 0.08
     # A fence is built from boxes of at most this length.
-    section_m: 3
+    section_m: 4
     colour: "#8a6a47"
     # Optional `type` (picket, wire, brick_red, brick_white, stone_wall, concrete; see edits.py
     # FENCE_TYPES) draws the rule fences in that textured style instead of the plain box, and an
@@ -274,11 +274,11 @@ props:
     gate_gap_m: 3
     gate_road_within_m: 4
     # Emit fence collision boxes (props_collision node). They are about half of all triangles of a
-    # chunk file; turn off where fences need not stop players (the village profile does).
-    collision: true
+    # chunk file; off, fences are visual only.
+    collision: false
   trees:
-    # Every tree comes from the orthophoto detector (props.ortho_trees; make ortho-trees writes data/<area>/ortho/trees.json
-    # and the canopy mask); there are no rule-based, OSM or shore trees. An area without ortho data has no trees.
+    # Every tree comes from the orthophoto detector (props.ortho_trees; make ortho-trees writes data/village/ortho/trees.json
+    # and the canopy mask); there are no rule-based, OSM or shore trees. Without ortho data there are no trees.
     # Cap on trees per chunk (0 = no cap); surplus trees are dropped by a position hash, so the result is stable.
     max_per_chunk: 0
     building_clearance_m: 3.5
@@ -548,7 +548,7 @@ detail:
 # --- Spawn candidates (props stage, spawns.json) --------------------------------------------
 spawns:
   # Number of candidates written (a seeded subset of all valid points).
-  count: 60
+  count: 150
   # Share of the subset taken from roads, the rest from open ground (garden, field, village).
   road_fraction: 0.4
   min_building_distance_m: 12
@@ -559,7 +559,7 @@ spawns:
   # Parcel kinds with spawns in the open ground; ground types: the `spawns` attribute of ground.types.
   ground_kinds: [garden]
 
-# --- Street lamps (props stage, data/work/lamps.json) ----------------------------------------
+# --- Street lamps (props stage, data/village/work/lamps.json) ----------------------------------------
 # OSM street_lamp nodes are kept where they stand. Where a road has no lamp nearby, rule lamps are
 # placed along it every spacing_m, staggered left and right, just beyond the carriageway edge.
 # Every lamp must lie in the terrain coverage, outside building footprints (grown by
@@ -567,7 +567,7 @@ spawns:
 # only get the coverage and building checks, since their position is taken as given.
 lamps:
   # false: no street lamps at all (OSM ones included); the poles and lamps of the edits are placed objects, not these.
-  enabled: true
+  enabled: false
   spacing_m: 30
   # Gap between the carriageway edge and the lamp pole, metres.
   road_offset_m: 1.0
@@ -576,22 +576,3 @@ lamps:
   min_lamp_distance_m: 10
   rule_highways: [primary, secondary, tertiary, unclassified, residential, living_street, service]
   avoid_kinds: [building_plot, garden]
-
-# --- Area overlays --------------------------------------------------------------------------
-# `areas.<name>.<section>` is merged over the section when the pipeline runs with that area
-# (--area / AREA=). The slice has none and keeps the settings above. The village is ~50x larger,
-# so it trades prop density for chunk size (all chunks are loaded at startup, 16-64 players,
-# weak GPUs): fewer fences without collision, fewer trees, a few more spawn candidates.
-areas:
-  village:
-    lamps:
-      enabled: false
-    props:
-      fences:
-        probability: 0.5
-        section_m: 4
-        collision: false
-      trees:
-        max_per_chunk: 0
-    spawns:
-      count: 150

@@ -1,4 +1,4 @@
-"""Export stage: ``data/work`` -> ``out/map/`` (chunk glTFs, parcels.json, manifest.json).
+"""Export stage: ``data/village/work`` -> ``out/village/map/`` (chunk glTFs, parcels.json, manifest.json).
 
 Output is byte-deterministic: no timestamps, sorted keys, sorted node order. glTF axes are Y-up:
 glTF (x, y, z) = local (east, up, -north). parcels.json keeps local metres (x east, y north).
@@ -14,7 +14,7 @@ import numpy as np
 import trimesh
 
 from drycastle_pipeline.buildings import DEFAULT_OVERRIDES
-from drycastle_pipeline.config import DEFAULT_AREA, DEFAULT_RAW_DIR, REPO_ROOT, area_paths
+from drycastle_pipeline.config import DEFAULT_RAW_DIR, REPO_ROOT, map_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, GROUND_RECIPES
 from drycastle_pipeline.detail_meshes import clutter_meshes
 from drycastle_pipeline.meshes import Mesh
@@ -180,9 +180,9 @@ def _dump(path: Path, doc: dict) -> None:
     path.write_text(json.dumps(doc, separators=(",", ":"), sort_keys=True) + "\n")
 
 
-def _edit_defaults(rules_path: Path, area: str) -> dict:
-    """Rule values the editor shows as the greyed defaults of fences and trees (area overlay applied)."""
-    props = load_section("props", rules_path, area)
+def _edit_defaults(rules_path: Path) -> dict:
+    """Rule values the editor shows as the greyed defaults of fences and trees."""
+    props = load_section("props", rules_path)
     fences = props["fences"]
     return {
         "fence": {
@@ -201,7 +201,6 @@ def run_export(
     raw_dir: Path = DEFAULT_RAW_DIR,
     rules_path: Path = DEFAULT_RULES,
     overrides_path: Path = DEFAULT_OVERRIDES,
-    area: str = DEFAULT_AREA,
     edits_path: Path = DEFAULT_EDITS,
 ) -> dict:
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
@@ -215,7 +214,7 @@ def run_export(
     for old in chunks_dir.glob("chunk_*.glb"):
         old.unlink()
 
-    scene = build_scene(work_dir, rules_path, area=area, edits_path=edits_path)
+    scene = build_scene(work_dir, rules_path, edits_path=edits_path)
     for warning in scene.warnings:
         print(f"export: warning: {warning}", file=sys.stderr)
     parcels_out = []
@@ -270,7 +269,7 @@ def run_export(
         files["spawns"] = "spawns.json"
     if scene.trees is not None:
         # tree collision solids (trunk and crown), built by the game from these records and the model numbers
-        tree_cfg = load_section("props", rules_path, area)["trees"]
+        tree_cfg = load_section("props", rules_path)["trees"]
         chunk_m = float(parcels_doc["chunk_size_m"])
         _dump(out_dir / "trees.json", {
             "format_version": TREES_FORMAT_VERSION,
@@ -341,11 +340,11 @@ def run_export(
     # the ground types for the editor (ground types tool, the ground list of a region): every type of the rules, with the
     # rules' own entry (`rules`; the editor lays the user's edits.json overrides over it, so the list stays live between
     # builds), then the types the user made (`custom`); name, first colour and a summary are those at this build
-    rule_types = rules_ground_types(rules_path, area)
-    effective = ground_types(rules_path, area, edits_path)
-    parcels_file["ground_default"] = load_section("ground", rules_path, area)["default"]
+    rule_types = rules_ground_types(rules_path)
+    effective = ground_types(rules_path, edits_path)
+    parcels_file["ground_default"] = load_section("ground", rules_path)["default"]
     # the shipped settings of each detail recipe (without the clutter tables): what a ground type's `detail` is laid over
-    detail_cfg = load_section("detail", rules_path, area)
+    detail_cfg = load_section("detail", rules_path)
     parcels_file["ground_recipes"] = {
         r: {k: v for k, v in detail_cfg[r].items() if k != "clutter"} for r in GROUND_RECIPES if isinstance(detail_cfg.get(r), dict)
     }
@@ -413,17 +412,17 @@ def run_export(
         "config/overrides.yaml": _sha256(overrides_path),
     }
     manifest = {
-        "map_version": f"{MAP_VERSION_BASE}-{area}",
+        "map_version": f"{MAP_VERSION_BASE}-village",
         "format_version": ARTIFACT_FORMAT_VERSION,
         "chunk_size_m": parcels_doc["chunk_size_m"],
         "props_layout": PROPS_LAYOUT,
-        "gltf_axes": "Y-up: x east, y up, z -north, metres, shared slice-origin frame",
+        "gltf_axes": "Y-up: x east, y up, z -north, metres, shared map-origin frame",
         "chunks": chunk_entries,
         "attribution": raw_manifest.get("attribution", []),
         "inputs": inputs,
         "generated": sorted(generated),
         "files": files,
-        "edit_defaults": _edit_defaults(rules_path, area),
+        "edit_defaults": _edit_defaults(rules_path),
         "textures": sorted(
             {name.partition("_tex_")[2] for c in chunk_entries for name in c["triangles"] if "_tex_" in name}
         ),
@@ -437,17 +436,16 @@ def run_export(
 
 def run(
     force: bool = False,
-    area: str = DEFAULT_AREA,
     out: str | None = None,
     work: str | None = None,
     edits: str | None = None,
     **_options: object,
 ) -> int:
-    """``out`` and ``work`` override the area's map and work directories (experiments, tests)."""
-    paths = area_paths(area)
+    """``out`` and ``work`` override the map's output and work directories (experiments, tests)."""
+    paths = map_paths()
     out_dir = Path(out) if out else paths.out
     try:
-        manifest = run_export(Path(work) if work else paths.work, out_dir, paths.raw, area=area,
+        manifest = run_export(Path(work) if work else paths.work, out_dir, paths.raw,
                               edits_path=Path(edits) if edits else DEFAULT_EDITS)
     except FileNotFoundError as exc:
         print(f"export: error: missing input {Path(str(exc.filename)).name}; run earlier stages")

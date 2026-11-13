@@ -6,7 +6,7 @@ namespace Drycastle.Shooter;
 /// <summary>
 /// Shooter entry point. Args after "--":
 ///   --role server|client      (default client; the server is for --headless)
-///   --map DIR                 map folder (else DRYCASTLE_MAP, else ../../out/map relative to the project)
+///   --map DIR                 map folder (else DRYCASTLE_MAP, else ../../out/village/map relative to the project)
 ///   --connect HOST[:PORT] --name NAME   join a server (default port 27015); --headless-bot [--bot-seconds N] scripts a walk
 ///   --port N                  server listen port (default 27015); --quit-after SECONDS ends the server with a verdict
 ///   --net-sim latency_ms=50,jitter_ms=5,loss=0.03   server and client: delay every outgoing packet, drop that share of the unreliable ones (see NetSim.cs)

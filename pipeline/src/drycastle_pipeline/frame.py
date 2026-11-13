@@ -1,4 +1,4 @@
-"""Local metric frame: WGS84 -> EPSG:5514 (S-JTSK / Krovak East North) -> origin at slice centre.
+"""Local metric frame: WGS84 -> EPSG:5514 (S-JTSK / Krovak East North) -> origin at map centre.
 
 With ``always_xy`` pyproj returns EPSG:5514 as (east-like, north-like) metres, so local x grows
 eastwards and local y northwards. The axes stay those of EPSG:5514 (they are rotated a few
@@ -29,7 +29,7 @@ DECIMALS = 3
 
 @dataclass(frozen=True)
 class Frame:
-    """Local frame whose origin is the slice centre; ``origin`` is in EPSG:5514 metres."""
+    """Local frame whose origin is the map centre; ``origin`` is in EPSG:5514 metres."""
 
     lon: float
     lat: float

@@ -8,7 +8,7 @@ Details for `godot/viewer/`. Setup and the make targets are in the [README](../R
 (namespace `Drycastle.MapLoader`) and lets you walk around in first person.
 
 Map folder: `--map <dir>` after Godot's own args, else the env var `DRYCASTLE_MAP`, else
-`../../out/map` relative to `godot/viewer`. With make: `make viewer` (MAP defaults to `out/village/map`, or `out/map` with `AREA=slice`; override with `MAP=/path/to/map`).
+`../../out/village/map` relative to `godot/viewer`. With make: `make viewer` (MAP defaults to `out/village/map`; override with `MAP=/path/to/map`).
 
 - Controls: WASD, mouse look, Space jump, Shift sprint, Escape frees or recaptures the mouse,
   R replaces the nearest parcel with a magenta test cube (`test_cube.tscn`) and restores it on the
@@ -58,12 +58,11 @@ objects. `AssetsDir`, `ObjectNodes`, `DynamicProps`, `Warnings` are exposed.
 Hot reload: `make viewer` with `--watch` (`godot --path godot/viewer -- --watch`; off by default, so normal
 viewing and headless servers are unaffected):
 
-- `--edits PATH` the edits file (default `pipeline/config/edits.json`), `--area slice|village` (default: from
-  the map version), `--state PATH` (default `out/editor-state.json`), env `DRYCASTLE_UV` (the `uv` executable).
+- `--edits PATH` the edits file (default `pipeline/config/edits.json`), `--state PATH` (default `out/editor-state.json`), env `DRYCASTLE_UV` (the `uv` executable).
 - The file is polled twice a second. The state at startup is assumed to be what the map was built with.
   A change is diffed per parcel and per group (a group change affects all its members and the other way
   round), and only those parcels are regenerated with
-  `uv run python -m drycastle_pipeline parcel-run --area A --parcel ... --edits <snapshot> --glb ... --out ...`
+  `uv run python -m drycastle_pipeline parcel-run --parcel ... --edits <snapshot> --glb ... --out ...`
   in the `pipeline` directory (0.3 to 0.9 s) in a subprocess; edits that arrive during a run are coalesced into
   the next one. The viewer prints `edits applied: <ids> in <ms> ms`. A half-written or invalid file is ignored
   until it changes again, a failed `parcel-run` only prints its error. Writers must replace the file atomically
@@ -75,7 +74,7 @@ viewing and headless servers are unaffected):
   chunk whose hash differs from what is loaded gets its building nodes (`parcel_<ID>_visual`,
   `parcel_<ID>_collision`, `window_*`) swapped with `MapLoader.ReloadChunkBuildings`, one chunk per frame. The
   viewer prints `map reloaded: buildings of N chunk(s) ...`, the editor shows it in the status line. So after
-  changing a building: `make rules export AREA=...`, no restart. Not reloaded: everything else baked into a chunk
+  changing a building: `make rules export`, no restart. Not reloaded: everything else baked into a chunk
   (terrain, roads; fences, trees and regions keep following the edits file). A re-export with different parcels
   or a new chunk is not swapped in; the viewer says to restart.
 - `editor-state.json` (written at most once a second while watching, an ignored build output):
@@ -89,10 +88,10 @@ viewing and headless servers are unaffected):
   "points": [{"id": "A", "sketch": "ROAD", "x": .., "y": ..}]}` (see "Sketch tool"). `version` goes up on every write; the editor
   checks the file four times a second and takes a version it did not write over as one undo step. A sketch an older editor kept in
   `editor-state.json` is moved to the sketch `DEFAULT` the first time.
-- `make viewer-edit-smoke` exports a fresh slice map and a work-directory copy into a scratch directory
+- `make viewer-edit-smoke` exports a fresh map and a work-directory copy into a scratch directory
   (`SMOKE_DIR=...`, default a temp dir), starts the viewer headless with `--watch`, writes edits files during the
   run and checks objects, swapped props, colliders, replacement without leaks and survival of a broken file.
-- `make viewer-regions-smoke` does the same for regions: exports a slice map with three regions, then recolours,
+- `make viewer-regions-smoke` does the same for regions: exports a map with three regions, then recolours,
   reshapes, adds and removes regions through the watcher (alone and together with a parcel edit in one file
   change) and checks that only those regions are swapped (`region-run --glb`, `MapLoader.ApplyRegions`; a region
   split over chunk files is swapped completely), that repeated swaps do not grow the node count and that a broken
@@ -138,15 +137,13 @@ The first visible part of the world map editor: `--editor` starts the viewer in 
 The View page has an **Aerial photo** layer (O) to edit by eye; it is a download for reference only, see `docs/ortho.md`.
 
 ```sh
-# slice, against the default edits file (pipeline/config/edits.json)
+# against the default edits file (pipeline/config/edits.json)
 dotnet build godot/viewer/viewer.csproj
-godot --path godot/viewer -- --editor --map out/map --area slice
-# village
-godot --path godot/viewer -- --editor --map out/village/map --area village
+godot --path godot/viewer -- --editor --map out/village/map
 ```
 
 Options: `--edits PATH` (default `pipeline/config/edits.json`), `--state PATH` (default `out/editor-state.json`),
-`--area slice|village`, plus the usual `--map`, `--seed`, `--assets`.
+plus the usual `--map`, `--seed`, `--assets`.
 
 | Key | Action |
 | --- | --- |
@@ -282,7 +279,7 @@ canonical writer and group operations for edits.json), `ParcelInfo` (now with `R
 and `Contains`) and `ParcelIndex` / `MapLoader.ParcelAt(x, z)` (grid index over the parcel boxes; about 5 us per
 lookup).
 
-`make viewer-editor-smoke` (`SMOKE_DIR=...` for the scratch directory) exports a slice map into a scratch dir,
+`make viewer-editor-smoke` (`SMOKE_DIR=...` for the scratch directory) exports a map into a scratch dir,
 starts the viewer headless with `--editor-smoke` and drives the editor through its API: F2 round trip, top-down
 snap, picking, selection, outlines (shared edges not drawn), creating and dissolving a group, saved file content
 checked byte for byte against `dump_edits`, `editor-state.json`. Screenshots of the editor mode (windowed, needs a

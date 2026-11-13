@@ -20,7 +20,7 @@ The category of a parcel: building plot (it holds a building) or garden (the res
 
 **Ground area**:
 A piece of the land outside the parcels with a ground type (field, forest, water, village, dike), cut from OSM land use and rules instead of cadastral outlines, or drawn by hand (a region with a ground stack). It has the terrain of exactly one ground type, which picks its colour, vegetation and detail recipe, and it can lie under attribute layers. It has no fence and no stable ID.
-_Avoid_: area (that is the map area: slice or village), zone, road parcel
+_Avoid_: zone, road parcel
 
 **Ground type**:
 A named bundle of attributes: the whole description of one kind of ground (forest, field, meadow, orchard, allotments, village, dike, water, ...) or of a layer over ground (a Bigfoot zone). It says where it comes from (OSM land use or a rule, or only drawn by hand) and ticks the attributes it carries. Defined in `rules.yaml` (`ground.types`); you override, add and delete types in `edits.json` (`ground_types`) from the editor's Ground types tool or MCP. A change shows after the next full map build. Names are IDs and cannot be renamed.
@@ -272,12 +272,12 @@ _Avoid_: object, prop, actor
 The number in the hello and welcome messages. A client and a server must match, or the server refuses the client with both numbers in the message.
 _Avoid_: build number, version (alone)
 **Map outline**:
-The ground the village map covers: a square around the centre by default, or any polygon (`village.polygon`) of absolute S-JTSK points. Only what touches it is in the map; the terrain stops at it.
-_Avoid_: border, boundary, area (an "area" is the slice or the village)
+The ground the map covers: a polygon (`polygon` in `map.local.yaml`) of absolute S-JTSK points. Only what touches it is in the map; the terrain stops at it.
+_Avoid_: border, boundary
 
 **Region**:
 A hand-drawn shape of any form, independent of parcel boundaries, painted in one colour over the ground inside it. It changes only colour: parcels, roads, buildings and everything standing on the ground are unaffected.
-_Avoid_: zone, area (an "area" is the slice or the village)
+_Avoid_: zone
 
 **Sketch**:
 A named group (ROAD, FENCE_PLAN, ...) of the temporary marks a developer draws on the ground in the map editor to point at places in a prompt. Several sketches exist at once, each holding any number of **marks**: points (A, B, ...) and lines (L1, L2, ...; a closed line means the ground inside it). Mark names are unique across all sketches; a prompt can name one mark ("at A"), or a whole sketch ("everything in sketch ROAD"). The developer draws in the editor, and Claude draws through the MCP server (`sketch_add_*`, e.g. "highlight this road under sketch ROAD"). A sketch is never map content and is not a hand edit; it lives in `out/sketch.json` only.

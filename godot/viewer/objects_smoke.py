@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Objects, gizmo and session undo smoke test (`make viewer-objects-smoke`).
 
-Exports a fresh slice map into a scratch directory (a copy of data/work, so nothing under data/ or out/ is
+Exports a fresh map into a scratch directory (a copy of data/village/work, so nothing under data/ or out/ is
 touched), seeds a scratch edits.json, computes in Python the exact text edits.json must have after every step
 of the scenario (place a pack model and a primitive, drag, rotate, cross-parcel move, field edits, nudge,
 duplicate, delete, group, fence Apply, ...), starts the viewer headless with `--objects-smoke`
@@ -98,7 +98,7 @@ def main() -> int:
     work = scratch / "work"
     if work.exists():
         shutil.rmtree(work)
-    shutil.copytree(REPO / "data" / "work", work)
+    shutil.copytree(REPO / "data" / "village" / "work", work)
     pdoc = json.loads((work / "parcels.json").read_text())
     origin = pdoc["origin_epsg5514"]
     parcels = pdoc["parcels"]
@@ -245,7 +245,7 @@ def main() -> int:
         shutil.rmtree(steps_dir)
     (scratch / "plan.json").write_text(json.dumps(plan, indent=1))
 
-    r = es.uv("-m", "drycastle_pipeline", "export", "--area", "slice", "--out", str(scratch / "map"), "--work", str(work))
+    r = es.uv("-m", "drycastle_pipeline", "export", "--out", str(scratch / "map"), "--work", str(work))
     print(r.stdout.strip())
     if r.returncode != 0:
         print(r.stderr)
@@ -258,7 +258,7 @@ def main() -> int:
     code = 0
     if not args.skip_smoke:
         cmd = [args.godot, "--headless", "--path", str(REPO / "godot/viewer"), "--",
-               "--map", str(scratch / "map"), "--seed", args.seed, "--area", "slice",
+               "--map", str(scratch / "map"), "--seed", args.seed,
                "--edits", str(edits), "--state", str(scratch / "editor-state.json"),
                "--objects-smoke", "--objects-smoke-plan", str(scratch / "plan.json")]
         code = subprocess.run(cmd).returncode
@@ -326,7 +326,7 @@ def shots(args, scratch: Path, origin, a_id: str, a_base, b_base) -> int:
         shot_edits.write_text(text({}, {}, objects))
         edits = scratch / "edits_shot.json"
         edits.write_text(text({}, {}))
-        cmd = [args.godot, "--path", str(REPO / "godot/viewer"), "--", "--map", str(scratch / "map"), "--area", "slice",
+        cmd = [args.godot, "--path", str(REPO / "godot/viewer"), "--", "--map", str(scratch / "map"),
                "--edits", str(edits), "--state", str(scratch / "editor-state-shot.json"),
                "--editor-shot", str(out / name), "--select", a_id, "--shot-at", a_id, "--shot-edits", str(shot_edits), *extra]
         code = subprocess.run(cmd).returncode

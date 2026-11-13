@@ -113,7 +113,6 @@ def build_scene(
     work_dir: Path,
     rules_path: Path = DEFAULT_RULES,
     exaggeration: float = 1.0,
-    area: str | None = None,
     edits_path: Path = DEFAULT_EDITS,
 ) -> MapScene:
     """All meshes of the map. ``exaggeration`` scales heights (preview only; 1 for export).
@@ -183,7 +182,7 @@ def build_scene(
                 scene.nodes.setdefault(key, {})[name] = mesh
 
     tcfg = load_section("terrain", rules_path)
-    colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(ground_types(rules_path, area, edits_path))})
+    colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(ground_types(rules_path, edits_path))})
     dec = int(tcfg["collision_decimate"])
     grey = np.array(GREY, np.uint8)
     # the hatch of each bunker is a hole in the ground (#224): the terrain, seen and collided with, has it cut out
@@ -230,7 +229,7 @@ def build_scene(
 
     scene.props = _read(work_dir, "props.json")
     if scene.props:
-        pcfg = load_section("props", rules_path, area)
+        pcfg = load_section("props", rules_path)
         fences = [{**s, "za": s["za"] * k, "zb": s["zb"] * k} for s in scene.props["fences"]]
         trees = [{**tr, "z": tr["z"] * k} for tr in scene.props["trees"]]
         scene.trees = trees

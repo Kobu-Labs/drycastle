@@ -1,6 +1,6 @@
 """Per-parcel run: fences and objects of some parcels only, as a JSON fragment (for the editor).
 
-``python -m drycastle_pipeline parcel-run --area village --parcel P-0412 [--group G-0001]``
+``python -m drycastle_pipeline parcel-run --parcel P-0412 [--group G-0001]``
 loads the work files, applies ``edits.json`` exactly like the props stage and regenerates only the
 fences and objects of the target parcels. Nothing under ``data/`` is written. The result equals the
 target parcels' share of the full props stage (``props.json`` / ``objects.json``):
@@ -26,7 +26,7 @@ from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
 
 from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import DEFAULT_AREA, area_paths
+from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
 from drycastle_pipeline.props import (
     EditPlan,
@@ -212,7 +212,6 @@ def write_glb(path: Path, fragment: dict, fcfg: dict) -> None:
 
 def run_parcel_run(
     work_dir: Path,
-    area: str,
     parcels: list[str],
     groups: list[str],
     edits_path: Path = DEFAULT_EDITS,
@@ -224,7 +223,7 @@ def run_parcel_run(
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     graph = json.loads((work_dir / "roads.json").read_text())
-    fcfg = load_section("props", rules_path, area)
+    fcfg = load_section("props", rules_path)
     plan = plan_edits(
         load_edits(edits_path),
         parcels_doc["parcels"],
@@ -258,7 +257,6 @@ def run_parcel_run(
 def run(
     parcels: list[str],
     groups: list[str] | None = None,
-    area: str = DEFAULT_AREA,
     edits: str | None = None,
     out: str | None = None,
     glb: str | None = None,
@@ -271,7 +269,7 @@ def run(
     edits_path = Path(edits) if edits else DEFAULT_EDITS
     try:
         fragment = run_parcel_run(
-            Path(work) if work else area_paths(area).work, area, parcels, groups, edits_path,
+            Path(work) if work else map_paths().work, parcels, groups, edits_path,
             glb_path=Path(glb) if glb else None,
         )
     except FileNotFoundError as exc:

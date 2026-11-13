@@ -34,7 +34,6 @@ def test_chunk_glb_has_all_node_groups(ws) -> None:
         "terrain_collision",
     } <= set(names)
     assert any(n.startswith("parcel_") and n.endswith("_props") for n in names)
-    assert any(n.endswith("_props_collision") for n in names)
     tris = manifest["chunks"][0]["triangles"]
     for name in names:
         geom = scene.geometry[scene.graph[name][1]]
@@ -107,14 +106,14 @@ def test_export_is_byte_deterministic_across_runs(ws, tmp_path) -> None:
 
 
 def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
-    from drycastle_pipeline.propmeshes import fence_mesh, fence_meshes, trees_mesh
+    from drycastle_pipeline.propmeshes import fence_meshes, trees_mesh
     from drycastle_pipeline.rules import load_section
 
     manifest = export(ws)
     assert manifest["props_layout"] == "per_parcel"
     tris = manifest["chunks"][0]["triangles"]
     props = json.loads((ws["work"] / "props.json").read_text())
-    pcfg = load_section("props", DEFAULT_RULES, "slice")
+    pcfg = load_section("props", DEFAULT_RULES)
     ids = sorted({x["parcel"] for x in props["fences"] + props["trees"] if x.get("parcel")})
     assert ids and all(f"parcel_{i}_props" in tris for i in ids)
     # triangle totals equal what the merged chunk-level nodes held before
@@ -122,11 +121,10 @@ def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
     want_visual = fence_meshes(props["fences"], pcfg["fences"])[0].face_count + trees_mesh(
         props["trees"], pcfg["trees"]
     ).face_count
-    want_collision = fence_mesh(props["fences"], pcfg["fences"], True).face_count
     got_visual = sum(v for n, v in tris.items() if n == "props" or n.endswith("_props"))
     got_collision = sum(v for n, v in tris.items() if n.endswith("props_collision"))
     assert got_visual == want_visual > 0
-    assert got_collision == want_collision > 0
+    assert got_collision == 0  # the map ships with fence collision off
     # fences always have a parcel; OSM trees (no parcel) stay in the chunk-level node
     assert all(f["parcel"] for f in props["fences"])
     osm = [t for t in props["trees"] if not t.get("parcel")]

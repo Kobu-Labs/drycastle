@@ -2,7 +2,7 @@
 
 Run it over stdio (Claude Code starts it)::
 
-    uv run --directory <repo>/pipeline python -m drycastle_pipeline.mcp_server [--area slice|village]
+    uv run --directory <repo>/pipeline python -m drycastle_pipeline.mcp_server
         [--edits PATH] [--state PATH] [--assets PATH] [--work DIR]
 
 It talks only to files: it reads the map's work files (``parcels.json``, ``buildings.json``,
@@ -48,7 +48,7 @@ from shapely.ops import nearest_points, unary_union
 from drycastle_pipeline import sketchfile
 from drycastle_pipeline.assets import DEFAULT_MANIFEST, load_manifest, validate_asset_ref
 from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import DEFAULT_AREA, REPO_ROOT, area_paths
+from drycastle_pipeline.config import REPO_ROOT, map_paths
 from drycastle_pipeline.ground import ground_type_source, ground_types, merge_ground_types, rules_ground_types
 from drycastle_pipeline.ground_attributes import (
     ATTRIBUTES,
@@ -115,7 +115,6 @@ def _pt(x: float, y: float) -> list[float]:
 
 @dataclass(frozen=True)
 class Settings:
-    area: str = DEFAULT_AREA
     work_dir: Path | None = None
     edits_path: Path = DEFAULT_EDITS
     state_path: Path = DEFAULT_STATE
@@ -125,7 +124,7 @@ class Settings:
 
     @property
     def work(self) -> Path:
-        return self.work_dir or area_paths(self.area).work
+        return self.work_dir or map_paths().work
 
     @property
     def sketch_file(self) -> Path:
@@ -166,7 +165,7 @@ class Frame:
 
 
 class MapData:
-    """The work files of one area, as shapely geometry in local metres. Reloaded when they change."""
+    """The work files of the map, as shapely geometry in local metres. Reloaded when they change."""
 
     def __init__(self, work_dir: Path) -> None:
         self.work_dir = work_dir
@@ -193,7 +192,7 @@ class MapData:
             raise ToolError(
                 f"map work files missing in {self.work_dir}: {', '.join(missing)}. Run the "
                 "pipeline stages first (make normalise parcels rules terrain roads, with the same "
-                "AREA) or start the server with --area/--work pointing at a built area."
+                ") or start the server with --work pointing at a built map."
             )
         stamp = tuple(f.stat().st_mtime_ns for f in files)
         if stamp != self._stamp:
@@ -243,7 +242,7 @@ class MapData:
         if not isinstance(pid, str) or pid not in self.parcels:
             hint = ""
             if isinstance(pid, str) and _PARCEL_ID.fullmatch(pid):
-                hint = " (it may be retired or outside this area; check --area)"
+                hint = " (it may be retired or outside this map)"
             raise ToolError(f"unknown parcel {pid!r}{hint}. Use find_parcels to look up IDs.")
         return pid
 
@@ -653,8 +652,7 @@ class ParcelEditTools:
         if unknown:
             raise ToolError(
                 f"the viewer's selection {unknown[:5]} is not in this map: the state file comes "
-                f"from another area or an older map (this server uses --area {self.settings.area}). "
-                "Check the --area/--state options."
+                "from an older map. Check the --state option."
             )
         extra = {"selection_age_s": round(age, 1), "camera": doc.get("camera")}
         return sorted(ids), extra, warnings
@@ -966,8 +964,8 @@ class ParcelEditTools:
             line_rows.append(row)
         if not on_map:
             warnings.append(
-                "no mark lies on a parcel of this map: the sketch may come from another area or an "
-                f"older map (this server uses --area {self.settings.area}); check the --area/--state options"
+                "no mark lies on a parcel of this map: the sketch may come from an older map; "
+                "check the --state option"
             )
         out: dict = {
             "count": len(point_rows) + len(line_rows),
@@ -994,7 +992,7 @@ class ParcelEditTools:
         gid = self._group_of(edits, pid)
         entry = edits.parcels.get(pid, {})
         group_fence = edits.groups[gid].get("fence") if gid else None
-        fence_rules = load_section("props", self.settings.rules_path, self.settings.area)
+        fence_rules = load_section("props", self.settings.rules_path)
         fcfg, tcfg = fence_rules["fences"], fence_rules["trees"]
         effective = resolve_fence(entry.get("fence"), group_fence)
         buildings = []
@@ -1793,7 +1791,7 @@ class ParcelEditTools:
     def _ground_types(self) -> dict[str, dict]:
         """The effective ground types: rules.yaml with the overrides and additions of edits.json."""
         _read_edits(self.settings.edits_path)  # an invalid edits file is reported as such, not as a crash
-        return ground_types(self.settings.rules_path, self.settings.area, self.settings.edits_path)
+        return ground_types(self.settings.rules_path, edits_path=self.settings.edits_path)
 
     def _ground_type(self, name: object) -> str:
         types = self._ground_types()
@@ -1855,7 +1853,7 @@ class ParcelEditTools:
 
     def list_ground_types(self) -> dict:
         """The ground types, effective attributes and where each comes from (see the registered tool description)."""
-        rules = rules_ground_types(self.settings.rules_path, self.settings.area)
+        rules = rules_ground_types(self.settings.rules_path)
         edited = _read_edits(self.settings.edits_path).ground_types
         rows = []
         for name, spec in merge_ground_types(rules, edited).items():
@@ -1896,7 +1894,7 @@ class ParcelEditTools:
             unknown = [k for k in attributes if k not in ATTRIBUTES]
             if unknown:
                 raise ToolError(f"unknown attribute {', '.join(unknown)}; the catalog has {', '.join(ATTRIBUTES)} (see list_ground_types)")
-        rules = rules_ground_types(self.settings.rules_path, self.settings.area)
+        rules = rules_ground_types(self.settings.rules_path)
 
         def change(edits: Edits) -> str:
             before = ground_type_source(name, rules, edits.ground_types)
@@ -1935,7 +1933,7 @@ class ParcelEditTools:
 
     def reset_ground_type(self, name: str) -> dict:
         """Remove the user's override of a ground type of the rules (also brings a deleted one back)."""
-        rules = rules_ground_types(self.settings.rules_path, self.settings.area)
+        rules = rules_ground_types(self.settings.rules_path)
 
         def change(edits: Edits) -> str:
             source = ground_type_source(name, rules, edits.ground_types) if isinstance(name, str) else "custom"
@@ -1959,7 +1957,7 @@ class ParcelEditTools:
 
     def delete_ground_type(self, name: str) -> dict:
         """Delete a ground type: a custom one is removed, one of the rules is marked deleted (reset_ground_type undoes)."""
-        rules = rules_ground_types(self.settings.rules_path, self.settings.area)
+        rules = rules_ground_types(self.settings.rules_path)
         used: list[str] = []
 
         def change(edits: Edits) -> str:
@@ -2554,15 +2552,13 @@ def parse_args(argv: list[str] | None = None) -> Settings:
         prog="python -m drycastle_pipeline.mcp_server",
         description="MCP server (stdio) that edits pipeline/config/edits.json",
     )
-    ap.add_argument("--area", choices=("slice", "village"), default=DEFAULT_AREA)
     ap.add_argument("--edits", type=Path, default=DEFAULT_EDITS, help="edits file to read and write")
     ap.add_argument("--state", type=Path, default=DEFAULT_STATE, help="editor-state.json of the viewer")
     ap.add_argument("--sketch", type=Path, default=None, help="sketch.json shared with the viewer (default: next to --state)")
     ap.add_argument("--assets", type=Path, default=DEFAULT_MANIFEST, help="asset manifest")
-    ap.add_argument("--work", type=Path, default=None, help="work dir (default: from --area)")
+    ap.add_argument("--work", type=Path, default=None, help="work dir (default: data/village/work)")
     a = ap.parse_args(argv)
     return Settings(
-        area=a.area,
         work_dir=a.work.resolve() if a.work else None,
         edits_path=a.edits.resolve(),
         state_path=a.state.resolve(),
@@ -2574,7 +2570,7 @@ def parse_args(argv: list[str] | None = None) -> Settings:
 def main(argv: list[str] | None = None) -> int:
     settings = parse_args(argv)
     print(
-        f"drycastle MCP server: area={settings.area} edits={settings.edits_path} "
+        f"drycastle MCP server: edits={settings.edits_path} "
         f"state={settings.state_path}",
         file=sys.stderr,
     )

@@ -365,7 +365,7 @@ def test_region_run_without_regions_writes_a_valid_empty_glb(ws, tmp_path) -> No
 
 
 def test_cli_region_run(ws, tmp_path, monkeypatch, capsys) -> None:
-    monkeypatch.setattr(region_run, "area_paths", lambda area: SimpleNamespace(work=ws["work"]))
+    monkeypatch.setattr(region_run, "map_paths", lambda *_a, **_k: SimpleNamespace(work=ws["work"]))
     glb = tmp_path / "c.glb"
     assert cli.main(["region-run", "--region", "R-0003", "--edits", str(ws["edits"]), "--glb", str(glb)]) == 0
     out = json.loads(capsys.readouterr().out)
@@ -375,7 +375,7 @@ def test_cli_region_run(ws, tmp_path, monkeypatch, capsys) -> None:
     bad.write_text(json.dumps(doc(**{"R-1": region()})))
     assert cli.main(["region-run", "--edits", str(bad)]) == 1
     assert "R-1" in capsys.readouterr().err
-    monkeypatch.setattr(region_run, "area_paths", lambda area: SimpleNamespace(work=tmp_path / "missing"))
+    monkeypatch.setattr(region_run, "map_paths", lambda *_a, **_k: SimpleNamespace(work=tmp_path / "missing"))
     assert cli.main(["region-run", "--edits", str(ws["edits"])]) == 1
 
 

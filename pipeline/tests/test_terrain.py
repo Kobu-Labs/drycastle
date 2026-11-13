@@ -57,7 +57,7 @@ def dmr(tmp_path):
     work = tmp_path / "work"
     work.mkdir()
     (work / "frame.json").write_text(
-        json.dumps({"origin_epsg5514": [frame.origin_x, frame.origin_y]})
+        json.dumps({"origin_epsg5514": [frame.origin_x, frame.origin_y], "area_polygon_epsg5514": [[(frame.origin_x - 50), (frame.origin_y - 50)], [(frame.origin_x + 1100), (frame.origin_y - 50)], [(frame.origin_x + 1100), (frame.origin_y + 1100)], [(frame.origin_x - 50), (frame.origin_y + 1100)]]})
     )
     return {"raw": raw, "work": work, "frame": frame, "e0n0": (e0, n0)}
 

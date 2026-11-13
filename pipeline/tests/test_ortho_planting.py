@@ -99,7 +99,7 @@ def test_trees_keep_clear_of_placed_objects_and_out_of_water(tmp_path: Path) -> 
             assert math.hypot(t["x"] - ox, t["y"] - oy) >= TREE["object_clearance_m"] - 1e-6
 
 
-def test_run_props_plants_from_the_detector_and_an_area_without_ortho_data_has_no_trees(tmp_path: Path, capsys) -> None:
+def test_run_props_plants_from_the_detector_and_a_map_without_ortho_data_has_no_trees(tmp_path: Path, capsys) -> None:
     ws = make_workspace(tmp_path)
     work = ws["work"]
     rules = tmp_path / "rules.yaml"

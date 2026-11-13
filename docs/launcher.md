@@ -8,7 +8,7 @@ Players install the launcher once (`drycastle-launcher-windows.zip`, `-linux.zip
 ```
 maintainer                      GitHub Releases (Kobu-Labs/drycastle)            player
 ----------                      -------------------------------------            ------
-make map AREA=village
+make map
 scripts/publish-map.sh  ------> map-<date>-<hash>   (map.zip, map.json)
 commit map-version.txt
 PR main -> release, merge ------> deploys the server to the VPS, THEN publishes v0.<run> (game zips for Windows + Linux + macOS, manifest.json)
@@ -37,7 +37,7 @@ what changed, then Play. **Maintainer, release (game and server together):** ope
 
 ## The map
 
-The village map is generated from gitignored data, so CI cannot build it. After `make map AREA=village`, run `scripts/publish-map.sh`
+The village map is generated from gitignored data, so CI cannot build it. After `make map`, run `scripts/publish-map.sh`
 (zips it, publishes a `map-*` release, writes `map-version.txt`), then commit `map-version.txt`. Game builds pick the map named there, so game and map
 move together. Until the first map is published, `map-version.txt` holds a placeholder: the release job stays green, publishes nothing and prints a warning.
 Most game updates then download only the game zip; a map change downloads the map zip only.

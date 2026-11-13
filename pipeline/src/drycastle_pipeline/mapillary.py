@@ -1,10 +1,10 @@
-"""Mapillary street-level imagery for the area -> ``data/<area>/mapillary/`` (reference only).
+"""Mapillary street-level imagery for the map -> ``data/village/mapillary/`` (reference only).
 
 Not a map stage: the photos are a visual reference for recreating buildings by hand, not an input
 of the generated map. Needs a client access token (``MAPILLARY_TOKEN``, see docs/mapillary.md).
 
-    python -m drycastle_pipeline.mapillary --area village            # index of images in the bbox
-    python -m drycastle_pipeline.mapillary --area village --download # also fetch the photos
+    python -m drycastle_pipeline.mapillary            # index of images in the bbox
+    python -m drycastle_pipeline.mapillary --download # also fetch the photos
     python -m drycastle_pipeline.mapillary --near 16.8601,48.4044 --radius 40 --download
 
 Images are CC BY-SA 4.0; keep the creator in the index when using them.
@@ -17,7 +17,7 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
-from drycastle_pipeline.config import AREAS, DEFAULT_AREA, area_paths, load_dotenv
+from drycastle_pipeline.config import load_dotenv, map_paths
 from drycastle_pipeline.http import HttpError, PoliteClient
 
 API = "https://graph.mapillary.com/images"
@@ -73,8 +73,7 @@ def download(client: PoliteClient, images: list[dict], folder: Path) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="drycastle_pipeline.mapillary", description=__doc__.split("\n")[0])
-    p.add_argument("--area", choices=AREAS, default=DEFAULT_AREA)
-    p.add_argument("--near", metavar="LON,LAT", help="only this spot instead of the whole area")
+    p.add_argument("--near", metavar="LON,LAT", help="only this spot instead of the whole map")
     p.add_argument("--radius", type=float, default=50.0, help="--near radius in metres (default 50)")
     p.add_argument("--download", action="store_true", help="also download the 2048 px photos")
     args = p.parse_args(argv)
@@ -85,7 +84,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"{TOKEN_ENV} is not set; see docs/mapillary.md")
         return 2
 
-    paths = area_paths(args.area)
+    paths = map_paths()
     if args.near:
         lon, lat = (float(v) for v in args.near.split(","))
         bbox = bbox_around(lon, lat, args.radius)

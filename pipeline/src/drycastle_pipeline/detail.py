@@ -45,7 +45,7 @@ from shapely.ops import nearest_points, unary_union
 
 from drycastle_pipeline.assets import load_manifest
 from drycastle_pipeline.buildings import footprint_polygon, hex_to_rgb
-from drycastle_pipeline.config import DEFAULT_AREA, area_paths
+from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
 from drycastle_pipeline import meadow as meadow_mod
 from drycastle_pipeline.ground import ground_types, ground_units, type_colours, water_kinds
@@ -1007,13 +1007,13 @@ def make_verge(graph: dict, cfg: dict) -> dict[str, list[Polygon]]:
 
 
 class Village:
-    """The work files of an area, indexed, and one :class:`ParcelContext` per parcel part."""
+    """The work files of the map, indexed, and one :class:`ParcelContext` per parcel part."""
 
-    def __init__(self, work_dir: Path, rules_path: Path, area: str | None, edits_path: Path) -> None:
+    def __init__(self, work_dir: Path, rules_path: Path, edits_path: Path) -> None:
         from drycastle_pipeline.scene import ParcelColours  # heavy imports, only for the stage
 
-        self.cfg = load_section("detail", rules_path, area)
-        self.tree_cfg = load_section("props", rules_path, area)["trees"]
+        self.cfg = load_section("detail", rules_path)
+        self.tree_cfg = load_section("props", rules_path)["trees"]
         self.terrain, _ = load_terrain(work_dir)
         parcels_doc = json.loads((work_dir / "parcels.json").read_text())
         self.chunk_m = float(parcels_doc["chunk_size_m"])
@@ -1022,7 +1022,7 @@ class Village:
         props = json.loads((work_dir / "props.json").read_text())
         graph = json.loads((work_dir / "roads.json").read_text())
         objects = json.loads((work_dir / "objects.json").read_text())["objects"] if (work_dir / "objects.json").is_file() else []
-        self.types = ground_types(rules_path, area, edits_path)
+        self.types = ground_types(rules_path, edits_path)
         colours = ParcelColours(self.parcels, {**load_section("terrain", rules_path)["colours"], **type_colours(self.types)})
         self._type_cfg: dict[str, dict] = {}
         self.colour = {p["id"]: colours._pick(p) for p in self.parcels}
@@ -1177,11 +1177,11 @@ def patch_rows(flat: Mesh, textured: dict[str, TexturedMesh], textures: list[str
 
 
 def build_village_detail(
-    work_dir: Path, rules_path: Path = DEFAULT_RULES, area: str | None = None, edits_path: Path = DEFAULT_EDITS,
+    work_dir: Path, rules_path: Path = DEFAULT_RULES, edits_path: Path = DEFAULT_EDITS,
     only: set[str] | None = None, log=None,
 ) -> VillageDetail:
-    """The detail of every parcel of an area (``only``: just these parcel IDs; tests, previews)."""
-    v = Village(work_dir, rules_path, area, edits_path)
+    """The detail of every parcel of the map (``only``: just these parcel IDs; tests, previews)."""
+    v = Village(work_dir, rules_path, edits_path)
     for w in v.warnings:
         print(f"detail: warning: {w}", file=sys.stderr)
     lift = float(v.cfg["lift_m"])
@@ -1307,7 +1307,6 @@ def run_parcel(
     parcel_id: str,
     work_dir: Path,
     rules_path: Path = DEFAULT_RULES,
-    area: str | None = None,
     edits_path: Path = DEFAULT_EDITS,
     with_meadow: bool = False,
     meadow_window: float = 56.0,
@@ -1316,7 +1315,7 @@ def run_parcel(
     only) swaps the recipe's dense kinds for what the game would generate from the raster of this parcel (the
     instances of :func:`meadow.generate`, minus those within a trunk's reach), for the preview, within a
     ``meadow_window`` metre square round the parcel's representative point (a forest is too big to draw)."""
-    v = Village(work_dir, rules_path, area, edits_path)
+    v = Village(work_dir, rules_path, edits_path)
     parcel = next((p for p in v.parcels if p["id"] == parcel_id), None)
     if parcel is None:
         raise ValueError(f"no parcel {parcel_id}")
@@ -1378,20 +1377,20 @@ def patch_meshes(res: DetailResult, terrain: Terrain, lift_m: float, tally: dict
 # --- the stage ------------------------------------------------------------------------------
 
 
-def run(force: bool = False, area: str = DEFAULT_AREA, edits: str | None = None, work: str | None = None, **_options: object) -> int:
+def run(force: bool = False, edits: str | None = None, work: str | None = None, **_options: object) -> int:
     """The stage runs on the Rust engine (:mod:`detail_rust`) only. :func:`run_reference` is this module's own, slow build,
     kept as the reference the tests compare the engine with."""
     from drycastle_pipeline import detail_rust
 
-    return detail_rust.run(force=force, area=area, edits=edits, work=work, **_options)
+    return detail_rust.run(force=force, edits=edits, work=work, **_options)
 
 
-def run_reference(area: str = DEFAULT_AREA, edits: str | None = None, work: str | None = None) -> int:
+def run_reference(edits: str | None = None, work: str | None = None) -> int:
     """The Python reference build (minutes on the village map). Not a stage: nothing in the pipeline or the Makefile calls it."""
     edits_path = Path(edits) if edits else DEFAULT_EDITS
-    work_dir = Path(work) if work else area_paths(area).work
+    work_dir = Path(work) if work else map_paths().work
     try:
-        detail = build_village_detail(work_dir, area=area, edits_path=edits_path, log=lambda m: print(f"detail: {m}", file=sys.stderr))
+        detail = build_village_detail(work_dir, edits_path=edits_path, log=lambda m: print(f"detail: {m}", file=sys.stderr))
     except FileNotFoundError as exc:
         print(f"detail: error: missing input {Path(str(exc.filename)).name}; run earlier stages")
         return 1

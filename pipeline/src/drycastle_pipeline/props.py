@@ -1,4 +1,4 @@
-"""Props stage: fences, trees (from the orthophoto only) and spawn candidates -> ``data/work/props.json`` and ``spawns.json``.
+"""Props stage: fences, trees (from the orthophoto only) and spawn candidates -> ``data/village/work/props.json`` and ``spawns.json``.
 
 Hand edits (``config/edits.json``, see ``edits.py``) are applied here too: fence modes and groups,
 and placed objects, which are written to ``objects.json``.
@@ -24,7 +24,7 @@ from shapely.ops import linemerge, nearest_points, unary_union
 
 from drycastle_pipeline.assets import load_manifest, validate_asset_ref
 from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import DEFAULT_AREA, area_paths
+from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.edits import (
     DEFAULT_EDITS,
     WIRE_ASSET_PREFIXES,
@@ -315,7 +315,7 @@ def make_trees(
     """Every tree of the map: planted from the orthophoto detector (:func:`ortho_trees`, ``make ortho-trees``).
 
     There is no other source: no OSM trees, no per-parcel density, no shore rows. ``cfg["ortho_dir"]`` is the folder
-    of the detector's output (``trees.json`` and the canopy mask); an area without it has no trees. ``origin`` is the
+    of the detector's output (``trees.json`` and the canopy mask); without it there are no trees. ``origin`` is the
     frame origin (EPSG:5514; without it there are no trees). ``objects`` are placed object positions (local metres) that trees keep
     ``object_clearance_m`` away from; ``water`` (local metres) is where the water regions lie: no trunk in it.
     """
@@ -606,7 +606,6 @@ def unknown_asset_warnings(objects: list[dict]) -> list[str]:
 def run_props(
     work_dir: Path = DEFAULT_WORK_DIR,
     rules_path: Path = DEFAULT_RULES,
-    area: str | None = None,
     edits_path: Path = DEFAULT_EDITS,
 ) -> dict:
     terrain, _ = load_terrain(work_dir)
@@ -615,9 +614,9 @@ def run_props(
     ground = ground_units(parcels_doc)  # spawns are by the kind of ground: parcels and ground areas
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     graph = json.loads((work_dir / "roads.json").read_text())
-    fcfg = load_section("props", rules_path, area)
-    scfg = load_section("spawns", rules_path, area)
-    scfg["ground_kinds"] = sorted(set(scfg["ground_kinds"]) | spawn_kinds(ground_types(rules_path, area, edits_path)))
+    fcfg = load_section("props", rules_path)
+    scfg = load_section("spawns", rules_path)
+    scfg["ground_kinds"] = sorted(set(scfg["ground_kinds"]) | spawn_kinds(ground_types(rules_path, edits_path)))
     chunk_m = float(parcels_doc["chunk_size_m"])
     plan = plan_edits(load_edits(edits_path), parcels, parcels_doc.get("origin_epsg5514"), chunk_m)
     for warning in plan.warnings + unknown_asset_warnings(plan.objects):
@@ -665,7 +664,7 @@ def run_props(
     }
     for name, doc in (("props.json", props), ("spawns.json", spawn_doc)):
         (work_dir / name).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-    lamps_cfg = load_section("lamps", rules_path, area)
+    lamps_cfg = load_section("lamps", rules_path)
     lamps = make_lamps(
         parcels,
         buildings,
@@ -687,13 +686,12 @@ def run_props(
 
 def run(
     force: bool = False,
-    area: str = DEFAULT_AREA,
     edits: str | None = None,
     **_options: object,
 ) -> int:
     edits_path = Path(edits) if edits else DEFAULT_EDITS
     try:
-        counts = run_props(area_paths(area).work, area=area, edits_path=edits_path)
+        counts = run_props(map_paths().work, edits_path=edits_path)
     except FileNotFoundError as exc:
         print(f"props: error: missing input {Path(str(exc.filename)).name}; run earlier stages")
         return 1

@@ -193,7 +193,7 @@ public class VehicleTests
     {
         var f = Shipped(); var car = f.Vehicles[0]; var moto = f.Vehicles[1]; var bike = f.Vehicles[2];
         Assert.True(car.TopSpeed > moto.TopSpeed && moto.TopSpeed > bike.TopSpeed, "bikes never outrun the car");
-        Assert.InRange(car.TopSpeed * 3.6f, 150f, 170f);    // about 160 km/h on the small map
+        Assert.InRange(car.TopSpeed * 3.6f, 150f, 170f);    // about 160 km/h
         Assert.InRange(moto.TopSpeed * 3.6f, 110f, 150f);
         Assert.InRange(bike.TopSpeed * 3.6f, 25f, 35f);     // a bicycle: 25 to 35 km/h
         Assert.True(moto.Acceleration > car.Acceleration && car.Acceleration > bike.Acceleration);

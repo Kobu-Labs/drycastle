@@ -2,18 +2,18 @@
 
 Details for the map pipeline (`pipeline/`). Setup and the make targets are in the [README](../README.md).
 
-## Configuring the slice and fetching data
+## Configuring the map and fetching data
 
-The map is built for a small slice of the village first. The slice is a square around the
-centroid of one OSM way (for example a building), set in a local, gitignored file:
+The map is the village inside an outline. Set it in a local, gitignored file:
 
 ```sh
-cp pipeline/config/slice.example.yaml pipeline/config/slice.local.yaml
-# edit osm_way (OSM way id), radius_m (default 100) and margin_m (extra metres fetched, default 25)
+cp pipeline/config/map.example.yaml pipeline/config/map.local.yaml
+# edit osm_way (OSM way id; its centroid is the origin of the local frame), polygon (the outline, required)
+# and margin_m (extra metres fetched around it, default 25)
 make fetch
 ```
 
-`make fetch` writes to `data/raw/` (gitignored): `osm.json` (Overpass: buildings, highways,
+`make fetch` writes to `data/village/raw/` (gitignored): `osm.json` (Overpass: buildings, highways,
 barriers, landuse, natural tree/wood/water), `parcels.geojson` (INSPIRE cadastral parcels
 intersecting the box, WFS) and `dmr5.tif` (DMR 5.0 terrain, 1 m, EPSG:3046, via INSPIRE WCS).
 Each file has a `<name>.meta.json` sidecar (request, url, fetched-at, sha256, source, licence,
@@ -24,42 +24,38 @@ Reruns skip files whose request parameters are unchanged and download nothing; u
 Requests are sequential, use the User-Agent `drycastle-pipeline`, have timeouts and retry with
 backoff (Overpass falls back to a second public instance).
 
-## Whole village (areas)
+## The map
 
-The pipeline runs over two areas around the same centre, chosen with `AREA=village` (default) or
-`AREA=slice` for make, or `--area` on the CLI:
+One map is built: the village inside its outline (`polygon`, see below). Its paths:
 
-| | slice | village |
-| --- | --- | --- |
-| size | `radius_m` (default 100) | `village.radius_m` (default 700, `village.margin_m` defaults to `margin_m`) |
-| raw data | `data/raw/` | `data/village/raw/` |
-| work files | `data/work/` | `data/village/work/` |
-| export, previews | `out/map/`, `out/preview/` | `out/village/map/`, `out/village/preview/` |
-| `map_version` | `0.2.0-slice` | `0.2.0-village` |
+| | |
+| --- | --- |
+| raw data | `data/village/raw/` |
+| work files | `data/village/work/` |
+| export, previews | `out/village/map/`, `out/village/preview/` |
+| `map_version` | `<MAP_VERSION_BASE>-village` (`export.py`) |
 
-Add the `village:` section to `pipeline/config/slice.local.yaml` (see `slice.example.yaml`).
-Both areas share the one committed registry `registry/parcels.registry.json`. Fetching the
-village is polite: Overpass in one request (an area over about 1.5 km a side in pieces of that size, each cached in
+The committed registry `registry/parcels.registry.json` is the one
+source of IDs. Fetching is polite: Overpass in one request (a box over about 1.5 km a side in pieces of that size, each cached in
 `osm_tiles/` so a failed run resumes, merged into `osm.json` without duplicates), cadastral WFS paged (`startIndex`, 5000 per page, sorted)
 when a page is full, the DMR raster in WCS tiles of at most 1000 m per side (cached per tile in
 `dmr_tiles/`) that are mosaicked into `dmr5.tif`. All are cached; `--force` refetches.
 
-**Map outline (village only).** `village.polygon` in `slice.local.yaml` replaces the square with any
+**Map outline.** `polygon` in `map.local.yaml` (required) is the outline: any
 simple polygon, given as absolute S-JTSK `[x, y]` metres (mapy.com or GPS points convert with pyproj
 `EPSG:4326 -> EPSG:5514`, lon first; local game coordinates are these minus `origin_epsg5514` in
 `frame.json`). Upstream services only take boxes, so the pipeline fetches the polygon's bounding box
 (grown by `margin_m`) and then clips to the polygon: `normalise` drops every parcel, building, road,
-tree, lamp and landuse that does not touch it (whole objects are kept, not cut), `fetched_bounds_epsg5514`
-becomes the polygon (so the registry only retires entries inside it) and the terrain coverage becomes the
-polygon, which every later stage already clips to. The terrain mesh reaches 1.5 cells past the outline so the
+tree, lamp and landuse that does not touch it (whole objects are kept, not cut), `area_polygon_epsg5514` in
+`frame.json` is the polygon (the registry only retires entries inside it, the terrain coverage is it too), which
+every later stage already clips to. The terrain mesh reaches 1.5 cells past the outline so the
 edge is not eaten. The centre `osm_way` still sets the local origin, so the frame and all edits stay put.
 Changing the polygon needs `make fetch` again (the box changes) and then the stages after it. Not done:
 nothing stops a player at the edge (the flight limit is still the parcels' bounding rectangle).
 
-`rules.yaml` has an `areas.<name>` overlay that is merged over a section only for that area. The
-village profile uses fewer fences without collision boxes, lower tree densities (the per-chunk tree cap
+`rules.yaml` is the village profile: fewer fences without collision boxes, lower tree densities (the per-chunk tree cap
 `props.trees.max_per_chunk` is available but set to 0 = off) and more spawn candidates, to keep chunk files small for 16-64
-players on weak GPUs. `make preview AREA=village` also writes `overview.png`: the parcels and
+players on weak GPUs. `make preview` also writes `overview.png`: the parcels and
 buildings with the 250 m chunk grid and chunk indices.
 
 Village numbers (one real run, default settings): 1165 parcels, 384 buildings, 40 chunk files,
@@ -91,8 +87,7 @@ shape of a parcel (`id` `A-0001`..., `kind` = the type, polygon, area, anchor, c
 A type is a named bundle of attributes, one entry of `ground.types`: its source (`osm` or `rule`, or none) and the
 `attributes` it carries: terrain `colours`, detail `recipe` (field, forest, village, dike) with optional `detail`
 settings laid over that recipe's section for this type only (a meadow is the field recipe without furrows and
-headlands), `water`, `spawns`, `event_spawn` (see "Ground attributes and stacks"). A new type is one new entry; the map
-area can override a type (`areas.village.ground.types`). There is no road ground: a road is the OSM ribbon on top of whatever lies under it.
+headlands), `water`, `spawns`, `event_spawn` (see "Ground attributes and stacks"). A new type is one new entry. There is no road ground: a road is the OSM ribbon on top of whatever lies under it.
 Ground areas have no fence and no edits of their own, and their IDs are only stable while the inputs are. Trees are not
 part of a type: they come from the orthophoto only (`docs/ortho.md`).
 
@@ -151,8 +146,8 @@ a value `null` removes that attribute of the type of the rules (the type stops c
 
 and a region over a forest can then carry `"ground": ["forest", "bigfoot_zone"]`.
 
-* **Merge rule** (`ground.ground_types(rules_path, area, edits_path=None)`, `merge_ground_types`): the types of
-  `rules.yaml` (with the area overlay) come first; a key of an edits entry overrides that key of the rules entry (the
+* **Merge rule** (`ground.ground_types(rules_path, edits_path=None)`, `merge_ground_types`): the types of
+  `rules.yaml` come first; a key of an edits entry overrides that key of the rules entry (the
   dicts `osm`, `attributes` and `detail` are merged key by key, deeper dicts the same way, lists and plain values are replaced, so
   `colours` is replaced whole and `osm: {natural: [...]}` replaces only the natural list); an attribute set to `null` is
   removed; a new name is a new type
@@ -187,12 +182,12 @@ with a building plot (by hand in `edits.json`, it is not shown in the editor) br
 ## Normalise and the parcel registry
 
 `make normalise` reprojects the OSM data and cadastral parcels from WGS84 to EPSG:5514 and then
-shifts them into a local metric frame whose origin is the slice centre (`slice_centre.json`).
-Axes stay those of EPSG:5514. It writes `data/work/normalised/{buildings,highways,landuse,parcels}.geojson`
-(local metres, gitignored) and `data/work/frame.json`.
+shifts them into a local metric frame whose origin is the centre of the `osm_way` (`centre.json`).
+Axes stay those of EPSG:5514. It writes `data/village/work/normalised/{buildings,highways,landuse,parcels}.geojson`
+(local metres, gitignored) and `data/village/work/frame.json`.
 
 `make parcels` gives every cadastral parcel an own stable ID (`P-0001`, 4 digits, growing when
-needed) and writes `data/work/parcels.json`: the parcels that are properties (ID, cadastral reference, polygon, area,
+needed) and writes `data/village/work/parcels.json`: the parcels that are properties (ID, cadastral reference, polygon, area,
 kind, anchor point, building ids, 250 m chunk index) and the ground areas (see "Parcels and ground areas"). It prints
 a report (parcels by kind, ground areas by type, buildings assigned or unassigned, new and retired IDs). The
 building-assignment and ground rules are documented in `pipeline/config/rules.yaml`. Every cadastral parcel keeps its
@@ -213,16 +208,15 @@ it comes from the cadastre only). Each regeneration matches current parcels to i
 To regenerate after the cadastre or OSM changed: `make fetch` (or `fetch --force`), `make parcels`
 (which needs `make normalise` first), then review and commit the `registry/` diff. Re-running
 on unchanged input leaves the registry byte-identical. A run only retires entries whose outline
-lies inside the box it fetched (`fetched_bounds_epsg5514` in `frame.json`); entries outside are
-left untouched. So the village after the slice keeps every ID and numbers the new parcels after the
-highest one, and the slice after the village retires nothing. Shrinking or moving an area retires
+lies inside the outline it fetched (`area_polygon_epsg5514` in `frame.json`); entries outside are
+left untouched. So the registry keeps every ID and numbers the new parcels after the highest one. Shrinking or moving the outline retires
 only what is inside the new box and no longer in the cadastre (reversible: an entry whose exact
 reference reappears is revived). Retiring or
 reassigning IDs is a breaking change of the map artifact (see the versioning decision).
 
 ## Buildings: rules, meshes, export
 
-`make rules` writes `data/work/buildings.json`, one entry per building assigned to a parcel
+`make rules` writes `data/village/work/buildings.json`, one entry per building assigned to a parcel
 (buildings without a parcel are skipped and counted): ID, parcel ID, footprint (local metres,
 holes allowed), `height_m` (to the roof top), `eave_height_m`, `roof_height_m`, `levels`, `roof`
 (`flat`, `gabled`, `hipped`), `ridge_dir` (radians, pitched roofs only), `wall_colour` and
@@ -240,7 +234,7 @@ ID or OSM id, any building field) is documented at the top of `overrides.yaml`.
 Settings for all of this are in the `terrain`, `roads`, `props` and `spawns` sections of
 `pipeline/config/rules.yaml`.
 
-**Terrain** (`make terrain`): `data/raw/dmr5.tif` (EPSG:3046) is resampled bilinearly into a
+**Terrain** (`make terrain`): `data/village/raw/dmr5.tif` (EPSG:3046) is resampled bilinearly into a
 regular height grid in the local frame (default step about 4 m; chunk borders are grid lines, so
 neighbouring chunks share border vertices). Terrain is meshed only where the DMR raster covers
 all four corners of a grid cell; nothing is clamped or invented outside it, and chunks without
@@ -252,7 +246,7 @@ edge; road ribbons, fences, trees and spawns outside coverage are dropped.
 
 **Roads** (`make roads`): highways from `normalised/highways.geojson` (classes and widths in
 `rules.yaml`; an OSM `width` or `lanes` tag wins) become graph nodes and edges in
-`out/map/roads.json` (`nodes`: id, x, y; `edges`: id, osm_id, from, to, polyline, highway, width,
+`out/village/map/roads.json` (`nodes`: id, x, y; `edges`: id, osm_id, from, to, polyline, highway, width,
 oneway, surface, length_m; local metres, x east, y north). Ribbon footprints are clipped against the
 terrain triangles they cover, so every piece lies in a terrain triangle's plane lifted by `lift_m` (0.05 m)
 and no terrain crease can poke through. A higher road class sits a hair above a lower one. Ribbons of
@@ -296,11 +290,11 @@ they are not read by the props stage, only by the export and `region-run` (below
 `pipeline/src/drycastle_pipeline/edits.py`. Entries for parcels that no longer exist are skipped
 with a warning; schema errors fail the stage.
 
-**Spawns**: `out/map/spawns.json` has a seeded subset (default 60) of points on roads and on
+**Spawns**: `out/village/map/spawns.json` has a seeded subset (default 60) of points on roads and on
 garden, field and other parcels, at least `min_building_distance_m` from any building, with
 elevation, parcel, highway type (roads) and chunk index.
 
-**Street lamps** (`lamps.py`, run by the props stage, `make props`): `data/work/lamps.json` holds
+**Street lamps** (`lamps.py`, run by the props stage, `make props`): `data/village/work/lamps.json` holds
 one point per lamp (`id` `L-NNNN`, `x`, `y`, `z` elevation, `source` `osm` or `rule`, `osm_id`,
 `highway`, `parcel`, `chunk`). OSM `highway=street_lamp` and `man_made=street_lamp` nodes are in the
 Overpass query and in `normalised/street_lamps.geojson`; each one is kept if it is inside the terrain
@@ -310,7 +304,7 @@ coverage and outside building footprints (grown by `lamps.building_clearance_m`)
 Rule lamps also stay out of `lamps.avoid_kinds` parcels (house plots and gardens). Placement is
 deterministic (no random numbers). Raw data fetched before street lamps were queried has no
 lamp nodes: run `make fetch --force` once, then `make normalise` and `make props`. The export copies
-`lamps.json` to `out/map/` (map version 0.5.0, `files.lamps`); lamps are not in the chunk GLBs. The game
+`lamps.json` to `out/village/map/` (map version 0.5.0, `files.lamps`); lamps are not in the chunk GLBs. The game
 builds the pole, the head and the light from primitives, so the viewer ignores them.
 
 **Tree collision (`trees.json`).** Each tree is two or three solids, built in the game from the rule model numbers
@@ -346,9 +340,9 @@ every region overlapping a named one, whose visible area changes with it), `tria
 
 ## Detail (ground patches and clutter)
 
-`make detail` (stage `detail`, in `run-all` between `props` and `export`; `AREA=village` for the village) gives the
+`make detail` (stage `detail`, in `run-all` between `props` and `export`) gives the
 ground something to look at. It reads `parcels`, `buildings`, `roads`, `terrain`, `props` (fences, trees), `objects`
-and `edits.json` (regions), and writes `data/work/detail.json` (clutter), `detail_patches.npy` and
+and `edits.json` (regions), and writes `data/village/work/detail.json` (clutter), `detail_patches.npy` and
 `detail_patches.json` (patch triangles). `python -m drycastle_pipeline detail --work DIR` reads and writes another work
 directory (experiments). The module is `detail.py`; every number is in the `detail` section of `rules.yaml`.
 
@@ -418,7 +412,7 @@ purpose: a stored instance costs about 33 bytes, so the open land (150 ha) canno
 wanted, generate it near the player at run time from a per-chunk density instead.
 
 All random choices are seeded with `sha256("<parcel id>:detail:<purpose>")` (verges with the road edge ID), so reruns give
-identical files. `uv run python -m drycastle_pipeline.detail_preview --parcel P-0637 --area village` draws the detail of
+identical files. `uv run python -m drycastle_pipeline.detail_preview --parcel P-0637 ` draws the detail of
 one parcel top-down from the real patches, textures and clutter meshes into `out/detail/`.
 
 **Rust engine** (`pipeline/rust/detail`, `detail_rust.py`). The Python stage takes about 250 s on the full village map (the big
@@ -486,7 +480,7 @@ The game computes the same bytes for generated instances (`MeadowGen.Tint`, pinn
 
 ## Export
 
-`make export` writes `out/map/` (gitignored): `chunks/chunk_<ix>_<iy>.glb` (one glTF per 250 m
+`make export` writes `out/village/map/` (gitignored): `chunks/chunk_<ix>_<iy>.glb` (one glTF per 250 m
 chunk that has buildings or terrain; Y-up axes x east, y up, z -north, metres, one frame for all
 chunks). Nodes per chunk glb: `parcel_<ID>_visual` (walls and roof, flat per-face vertex colours)
 and `parcel_<ID>_collision` (extruded footprint, no roof detail) for each parcel with buildings;
@@ -502,7 +496,7 @@ library, and the manifest's `textures` lists the ids the map uses); `region_<ID>
 change (pre-1.0, a node-layout change bumps the minor part). Also
 `parcels.json` (ID, cadastral reference, kind, polygon and anchor in local metres with x east and
 y north, chunk, building IDs), `roads.json`, `spawns.json` and `manifest.json` (map version
-`0.2.0-slice`, chunk list with triangle counts per node, generated parts, terrain grid info,
+`<MAP_VERSION_BASE>-village`, chunk list with triangle counts per node, generated parts, terrain grid info,
 attribution, input hashes including the work files). The output has no timestamp and is
 byte-identical for identical input.
 
@@ -540,7 +534,7 @@ depth is one value per body (an approximation). The file is absent for a map wit
 **Water craft placement (#132).** The amphibious transport spawns on land within 40 m of water when it can (`NetServer.Vehicles`,
 using `Water.ShoreDistance`); it is the only vehicle that floats, and nothing is placed on the water itself.
 
-`make preview` renders `out/preview/topdown.png` (parcels by kind, buildings in wall colour),
+`make preview` renders `out/village/preview/topdown.png` (parcels by kind, buildings in wall colour),
 `iso.png` (isometric view from the mesh data: terrain relief, roads, buildings, fences, trees;
 `make preview EXAG=5` changes the relief exaggeration, default 3) and `iso_close.png` (the same,
 zoomed on the densest cluster of buildings), all with a scale bar.
