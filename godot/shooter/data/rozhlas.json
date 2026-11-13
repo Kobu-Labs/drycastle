@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "_note": "The village loudspeaker. files are relative to assets/ and baked by scripts/make_rozhlas.py (song, muffled announcement, clear OPAKUJEM, announcement again); the game stays silent until they exist. One broadcast every period_s seconds at a clock-derived moment, the same on every client. Each speaker is at full level within reference_distance, 6 dB quieter per doubling beyond it, and silent past max_distance, and its low-pass falls from near_cutoff_hz to far_cutoff_hz over the same range (duller with distance); the nearest `voices` speakers sound at once.",
+  "files": ["suchohrad-rozhlas/rozhlas_1.ogg"],
+  "period_s": 600,
+  "volume_db": 0,
+  "reference_distance": 6,
+  "max_distance": 350,
+  "voices": 3,
+  "near_cutoff_hz": 8000,
+  "far_cutoff_hz": 500
+}

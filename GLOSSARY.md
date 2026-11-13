@@ -310,3 +310,7 @@ _Avoid_: world map, big map, full map
 **Animal**:
 A creature of the world that is not a player: a deer, a dog, a cow. It has hit points and can be shot dead (`animals.json` lists the species, their hit points, speeds and models). It stands, eats, wanders around the spot it spawned at, and runs from players, vehicles and the shot that hurt it. A killed animal lies for `corpse_seconds` with its death clip held on the last frame, then is removed. It is a world entity (wire type 50) the server owns; clients only draw it. Not a target dummy (a player-shaped practice target) and not a corpse (what a killed player leaves).
 _Avoid_: NPC (alone), mob, critter
+
+**Rozhlas**:
+The village loudspeaker broadcast: a song, a barely audible announcement, a clear "OPAKUJEM" (I repeat), then the announcement again, played from the megaphone poles. Baked from clean recordings by `scripts/make_rozhlas.py`; on the air at a clock-derived moment, so every client hears the same thing. Louder and clearer the closer the player is to a speaker, quieter and duller the further.
+_Avoid_: PA system, radio, announcer

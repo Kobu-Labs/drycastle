@@ -191,6 +191,20 @@ public sealed partial class MapLoader
         return lights;
     }
 
+    /// <summary>Where the horns of the placed megaphone poles (assets "prim:pole_megaphone_*") are in map space: about 79% up the pole, where the generator mounts them.</summary>
+    public List<Vector3> MegaphoneSpeakers()
+    {
+        var spots = new List<Vector3>();
+        if (_assetManifest == null) ReadAssetManifest();
+        foreach (var (id, node) in _objectNodes.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            if (!GodotObject.IsInstanceValid(node) || !_objectAssets.TryGetValue(id, out var asset)
+                || !asset.StartsWith("prim:pole_megaphone_", StringComparison.Ordinal) || !_assetManifest!.TryGetValue(asset, out var entry)) continue;
+            spots.Add(node.Transform * new Vector3(0f, entry.Size.Y * 0.79f, 0f));
+        }
+        return spots;
+    }
+
     /// <summary>The light points of a manifest asset in the object's own frame (Godot axes), from its "lights" list (pipeline axes, z up).</summary>
     static List<Vector3> ParseLights(JsonElement asset)
     {

@@ -26,3 +26,6 @@ pipeline/config/slice.local.yaml
 # local secrets
 .env
 *.uid
+
+# rozhlas source recordings (large; only the baked ogg is kept)
+assets/suchohrad-rozhlas/source/

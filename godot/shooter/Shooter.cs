@@ -352,6 +352,7 @@ public partial class Shooter : Node3D
                 PoleHeads = poleLamps.Select(l => (l.Position, l.YawDeg)).ToList(),
                 CollisionOnly = _map.CollisionOnly,
             });
+        if (!_map.CollisionOnly) AddChild(new Rozhlas { Speakers = _map.MegaphoneSpeakers() }); // the megaphone poles
         GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} pole_lamps={poleLamps.Count} load={s.LoadSeconds:F2}s");
     }
 
