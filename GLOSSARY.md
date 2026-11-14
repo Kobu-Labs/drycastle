@@ -89,7 +89,7 @@ A lamp post of the base map, placed from OSM street lamp nodes or along roads by
 _Avoid_: light, streetlight, lamp post
 
 **Corpse**:
-A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. It also carries every Item its player wore or carried in the Bag (up to seven), which another player can take one at a time (see Pickup limit).
+A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. It also carries every Item its player wore or carried in the Bag (up to eight), which another player can take one at a time (see Pickup limit).
 _Avoid_: ragdoll, body, drop
 
 **Sandbox mode**:
@@ -101,7 +101,7 @@ A player whose player token is listed on the server (`--admin-token`). Admins ma
 _Avoid_: operator, moderator, op
 
 **Chat command**:
-A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/event` (`rozhlas` the loudspeaker, `intel` a test announcement, `bigfoot` starts the Bigfoot Event, `current end` concludes the running Event as a win for testing, `current cancel` removes it with no reward), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
+A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/event` (`rozhlas` the loudspeaker, `intel` a test announcement, `bigfoot` starts the Bigfoot Event, `thieves` starts the Thieves event, `current end` concludes the running Event as a win for testing, `current cancel` removes it with no reward), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
 _Avoid_: console command, cheat
 
 **Care package**:
@@ -141,11 +141,11 @@ The weapons a player can select: the primary, the secondary and the knife of the
 _Avoid_: inventory, toolbar, slots
 
 **Item**:
-Something a player wears that is not a weapon, perk or killstreak, defined in `items.json`. The first Items are event rewards (the Bigfoot head). A player wears at most one Item per equipment slot and carries the rest in the Bag.
+Something a player wears that is not a weapon, perk or killstreak, defined in `items.json`. The first Items are event rewards (the Bigfoot head, the Gold chain). A player wears at most one Item per equipment slot and carries the rest in the Bag.
 _Avoid_: loot, gear, drop (as a noun)
 
 **Equipment**:
-What a player wears right now: one Item per equipment slot, of which the headgear slot is the only one. It belongs to the match and not to the Profile: death puts the worn Items on the Corpse, leaving the match loses it, and a new round keeps it. What is carried unworn is the Bag.
+What a player wears right now: one Item per equipment slot (the headgear slot and the Neck slot). It belongs to the match and not to the Profile: death puts the worn Items on the Corpse, leaving the match loses it, and a new round keeps it. What is carried unworn is the Bag.
 _Avoid_: inventory (the weapons are the Hotbar), outfit (that is Camouflage)
 
 **Bag**:
@@ -163,6 +163,14 @@ _Avoid_: helmet slot, hat slot
 **Bigfoot head**:
 The first Item: headgear, the reward for defeating the Bigfoot event. A headshot on its wearer is a body hit: the weapon's body damage, with no headshot multiplier, marker or bonus XP. It has a Pickup limit of three.
 _Avoid_: Bigfoot mask, Bigfoot helmet
+
+**Neck slot**:
+The equipment slot on the neck, under the headgear slot: it holds one Item and nothing hides when it is worn. Worn, moved to the Bag and dropped as the headgear slot is.
+_Avoid_: necklace slot, amulet slot
+
+**Gold chain**:
+The Item of the Neck slot, cosmetic (it protects nothing): a chunky gold chain with a pendant, drawn on the wearer's neck. Each Gang boss killed by a hit leaves one on his body, a Corpse that lasts a few minutes (`reward.chain_corpse_seconds` in `thieves.json`) and carries only the chain. A Gang boss who boards his van and leaves, or flees off the map, keeps his. It has a Pickup limit of three.
+_Avoid_: necklace, bling
 
 **Pickup limit**:
 How many times an Item can be taken from a Corpse or the ground over its whole life. Moving it between the Bag and an equipment slot or dropping it counts nothing. The count belongs to the Item and travels with it from corpse to wearer or Bag to corpse or ground; the attempt after the last pickup makes it crumble (it is gone, and the player reads "The item crumbles in your hands"). An Item with no limit never crumbles.

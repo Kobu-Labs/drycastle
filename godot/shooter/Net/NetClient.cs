@@ -337,6 +337,7 @@ public partial class NetClient : Node
                 OnStatusEvent((EventKind)e.Kind, e.Payload); // statuses: blessing, curse, burning
                 OnItemEvent((EventKind)e.Kind, e.Payload); // what the player wears, what a corpse carries, an item crumbling
                 OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
+                OnThiefAudioEvent((EventKind)e.Kind, e.Payload); // a Gang member says a line (ticket 09)
                 OnBigfootEvent((EventKind)e.Kind, e.Payload); // the Bigfoot's effects and the footprints to its corpse (#264)
                 OnThievesEvent((EventKind)e.Kind, e.Payload); // the Raid vans' honk
                 OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors

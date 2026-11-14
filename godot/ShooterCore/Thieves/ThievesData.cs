@@ -13,6 +13,11 @@ public sealed class ThievesFile : IVersioned
     public VanConfig Van { get; set; } = new();
     /// <summary>The sequence of Raids that makes the event (ticket 03): how many, how fast, how the crew grows with the players.</summary>
     public RaidsConfig Raids { get; set; } = new();
+    /// <summary>Voice lines, the speaker and the songs (ticket 09): <see cref="ThievesAudioConfig"/>.</summary>
+    public ThievesAudioConfig Audio { get; set; } = new();
+
+    /// <summary>The event's reward (ticket 10). Last section of the file.</summary>
+    public ThievesRewardConfig Reward { get; set; } = new();
 
     public static ThievesFile Load(string path) => Validate(DataFile.Load<ThievesFile>(path));
 
@@ -67,6 +72,9 @@ public sealed class ThievesFile : IVersioned
         Positive(r.NextRaidSeconds, "raids.next_raid_seconds"); NotNegative(r.GapSeconds, "raids.gap_seconds");
         if (r.PlayersPerExtra < 1 || r.MaxExtraThieves < 0 || r.MaxExtraEnforcers < 0) throw new DataFileException($"{F}: raids.players_per_extra is at least 1, the extras are not negative");
         if (g.Raid.Size + r.MaxExtraThieves + r.MaxExtraEnforcers > GangRules.MaxCrew) throw new DataFileException($"{F}: raids can grow a crew past {GangRules.MaxCrew} members");
+        f.Audio.Validate(F);
+        if (f.Reward.ChainItem == "") throw new DataFileException($"{F}: reward.chain_item names an item of items.json");
+        Positive(f.Reward.ChainCorpseSeconds, "reward.chain_corpse_seconds");
         return f;
     }
 }
@@ -274,4 +282,13 @@ public sealed class VanView
     public string WreckColor { get; set; } = "#2b2724";
     /// <summary>How far from the camera a honk is heard (the sound is a stand-in with no range of its own).</summary>
     public float HonkHearM { get; set; } = 180;
+}
+
+/// <summary>What the event pays. The win's XP is the level data's event-win award (levels.json), the same for every event, so it is not a number here.</summary>
+public sealed class ThievesRewardConfig
+{
+    /// <summary>The items.json id of the Item a killed Gang boss leaves on his body (the Gold chain).</summary>
+    public string ChainItem { get; set; } = "gold_chain";
+    /// <summary>How long that body lies, seconds, before it and the chain are gone.</summary>
+    public float ChainCorpseSeconds { get; set; } = 300;
 }

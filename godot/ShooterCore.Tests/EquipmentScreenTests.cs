@@ -48,21 +48,23 @@ public class EquipmentScreenTests
     public void LeftFromTheFirstBagColumnGoesToTheSlotAndRightFromTheSlotEntersTheBag()
     {
         Assert.Equal(Head, EquipmentNav.Move(Bag(0), NavDir.Left));
-        Assert.Equal(Head, EquipmentNav.Move(Bag(3), NavDir.Left)); // one slot: both rows reach it
+        Assert.Equal(CellRef.Slot(EquipSlot.Neck), EquipmentNav.Move(Bag(3), NavDir.Left)); // two slots: the second bag row reaches the neck
         Assert.Equal(Bag(0), EquipmentNav.Move(Head, NavDir.Right));
+        Assert.Equal(Bag(3), EquipmentNav.Move(CellRef.Slot(EquipSlot.Neck), NavDir.Right));
     }
 
     [Fact]
     public void TheSlotColumnMovesUpAndDownAndStopsAtItsEnds()
     {
         Assert.Null(EquipmentNav.Move(Head, NavDir.Up));
-        Assert.Null(EquipmentNav.Move(Head, NavDir.Down)); // one slot only
+        Assert.Null(EquipmentNav.Move(Head, NavDir.Down, slots: 1)); // one slot only
         Assert.Null(EquipmentNav.Move(Head, NavDir.Left));
-        var second = CellRef.Slot(Other);
-        Assert.Equal(second, EquipmentNav.Move(Head, NavDir.Down, slots: 2));
-        Assert.Equal(Head, EquipmentNav.Move(second, NavDir.Up, slots: 2));
-        Assert.Equal(Bag(3), EquipmentNav.Move(second, NavDir.Right, slots: 2)); // the bag row level with the slot
-        Assert.Equal(second, EquipmentNav.Move(Bag(3), NavDir.Left, slots: 2));
+        var neck = CellRef.Slot(EquipSlot.Neck); // the slot column is headgear, then the neck
+        Assert.Equal(neck, EquipmentNav.Move(Head, NavDir.Down));
+        Assert.Null(EquipmentNav.Move(neck, NavDir.Down));
+        Assert.Equal(Head, EquipmentNav.Move(neck, NavDir.Up));
+        Assert.Equal(Bag(3), EquipmentNav.Move(neck, NavDir.Right)); // the bag row level with the slot
+        Assert.Equal(neck, EquipmentNav.Move(Bag(3), NavDir.Left));
     }
 
     [Fact]

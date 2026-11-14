@@ -8,6 +8,7 @@ namespace Drycastle.Shooter;
 /// (<see cref="ItemDef.Model"/>, authored in the slot's frame: metres, facing -Z). A headgear Item rides the head bone in every stance and pose
 /// (the clips, the crouch squash, the prone roll, the ragdoll flail all move the bone) and replaces the Camouflage's helmet: the helmet and the
 /// hair are hidden, and the foliage and face paint of the head are left out, because the item covers the head (see <see cref="HeadCovered"/>).
+/// A neck Item (the Gold chain) rides the neck bone and hides nothing (<see cref="NeckOffset"/>).
 /// The same call serves remote players, corpses, the vehicle seat view and the menu preview (<see cref="CamoPreview.ShowWorn"/>).
 /// </summary>
 public sealed partial class CharacterView
@@ -17,6 +18,12 @@ public sealed partial class CharacterView
     /// them all (measured on the models: the head spans x -0.49..0.49, y 2.07..3.13, z -0.49..0.49, the Operator's hood a little more).
     /// </summary>
     static readonly Vector3 HeadCentre = new(0f, 2.6f, 0f);
+
+    /// <summary>
+    /// Where a neck Item's origin sits, in rig units from the Neck bone's bind origin (the base of the neck, level with the shoulders' top): straight on the bone. The four
+    /// bodies share one rig, so one point serves them all. Not yet checked against a render (the screens are not run in the build): nudge this if a chain sits high or low.
+    /// </summary>
+    static readonly Vector3 NeckOffset = Vector3.Zero;
 
     readonly ItemDef?[] _worn = new ItemDef?[Equipment.SlotCount];
     readonly Node?[] _wornNodes = new Node?[Equipment.SlotCount];
@@ -39,7 +46,7 @@ public sealed partial class CharacterView
         if (_worn[i]?.Id == item?.Id) return;
         _worn[i] = item;
         BuildWorn(slot);
-        if (slot == EquipSlot.Headgear) ReapplyCamo(); // the helmet, hair, foliage and face paint depend on it
+        if (slot == EquipSlot.Headgear) ReapplyCamo(); // the helmet, hair, foliage and face paint depend on it (a neck Item covers nothing)
     }
 
     /// <summary>Draws the Item of one slot on the current body, replacing the node drawn before.</summary>
@@ -49,17 +56,17 @@ public sealed partial class CharacterView
         if (_wornNodes[i] is { } old && GodotObject.IsInstanceValid(old)) old.QueueFree();
         _wornNodes[i] = null;
         if (_worn[i] is not { Model: not "" } item || _skeleton == null) return;
-        if (slot != EquipSlot.Headgear) return; // the only slot there is
-        var head = _skeleton.FindBone("Head");
-        if (head < 0 || !_bind.TryGetValue(head, out var bind)) return;
+        var neck = slot == EquipSlot.Neck;
+        var bone = _skeleton.FindBone(neck ? "Neck" : "Head");
+        if (bone < 0 || !_bind.TryGetValue(bone, out var bind)) return;
         var model = ModelLib.Instance(item.Model);
         if (model == null) return; // headless, or the file is missing: worn but not drawn
         // the model is in metres facing -Z; the rig is in rig units facing +Z, so turn it round and scale it up, then express that in the head bone's frame
         // (the same way the eyes are placed in BuildEyes)
-        var inBind = new Transform3D(Basis.FromEuler(new Vector3(0, Mathf.Pi, 0)).Scaled(Vector3.One / Scale), HeadCentre);
+        var inBind = new Transform3D(Basis.FromEuler(new Vector3(0, Mathf.Pi, 0)).Scaled(Vector3.One / Scale), neck ? bind.Origin + NeckOffset : HeadCentre);
         var holder = new Node3D { Name = "Item", Transform = bind.AffineInverse() * inBind };
         holder.AddChild(model);
-        var carrier = new BoneAttachment3D { Name = "Worn_Headgear", BoneName = "Head" };
+        var carrier = new BoneAttachment3D { Name = neck ? "Worn_Neck" : "Worn_Headgear", BoneName = neck ? "Neck" : "Head" };
         carrier.AddChild(holder);
         _skeleton.AddChild(carrier);
         _wornNodes[i] = carrier;

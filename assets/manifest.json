@@ -3604,6 +3604,27 @@
       "used_for": "godot/shooter item id bigfoot_head (data/items.json `model`), worn by CharacterView on the head bone and rendered into ui/icons/items/bigfoot_head.png; authored in the headgear slot frame (forward -Z, origin at the middle of the head, metres), one mesh node, 8 flat-colour materials"
       },
       {
+      "id": "pack:drycastle-generated-models/gold_chain",
+      "category": "other",
+      "name": "Gold chain (chunky necklace of interlocked links with a diamond pendant)",
+      "file": "drycastle-generated-models/gold_chain.glb",
+      "size_m": [
+        0.23,
+        0.26,
+        0.27
+      ],
+      "tags": [
+        "shooter",
+        "worn-item",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_gold_chain_model.py (original geometry written as code; python3 -I scripts/make_gold_chain_model.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "godot/shooter item id gold_chain (data/items.json `model`), worn by CharacterView on the Neck bone and rendered into ui/icons/items/gold_chain.png; authored in the neck slot frame (forward -Z, origin at the Neck bone's origin, metres), one mesh node, 3 flat-colour materials"
+      },
+      {
       "id": "pack:drycastle-generated-models/satellite_dish",
       "category": "other",
       "name": "Satellite dish (household, 0.7 m, on a short wall arm)",

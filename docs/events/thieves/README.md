@@ -12,8 +12,8 @@ Throwaway. Delete this folder when the event is done. Design: `docs/events/READM
 | 06 | Dishes | 04 | todo |
 | 07 | Poles | 04, climb of 06 | todo |
 | 08 | Assets | 02 (pack on disk) | blocked: Gang Warfare pack not found on disk |
-| 09 | Audio | 02, 03 | todo |
-| 10 | Reward | 02 | todo |
+| 09 | Audio | 02, 03 | done except van music |
+| 10 | Reward | 02 | done |
 
 ## Rules for every ticket
 

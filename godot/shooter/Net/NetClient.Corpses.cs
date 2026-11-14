@@ -8,7 +8,7 @@ namespace Drycastle.Shooter;
 /// hold and tap of the interact key, and the chooser. Holding the key takes the corpse's weapon into the primary position
 /// (<see cref="CorpseRules.PrimaryPos"/>); a tap opens <see cref="CorpseChooser"/> to pick the primary or the secondary.
 /// The server validates reach and slot; the hotbar it sends back (<see cref="EventKind.Hotbar"/>) is the one that counts.
-/// A corpse that carries items (<see cref="EventKind.CorpseItems"/>, up to seven; issues #261, #269) adds a row of item cells to the chooser, one for each
+/// A corpse that carries items (<see cref="EventKind.CorpseItems"/>, up to eight; issues #261, #269) adds a row of item cells to the chooser, one for each
 /// of them: taking an item is a separate action from taking the weapon (a click or Enter on its cell, <see cref="RequestTakeCorpseItem"/>), and the cell
 /// leaves the list when the server sends the corpse's next list. Holding the key still takes the weapon only. The prompt names the item only when there is
 /// exactly one, and nothing else for several.
@@ -139,7 +139,7 @@ public partial class NetClient
     {
         if (_near is not { } id || !InteractArbiter.CorpseShowsPrompt(_crateNear != null, _groundNear != null, _groundNearest, true, ChooserOpen)) return null;
         var key = InputBindings.Name("interact");
-        if (IsGiantCorpse(id)) // the Bigfoot's corpse has no weapon to take, only what it carries (#264)
+        if (IsItemOnlyCorpse(id)) // the Bigfoot's and the Gang boss's corpse have no weapon to take, only what they carry (#264, Thieves 10)
             return CorpseItems(id).Count switch { 0 => null, 1 => Strings.F("hud.corpse.giant.item", key, ItemName(CorpseItem(id)!)), _ => Strings.F("hud.corpse.giant.items", key) };
         if (CorpseWeapon(id) is not { } w) return null;
         var hold = CorpseRules.CanReplace(w, CorpseRules.PrimaryPos);
@@ -170,7 +170,7 @@ public partial class NetClient
         }
         if (released && !_holdSent && !ChooserOpen && near is { } tap)
         {
-            if (IsGiantCorpse(tap)) OpenChooser(tap, null);
+            if (IsItemOnlyCorpse(tap)) OpenChooser(tap, null);
             else if (CorpseWeapon(tap) is { } tw) OpenChooser(tap, tw);
         }
     }
@@ -179,7 +179,11 @@ public partial class NetClient
     List<ChooserItem> ChooserItems(ushort corpse) =>
         CorpseItems(corpse).Select(h => new ChooserItem(h, ItemIcon(h.Def), ItemName(h.Def))).ToList();
 
-    /// <summary>Opens the chooser at a corpse. <paramref name="weapon"/> is null for the Bigfoot's corpse, which has none: the Items are all it offers.</summary>
+    /// <summary>A corpse that offers no weapon, only its Items: the giant's, and the Gang boss's with the Gold chain (owner <see cref="ThievesReward.ChainCorpseOwner"/>, drawn as a body like any other).</summary>
+    bool IsItemOnlyCorpse(ushort corpse) =>
+        IsGiantCorpse(corpse) || WorldEntities.Entities.TryGetValue(corpse, out var e) && e.State.Owner == ThievesReward.ChainCorpseOwner;
+
+    /// <summary>Opens the chooser at a corpse. <paramref name="weapon"/> is null for a corpse that offers no weapon (<see cref="IsItemOnlyCorpse"/>): the Items are all it offers.</summary>
     void OpenChooser(ushort corpse, WeaponDef? weapon)
     {
         var options = new List<(int Pos, string Text)>();

@@ -41,6 +41,7 @@ const MODELS := {
 # id -> [model in assets/ (items.json `model`), yaw degrees to the right of the item's front, pitch degrees above it]
 const ITEMS := {
 	"bigfoot_head": ["drycastle-generated-models/bigfoot_head.glb", 20.0, 10.0],
+	"gold_chain": ["drycastle-generated-models/gold_chain.glb", 0.0, 18.0],
 }
 
 var _vp: SubViewport

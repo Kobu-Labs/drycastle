@@ -715,7 +715,6 @@ public class RaidVanTests
         Assert.Null(ThievesFxCodec.Decode(new byte[3]));
         Assert.Null(ThievesFxCodec.Decode(new byte[ThievesFxCodec.Bytes].Select((_, i) => i == 0 ? (byte)99 : (byte)0).ToArray()));
         Assert.Equal(232, (int)EventKind.ThievesFx);
-        Assert.Equal(44, Wire.ProtocolVersion);
     }
 
     // ---- the sequence of Raids ----

@@ -81,5 +81,16 @@
     "ram_mass_scale": 3, "ram_fallback_damage": 100,
     // Client only: a box van of boxes and cylinders; honk_hear_m is how far from the camera a honk is heard.
     "view": { "body_color": "#b9b3a2", "cab_color": "#8c3f33", "door_color": "#9b9585", "wreck_color": "#2b2724", "honk_hear_m": 180 }
-  }
+  },
+  // Ticket 09. Voice lines (server): a living member not in a windup or swing with a human within voice_near_m rolls voice_chance every voice_roll_s; a member that spoke waits
+  // voice_cooldown_s; one line at a time per Raid (voice_busy_s, the server does not know how long a line is). voice_lines = recordings the server picks from; the client plays line mod files found.
+  // Ranges are client only: voice_range_m, speaker_range_m (a member's speaker), van_range_m (a van's song). speaker_chance is rolled once per member.
+  // Files (private, optional): assets-private/audio/thieves/voice/*.ogg and songs/*.ogg; none found = silence.
+  "audio": {
+    "voice_near_m": 8, "voice_chance": 0.3, "voice_roll_s": 2, "voice_cooldown_s": 15, "voice_busy_s": 3, "voice_lines": 15, "voice_range_m": 25,
+    "speaker_chance": 0.05, "speaker_range_m": 30, "van_range_m": 60
+  },
+  // The reward (ticket 10). Everyone credited (hit a Gang member or a van, or sent Loot back) gets the level data's event_win XP when the event is won.
+  // chain_item: the items.json id a killed Gang boss leaves on his body; chain_corpse_seconds: how long that body lies. A boss who leaves alive keeps his.
+  "reward": { "chain_item": "gold_chain", "chain_corpse_seconds": 300 }
 }

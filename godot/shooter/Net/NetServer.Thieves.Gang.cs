@@ -49,6 +49,7 @@ public partial class NetServer
     void OnGangKilled(GangKilled k)
     {
         GD.Print($"server: #{k.Killer} killed a {k.Kind} (hit id {k.HitId})");
+        GangSpeakerDrop(k); // a speaker it carried lies where it fell (ticket 09)
         if (k.Killer != 0 && ThievesData.Gang.KillXp > 0 && Scores(k.Killer)) AwardXp(new[] { new XpGrant(k.Killer, ThievesData.Gang.KillXp, XpReason.GangKill) });
     }
 

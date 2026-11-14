@@ -54,15 +54,16 @@ public static class GangRules
 
     public static bool IsHitId(ushort id) => id >= FirstHitId && id < FirstHitId + HitIdCount;
 
-    // The hit-point byte: bit 0 alive, bits 1-2 kind, bits 3-5 what is carried (0 nothing, 1 and up the Loot kind plus one: ticket 04), bits 6-7 free.
-    const int AliveBit = 1, KindShift = 1, KindMask = 3, CarriedShift = 3, CarriedMask = 7;
+    // The hit-point byte: bit 0 alive, bits 1-2 kind, bits 3-5 what is carried (0 nothing, 1 and up the Loot kind plus one: ticket 04), bit 6 speaker (ticket 09), bit 7 free.
+    const int AliveBit = 1, KindShift = 1, KindMask = 3, CarriedShift = 3, CarriedMask = 7, SpeakerBit = 64;
 
-    public static byte PackHp(GangMemberKind kind, bool alive, byte carried) =>
-        (byte)((alive ? AliveBit : 0) | (((int)kind & KindMask) << KindShift) | ((carried & CarriedMask) << CarriedShift));
+    public static byte PackHp(GangMemberKind kind, bool alive, byte carried, bool speaker = false) =>
+        (byte)((alive ? AliveBit : 0) | (((int)kind & KindMask) << KindShift) | ((carried & CarriedMask) << CarriedShift) | (speaker ? SpeakerBit : 0));
 
     public static bool AliveOf(byte hp) => (hp & AliveBit) != 0;
     public static GangMemberKind KindOf(byte hp) => (GangMemberKind)Math.Min((hp >> KindShift) & KindMask, (int)GangMemberKind.GangBoss);
     public static byte CarriedOf(byte hp) => (byte)((hp >> CarriedShift) & CarriedMask);
+    public static bool SpeakerOf(byte hp) => (hp & SpeakerBit) != 0;
 
     /// <summary>A state byte as a state; a value this build does not know stands.</summary>
     public static GangMemberState StateOf(byte state) => state <= (byte)GangMemberState.Board ? (GangMemberState)state : GangMemberState.Idle;
@@ -156,6 +157,8 @@ public sealed class GangMember : IWorldEntity
     public bool Alive => State != GangMemberState.Dead;
     /// <summary>The Thief an Enforcer escorts (set by the gang).</summary>
     public GangMember? Escort { get; set; }
+    /// <summary>Carries a speaker (a song plays from it until it dies, then it drops as an Item). Rolled by <see cref="GangAudio"/> when the server first sees the member; bit 6 of the hp byte.</summary>
+    public bool Speaker { get; set; }
     /// <summary>What it carries: 0 nothing, 1 and up the Loot kind plus one (ticket 04). Travels in the hp byte.</summary>
     public byte Carried { get; set; }
     /// <summary>Stealing or hauling: a player crowding it is in the way. HOOK for ticket 04 (Steal and Haul states); false until they exist.</summary>
@@ -192,7 +195,7 @@ public sealed class GangMember : IWorldEntity
     /// <summary>The standing hit volume the shots test against: the player's capsule at the kind's scale (a headshot is a head hit).</summary>
     public HitTarget HitVolume => new(HitId, Position, Stance.Stand, Yaw, HeadGuarded: false, Scale: _k.HitScale);
 
-    public WorldState Serialize() => WorldState.Make(Position, Yaw, 0, Look, (byte)State, GangRules.PackHp(Kind, Alive, Carried));
+    public WorldState Serialize() => WorldState.Make(Position, Yaw, 0, Look, (byte)State, GangRules.PackHp(Kind, Alive, Carried, Speaker && Alive));
 
     // ---- hits ----
 

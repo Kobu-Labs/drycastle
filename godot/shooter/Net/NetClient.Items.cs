@@ -192,7 +192,7 @@ public partial class NetClient
         for (var s = 0; s < Equipment.SlotCount; s++)
         {
             ItemDef? shown = null; // the first item of the slot in the corpse's list (the worn ones come first)
-            foreach (var h in items) if ((int)h.Def.Slot == s) { shown = h.Def; break; }
+            foreach (var h in items) if (!h.Def.BagOnly && (int)h.Def.Slot == s) { shown = h.Def; break; }
             v.View.SetWorn((EquipSlot)s, shown);
         }
     }

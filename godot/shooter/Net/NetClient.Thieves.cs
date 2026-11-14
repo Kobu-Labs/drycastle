@@ -89,6 +89,7 @@ public partial class NetClient
                 g.Last = p; g.Placed = true;
             }
             g.View.Show(GangRules.StateOf(e.State.State), g.Speed > 0.35f);
+            UpdateGangSpeaker(id, g, e.State.Hp); // the speaker on it and its song (ticket 09)
         }
     }
 

@@ -21,3 +21,33 @@ Voice lines, van music, the speaker.
 - `make thief-voices` writes 15 files; rerun is idempotent.
 - Tests: voice roll rules (range, cooldown, one per Raid); speaker roll seeded; codec round trip.
 - No private folder: silent, no error beyond one log line.
+
+## Done: notes
+Member-side half only (voice lines, speaker, private-folder loader). Not done here: the voice bake (done earlier, `make thief-voices`), the van's song (03 calls the API below). Protocol 44, event kind 236 `ThiefVoice` (237 stays free).
+
+Code: pure `ShooterCore/Thieves/GangVoice.cs` (`ThievesAudioConfig`, `GangVoiceCodec`, `GangAudio`), server `NetServer.Thieves.Audio.cs`, client `ThiefAudio.cs` + `NetClient.Thieves.Audio.cs`, tests `GangAudioTests.cs`. Numbers: new last section `audio` in `thieves.json`.
+
+### Van song API (client, for 03)
+`NetClient.ThiefSounds` (made on first use) -> `ThiefAudio`:
+- `AudioStreamPlayer3D? PlayVanSong(Node3D van, int songIndex, double startOffsetSeconds)`: loops song `songIndex mod songs found` (sorted by file name) at `van`, a child of it (follows it, goes with it when freed), heard to `audio.van_range_m` (60), bus Music. Offset is taken modulo the song length: pass the server clock since the van's song began. Null when no songs (silence). Calling it again on the same node restarts.
+- `void StopVanSong(Node3D van)`: destroyed or gone.
+- `SongCount`, `VoiceCount`: files found.
+
+### Wire
+- Event 236 `ThiefVoice`: u16 world entity id of the member, u8 line number (`GangVoiceCodec`). Broadcast; client plays `files[line mod count]` as a child of the member's view (follows it), bus SFX, `voice_range_m`. Server picks `0..voice_lines-1` (15), never the line the Raid said last.
+- Gang member hp byte bit 6 = speaker (`GangRules.SpeakerOf`, `PackHp(..., speaker)`); only while alive.
+
+### Decisions
+- Roll rules are in `GangAudio` (pure, own clock, seeded): a member alive and not in Windup/Swing with a human within `voice_near_m` (3D distance) rolls `voice_chance` (0.3) every `voice_roll_s` (2, the clock runs only while one is near, start staggered); `voice_cooldown_s` 15 per member; `voice_busy_s` 3 per Raid. Bots do not count as listeners.
+- Speaker roll (`speaker_chance` 0.05) happens in `GangAudio.Update` the first tick a member is seen (so members the van adds later are rolled too, no hook in `ThiefGang.Add`). Flag in `GangMember.Speaker`.
+- Speaker on the client: a small box (dark body, grille, orange stripe) child of the member view at the hip; its song = `songs[entity id mod count]` (same on every client), looped from a random point in the first half, bus Music, `speaker_range_m` 30. Flag gone (death) removes both. Joiners need nothing extra (the flag is in the entity state).
+- Kill drops a ground Item `speaker` at the member's feet (`_corpses.Drop`, dropper 0) from `OnGangKilled`; not dropped when the member was removed otherwise (event end). Items.json: `speaker` appended; new item flag `bag_only` (no slot): `ItemRules.Place` puts it in the bag and never the slot or a swap (`NoRoom`), `Equip` refuses it, corpse and ground pickups return `NoRoom` before counting when the bag is full (also corpse pickup now says "bag full"), `DressCorpse` does not draw it as headgear.
+- Equipment screen: `EquipmentWishes.Activate/Drag/CanDrop` take an optional `plain` predicate; a bag-only item has no put-on wish (click, Enter, drag to the avatar or the slot do nothing), it can still be dropped. Icon `ui/icons/items/speaker.png` drawn by script (the `.import` file is made by Godot on the next editor open).
+- Private audio: `assets-private/audio/thieves/voice/*.ogg` and `songs/*.ogg`, scanned once on first use, sorted by name; missing or empty folder = one log line each, silence. Not in sounds.json, not the `LoopVoice` pool.
+
+### Open
+- Merge: items.json must have `speaker` AFTER `gold_chain` (ticket 10 appends it); renumber the protocol (mine is 44) and the Wire.cs comment line.
+- UI standard: the Equipment screen change is logic only (no new control or visual); no screenshots or keyboard walkthrough (brief forbids running the game). A bag-only item's Enter/click does nothing and the hint row still says "put on": a hint per item kind is not done.
+- Not run in the game: voice levels (`VoiceDb` 4 dB, speaker 0 dB, van 2 dB are guesses), the inverse-distance cut at the range edge, the speaker's place on the body.
+- Song sync of speakers across clients is not attempted (each starts from a random point).
+- No file named `line_NN.ogg` is required: any `.ogg` in the folder is a line (sorted by name).

@@ -5,11 +5,11 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// The Equipment screen (issue #268, F, rebindable action "inventory"): the player's figure in their Camouflage with the worn Items drawn, a cell for
-/// each equipment slot at its body part (headgear above the head) and the six cells of the Bag. No title, labels, buttons or explanation text: an
+/// each equipment slot (a column at the figure's head: headgear, then the neck) and the six cells of the Bag. No title, labels, buttons or explanation text: an
 /// Item is its icon, its pickup pips and a name tooltip (<see cref="ItemCell"/>), and the controls are implicit:
 /// click or Enter on a worn Item takes it off into the bag (a full bag shakes the cell and plays the error sound), on a bagged Item puts it on (what was
 /// worn goes into its cell); drag between the bag, a slot and the avatar (a valid target highlights); drag out of the panel or press Delete to drop an
-/// Item on the ground (no confirmation: picking it up again costs a pickup); the arrows move focus. Over the head slot (hovered or focused) the figure
+/// Item on the ground (no confirmation: picking it up again costs a pickup); the arrows move focus. Over the headgear or neck slot (hovered or focused) the figure
 /// shows the head close up. One glyph-only hint row follows the active device.
 /// It is a non-pausing overlay in the HUD, like the map: the mouse is released (UiShell asks <see cref="Hud.EquipmentOpen"/>), the movement keys still
 /// work (<see cref="Player.MoveWithFreeMouse"/>), firing does not, and nothing pauses. It closes with F, Esc, death, the end of the match and a turret
@@ -52,18 +52,23 @@ public sealed partial class EquipmentScreen : Control
         var row = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         _panel.AddChild(row);
 
-        // the figure with the slots at their body part: headgear above the head
+        // the figure with the slots in a column at its head, in body order from the top: headgear, then the neck
         var left = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         row.AddChild(left);
         _avatar = new CamoPreview(new Vector2(ShooterTheme.AvatarWidth, ShooterTheme.AvatarHeight)) { Focusable = false };
         _avatar.SetDropTarget(
-            data => ItemCell.TryRead(data, out var from) && EquipmentWishes.CanDrop(from, DropTarget.Avatar, SlotOf),
-            data => { if (ItemCell.TryRead(data, out var from)) Perform(EquipmentWishes.Drag(from, DropTarget.Avatar, SlotOf), null); });
-        var headRow = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
-        for (var s = 0; s < _slots.Length; s++) _slots[s] = MakeCell(CellRef.Slot((EquipSlot)s), GhostFor((EquipSlot)s));
-        headRow.AddChild(_slots[(int)EquipSlot.Headgear]); // a slot added to EquipSlot gets its place at its body part here
-        left.AddChild(headRow);
-        left.AddChild(_avatar.Root);
+            data => ItemCell.TryRead(data, out var from) && EquipmentWishes.CanDrop(from, DropTarget.Avatar, SlotOf, Plain),
+            data => { if (ItemCell.TryRead(data, out var from)) Perform(EquipmentWishes.Drag(from, DropTarget.Avatar, SlotOf, Plain), null); });
+        var figure = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        var slotColumn = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore, SizeFlagsVertical = SizeFlags.ShrinkBegin }; // the arrows walk it top to bottom in slot order (EquipmentNav)
+        for (var s = 0; s < _slots.Length; s++)
+        {
+            _slots[s] = MakeCell(CellRef.Slot((EquipSlot)s), GhostFor((EquipSlot)s));
+            slotColumn.AddChild(_slots[s]);
+        }
+        figure.AddChild(_avatar.Root);
+        figure.AddChild(slotColumn);
+        left.AddChild(figure);
         left.AddChild(BuildHints());
 
         // the bag: three columns of two
@@ -80,17 +85,17 @@ public sealed partial class EquipmentScreen : Control
     ItemCell MakeCell(CellRef at, Glyph.Kind? ghost)
     {
         var cell = new ItemCell { Ref = at, Draggable = true, Ghost = ghost };
-        cell.Activated += c => Perform(EquipmentWishes.Activate(c.Ref, SlotOf, _client.BagIsFull), c);
+        cell.Activated += c => Perform(EquipmentWishes.Activate(c.Ref, SlotOf, _client.BagIsFull, Plain), c);
         cell.DropPressed += c => Perform(EquipmentWishes.Drop(c.Ref, SlotOf), c);
         cell.Moved += OnMoved;
         cell.FocusChanged += (_, _) => QueueFraming();
-        cell.AcceptDrop = (target, from) => EquipmentWishes.CanDrop(from, DropTarget.Onto(target.Ref), SlotOf);
-        cell.Dropped = (target, from) => Perform(EquipmentWishes.Drag(from, DropTarget.Onto(target.Ref), SlotOf), target);
+        cell.AcceptDrop = (target, from) => EquipmentWishes.CanDrop(from, DropTarget.Onto(target.Ref), SlotOf, Plain);
+        cell.Dropped = (target, from) => Perform(EquipmentWishes.Drag(from, DropTarget.Onto(target.Ref), SlotOf, Plain), target);
         return cell;
     }
 
     /// <summary>The ghost an empty slot shows: the kind of Item it takes.</summary>
-    static Glyph.Kind? GhostFor(EquipSlot slot) => slot == EquipSlot.Headgear ? Glyph.Kind.Headgear : null;
+    static Glyph.Kind? GhostFor(EquipSlot slot) => slot switch { EquipSlot.Headgear => Glyph.Kind.Headgear, EquipSlot.Neck => Glyph.Kind.Neck, _ => null };
 
     /// <summary>The hint row: a key cap and a pictogram for each of F (close), Enter (swap) and Delete (drop). No words.</summary>
     Control BuildHints()
@@ -123,6 +128,9 @@ public sealed partial class EquipmentScreen : Control
     }
 
     // ---- what it shows ----
+
+    /// <summary>A cell that holds a bag-only item (no slot): it cannot be put on.</summary>
+    bool Plain(CellRef at) => (at.Home == CellHome.Worn ? _client.Worn((EquipSlot)at.Index) : _client.InBag(at.Index))?.Def.BagOnly == true;
 
     EquipSlot? SlotOf(CellRef at) => (at.Home == CellHome.Worn ? _client.Worn((EquipSlot)at.Index) : _client.InBag(at.Index))?.Def.Slot;
 
@@ -264,7 +272,7 @@ public sealed partial class EquipmentScreen : Control
         CellAt(to).FocusByKeys();
     }
 
-    /// <summary>The figure shows the head close up while the headgear slot is hovered or focused (a hovered cell has the focus), and the whole body otherwise.</summary>
+    /// <summary>The figure shows the head close up while the headgear or neck slot is hovered or focused (a hovered cell has the focus), and the whole body otherwise.</summary>
     void QueueFraming()
     {
         if (_framingQueued) return;
@@ -272,7 +280,7 @@ public sealed partial class EquipmentScreen : Control
         Callable.From(() =>
         {
             _framingQueued = false;
-            if (_open && !_quietFraming) _avatar.Frame(_slots[(int)EquipSlot.Headgear].HasFocus() ? CamoPreview.Framing.Head : CamoPreview.Framing.Body);
+            if (_open && !_quietFraming) _avatar.Frame(_slots[(int)EquipSlot.Headgear].HasFocus() || _slots[(int)EquipSlot.Neck].HasFocus() ? CamoPreview.Framing.Head : CamoPreview.Framing.Body);
         }).CallDeferred();
     }
 
