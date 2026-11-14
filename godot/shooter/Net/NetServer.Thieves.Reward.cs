@@ -8,7 +8,7 @@ namespace Drycastle.Shooter;
 /// The Thieves event's reward on the server (docs/events/thieves/10, design "Reward"): the XP of everyone who took part, and the Gold chain a killed Gang boss leaves.
 /// <para>
 /// Credit (<see cref="ThievesCredit"/>): a hit on a Gang member credits its player (<see cref="CreditedGangHits"/> wraps the match's member hits, so every weapon path counts);
-/// a hit on a van and Loot sent back credit through <see cref="Credit"/> (<c>NoteVanHit</c>, <c>NoteLootReturned</c>), which tickets 03 and 04 call. When the event is won
+/// a hit on a van credits through <see cref="CreditedVanHits"/> (the same wrapper for every weapon path) and Loot sent back through <c>NoteLootReturned</c> (<c>NetServer.Thieves.Loot.cs</c>). When the event is won
 /// each credited player still in the match gets the event-win XP (levels.json) once; nobody credited, no XP. A cancelled event or a round reset pays nothing.
 /// </para>
 /// <para>
@@ -18,13 +18,14 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class NetServer
 {
-    /// <summary>Who took part in the running Thieves event. Tickets 03 and 04 call <see cref="ThievesCredit.NoteVanHit"/> and <see cref="ThievesCredit.NoteLootReturned"/> on it.</summary>
+    /// <summary>Who took part in the running Thieves event. <see cref="CreditedVanHits"/> and the Loot return call it.</summary>
     public ThievesCredit Credit { get; } = new();
 
     /// <summary>Called from <see cref="InitThieves"/> after the roster exists: counts the hits on members, and watches for a killed Gang boss.</summary>
     void InitThievesReward()
     {
         _match.Gang = new CreditedGangHits(_gangs!, Credit);
+        _match.Vans = new CreditedVanHits(_raids!, Credit);
         _gangs!.Killed += OnGangBossKilled;
     }
 

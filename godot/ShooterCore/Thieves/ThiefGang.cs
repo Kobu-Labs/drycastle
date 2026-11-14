@@ -27,8 +27,7 @@ public sealed class GangHitIds
 
 /// <summary>
 /// The Gang members of one Raid (GLOSSARY "Raid", "Gang member"), pure. It spawns them as world entities, keeps the hit ids, the aggro list and the queue of routes
-/// they wait for, and answers the hits on them. The Raid's van (ticket 03) sets <see cref="Post"/> and calls <see cref="Add"/>; the stealing loop (ticket 04) reads
-/// <see cref="Members"/> and <see cref="GangMember.Working"/>. The gang owns no clock: the server calls <see cref="Update"/> before the entities tick and
+/// they wait for, and answers the hits on them. The Raid's van (ticket 03) sets <see cref="Post"/> and calls <see cref="Add"/>; the stealing loop (ticket 04) runs in the members through <see cref="Work"/>. The gang owns no clock: the server calls <see cref="Update"/> before the entities tick and
 /// <see cref="ServeRoute"/> after.
 /// <para>
 /// Aggro is kept per Raid: a player who hit any member, or who stands within <see cref="GangAggro.CrowdM"/> of a working Thief, is fought by every member that
@@ -87,6 +86,14 @@ public sealed class ThiefGang : IGangHits, IDisposable
     /// <summary>The players this Raid fights now.</summary>
     public IReadOnlyCollection<ushort> Aggro => _aggro;
 
+    /// <summary>What this Raid's Thieves steal through (<see cref="RaidWork"/>); given to every member, those that join later too. Null: Thieves stand about.</summary>
+    public IThiefWork? Work
+    {
+        get => _work;
+        set { _work = value; foreach (var m in _members) m.Work = value; }
+    }
+    IThiefWork? _work;
+
     public bool Owns(ushort hitId) => _byHit.ContainsKey(hitId);
 
     // ---- spawning ----
@@ -98,7 +105,7 @@ public sealed class ThiefGang : IGangHits, IDisposable
     public GangMember? Add(GangMemberKind kind, Vector3 at, float yaw)
     {
         if (_ids.Allocate() is not { } hit) { Log?.Invoke("gang: every hit id is in use, no member spawned"); return null; }
-        var member = new GangMember(_cfg, kind, _world, at, yaw, (ushort)_rng.Next(ushort.MaxValue + 1), hit, _rng.Next()) { Home = _post };
+        var member = new GangMember(_cfg, kind, _world, at, yaw, (ushort)_rng.Next(ushort.MaxValue + 1), hit, _rng.Next()) { Home = _post, Work = _work };
         member.Died += OnDied;
         member.Boarded += OnBoarded;
         if (_entities.Spawn(member) is not { } entity) { member.Died -= OnDied; member.Boarded -= OnBoarded; _ids.Release(hit); return null; }
@@ -314,7 +321,7 @@ public sealed class ThiefGang : IGangHits, IDisposable
 
     public void Dispose() => _entities.Despawned -= OnDespawned;
 
-    void OnDied(GangMember m) => Killed?.Invoke(new GangKilled(m.HitId, m.Killer, m.Kind, m.Position, m.Carried));
+    void OnDied(GangMember m) => Killed?.Invoke(new GangKilled(m.HitId, m.Killer, m.Kind, m.RestPoint, m.Carried, m.CarriedId));
 
     void OnBoarded(GangMember m) => Boarded?.Invoke(m);
 
@@ -322,7 +329,7 @@ public sealed class ThiefGang : IGangHits, IDisposable
     {
         if (!_hitOfEntity.Remove(d.Id, out var hit)) return;
         _entityOfHit.Remove(hit);
-        if (_byHit.Remove(hit, out var m)) { _members.Remove(m); m.Died -= OnDied; m.Boarded -= OnBoarded; }
+        if (_byHit.Remove(hit, out var m)) { _members.Remove(m); m.Died -= OnDied; m.Boarded -= OnBoarded; m.Remove(d.Reason); } // Remove lets go of the target it had claimed
         _ids.Release(hit);
     }
 

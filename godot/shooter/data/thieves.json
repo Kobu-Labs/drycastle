@@ -31,7 +31,7 @@
     "repath_m": 3,
     // An Enforcer escorting a Thief stays within this of it.
     "guard_follow_m": 3.5,
-    // A Thief with nothing to steal (until ticket 04) idles for a random time, then walks to a point within wander_m of the Raid's post.
+    // A Thief with no Loot work (a gang the Raid gave none) idles for a random time, then walks to a point within wander_m of the Raid's post.
     "idle_min_seconds": 3,
     "idle_max_seconds": 8,
     "wander_m": 12,
@@ -44,10 +44,10 @@
     // The dev fallback (no van yet): the crew appears on a road between min_m and max_m of the admin, spread_m round the point.
     "spawn": { "min_m": 25, "max_m": 60, "spread_m": 3 },
     // Client only. Stand-in bodies (Synty peasants, as holy_mass.json's citizens) until the Gang Warfare pack (ticket 08); without the private pack a coloured capsule per kind.
-    // An empty clip name plays nothing: the windup and swing then lean the body.
+    // An empty clip name plays nothing: the windup and swing then lean the body, steal (kneeling at a target) bends and lowers it, climb_up, climb_down and climb_work (tickets 06 and 07) hold the pose.
     "view": {
       "models": ["peasant_male_01", "peasant_male_01", "peasant_female_01"],
-      "clips": { "idle": "idle_standing_masc", "walk": "walk_f_masc", "run": "sprint_up25f_femn", "windup": "", "swing": "", "death": ["death_back_sword", "death_left_sword"] },
+      "clips": { "idle": "idle_standing_masc", "walk": "walk_f_masc", "run": "sprint_up25f_femn", "windup": "", "swing": "", "steal": "", "climb_up": "", "climb_down": "", "climb_work": "", "death": ["death_back_sword", "death_left_sword"] },
       "thief_color": "#7d6b4f", "enforcer_color": "#8a3b32", "gang_boss_color": "#c9a227", "capsule_height_m": 1.8
     }
   },
@@ -92,5 +92,29 @@
   },
   // The reward (ticket 10). Everyone credited (hit a Gang member or a van, or sent Loot back) gets the level data's event_win XP when the event is won.
   // chain_item: the items.json id a killed Gang boss leaves on his body; chain_corpse_seconds: how long that body lies. A boss who leaves alive keeps his.
-  "reward": { "chain_item": "gold_chain", "chain_corpse_seconds": 300 }
+  "reward": { "chain_item": "gold_chain", "chain_corpse_seconds": 300 },
+  // Ticket 04. How the Thieves steal and how Loot is sent back, then one sub-section per kind of Loot (each later ticket edits only its own).
+  // A Thief looks for a target within seek_radius_m of the van and picks a kind by weight (0: never), then the nearest target of it; one Thief per target. It walks to it at approach_speed_mps (giving it up
+  // after approach_give_up_seconds, or at once with no route, and not choosing it again for avoid_seconds), works steal_seconds (pickup_seconds on Loot that lies), carries it to the van's door at
+  // haul_speed_mps (drops it after haul_give_up_seconds) and tosses it in (load_seconds, within load_reach_m of the door). climb_speed: how fast a Thief climbs up and down for a target that needs a climb.
+  // Loot that lies (its carrier was killed): at most max_lying (over it the oldest goes back by itself); a player holds use return_seconds within reach_m of it to send it back; moving off or a hit starts it over.
+  "loot": {
+    "max_lying": 24, "return_seconds": 1.0, "reach_m": 1.8,
+    "seek_radius_m": 90, "seek_retry_seconds": 2, "approach_speed_mps": 3.0, "haul_speed_mps": 4.5, "arrive_m": 1.0,
+    "approach_give_up_seconds": 45, "avoid_seconds": 60, "haul_give_up_seconds": 60, "pickup_seconds": 1.0, "load_seconds": 0.6, "load_reach_m": 1.5,
+    "climb_speed": 1.5,
+
+    // Tires (ticket 04): one target per wheel of a car at rest, of the vehicle types listed (the sedan model, whose wheel nodes the client hides). The wheel centres are wheel_side_m either side of
+    // the car's middle and wheel_end_m ahead of and behind it; the Thief kneels work_side_m out beside the wheel. At rest: nobody inside and slower than rest_speed_mps.
+    "tire": { "weight": 1, "steal_seconds": 6, "vehicle_ids": ["car"], "wheel_side_m": 0.72, "wheel_end_m": 1.12, "work_side_m": 1.9, "rest_speed_mps": 0.5 },
+
+    // Pets (ticket 05).
+    "pet": { "weight": 1, "steal_seconds": 4 },
+
+    // Dishes (ticket 06).
+    "dish": { "weight": 1, "steal_seconds": 8 },
+
+    // Connectors (ticket 07).
+    "connector": { "weight": 1, "steal_seconds": 6 }
+  }
 }

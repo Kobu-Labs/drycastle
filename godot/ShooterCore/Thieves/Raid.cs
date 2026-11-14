@@ -14,16 +14,20 @@ public sealed class Raid : IRaidCrew
     readonly Func<Vector3, Vector3>? _snap;
     readonly Func<Vector3, Vector3> _edgeFor;
     readonly Queue<GangMemberKind> _queue = new();
+    readonly LootBook? _loot;
+    readonly List<LootOrigin> _loaded = new();
     Countdown _stagger;
     bool _over;
 
-    public Raid(RaidVan van, ThiefGang gang, VanConfig cfg, GangConfig gangCfg, GangRaidCounts crew, RaidPlan plan, Func<Vector3, Vector3>? snap, Func<Vector3, Vector3> edgeFor)
+    /// <param name="loot">The event's Loot: with it the Thieves of the gang steal and load the van (<see cref="RaidWork"/>); without, they stand about.</param>
+    public Raid(RaidVan van, ThiefGang gang, VanConfig cfg, GangConfig gangCfg, GangRaidCounts crew, RaidPlan plan, Func<Vector3, Vector3>? snap, Func<Vector3, Vector3> edgeFor, LootBook? loot = null)
     {
-        Van = van; Gang = gang; _cfg = cfg; _gang = gangCfg; Plan = plan; _snap = snap; _edgeFor = edgeFor;
+        Van = van; Gang = gang; _cfg = cfg; _gang = gangCfg; Plan = plan; _snap = snap; _edgeFor = edgeFor; _loot = loot;
         foreach (var k in Order(crew)) _queue.Enqueue(k);
         van.Crew = this;
         van.StateChanged += OnVanState;
-        gang.Boarded += _ => Boarded++;
+        if (loot != null) gang.Work = new RaidWork(loot, this);
+        gang.Boarded += OnBoarded;
         if (van.State != RaidVanState.Arriving) OnVanState(RaidVanState.Arriving, van.State); // a van put at its stop (the fallback) is already opening
     }
 
@@ -35,6 +39,24 @@ public sealed class Raid : IRaidCrew
     /// <summary>Crew members that got back aboard.</summary>
     public int Boarded { get; private set; }
 
+    /// <summary>The Loot loaded in the van, in the order it was tossed in. Comes back to its places when the van is destroyed; stays with a van that drove off.</summary>
+    public IReadOnlyList<LootOrigin> Loaded => _loaded;
+
+    /// <summary>A Thief tosses a piece of Loot into the van (the van counts it). False when the van takes no more.</summary>
+    public bool LoadIn(LootOrigin piece)
+    {
+        if (!Van.LoadLoot()) return false;
+        _loaded.Add(piece);
+        return true;
+    }
+
+    /// <summary>A member got back aboard: what it still carried goes into the van (the door is open while the crew boards); a van that cannot take it sends it back to its place.</summary>
+    void OnBoarded(GangMember m)
+    {
+        Boarded++;
+        if (m.CarriedOrigin is { } piece && !LoadIn(piece)) _loot?.Return(piece);
+    }
+
     public int StillToSpawn => _queue.Count;
     public int Afoot => Gang.Afoot;
 
@@ -43,7 +65,7 @@ public sealed class Raid : IRaidCrew
 
     /// <summary>Raised once, when the Raid becomes <see cref="Over"/>.</summary>
     public event Action<Raid>? Ended;
-    /// <summary>Raised when the van is destroyed with Loot in it: how many go back (the Loot of ticket 04 returns to its places).</summary>
+    /// <summary>Raised when the van is destroyed with Loot in it: how many went back to their places (the Raid returns them through the <see cref="LootBook"/> before it raises this).</summary>
     public event Action<Raid, int>? LootReturned;
 
     /// <summary>The order the crew gets out: an Enforcer, the Gang boss, then Thieves and Enforcers alternating.</summary>
@@ -82,7 +104,10 @@ public sealed class Raid : IRaidCrew
             case RaidVanState.Destroyed:
                 _queue.Clear();
                 Gang.FleeAll(_edgeFor(Van.Position));
-                LootReturned?.Invoke(this, Van.LootReturnAll()); // HOOK for ticket 04: the Loot loaded goes back to its places
+                var back = Van.LootReturnAll();
+                _loot?.ReturnAll(_loaded); // the Loot loaded goes back to its places (a van that drives off keeps it)
+                _loaded.Clear();
+                LootReturned?.Invoke(this, back);
                 break;
         }
     }
@@ -136,6 +161,9 @@ public sealed class RaidRoster : IGangHits
 
     public Action<string>? Log { get; set; }
 
+    /// <summary>The event's Loot: every Raid launched from now on has Thieves that steal it. Null: they stand about.</summary>
+    public LootBook? Loot { get; set; }
+
     /// <summary>What kind of hit a weapon byte is (<see cref="BigfootRules.SourceOf"/> needs the weapon list, which the server has): the default counts everything as a bullet.</summary>
     public Func<byte, HitSource> SourceOf { get; set; } = _ => HitSource.Bullet;
 
@@ -166,10 +194,11 @@ public sealed class RaidRoster : IGangHits
         {
             Ground = ground,
             Exit = exit,
+            Song = PickSong(),
         };
         if (_entities.Spawn(van) is not { } entity) { Log?.Invoke("raid: the van could not be spawned (entity cap)"); return null; }
         var gang = _gangs.NewGang(start);
-        var raid = new Raid(van, gang, _cfg.Van, _cfg.Gang, crew, plan, snap, edgeFor) { VanEntity = entity };
+        var raid = new Raid(van, gang, _cfg.Van, _cfg.Gang, crew, plan, snap, edgeFor, Loot) { VanEntity = entity };
         raid.Ended += r => RaidOver?.Invoke(r);
         raid.LootReturned += (r, n) => LootReturned?.Invoke(r, n);
         van.Honked += _ => Honked?.Invoke(raid);
@@ -177,6 +206,18 @@ public sealed class RaidRoster : IGangHits
         _used.Add(plan.StopAt);
         Launched?.Invoke(raid);
         return raid;
+    }
+
+    /// <summary>A song number no other van in the village plays, when there is one.</summary>
+    int PickSong()
+    {
+        var taken = _raids.Where(r => !r.Over).Select(r => r.Van.Song).ToHashSet();
+        for (var i = 0; i < 8; i++)
+        {
+            var n = _rng.Next(RaidVanRules.SongCount);
+            if (!taken.Contains(n)) return n;
+        }
+        return _rng.Next(RaidVanRules.SongCount);
     }
 
     int FreeSlot()

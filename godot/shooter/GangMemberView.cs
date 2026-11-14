@@ -16,7 +16,7 @@ namespace Drycastle.Shooter;
 public sealed partial class GangMemberView : Node3D
 {
     const string AtlasDir = "fantasy-characters/textures/";
-    const float LeanBackDeg = 22f, LeanForwardDeg = -32f;
+    const float LeanBackDeg = 22f, LeanForwardDeg = -32f, KneelDeg = -35f, KneelDropM = 0.35f;
 
     readonly GangConfig _cfg;
     readonly GangMemberKind _kind;
@@ -61,7 +61,7 @@ public sealed partial class GangMemberView : Node3D
         _pivot.AddChild(_model);
         _death = clips.Death.Count == 0 ? "" : clips.Death[(int)((_hash >> 24) % (uint)clips.Death.Count)];
         var lib = new AnimationLibrary();
-        foreach (var name in new[] { clips.Idle, clips.Walk, clips.Run, clips.Windup, clips.Swing, _death }.Where(n => n != "").Distinct())
+        foreach (var name in new[] { clips.Idle, clips.Walk, clips.Run, clips.Windup, clips.Swing, clips.Steal, clips.ClimbUp, clips.ClimbDown, clips.ClimbWork, _death }.Where(n => n != "").Distinct())
             if (SyntyLib.Clip(name) is { } clip)
             {
                 if (name == clips.Run) clip.LoopMode = Animation.LoopModeEnum.Linear; // looped whatever the manifest says
@@ -134,11 +134,16 @@ public sealed partial class GangMemberView : Node3D
         var want = state switch
         {
             GangMemberState.Dead => _death,
-            GangMemberState.Chase or GangMemberState.Flee or GangMemberState.Board => c.Run,
+            GangMemberState.Chase or GangMemberState.Flee or GangMemberState.Board or GangMemberState.Haul => c.Run,
             GangMemberState.Windup => c.Windup != "" ? c.Windup : c.Idle,
             GangMemberState.Swing => c.Swing != "" ? c.Swing : c.Idle,
+            GangMemberState.Steal => c.Steal != "" ? c.Steal : c.Idle,
+            GangMemberState.ClimbUp => c.ClimbUp,
+            GangMemberState.ClimbDown => c.ClimbDown,
+            GangMemberState.WorkAloft => c.ClimbWork,
             _ => moving ? c.Walk : c.Idle,
         };
+        if (want == "" && state is GangMemberState.ClimbUp or GangMemberState.ClimbDown or GangMemberState.WorkAloft) { _anim?.Pause(); _clip = ""; return; } // no climb clip yet: a held pose
         if (_anim == null || want == "" || want == _clip) return;
         _clip = want;
         if (!_anim.HasAnimation(want)) return;
@@ -150,9 +155,14 @@ public sealed partial class GangMemberView : Node3D
     void Lean(GangMemberState state)
     {
         var c = _cfg.View.Clips;
-        var deg = state switch { GangMemberState.Windup when c.Windup == "" => LeanBackDeg, GangMemberState.Swing when c.Swing == "" => LeanForwardDeg, _ => 0f };
+        var deg = state switch { GangMemberState.Windup when c.Windup == "" => LeanBackDeg, GangMemberState.Swing when c.Swing == "" => LeanForwardDeg, GangMemberState.Steal when c.Steal == "" => KneelDeg, _ => 0f };
         _lean?.Kill();
-        if (state == GangMemberState.Dead) return;
+        _pivot.Position = new Vector3(0, state == GangMemberState.Steal && c.Steal == "" ? -KneelDropM : 0f, 0); // kneeling at a target: bent forward and lowered
+        if (state == GangMemberState.Dead)
+        {
+            if (_capsule == null) _pivot.RotationDegrees = Vector3.Zero; // a model plays its death clip upright (a capsule falls: Fall)
+            return;
+        }
         _lean = CreateTween();
         _lean.TweenProperty(_pivot, "rotation_degrees:x", deg, state == GangMemberState.Swing ? 0.08 : 0.25);
     }

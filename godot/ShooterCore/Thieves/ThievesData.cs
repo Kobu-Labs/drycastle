@@ -16,8 +16,11 @@ public sealed class ThievesFile : IVersioned
     /// <summary>Voice lines, the speaker and the songs (ticket 09): <see cref="ThievesAudioConfig"/>.</summary>
     public ThievesAudioConfig Audio { get; set; } = new();
 
-    /// <summary>The event's reward (ticket 10). Last section of the file.</summary>
+    /// <summary>The event's reward (ticket 10).</summary>
     public ThievesRewardConfig Reward { get; set; } = new();
+
+    /// <summary>How the Thieves steal, how Loot is sent back, and one sub-section per kind of Loot (ticket 04 and the target kinds after it). Last section of the file.</summary>
+    public LootConfig Loot { get; set; } = new();
 
     public static ThievesFile Load(string path) => Validate(DataFile.Load<ThievesFile>(path));
 
@@ -75,6 +78,7 @@ public sealed class ThievesFile : IVersioned
         f.Audio.Validate(F);
         if (f.Reward.ChainItem == "") throw new DataFileException($"{F}: reward.chain_item names an item of items.json");
         Positive(f.Reward.ChainCorpseSeconds, "reward.chain_corpse_seconds");
+        f.Loot.Validate(F);
         return f;
     }
 }
@@ -191,6 +195,11 @@ public sealed class GangClips
     public string Run { get; set; } = "sprint_up25f_femn";
     public string Windup { get; set; } = "";
     public string Swing { get; set; } = "";
+    /// <summary>The Thief kneeling at a target (Steal; empty: the body is bent forward and lowered) and on a climb (tickets 06 and 07; empty: a held pose, the body stays as it was).</summary>
+    public string Steal { get; set; } = "";
+    public string ClimbUp { get; set; } = "";
+    public string ClimbDown { get; set; } = "";
+    public string ClimbWork { get; set; } = "";
     public List<string> Death { get; set; } = new() { "death_back_sword", "death_left_sword" };
 }
 

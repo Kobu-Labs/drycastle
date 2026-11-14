@@ -16,10 +16,10 @@ public sealed class ThievesCredit
     /// <summary>A player landed a hit on a Gang member that counted (not one the member ignored).</summary>
     public void NoteGangHit(ushort player) => Add(player);
 
-    /// <summary>A player landed a hit on a Raid van. HOOK for ticket 03: call it where the van takes a counted hit.</summary>
+    /// <summary>A player landed a hit on a Raid van that counted (<see cref="CreditedVanHits"/> calls it).</summary>
     public void NoteVanHit(ushort player) => Add(player);
 
-    /// <summary>A player sent a piece of Loot back to its place. HOOK for ticket 04: call it when the send-back completes.</summary>
+    /// <summary>A player sent a piece of Loot back to its place: called when the hold-to-send-back completes (<c>NetServer.Thieves.Loot.cs</c>), while the event runs.</summary>
     public void NoteLootReturned(ushort player) => Add(player);
 
     void Add(ushort player)
@@ -54,6 +54,22 @@ public sealed class CreditedGangHits : IGangHits
     {
         var result = _inner.Hit(hitId, attacker, weapon, amount, cause);
         if (result != DamageResult.Ignored) _credit.NoteGangHit(attacker);
+        return result;
+    }
+}
+
+/// <summary>The match's Raid van hits with a note to <see cref="ThievesCredit"/> on every hit that counted (not one the van ignored: weight 0, a wreck, a blast it already took this tick). It wraps the roster of vans, so every path that reaches a van credits.</summary>
+public sealed class CreditedVanHits : IGangHits
+{
+    readonly IGangHits _inner;
+    readonly ThievesCredit _credit;
+
+    public CreditedVanHits(IGangHits inner, ThievesCredit credit) { _inner = inner; _credit = credit; }
+
+    public DamageResult Hit(ushort hitId, ushort attacker, byte weapon, float amount, KillCause cause)
+    {
+        var result = _inner.Hit(hitId, attacker, weapon, amount, cause);
+        if (result != DamageResult.Ignored) _credit.NoteVanHit(attacker);
         return result;
     }
 }

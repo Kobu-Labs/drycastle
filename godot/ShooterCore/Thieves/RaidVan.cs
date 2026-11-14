@@ -35,16 +35,20 @@ public static class RaidVanRules
     public static int SlotOf(ushort hitId) => (hitId - FirstHitId) / IdsPerVan;
     public static ushort HitIdOf(int slot, int part) => (ushort)(FirstHitId + slot * IdsPerVan + part);
 
-    // The hp byte: bits 0-4 Loot loaded, bits 5-7 the damage stage (0 whole, 7 nearly gone). The owner field: bits 0-9 the door open in thousandths, bit 15 the door is on the left.
+    // The hp byte: bits 0-4 Loot loaded, bits 5-7 the damage stage (0 whole, 7 nearly gone). The owner field: bits 0-9 the door open in thousandths, bits 10-14 the song that plays at the van
+    // (the server picks it at the van's birth, the client plays song number modulo the songs it has), bit 15 the door is on the left.
     const int LoadMask = 31, StageShift = 5, StageMask = 7;
     public const int DoorMax = 1000;
-    const int LeftBit = 0x8000;
+    const int LeftBit = 0x8000, SongShift = 10, SongMask = 31;
+    /// <summary>The songs a van's number can name (5 bits).</summary>
+    public const int SongCount = SongMask + 1;
 
     public static byte PackHp(int load, int stage) => (byte)((Math.Clamp(load, 0, LoadMask)) | ((Math.Clamp(stage, 0, StageMask)) << StageShift));
     public static int LoadOf(byte hp) => hp & LoadMask;
     public static int StageOf(byte hp) => (hp >> StageShift) & StageMask;
 
-    public static ushort PackOwner(float doorOpen, bool left) => (ushort)((int)MathF.Round(Math.Clamp(doorOpen, 0f, 1f) * DoorMax) | (left ? LeftBit : 0));
+    public static ushort PackOwner(float doorOpen, bool left, int song = 0) => (ushort)((int)MathF.Round(Math.Clamp(doorOpen, 0f, 1f) * DoorMax) | ((song & SongMask) << SongShift) | (left ? LeftBit : 0));
+    public static int SongOf(ushort owner) => (owner >> SongShift) & SongMask;
     public static float DoorOf(ushort owner) => Math.Min(owner & 0x3FF, DoorMax) / (float)DoorMax;
     public static bool LeftOf(ushort owner) => (owner & LeftBit) != 0;
 
@@ -165,6 +169,8 @@ public sealed class RaidVan : IWorldEntity
     public RoadPath? Exit { get; set; }
 
     public int Slot { get; }
+    /// <summary>The song that plays at this van (0 to <see cref="RaidVanRules.SongCount"/> - 1): picked by the roster at its birth, travels in the owner field.</summary>
+    public int Song { get; set; }
     /// <summary>The side the door is on: 1 right, -1 left.</summary>
     public int DoorSide { get; }
 
@@ -280,7 +286,7 @@ public sealed class RaidVan : IWorldEntity
     public WorldState Serialize()
     {
         var stage = Math.Min(7, (int)MathF.Floor(8f * Math.Min(1f, _taken / _d.Hits)));
-        return WorldState.Make(Position, Yaw, _pitch, RaidVanRules.PackOwner(DoorOpen, DoorSide < 0), (byte)State, RaidVanRules.PackHp(Load, stage));
+        return WorldState.Make(Position, Yaw, _pitch, RaidVanRules.PackOwner(DoorOpen, DoorSide < 0, Song), (byte)State, RaidVanRules.PackHp(Load, stage));
     }
 
     public void Tick(float dt)

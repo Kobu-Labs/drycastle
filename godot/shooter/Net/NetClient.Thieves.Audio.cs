@@ -20,6 +20,16 @@ public partial class NetClient
         }
     }
 
+    /// <summary>
+    /// The song of a Raid van (the number the server picked at its birth, in the van's owner field): looped at the van to <c>audio.van_range_m</c> from the server's clock (seconds of ticks) modulo the
+    /// song's length, so every client, a joiner too, hears the same bar. Silence without songs (or on a client with no sound).
+    /// </summary>
+    void StartVanSong(Node3D van, int song)
+    {
+        if (!Sfx.Enabled) return;
+        ThiefSounds.PlayVanSong(van, song, _lastTick / (double)Wire.TickRate);
+    }
+
     /// <summary>A Gang member says a line: it is played at the member (the entity id names it), if its body is here.</summary>
     void OnThiefAudioEvent(EventKind kind, byte[] payload)
     {

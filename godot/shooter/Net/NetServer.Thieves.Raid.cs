@@ -45,13 +45,10 @@ public partial class NetServer
         _raids.LootReturned += (r, n) => LootReturnAll(r, n);
     }
 
-    /// <summary>
-    /// HOOK for ticket 04: a van was destroyed with <paramref name="loaded"/> Loot in it (<see cref="RaidVan.LootReturnAll"/> already counted it out). The Loot goes back to its places by
-    /// itself. Nothing is stolen yet, so nothing to do.
-    /// </summary>
+    /// <summary>A van was destroyed with <paramref name="loaded"/> Loot in it: the Raid has put each piece back at its place (<see cref="Raid.LootReturned"/>, through the <see cref="LootBook"/>). Only a log line here.</summary>
     void LootReturnAll(Raid raid, int loaded)
     {
-        if (loaded > 0) GD.Print($"server: Thieves: {loaded} Loot of a destroyed van goes back (no Loot exists yet: ticket 04)");
+        if (loaded > 0) GD.Print($"server: Thieves: {loaded} Loot of a destroyed van goes back to its places");
     }
 
     /// <summary>The road graph of the map's roads.json, cut to the roads a van may use (nothing is read as a graph before the first Raid).</summary>
@@ -69,17 +66,8 @@ public partial class NetServer
     /// <summary>Humans in the match (the crew grows with them); at least one.</summary>
     int RaidHumans() => Math.Max(1, _byId.Values.Count(c => !c.IsBot));
 
-    /// <summary>
-    /// The places something can be stolen at, for the stop choice (<see cref="RaidPlanner"/>). HOOK for tickets 04 to 07: each target kind adds its places here. Until there are targets
-    /// it is the cars that stand in the village (the tires of ticket 04 are theirs).
-    /// </summary>
-    List<NVec2> RaidTargetPoints()
-    {
-        var list = new List<NVec2>();
-        foreach (var car in _cars)
-            if (!car.Destroyed) list.Add(new NVec2(car.GlobalPosition.X, car.GlobalPosition.Z));
-        return list;
-    }
+    /// <summary>The places something can be stolen at, for the stop choice (<see cref="RaidPlanner"/>): the registry of Loot kinds says (<see cref="LootPlaces"/>; a new kind adds nothing here).</summary>
+    List<NVec2> RaidTargetPoints() => LootPlaces();
 
     /// <summary>A point to bring a fallback van near: the admin who started the event, else any human, else the map's middle.</summary>
     NVec2 RaidNearPoint()

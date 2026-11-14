@@ -360,6 +360,7 @@ stateDiagram-v2
     Idle --> Walk
     Idle --> Guard
     Idle --> Chase
+    Idle --> Seek
     Idle --> Flee
     Idle --> Board
     Walk --> Idle
@@ -385,6 +386,38 @@ stateDiagram-v2
     Swing --> Guard
     Swing --> Flee
     Swing --> Board
+    Seek --> Approach
+    Seek --> Chase
+    Seek --> Flee
+    Seek --> Board
+    Approach --> Steal
+    Approach --> ClimbUp
+    Approach --> Seek
+    Approach --> Chase
+    Approach --> Flee
+    Approach --> Board
+    Steal --> Haul
+    Steal --> Seek
+    Steal --> Flee
+    Steal --> Board
+    ClimbUp --> WorkAloft
+    ClimbUp --> ClimbDown
+    ClimbUp --> Flee
+    ClimbUp --> Board
+    WorkAloft --> ClimbDown
+    WorkAloft --> Flee
+    WorkAloft --> Board
+    ClimbDown --> Haul
+    ClimbDown --> Seek
+    ClimbDown --> Flee
+    ClimbDown --> Board
+    Haul --> Load
+    Haul --> Seek
+    Haul --> Flee
+    Haul --> Board
+    Load --> Seek
+    Load --> Flee
+    Load --> Board
     Board --> Flee
     Flee --> [*]
     Dead --> [*]
@@ -392,7 +425,7 @@ stateDiagram-v2
 
 From any state: Dead
 
-- **Idle**: A Thief standing (clock: a random time, then it walks to a point near the post). Steals nothing until ticket 04.
+- **Idle**: A Thief standing (clock: a random time, then it walks to a point near the post); a Thief that has Loot work (its Raid gave it) goes straight on to Seek instead.
 - **Walk**: A Thief on a route to a point near the post (clock: the time budget to arrive, then it stands again).
 - **Guard**: An Enforcer follows the Thief it escorts, or stands at the post; the Gang boss stands at the post. Never steals.
 - **Chase**: Runs at the player the Raid is fighting (a route from the navigation mesh, asked for at most every repath_seconds); winds up once within reach.
@@ -401,6 +434,14 @@ From any state: Dead
 - **Flee**: Runs for the map edge on a route (clock: flee_seconds); the entity ends there (no state follows).
 - **Dead**: Lies for corpse_seconds (the clock's elapsed time), then the entity ends. Reached from any state; never left.
 - **Board**: Called back by the van: runs to its side door on a route (never fights) and ends there, counted as boarded. Flee when the van is destroyed or leaves without it.
+- **Seek**: A Thief looks for a target: the nearest free one of a kind chosen by weight near the van's door, one Thief per target (clock: it asks again after seek_retry_seconds when nothing is free or the van takes no more). A Thief with free hands still joins a fight.
+- **Approach**: Walks a route to the target's work spot (clock: approach_give_up_seconds; a target that is gone, a lost route or the clock ends it and the target is avoided for a while). Arrived: Steal, or ClimbUp when the target needs a climb.
+- **Steal**: Stands at the target, a still target (clock: the kind's steal_seconds, or pickup_seconds for Loot that lies). When the clock runs out the Thief has it and it is gone from its place; a target that goes meanwhile ends it. A Working state: a player crowding it is aggro.
+- **Haul**: Carries the Loot to the van's door, faster than it approached (clock: haul_give_up_seconds, then it drops the Loot where it stands). A Working state; the client attaches the prop from the hp byte.
+- **Load**: Tosses the Loot into the van at the door (clock: load_seconds): counted in the van, the Thief seeks again. A van that cannot take it any more gets it dropped at the Thief's feet.
+- **ClimbUp**: Climbs straight up from the climb's base to its top at climb_speed, off the navigation mesh (no clock: the distance). A Working state; shot dead here it falls to the ground.
+- **WorkAloft**: Works at the top of the climb (clock: the kind's steal_seconds), then has the thing. A Working state; shot dead here it falls to the ground.
+- **ClimbDown**: Climbs straight down to the base at climb_speed, then hauls what it has (or seeks again when it has nothing). A Working state; shot dead here it falls to the ground.
 
 ## HelicopterGunner.Phase
 

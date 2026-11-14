@@ -44,6 +44,7 @@ public partial class NetClient
     {
         GangRules.Register(WorldEntityRegistry.Shared);
         RaidVanRules.Register(WorldEntityRegistry.Shared);
+        InitLootView();
         WorldEntities.Spawned += OnGangSpawned;
         WorldEntities.Despawned += OnGangDespawned;
     }
@@ -55,7 +56,9 @@ public partial class NetClient
             var van = RaidVanView.Make(ThievesData.Van);
             van.Name = $"RaidVan{e.Id}";
             Owned.AddChild(van);
-            _vans[e.Id] = new VanNode { View = van, Shown = RaidVanRules.StateOf(e.State.State) };
+            var shown = RaidVanRules.StateOf(e.State.State);
+            _vans[e.Id] = new VanNode { View = van, Shown = shown };
+            if (shown != RaidVanState.Destroyed) StartVanSong(van, RaidVanRules.SongOf(e.State.Owner));
             return;
         }
         if (e.Type != GangRules.TypeId) return;
@@ -68,13 +71,14 @@ public partial class NetClient
     void OnGangDespawned(ushort id)
     {
         if (_gang.Remove(id, out var g)) g.View.QueueFree();
-        if (_vans.Remove(id, out var v)) { v.View.QueueFree(); v.Solid?.QueueFree(); }
+        if (_vans.Remove(id, out var v)) { if (_thiefAudio != null) _thiefAudio.StopVanSong(v.View); v.View.QueueFree(); v.Solid?.QueueFree(); }
     }
 
     /// <summary>Places the Gang members (interpolated, a little in the past like every remote body) and shows the state they are in.</summary>
     void RenderGang(double delta)
     {
         RenderVans(delta);
+        RenderLoot();
         if (_gang.Count == 0 || _lastTick == 0) return;
         var rt = RenderTickNow();
         foreach (var (id, g) in _gang)
@@ -89,6 +93,7 @@ public partial class NetClient
                 g.Last = p; g.Placed = true;
             }
             g.View.Show(GangRules.StateOf(e.State.State), g.Speed > 0.35f);
+            g.View.SetCarried(e.State.Hp); // the Loot in its hands
             UpdateGangSpeaker(id, g, e.State.Hp); // the speaker on it and its song (ticket 09)
         }
     }
@@ -127,7 +132,11 @@ public partial class NetClient
                 v.Last = p; v.Placed = true;
             }
             v.View.Apply(state, RaidVanRules.DoorOf(e.State.Owner), RaidVanRules.LeftOf(e.State.Owner), RaidVanRules.StageOf(e.State.Hp));
-            if (state == RaidVanState.Destroyed && v.Shown != RaidVanState.Destroyed && ShotFx.Enabled) ExplodeVan(v.View.GlobalPosition);
+            if (state == RaidVanState.Destroyed && v.Shown != RaidVanState.Destroyed)
+            {
+                if (_thiefAudio != null) _thiefAudio.StopVanSong(v.View); // the music dies with the van
+                if (ShotFx.Enabled) ExplodeVan(v.View.GlobalPosition);
+            }
             v.Shown = state;
             PlaceVanSolid(v, e.State, RaidVanRules.IsSolid(state));
         }

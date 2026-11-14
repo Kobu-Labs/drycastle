@@ -51,3 +51,4 @@ Code: pure `ShooterCore/Thieves/GangVoice.cs` (`ThievesAudioConfig`, `GangVoiceC
 - Not run in the game: voice levels (`VoiceDb` 4 dB, speaker 0 dB, van 2 dB are guesses), the inverse-distance cut at the range edge, the speaker's place on the body.
 - Song sync of speakers across clients is not attempted (each starts from a random point).
 - No file named `line_NN.ogg` is required: any `.ogg` in the folder is a line (sorted by name).
+- Van song: done in ticket 04 (`NetClient.StartVanSong`, number in the van's owner field bits 10-14, started from the server clock; stopped when the van is destroyed or gone).

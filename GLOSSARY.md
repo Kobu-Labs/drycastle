@@ -448,7 +448,7 @@ A person of a Raid: a world entity with its own brain and a Hit count, not a Cit
 _Avoid_: NPC (alone), enemy, bandit, robber; boss (alone: say Gang boss)
 
 **Loot**:
-What a Thief takes: a tire off a car, a Pet, a satellite dish off a house, a connector off a utility pole. It is carried, lying (its carrier was killed: another Thief may take it, a player holds use on it to send it back to its place; a Pet walks home by itself) or loaded in a Raid van. Loaded Loot of a van that drove off is gone until the round resets. Not an Item: a player never carries it.
+What a Thief takes: a tire off a car, a Pet, a satellite dish off a house, a connector off a utility pole. It is carried, lying (its carrier was killed: another Thief may take it, a player holds use on it to send it back to its place; a Pet walks home by itself) or loaded in a Raid van. Loaded Loot of a van that drove off is gone until the round resets. At most 24 pieces lie at once (over it the oldest goes back by itself), and lying Loot stays, and stays returnable, after the event. Not an Item: a player never carries it.
 _Avoid_: item, pickup, cargo, stolen goods
 
 **Hit count**:

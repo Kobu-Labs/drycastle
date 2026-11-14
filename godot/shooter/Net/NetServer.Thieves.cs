@@ -26,6 +26,7 @@ public partial class NetServer
         _thieves = new ThievesEvent();
         InitGangs();
         InitRaids();
+        InitLoot();
         InitThievesReward();
     }
 
@@ -47,7 +48,7 @@ public partial class NetServer
 
     /// <summary>
     /// Once a tick (after <see cref="MassTick"/>): the routes the Gang members wait for, the Raids (their crews, their vans' contact with the world) and the Raid sequence: the next Raid
-    /// when it is due, and the win once the last van is gone. HOOK for the Loot: what the Thieves steal runs here.
+    /// when it is due, and the win once the last van is gone. What the Thieves steal runs in their members (<see cref="RaidWork"/>).
     /// </summary>
     void ThievesTick(float dt)
     {
@@ -84,6 +85,7 @@ public partial class NetServer
     {
         _thieves!.Finish();
         if (by != null || !won) ClearGangs(); // an admin's end or cancel removes every van and crew; a win by itself leaves what is still fleeing to run off
+        if (!won) ResetLoot(); // a cancelled event never happened: everything taken goes back (a win keeps what was stolen, and lying Loot stays returnable)
         WithdrawIntel(ThievesEvent.IntelId);
         _events.End(EventBook.Thieves, won ? EventPhase.Won : EventPhase.Despawned, _elapsed);
         ChatToAll(ChatLineKind.System, "", won
@@ -96,13 +98,14 @@ public partial class NetServer
     /// <summary>Join: what a joiner needs to see of a running Thieves event. Nothing: the vans and crews are world entities, which a joiner is sent with the rest of the world (the intel board is sent by <see cref="SendIntelOnJoin"/>).</summary>
     void SendThievesOnJoin(Client c) { }
 
-    /// <summary>A new round clears the event (the world's entities went with it): a running run is despawned without a reward, the phase is Idle. HOOK for the Loot: what it stole is put back.</summary>
+    /// <summary>A new round clears the event (the world's entities went with it): a running run is despawned without a reward, the phase is Idle. What it stole is put back (<see cref="ResetLoot"/>).</summary>
     void ThievesRoundReset()
     {
         if (_thieves == null) return;
         var wasRunning = _thieves.Running;
         _thieves.Reset();
         ClearGangs();
+        ResetLoot();
         ResetThievesReward();
         if (!wasRunning) return;
         WithdrawIntel(ThievesEvent.IntelId);
