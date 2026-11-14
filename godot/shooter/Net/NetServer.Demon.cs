@@ -195,6 +195,10 @@ public partial class NetServer
             DemonPhase.Dwelling => DemonState.Dwelling,
             DemonPhase.Crawling => DemonState.Crawling,
             DemonPhase.Telegraphing => DemonState.Telegraphing,
+            DemonPhase.Roaring => DemonState.Roaring,
+            DemonPhase.LeapWind => DemonState.Crouching,
+            DemonPhase.Leaping => DemonState.Leaping,
+            DemonPhase.Breathing => DemonState.Breathing,
             _ => DemonState.Dead,
         };
         DemonHandle(_dEvents);
@@ -210,6 +214,12 @@ public partial class NetServer
                 case DemonFireballLaunched l:
                     _balls.Add(l.Ball);
                     BroadcastEvent(EventKind.DemonFireball, DemonCodec.EncodeFireball(new DemonFireballMsg((ushort)l.Ball.Id, l.Ball.Pos, l.Ball.Vel)));
+                    break;
+                case DemonFlameStarted f:
+                    BroadcastEvent(EventKind.DemonFlame, DemonCodec.EncodeFlame(f.Target));
+                    break;
+                case DemonFlameHit h:
+                    FlameBurn(h.Player);
                     break;
                 case DemonWiped:
                     GD.Print("server: demon: everyone inside is dead; it heals and waits");
@@ -285,6 +295,15 @@ public partial class NetServer
             if (res == DamageResult.Ignored) { _burns.Extinguish(v.Id); continue; } // spawn protected: no burn either
             if (res != DamageResult.Killed && v.Knockback != NVec3.Zero) victim.Body.AddImpulse(new Vector3(v.Knockback.X, v.Knockback.Y, v.Knockback.Z));
         }
+    }
+
+    /// <summary>A tick of the demon's flame reaches a player: its own damage and the fireball's burn (no kill credit), like a fireball's blast.</summary>
+    void FlameBurn(ushort id)
+    {
+        if (!_byId.ContainsKey(id)) return;
+        _burns.Ignite(id, BurnSet.NoSource, Demon.Burn);
+        var res = Deal(id, SpecialWeapons.Burn, id, MathF.Max(1f, MathF.Round(Demon.Flame.DamagePerTick)), false, false);
+        if (res == DamageResult.Ignored) _burns.Extinguish(id); // spawn protected: no burn either
     }
 
     // ---- being hit ----

@@ -39,5 +39,35 @@
     "splash": { "radius_m": 3.0, "full_damage_radius_m": 1.0, "edge_damage": 6, "knockback_speed": 2.5 },
     "ignites": true
   },
+  "roar": {
+    "duration_s": 3.2,
+    "interval_s": [22, 38],
+    "health_shares": [0.66, 0.33],
+    "on_wake": true,
+    "shake_radius_m": 30
+  },
+  "leap": {
+    "chance": 0.3,
+    "min_range_m": 5,
+    "max_range_m": 24,
+    "crouch_s": 0.6,
+    "speed_mps": 15,
+    "arc_height_m": 1.5,
+    "land_recover_s": 0.8,
+    "cooldown_s": 8,
+    "min_opposite_dot": 0.7
+  },
+  "flame": {
+    "range_m": 11,
+    "cone_half_angle_deg": 14,
+    "windup_s": 0.8,
+    "duration_s": 2.0,
+    "cooldown_s": 7,
+    "track_deg_per_s": 40,
+    "tick_s": 0.25,
+    "damage_per_tick": 3,
+    "head_up_m": 0.9,
+    "head_forward_m": 0.6
+  },
   "burn": { "dps": 0.5, "duration_s": 10, "tick_interval_s": 1 }
 }

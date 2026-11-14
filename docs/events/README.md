@@ -156,6 +156,8 @@ Both are a status, not an Item: no slot, no drop. They survive a round change an
 - wire: world entity 52 (owner field = octahedral surface normal, yaw/pitch = facing, state `DemonState`, hp byte = share of hits left); events 216 fireball (clients fly the arc), 217 impact, 218 cursed toast. Hit id 39999
 - fireball damage and burn are the victim's own (weapon "Burning", no kill credit); hits on the demon count by weapon kind (splash weapons explosive, special weapons and vehicles vehicle, the rest bullet)
 - gait: diagonal, driven by distance, two-bone IK per limb to footholds on the surface plane (`DemonPose`)
+- roar / leap / flame (protocol v37, `holy_mass_demon.json` `roar`, `leap`, `flame`; each off when its key number is 0): `DemonBrain` phases Roaring (on wake, every `interval_s`, at `health_shares`), LeapWind + Leaping (scripted arc to an opposite-wall anchor, server-side position), Breathing (windup, then a cone that burns every `tick_s`); replicated as demon states 6-9, event 222 `DemonFlame` names the target so clients aim the stream
+- church decor (client only, from `church.json`, `ChurchDecor.cs`): wooden cross on the wall behind the altar, burns and turns upside down while a demon exists, upright again after; warm interior lights (no shadows) go out when the demon appears
 
 ## Tickets
 1. Enterable church (pipeline, ADR, `church.json`)
