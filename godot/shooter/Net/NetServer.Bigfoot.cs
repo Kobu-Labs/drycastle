@@ -7,7 +7,7 @@ namespace Drycastle.Shooter;
 /// <summary>
 /// The Bigfoot event on the server (issue #264, GLOSSARY "Event"). An admin starts it with <c>/event bigfoot</c>; the <see cref="Bigfoot"/> brain
 /// (<c>ShooterCore/Events</c>) fights from then on, as a world entity of its own (not a bot) that the shots reach as a scaled <see cref="HitTarget"/>
-/// (<see cref="DealBigfoot"/> counts the hits). It ends as a win (it dies: an "event won" line, XP, then footsteps to a corpse that carries the head)
+/// (<see cref="DealBigfoot"/> counts the hits). It ends as a win (it dies: an "event won" line, XP, then its body is a corpse that carries the head)
 /// or despawned (nobody came near for minutes, the admin cancelled it, the round ended): no reward. This file is the world the brain stands in
 /// (<see cref="BigfootEnv"/>: the terrain, the solid world, the players, the vehicles it throws), the lifecycle, the reward and the chat commands.
 /// </summary>
@@ -23,11 +23,10 @@ public partial class NetServer
     /// <summary>The Bigfoot's hit volume at the end of recent ticks, for the rewind of a shot (ADR 0013), and the tick it appeared.</summary>
     readonly PoseRing _bigfootPoses = new();
     uint _bigfootLifeStart;
-    /// <summary>It died: its body lies out the death clip, and when it is gone the footsteps and the corpse appear where it fell.</summary>
+    /// <summary>It died: its body lies out the death clip, and when the clip is over it is a corpse to loot where it fell.</summary>
     bool _bigfootWon;
     NVec3 _bigfootFell;
-    List<Footprint>? _trail;
-    ushort _trailCorpse;
+    float _bigfootFellYaw;
     /// <summary>The living players and the throwable vehicles of this tick, refilled once a tick before the entities tick (<see cref="BigfootPrepare"/>).</summary>
     readonly List<BigfootPlayer> _bfPlayers = new();
     readonly List<BigfootVehicle> _bfVehicles = new();
@@ -193,11 +192,11 @@ public partial class NetServer
     {
         _events.End(EventPhase.Won, _elapsed);
         _bigfootWon = true;
-        _bigfootFell = bf.Position;
+        _bigfootFell = bf.Position; _bigfootFellYaw = bf.Yaw;
         BigfootFxEvent(BigfootFxKind.Death, bf.Position);
         var credited = bf.Credited.Where(id => _byId.ContainsKey(id)).ToList();
         var names = credited.Count == 0 ? "" : " " + string.Join(", ", credited.Select(id => _byId[id].Name).Take(8)) + (credited.Count > 8 ? " and others" : "") + " took part.";
-        ChatToAll(ChatLineKind.System, "", $"Event won: the Bigfoot is down!{names} Its tracks will lead you to what it left behind.");
+        ChatToAll(ChatLineKind.System, "", $"Event won: the Bigfoot is down!{names} Loot its body for what it left behind.");
         AwardXp(credited.Where(Scores).Select(id => new XpGrant(id, Levels.Awards.EventWin, XpReason.EventWin)).ToList());
         GD.Print($"server: Bigfoot died (last hit by #{bf.Killer}), credited {string.Join(",", credited)}");
     }
@@ -205,12 +204,6 @@ public partial class NetServer
     /// <summary>The Bigfoot entity left the world: after its death it is the reward's time, otherwise the event ended with no reward.</summary>
     void OnBigfootWorldDespawn(WorldDespawned w)
     {
-        if (w.Id == _trailCorpse && _trailCorpse != 0)
-        {
-            _trailCorpse = 0; _trail = null;
-            BroadcastEvent(EventKind.BigfootTrail, BigfootTrail.Encode(Array.Empty<Footprint>())); // the corpse is gone, so are the tracks
-            return;
-        }
         if (w.Id != _bigfootId || _bigfoot == null) return;
         var won = _bigfootWon;
         _bigfoot = null; _bigfootId = 0; _bigfootEnv = null; _bigfootWon = false;
@@ -226,35 +219,23 @@ public partial class NetServer
         }
     }
 
-    /// <summary>The reward: footsteps from where it fell to a corpse that carries the head (the corpse item path of ADR 0016 and 0018), both lasting <see cref="BigfootReward.CorpseSeconds"/>.</summary>
+    /// <summary>The reward: when its death clip is over, its body is a corpse where it fell that carries the head (the corpse item path of ADR 0016 and 0018), lasting <see cref="BigfootReward.CorpseSeconds"/>.</summary>
     void SpawnBigfootReward(NVec3 fell)
     {
         var r = BigfootData.Reward;
         var item = Items.IndexOf(r.HeadItem);
-        if (item < 0) { GD.PrintErr($"server: the Bigfoot's reward item '{r.HeadItem}' is not in items.json: no corpse, no tracks"); return; }
-        var prints = BigfootTrail.Plan(fell, r.TrailLengthM, r.TrailSpacingM, r.TrailTries, (x, z) => BigfootGround(x, z, fell.Y), _rng, out var end);
-        var yaw = prints.Count > 0 ? prints[^1].Yaw : 0f;
+        if (item < 0) { GD.PrintErr($"server: the Bigfoot's reward item '{r.HeadItem}' is not in items.json: no corpse"); return; }
         var knife = Weapons.Weapons.FindIndex(w => w.Kind == WeaponKind.Melee); // a weapon nobody can take into a hotbar position (CorpseRules.CanReplace): the corpse is for its item
-        var corpse = new Corpse(BigfootRules.TargetId, end, yaw, Math.Max(0, knife), 0, new[] { new ItemStack(item) }, r.CorpseSeconds);
+        var corpse = new Corpse(BigfootRules.TargetId, fell, _bigfootFellYaw, Math.Max(0, knife), 0, new[] { new ItemStack(item) }, r.CorpseSeconds);
         var id = _corpses.Add(corpse);
         if (id is not { } cid) { GD.PrintErr("server: the world refused the Bigfoot's corpse"); return; }
-        _trailCorpse = cid; _trail = prints;
         BroadcastCorpseItems(cid);
-        BroadcastEvent(EventKind.BigfootTrail, BigfootTrail.Encode(prints));
-        ChatToAll(ChatLineKind.System, "", "Footsteps lead away from where the Bigfoot fell. Follow them.");
-        GD.Print($"server: Bigfoot corpse {cid} at ({end.X:F1},{end.Y:F1},{end.Z:F1}), {prints.Count} footprints, lasts {r.CorpseSeconds:F0} s");
-    }
-
-    /// <summary>Join: the footprints that lead to the corpse, while it lasts.</summary>
-    void SendTrailOnJoin(Client c)
-    {
-        if (_trail is { Count: > 0 } t) Send(c, new EventMsg((byte)EventKind.BigfootTrail, BigfootTrail.Encode(t)));
+        GD.Print($"server: Bigfoot corpse {cid} at ({fell.X:F1},{fell.Y:F1},{fell.Z:F1}), lasts {r.CorpseSeconds:F0} s");
     }
 
     /// <summary>A new round clears the world, the Bigfoot and its tracks with it; nothing of the event is left running.</summary>
     void BigfootRoundReset()
     {
-        _trail = null; _trailCorpse = 0;
         if (_events.Current != null && _bigfoot == null) _events.End(EventPhase.Despawned, _elapsed);
     }
 

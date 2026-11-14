@@ -32,6 +32,11 @@
     "second_phase_at": 0.30,
     "third_phase_at": 0.60,
     "enrage_at": 0.85,
+    // the same steps by the clock, whichever comes first: seconds of the fight (awake, with a target) after which each begins even
+    // if nobody shot it (0: never by time)
+    "second_phase_after_seconds": 20,
+    "third_phase_after_seconds": 45,
+    "enrage_after_seconds": 90,
     "enrage_speed_multiplier": 1.3,
     "enrage_cooldown_multiplier": 0.6,
     "health_regain_per_second": 0
@@ -41,13 +46,15 @@
   // obstacle (it tramples through them); buildings and walls are solid, and it goes round them.
   "movement": {
     "walk_speed": 3.4,
-    "run_speed": 6.8,
+    "run_speed": 13.9,
     "run_beyond_m": 16,
     "turn_rate_deg_per_s": 150,
     "max_step_m": 1.4,
     "body_radius_m": 1.1,
     "retarget_seconds": 4,
-    "stop_distance_m": 3
+    "stop_distance_m": 3,
+    // a player farther than this is no target: it gives a runner up and stands until someone is nearer
+    "give_up_m": 150
   },
 
   // Phase one: it hurls tree trunks, an arc aimed ahead of the target.
@@ -117,7 +124,7 @@
   "reward": {
     "head_item": "bigfoot_head",
     "corpse_seconds": 900,
-    "death_seconds": 8,
+    "death_seconds": 3,
     "trail_length_m": 120,
     "trail_spacing_m": 1.9,
     "trail_tries": 24,

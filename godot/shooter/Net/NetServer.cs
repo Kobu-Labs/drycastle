@@ -483,7 +483,6 @@ public partial class NetServer : Node
         SendCorpseItemsOnJoin(c); // the items the corpses carry, after the corpses themselves
         SendGlassOnJoin(c); // the glass panes that are not whole (ADR 0007)
         SendIntelOnJoin(c); // the events on the intel screen
-        SendTrailOnJoin(c); // the Bigfoot's footprints, while they last (#264)
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
         SendWornOnJoin(c); // what the others wear (#266), to draw on their characters

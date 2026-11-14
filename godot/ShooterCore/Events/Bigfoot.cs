@@ -104,6 +104,7 @@ public sealed class Bigfoot : IWorldEntity
     float _actLeft;                   // seconds left of a timed act
     ushort _target;
     float _retarget;
+    float _fight;                     // seconds awake with a target: the phases also begin by this clock
     float _trunkCd, _stompCd, _vehicleCd, _grabCd;
     ushort _vehicleToThrow;
     ushort _held;
@@ -209,8 +210,8 @@ public sealed class Bigfoot : IWorldEntity
     void UpdatePhase()
     {
         var f = TakenFraction;
-        var phase = BigfootRules.PhaseAt(_d.Hits, f);
-        var enraged = BigfootRules.EnrageAt(_d.Hits, f);
+        var phase = Math.Max(BigfootRules.PhaseAt(_d.Hits, f), BigfootRules.PhaseAfter(_d.Hits, _fight));
+        var enraged = BigfootRules.EnrageAt(_d.Hits, f) || BigfootRules.EnrageAfter(_d.Hits, _fight);
         if (phase > Phase) _w.Fx(BigfootFxKind.Roar, Position, 0, (byte)phase);
         Phase = Math.Max(Phase, phase);
         Enraged = Enraged || enraged;
@@ -235,6 +236,7 @@ public sealed class Bigfoot : IWorldEntity
         TickFlyers(players, dt);
         _trunkCd -= dt; _stompCd -= dt; _vehicleCd -= dt; _grabCd -= dt;
         if (_waiting) { Act = BigfootAct.Idle; return; }
+        if (_target != 0) { _fight += dt; UpdatePhase(); }
 
         switch (Act)
         {
@@ -300,7 +302,7 @@ public sealed class Bigfoot : IWorldEntity
     void Wipe()
     {
         _taken = 0; _hitsBy.Clear(); _waiting = true;
-        Phase = 0; Enraged = false;
+        Phase = 0; Enraged = false; _fight = 0;
         _need = BigfootRules.HitsNeeded(_d.Hits, 0);
         ReleaseHeld();
         _waves.Clear(); _flyers.Clear();
@@ -365,12 +367,13 @@ public sealed class Bigfoot : IWorldEntity
         _retarget -= dt;
         BigfootPlayer? current = null;
         foreach (var p in players) if (p.Id == _target) current = p;
+        if (current is { } c && Flat(c.Feet, Position) > _d.Movement.GiveUpM) current = null; // out of reach: given up at once
         if (current != null && _retarget > 0) return current;
-        BigfootPlayer? best = null; var bd = float.MaxValue;
+        BigfootPlayer? best = null; var bd = _d.Movement.GiveUpM;
         foreach (var p in players)
         {
             var d = Flat(p.Feet, Position);
-            if (d < bd) { bd = d; best = p; }
+            if (d <= bd) { bd = d; best = p; }
         }
         if ((best?.Id ?? 0) != _target) _targetSeenValid = false;
         _target = best?.Id ?? 0;

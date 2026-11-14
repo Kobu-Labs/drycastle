@@ -318,7 +318,7 @@ public class BigfootTests
     {
         var w = new FakeWorld().Player(1, 0, -80).Player(2, 200, 0);
         var b = Make(w);
-        Run(b, 6);
+        Run(b, 1.5f);
         Assert.True(b.Position.Z < -10, $"it walked towards player 1, to {b.Position}");
         Assert.True(MathF.Abs(b.Position.X) < 5);
         Assert.Equal(1, b.Target);
@@ -327,14 +327,40 @@ public class BigfootTests
     }
 
     [Fact]
+    public void ItGivesUpAPlayerBeyondItsReach()
+    {
+        var w = new FakeWorld().Player(1, 0, -(Shipped.Movement.GiveUpM + 20));
+        var b = Make(w);
+        Run(b, 3);
+        Assert.Equal(0, b.Target);
+        Assert.Equal(Vector3.Zero, b.Position);
+        Assert.Equal(BigfootAct.Idle, b.Act);
+    }
+
+    [Fact]
+    public void ThePhasesAlsoBeginByTheClockWithNobodyShooting()
+    {
+        var w = new FakeWorld().Player(1, 0, -30);
+        var b = Make(w);
+        Run(b, Shipped.Hits.SecondPhaseAfterSeconds - 1);
+        Assert.Equal(0, b.Phase);
+        Run(b, 2);
+        Assert.Equal(1, b.Phase);
+        Run(b, Shipped.Hits.ThirdPhaseAfterSeconds - Shipped.Hits.SecondPhaseAfterSeconds);
+        Assert.Equal(2, b.Phase);
+        Run(b, Shipped.Hits.EnrageAfterSeconds - Shipped.Hits.ThirdPhaseAfterSeconds);
+        Assert.True(b.Enraged);
+    }
+
+    [Fact]
     public void ItKeepsATargetUntilItDiesThenTakesAnother()
     {
-        var w = new FakeWorld().Player(1, 0, -70).Player(2, 65, 0); // all beyond the throwing range: it only walks
+        var w = new FakeWorld().Player(1, 0, -140).Player(2, 135, 0); // all beyond the throwing range: it only runs
         var b = Make(w);
         b.Tick(Dt);
         var first = b.Target;
         Assert.Equal(2, first);
-        w.PlayerList.Insert(0, new BigfootPlayer(3, new Vector3(0, 0, 60), true, false)); // a nearer one arrives: not before the retarget time
+        w.PlayerList.Insert(0, new BigfootPlayer(3, new Vector3(0, 0, 120), true, false)); // a nearer one arrives: not before the retarget time
         Run(b, 1.5f);
         Assert.Equal(first, b.Target);
         w.Remove(first);
@@ -433,7 +459,7 @@ public class BigfootTests
     [Fact]
     public void ItThrowsAVehicleInContactInPhaseTwoToWhereThereIsGround()
     {
-        var w = new FakeWorld().Player(1, 0, -50);
+        var w = new FakeWorld().Player(1, 0, -12);
         w.VehicleList.Add(new BigfootVehicle(0x4001, new Vector3(2, 0, 1)));
         var b = Make(w);
         Run(b, 0.3f);
@@ -550,16 +576,16 @@ public class BigfootTests
     [Fact]
     public void EnragedItIsFasterAndItsCooldownsAreShorter()
     {
-        var far = new FakeWorld().Player(1, 0, -400);
+        var far = new FakeWorld().Player(1, 0, -140);
         var calm = Make(far);
-        Run(calm, 10);
+        Run(calm, 4);
         var calmWalked = -calm.Position.Z;
-        var far2 = new FakeWorld().Player(1, 0, -400);
+        var far2 = new FakeWorld().Player(1, 0, -140);
         var angry = Make(far2);
         HitUntil(angry, Shipped.Hits.EnrageAt);
         Assert.True(angry.Enraged);
         var start = angry.Position.Z;
-        Run(angry, 10);
+        Run(angry, 4);
         Assert.True(start - angry.Position.Z > calmWalked * 1.15f, $"enraged it walked {start - angry.Position.Z} m, calm {calmWalked} m");
         Assert.True(BigfootRules.IsEnraged(angry.Serialize().State));
     }

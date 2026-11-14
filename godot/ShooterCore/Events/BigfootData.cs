@@ -65,7 +65,9 @@ public sealed class BigfootFile : IVersioned
         if (m.RunSpeed < m.WalkSpeed) throw new DataFileException($"{F}: movement.run_speed is not below walk_speed");
         Positive(m.TurnRateDegPerS, "movement.turn_rate_deg_per_s"); Positive(m.RunBeyondM, "movement.run_beyond_m");
         Positive(m.MaxStepM, "movement.max_step_m"); Positive(m.BodyRadiusM, "movement.body_radius_m"); Positive(m.RetargetSeconds, "movement.retarget_seconds");
-        Positive(m.StopDistanceM, "movement.stop_distance_m");
+        Positive(m.StopDistanceM, "movement.stop_distance_m"); Positive(m.GiveUpM, "movement.give_up_m");
+        NotNegative(h.SecondPhaseAfterSeconds, "hits.second_phase_after_seconds"); NotNegative(h.ThirdPhaseAfterSeconds, "hits.third_phase_after_seconds");
+        NotNegative(h.EnrageAfterSeconds, "hits.enrage_after_seconds");
 
         var t = f.Trunk;
         Positive(t.MinRangeM, "trunk.min_range_m");
@@ -126,6 +128,10 @@ public sealed class BigfootHits
     public float SecondPhaseAt { get; set; } = 0.30f;
     public float ThirdPhaseAt { get; set; } = 0.60f;
     public float EnrageAt { get; set; } = 0.85f;
+    /// <summary>The same three steps by the clock: seconds of the fight (awake, with a target) after which they begin whatever damage it took. 0: never by time.</summary>
+    public float SecondPhaseAfterSeconds { get; set; } = 20;
+    public float ThirdPhaseAfterSeconds { get; set; } = 45;
+    public float EnrageAfterSeconds { get; set; } = 90;
     /// <summary>Enraged: it moves this much faster and its cooldowns are this much of what they were.</summary>
     public float EnrageSpeedMultiplier { get; set; } = 1.3f;
     public float EnrageCooldownMultiplier { get; set; } = 0.6f;
@@ -148,6 +154,8 @@ public sealed class BigfootMovement
     public float RetargetSeconds { get; set; } = 4;
     /// <summary>It stops this close to its target (the target's capsule is in its way).</summary>
     public float StopDistanceM { get; set; } = 3f;
+    /// <summary>A player farther than this is no target: it gives a runner up and stands until someone is nearer.</summary>
+    public float GiveUpM { get; set; } = 150;
 }
 
 /// <summary>Phase one: it hauls tree trunks at the players (an arc, no homing).</summary>
@@ -292,6 +300,12 @@ public static class BigfootRules
 
     /// <summary>The phase (0 to 2) for a fraction of the hit count taken.</summary>
     public static int PhaseAt(BigfootHits h, float taken) => taken >= h.ThirdPhaseAt ? 2 : taken >= h.SecondPhaseAt ? 1 : 0;
+
+    /// <summary>The phase (0 to 2) for the seconds the fight has lasted.</summary>
+    public static int PhaseAfter(BigfootHits h, float seconds) =>
+        h.ThirdPhaseAfterSeconds > 0 && seconds >= h.ThirdPhaseAfterSeconds ? 2 : h.SecondPhaseAfterSeconds > 0 && seconds >= h.SecondPhaseAfterSeconds ? 1 : 0;
+
+    public static bool EnrageAfter(BigfootHits h, float seconds) => h.EnrageAfterSeconds > 0 && seconds >= h.EnrageAfterSeconds;
 
     public static bool EnrageAt(BigfootHits h, float taken) => taken >= h.EnrageAt;
 
