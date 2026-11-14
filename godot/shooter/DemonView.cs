@@ -176,6 +176,7 @@ public sealed partial class DemonView : Node3D
         if (state == DemonState.Roaring && !first) BeginRoar();
         else if (prev == DemonState.Roaring && state != DemonState.Dead && _demonAnim != null && _demonAnim.HasAnimation(Idle)) _demonAnim.Play(Idle, 0.3);
         if (state == DemonState.Breathing) _hasFlameDir = false;
+        SetMusic(state != DemonState.Transforming && state != DemonState.Dead);
         _crawlSpeed = state == DemonState.Roaring || prev == DemonState.Roaring ? 3f : 1f / Math.Max(0.1f, _data.Fight.TransformDropS);
         switch (state)
         {
@@ -240,6 +241,24 @@ public sealed partial class DemonView : Node3D
         _crawl = 0; _crawlTo = 0;
         if (_flames != null) ParticleFx.Run(_flames, true);
         PlayTransformSound();
+    }
+
+    AudioStreamPlayer3D? _music;
+
+    /// <summary>The fight's looped background, from the private pack, heard in and around the church; off while it turns and once it is dead.</summary>
+    void SetMusic(bool on)
+    {
+        if (!on) { _music?.Stop(); return; }
+        if (_music == null)
+        {
+            if (!Sfx.Enabled) return;
+            var path = System.IO.Path.Combine(GamePaths.PrivateAssets(), "audio/holy_mass/demon_music.ogg");
+            if (!System.IO.File.Exists(path) || AudioStreamOggVorbis.LoadFromFile(path) is not { } stream) return;
+            stream.Loop = true;
+            _music = new AudioStreamPlayer3D { Stream = stream, Bus = "Music", UnitSize = 30f, MaxDistance = 70f, VolumeDb = -2f };
+            AddChild(_music);
+        }
+        if (!_music.Playing) _music.Play();
     }
 
     /// <summary>The turning's sound, from the private pack (not ours to publish); skipped when the file is not there.</summary>
