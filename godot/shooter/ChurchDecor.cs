@@ -57,6 +57,29 @@ public partial class ChurchDecor : Node3D
     float _angle, _burn, _lightK = 1;
     double _t;
 
+    static string? _glassPrefix;
+    static readonly StandardMaterial3D ClearPane = new()
+    {
+        Transparency = BaseMaterial3D.TransparencyEnum.Alpha, AlbedoColor = new Color(0.62f, 0.78f, 0.88f, 0.22f),
+        Roughness = 0.08f, Metallic = 0.1f, CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+    };
+    float _glassIn;
+    int _glassDone;
+
+    /// <summary>
+    /// The church's panes come from the map as opaque coloured meshes, like every house window; these stand in real openings, so they get a clear
+    /// material. The chunk with the church may load after this node: looked for once a second until its panes are found (and a few times after, for stragglers).
+    /// </summary>
+    void ClearGlass(float dt)
+    {
+        if (_glassPrefix == null || _glassDone >= 3 || (_glassIn -= dt) > 0) return;
+        _glassIn = 1f;
+        var found = 0;
+        foreach (var n in GetTree().Root.FindChildren(_glassPrefix + "*", "MeshInstance3D", true, false))
+            if (n is MeshInstance3D m) { m.MaterialOverride = ClearPane; found++; }
+        if (found > 0) _glassDone++;
+    }
+
     /// <summary>The decor of the church.json in <paramref name="mapDir"/>, or null when the map has no church or the file lacks rooms.</summary>
     public static ChurchDecor? Create(string mapDir)
     {
@@ -72,6 +95,7 @@ public partial class ChurchDecor : Node3D
             if (poly.Count >= 3) list.Add(new Room(poly, r.GetProperty("z0").GetSingle(), r.GetProperty("z1").GetSingle()));
         }
         if (list.Count == 0) return null;
+        _glassPrefix = root.TryGetProperty("id", out var bid) && bid.GetString() is { Length: > 0 } id ? $"window_{id}_c" : null;
         Spot? altar = null, pastor = null;
         if (root.TryGetProperty("props", out var props))
             foreach (var p in props.EnumerateArray())
@@ -295,6 +319,7 @@ public partial class ChurchDecor : Node3D
         _burn = Mathf.MoveToward(_burn, _demon ? 1f : 0f, dt / (_demon ? BurnRampS : BurnOutS));
         _angle = Mathf.MoveToward(_angle, _demon ? MathF.PI : 0f, dt * MathF.PI / (_demon ? InvertS : ReturnS));
         _lightK = Mathf.MoveToward(_lightK, _demon ? 0f : 1f, dt / (_demon ? LightsOutS : LightsOnS));
+        ClearGlass(dt);
         if (!Visible) return;
 
         if (_rot != null) _rot.Rotation = new Vector3(0, 0, _angle);

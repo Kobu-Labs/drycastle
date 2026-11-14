@@ -11,7 +11,7 @@ public sealed partial class DemonAudio : Node3D
 {
     const string Dir = "audio/holy_mass";
     const float FadeInS = 9f, FadeOutS = 3f, SilentDb = -50f;
-    static readonly (string File, float Db)[] Loops = { ("demon_music.ogg", -2f), ("demon_ambient.ogg", -6f) };
+    static readonly (string File, float Db)[] Loops = { ("demon_music.ogg", 6f), ("demon_ambient.ogg", 3f) };
     static readonly string[] Screams = { "scream1.ogg", "scream2.ogg" };
 
     readonly List<(AudioStreamPlayer3D Player, float Db)> _loops = new();
@@ -48,7 +48,7 @@ public sealed partial class DemonAudio : Node3D
                 var p = new AudioStreamPlayer3D
                 {
                     Stream = stream, Bus = "Music", VolumeDb = SilentDb, PanningStrength = 0f,
-                    AttenuationModel = AudioStreamPlayer3D.AttenuationModelEnum.Disabled, MaxDistance = 30f,
+                    AttenuationModel = AudioStreamPlayer3D.AttenuationModelEnum.Disabled, MaxDistance = 30f, MaxDb = 12f,
                 };
                 AddChild(p);
                 _loops.Add((p, db));
@@ -70,15 +70,15 @@ public sealed partial class DemonAudio : Node3D
     }
 
     /// <summary>The turning's scream, from where the pastor stood.</summary>
-    public void Transform() => Play("transform.ogg", 4f);
+    public void Transform() => Play("transform.ogg", 9f);
 
     /// <summary>One of the roar's screams. False when the pack has none (the caller plays its stand-in).</summary>
-    public bool Scream() => Play(Screams[GD.RandRange(0, Screams.Length - 1)], 3f);
+    public bool Scream() => Play(Screams[GD.RandRange(0, Screams.Length - 1)], 10f);
 
     bool Play(string file, float db)
     {
         if (!Sfx.Enabled || Load(file) is not { } stream) return false;
-        var p = new AudioStreamPlayer3D { Stream = stream, Bus = "SFX", UnitSize = 14f, MaxDistance = 90f, VolumeDb = db, PitchScale = (float)GD.RandRange(0.95, 1.05) };
+        var p = new AudioStreamPlayer3D { Stream = stream, Bus = "SFX", UnitSize = 30f, MaxDistance = 120f, MaxDb = 12f, VolumeDb = db, PitchScale = (float)GD.RandRange(0.95, 1.05) };
         AddChild(p);
         p.Finished += p.QueueFree;
         p.Play();
