@@ -72,6 +72,7 @@ def test_roads_json_spawns_json_and_manifest(ws) -> None:
         "roads": "roads.json",
         "spawns": "spawns.json",
         "water": "water.json",
+        "fences": "fences.json",
         "lamps": "lamps.json",
         "trees": "trees.json",
     }
@@ -82,6 +83,15 @@ def test_roads_json_spawns_json_and_manifest(ws) -> None:
     for name in ("terrain.json", "terrain_heights.npy", "roads.json", "props.json", "spawns.json"):
         assert len(manifest["inputs"][f"work/{name}"]) == 64
     assert not any("time" in k or "date" in k for k in manifest)
+
+
+def test_fences_json_is_copied_from_the_props_stage_and_a_stale_one_goes(ws) -> None:
+    manifest = export(ws)
+    assert manifest["files"]["fences"] == "fences.json"
+    assert (ws["out"] / "fences.json").read_bytes() == (ws["work"] / "fences.json").read_bytes()
+    (ws["work"] / "fences.json").unlink()
+    manifest = export(ws)
+    assert "fences" not in manifest["files"] and not (ws["out"] / "fences.json").exists()
 
 
 def test_export_without_optional_stages_still_works(tmp_path) -> None:

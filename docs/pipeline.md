@@ -310,6 +310,28 @@ lamp nodes: run `make fetch --force` once, then `make normalise` and `make props
 `lamps.json` to `out/village/map/` (map version 0.5.0, `files.lamps`); lamps are not in the chunk GLBs. The game
 builds the pole, the head and the light from primitives, so the viewer ignores them.
 
+**Fence sections (`fences.json`).** The fences are baked into the chunk GLBs, but the game server also needs where they
+stand (a gang member hops a pet's fence, `docs/events/thieves/05-pets.md`). The props stage writes the sections that
+`make_fences` produced (the same list as `fences` of `work/props.json`) to `data/village/work/fences.json`; the export copies it to
+`out/village/map/fences.json` (`files.fences`; no map version bump; absent when the map has no props stage output, a stale
+file is deleted; a loader that does not know it, or a map without it, means "no fence data"). Format, version 1:
+
+```json
+{"version": 1,
+ "axes": "local metres, x east, y north, z up (elevation of the ground at each end); height_m above that",
+ "fences": [{"parcel": "P-0412", "group": "G-0003", "a": [12.5, 40.0], "b": [16.25, 40.0], "za": 187.1, "zb": 187.2,
+             "height_m": 1.2, "type": null}]}
+```
+
+One entry per section (a straight piece of at most `props.fences.section_m`, in parcel ID order, along each fence line in order):
+`a` and `b` its two end points (`[x, y]`, local metres as `parcels.json`), `za` and `zb` the ground elevation under them (as
+`terrain.json`), `height_m` the effective fence height (the section's own for a custom fence, else `props.fences.height_m`),
+`type` the effective fence type (`picket`, `wire`, `brick_red`, ... as `edits.py` `FENCE_TYPES`) or `null` for the plain box,
+`parcel` the owning parcel and `group` the property group of that parcel (`G-NNNN`, as in `groups.json`) or `null`. A group's fence
+is one line round the members' outer edge, each piece owned by its member parcel. The gate gap and the stretches
+cleared of buildings and roads are simply missing: the sections are the fence that stands. `make parcel-run` (the editor's live
+regeneration) does not rewrite it; run `make map-update` (or `make props export`) after changing fences.
+
 **Tree collision (`trees.json`).** Each tree is two or three solids, built in the game from the rule model numbers
 (`model`: trunk width and height, canopy edge) and the tree's scale and rotation, with the same arithmetic as the drawn tree
 (`propmeshes.tree_mesh`): the trunk box (solid, starts 0.2 m below the ground) and the crown (two stacked boxes for a broadleaf,

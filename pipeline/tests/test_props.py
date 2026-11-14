@@ -6,7 +6,7 @@ import yaml
 from shapely.geometry import LineString, Point, box, shape
 
 from drycastle_pipeline.propmeshes import fence_mesh, tree_mesh
-from drycastle_pipeline.props import make_fences, make_spawns, make_trees, run_props, seeded
+from drycastle_pipeline.props import fences_doc, make_fences, make_spawns, make_trees, run_props, seeded
 from drycastle_pipeline.rules import load_section
 from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace
 
@@ -187,3 +187,33 @@ def test_run_props_cap_via_rules(ws, tmp_path) -> None:
     for t in rule_trees:
         per_chunk[(t["x"] // 250, t["y"] // 250)] = per_chunk.get((t["x"] // 250, t["y"] // 250), 0) + 1
     assert per_chunk and max(per_chunk.values()) <= 1
+
+
+def test_fences_doc_has_the_sections_with_effective_height_type_and_group() -> None:
+    plain = {"parcel": "P-0001", "a": [0.0, 0.0], "b": [4.0, 0.0], "za": 100.0, "zb": 100.5}
+    custom = {"parcel": "P-0002", "a": [4.0, 0.0], "b": [8.0, 0.0], "za": 100.5, "zb": 101.0, "type": "brick_red", "height_m": 1.8}
+    doc = fences_doc([plain, custom], {"G-0001": ["P-0002", "P-0003"]}, FENCE)
+    assert set(doc) == {"version", "axes", "fences"} and doc["version"] == 1
+    p, c = doc["fences"]
+    assert p == {"parcel": "P-0001", "group": None, "a": [0.0, 0.0], "b": [4.0, 0.0], "za": 100.0, "zb": 100.5,
+                 "height_m": FENCE["height_m"], "type": FENCE.get("type")}
+    assert c["group"] == "G-0001" and c["type"] == "brick_red" and c["height_m"] == 1.8 and c["zb"] == 101.0
+
+
+def test_run_props_writes_fences_json_for_every_section_deterministically(ws, tmp_path) -> None:
+    edits = tmp_path / "edits.json"
+    edits.write_text(json.dumps({"version": 1, "groups": {"G-0001": {"parcels": ["P-0001", "P-0002"]}}}))
+    rules = tmp_path / "rules.yaml"
+    rules.write_text(yaml.safe_dump({"props": {"fences": {"probability": 1.0}}}))
+    counts = run_props(ws["work"], rules, edits)
+    first = (ws["work"] / "fences.json").read_bytes()
+    run_props(ws["work"], rules, edits)
+    assert first == (ws["work"] / "fences.json").read_bytes()
+    doc = json.loads(first)
+    sections = json.loads((ws["work"] / "props.json").read_text())["fences"]
+    assert len(doc["fences"]) == len(sections) == counts["fences"] > 0
+    assert {f["parcel"] for f in doc["fences"]} <= {"P-0001", "P-0002"}
+    assert all(f["group"] == "G-0001" for f in doc["fences"])  # both parcels are in the group
+    for f, s in zip(doc["fences"], sections, strict=True):
+        assert (f["a"], f["b"], f["za"], f["zb"]) == (s["a"], s["b"], s["za"], s["zb"])
+        assert f["height_m"] == pytest.approx(FENCE["height_m"])

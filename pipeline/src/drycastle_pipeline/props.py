@@ -45,6 +45,8 @@ from drycastle_pipeline.terrain import Terrain, load_terrain
 PROPS_FORMAT_VERSION = 1
 SPAWNS_FORMAT_VERSION = 1
 OBJECTS_FORMAT_VERSION = 1
+FENCES_FORMAT_VERSION = 1
+FENCES_AXES = "local metres, x east, y north, z up (elevation of the ground at each end); height_m above that"
 _MIN_PIECE_M = 0.5
 
 
@@ -210,6 +212,33 @@ def make_fences(
             full = unary_union(fenced).buffer(0.3)
             done = full if done is None else done.union(full)
     return sections
+
+
+def fences_doc(sections: list[dict], groups: dict[str, list[str]], cfg: dict) -> dict:
+    """The ``fences.json`` document: every fence section as the game needs it (ground-plan segment, heights, owner).
+
+    ``sections`` is :func:`make_fences`' output, ``groups`` the valid property groups (group ID -> member parcel IDs),
+    ``cfg`` the rules' ``props.fences``. ``height_m`` and ``type`` are the effective values (the section's own, else the
+    rules'; ``type`` is null for the plain box). ``group`` is the property group of the owning parcel, or null.
+    """
+    member_of = {pid: gid for gid, pids in groups.items() for pid in pids}
+    return {
+        "version": FENCES_FORMAT_VERSION,
+        "axes": FENCES_AXES,
+        "fences": [
+            {
+                "parcel": s["parcel"],
+                "group": member_of.get(s["parcel"]),
+                "a": s["a"],
+                "b": s["b"],
+                "za": s["za"],
+                "zb": s["zb"],
+                "height_m": float(s.get("height_m", cfg["height_m"])),
+                "type": s.get("type", cfg.get("type")),
+            }
+            for s in sections
+        ],
+    }
 
 
 # --- trees ----------------------------------------------------------------------------------
@@ -656,6 +685,7 @@ def run_props(
         objects_doc["cables"] = plan.cables
     (work_dir / "objects.json").write_text(json.dumps(objects_doc, indent=1, sort_keys=True) + "\n")
     props = {"version": PROPS_FORMAT_VERSION, "fences": fences, "trees": trees}
+    (work_dir / "fences.json").write_text(json.dumps(fences_doc(fences, plan.groups, fcfg["fences"]), indent=1, sort_keys=True) + "\n")
     spawn_doc = {
         "version": SPAWNS_FORMAT_VERSION,
         "axes": "local metres, x east, y north, z up (elevation)",
