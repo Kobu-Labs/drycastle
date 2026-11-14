@@ -28,6 +28,7 @@ public sealed partial class DemonView : Node3D
     AnimationPlayer? _demonAnim, _priestAnim;
     DemonPose? _pose;
     Skeleton3D? _skel;
+    DemonMouth? _jaws;
     Node3D? _orb;
     OmniLight3D? _orbLight, _fireLight, _eyeLight, _flameLight;
     CpuParticles3D? _flames, _stream;
@@ -120,6 +121,7 @@ public sealed partial class DemonView : Node3D
                 hand.AddChild(_orb);
                 var head = new BoneAttachment3D { BoneName = "Head", Name = "HeadMark" };
                 _skel.AddChild(head);
+                _jaws = DemonMouth.Install(_demon, _skel);
                 _mouth = new Node3D { Name = "Mouth" };
                 head.AddChild(_mouth);
             }
@@ -464,6 +466,9 @@ public sealed partial class DemonView : Node3D
         // rearing for the throw too: it sits back on its legs
         rear = Math.Max(rear, 0.35f * _wind);
         rear = Math.Max(rear, 0.7f * _fireK);
+        // the mouth: wide for the roar and the fire, slack when dead, a snarl when hurt
+        if (_jaws != null)
+            _jaws.Target = _state == DemonState.Roaring ? 1f : _state == DemonState.Dead ? 0.55f : Math.Max(0.95f * _fireK, 0.5f * hurt);
         if (_pose == null) return;
         _pose.Rear = rear;
         _pose.Breath = 0.03f * MathF.Sin((float)_t * 2.1f) + 0.35f * hurt;
