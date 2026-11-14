@@ -169,21 +169,23 @@ public class BagTests
     {
         var (worn, bag) = Kit();
         worn.Wear(EquipSlot.Headgear, new ItemStack(Mask, 1));
+        worn.Wear(EquipSlot.Neck, new ItemStack(Hat, 9));
         for (var i = 0; i < Bag.Cells; i++) bag.Set(i, new ItemStack(Cap, i));
-        Assert.Equal(7, ItemRules.MaxCarried);
+        Assert.Equal(8, ItemRules.MaxCarried); // two worn slots (headgear, neck) and six cells
 
         var all = ItemRules.All(worn, bag);
-        Assert.Equal(7, all.Count);
+        Assert.Equal(8, all.Count);
         Assert.Equal(new ItemStack(Mask, 1), all[0]);
-        Assert.Equal(new ItemStack(Cap, 5), all[6]);
+        Assert.Equal(new ItemStack(Hat, 9), all[1]);        // the neck follows the head
+        Assert.Equal(new ItemStack(Cap, 5), all[7]);
 
         var corpse = new Corpse(3, Vector3.Zero, 0, 0, 0, all);
-        Assert.Equal(7, corpse.Items.Count);
-        Assert.False(corpse.AddItem(new ItemStack(Hat)));   // up to seven
+        Assert.Equal(8, corpse.Items.Count);
+        Assert.False(corpse.AddItem(new ItemStack(Hat)));   // up to eight
         Assert.Equal(new ItemStack(Mask, 1), corpse.Item);  // the first, for the single row
 
         var more = new Corpse(3, Vector3.Zero, 0, 0, 0, all.Concat(all));
-        Assert.Equal(7, more.Items.Count);                   // a longer list is cut at the capacity
+        Assert.Equal(8, more.Items.Count);                   // a longer list is cut at the capacity
     }
 
     [Fact]

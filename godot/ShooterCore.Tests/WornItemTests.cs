@@ -24,10 +24,10 @@ public class WornItemTests
     public void WornItemsNamePlayerAndItemPerSlotAndLeaveThePickupCountOut()
     {
         var bytes = ItemEvents.EncodeWorn(7, Wearing(pickups: 2));
-        Assert.Equal(new byte[] { 7, 0, 1, (byte)(Bigfoot + 1) }, bytes);
+        Assert.Equal(new byte[] { 7, 0, 2, (byte)(Bigfoot + 1), 0 }, bytes);
         Assert.True(ItemEvents.TryDecodeWorn(bytes, out var player, out var slots));
         Assert.Equal((ushort)7, player);
-        Assert.Equal(new int?[] { Bigfoot }, slots);
+        Assert.Equal(new int?[] { Bigfoot, null }, slots);
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public class WornItemTests
     {
         Assert.True(ItemEvents.TryDecodeWorn(ItemEvents.EncodeWorn(0x1234, new Equipment(Items)), out var player, out var slots));
         Assert.Equal((ushort)0x1234, player);
-        Assert.Equal(new int?[] { null }, slots); // nothing worn: the other clients take the item off again
+        Assert.Equal(new int?[] { null, null }, slots); // nothing worn: the other clients take the item off again
     }
 
     [Theory]
@@ -43,7 +43,7 @@ public class WornItemTests
     [InlineData(new byte[] { 7, 0 })]                 // no slot count
     [InlineData(new byte[] { 7, 0, 1 })]              // the slot is missing
     [InlineData(new byte[] { 7, 0, 1, 1, 1 })]        // one slot too many
-    [InlineData(new byte[] { 7, 0, 2, 1 })]           // the count says two
+    [InlineData(new byte[] { 7, 0, 2, 1 })]           // the count says two, one is there
     public void MalformedWornItemsAreRefused(byte[] payload) => Assert.False(ItemEvents.TryDecodeWorn(payload, out _, out _));
 
     [Fact]
@@ -61,7 +61,7 @@ public class WornItemTests
         Assert.Equal((byte)EventKind.WornItems, back.Kind);
         Assert.True(ItemEvents.TryDecodeWorn(back.Payload, out var player, out var slots));
         Assert.Equal((ushort)3, player);
-        Assert.Equal(new int?[] { Bigfoot }, slots);
+        Assert.Equal(new int?[] { Bigfoot, null }, slots);
         Assert.False(Wire.IsEffect(EventKind.WornItems)); // state, not an effect: it must not be lost
     }
 

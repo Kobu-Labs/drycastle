@@ -135,12 +135,12 @@ public class CorpseItemTests
         var bag = new Bag();
         bag.Set(3, new ItemStack(0, 1));
         Assert.True(ItemEvents.TryDecodeEquipment(ItemEvents.EncodeEquipment(worn, bag), out var slots, out var cells));
-        Assert.Equal(new ItemStack?[] { new ItemStack(Bigfoot, 2) }, slots); // the pickup counts travel now: the screens show them
+        Assert.Equal(new ItemStack?[] { new ItemStack(Bigfoot, 2), null }, slots); // the pickup counts travel now: the screens show them
         Assert.Equal(Bag.Cells, cells.Length);
         Assert.Equal(new ItemStack(0, 1), cells[3]);
         Assert.Equal(1, cells.Count(x => x != null));
         Assert.True(ItemEvents.TryDecodeEquipment(ItemEvents.EncodeEquipment(new Equipment(Items), new Bag()), out var bare, out var empty));
-        Assert.Equal(new ItemStack?[] { null }, bare);
+        Assert.Equal(new ItemStack?[] { null, null }, bare);
         Assert.All(empty, x => Assert.Null(x));
 
         Assert.True(ItemEvents.TryDecodeNotice(ItemEvents.EncodeNotice(ItemNoticeKind.Crumbled), out var notice));

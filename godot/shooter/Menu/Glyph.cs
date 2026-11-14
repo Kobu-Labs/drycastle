@@ -6,11 +6,11 @@ namespace Drycastle.Shooter;
 /// A drawn padlock or star for menu rows and tabs (ticket #147). Drawn rather than taken from a font, so it renders the same
 /// on every system. It ignores the mouse and always sits beside a text label, so it is never the only cue.
 /// The Equipment screen (issue #268) adds the pictograms of its hint row (<see cref="Kind.Close"/>, <see cref="Kind.Swap"/>, <see cref="Kind.Drop"/>), which
-/// stand beside a key cap, and the ghost of an empty headgear slot (<see cref="Kind.Headgear"/>).
+/// stand beside a key cap, and the ghosts of an empty headgear slot (<see cref="Kind.Headgear"/>) and neck slot (<see cref="Kind.Neck"/>).
 /// </summary>
 public sealed partial class Glyph : Control
 {
-    public enum Kind { Padlock, Star, Close, Swap, Drop, Headgear }
+    public enum Kind { Padlock, Star, Close, Swap, Drop, Headgear, Neck }
 
     readonly Kind _kind;
     readonly Color _color;
@@ -32,6 +32,7 @@ public sealed partial class Glyph : Control
             case Kind.Close: DrawClose(Size); break;
             case Kind.Swap: DrawSwap(Size); break;
             case Kind.Drop: DrawDrop(Size); break;
+            case Kind.Neck: DrawNeck(Size); break;
             default: DrawHeadgear(Size); break;
         }
     }
@@ -80,6 +81,17 @@ public sealed partial class Glyph : Control
         }
         DrawColoredPolygon(points.ToArray(), _color);
         DrawRect(new Rect2(s.X * 0.12f, s.Y * 0.62f, s.X * 0.76f, s.Y * 0.12f), _color);
+    }
+
+    /// <summary>A necklace: a chain hanging in a U from two ends, with a pendant at the bottom.</summary>
+    void DrawNeck(Vector2 s)
+    {
+        var centre = new Vector2(s.X * 0.5f, s.Y * 0.2f);
+        var r = s.X * 0.38f;
+        DrawArc(centre, r, 0.12f * Mathf.Pi, 0.88f * Mathf.Pi, 20, _color, Stroke(s), true);
+        var tip = new Vector2(s.X * 0.5f, centre.Y + r);
+        var h = s.X * 0.13f;
+        DrawColoredPolygon(new[] { tip + new Vector2(0, -h * 0.6f), tip + new Vector2(h, h * 0.5f), tip + new Vector2(0, h * 2f), tip + new Vector2(-h, h * 0.5f) }, _color);
     }
 
     void DrawPadlock(Vector2 s)

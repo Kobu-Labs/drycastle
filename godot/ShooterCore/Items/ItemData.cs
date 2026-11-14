@@ -1,7 +1,7 @@
 namespace Drycastle.ShooterCore;
 
 /// <summary>Where an item is worn. The wire sends the slots in this order (see <see cref="Equipment"/>), so append new ones and never reorder.</summary>
-public enum EquipSlot : byte { Headgear = 0 }
+public enum EquipSlot : byte { Headgear = 0, Neck = 1 }
 
 /// <summary>
 /// One item definition (items.json): what a player can wear that is not a weapon, perk or killstreak. The effects are plain fields with a
@@ -16,7 +16,7 @@ public sealed class ItemDef
     public EquipSlot Slot { get; set; } = EquipSlot.Headgear;
     /// <summary>
     /// The model a character wears for this item, relative to the asset library (assets/), or empty for none (the item is worn but not drawn). Authored in
-    /// the slot's frame, in metres, facing -Z (the game's forward): for headgear the origin is the middle of the head.
+    /// the slot's frame, in metres, facing -Z (the game's forward): for headgear the origin is the middle of the head, for the neck the base of the neck (the neck bone).
     /// </summary>
     public string Model { get; set; } = "";
     /// <summary>How many times the item can be taken from a corpse over its whole life, or null for any number. The attempt after the last makes it crumble.</summary>

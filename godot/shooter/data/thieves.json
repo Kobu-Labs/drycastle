@@ -48,5 +48,8 @@
       "clips": { "idle": "idle_standing_masc", "walk": "walk_f_masc", "run": "sprint_up25f_femn", "windup": "", "swing": "", "death": ["death_back_sword", "death_left_sword"] },
       "thief_color": "#7d6b4f", "enforcer_color": "#8a3b32", "gang_boss_color": "#c9a227", "capsule_height_m": 1.8
     }
-  }
+  },
+  // The reward (ticket 10). Everyone credited (hit a Gang member or a van, or sent Loot back) gets the level data's event_win XP when the event is won.
+  // chain_item: the items.json id a killed Gang boss leaves on his body; chain_corpse_seconds: how long that body lies. A boss who leaves alive keeps his.
+  "reward": { "chain_item": "gold_chain", "chain_corpse_seconds": 300 }
 }

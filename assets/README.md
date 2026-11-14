@@ -94,6 +94,12 @@ flat-colour materials, no texture, one mesh node, about 1100 triangles. Frame of
 wearer's head (it is not a vehicle). About 0.88 x 1.12 x 0.87 m with the mane, sized to swallow the head of every player body; the game turns it to the
 rig's +Z face and scales it to rig units (`CharacterView.Worn.cs`). Not meant to be placed on the map, though it is listed like the other generated models.
 
+`drycastle-generated-models/gold_chain.glb` (2026-11-15) is the Gold chain, the neck item of the Thieves event (item id `gold_chain`, `data/items.json` `model`): a chunky necklace of 38 interlocked
+links (every other one on its edge, two golds) round the neck and over the collar, drooping to a diamond pendant on the chest. Original geometry written as code in `scripts/make_gold_chain_model.py`
+(standard library only; it loads the flak script's mesh helpers; `python3 -I scripts/make_gold_chain_model.py` rebuilds the file byte for byte), CC0, 3 flat-colour materials, no texture, one mesh
+node, about 2400 triangles, 0.24 x 0.26 x 0.27 m. Frame of a worn neck item: metres, forward -Z, origin at the origin of the rig's Neck bone (`CharacterView.Worn.cs`); the placement is from the bone
+origins, not checked on a render. The Gang Warfare pack may replace it later (point `model` at it).
+
 **Unverified, user-provided (2026-11-13):** `quaternius-giant/giant.glb` is the placeholder model of the Bigfoot event (#264, `godot/shooter/data/bigfoot.json`): "Giant" by
 Quaternius, a free rigged model (3812 triangles, one texture atlas, an `EnemyArmature` skeleton of 12 joints) the owner downloaded as a local file. It comes with seven clips
 (Attack, Death, HitRecieve, Idle, Jump, Run, Walk, each prefixed `EnemyArmature|EnemyArmature|EnemyArmature|`). As Godot imports it, it is 4.53 units tall, 6.47 wide with the arms out

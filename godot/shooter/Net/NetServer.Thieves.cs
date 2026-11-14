@@ -28,6 +28,7 @@ public partial class NetServer
     {
         _thieves = new ThievesEvent();
         InitGangs();
+        InitThievesReward();
     }
 
     /// <summary>"/event thieves": the run begins, the intel board and the village are told.</summary>
@@ -81,6 +82,7 @@ public partial class NetServer
         ChatToAll(ChatLineKind.System, "", won
             ? (by == null ? "Event won: the Thieves are gone from the village." : $"{by} ended the Thieves event as a win.")
             : $"{by} cancelled the Thieves event.");
+        GiveThievesReward(won);
         GD.Print($"server: Thieves event {(won ? "won" : "cancelled")}{(by == null ? "" : $" by {by}")}");
     }
 
@@ -94,6 +96,7 @@ public partial class NetServer
         var wasRunning = _thieves.Running;
         _thieves.Reset();
         ClearGangs();
+        ResetThievesReward();
         if (!wasRunning) return;
         WithdrawIntel(ThievesEvent.IntelId);
         _events.End(EventBook.Thieves, EventPhase.Despawned, _elapsed);

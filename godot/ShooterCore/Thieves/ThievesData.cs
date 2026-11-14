@@ -10,6 +10,9 @@ public sealed class ThievesFile : IVersioned
 
     public GangConfig Gang { get; set; } = new();
 
+    /// <summary>The event's reward (ticket 10). Last section of the file.</summary>
+    public ThievesRewardConfig Reward { get; set; } = new();
+
     public static ThievesFile Load(string path) => Validate(DataFile.Load<ThievesFile>(path));
 
     public static ThievesFile Parse(string json) => Validate(DataFile.Parse<ThievesFile>(json, "thieves.json"));
@@ -42,6 +45,8 @@ public sealed class ThievesFile : IVersioned
         Positive(g.Spawn.MinM, "gang.spawn.min_m"); Positive(g.Spawn.MaxM, "gang.spawn.max_m"); Positive(g.Spawn.SpreadM, "gang.spawn.spread_m");
         if (!(g.Spawn.MaxM > g.Spawn.MinM)) throw new DataFileException($"{F}: gang.spawn.max_m is not above min_m");
         if (g.View.Models.Count == 0) throw new DataFileException($"{F}: gang.view.models lists at least one model");
+        if (f.Reward.ChainItem == "") throw new DataFileException($"{F}: reward.chain_item names an item of items.json");
+        Positive(f.Reward.ChainCorpseSeconds, "reward.chain_corpse_seconds");
         return f;
     }
 }
@@ -157,4 +162,13 @@ public sealed class GangClips
     public string Windup { get; set; } = "";
     public string Swing { get; set; } = "";
     public List<string> Death { get; set; } = new() { "death_back_sword", "death_left_sword" };
+}
+
+/// <summary>What the event pays. The win's XP is the level data's event-win award (levels.json), the same for every event, so it is not a number here.</summary>
+public sealed class ThievesRewardConfig
+{
+    /// <summary>The items.json id of the Item a killed Gang boss leaves on his body (the Gold chain).</summary>
+    public string ChainItem { get; set; } = "gold_chain";
+    /// <summary>How long that body lies, seconds, before it and the chain are gone.</summary>
+    public float ChainCorpseSeconds { get; set; } = 300;
 }
