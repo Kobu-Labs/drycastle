@@ -3604,6 +3604,27 @@
       "used_for": "godot/shooter item id bigfoot_head (data/items.json `model`), worn by CharacterView on the head bone and rendered into ui/icons/items/bigfoot_head.png; authored in the headgear slot frame (forward -Z, origin at the middle of the head, metres), one mesh node, 8 flat-colour materials"
       },
       {
+      "id": "pack:drycastle-generated-models/satellite_dish",
+      "category": "other",
+      "name": "Satellite dish (household, 0.7 m, on a short wall arm)",
+      "file": "drycastle-generated-models/satellite_dish.glb",
+      "size_m": [
+        0.67,
+        0.66,
+        0.7
+      ],
+      "tags": [
+        "dish",
+        "house",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_satellite_dish_model.py (original geometry written as code; python3 -I scripts/make_satellite_dish_model.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "the dishes of the Thieves event (pipeline/src/drycastle_pipeline/dishes.py places them on house walls); origin on the wall at the arm's root, +X out of the wall (set rotation_deg to the way the wall faces and z to the height of the origin; it reaches 0.4 m above it), a node each for mount, dish and lnb"
+      },
+      {
       "id": "pack:welcome-sign/welcome_sign",
       "category": "other",
       "name": "Welcome sign (VITAJTE V OBCI)",

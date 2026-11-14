@@ -6,7 +6,14 @@ import yaml
 from shapely.geometry import LineString, Point, box, shape
 
 from drycastle_pipeline.propmeshes import fence_mesh, tree_mesh
-from drycastle_pipeline.props import fences_doc, make_fences, make_spawns, make_trees, run_props, seeded
+from drycastle_pipeline.props import (
+    fences_doc,
+    make_fences,
+    make_spawns,
+    make_trees,
+    run_props,
+    seeded,
+)
 from drycastle_pipeline.rules import load_section
 from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace
 
