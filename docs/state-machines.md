@@ -31,3 +31,27 @@ stateDiagram-v2
 - **Fighting**: The DemonBrain runs; the demon is a hit target. Ends by its death (a weapon hit) or by a clear.
 - **Dying**: The corpse lies for corpse_s; fireballs in the air still fly. Then the server ends the Mass.
 
+## Pounce.View
+
+The client's view of the demon's pounce: a victim is marked (Wind), pinned flat, then let go; the local victim's camera rises back afterwards.
+
+```mermaid
+stateDiagram-v2
+    [*] --> None
+    None --> Wind
+    None --> Pinned
+    Wind --> Pinned
+    Wind --> None
+    Pinned --> Rising
+    Pinned --> None
+    Pinned --> Wind
+    Rising --> None
+    Rising --> Wind
+    Rising --> Pinned
+```
+
+- **None**: Nobody is marked or held (also after the demon is gone).
+- **Wind**: A victim is marked: the local victim's look is locked on the demon. A joiner can start here.
+- **Pinned**: The victim lies pinned. Locally: the body is the server's (no prediction, no weapon), the camera is on the floor. A joiner can start here.
+- **Rising**: The local victim was let go: the camera rises back to standing height while the red fades. Only after a pin of the local player.
+
