@@ -27,22 +27,30 @@ public partial class NetServer
     void InitThieves()
     {
         _thieves = new ThievesEvent();
+        InitGangs();
     }
 
     /// <summary>"/event thieves": the run begins, the intel board and the village are told.</summary>
     void StartThieves(Client admin)
     {
         if (_events.WhyNotStart(EventBook.Thieves) is { } busy) { ChatTo(admin, ChatLineKind.Error, busy); return; }
+        if (_match.Phase != MatchPhase.Running) { ChatTo(admin, ChatLineKind.Error, "No round is running."); return; }
+        if (_nav == null) { ChatTo(admin, ChatLineKind.Error, "The Thieves need the navigation mesh, which is not built (no map, or it failed: see the server log)."); return; }
+        // the dev fallback until the van exists (ticket 03): the crew appears on a road near the admin
+        if (FindGangSpot(N(admin.Body.GlobalPosition)) is not { } spot) { ChatTo(admin, ChatLineKind.Error, "No road on the navigation mesh was found near you for the crew to appear on."); return; }
         _events.Start(EventBook.Thieves, _elapsed);
         _thieves!.Begin(PlaceholderSeconds);
+        var crew = SpawnCrew(spot);
+        if (crew > 0) ChatTo(admin, ChatLineKind.Info, $"The crew of {crew} appeared {Dist2D(spot, N(admin.Body.GlobalPosition)):0} m from you (dev fallback: no van yet).");
         AnnounceIntel(ThievesEvent.Intel(_elapsed));
         ChatToAll(ChatLineKind.System, "", $"{admin.Name} started the Thieves event. Thieves are coming to the village.");
         GD.Print($"server: Thieves event started by {admin.Name} #{admin.Id}");
     }
 
-    /// <summary>Once a tick (after <see cref="MassTick"/>): the placeholder timer. HOOK for the Raids: their clocks and the vans run here, and the last van gone wins the event.</summary>
+    /// <summary>Once a tick (after <see cref="MassTick"/>): the placeholder timer, and the routes the Gang members wait for. HOOK for the Raids: their clocks and the vans run here, and the last van gone wins the event.</summary>
     void ThievesTick(float dt)
     {
+        GangsTick();
         if (_thieves is { Running: true } && _thieves.Tick(dt)) ThievesFinish(true, null);
     }
 
@@ -67,6 +75,7 @@ public partial class NetServer
     void ThievesFinish(bool won, string? by)
     {
         _thieves!.Finish();
+        ClearGangs(); // the crew goes with the event (ticket 03: the van's Raids end by their own rules)
         WithdrawIntel(ThievesEvent.IntelId);
         _events.End(EventBook.Thieves, won ? EventPhase.Won : EventPhase.Despawned, _elapsed);
         ChatToAll(ChatLineKind.System, "", won
@@ -84,6 +93,7 @@ public partial class NetServer
         if (_thieves == null) return;
         var wasRunning = _thieves.Running;
         _thieves.Reset();
+        ClearGangs();
         if (!wasRunning) return;
         WithdrawIntel(ThievesEvent.IntelId);
         _events.End(EventBook.Thieves, EventPhase.Despawned, _elapsed);

@@ -1,4 +1,52 @@
 {
-  "version": 1
-  // Every number of the Thieves event (GLOSSARY: Thieves event, Raid) goes here as the tickets of docs/events/thieves/ need it.
+  "version": 1,
+  // Every number of the Thieves event (GLOSSARY: Thieves event, Raid, Gang member). Lengths are metres, speeds metres per second, times seconds.
+  "gang": {
+    // The crew of one Raid. (Ticket 03 scales it with the players.)
+    "raid": { "gang_bosses": 1, "enforcers": 2, "thieves": 5 },
+    // Hits is the Hit count: the weighted hits a member takes before it dies (a bullet 1, a headshot 2, see hits below). A player walks at 5 and sprints at 8, so a chase can be outrun.
+    // Melee: a swing is a windup (a player can step out of reach in it), then the blow if the target is still within reach; interval_seconds is one swing's start to the next.
+    "thief": {
+      "hits": 20, "walk_speed": 1.8, "run_speed": 5.5, "hit_scale": 1.0,
+      "melee": { "damage": 10, "reach_m": 2, "windup_seconds": 0.45, "interval_seconds": 1.0 }
+    },
+    "enforcer": {
+      "hits": 35, "walk_speed": 1.6, "run_speed": 5.0, "hit_scale": 1.04,
+      "melee": { "damage": 25, "reach_m": 2, "windup_seconds": 0.45, "interval_seconds": 1.0 }
+    },
+    "gang_boss": {
+      "hits": 80, "walk_speed": 1.4, "run_speed": 4.5, "hit_scale": 1.15,
+      "melee": { "damage": 10, "reach_m": 2, "windup_seconds": 0.45, "interval_seconds": 1.0 }
+    },
+    // What a hit counts besides a bullet (1). Run over by a vehicle: dead.
+    "hits": { "headshot_weight": 2, "explosive_weight": 12, "vehicle_weapon_weight": 3 },
+    // A player who hit any member of a Raid, or who is within crowd_m of a working Thief, is fought by the whole Raid until they die or are give_up_m from every living member.
+    "aggro": { "crowd_m": 4, "give_up_m": 30 },
+    "corpse_seconds": 10,
+    // XP for killing a member (no kill feed, streak or assist).
+    "kill_xp": 5,
+    "turn_rate_deg_per_s": 360,
+    // A chaser or follower asks for a new route at most every repath_seconds, and only when its goal is repath_m from the end of the route it has.
+    "repath_seconds": 1.0,
+    "repath_m": 3,
+    // An Enforcer escorting a Thief stays within this of it.
+    "guard_follow_m": 3.5,
+    // A Thief with nothing to steal (until ticket 04) idles for a random time, then walks to a point within wander_m of the Raid's post.
+    "idle_min_seconds": 3,
+    "idle_max_seconds": 8,
+    "wander_m": 12,
+    "walk_give_up_seconds": 20,
+    // A fleeing member is removed at the map edge, after flee_seconds at the latest.
+    "flee_seconds": 180,
+    "edge_arrive_m": 3,
+    // The dev fallback (no van yet): the crew appears on a road between min_m and max_m of the admin, spread_m round the point.
+    "spawn": { "min_m": 25, "max_m": 60, "spread_m": 3 },
+    // Client only. Stand-in bodies (Synty peasants, as holy_mass.json's citizens) until the Gang Warfare pack (ticket 08); without the private pack a coloured capsule per kind.
+    // An empty clip name plays nothing: the windup and swing then lean the body.
+    "view": {
+      "models": ["peasant_male_01", "peasant_male_01", "peasant_female_01"],
+      "clips": { "idle": "idle_standing_masc", "walk": "walk_f_masc", "run": "sprint_up25f_femn", "windup": "", "swing": "", "death": ["death_back_sword", "death_left_sword"] },
+      "thief_color": "#7d6b4f", "enforcer_color": "#8a3b32", "gang_boss_color": "#c9a227", "capsule_height_m": 1.8
+    }
+  }
 }

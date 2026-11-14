@@ -436,7 +436,7 @@ The vehicle of a Raid: a scripted world entity that follows the road graph, not 
 _Avoid_: truck, transport, car
 
 **Gang member**:
-A person of a Raid: a world entity with its own brain and a Hit count, not a Citizen (a Citizen dies of one hit and never reacts) and not a bot. Three kinds: a **Thief** steals Loot and carries it to the van; an **Enforcer** carries a pipe, steals nothing and guards the Thieves and the van; the **Gang boss** stays by the van and wears the Gold chain. They attack a player only when interfered with (a member of their Raid was hit, or the player crowds a working Thief).
+A person of a Raid: a world entity with its own brain and a Hit count, not a Citizen (a Citizen dies of one hit and never reacts) and not a bot. Three kinds: a **Thief** steals Loot and carries it to the van; an **Enforcer** carries a pipe, steals nothing and guards the Thieves and the van; the **Gang boss** stays by the van and wears the Gold chain. They attack a player only when interfered with (a member of their Raid was hit, or the player crowds a working Thief): the whole Raid then fights that player (Enforcers, the Gang boss and a Thief with free hands) until they die or are 30 m from every living member. Killed by hits (a Hit count of 20 / 35 / 80: a bullet 1, a headshot 2, an explosive or a vehicle weapon a weight) or by a vehicle running it over; it lies 10 s, pays a little XP and is not in the kill feed. Turrets and killstreak weapons shoot it, bots ignore it. World entity wire type 54.
 _Avoid_: NPC (alone), enemy, bandit, robber; boss (alone: say Gang boss)
 
 **Loot**:

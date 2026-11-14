@@ -236,6 +236,7 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Housekeeping);
         _match.Update();
         BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
+        GangsPrepare(); // the players the Gang members fight, and who each fights
         _match.Entities.Tick((float)delta);
         CitizensTick((float)delta);
         PetsTick((float)delta);
@@ -837,6 +838,7 @@ public partial class NetServer : Node
         }
         if (BigfootTarget() is { } bigfoot) list.Add(bigfoot); // the Bigfoot is a hit target like a player (issue #264)
         _crowd?.AddTargets(list); // the citizens of the Holy Mass
+        AddGangTargets(list); // the Gang members of the Thieves event
         AddPetTargets(list);
         _workers?.AddTargets(list); // the workers of the Urad
         AddDemonTarget(list);
@@ -1019,7 +1021,7 @@ public partial class NetServer : Node
         if (DemonRules.IsHitId(victim)) return DemonHit(attackerId, weaponIdx, damage); // the demon: a hit count, no hit points
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
-        if (CitizenRules.IsHitId(victim) || PetRules.IsHitId(victim)) // a citizen or a pet: the hit marker, but no assist, streak, refill or kill feed
+        if (CitizenRules.IsHitId(victim) || PetRules.IsHitId(victim) || GangRules.IsHitId(victim)) // a citizen, a pet or a Gang member: the hit marker, but no assist, streak, refill or kill feed
         {
             if (_byId.TryGetValue(attackerId, out var shooter)) Send(shooter, new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attackerId, weaponIdx, (ushort)damage, head, backstab, r == DamageResult.Killed))));
             return r;

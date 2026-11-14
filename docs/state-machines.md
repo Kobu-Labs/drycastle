@@ -350,6 +350,50 @@ stateDiagram-v2
 - **Won**: Concluded: the reward is due.
 - **Despawned**: Timed out, cancelled or cleared by a round: no reward.
 
+## GangMember.State
+
+What a Gang member of a Raid is doing; the replicated state byte.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Walk
+    Idle --> Guard
+    Idle --> Chase
+    Idle --> Flee
+    Walk --> Idle
+    Walk --> Chase
+    Walk --> Flee
+    Guard --> Idle
+    Guard --> Chase
+    Guard --> Flee
+    Chase --> Windup
+    Chase --> Idle
+    Chase --> Guard
+    Chase --> Flee
+    Windup --> Swing
+    Windup --> Idle
+    Windup --> Guard
+    Windup --> Flee
+    Swing --> Chase
+    Swing --> Idle
+    Swing --> Guard
+    Swing --> Flee
+    Flee --> [*]
+    Dead --> [*]
+```
+
+From any state: Dead
+
+- **Idle**: A Thief standing (clock: a random time, then it walks to a point near the post). Steals nothing until ticket 04.
+- **Walk**: A Thief on a route to a point near the post (clock: the time budget to arrive, then it stands again).
+- **Guard**: An Enforcer follows the Thief it escorts, or stands at the post; the Gang boss stands at the post. Never steals.
+- **Chase**: Runs at the player the Raid is fighting (a route from the navigation mesh, asked for at most every repath_seconds); winds up once within reach.
+- **Windup**: The swing's telegraph (clock: windup_seconds): a player can step out of reach. Ends in Swing, or in a stand if the target is gone.
+- **Swing**: The blow lands at its start, only if the target is still within reach; then recovers (clock: interval minus windup) and chases or stands again.
+- **Flee**: Runs for the map edge on a route (clock: flee_seconds); the entity ends there (no state follows).
+- **Dead**: Lies for corpse_seconds (the clock's elapsed time), then the entity ends. Reached from any state; never left.
+
 ## HelicopterGunner.Phase
 
 The helicopter's gun cycle: wait, warn the picked enemy, fire a burst, wait again.

@@ -35,6 +35,7 @@ public partial class NetServer
             o.Poses.Record(_tick, valid, new HitTarget(o.Id, N(o.Body.GlobalPosition), BodyStanceOf(o), o.Body.Yaw));
         }
         CaptureBigfootPose();
+        CaptureGangPoses();
     }
 
     /// <summary>
@@ -139,6 +140,7 @@ public partial class NetServer
         }
         if (BigfootTarget() is { } bigfoot) list.Add(BigfootRewound(bigfoot, view)); // the Bigfoot is rewound like a player (issue #264)
         _crowd?.AddTargets(list); // citizens walk slowly: not rewound
+        AddGangTargets(list, view); // Gang members run: rewound like the Bigfoot (a pose ring each)
         AddPetTargets(list); // so do pets
         _workers?.AddTargets(list); // the Urad workers sit still
         AddDemonTarget(list); // so does the demon on its wall

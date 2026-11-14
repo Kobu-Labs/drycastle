@@ -131,6 +131,7 @@ public partial class NetClient : Node
         InitPoop();
         InitBigfoot();
         InitCitizens();
+        InitThieves();
         InitDemon();
         InitAircraft();
         InitFlak();
@@ -245,6 +246,7 @@ public partial class NetClient : Node
         RenderAnimals();
         RenderBigfoot();
         RenderCitizens();
+        RenderGang(delta);
         RenderDemon();
         UpdatePounce(delta);
         RenderCars();

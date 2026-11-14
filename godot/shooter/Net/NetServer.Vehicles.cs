@@ -575,6 +575,7 @@ public partial class NetServer
         var dmg = RunOver.Damage(Vehicles!, car.State.Speed, Vehicles!.RunOverScale(car.Def));
         if (dmg <= 0) return;
         RunOverTargets(car, driver, dmg); // target dummies (#148)
+        RunOverGang(car, driver); // the Gang members of the Thieves event
         var fwd = car.Forward;
         foreach (var t in _byId.Values)
         {
