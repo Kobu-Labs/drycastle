@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.ShooterCore;
 
 namespace Drycastle.Shooter;
 
@@ -9,9 +10,36 @@ public partial class NetClient
     public bool CloseTacticalMap() => _hud?.CloseTacticalMap() ?? false;
 
     /// <summary>The map key toggles the map, but not while a menu is open or the chat box is (the HUD checks the chat). True when the key was used.</summary>
+    bool _mapCursor;
+
+    /// <summary>
+    /// Per frame. Sandbox: the open map frees the mouse (a cursor to pick the teleport point with; looking and firing stop meanwhile) and takes it
+    /// back when it closes, unless a menu has opened in between and owns the mouse now.
+    /// </summary>
+    void UpdateMapCursor()
+    {
+        var want = _hud != null && _hud.TacticalMapOpen && SandboxGranted;
+        if (want == _mapCursor) return;
+        _mapCursor = want;
+        if (want) Input.MouseMode = Input.MouseModeEnum.Visible;
+        else if (MenuOpen?.Invoke() != true) Input.MouseMode = Input.MouseModeEnum.Captured;
+    }
+
     bool HandleMapInput(InputEvent e)
     {
-        if (_hud == null || Bot || e.IsEcho() || !e.IsActionPressed("map")) return false;
+        if (_hud == null || Bot) return false;
+        if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Middle } && _hud.TacticalMapOpen && SandboxGranted)
+        {
+            // sandbox: a middle click on the sheet teleports there; the map closes so the player sees where they landed
+            if (_hud.TacticalMapGroundAtMouse() is { } g)
+            {
+                SendSandboxEvent(EventKind.SandboxTeleportTo, SandboxEvents.EncodeTeleportTo(g.X, g.Y));
+                _hud.CloseTacticalMap();
+            }
+            GetViewport().SetInputAsHandled();
+            return true;
+        }
+        if (e.IsEcho() || !e.IsActionPressed("map")) return false;
         if (MenuOpen?.Invoke() == true) return false;
         if (!_hud.ToggleTacticalMap()) return false;
         GetViewport().SetInputAsHandled();

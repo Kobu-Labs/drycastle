@@ -25,6 +25,7 @@ public static class TacticalMapStrings
         ("map.scale", "SCALE"),
         ("map.scale.m", "{0} m"),
         ("map.hint", "{0} or Esc  Close map"),
+        ("map.hint.teleport", "Middle click  Teleport (sandbox)"),
         ("map.unavailable", "No map data loaded"),
         ("map.unavailable.note", "Your position and heading are still shown."),
     };
