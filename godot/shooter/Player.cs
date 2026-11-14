@@ -352,10 +352,14 @@ public partial class Player : CharacterBody3D
         if (PickSpawn != null) Teleport(PickSpawn() + Vector3.Up * 0.1f);
     }
 
-    public override void _UnhandledInput(InputEvent e)
+    /// <summary>
+    /// Looking is read in <c>_Input</c>, before the GUI: with the mouse captured there is no cursor, yet the viewport still routes motion to the control
+    /// under the frozen cursor point (or the one holding mouse focus), and a control that stops the mouse swallows it before <c>_UnhandledInput</c>
+    /// (the tactical map's marker layer did: clicks and zoom worked, looking did not).
+    /// </summary>
+    public override void _Input(InputEvent e)
     {
-        if (!CaptureMouse) return;
-        if (e is InputEventMouseMotion && LookLocked) return;
+        if (!CaptureMouse || LookLocked) return;
         if (e is InputEventMouseMotion m && Input.MouseMode == Input.MouseModeEnum.Captured)
         {
             var gs = GameSettings.Current;
@@ -367,8 +371,13 @@ public partial class Player : CharacterBody3D
             _lookPitch += _pitch - pitchBefore;
             _camera.Rotation = new Vector3(_pitch, _yaw, 0);
         }
-        else if (!SelfManageMouse) return;
-        else if (e is InputEventKey { Pressed: true, Keycode: Key.Escape })
+    }
+
+    public override void _UnhandledInput(InputEvent e)
+    {
+        if (!CaptureMouse || !SelfManageMouse) return;
+        if (e is InputEventMouseMotion && Input.MouseMode == Input.MouseModeEnum.Captured) return;
+        if (e is InputEventKey { Pressed: true, Keycode: Key.Escape })
             Input.MouseMode = Input.MouseModeEnum.Visible;
         else if (e is InputEventMouseButton { Pressed: true } && Input.MouseMode != Input.MouseModeEnum.Captured)
             Input.MouseMode = Input.MouseModeEnum.Captured;
