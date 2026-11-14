@@ -82,6 +82,9 @@ public sealed partial class TacticalMap : Control
     /// <summary>Sandbox: the map also teleports (middle click). Shown as a second line of the hint; read when the map opens.</summary>
     public bool TeleportHint;
 
+    /// <summary>Sandbox: called with the ground point (x, z) of a middle click on the sheet. Set by the shell; ignored unless <see cref="TeleportHint"/>.</summary>
+    public Action<Vector2>? TeleportTo;
+
     /// <summary>The ground point (x, z) under the mouse, or null when the mouse is off the sheet or there is no map data.</summary>
     public Vector2? GroundAtMouse()
     {
@@ -424,6 +427,11 @@ public sealed partial class TacticalMap : Control
             if (!_o._open || e is not InputEventMouseButton { Pressed: true } mb) return;
             if (mb.ButtonIndex == MouseButton.Left) _o.PlaceAt(mb.Position);
             else if (mb.ButtonIndex == MouseButton.Right) _o._m.Waypoint.Clear();
+            else if (mb.ButtonIndex == MouseButton.Middle && _o.TeleportHint)
+            {
+                // this layer stops the mouse, so the click never reaches the shell's input; hand it over here
+                if (_o.GroundAtMouse() is { } g) _o.TeleportTo?.Invoke(g);
+            }
             else return;
             AcceptEvent();
         }

@@ -20,6 +20,9 @@ public partial class Hud
     /// <summary>The ground point (x, z) under the mouse on the open map, or null.</summary>
     public Vector2? TacticalMapGroundAtMouse() => _tacticalMap.GroundAtMouse();
 
+    /// <summary>Sandbox: a middle click on the open map picked this ground point (x, z) to teleport to.</summary>
+    public Action<Vector2>? TacticalMapTeleport { set => _tacticalMap.TeleportTo = value; }
+
     void BuildTacticalMap()
     {
         _waypointMarker = new WaypointMarker(_mapMarkers.Waypoint, () => _minimap.Base) { MouseFilter = Control.MouseFilterEnum.Ignore };
