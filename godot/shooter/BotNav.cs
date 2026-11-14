@@ -69,7 +69,9 @@ public sealed class BotNav
             nav._meshes.Add(m);
             nav.Polygons += m.GetPolygonCount();
         }
-        // the map takes the regions in at the next physics frame; players (and so bots) join later than that
+        // take the regions in now: citizens build this map on first use and ask for routes in the same frame, before the next
+        // physics frame would have synchronised it (the query then fails: "made before first map synchronization")
+        NavigationServer3D.MapForceUpdate(nav._map);
         nav._query = new NavigationPathQueryParameters3D { Map = nav._map, PathSearchMaxPolygons = 0 };
         nav.BuildSeconds = sw.Elapsed.TotalSeconds;
         return nav;
@@ -87,6 +89,9 @@ public sealed class BotNav
         NavigationServer3D.QueryPath(_query, _result);
         return _result.Path;
     }
+
+    /// <summary>The point of the mesh nearest to <paramref name="p"/> (where a citizen stands when it leaves a house).</summary>
+    public Vector3 Snap(Vector3 p) => NavigationServer3D.MapGetClosestPoint(_map, p);
 
     public void Free()
     {

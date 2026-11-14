@@ -53,6 +53,7 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # "tint" flag; meadow.bin is format 2 (a tint flag per layer) and then 3 (a species-zone plane and kind mixes); more
 # clutter kinds (grasses, wild and garden flowers) in clutter_meshes.glb. A loader that reads only 0.9.0 clutter would refuse
 # meadow.bin's new format and draw no meadow.
+# (no bump) church.json (files.church): the inside of the church: door, seats with routes, spots, anchors, rooms.
 # (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
 # Only maps with a bunker have it; a loader that does not know it gives no shelter from blasts. A bunker may carry "intel", the
 # wall of its command post the intel screen hangs on (ADR 0017); a loader that does not know it has no intel room.
@@ -335,6 +336,16 @@ def run_export(
             "bunkers": sorted(scene.bunkers, key=lambda b: b["id"]),
         })
         files["bunkers"] = "bunkers.json"
+    stale_church = out_dir / "church.json"
+    stale_church.unlink(missing_ok=True)
+    if scene.church:
+        # the inside of the church (church_interior.church_info): seats and routes, spots, demon anchors, shelter rooms
+        _dump(stale_church, {
+            "version": 1,
+            "axes": "points: local metres [x east, y north, z up] (x, y as parcels.json, z as terrain.json); yaw: compass degrees",
+            **scene.church,
+        })
+        files["church"] = "church.json"
 
     parcels_file = {
         "version": ARTIFACT_FORMAT_VERSION,

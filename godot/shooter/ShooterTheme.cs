@@ -40,6 +40,8 @@ public static class ShooterTheme
     public static readonly Color Active = new(0.10f, 0.34f, 0.48f, 0.92f);
     public static readonly Color Line = new(0.45f, 0.49f, 0.58f);
     public static readonly Color Text = new(0.96f, 0.97f, 0.98f);
+    /// <summary>Gold of the divine blessing (the screen flash).</summary>
+    public static readonly Color Blessing = new(1f, 0.84f, 0.35f);
     public static readonly Color Dim = new(0.76f, 0.79f, 0.85f);
     public static readonly Color Accent = new(StatePalette.Accent.R, StatePalette.Accent.G, StatePalette.Accent.B);
     public static readonly Color Hover = new(0.19f, 0.23f, 0.31f, 0.95f);

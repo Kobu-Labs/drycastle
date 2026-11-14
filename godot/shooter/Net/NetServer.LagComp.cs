@@ -31,8 +31,8 @@ public partial class NetServer
         foreach (var o in _byId.Values)
         {
             SyncLife(o);
-            var valid = o.Car == null && _match.Get(o.Id)?.Life == PlayerLife.Alive;
-            o.Poses.Record(_tick, valid, new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw));
+            var valid = o.Car == null && _match.Get(o.Id)?.Life == PlayerLife.Alive && !_pins.ContainsKey(o.Id);
+            o.Poses.Record(_tick, valid, new HitTarget(o.Id, N(o.Body.GlobalPosition), BodyStanceOf(o), o.Body.Yaw));
         }
         CaptureBigfootPose();
     }
@@ -138,6 +138,8 @@ public partial class NetServer
             if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
         }
         if (BigfootTarget() is { } bigfoot) list.Add(BigfootRewound(bigfoot, view)); // the Bigfoot is rewound like a player (issue #264)
+        _crowd?.AddTargets(list); // citizens walk slowly: not rewound
+        AddDemonTarget(list); // so does the demon on its wall
         return list;
     }
 

@@ -123,6 +123,8 @@ public partial class NetClient : Node
         InitTurrets();
         InitAnimals();
         InitBigfoot();
+        InitCitizens();
+        InitDemon();
         InitAircraft();
         InitFlak();
         InitSeats();
@@ -171,6 +173,7 @@ public partial class NetClient : Node
         _owned = null;
         _missiles.Clear();
         _animals.Clear(); // the nodes are under Owned
+        _citizens.Clear();
         _impacts = null; Array.Clear(_impactNext);
         _rings = null; _ringNext = 0; _ringMesh = null;
         _dust = null; _dustNext = 0;
@@ -231,6 +234,9 @@ public partial class NetClient : Node
         RenderTurrets();
         RenderAnimals();
         RenderBigfoot();
+        RenderCitizens();
+        RenderDemon();
+        UpdatePounce(delta);
         RenderCars();
         RenderAircraft(delta);
         RenderRockets();
@@ -238,6 +244,7 @@ public partial class NetClient : Node
         RenderMissilePov();
         RenderWater();
         UpdateViewmodel();
+        UpdateDemonQuake(delta);
         UpdateShake(delta);
         FadeOwnCorrection(delta);
         UpdateHud();
@@ -306,14 +313,19 @@ public partial class NetClient : Node
                 _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
                 if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
                 ForgetWorn(l.PlayerId);
+                ForgetStatus(l.PlayerId);
                 break;
             case EventMsg e:
                 if ((EventKind)e.Kind == EventKind.TargetRoster) OnTargetRoster(e.Payload); // target dummies' names (#148)
                 OnSandboxEvent((EventKind)e.Kind, e.Payload); // sandbox answer (#156)
                 OnChatEvent((EventKind)e.Kind, e.Payload); // chat lines, the admin flag, the day clock
+                OnStatusEvent((EventKind)e.Kind, e.Payload); // statuses: blessing, curse, burning
                 OnItemEvent((EventKind)e.Kind, e.Payload); // what the player wears, what a corpse carries, an item crumbling
                 OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
                 OnBigfootEvent((EventKind)e.Kind, e.Payload); // the Bigfoot's effects and the footprints to its corpse (#264)
+                OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
+                OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
+                OnDemonEvent((EventKind)e.Kind, e.Payload); // the demon: fireballs, the curse
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 OnProgressionEvent((EventKind)e.Kind, e.Payload);
@@ -389,7 +401,7 @@ public partial class NetClient : Node
             if (rec.Type == EntityType.Flight) { OnFlightState(rec, h.Tick); continue; }
             if (rec.Type == EntityType.Drive) { OnDriveState(rec, h.Tick); continue; }
             if (rec.Type is not (EntityType.Player or EntityType.Target)) continue;
-            if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); _remotes[id] = r; }
+            if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); _remotes[id] = r; SyncStatusFx(id); }
             r.State = rec.State; r.Stance = rec.Stance; r.Slot = rec.Weapon;
             r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
@@ -469,6 +481,7 @@ public partial class NetClient : Node
             return;
         }
         if (_heldByBigfoot && !_driving) { _pending.Clear(); _reconcile = null; _viewFix = Vector3.Zero; _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); return; } // in the Bigfoot's hand: the body is where the server puts it, nothing is predicted (#264)
+        if (_massSeated || _pinned) { _pending.Clear(); _reconcile = null; _me.SetState(new MoveState { Position = sp, OnFloor = true, FallPeakY = sp.Y }); return; } // seated at the Mass or pinned by the demon: the server holds the body, take its place as is
         if (_driving || _controlling || _gunship != null) { _pending.Clear(); return; }
         if (rec.State == EntityState.Protected) _sawProtected = true;
         if (rec.State == EntityState.Alive && _fireStart > 0 && !_earlyCounted && Now - _fireStart < 0.6 && _fireStart - _spawnAt < _spawnProtection - 1.0) { _earlyEnds++; _earlyCounted = true; }
@@ -600,7 +613,7 @@ public partial class NetClient : Node
         if (_gunship == null) _me.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? _wantSlot : 0), GunnerAim);
         // C-03: a dead body does not move on the server (its input is zero and it is skipped), so it is not predicted either; else each snapshot snapped it back
-        if (!_driving && !_controlling && _gunship == null && !_heldByBigfoot) { if (!Dead) _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
+        if (!_driving && !_controlling && _gunship == null && !_heldByBigfoot && !_massSeated && !_pinned) { if (!Dead) _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         PredictFlight(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
         PredictDrive(ni, dt);  // and so does the driver of an amphibious transport
         _pending.Add(new Pending { Input = ni, After = _me.State });
@@ -630,6 +643,7 @@ public partial class NetClient : Node
                 var dead = r.State == EntityState.Dead;
                 r.ShownYaw = s.Yaw; r.ShownPitch = s.Pitch;
                 TumbleRemote(r, at, s.Yaw, dead && TargetDummies.IsDummyId(id), dt);
+                PounceLieRemote(id, r, at); // the one the demon has pinned lies on its back
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
                 r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && CorpseOf(id)); // riders are drawn in their seat (the server puts the body there), seated rather than standing
                 r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
@@ -675,7 +689,7 @@ public partial class NetClient : Node
         var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
         _viewmodel.Show(id);
         var seated = (_driving || _myState == EntityState.InVehicle) && !InArmedSeat; // an armed seat's rider holds their weapon (ADR 0011)
-        _viewmodel.Visible = !Dead && !seated && !_controlling && _gunship == null && _me is not { ZoomFov: > 0 };
+        _viewmodel.Visible = !Dead && !seated && !_massSeated && !_pinned && !_pRising && !_controlling && _gunship == null && _me is not { ZoomFov: > 0 };
     }
 
     /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
@@ -819,7 +833,7 @@ public partial class NetClient : Node
         }
         var slot = Ammo?.Slot ?? _wantSlot;
         var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
-        var on = zoom > 0 && !Dead && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
+        var on = zoom > 0 && !Dead && !_pinned && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
         _me.ZoomFov = on ? zoom : 0f;
         // iron sights: any non-scoped, non-melee weapon while zoom is held
         var kind = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Kind : WeaponKind.Melee;

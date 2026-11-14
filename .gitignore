@@ -33,5 +33,7 @@ assets/drycastle-rozhlas/parts/
 
 # paid Synty assets (private; never commit)
 assets-private/
+# also as a symlink (a worktree linking to another worktree's folder): the trailing slash above does not match a link
+assets-private
 # linked private packs (res://Assets/Synty/<Pack> -> assets-private/...)
 godot/*/Assets/

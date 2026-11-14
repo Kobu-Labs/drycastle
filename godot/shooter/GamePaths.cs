@@ -33,6 +33,14 @@ public static class GamePaths
         return Path.GetFullPath(Exported ? Path.Combine(ExeDir, "assets") : ProjectSettings.GlobalizePath("res://") + "../../assets");
     }
 
+    /// <summary>Paid asset packs (Synty), never in the repo: DRYCASTLE_ASSETS_PRIVATE, else <c>assets-private/</c> next to the executable (export) or in the repo root (source, gitignored).</summary>
+    public static string PrivateAssets()
+    {
+        var env = OS.GetEnvironment("DRYCASTLE_ASSETS_PRIVATE");
+        if (!string.IsNullOrEmpty(env)) return env;
+        return Path.GetFullPath(Exported ? Path.Combine(ExeDir, "assets-private") : ProjectSettings.GlobalizePath("res://") + "../../assets-private");
+    }
+
     /// <summary>Map folder: the explicit value (flag), else DRYCASTLE_MAP, else <c>map/</c> next to the executable (export) or out/village/map (source).</summary>
     public static string Map(string? explicitDir)
     {

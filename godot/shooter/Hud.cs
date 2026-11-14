@@ -97,6 +97,7 @@ public partial class Hud : CanvasLayer
         _root = new Control { Theme = ShooterTheme.Build(), MouseFilter = Control.MouseFilterEnum.Ignore };
         AddChild(_root);
         BuildProtection();
+        BuildPounce();
         _scope = new ScopeOverlay { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
         _scope.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _root.AddChild(_scope);
@@ -104,6 +105,7 @@ public partial class Hud : CanvasLayer
         BuildBreath();
         BuildHealth();
         BuildAir();
+        BuildStatus();
         BuildAmmo();
         BuildSeats(); // the vehicle seat schematic above the vehicle readout
         BuildTop();
@@ -672,7 +674,7 @@ public partial class Hud : CanvasLayer
 
     string WeaponName(byte id)
     {
-        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Bigfoot => Strings.T("weapon.bigfoot"), SpecialWeapons.Drown => Strings.T("weapon.drown"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), SpecialWeapons.VehicleGun => Strings.T("weapon.vehicle_gun"), SpecialWeapons.Flak => Strings.T("weapon.flak"), SpecialWeapons.Moab => Strings.T("weapon.moab"), SpecialWeapons.Missile => Strings.T("weapon.attack_missile"), SpecialWeapons.Turret => Strings.T("weapon.turret"), SpecialWeapons.AttackHelicopter => Strings.T("heli.weapon"), SpecialWeapons.Ac130 => Strings.T("ac130.kill"), SpecialWeapons.Helper => Strings.T("helper.weapon"), _ => KillWeaponName?.Invoke(id) ?? Strings.T("weapon.unknown") };
+        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Bigfoot => Strings.T("weapon.bigfoot"), SpecialWeapons.Drown => Strings.T("weapon.drown"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), SpecialWeapons.VehicleGun => Strings.T("weapon.vehicle_gun"), SpecialWeapons.Flak => Strings.T("weapon.flak"), SpecialWeapons.Burn => Strings.T("weapon.burn"), SpecialWeapons.Moab => Strings.T("weapon.moab"), SpecialWeapons.Missile => Strings.T("weapon.attack_missile"), SpecialWeapons.Turret => Strings.T("weapon.turret"), SpecialWeapons.AttackHelicopter => Strings.T("heli.weapon"), SpecialWeapons.Ac130 => Strings.T("ac130.kill"), SpecialWeapons.Helper => Strings.T("helper.weapon"), _ => KillWeaponName?.Invoke(id) ?? Strings.T("weapon.unknown") };
     }
 
     /// <summary>Black outside a centred circle with a thin cross, drawn over the zoomed view.</summary>
@@ -759,6 +761,7 @@ public partial class Hud : CanvasLayer
 
     void UpdateCrosshair()
     {
+        if (_pounceHide) return; // lying under the demon: no crosshair
         var scoped = Scoped?.Invoke() ?? false;
         if (_scope.Visible != scoped) { _scope.Visible = scoped; _scope.QueueRedraw(); _crossRoot.Visible = Settings.ShowCrosshair && !scoped && !_crossCovered; }
         if (scoped) return;

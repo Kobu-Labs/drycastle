@@ -926,8 +926,8 @@ public class BigfootTests
     public void TheWireKnowsTheBigfootsKindsAndTheXpReason()
     {
         Assert.True(Wire.ProtocolVersion >= 32);
-        Assert.Equal(210, (int)EventKind.BigfootFx);
-        Assert.Equal(211, (int)EventKind.BigfootTrail);
+        Assert.Equal(230, (int)EventKind.BigfootFx);
+        Assert.Equal(231, (int)EventKind.BigfootTrail);
         Assert.False(Wire.IsEffect(EventKind.BigfootFx), "an effect that names a vehicle is reliable: the driver must stop predicting");
         Assert.Equal(300, GameData.Load(DataDir).Levels.Awards.EventWin);
         Assert.True(Enum.IsDefined(XpReason.EventWin));

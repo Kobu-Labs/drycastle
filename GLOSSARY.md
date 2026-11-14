@@ -329,8 +329,12 @@ How a player moves between the floors of a bunker: they get on with the interact
 _Avoid_: stairs, climbing (that is the verb)
 
 **Shelter**:
-What a bunker's room gives the players in it: a blast outside the room does not hurt them, and a blast inside it hurts nobody outside. The MOAB is not stopped.
+What a bunker's room, or the church, gives the players in it: a blast outside the room does not hurt them, and a blast inside it hurts nobody outside. The MOAB is not stopped.
 _Avoid_: blast cover, shot-only cover (that stops shots, not blasts), protection (that is spawn protection)
+
+**Church doors**:
+The double doors in the doorway of the church: closed (solid, drawn as dark wooden leaves) or open (leaves swung inward, nothing solid). Closed unless the Holy Mass event opens them. The church rooms shelter whether they are open or not.
+_Avoid_: church gate, church entrance (that is the doorway)
 
 **Match mode**:
 How a round is scored and won, set by `mode` in `match.json` at server start, or by an admin's `/restart`: free-for-all (`ffa`, the default: every player alone) or team deathmatch (`tdm`).
@@ -354,6 +358,10 @@ _Avoid_: ping, marker, objective
 **Animal**:
 A creature of the world that is not a player: a deer, a dog, a cow. It has hit points and can be shot dead (`animals.json` lists the species, their hit points, speeds and models). It stands, eats, wanders around the spot it spawned at, and runs from players, vehicles and the shot that hurt it. A killed animal lies for `corpse_seconds` with its death clip held on the last frame, then is removed. It is a world entity (wire type 50) the server owns; clients only draw it. Not a target dummy (a player-shaped practice target) and not a corpse (what a killed player leaves).
 _Avoid_: NPC (alone), mob, critter
+
+**Citizen**:
+A villager of the Holy Mass: leaves a house, walks the navigation mesh to the church door, follows the church's scripted route to its seat and sits. Any hit kills it in one (it lies for `corpse_seconds`, nothing replaces it); it never reacts to combat, and bots do not see it. The server tells who killed it (the event's sinner rule). A world entity (wire type 51) with a pure brain; `holy_mass.json` holds its numbers and bodies, `church.json` (door, aisle, seats) its destination. Not a bot (bots are players with loadouts), not an Animal, not a target dummy.
+_Avoid_: NPC (alone), villager, pedestrian
 
 **Rozhlas**:
 The village loudspeaker broadcast: a song, the announcement, "OPAKUJEM" (I repeat), then the announcement again, all through the same bad-loudspeaker sound, heard across the village as one shared recording, not one per pole. Baked from clean recordings by `scripts/make_rozhlas.py`; on the air at a clock-derived moment, so every client hears the same thing. Louder and clearer the closer the player is to the nearest megaphone pole, quieter and duller the further; poles next to each other do not add up. An **Event announcement** also starts it, and so does an admin's `/event rozhlas`.
@@ -406,3 +414,14 @@ _Avoid_: blast, explosion (those have a radius and damage falloff)
 **Footsteps**:
 The trail of giant footprints that appears where the Bigfoot fell and leads, a little over a hundred metres, to its corpse. They are drawn on every client for as long as the corpse lasts (`reward.corpse_seconds`, much longer than a player's corpse).
 _Avoid_: tracks, breadcrumbs
+**Status**:
+A condition a player carries that is not an Item: no slot, no bag cell, no drop, no corpse. Server session state beside the Equipment, never in the profile. Two kinds: the devil's curse (the player's hits set victims ablaze) and the divine blessing (one lethal hit is negated). A new round keeps it; the player's death ends it.
+_Avoid_: buff, effect, power-up, item (an Item is worn or carried)
+
+**Burn**:
+Damage over time on a player who was set ablaze, by a cursed player's hit or by a demon's fireball: 0.5 hp/s for 10 s (`burn` in `holy_mass_demon.json`). A new ignition refreshes it and never stacks; a kill is credited to the cursed shooter, and a fireball's burn to nobody. It ends with the victim's death.
+_Avoid_: fire damage, DoT, poison
+
+**Demon**:
+The boss the priest turns into in the Holy Mass event: it crawls on the walls and ceiling of the church between baked anchor points (no physics, no navmesh) and throws telegraphed fireballs. It has no hit points but a hit count (bullet 1, explosive and vehicle weapons more, no headshot bonus) that scales with the players inside. If everyone inside dies it heals and waits. Every player who hit it at least once when it dies gets the devil's curse (a Status).
+_Avoid_: boss (alone), monster, priest (that is its first form)

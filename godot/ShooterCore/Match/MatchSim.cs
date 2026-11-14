@@ -4,7 +4,8 @@ namespace Drycastle.ShooterCore;
 
 public enum MatchPhase : byte { Waiting = 0, Running = 1, Ending = 2 }
 
-public enum DamageResult { Ignored, Damaged, Killed }
+/// <summary>Saved: a lethal hit was negated (a blessing, <see cref="BlessingRules"/>); the victim is at full health and the shooter has no kill.</summary>
+public enum DamageResult { Ignored, Damaged, Killed, Saved }
 
 /// <summary>Weapon ids for deaths that no weapon from weapons.json caused.</summary>
 public static class SpecialWeapons
@@ -28,7 +29,9 @@ public static class SpecialWeapons
     /// <summary>The flak truck's shells (a gunner's rounds): its kills are ordinary kills, not the streak's, like the jeep's roof gun.</summary>
     public const byte Flak = 243;
     /// <summary>What the Bigfoot does to a player (its logs, shockwave and launch, issue #264): the kill feed names it.</summary>
-    public const byte Bigfoot = 242;
+    public const byte Bigfoot = 241;
+    /// <summary>Burning (the devil's curse, <see cref="BurnSet"/>): a kill is credited to the curse owner and named "Burning" in the feed.</summary>
+    public const byte Burn = 242;
 }
 
 public abstract record MatchEvent;
@@ -71,6 +74,10 @@ public sealed class MatchPlayer
     public float Health;
     public Vector3 Position;
     public double RespawnAt, ProtectedUntil;
+    /// <summary>Invulnerable until this time after a blessing saved the player; unlike spawn protection, firing does not end it.</summary>
+    public double InvulnerableUntil;
+    /// <summary>Held down by the demon's pounce: nothing hurts, kills or heals them while it lasts (<see cref="MatchSim.SetHeld"/>).</summary>
+    public bool Held;
 }
 
 /// <summary>
@@ -115,8 +122,14 @@ public sealed class MatchSim
     /// <summary>The target dummies of this match (#148); empty until <see cref="SetTargets"/>. Not in <see cref="Players"/>.</summary>
     public TargetDummies Targets { get; private set; } = new(Array.Empty<TargetSpot>(), TargetDummies.RespawnDelay);
 
+    /// <summary>The citizens of the Holy Mass, set by the server; a hit on a victim id in their range goes to them (no score, no kill feed).</summary>
+    public ICitizenHits? Citizens { get; set; }
+
     public void SetTargets(IReadOnlyList<TargetSpot> spots) => Targets = new TargetDummies(spots, TargetDummies.RespawnDelay);
     public event Action<MatchEvent>? Event;
+
+    /// <summary>Asked when a hit would kill (not for falls out of the world or the MOAB, which ignore protection): true negates it once (the host removes the blessing).</summary>
+    public Func<ushort, bool>? SaveFromDeath { get; set; }
 
     public MatchPlayer? Get(ushort id) => _players.GetValueOrDefault(id);
 
@@ -169,8 +182,26 @@ public sealed class MatchSim
     /// <summary>Sandbox (#156): full health for a living player. False when the player is not alive.</summary>
     public bool Heal(ushort id)
     {
-        if (!_players.TryGetValue(id, out var p) || p.Life != PlayerLife.Alive) return false;
+        if (!_players.TryGetValue(id, out var p) || p.Life != PlayerLife.Alive || p.Held) return false;
         p.Health = MoveConsts.MaxHealth;
+        return true;
+    }
+
+    /// <summary>The demon's pounce holds a player (or lets go): while held nothing damages them, not even the world (a fall, the void), and a heal does nothing. False when the player is not here.</summary>
+    public bool SetHeld(ushort id, bool held)
+    {
+        if (!_players.TryGetValue(id, out var p)) return false;
+        p.Held = held;
+        return true;
+    }
+
+    public bool IsHeld(ushort id) => _players.TryGetValue(id, out var p) && p.Held;
+
+    /// <summary>Sets a living player's health to exactly <paramref name="health"/> (the pounce leaves them at a few): above or below what it was. False when they are not alive.</summary>
+    public bool SetHealth(ushort id, float health)
+    {
+        if (!_players.TryGetValue(id, out var p) || p.Life != PlayerLife.Alive) return false;
+        p.Health = Math.Clamp(health, 1f, MoveConsts.MaxHealth);
         return true;
     }
 
@@ -230,14 +261,23 @@ public sealed class MatchSim
     /// </summary>
     public DamageResult ApplyDamage(ushort victim, ushort attacker, byte weapon, float amount, bool ignoreProtection = false, KillCause cause = KillCause.Standard)
     {
+        if (CitizenRules.IsHitId(victim)) return Phase == MatchPhase.Running && Citizens != null ? Citizens.Hit(victim, attacker, amount) : DamageResult.Ignored;
         if (TargetDummies.IsDummyId(victim)) return ApplyTargetDamage(victim, attacker, weapon, amount, cause);
         if (Phase != MatchPhase.Running || amount <= 0) return DamageResult.Ignored;
         if (!_players.TryGetValue(victim, out var v) || v.Life != PlayerLife.Alive) return DamageResult.Ignored;
+        if (v.Held) return DamageResult.Ignored; // pinned by the demon: nothing touches them
         if (v.Sandbox && !v.Vulnerable) return DamageResult.Ignored; // godmode (#156): nothing hurts a sandbox player, unless they switched damage on
         if (!_cfg.FriendlyFire && AreFriends(victim, attacker)) return DamageResult.Ignored; // teammates cannot hurt each other (self damage is not friendly fire)
         if (!ignoreProtection && IsProtected(victim)) return DamageResult.Ignored;
+        if (!ignoreProtection && _now() < v.InvulnerableUntil) return DamageResult.Ignored; // just saved by a blessing
         v.Health -= amount;
         if (v.Health > 0) return DamageResult.Damaged;
+        if (!ignoreProtection && SaveFromDeath?.Invoke(victim) == true)
+        {
+            v.Health = MoveConsts.MaxHealth;
+            v.InvulnerableUntil = _now() + BlessingRules.InvulnerableS;
+            return DamageResult.Saved;
+        }
 
         v.Health = 0; v.Life = PlayerLife.Dead; v.Deaths++;
         v.RespawnAt = _now() + _cfg.RespawnDelay;
@@ -364,6 +404,7 @@ public sealed class MatchSim
         p.Position = SpawnChooser.Choose(_spawns, others, _cfg.MinSpawnDistance, _rng);
         p.Life = PlayerLife.Alive;
         p.Health = MoveConsts.MaxHealth;
+        p.InvulnerableUntil = 0; p.Held = false;
         p.ProtectedUntil = _now() + _cfg.SpawnProtection;
         Emit(new PlayerSpawned(p.Id, p.Position, _cfg.SpawnProtection));
     }

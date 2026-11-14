@@ -94,6 +94,7 @@ Settled design (2026-11-13). Numbers live in `data/holy_mass.json`.
 - permanent in the model (`church_solids`), real shell collision like bunkers; new ADR extending 0009
 - doors are solid outside the event, the event opens them; client hides the interior while doors are shut
 - nave, aisle, bench rows, altar, sacristy door next to the altar, gallery (second floor) with seats and stairs
+- the two side aisles are hollow too (as wide as the plan), open to the nave by arcades; side altars at the aisle ends, standing spots in the aisles; real windows (dark frame, breakable glass pane) in the aisle walls, the clerestory, the chancel and the front facade above the door
 - door at least 2 m wide (NPC navigation, 0.5 m radius)
 - blast shelter like a bunker room: a blast outside does not hurt players inside and the other way round
 - pipeline exports `church.json`: seat poses, aisle path, altar and monk spots, demon wall anchors, doors
@@ -118,6 +119,14 @@ Settled design (2026-11-13). Numbers live in `data/holy_mass.json`.
 - hit-count damage model like Bigfoot, scaled by players inside
 - wipe: heals, doors reopen, waits
 - killed: hellish text "You feel cursed" for every player with at least one hit; doors open, the church closes only after every player leaves
+### Pounce
+- cut-scene attack (protocol v40, `holy_mass_demon.json` `pounce`; `pin_s` 0 turns it off): at a living player in the church, in sight, on the ground (not seated at the Mass), within `range_m` (16); `chance` at each dwell end, `cooldown_s` 30 after a pounce, first no sooner than `first_after_s` 12 of fighting; never the same victim twice in a row while another qualifies; one at a time
+- wind (`wind_s` 0.9): demon crouches facing the victim, victim marked (event 223 `DemonPounce`, stage 1; demon state 10); victim's camera turns to the demon and the mouse look is locked, they can still move
+- flight (state 11): leap arc (leap speed) that homes on the victim's feet
+- pin (`pin_s` 5, state 12): victim knocked flat on their back where they stand, head away from the demon's approach, body held by the server like a Mass seat (no movement, no weapon, no use), takes no damage from anything (`MatchSim.SetHeld`), is not a hit target; others can shoot the demon. Demon stands over them on the floor, head lowered, biting (jaw snaps ~2.5/s). Victim's camera drops to 0.25 m looking up at the demon's face (muzzle `face_distance_m` above their eyes), shake on landing, red pulse and shake on each bite, weapon and crosshair hidden; `bite.ogg` plays flat and loud for the victim, positional for the rest
+- release: health set to exactly `leave_hp` (10), above or below what it was; victim gets up with `immunity_s` of immunity to the demon's fire and flame; demon leaps off to a wall or the ceiling (forced leap)
+- aborts (stage 0): victim leaves, dies or leaves the church before the landing (no pin, cooldown still applies); victim leaves during the pin, or the demon dies (victim let go, health unchanged). `NetServer.PounceSweep` lets go of anyone nothing holds every tick; the event ending does the same
+- reduce motion: no shake or jolt, softer flash
 ## Reward
 Both are a status, not an Item: no slot, no drop. They survive a round change and end when the player dies.
 - underwent the Mass - divine blessing
@@ -131,9 +140,43 @@ Both are a status, not an Item: no slot, no drop. They survive a round change an
     - pew `SM_Prop_Pew_01` / `SM_Prop_Pew_Large_01`, holy water `SM_Prop_Holy_Water_01`, altar `SM_Prop_Altar_Table_01` (POLYGON Dark Fantasy, Godot)
     - citizens `SM_Chr_Male_Peasant_01`, `SM_Chr_Female_Peasant_01`, `SM_Chr_Female_Peasant_02` (POLYGON Fantasy Characters, Unity package: meshes are in `Models/Characters.fbx`; 15 texture variants 01-05 x A-C for variety)
     - demon `SM_Chr_Demon_01` (POLYGON Horror Mansion, Unity package: mesh is in `Models/Characters.fbx`, import the FBX and rebuild the material by hand)
-- no pack ships animations: walk, sit, gestures, shocked look, death and the demon crawl need another source
+- animations: Synty animation packs (Emotes And Taunts, Idles, Base Locomotion, Sword Combat), the Polygon-rig variant of each clip (`A_POLY_*`; the `A_MOD_*` twin is for the Sidekick rig), converted into `assets-private/synty/anim/`
+    - citizens: death `SWD_Death_B`, `SWD_Death_L` (sword not shown); idle picked at random from the idle clips; walk from Base Locomotion; sit down and sitting are code-built (no clip exists)
+    - some citizens take a standing spot instead of a seat and pray kneeling: `IDL_Pray_Kneeling_Enter/Loop/Exit_Masc`
+    - Mass completed: some citizens clap (`EMOT_Celebrate_Clapping_Polite_Femn`), on standing up or at their standing spot
+    - pastor gestures: `EMOT_Angry_TantrumStomp_Femn`, `EMOT_Angry_StranglingMotion_Femn`, `EMOT_Reproach_CalmDown_Femn`, `IDL_PointHand_Index_F_Femn`, `IDL_Pray_Standing_Enter/Loop/Exit_Femn`, `IDL_Thoughtful_R_Enter_Femn`, `IDL_Thoughtful_L_Loop/Exit_Femn`, `IDL_Plead_F_Masc`; death and walk as citizens; Mass survived: `EMOT_Sporty_Flex_Combo_Femn`
+    - monks shocked: `EMOT_Reproach_CalmDown_Femn` or `EMOT_Sad_Crying_Masc`, very rarely `EMOT_Celebrate_Dab_Femn`; death and idle as citizens
+    - demon: scream `EMOT_Aggressive_Roar_Low_Masc`; crawl on all fours, creepy head movements and emotes, and the fireball throw are our own procedural system (no clips)
+    - transformation: the pastor turns into the demon in an animation with lots of fire, then the demon drops on all fours
 - the church shell stays the code model (it fits the real footprint); Synty props are placed inside it at `church.json` poses
-- Synty is paid: only in gitignored `assets-private/`, never in this public repo (#265); every Synty asset needs a CC0 or code fallback so the game runs without the pack
+- Synty is paid: only in gitignored `assets-private/`, never in this public repo (#265); no fallback models, the event needs the pack
+## Implemented (ticket 3: Mass event, pastor, sitting)
+- `/event mass` starts, `/event current end` concludes as if completed (blessing computed), a second `end` removes what is left; `Completed` lasts `completed_seconds`, then everything is removed. Core: `HolyMassEvent` (`ShooterCore/Citizens`), server: `NetServer.Mass.cs`, numbers in `holy_mass.json` `mass`
+- phases `MassPhase`: Idle, Gather, Mass, Completed, Void. Hooks on `NetServer`: `MassPhaseChanged` (doors), `PastorTurns` (demon), `GrantBlessing(playerId)` (status system, stub)
+- pastor and monks are citizen entities with a role (hit-point byte = `role * 2 + alive`); states Standing and Clapping added
+- seats: citizens fill every seat but `player_seats` kept ones; a player takes a kept seat or one no citizen has (a killed citizen's seat after its body is gone); never a citizen's seat, never a standing spot
+- seated player: body and weapon not simulated, look still taken; interact or jump stands up; replicated as a crouch at the seat feet (no sit pose for the player character); shot as a crouching figure
+- Mass time = progress (paused while the pastor is gone); seated time counts only while it progresses; ended early the share is measured against progress so far (none: every seated non-sinner)
+- audio: `chant_sound` loops positionally with a reverb bus (no asset yet; a missing file is skipped and logged once); `bells_sound` plays once everywhere (`assets/drycastle-generated-sounds/church_bells.ogg`, made by `scripts/make_church_bells.py`)
+- bells: ring when the gather starts; the first citizen leaves `bells_lead_seconds` later (the gather clock includes the lead)
+- a killed monk or pastor (kills 1 and 2) lies until the event is cleared (citizens' corpses still expire); dead monks do not react to later pastor kills
+- the Mass begins `start_delay_seconds` (4) after the last citizen still coming has reached its place (dead ones do not count, nor the bells' lead); `gather_seconds` is the upper limit
+- when the pastor turns (phase Void) every living citizen (walking, seated, kneeling, standing) sprints home at `flee_speed` (6 m/s): scripted route out, then the walk route backwards to its spawn point, removed there (citizen state 7 Fleeing, protocol v39; client clip `sprint_up25f_femn`, the walk sped up when it is missing). Killable while fleeing; the doors do not stop them. Monks stay and burn; the demon's fire spares citizens
+- a monk who sees the pastor killed picks one of calm down, crying, `emote_taunt_shhh_femn` (a third each; 3% dab)
+- third pastor kill: the pastor entity is removed in the hit (no death clip, no corpse) and the demon transforms at once (`transform_delay_s` is 0)
+## Implemented (ticket 4: demon and curse)
+- `/event demon` turns the pastor now (`HolyMassEvent.ForceTurn`); the third pastor kill does the same. Numbers: `holy_mass_demon.json` (`fight` section: delays, turning, climb, door grace, corpse time). Server: `NetServer.Demon.cs`, client: `NetClient.Demon.cs`, `DemonView.cs` (body, head, emotes, death), `DemonPose.cs` (crawl modifier), `DemonFx.cs`
+- stages: delay (`transform_delay_s`, 0: none) -> transforming (the dead pastor is removed, everyone else in the church dies where they stand, the demon burns into being; not hittable) -> climbing (scripted leap to the first anchor) -> fighting (`DemonBrain`) -> dying (corpse time, then the event is `End`ed)
+- doors: shut while a living player is inside; empty church (a wipe, or nobody was in when it turned): they open and the demon waits (it heals on a wipe); a player inside shuts them after `door_grace_s`. Killed: doors open, `_closeWhenEmpty`
+- wire: world entity 52 (owner field = octahedral surface normal, yaw/pitch = facing, state `DemonState`, hp byte = share of hits left); events 216 fireball (clients fly the arc), 217 impact, 218 cursed toast. Hit id 39999
+- fireball damage and burn are the victim's own (weapon "Burning", no kill credit); hits on the demon count by weapon kind (splash weapons explosive, special weapons and vehicles vehicle, the rest bullet)
+- gait: diagonal, driven by distance, two-bone IK per limb to footholds on the surface plane (`DemonPose`)
+- roar / leap / flame (protocol v37, `holy_mass_demon.json` `roar`, `leap`, `flame`; each off when its key number is 0): `DemonBrain` phases Roaring (on wake, every `interval_s`, at `health_shares`), LeapWind + Leaping (scripted arc to an anchor on another surface: opposite wall, wall to ceiling and back; server-side position; about every 12 s: `leap.chance` at each dwell end after `cooldown_s`, certain after `due_s`), Breathing (windup, then a cone that burns every `tick_s`); replicated as demon states 6-9, event 222 `DemonFlame` names the target so clients aim the stream
+- church decor (client only, from `church.json`, `ChurchDecor.cs`): wooden cross hung in front of the retable above the altar (placed from the altar's pose and the chancel outline: `ChurchDecor` constants `WallInsetM`, `RetableM`), burns and turns upside down while a demon exists, upright again after; warm interior lights (no shadows; chandeliers `ChandelierDropM` under the lowest ceiling anchor) go out when the demon appears
+- church paintings (client only, `ChurchPaintings.cs`): 12 `painting` props in `church.json` (`pos` canvas centre on the wall face, `yaw`, `w`/`h` metres; `PAINTINGS` in `church_interior.py`) are a gilt frame plus a canvas; calm pictures are painted in code, and while a demon exists each burns through (shader dissolve with ember edge, staggered over `SpreadS`) to a `paintings/hell_01..09.png` of the private pack (best aspect match, cropped by UV; painted red/black fallback) and pulses faint red
+- demon size: `scale` (1.6) in `holy_mass_demon.json`; model, gait stride, hit capsule (`HitTarget.Scale`), body height, muzzle and mouth offsets follow it; the other lengths in the file are those of a scale 1 demon
+- movement: the crawl picks goals 2-6 links away, preferring another surface and the ceiling (`surface_change_bonus`, `ceiling_bonus` plus hunger); dwells are short (`dwell_s`)
+
 ## Tickets
 1. Enterable church (pipeline, ADR, `church.json`)
 2. Citizen NPC entity (walk to seat, sit, die)

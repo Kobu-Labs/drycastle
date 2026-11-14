@@ -174,7 +174,13 @@ public partial class NetServer
     void ChatCurrentEvent(Client c, string action)
     {
         if (action is not ("end" or "cancel")) { ChatTo(c, ChatLineKind.Error, "Usage: /event current end (conclude it as a win) or /event current cancel (remove it, no reward)."); return; }
-        if (_events.Current == null || _bigfoot is not { } bf) { ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
+        if (_events.Current == null || _bigfoot is not { } bf)
+        {
+            // no Bigfoot: the Holy Mass keeps its own run (it can only be ended)
+            if (action == "end" || _mass is not { Running: true }) ChatCurrentEnd(c);
+            else ChatTo(c, ChatLineKind.Error, "The Holy Mass takes /event current end.");
+            return;
+        }
         if (action == "end")
         {
             ChatToAll(ChatLineKind.System, "", $"{c.Name} ended the Bigfoot event as a win.");

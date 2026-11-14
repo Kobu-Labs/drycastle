@@ -7,7 +7,7 @@ namespace Drycastle.ShooterCore;
 /// (<see cref="MoveConsts.Gravity"/>). A flight is a closed formula of the time since the start, so the server needs no integration and a test can
 /// check where it lands.
 /// </summary>
-public static class Ballistics
+public static partial class Ballistics
 {
     public const float Gravity = MoveConsts.Gravity;
 

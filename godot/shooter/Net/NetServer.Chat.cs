@@ -65,6 +65,9 @@ public partial class NetServer
             case "time": ChatTimeCommand(c, args); break;
             case "restart": ChatRestart(c, args); break;
             case "event": ChatEvent(c, args); break;
+            case "citizens": ChatCitizens(c, args); break;
+            case "church": ChatChurch(c, args); break;
+            case "status": ChatStatus(c, args); break;
         }
         GD.Print($"server: {c.Name} #{c.Id} ran {text}");
     }
@@ -190,6 +193,8 @@ public partial class NetServer
                 break;
             case "intel": ChatIntel(c, action == "clear"); break;
             case "bigfoot": StartBigfoot(c); break;
+            case "mass": ChatMass(c); break;
+            case "demon": ChatDemon(c); break;
         }
     }
 

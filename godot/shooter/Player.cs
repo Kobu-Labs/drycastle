@@ -77,6 +77,13 @@ public partial class Player : CharacterBody3D
     /// </summary>
     public float ViewDip { get; set; }
     float _lookYaw, _lookPitch;
+    /// <summary>The mouse does not turn the view (the demon's pounce locks the camera on it).</summary>
+    public bool LookLocked { get; set; }
+    /// <summary>
+    /// A cut-scene camera: called every frame with the transform the first-person eye would have, it returns the transform to use instead (or null: the normal eye). Not part of the state;
+    /// the demon's pounce lays the victim's camera on the floor with it.
+    /// </summary>
+    public Func<Transform3D, Transform3D?>? CutCamera { get; set; }
 
     /// <summary>
     /// How far the mouse turned the view since the last call, radians in the camera's own sense (x yaw, positive turns left; y pitch, positive looks up),
@@ -129,6 +136,7 @@ public partial class Player : CharacterBody3D
         if (!_camera.IsInsideTree()) return;
         if (!_chase) _camera.Position = _eyeLocal + ViewOffset + Vector3.Down * ViewDip; // the eye glides over a reconcile (ViewOffset) and dips on a landing (ViewDip); the physics sets the eye's place per tick
         if (!_chase) _camera.Rotation = new Vector3(RecoilState.ClampPitch(_pitch + AimKick.X + ViewSway.X), _yaw + AimKick.Y + ViewSway.Y, ViewRoll);
+        if (!_chase && CutCamera?.Invoke(_camera.GlobalTransform) is { } cut) _camera.GlobalTransform = cut;
         var target = ZoomFov > 0 ? ZoomFov : (GameSettings.Current.Fov + FovBoost) * (IronSightZoom ? IronSightFovScale : 1f);
         if (Mathf.IsEqualApprox(_fovNow, target)) return;
         _fovNow = Mathf.Lerp(_fovNow, target, 1f - Mathf.Exp(-18f * (float)delta));
@@ -347,6 +355,7 @@ public partial class Player : CharacterBody3D
     public override void _UnhandledInput(InputEvent e)
     {
         if (!CaptureMouse) return;
+        if (e is InputEventMouseMotion && LookLocked) return;
         if (e is InputEventMouseMotion m && Input.MouseMode == Input.MouseModeEnum.Captured)
         {
             var gs = GameSettings.Current;
@@ -428,6 +437,33 @@ public partial class Player : CharacterBody3D
         Simulate(input, (float)delta);
     }
 
+    readonly KinematicCollision3D _stepHit = new();
+
+    /// <summary>
+    /// Walking into a low ledge (up to <see cref="MoveConsts.StepHeight"/>: a doorstep, a kerb, a stair) lifts the body onto it instead of stopping it.
+    /// Run before the move, on the floor only: when the way ahead is blocked by something that is no walkable slope, but is free one step higher and
+    /// has a floor to stand on there, the body is raised to that floor and the move then carries it forward. Part of the tick, so the server and a
+    /// client's replay do the same.
+    /// </summary>
+    void StepUp(float dt)
+    {
+        if (!IsOnFloor()) return;
+        var ahead = new Vector3(Velocity.X, 0, Velocity.Z) * dt;
+        var len = ahead.Length();
+        if (len < 1e-4f) return;
+        var floorCos = Mathf.Cos(FloorMaxAngle);
+        var here = GlobalTransform;
+        if (!TestMove(here, ahead, _stepHit) || _stepHit.GetNormal().Y >= floorCos) return; // free, or a slope the move climbs anyway
+        var up = Vector3.Up * MoveConsts.StepHeight;
+        if (TestMove(here, up)) return; // no headroom
+        var raised = here.Translated(up);
+        var probe = ahead / len * Mathf.Max(len, MoveConsts.CapsuleRadius + 0.05f); // far enough to stand on the ledge, not on its edge
+        if (TestMove(raised, probe)) return; // a wall, not a ledge
+        if (!TestMove(raised.Translated(probe), -up, _stepHit) || _stepHit.GetNormal().Y < floorCos) return; // nothing to stand on up there
+        var rise = MoveConsts.StepHeight + _stepHit.GetTravel().Y;
+        if (rise > 0.02f) GlobalPosition += Vector3.Up * rise;
+    }
+
     /// <summary>One movement tick: the shared step, the physics move and (when authoritative) fall damage and respawn.</summary>
     public void Simulate(in MoveInput input, float dt)
     {
@@ -449,6 +485,7 @@ public partial class Player : CharacterBody3D
         SetStanceShape(_state.Stance);
 
         Velocity = ToG(_state.Velocity);
+        StepUp(dt);
         MoveAndSlide();
         LastFallDamage = MovementStep.PostMove(ref _state, ToN(GlobalPosition), ToN(Velocity), IsOnFloor(), Water.DepthAt(ToN(GlobalPosition)));
         if (Authoritative && LastFallDamage > 0)

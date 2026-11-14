@@ -66,7 +66,7 @@ public partial class NetServer
         _helperEnemies.Clear();
         var targets = LiveTargets();
         foreach (var t in targets)
-            if (t.Id != owner) _helperEnemies.Add(new HelperCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM, t.Stance));
+            if (t.Id != owner && !CitizenRules.IsHitId(t.Id) && !DemonRules.IsHitId(t.Id)) _helperEnemies.Add(new HelperCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM, t.Stance));
         ReturnTargets(targets);
         return _helperEnemies;
     }

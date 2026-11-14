@@ -43,6 +43,10 @@ public partial class NetServer : Node
         public PlayerWeapons W = null!;
         /// <summary>What the player wears (items.json): set at join, taken off onto the corpse at death, never stored in the profile.</summary>
         public Equipment Worn = null!;
+        /// <summary>The blessing and the curse the player carries (Holy Mass reward); ends at death, survives a round change, never stored.</summary>
+        public readonly PlayerStatuses Status = new();
+        /// <summary>Whether the last <see cref="EventKind.StatusState"/> said this player burns.</summary>
+        public bool BurningSent;
         /// <summary>What the player carries unworn: set at join, emptied onto the corpse at death, never stored in the profile (ADR 0018).</summary>
         public Bag Bag = null!;
         /// <summary>The player's perk values. Neutral until the loadout ticket sets them from the player's loadout.</summary>
@@ -174,12 +178,15 @@ public partial class NetServer : Node
         _xp = new MatchXp(Levels.Awards);
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
+        StatusInit();
+        DemonInit();
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");
         _match.Entities.Spawned += w => BroadcastEvent(EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State));
         _match.Entities.Despawned += w => BroadcastEvent(EventKind.WorldDespawn, WorldCodec.EncodeDespawn(w.Id, w.Reason));
         CorpseRules.Register(WorldEntityRegistry.Shared);
         GroundItemRules.Register(WorldEntityRegistry.Shared);
         TurretRules.Register(WorldEntityRegistry.Shared);
+        CitizenRules.Register(WorldEntityRegistry.Shared);
         _corpses = new CorpseBook(_match.Entities);
         InitBigfoot(); // after the corpse book, which follows the same despawns
         InitAircraft();
@@ -207,7 +214,7 @@ public partial class NetServer : Node
         _tick++;
         if (!_spawnsChecked)
         {
-            if (_tick >= 3) { CheckSpawnGround(); SpawnCars(); PlanTargets(); BuildBotNav(); }
+            if (_tick >= 3) { CheckSpawnGround(); SpawnCars(); PlanTargets(); BuildBotNav(force: true); } // always: citizens and events need it too, and a bake during play times the clients out
             return; // not accepting connections until the spawn list is validated
         }
         _elapsed += delta;
@@ -224,6 +231,8 @@ public partial class NetServer : Node
         _match.Update();
         BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
         _match.Entities.Tick((float)delta);
+        CitizensTick((float)delta);
+        MassTick((float)delta); // the Holy Mass: its clock, the pastor, the seats
         PerfLap(ServerPerf.Ph.Match);
         StreakTick((float)delta);
         PerfLap(ServerPerf.Ph.Streaks);
@@ -240,10 +249,12 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Corpses);
         StepVehicles((float)delta);
         PerfLap(ServerPerf.Ph.Vehicles);
+        StatusTick((float)delta); // burns tick
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
         DetonateFlak();    // flak shells that have arrived burst now
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
+        FlushStatuses(); // statuses and burning that changed this tick
         FlushScoreboard(); // once a tick at most, and about once a second (the ping), however many kills the tick had (A-04)
         PerfLap(ServerPerf.Ph.Detonate);
         if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
@@ -483,10 +494,14 @@ public partial class NetServer : Node
         foreach (var w in _match.Entities.Snapshot()) Send(c, new EventMsg((byte)EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State)));
         SendCorpseItemsOnJoin(c); // the items the corpses carry, after the corpses themselves
         SendGlassOnJoin(c); // the glass panes that are not whole (ADR 0007)
+        SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
         SendIntelOnJoin(c); // the events on the intel screen
+        SendMassOnJoin(c); // the Holy Mass, when one runs
+        SendPounceOnJoin(c); // and the demon's pounce, when one is on
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
         SendWornOnJoin(c); // what the others wear (#266), to draw on their characters
+        SendStatusOnJoin(c); // who is blessed, cursed or burning
         _match.AddPlayer(c.Id, c.Name, c.Sandbox); // spawns the player (event) and broadcasts the scoreboard
         SandboxAnnounce(c); // sandbox name tags both ways, and the held streak (#156)
         _host.Flush();
@@ -506,6 +521,8 @@ public partial class NetServer : Node
     void Leave(Client c)
     {
         StreakLeave(c.Id);
+        StatusLeave(c.Id);
+        MassStandUp(c.Id); _seatHint.Remove(c.Id);
         if (c.Car != null) { c.Car.Seat.Exit(c.Id); c.Car = null; }
         foreach (var car in _cars) { car.RemoveCollisionExceptionWith(c.Body); car.Probe?.Unignore(c.Body); car.DriveWorld?.Unignore(c.Body); } // the exception outlives the freed body otherwise (T3-014)
         c.Body.QueueFree();
@@ -601,8 +618,11 @@ public partial class NetServer : Node
                 GD.Print($"server: round over, winners {string.Join(",", _match.Winners)}");
                 break;
             case PhaseChanged { Phase: MatchPhase.Running }:
+                _mass?.End(); // the Holy Mass does not outlive the round
+                _crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
                 ResetCars();
                 LossRoundStart();
+                StatusRoundStart();
                 RoundStarted();
                 if (_roundsEnded > 0) { _restarts++; _finishAt = _elapsed + 1.5; }
                 GD.Print("server: round started");
@@ -634,7 +654,7 @@ public partial class NetServer : Node
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon, k.Cause)));
                 break;
             case TargetKilled tk: OnTargetKilled(tk); break;
-            case PlayerDied d: LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
+            case PlayerDied d: OnStatusDeath(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
         }
     }
 
@@ -683,6 +703,8 @@ public partial class NetServer : Node
             c.StreakHeld = streakDown;
             if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
             if (c.Car == null && _tick <= c.HeldUntilTick) continue; // in the Bigfoot's hand: the input is acked, the body is where the Bigfoot puts it (issue #264)
+            if (c.Car == null && _sitters.TryGetValue(c.Id, out var sitter)) { SitterInput(c, sitter, i, useEdge); continue; } // seated in the church: no walking, no weapon
+            if (c.Car == null && _pins.TryGetValue(c.Id, out var pinYaw)) { c.Body.Yaw = pinYaw; c.Body.Pitch = 0; continue; } // pinned by the demon: held on the floor, no walking, no weapon, no use
             if (streakEdge && !controlled) StreakActivate(c);
             if (c.Car == null && _streaks.ControlOf(c.Id) is { FreezesBody: true }) continue; // controlling a streak entity that holds the body (the missile, a gunship): the body stands still
             if (c.Car is { Thrown: not null }) continue; // the Bigfoot threw it: nobody steers, fires or gets out until it lands (issue #264)
@@ -704,7 +726,7 @@ public partial class NetServer : Node
                 if (useEdge) ExitCar(c);
                 continue;
             }
-            if (useEdge && TryEnterCar(c)) continue;
+            if (useEdge && (MassSit(c) || TryEnterCar(c))) continue;
             c.Body.Yaw = Quant.Yaw(i.Yaw);
             c.Body.Pitch = Quant.Pitch(i.Pitch);
             c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
@@ -774,7 +796,7 @@ public partial class NetServer : Node
     {
         var list = _targetLists.Count > 0 ? _targetLists.Pop() : new List<HitTarget>(_byId.Count + 4);
         foreach (var o in _byId.Values)
-            if (_match.Get(o.Id)?.Life == PlayerLife.Alive) list.Add(HitTargetOf(o));
+            if (_match.Get(o.Id)?.Life == PlayerLife.Alive && !_pins.ContainsKey(o.Id)) list.Add(HitTargetOf(o)); // a pinned player is under the demon and untouchable: not a target, so no shot stops on them
         var dummies = _match.Targets.All; // living target dummies: an index loop, no enumerator object
         for (var i = 0; i < dummies.Count; i++)
         {
@@ -782,6 +804,8 @@ public partial class NetServer : Node
             if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
         }
         if (BigfootTarget() is { } bigfoot) list.Add(bigfoot); // the Bigfoot is a hit target like a player (issue #264)
+        _crowd?.AddTargets(list); // the citizens of the Holy Mass
+        AddDemonTarget(list);
         PerfCounters.LiveTargetsCalls++; PerfCounters.LiveTargetsElems += list.Count;
         return list;
     }
@@ -802,7 +826,7 @@ public partial class NetServer : Node
     {
         if (o.Car is { } car && car.Def.Seats[o.CarSeat].Exposed) // the seat where the car stood at the shot's view (B-02), or now
             return new HitTarget(o.Id, N(SeatPosAt(car, o.CarSeat, PoseOf(car))), RiderRules.HitStance(car.Def, o.CarSeat, o.Body.State.Stance), o.Body.Yaw, o.Worn.HeadGuarded);
-        return new HitTarget(o.Id, N(o.Body.GlobalPosition), o.Body.State.Stance, o.Body.Yaw, o.Worn.HeadGuarded);
+        return new HitTarget(o.Id, N(o.Body.GlobalPosition), BodyStanceOf(o), o.Body.Yaw, o.Worn.HeadGuarded);
     }
 
     /// <summary>The player bodies' RIDs for ray exclusion, rebuilt only after a join or a drop (T2-02) instead of per ray.</summary>
@@ -958,8 +982,16 @@ public partial class NetServer : Node
     {
         if (victim == BigfootRules.TargetId) return DealBigfoot(attackerId, weaponIdx); // a hit count, not hit points (issue #264)
         if (_streaks.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
+        if (DemonRules.IsHitId(victim)) return DemonHit(attackerId, weaponIdx, damage); // the demon: a hit count, no hit points
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
+        if (CitizenRules.IsHitId(victim)) // a citizen: the hit marker, but no assist, streak, refill or kill feed
+        {
+            if (_byId.TryGetValue(attackerId, out var shooter)) Send(shooter, new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attackerId, weaponIdx, (ushort)damage, head, backstab, r == DamageResult.Killed))));
+            return r;
+        }
+        if (r == DamageResult.Saved) BroadcastEvent(EventKind.BlessingSaved, StatusCodec.EncodeSaved(victim)); // the blessing is used up; the mask follows with the flush
+        else if (r == DamageResult.Damaged) CurseOnHit(attackerId, weaponIdx, victim);
         if (r == DamageResult.Damaged && Scores(attackerId) && Scores(victim)) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
         BotHit(victim, attackerId);
         _hitsLanded++;
@@ -1069,7 +1101,7 @@ public partial class NetServer : Node
         foreach (var c in _byId.Values) // every joined player, bots included
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot,
-                    c.Car != null ? RiderRules.HitStance(c.Car.Def, c.CarSeat, c.Body.State.Stance) : c.Body.State.Stance));
+                    c.Car != null ? RiderRules.HitStance(c.Car.Def, c.CarSeat, c.Body.State.Stance) : BodyStanceOf(c)));
         foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed, car.Lights));
         foreach (var car in _cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model
         foreach (var car in _cars) if (car.Flies) ents.Add(FlightRecord.Make(car.Id, car.Flight)); // a helicopter's velocity, tilt and rotor (ADR 0006)
