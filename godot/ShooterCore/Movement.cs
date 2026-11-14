@@ -30,11 +30,11 @@ public static class MoveConsts
     /// <summary>Steeper ground than this (degrees) forces a prone player to stand (auto stand).</summary>
     public const float ProneMaxSlopeDegrees = 20f;
     /// <summary>Stance step durations in seconds. The body changes stance when a step ends; standing up waits for headroom.</summary>
-    public const float StandToCrouchTime = 0.2f;
-    public const float CrouchToStandTime = 0.35f;
-    public const float CrouchToProneTime = 0.45f;
-    /// <summary>Getting up from prone is deliberately slow.</summary>
-    public const float ProneToCrouchTime = 0.9f;
+    public const float StandToCrouchTime = 0.12f;
+    public const float CrouchToStandTime = 0.21f;
+    public const float CrouchToProneTime = 0.27f;
+    /// <summary>Getting up from prone is deliberately slower than the other steps.</summary>
+    public const float ProneToCrouchTime = 0.45f;
 }
 
 /// <summary>Body stance. Steps are one level at a time: Stand to Crouch to Prone, and back.</summary>

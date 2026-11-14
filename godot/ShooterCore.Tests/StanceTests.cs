@@ -72,11 +72,11 @@ public class StanceTests
         Ticks(ref s, new MoveInput(), 1);                       // key up
         Ticks(ref s, new MoveInput { Buttons = MoveButtons.Prone }, 1); // key down: toggle off
         Assert.False(s.ProneLatched);
-        Ticks(ref s, new MoveInput(), 20);                      // 0.67 s: still lying down
+        Ticks(ref s, new MoveInput(), 10);                      // 0.37 s: still lying down
         Assert.Equal(Stance.Prone, s.Stance);
-        Ticks(ref s, new MoveInput(), 15);                      // 1.17 s: crouched, the stand-up is still going
+        Ticks(ref s, new MoveInput(), 6);                       // 0.57 s: crouched, the stand-up is still going
         Assert.Equal(Stance.Crouch, s.Stance);
-        Ticks(ref s, new MoveInput(), 15);                      // 1.67 s: standing
+        Ticks(ref s, new MoveInput(), 7);                       // 0.80 s: standing
         Assert.Equal(Stance.Stand, s.Stance);
     }
 
