@@ -66,6 +66,7 @@ public partial class NetClient
             foreach (var v in _cars.Values)
                 if (v.Driver == _myId && !v.Destroyed && FlightDef(v) != null) { mine = v; break; }
         if (mine == null || !_flights.TryGetValue(mine.Id, out var fv) || !_dec.States.TryGetValue(mine.Id, out var vehicle)) { StopPiloting(); return; }
+        if (CarThrown(mine.Id)) { StopPiloting(); return; } // in the Bigfoot's hands or thrown: the server places it and ignores the pilot, so it is drawn from the snapshots
         var server = FlightRecord.State(vehicle, fv.Rec);
         if (_pilot == null || _pilot.CarId != mine.Id)
         {

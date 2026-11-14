@@ -310,6 +310,16 @@ public partial class ServerCar : CharacterBody3D
             FollowDrive();
             return;
         }
+        if (Flies)
+        {
+            // a helicopter in its hands or in the air: level, still, off the ground, its rotor as it was; the clients draw it from this state
+            Flight.Position = new System.Numerics.Vector3(pos.X, pos.Y, pos.Z);
+            Flight.Velocity = new System.Numerics.Vector3(0, verticalSpeed, 0);
+            Flight.Yaw = FlightMath.Wrap(yaw); Flight.Pitch = 0; Flight.Roll = 0;
+            Flight.YawRate = 0; Flight.PitchRate = 0; Flight.RollRate = 0;
+            Flight.Grounded = false; Flight.Impact = 0;
+            FlightImpact = 0;
+        }
         GlobalPosition = pos;
         State.Yaw = FlightMath.Wrap(yaw); State.Speed = 0; State.YawRate = 0;
         Rotation = new Vector3(0, State.Yaw, 0);
@@ -328,6 +338,7 @@ public partial class ServerCar : CharacterBody3D
             DriveTick = 0;
             FollowDrive();
         }
+        if (Flies) { Flight.Velocity = System.Numerics.Vector3.Zero; Flight.Grounded = true; Flight.Agl = 0; Flight.Impact = 0; FlightImpact = 0; } // set down, undamaged
         TickEndPos = GlobalPosition;
         LastImpact = 0; DriveImpact = 0;
         Wake();

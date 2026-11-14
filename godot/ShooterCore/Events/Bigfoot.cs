@@ -6,7 +6,8 @@ namespace Drycastle.ShooterCore;
 public readonly record struct BigfootPlayer(ushort Id, Vector3 Feet, bool OnFloor, bool InVehicle);
 
 /// <summary>A vehicle it may throw: a ground vehicle that is not already flying. <see cref="Feet"/> is where it stands.</summary>
-public readonly record struct BigfootVehicle(ushort Id, Vector3 Feet);
+/// <summary>A vehicle the Bigfoot may take: where it stands and half its length (a bus is touched long before its middle is near).</summary>
+public readonly record struct BigfootVehicle(ushort Id, Vector3 Feet, float HalfLength = 0);
 
 /// <summary>What of the Bigfoot's damage a hurt was (the kill feed and the logs name it).</summary>
 public enum BigfootHurt : byte { Trunk, Shockwave, Landing, LaunchHit }
@@ -400,12 +401,16 @@ public sealed class Bigfoot : IWorldEntity
         return best;
     }
 
+    const float CarHalfLength = 2.3f;
+
     BigfootVehicle? FindVehicleInContact()
     {
         BigfootVehicle? best = null; var bd = _d.VehicleThrow.ContactM;
         foreach (var v in _w.Vehicles)
         {
-            var d = Flat(v.Feet, Position);
+            // the distance to its middle, less what a long vehicle is longer than a car; and only one it can reach up to (a helicopter that hovers low, not one that flies over)
+            var d = Flat(v.Feet, Position) - MathF.Max(0, v.HalfLength - CarHalfLength);
+            if (v.Feet.Y - Position.Y > _d.VehicleThrow.HoldHeightM + 2f) continue;
             if (d <= bd) { bd = d; best = v; }
         }
         return best;

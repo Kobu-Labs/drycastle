@@ -80,7 +80,7 @@ public partial class NetServer
         foreach (var c in _byId.Values)
             if (_match.Get(c.Id)?.Life == PlayerLife.Alive) _bfPlayers.Add(new BigfootPlayer(c.Id, N(c.Body.GlobalPosition), c.Body.State.OnFloor, c.Car != null));
         foreach (var car in _cars)
-            if (!car.Destroyed && !car.Flies && car.Thrown == null) _bfVehicles.Add(new BigfootVehicle(car.Id, N(car.GlobalPosition)));
+            if (!car.Destroyed && car.Thrown == null) _bfVehicles.Add(new BigfootVehicle(car.Id, N(car.GlobalPosition), car.Def.HalfLength));
     }
 
     /// <summary>A vehicle thrown by the Bigfoot flies its arc: the server places it, and its riders with it. It lands exactly where the throw was aimed.</summary>
@@ -344,7 +344,7 @@ public partial class NetServer
         public void LiftVehicle(ushort vehicle, NVec3 hold, float seconds)
         {
             var car = _s._cars.FirstOrDefault(v => v.Id == vehicle);
-            if (car == null || car.Destroyed || car.Flies || car.Thrown != null) return;
+            if (car == null || car.Destroyed || car.Thrown != null) return;
             car.Thrown = new VehicleThrow(N(car.GlobalPosition), car.State.Yaw, hold, seconds);
             car.Wake();
             car.HitCooldown.Clear();
@@ -354,7 +354,7 @@ public partial class NetServer
         {
             var car = _s._cars.FirstOrDefault(v => v.Id == vehicle);
             if (car is { Destroyed: false, Thrown: { Released: false } lifted }) { lifted.Release(landing, seconds, spinRadPerS); return; } // from over its head
-            if (car == null || car.Destroyed || car.Flies || car.Thrown != null) return;
+            if (car == null || car.Destroyed || car.Thrown != null) return;
             car.Thrown = new VehicleThrow(N(car.GlobalPosition), car.State.Yaw, landing, seconds, spinRadPerS);
             car.Wake();
             car.HitCooldown.Clear();

@@ -496,6 +496,28 @@ public class BigfootTests
     }
 
     [Fact]
+    public void ALongVehicleIsInContactAtItsEndAndAHelicopterOnlyWithinReach()
+    {
+        // a bus: its middle is 8 m away, its end at 2 m
+        var w = new FakeWorld().Player(1, 0, -12);
+        w.VehicleList.Add(new BigfootVehicle(0x4002, new Vector3(8, 0, 0), HalfLength: 6.03f));
+        var b = Make(w);
+        HitUntil(b, Shipped.Hits.SecondPhaseAt);
+        Run(b, 0.5f);
+        Assert.Equal(0x4002, Assert.Single(w.VehicleLifts).Car);
+        // a helicopter overhead, out of reach, is left alone; one that hovers low is taken
+        var sky = new FakeWorld().Player(1, 0, -12);
+        sky.VehicleList.Add(new BigfootVehicle(0x4003, new Vector3(1, 30, 0), HalfLength: 4f));
+        var b2 = Make(sky);
+        HitUntil(b2, Shipped.Hits.SecondPhaseAt);
+        Run(b2, 0.5f);
+        Assert.Empty(sky.VehicleLifts);
+        sky.VehicleList[0] = new BigfootVehicle(0x4003, new Vector3(1, 3, 0), HalfLength: 4f);
+        Run(b2, 0.5f);
+        Assert.Single(sky.VehicleLifts);
+    }
+
+    [Fact]
     public void ALiftedVehicleRisesHoldsAndFliesFromOverhead()
     {
         var t = new VehicleThrow(new Vector3(2, 0, 1), 0.5f, new Vector3(0, 4.2f, 0), 1f);
