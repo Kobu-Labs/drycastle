@@ -52,6 +52,7 @@ public partial class NetServer
     void ThievesTick(float dt)
     {
         GangsTick();
+        GangAudioTick(dt); // the voice lines (ticket 09)
         if (_thieves is { Running: true } && _thieves.Tick(dt)) ThievesFinish(true, null);
     }
 

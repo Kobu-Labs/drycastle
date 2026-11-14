@@ -260,6 +260,7 @@ public sealed class CorpseBook
         var body = entry.Body;
         if (!CorpseRules.InReach(player, body.Position, slack)) return ItemPickUp.OutOfReach;
         if (index < 0 || index >= body.Items.Count) return ItemPickUp.NoItem;
+        if (items.At(body.Items[index].Item) is { BagOnly: true } && bag.IsFull) return ItemPickUp.NoRoom; // a plain item has no slot to swap into: before the count
         var result = ItemRules.Take(items, body.Items[index], out var taken);
         if (result == ItemPickUp.Crumbled) body.RemoveItem(index);
         if (result != ItemPickUp.Ok) return result;
@@ -279,7 +280,7 @@ public sealed class CorpseBook
         var entry = _ground.FirstOrDefault(x => x.Id == id);
         if (entry.Item == null) return ItemPickUp.Gone;
         if (!GroundItemRules.InReach(player, entry.Item.Position, slack)) return ItemPickUp.OutOfReach;
-        if (items.At(entry.Item.Stack.Item) is { } def && worn.Get(def.Slot) != null && bag.IsFull) return ItemPickUp.NoRoom; // before the count: a futile attempt must not crumble it
+        if (items.At(entry.Item.Stack.Item) is { } def && (def.BagOnly || worn.Get(def.Slot) != null) && bag.IsFull) return ItemPickUp.NoRoom; // before the count: a futile attempt must not crumble it
         var result = ItemRules.Take(items, entry.Item.Stack, out var taken);
         if (result == ItemPickUp.Crumbled) _world.Despawn(id, WorldDespawnReason.Removed);
         if (result != ItemPickUp.Ok) return result;

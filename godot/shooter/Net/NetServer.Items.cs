@@ -74,6 +74,7 @@ public partial class NetServer
         if (!ItemEvents.TryDecodePickUp(payload, out var corpse, out var index)) return;
         if (!MayHandleItems(c) || c.Car != null) return;
         var result = _corpses.TryPickUpItem(corpse, index, N(c.Body.GlobalPosition), c.Worn, c.Bag, Items, out var placed);
+        if (result == ItemPickUp.NoRoom) { SendItemNotice(c, ItemNoticeKind.BagFull); return; }
         if (result is not (ItemPickUp.Ok or ItemPickUp.Crumbled))
         {
             GD.Print($"server: {c.Name} corpse item pickup refused: {result}");
