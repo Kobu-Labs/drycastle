@@ -62,8 +62,8 @@ public partial class NetServer
     bool _navTried;
 
     /// <summary>
-    /// Once the colliders are in (at start, or when an admin first asks for bots): the mesh the bots walk on. Only when bots are
-    /// wanted, and not in the smoke arenas (far from the map). Tried once; it blocks for the bake, so a live call warns first.
+    /// Once the colliders are in, at start and before connections are accepted: the mesh the bots and the citizens walk on. Not in the
+    /// smoke arenas (far from the map). Tried once; it blocks for the bake (once per map version, then it is read from the cache).
     /// </summary>
     void BuildBotNav(bool force = false)
     {

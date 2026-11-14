@@ -209,7 +209,7 @@ public partial class NetServer : Node
         _tick++;
         if (!_spawnsChecked)
         {
-            if (_tick >= 3) { CheckSpawnGround(); SpawnCars(); PlanTargets(); BuildBotNav(); }
+            if (_tick >= 3) { CheckSpawnGround(); SpawnCars(); PlanTargets(); BuildBotNav(force: true); } // always: citizens and events need it too, and a bake during play times the clients out
             return; // not accepting connections until the spawn list is validated
         }
         _elapsed += delta;
