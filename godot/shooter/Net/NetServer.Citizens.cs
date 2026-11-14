@@ -64,7 +64,7 @@ public partial class NetServer
             GD.Print($"server: #{k.Killer} killed a citizen (seat {k.SeatId}{(k.WasSeated ? ", seated" : "")})");
             CitizenKilled?.Invoke(k);
         };
-        _match.Citizens = _crowd;
+        CitizenHits().Add(_crowd);
         GD.Print($"server: church loaded, {_church.Seats.Count} seats ({_church.Seats.Count(s => s.Floor == 1)} in the gallery)");
         return null;
     }

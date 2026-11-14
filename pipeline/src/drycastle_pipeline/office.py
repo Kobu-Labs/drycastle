@@ -5,6 +5,9 @@ measured from Street View). This module adds what the generic generator cannot: 
 roof over the two bars (the long bar ``w378900312`` + ``w378900355`` and the east wing ``w378900320``,
 whose roof runs into the long bar's slope), eave overhang with fascia and gutter, the brick plinth band,
 window sills and the green blinds behind the glass.
+
+The south-west bar and the entry of the middle bar are hollow (``office_interior.py``, the rozhlas detour): there the
+walls, floors and furniture come from that module, and the middle bar's detail is built on what stays solid.
 """
 
 import copy
@@ -16,8 +19,10 @@ from shapely.geometry.polygon import orient
 
 from drycastle_pipeline.building_detail import DETAILS_DIR, build_detail, load_details
 from drycastle_pipeline.buildings import footprint_polygon, hex_to_rgb
+from drycastle_pipeline import office_interior as interior
 from drycastle_pipeline.landmarks import _Solids
 from drycastle_pipeline.meshes import Mesh, building_mesh
+from drycastle_pipeline.office_interior import edge_box as _edge_box
 
 EAVE = 3.0
 OVERHANG = 0.5
@@ -75,34 +80,28 @@ def _to_world(S: _Solids, r: dict) -> list:
     return out
 
 
-def _edge_box(S: _Solids, p, q, s0, s1, d0, d1, z0, z1, colour) -> None:
-    """Box along wall edge p->q: ``s`` along it, ``d`` outward, z up."""
-    length = math.dist(p, q)
-    ux, uy = (q[0] - p[0]) / length, (q[1] - p[1]) / length
-    nx, ny = uy, -ux
-
-    def at(s, d):
-        return (p[0] + ux * s + nx * d, p[1] + uy * s + ny * d)
-
-    c = [at(s0, d0), at(s1, d0), at(s1, d1), at(s0, d1)]
-    faces = [([(x, y, z0) for x, y in c], colour), ([(x, y, z1) for x, y in c], colour)]
-    for k in range(4):
-        (xa, ya), (xb, yb) = c[k], c[(k + 1) % 4]
-        faces.append(([(xa, ya, z0), (xb, yb, z0), (xb, yb, z1), (xa, ya, z1)], colour))
-    S.solid(faces)
-
-
 def office_mesh(b: dict, detail: bool = True) -> Mesh:
     bid = b["id"]
+    d = _details().get(bid)
+    hollow = interior.hollow(bid)
+    parts = [interior.shell(b, d, detail)] if hollow else []
+    inner_edges: tuple[int, ...] = ()
+    if bid == interior.MIDDLE_BAR:  # what stays solid: without the porch and the entry
+        b, d = interior.solid_part(b, d)
+        inner_edges = interior.SOLID_PART_INNER_EDGES
+    elif bid == interior.SW_BAR:  # all hollow: no block; the shared wall with the entry is inside
+        inner_edges = (3,)
     if not detail:
-        return building_mesh(b)
+        if bid != interior.SW_BAR:
+            parts.append(building_mesh(b))
+        return Mesh.concat(parts)
     flat = copy.deepcopy(b)
     flat.update(roof="flat", roof_height_m=0.0, eave_height_m=EAVE, height_m=EAVE, levels=1)
     flat["wall_colour"] = hex_to_rgb(WALL)
-    parts = []
-    d = _details().get(bid)
-    if d is not None:
-        parts.append(build_detail(flat, d)[0])
+    if d is not None and bid != interior.SW_BAR:
+        block, panes = build_detail(flat, d)
+        # the panes are the back of the window recesses: baked in (not breakable), or the recess is open into the solid block
+        parts += [block, *(t.mesh for t in panes)]
     S = _Solids()
     ring = list(orient(footprint_polygon(b["footprint"]), 1.0).exterior.coords)[:-1]
     by_edge: dict[int, list] = {}
@@ -112,7 +111,7 @@ def office_mesh(b: dict, detail: bool = True) -> Mesh:
     for i, p in enumerate(ring):
         q = ring[(i + 1) % len(ring)]
         length = math.dist(p, q)
-        if length < 0.5:
+        if length < 0.5 or i in inner_edges:
             continue
         # plinth band, broken at doors
         gaps = sorted((o.at_m, o.at_m + o.width_m) for o in by_edge.get(i, []) if o.kind in ("door", "garage_door"))
@@ -125,6 +124,8 @@ def office_mesh(b: dict, detail: bool = True) -> Mesh:
             if o.kind == "window" and o.parent is None:
                 x0, x1 = o.at_m, o.at_m + o.width_m
                 _edge_box(S, p, q, x0 - 0.06, x1 + 0.06, 0.0, 0.09, o.sill_m - 0.06, o.sill_m + 0.01, sill)
+                if bid == interior.SW_BAR:  # a real opening: nothing behind the glass
+                    continue
                 depth = max(0.02, o.recess_m - 0.03)
                 _edge_box(
                     S, p, q, x0 + 0.04, x1 - 0.04, -depth - 0.02, -depth, o.sill_m + 0.3 * o.height_m,

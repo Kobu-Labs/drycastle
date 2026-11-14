@@ -28,11 +28,12 @@ public class NetChannelTests
     [Fact]
     public void ThreeChannelsWithEffectsOnTheirOwn()
     {
-        Assert.Equal(3, Wire.Channels);
+        Assert.Equal(4, Wire.Channels);
         Assert.Equal(0, Wire.ChanReliable);
         Assert.Equal(1, Wire.ChanData);
         Assert.Equal(2, Wire.ChanEffects);
-        Assert.True(Wire.ChanEffects < Wire.Channels);
+        Assert.Equal(3, Wire.ChanRozhlasFeed);
+        Assert.True(Wire.ChanRozhlasFeed < Wire.Channels);
     }
 
     [Fact]

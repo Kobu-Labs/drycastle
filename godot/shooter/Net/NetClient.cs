@@ -161,6 +161,7 @@ public partial class NetClient : Node
         _done = true;
         TelemetryClose();
         SfxTeardown();
+        RozhlasSetReset(); // the mic is shut
         if (_peer != null) { _peer.PeerDisconnect(); _conn.Flush(); _peer = null; }
         foreach (var r in _remotes.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         _remotes.Clear();
@@ -257,6 +258,7 @@ public partial class NetClient : Node
         UpdateShake(delta);
         FadeOwnCorrection(delta);
         UpdateHud();
+        RozhlasMicFrame(); // the set holder's mic and the ON AIR cue
     }
 
     void Poll()
@@ -289,6 +291,7 @@ public partial class NetClient : Node
         if (d[0] < Wire.TInput) OnReliable(Wire.DecodeReliable(d));
         else if (d[0] == Wire.TSnapshot) OnSnapshot(d);
         else if (d[0] == Wire.TWorldSnapshot) WorldEntities.Apply(d);
+        else if (d[0] == Wire.TRozhlasFeed && RozhlasFeedWire.TryDecode(d, out var feedSeq, out var feedOpus)) { RozhlasFeedPlayer.Current?.Push(feedSeq, feedOpus); BotFeedFrame(feedOpus); } // the live rozhlas feed (silent when headless)
     }
 
     void OnReliable(ReliableMsg? m)
@@ -297,6 +300,7 @@ public partial class NetClient : Node
         {
             case WelcomeMsg w:
                 _myId = w.PlayerId; _welcomed = true;
+                RozhlasSetReset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
                 DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
                 _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders };
                 World.AddChild(_me);
@@ -333,6 +337,8 @@ public partial class NetClient : Node
                 OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
                 OnBigfootEvent((EventKind)e.Kind, e.Payload); // the Bigfoot's effects and the footprints to its corpse (#264)
                 OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
+                OnRozhlasEvent((EventKind)e.Kind, e.Payload); // the village loudspeaker's phase, broadcast and offset
+                OnUradDoorEvent((EventKind)e.Kind, e.Payload); // the Obecny Urad's door
                 OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
                 OnDemonEvent((EventKind)e.Kind, e.Payload); // the demon: fireballs, the curse
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
@@ -576,6 +582,7 @@ public partial class NetClient : Node
     {
         if (_done || !_welcomed || _me == null || _peer == null) return;
         _elapsed += delta;
+        BotChatTick();
         if (Bot && LossBot != "") { if (_elapsed >= BotSeconds) LossFail("timeout: round never reached its end"); }
         else if (Bot && _elapsed >= BotSeconds) { if (CarBot != "") CarResult(false, "timeout"); else if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
         if (!_gotSelf) return; // wait for our spawn position
@@ -600,6 +607,12 @@ public partial class NetClient : Node
         else if (Bot && CarBot != "") mi = CarBotStep();
         else if (Bot && CarLoop) mi = CarLoopStep();
         else if (Bot && WeaponsBot != "") mi = WeaponsBotStep();
+        else if (Bot && _botStand)
+        {
+            // at the dictation table (--bot-chat "/rozhlas goto"): stand still and hold E until the set is ours
+            var use = !HoldsRozhlasSet ? MoveButtons.Use : MoveButtons.None;
+            mi = new MoveInput { Buttons = use, SpeedScale = 1 };
+        }
         else if (Bot)
         {
             // scripted walk: forward, changing heading every 1.5 s, a jump now and then
@@ -807,6 +820,7 @@ public partial class NetClient : Node
     void FinishBot()
     {
         _done = true;
+        BotFeedReport();
         var own = new Vector2(_meMax.X - _meMin.X, _meMax.Z - _meMin.Z).Length();
         var seen = _remotes.Count;
         var best = 0f;

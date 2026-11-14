@@ -15,25 +15,27 @@ public sealed class ChurchShell
     public const string RoomId = "church";
 
     /// <summary>How deep the closed doors' collision box is (the doorway runs through a 0.4 m wall).</summary>
-    public const float DoorDepth = 0.3f;
+    public const float DoorDepth = Doorway.Depth;
 
+    /// <summary>The doorway the doors fill (the geometry and the push-out rule are <see cref="Doorway"/>'s, shared with the Urad).</summary>
+    public Doorway Gate { get; }
     /// <summary>The middle of the opening on the floor.</summary>
-    public Vector3 DoorwayPos { get; }
+    public Vector3 DoorwayPos => Gate.Pos;
     /// <summary>Godot yaw of the outward direction (a node with this yaw has its -Z pointing out of the church).</summary>
-    public float DoorwayYaw { get; }
-    public float Width { get; }
-    public float Height { get; }
+    public float DoorwayYaw => Gate.Yaw;
+    public float Width => Gate.Width;
+    public float Height => Gate.Height;
     public IReadOnlyList<BunkerRoom> Rooms { get; }
 
     public ChurchShell(Vector3 doorwayPos, float doorwayYaw, float width, float height, IReadOnlyList<BunkerRoom> rooms)
     {
-        DoorwayPos = doorwayPos; DoorwayYaw = doorwayYaw; Width = width; Height = height; Rooms = rooms;
+        Gate = new Doorway(doorwayPos, doorwayYaw, width, height); Rooms = rooms;
     }
 
     /// <summary>Unit vector out of the church through the doorway.</summary>
-    public Vector3 Out => new(-MathF.Sin(DoorwayYaw), 0, -MathF.Cos(DoorwayYaw));
+    public Vector3 Out => Gate.Out;
     /// <summary>Unit vector across the doorway, to the right of someone standing outside and facing in (the local +X of a node with <see cref="DoorwayYaw"/>).</summary>
-    public Vector3 Right => new(MathF.Cos(DoorwayYaw), 0, -MathF.Sin(DoorwayYaw));
+    public Vector3 Right => Gate.Right;
 
     /// <summary>Is <paramref name="p"/> inside the nave or the chancel?</summary>
     public bool InRooms(Vector3 p)
@@ -46,16 +48,7 @@ public sealed class ChurchShell
     /// Where a body standing at <paramref name="feet"/> (a capsule of <paramref name="radius"/>) must be moved so the closing doors do not shut
     /// through it, or null when it is clear of them. It moves along the doorway's depth only, to the nearer side (outside on a tie).
     /// </summary>
-    public Vector3? PushOutOfDoorway(Vector3 feet, float radius, float height = 1.8f)
-    {
-        var d = feet - DoorwayPos;
-        var across = Vector3.Dot(d, Right);
-        var depth = Vector3.Dot(d, Out);
-        var reach = DoorDepth / 2 + radius;
-        if (MathF.Abs(across) >= Width / 2 + radius || MathF.Abs(depth) >= reach || feet.Y + height <= DoorwayPos.Y || feet.Y >= DoorwayPos.Y + Height) return null;
-        var target = (depth >= 0 ? 1f : -1f) * (reach + 0.05f);
-        return feet + Out * (target - depth);
-    }
+    public Vector3? PushOutOfDoorway(Vector3 feet, float radius, float height = 1.8f) => Gate.PushOut(feet, radius, height);
 
     /// <summary>The church of a church.json text; null for an empty text or a map whose church.json has no <c>doorway</c> (older maps).</summary>
     public static ChurchShell? FromJson(string? json) => string.IsNullOrEmpty(json) ? null : Parse(json);

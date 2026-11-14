@@ -23,7 +23,8 @@ public partial class NetServer
 
     sealed class Sitter
     {
-        public ChurchSeat Seat = null!;
+        /// <summary>The pew; null for the one who sits at the rozhlas dictation table (NetServer.RozhlasSet.cs), who is not part of the Mass.</summary>
+        public ChurchSeat? Seat;
         public Edge Jump = new(startHeld: true); // the jump that may still be held as they sit is not a stand-up
     }
 
@@ -64,7 +65,7 @@ public partial class NetServer
             if (p != MassPhase.Idle) _events.Start(EventBook.Mass, _elapsed);
             else { _events.End(EventBook.Mass, _massWon || _massWas == MassPhase.Completed ? EventPhase.Won : EventPhase.Despawned, _elapsed); _massWon = false; }
             _massWas = p;
-            if (p == MassPhase.Idle) { foreach (var id in _sitters.Keys.ToList()) MassStandUp(id); DemonClear(); }
+            if (p == MassPhase.Idle) { foreach (var id in _sitters.Where(kv => kv.Value.Seat != null).Select(kv => kv.Key).ToList()) MassStandUp(id); DemonClear(); } // not the one at the rozhlas set
             DoorsFollowMass(p); // open for the event, slammed shut when the pastor turns, shut again afterwards once nobody is left inside
             MassPhaseChanged?.Invoke(p);
         };
@@ -124,8 +125,9 @@ public partial class NetServer
         foreach (var c in _byId.Values)
         {
             if (c.Peer == null) continue; // bots do not sit
-            if (_sitters.ContainsKey(c.Id))
+            if (_sitters.TryGetValue(c.Id, out var sat))
             {
+                if (sat.Seat == null) continue; // at the rozhlas set: the set's own rules stand them up
                 if (_match.Get(c.Id)?.Life != PlayerLife.Alive || c.Car != null || _mass.SeatOf(c.Id) == null) MassStandUp(c.Id);
                 continue;
             }
@@ -161,7 +163,8 @@ public partial class NetServer
     /// <summary>The player stands, or is no longer in the event (dead, left, the Mass is over).</summary>
     void MassStandUp(ushort id)
     {
-        if (!_sitters.Remove(id)) return;
+        if (!_sitters.Remove(id, out var was)) return;
+        if (was.Seat == null) RozhlasSetStood(id); // standing up from the dictation table lets go of the set
         _mass?.Stand(id);
         if (_byId.TryGetValue(id, out var c) && c.Peer != null) SendSeat(c, MassSeatState.None, 0);
     }

@@ -379,6 +379,22 @@ _Avoid_: NPC (alone), villager, pedestrian
 The village loudspeaker broadcast: a song, the announcement, "OPAKUJEM" (I repeat), then the announcement again, all through the same bad-loudspeaker sound, heard across the village as one shared recording, not one per pole. Baked from clean recordings by `scripts/make_rozhlas.py`; on the air at a clock-derived moment, so every client hears the same thing. Louder and clearer the closer the player is to the nearest megaphone pole, quieter and duller the further; poles next to each other do not add up. An **Event announcement** also starts it, and so does an admin's `/event rozhlas`.
 _Avoid_: PA system, radio, announcer
 
+**Detour**:
+The Obecny Urad (the village office, parcel P-0288) open to players while a Rozhlas broadcast is on air: every scheduled broadcast and an admin's `/event rozhlas` opens one, an Intel or Event announcement over the megaphones does not. It lasts as long as the broadcast, or as the Hijack if the announcer is killed; outside it the building is sealed and its workers do not exist. Not an Event (it is not on the Intel board, and Events run beside it). The loudspeaker's own state is `RozhlasPhase` (Idle, OnAir, Hijacked).
+_Avoid_: rozhlas event, urad event
+
+**Hijack**:
+The 3 minutes after the announcer is killed during a Detour: her announcement is cut at once, the microphone stays live and a player can take the Set and speak over the megaphones. The clock is exactly 180 s from the kill and is not refreshed (by taking the Set, the holder dying, other kills); it runs even if nobody takes the Set. One per broadcast. Every other worker stays and everything ends together. Without a kill the broadcast just ends on schedule and no player has the microphone.
+_Avoid_: takeover, hack
+
+**Set holder**:
+The one player on the microphone during a Hijack, at the dictation table, heard over every megaphone. Takes the Set by holding interact at the table once the announcer is dead; loses it on death, disconnect, moving more than about 2 m from the table or the end of the Hijack, and the next player can take it at once. The Set is fixed at the table: not carried, not an item.
+_Avoid_: broadcaster, speaker, host
+
+**Urad worker**:
+A person of the Detour, drawn and killed like a Citizen (same world entity, new roles), one of three: The **Mayor** (fat) sits in the chair; two **Clerks** (one female) sit at their desks; the **Announcer** (female) sits at the dictation table and is the voice of the broadcast. They appear sitting at their seats (`urad.json`) when the Detour opens, fresh each time, never walk or flee and do not react to combat. Any hit kills one in one (no score, no kill feed, no penalty); a corpse stays until the Detour ends. Killing the Announcer is the only way to start the Hijack. Not Mass citizens: the Holy Mass does not touch them and they do not touch it.
+_Avoid_: NPC (alone), staff, official
+
 **Base**:
 The place players are told to report to when something is happening: the military hangar, a large building placed on the map. It is an ordinary building; what makes it the base is that the intel room is on its floor.
 _Avoid_: HQ, headquarters, camp, outpost

@@ -14,6 +14,10 @@ config/features=PackedStringArray("4.7", "C#")
 file_logging/enable_file_logging=false
 file_logging/enable_file_logging.pc=false
 
+[audio]
+
+driver/enable_input=true
+
 [dotnet]
 
 project/assembly_name="shooter"

@@ -60,6 +60,7 @@ public partial class Viewer : Node3D
                  $"visual_triangles={s.Triangles} load_time={s.LoadSeconds:F2}s");
 
         if (_opts.ContainsKey("topdown")) AddTopDownEnvironment(); else AddEnvironment();
+        if (UradDecor.Create(mapDir) is { } urad) AddChild(urad); // the Obecny Urad furnished as in the game
         _player = new Player { Name = "Player" };
         AddChild(_player);
 

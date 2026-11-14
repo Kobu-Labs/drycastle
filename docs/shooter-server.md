@@ -49,6 +49,12 @@ export DRYCASTLE_ASSETS=$PWD/assets
 
 During development, `make shooter-server MAP=out/village/map` does the same from source.
 
+**Runtime dependency: ffmpeg.** The rozhlas live feed (a player's voice and the combat sounds over the village megaphones) runs each mic-live phase
+through an `ffmpeg` subprocess on the server, with the same filter chain as the baked announcement (`godot/shooter/data/rozhlas_voice.json`). `deploy/Dockerfile`
+installs it; on a bare machine install it from the package manager (`dnf install ffmpeg`, `apt install ffmpeg`), or point `DRYCASTLE_FFMPEG` at the
+executable. Without it the server runs normally: the feed logs `rozhlas feed: cannot start ffmpeg ...` once per phase and stays silent (never unprocessed audio).
+The feed uses a fourth ENet channel (3), so the firewall rule for the one UDP port is enough; it runs server to client (frame byte 229), and the set holder's voice runs client to server on the same channel (byte 228, accepted only from the holder while the mic is hijacked). Combat mix: while the mic is live, shots, launches, blasts and deaths inside the Urad volume are mixed into the feed as dry samples of the client's own sound ids; the server decodes the .ogg files of `sounds.json` with ffmpeg in the background (mono 16 kHz, first variant, table volume and pitch; a file that fails to decode is logged once and its sounds are not rebroadcast). The hijack adds a mic thump and a feedback squeal at the kill, rising static over its last 10 s and a click at its end (all synthesised). Admin tests: `/rozhlas feedtest`; `/rozhlas combattest` (a shot, a blast and a death, wherever you stand); `/rozhlas hijack`, then `/rozhlas take` (hold V on your client to talk) and `/rozhlas release` stand in for killing the announcer and holding E at the dictation table until the Urad exists.
+
 Flags (after `--`):
 
 | Flag | Meaning |
@@ -151,6 +157,7 @@ files below is missing.
 | `glass.json` | glass panes: hit points, crack stages, blast damage, whether a shattered vehicle pane exposes the riders, the shatter animation (see `docs/glass.md`) | `GlassConfig.cs` |
 | `match.json` | round rules (see the match options table above) | `MatchData.cs` |
 | `sounds.json` | sound ids and file names (validated against `assets/` by the server) | `SoundData.cs` |
+| `rozhlas_voice.json` | the announcement's voice chain (ffmpeg filters in order, their values, the echo tap ranges); read by the bake (`scripts/make_rozhlas.py`) and by the live feed, so they cannot drift | `RozhlasVoice.cs`, `RozhlasFeed.cs` |
 
 Sounds, models and textures are not in the `.pck`; they are read from `assets/` on disk (section 2).
 Shaders (`godot/shooter/shaders/*.gdshader`) are compiled by Godot from the project resources, so they are in the export

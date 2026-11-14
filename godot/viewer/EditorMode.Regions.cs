@@ -1160,6 +1160,7 @@ public partial class EditorMode
         foreach (var g in GroundRows()) { var gn = g.Name; yield return ($"{g.Name}  ground type  {RecipeWord(g)}  {StateWord(g.State)}", () => { SelectTool(EditorTool.Ground); SelectGroundType(gn); }); }
         yield return ("Region: new  (N)", () => { SelectTool(EditorTool.Region); StartRegion(); });
         yield return (_layersOn ? "View: hide the attribute layers  (V)" : "View: show the attribute layers  (V)", ToggleLayers);
+        yield return (_floorParcel != null ? $"View: floor plan off, show the building of {_floorParcel}  (B)" : "View: floor plan of the selected parcel  (B)", ToggleFloorPlan);
         yield return ("Sketch: mark points  (P)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Point); });
         yield return ("Sketch: draw a line  (L)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Line); });
         if (_sketch.Count > 0) yield return ("Sketch: clear the active sketch", () => { SelectTool(EditorTool.Sketch); RequestClearSketch(); });

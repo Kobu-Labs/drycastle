@@ -113,11 +113,13 @@ public partial class EditorMode : Node
         Active = on;
         OutlineRoot.Visible = on;
         MarkerRoot.Visible = on;
+        FloorPlanActive(on);
         _ui.Visible = on;
         _looking = false;
         if (on)
         {
             RestoreOrtho();
+            RestoreFloorPlan();
             _savedPlayer = (Player.GlobalPosition, Player.RotationDegrees, 0f, Player.InputEnabled);
             Player.InputEnabled = false;
             Player.Visible = false;
@@ -564,6 +566,7 @@ public partial class EditorMode : Node
                     case Key.T: ToggleTopDown(); break;
                     case Key.O: ToggleOrtho(); break;
                     case Key.V: ToggleLayers(); break;
+                    case Key.B: ToggleFloorPlan(); break;
                     case Key.Enter or Key.KpEnter:
                         if (GetViewport().GuiGetFocusOwner() is (LineEdit or TextEdit)) break;
                         if (Tool == EditorTool.Group) { if (!_btnGroup.Disabled) GroupSelected(); }
@@ -617,6 +620,7 @@ public partial class EditorMode : Node
         UpdatePolesTool();
         UpdateRegionTool();
         UpdateLayers();
+        UpdateFloorPlan();
         UpdateSketchTool();
         PollSketchFile(delta);
         UpdateYouDot();

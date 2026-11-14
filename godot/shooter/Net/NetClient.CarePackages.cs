@@ -24,8 +24,8 @@ public partial class NetClient
     readonly Dictionary<ushort, CrateView> _crates = new();
     /// <summary>The landed crate within reach, from the last render (null when none).</summary>
     ushort? _crateNear;
-    /// <summary>The interact key's hold at the crate: seconds held, and whether the open request for this hold is sent (<see cref="CrateHold"/>).</summary>
-    CrateHold _crateHold;
+    /// <summary>The interact key's hold at the crate: seconds held, and whether the open request for this hold is sent (<see cref="InteractHold"/>).</summary>
+    InteractHold _crateHold;
     /// <summary>The ring's shown fill (0 to 1): follows the hold up and drains down after a release.</summary>
     float _ringShown;
 
@@ -125,13 +125,15 @@ public partial class NetClient
     {
         var use = Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("interact");
         if (_crateHold.Tick(use, _crateNear != null, dt, CarePackageRules.OpenHoldSeconds) && _crateNear is { } id) SendOpenCarePackage(id);
-        ShowCrateRing(dt);
+        TickRozhlasSetHold(use, dt); // the other hold of the same key (NetClient.Rozhlas.cs); the ring shows whichever is on
+        ShowHoldRing(dt);
     }
 
     /// <summary>The ring fills with the hold and drains after a release; with reduce motion the drain is instant.</summary>
-    void ShowCrateRing(double dt)
+    void ShowHoldRing(double dt)
     {
         var target = _crateHold.Held > 0 && _crateNear != null ? (float)Math.Min(1.0, _crateHold.Held / CarePackageRules.OpenHoldSeconds) : 0f;
+        target = Math.Max(target, RozhlasSetHoldFraction);
         if (target >= _ringShown || GameSettings.Current.ReduceMotion) _ringShown = target;
         else _ringShown = Mathf.MoveToward(_ringShown, target, (float)dt / RingDrainSeconds);
         _hud?.SetRadial(_ringShown > 0 ? _ringShown : null);

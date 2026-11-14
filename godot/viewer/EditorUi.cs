@@ -278,7 +278,7 @@ public partial class EditorMode
         "Sketch edit\tLMB on a mark or [ ] selects it, Del deletes it, Backspace last corner, Ctrl+Z undo; marks are temporary and named in prompts\n" +
         "Sketches\tpick, New, Rename, Delete in the Sketch panel: marks go into the active sketch, prompts can name a whole sketch (\"sketch ROAD\")\n" +
         "Commands\tCtrl+P: tools, undo, region, sketch and parcel IDs\n" +
-        "View\tT top-down, O aerial photo (reference), V attribute layers (spawning and events of the ground stacks, translucent), F1 this sheet, F2 walk mode\n" +
+        "View\tT top-down, O aerial photo (reference), V attribute layers (spawning and events of the ground stacks, translucent), B floor plan of the selected parcel (building hidden, wall lines and a 1 m grid to sketch on), F1 this sheet, F2 walk mode\n" +
         "Esc\tgoes one level back: drawing, colour, region or sketch selection, placement, planning, connecting, gate, cable, object, selection, sidebar";
 
     void BuildCheatSheet(Control root)
@@ -360,6 +360,8 @@ public partial class EditorMode
             SetOrthoOpacity((float)(double)cfg.GetValue("ui", "ortho_opacity", (double)_orthoOpacity), save: false);
             _orthoRestore = (bool)cfg.GetValue("ui", "ortho_on", false); // applied when the editor first opens, the map is not up yet
             _layersOn = (bool)cfg.GetValue("ui", "layers_on", true);
+            var fp = (string)cfg.GetValue("ui", "floor_plan", "");
+            if (fp != "") _floorRestore = fp; // applied when the editor first opens, the map is not up yet
             if (ParseColour((string)cfg.GetValue("ui", "region_colour", _newColour)) is { } rc) _newColour = rc;
             var gsel = (string)cfg.GetValue("ui", "ground_type", "");
             if (gsel != "") _restoreGround = gsel;
@@ -380,6 +382,7 @@ public partial class EditorMode
             cfg.SetValue("ui", "ortho_on", _orthoOn || _orthoRestore);
             cfg.SetValue("ui", "ortho_opacity", (double)_orthoOpacity);
             cfg.SetValue("ui", "layers_on", _layersOn);
+            cfg.SetValue("ui", "floor_plan", _floorParcel ?? _floorRestore ?? "");
             cfg.SetValue("ui", "region_colour", _newColour);
             cfg.SetValue("ui", "region", SelectedRegionId ?? "");
             cfg.SetValue("ui", "ground_type", SelectedGroundType ?? "");

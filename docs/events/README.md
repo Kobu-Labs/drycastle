@@ -185,7 +185,142 @@ Both are a status, not an Item: no slot, no drop. They survive a round change an
 
 # Carousel/Carnival/Fair
 - techno music
-# Electio
+# Election
 # Nazis in bunker
+
 # Gypsies storming the village
 - rytmus songs playing from their cars
+
+
+- waves 
+    - walk
+    - babety
+    - cars - rusty damanged
+## Visual
+- rats will ocasionally run from the van and attack the player (jumping on them)
+- lit cigarettes in mouth
+- golden chains
+- neck tattoos
+- missing teeth
+- golden tooth
+- latino colored people
+## Mechanic
+- first wave arrive in a van (more vans can come later) and they haul their loot in the van, then loop the stealing again
+### Audio snippets
+- when player is walking near the thieves they have a chance to say something to the player
+- these recordings will be provided by us as assets
+- audio volume should be proximity based
+- note to ourselves:
+    - dig more
+    - jaj sak co je
+    - more naker
+    - co je more
+    - sokeres mores
+    - mandze tuke
+    - nemas cigaretu?
+    - dig on
+    - jaj dig raklo
+- the soudns will be ran trough a pipeline to adjust the voice
+    - we aim for a raspy voice, as someone who has smoked a lot of cigaretes
+- music playing
+    - some NPC models will have  asmall "repracik" - a JBL-like speaker
+    - songs from later provided assets will play from these
+### Stealing
+- stealing tires from cars and carrying them (the car will have an actual missing tire)
+- climb electricity poles and stealing the connectors (no actual missing piece on the pole)
+    - the electricity pole has a 5% chance to electrocute the thief (visual electircy beams and whizzing sounds) 
+    - they drop on the ground (ragdoll), unconcious for couple seconds, they try again
+- add satelites to buildings
+    - they can steal the satellite as well
+- add pets to gardens
+    - pets can be shot or road killed
+    - some gardens have a chance to spawn a pet (assets will be later provided, for now just dogs and catsi, hens, etc just small)
+    - the thief can sometimes chose to jump the fence, grab the pet under their arm, and run it to the haul van
+    - player needs to be careful not to shoot the pet, or it will die
+    - when player kills the thief carrying the pet, the pet will pathfind to that garden it came from
+
+
+# Pets Detour
+- this will be a separate ticket, which needs good design
+- pets will be on one parcel and "live" only there
+- we can add assets from the Simple DOg Pack - later downloaded
+- poop asset can spawn on that parcel as well
+- reminred to ourselves, ignore in v1
+    - saved dog does a backflip
+
+
+# Rozhlas detour
+- when rozhlas event is active, the doors to the Obecny Urad building will open and players can enter the interior
+- i will provide better instructions on how to design the interior of the building later
+- there will be couple rooms with around 3 workers in total
+    - fat mayor in the chair
+    - two desks with computers, one will have a female worker
+    - one dictation table with the microphone where the female sits - she "is" the one that speaks to the mic when rozhlas annoucment is made
+- all non-trivial sounds within the building - ei only shoots, kills, explosion etc, no footsteps and jumps, will be broadcast trough the megaphones
+- additionally players can kill the annoucer, take the set, and V to speak, their mic input will be broadcast trough the megaphone network
+- players input will have around 2 second delay and must be ran trough the same sound altering pipeline as the annoucment itself was
+
+
+# Zumpar
+# Kozkar
+
+## Design (grilled 2026-11-14)
+
+Terms: **Detour** = the Urad being open during a broadcast. **Hijack** = the 3 min after the announcer is killed. **Set holder** = the player on the mic.
+
+### Rozhlas becomes server-owned
+- Today: client-only, each client's wall clock, server has no "rozhlas active". Changes to: server schedules with its own clock, sends start + variant + offset; late joiners get the phase.
+- `RozhlasPhase` + `StateMachineSpec`: Idle → OnAir → Hijacked → Idle.
+- Not an EventBook Event. Other events run alongside; their announcements play over a hijack and don't end it.
+- Detour opens on every scheduled broadcast (10 min slot) and on `/event rozhlas`. Intel/event announcements over the megaphones don't open it.
+
+### Building
+- Built (ADR 0020, `pipeline/src/drycastle_pipeline/office_interior.py`): hollow south-west bar (clerks' office, mayor's room) and entry in the middle bar; middle bar's road wall set back 1.4 m behind a covered walkway; entrance in the set-back wall; furniture as `props` of `urad.json` (Synty SIMPLE Office models placed by the game, boxes drawn without the pack); `urad.json` exported with the map.
+- CCTV station in the mayor's room: reserved, issue #270.
+- Outside a detour: sealed, interior not rendered, workers don't exist.
+- Doors never trap: interior always exitable (see the door, below: a shut door shows everyone out), no kill. Bots never enter.
+- Entrance door (`doorway` of `urad.json`, next to `church.json`): the church door's box and look (`DoorNode`), open exactly while a detour is open (OnAir/Hijacked), shut at Idle; server-owned, wire event 188 `UradDoor`, a joiner is told. When it shuts, every living player in an interior room or the doorway is moved ~1.5 m outside it (`Urad.EvictionPoint`), so nobody is locked in for the 10 min. No `urad.json`: no volume, workers, table or door. Worker `pos` is the seat (chairs are baked into the map).
+- No megaphone horn on the Urad: the feed is faint inside (nearest pole 66 m).
+
+### Workers
+- Citizen entity, new roles: Mayor (fat, in the chair), Clerk x2 (one female), Announcer (female, at the dictation table).
+- Spawn seated at spots from `urad.json` (`SitPose`), stay seated when shot at. No lip sync or talking animation.
+- Passive, one-hit kill, no score, no kill feed, no penalty.
+- Respawn fresh every broadcast.
+
+### Hijack
+- Announcer killable any time the doors are open, including before/during her announcement. Kill is the only way to free the mic.
+- Kill: announcement cuts instantly (scream, mic thump, feedback over the megaphones).
+- Clock: exactly 3:00 from the kill, replacing whatever remained. One per broadcast; not refreshed by taking the set, holder deaths or other kills. Runs even if nobody takes the set.
+- During it: doors open, mic live, combat rebroadcast on, surviving workers stay. All stop together.
+- No warning before the end: hard cut with a click. No HUD timer, no takeover notice.
+- No kill: broadcast ends on its normal schedule, no player mic.
+
+### The set
+- Fixed at the dictation table, not carried, not an item.
+- Hold E for 1 s at the table once the announcer is dead (prompt + ring, like a care package): the player sits down in her chair (church sitting: held body, no weapon; E or jump stands up) and only then holds the set. Standing up for any reason releases it.
+- One holder at a time. Released on death, disconnect, moving more than ~2 m away, or hijack end. Next player can take it at once. No talk cap.
+- New rebindable action `rozhlas_talk`, default V, hold to talk, active only for the holder (`vehicle_view` keeps V in vehicles).
+- HUD: "ON AIR" indicator while held, nothing else. No local monitoring.
+- Mic: OS default input, `enable_input` on, no device picker or settings UI in v1.
+
+### Live feed
+- One feed carries player voice and in-building combat sounds; both get the announcement's exact pipeline.
+- Upstream: clean Opus (Concentus, 16 kHz mono, 20 ms frames) on a new unreliable ENet channel; server accepts frames only from the set holder. Protocol bump.
+- Combat mix, server-side: every Shot / Explosion / Death (players and workers) positioned inside the Urad volume while OnAir or Hijacked, anywhere in the building, no distance falloff. One dry sample per sound id, no random pitch or layering. Kills use Death + victim position. Footsteps, jumps, reloads, swaps, pickups: never.
+- Pipeline: server pipes the mix through a live ffmpeg subprocess running the same filter graph as `scripts/make_rozhlas.py`. Filter parameters live in one file read by both. One process per mic-live phase; echo taps randomised once at its start.
+- Only frames carrying sound are sent: a live mic nobody uses costs no bandwidth.
+- Delay: fixed 2 s on the server between input and broadcast. Buffer drains on holder death/release: last words, then the shot, then silence.
+- Downstream: degraded stream as Opus at ~32-48 kbps to every client, running whenever the mic is live. Clients add ~100 ms jitter buffer, decode and play with the announcement's nearest-pole gain and low-pass. No client DSP.
+- Heard by everyone, all teams.
+- ffmpeg missing or crashed: logged once, feed silent for that phase; doors, workers and the mic interaction still work. Never a dry fallback.
+- ffmpeg becomes a server runtime dependency (`deploy/Dockerfile`, dev machines).
+
+### Slices
+1. Server-owned rozhlas + `RozhlasPhase` machine.
+2. Urad shell, doors, workers. Postponed (interior instructions).
+3. Server feed: ffmpeg subprocess, shared params, Opus downstream, client playback.
+4. Server-side combat mix.
+5. Mic capture, upstream, hold-V, set holder.
+
+1 and 3 don't depend on the building. 4 and 5 need the Urad volume and the dictation-table spot from 2.

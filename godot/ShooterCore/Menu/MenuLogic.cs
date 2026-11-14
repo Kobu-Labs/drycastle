@@ -92,13 +92,28 @@ public readonly record struct Binding(bool Mouse, int Code)
 /// <summary>
 /// The one input map: action id to binding. Assigning a binding that another action already holds swaps the two
 /// (conflict detection with no unbound action left behind). Defaults are injected so this stays Godot-free.
+/// <para>
+/// Context pairs: two actions that can never be active together (the vehicle view, which acts only in a vehicle, and the rozhlas talk key, which acts only on foot) may be listed as
+/// <c>sharing</c>; they are not a conflict, so both can hold the same key and the rebind UI does not swap them. Sharing is symmetric and per pair, not transitive.
+/// </para>
 /// </summary>
 public sealed class BindingMap
 {
     readonly IReadOnlyList<(string Action, Binding Default)> _defaults;
+    readonly IReadOnlyList<(string A, string B)> _sharing;
     readonly Dictionary<string, Binding> _map = new();
 
-    public BindingMap(IReadOnlyList<(string Action, Binding Default)> defaults) { _defaults = defaults; Reset(); }
+    public BindingMap(IReadOnlyList<(string Action, Binding Default)> defaults, IReadOnlyList<(string A, string B)>? sharing = null)
+    {
+        _defaults = defaults; _sharing = sharing ?? Array.Empty<(string, string)>(); Reset();
+    }
+
+    /// <summary>The two actions may hold the same binding (they are never active together).</summary>
+    public bool Shares(string a, string b) => _sharing.Any(p => (p.A == a && p.B == b) || (p.A == b && p.B == a));
+
+    /// <summary>The other actions that hold <paramref name="b"/> and may not share it with <paramref name="action"/>.</summary>
+    List<string> ConflictsOf(string action, Binding b) =>
+        _map.Where(kv => kv.Key != action && kv.Value == b && !Shares(action, kv.Key)).Select(kv => kv.Key).ToList();
 
     public IEnumerable<string> Actions => _defaults.Select(d => d.Action);
     public Binding Get(string action) => _map[action];
@@ -108,19 +123,23 @@ public sealed class BindingMap
 
     public void Reset() { foreach (var (a, b) in _defaults) _map[a] = b; }
 
-    /// <summary>Binds <paramref name="action"/> to <paramref name="b"/>; returns the action it was swapped with (null: no conflict).</summary>
-    public string? Assign(string action, Binding b)
+    /// <summary>Binds <paramref name="action"/> to <paramref name="b"/>; returns every action that was moved off that key onto this action's old one (empty: no conflict).</summary>
+    public IReadOnlyList<string> Assign(string action, Binding b)
     {
-        var other = ActionFor(b);
-        if (other == action) return null;
-        if (other != null) _map[other] = _map[action];
+        var others = ConflictsOf(action, b);
+        if (others.Count == 0) { _map[action] = b; return others; }
+        var old = _map[action];
+        // actions that share the old key with this one move with it when the displaced ones cannot sit beside them on that key
+        var partners = _map.Where(kv => kv.Key != action && kv.Value == old && Shares(action, kv.Key) && others.Any(o => !Shares(o, kv.Key))).Select(kv => kv.Key).ToList();
+        foreach (var o in others) _map[o] = old;
+        foreach (var p in partners) _map[p] = b;
         _map[action] = b;
-        return other;
+        return others;
     }
 
     public BindingMap Clone()
     {
-        var c = new BindingMap(_defaults);
+        var c = new BindingMap(_defaults, _sharing);
         foreach (var kv in _map) c._map[kv.Key] = kv.Value;
         return c;
     }
@@ -137,13 +156,13 @@ public sealed class BindingMap
     {
         var chosen = new Dictionary<string, Binding>();
         foreach (var a in Actions)
-            if (saved.TryGetValue(a, out var str) && Binding.Parse(str ?? "") is { } b && !chosen.ContainsValue(b)) chosen[a] = b;
+            if (saved.TryGetValue(a, out var str) && Binding.Parse(str ?? "") is { } b && !chosen.Any(kv => kv.Value == b && !Shares(a, kv.Key))) chosen[a] = b;
         // an action left on its default holds that key; drop saved entries that would collide with it until stable
         for (var changed = true; changed;)
         {
             changed = false;
             foreach (var (a, def) in _defaults)
-                if (!chosen.ContainsKey(a) && chosen.FirstOrDefault(kv => kv.Value == def) is { Key: not null } hit)
+                if (!chosen.ContainsKey(a) && chosen.FirstOrDefault(kv => kv.Value == def && !Shares(a, kv.Key)) is { Key: not null } hit)
                 { chosen.Remove(hit.Key); changed = true; break; }
         }
         Reset();
@@ -154,7 +173,7 @@ public sealed class BindingMap
     public void Load(string action, string? saved)
     {
         if (!_map.ContainsKey(action) || Binding.Parse(saved ?? "") is not { } b) return;
-        if (ActionFor(b) is { } o && o != action) return;
+        if (ConflictsOf(action, b).Count > 0) return;
         _map[action] = b;
     }
 }

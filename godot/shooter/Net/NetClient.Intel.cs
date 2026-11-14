@@ -29,6 +29,6 @@ public partial class NetClient
         var text = at == null ? Strings.T("intel.announce") : Strings.F("intel.announce.at", at);
         UiShell.Instance?.Toast(text, ToastKind.Warn, null, 8.0);
         _hud?.AddChatLine(new ChatLine(ChatLineKind.System, "", text));
-        Rozhlas.Current?.Trigger();
+        Rozhlas.Current?.PlayAnnouncement(); // the megaphones: client-side, does not touch the server's rozhlas phase
     }
 }

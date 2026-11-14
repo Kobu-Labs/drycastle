@@ -155,6 +155,7 @@ plus the usual `--map`, `--seed`, `--assets`.
 | Shift + left click | add or remove that parcel in the selection |
 | G | create a property group (`G-NNNN`) from 2+ selected parcels |
 | T | snap to a top-down view above the cursor; again restores the previous camera |
+| B | floor plan of the selected parcel: its buildings hidden, wall lines and a 1 m grid shown; again restores them |
 | (Street View) | `streetview_follow.py` moves the character to where a Chrome Street View tab is; in the top-down view (T) a red point marks the spot below it, see `docs/streetview.md` |
 | Esc | stop placing / deselect the object / clear the parcel selection (in that order) |
 | Ctrl+Z, Ctrl+Y (Ctrl+Shift+Z) | undo / redo the saves made in this session (see Objects and undo) |
@@ -416,3 +417,10 @@ terrain) are drawn as a translucent overlay (about a third opaque, a thin edge i
 region's own colour, so they never hide the ground under them. `V` toggles it; the same switch is under View > Layers and on the
 Regions page, it is on by default and remembered (`editor_ui.cfg`); `Ctrl+P` has it too. The overlay is rebuilt when the edits or the
 ground types change. Nothing is saved by it.
+
+**Floor plan.** `B` (also View > Layers and `Ctrl+P`) hides the buildings of the one selected parcel and shows their plan on the
+ground: the wall lines (a horizontal cut 1.2 m above the ground, so recessed doors and windows show), over a 1 m grid on the
+Sketch tool's grid with a stronger line every 5 m. It is for sketching an interior: the ground under a building was always
+clickable, this makes it visible. One parcel at a time; it stays on while you select marks or other parcels, `B` again brings the
+building back. A view only: nothing is saved to the map, the collision stays, walk mode shows the building, and the parcel is
+remembered (`editor_ui.cfg`). There is no headless smoke for it yet.

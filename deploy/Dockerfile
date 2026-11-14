@@ -2,9 +2,9 @@
 # binary, .pck, self-contained .NET runtime, assets/ and the full map/. See docs/release.md.
 FROM debian:bookworm-slim
 
-# The export is self-contained (own .NET runtime); it only needs glibc and libstdc++. ICU is not installed, so use invariant globalization.
+# The export is self-contained (own .NET runtime); it only needs glibc and libstdc++, and ffmpeg for the rozhlas live feed (the server runs it as a subprocess). ICU is not installed, so use invariant globalization.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates libstdc++6 \
+ && apt-get install -y --no-install-recommends ca-certificates libstdc++6 ffmpeg \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --create-home --uid 10001 shooter
 

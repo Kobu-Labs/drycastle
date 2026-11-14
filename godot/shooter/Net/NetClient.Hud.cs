@@ -101,6 +101,7 @@ public partial class NetClient
             if (_hud.TacticalMapOpen && OverlayArbiter.YieldsToMenu(Overlay.TacticalMap, overlays)) _hud.CloseTacticalMap();
         }
         UavTick();
+        if (_me != null) RozhlasFeedPlayer.Current?.SetListener(_me.GlobalPosition);
         if (_me != null) Rozhlas.Current?.SetListener(_me.GlobalPosition); // the loudspeaker is heard where the player is, not where a vehicle's orbiting camera is
         if (_me != null) _hud?.SetBreath(Breath.AirLeft(_me.State), _me.HeadUnder);
         if (_me != null && _hud != null)

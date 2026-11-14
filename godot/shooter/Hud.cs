@@ -106,6 +106,7 @@ public partial class Hud : CanvasLayer
         BuildHealth();
         BuildAir();
         BuildStatus();
+        BuildRozhlas(); // the set holder's hint and ON AIR chip
         BuildAmmo();
         BuildSeats(); // the vehicle seat schematic above the vehicle readout
         BuildTop();
@@ -134,6 +135,7 @@ public partial class Hud : CanvasLayer
         Relayout();
         ApplyMinimapSettings();
         _gap = -1;
+        _rozhlasHintStale = true; // the talk key may have been rebound
         _seatsDef = null; // the seat hint names the (maybe rebound) keys: rebuilt on the next frame
         foreach (var tri in _indTri) tri.Color = ShooterTheme.Danger; // read at build time otherwise; the palette may have switched
         if (_crossRoot != null) _crossRoot.Visible = Settings.ShowCrosshair && !_crossCovered;
@@ -579,7 +581,7 @@ public partial class Hud : CanvasLayer
         if (text != null) Set(_prompt, text);
     }
 
-    /// <summary>The hold ring above the prompt (care package open, #151): a fill from 0 to 1, or null to hide it.</summary>
+    /// <summary>The hold ring above the prompt (care package open, #151; taking the rozhlas set): a fill from 0 to 1, or null to hide it.</summary>
     public void SetRadial(float? fraction)
     {
         _radial.Visible = fraction != null;

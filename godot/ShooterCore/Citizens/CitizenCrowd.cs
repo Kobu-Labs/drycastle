@@ -206,7 +206,7 @@ public sealed class CitizenCrowd : ICitizenHits
 
     ushort NextHitId()
     {
-        do { _nextHit = (_nextHit + 1) % CitizenRules.HitIdCount; }
+        do { _nextHit = (_nextHit + 1) % CitizenRules.CrowdHitIdCount; }
         while (_byHit.ContainsKey((ushort)(CitizenRules.FirstHitId + _nextHit)));
         return (ushort)(CitizenRules.FirstHitId + _nextHit);
     }

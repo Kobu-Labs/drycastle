@@ -214,6 +214,7 @@ public static class InputBindings
         ("zoom", Binding.MouseButton((int)MouseButton.Right)),
         ("headlights", Binding.Key((int)Key.H)),
         ("vehicle_view", Binding.Key((int)Key.V)),
+        ("rozhlas_talk", Binding.Key((int)Key.V)),
         ("killstreak", Binding.Key((int)Key.Q)),
         ("sandbox_panel", Binding.Key((int)Key.F4)),
         ("chat", Binding.Key((int)Key.T)),
@@ -221,7 +222,10 @@ public static class InputBindings
         ("inventory", Binding.Key((int)Key.F)),
     };
 
-    public static BindingMap NewMap() => new(Defaults);
+    /// <summary>Actions that may hold the same key because they are never active together: the vehicle view acts only in a vehicle, the rozhlas talk key (hold, the set holder) only on foot (<see cref="BindingMap.Shares"/>).</summary>
+    public static readonly (string, string)[] Sharing = { ("vehicle_view", "rozhlas_talk") };
+
+    public static BindingMap NewMap() => new(Defaults, Sharing);
 
     public static string LabelKey(string action) => "bind." + action;
 
