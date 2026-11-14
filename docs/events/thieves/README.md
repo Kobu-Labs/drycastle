@@ -9,7 +9,7 @@ Throwaway. Delete this folder when the event is done. Design: `docs/events/READM
 | 03 | Raid van | 01, 02 | done |
 | 04 | Loot + tires | 02, 03 | done |
 | 05 | Pets | 04 | todo |
-| 06 | Dishes | 04 | todo |
+| 06 | Dishes | 04 | done (map has no dishes until the owner places them) |
 | 07 | Poles | 04, climb of 06 | todo |
 | 08 | Assets | 02 (pack on disk) | blocked: Gang Warfare pack not found on disk |
 | 09 | Audio | 02, 03 | done |
