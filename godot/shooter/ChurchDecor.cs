@@ -56,6 +56,9 @@ public partial class ChurchDecor : Node3D
     bool _demon, _flamesOn;
     float _angle, _burn, _lightK = 1;
     double _t;
+    ChurchBlood? _blood;
+    /// <summary>How far the turning is, 0 to 1 (the lights flicker, ever worse, and are out at 1); negative: not turning.</summary>
+    float _transK = -1;
 
     static string? _glassPrefix;
     static readonly StandardMaterial3D ClearPane = new()
@@ -110,7 +113,7 @@ public partial class ChurchDecor : Node3D
                 var z = ap[2].GetSingle();
                 if (vault == null || z < vault) vault = z;
             }
-        var node = new ChurchDecor { Name = "ChurchDecor", _rooms = list, _vaultZ = vault };
+        var node = new ChurchDecor { Name = "ChurchDecor", _rooms = list, _vaultZ = vault, _blood = ChurchBlood.Create(mapDir) };
         node.Build(list, altar ?? pastor, altar, pastor);
         return node;
     }
@@ -173,12 +176,15 @@ public partial class ChurchDecor : Node3D
         Current = this;
         Visible = ChurchInterior.Visible;
         ChurchInterior.Changed += OnInterior;
+        // the blood is a sibling, not a child: this node hides with the interior, the outside walls bleed all the same
+        if (_blood != null) Callable.From(() => { if (IsInsideTree() && _blood.GetParent() == null) GetParent().AddChild(_blood); }).CallDeferred();
     }
 
     public override void _ExitTree()
     {
         if (Current == this) Current = null;
         ChurchInterior.Changed -= OnInterior;
+        if (_blood != null) { if (_blood.GetParent() != null) _blood.QueueFree(); else _blood.Free(); }
     }
 
     void OnInterior(bool visible) => Visible = visible;
@@ -305,11 +311,42 @@ public partial class ChurchDecor : Node3D
     /// <summary>The demon is in the church (its entity exists) or is gone. <paramref name="snap"/>: a joiner who finds it mid-fight sees the end state at once.</summary>
     public void SetDemon(bool active, bool snap = false)
     {
+        if (active && !_demon) _blood?.Begin(snap ? ChurchBlood.JoinAgeS : 0f);
+        else if (!active && _demon) _blood?.Freeze();
         _demon = active;
         if (!snap) return;
         _angle = active ? MathF.PI : 0;
         _burn = active ? 1 : 0;
         _lightK = active ? 0 : 1;
+    }
+
+    /// <summary>The stains of the windows are gone (a new Mass begins); they stay after the demon dies until then.</summary>
+    public void ResetBlood() => _blood?.Reset();
+
+    /// <summary>The turning of the pastor, <paramref name="k"/> from 0 to 1 over its first part: the lights flicker ever worse, with a few blackouts, and are out at 1. Negative or 1 and over: not turning.</summary>
+    public void SetTransform(float k) => _transK = k >= 1f ? -1f : k;
+
+    static float Hash(float x) { var h = MathF.Sin(x * 127.1f) * 43758.547f; return h - MathF.Floor(h); }
+
+    static float Noise(float x)
+    {
+        var i = MathF.Floor(x); var f = x - i;
+        f = f * f * (3 - 2 * f);
+        return Mathf.Lerp(Hash(i), Hash(i + 1), f);
+    }
+
+    static bool Between(float k, float a, float b) => k >= a && k <= b;
+
+    /// <summary>A light's share of its energy while the pastor turns: irregular dips that quicken and deepen, a blackout around 45 % and 73 % (a little off for each lamp) and one at the end.</summary>
+    float TurningLight(float k, float seed)
+    {
+        var n = Noise((float)_t * (6f + 14f * k) + seed * 5f);
+        var depth = 0.15f + 0.85f * k * k;
+        var d = Mathf.Clamp((n - 0.3f) / 0.6f, 0f, 1f);
+        var f = 1f - depth * d * d * (3 - 2 * d);
+        var kk = k + (Hash(seed * 3.7f) - 0.5f) * 0.03f;
+        if (Between(kk, 0.43f, 0.48f) || Between(kk, 0.71f, 0.76f) || kk > 0.94f) f = 0f;
+        return f;
     }
 
     public override void _Process(double delta)
@@ -318,7 +355,8 @@ public partial class ChurchDecor : Node3D
         _t += delta;
         _burn = Mathf.MoveToward(_burn, _demon ? 1f : 0f, dt / (_demon ? BurnRampS : BurnOutS));
         _angle = Mathf.MoveToward(_angle, _demon ? MathF.PI : 0f, dt * MathF.PI / (_demon ? InvertS : ReturnS));
-        _lightK = Mathf.MoveToward(_lightK, _demon ? 0f : 1f, dt / (_demon ? LightsOutS : LightsOnS));
+        if (_transK >= 0) _lightK = TurningLight(_transK, 0f); // the fade to dark carries on from where the flicker left it
+        else _lightK = Mathf.MoveToward(_lightK, _demon ? 0f : 1f, dt / (_demon ? LightsOutS : LightsOnS));
         ClearGlass(dt);
         if (!Visible) return;
 
@@ -333,10 +371,11 @@ public partial class ChurchDecor : Node3D
         }
         foreach (var l in _lamps)
         {
-            var k = _lightK * (l.Flicker > 0 ? DemonFx.Flicker(_t, l.Seed, 1f - l.Flicker, 1f + l.Flicker * 0.4f) : 1f);
+            var lit = _transK >= 0 ? TurningLight(_transK, l.Seed) : _lightK;
+            var k = lit * (l.Flicker > 0 ? DemonFx.Flicker(_t, l.Seed, 1f - l.Flicker, 1f + l.Flicker * 0.4f) : 1f);
             l.Light.LightEnergy = l.Energy * k;
-            l.Light.Visible = _lightK > 0.01f;
-            if (l.Glow != null) l.Glow.Visible = _lightK > 0.05f;
+            l.Light.Visible = lit > 0.01f;
+            if (l.Glow != null) l.Glow.Visible = lit > 0.05f;
         }
     }
 }

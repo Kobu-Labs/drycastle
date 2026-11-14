@@ -23,6 +23,7 @@ public partial class NetClient
         {
             case EventKind.MassState when MassCodec.DecodeState(payload) is { } m:
                 _massNow = m;
+                if (m.Phase == MassPhase.Gather) ChurchDecor.Current?.ResetBlood(); // a new Mass: the last one's stains are gone
                 var chant = Chant();
                 chant?.SetChant(m.Chanting, m.Phase == MassPhase.Mass, new Vector3(m.ChantAt.X, m.ChantAt.Y, m.ChantAt.Z));
                 if (m.Bells)
