@@ -22,7 +22,7 @@ public class MassTests
         public IReadOnlyList<Vector3> Route(Vector3 from, Vector3 to) => new[] { from, to };
     }
 
-    static MassConfig Cfg(int playerSeats = 1) => new() { GatherSeconds = 20, MassSeconds = 10, CompletedSeconds = 3, StaggerSeconds = 2, PlayerSeats = playerSeats, PastorReplaceSeconds = 2, ResumeSeconds = 1, PastorKillsToTurn = 3, SitReachM = 1.5f };
+    static MassConfig Cfg(int playerSeats = 1) => new() { GatherSeconds = 20, MassSeconds = 10, CompletedSeconds = 3, StaggerSeconds = 2, PlayerSeats = playerSeats, PastorReplaceSeconds = 2, ResumeSeconds = 1, PastorKillsToTurn = 3, SitReachM = 1.5f, StartDelaySeconds = 1000 };
 
     static (HolyMassEvent Mass, CitizenCrowd Crowd, WorldEntityManager Entities, Church Church) Make(MassConfig? cfg = null)
     {
@@ -188,6 +188,88 @@ public class MassTests
         Assert.Equal(MassPhase.Gather, mass.Phase);
         Run(mass, crowd, entities, 2f);
         Assert.Equal(MassPhase.Mass, mass.Phase);
+    }
+
+    [Fact]
+    public void TheMassBeginsShortlyAfterTheLastCitizenIsInPlace()
+    {
+        var cfg = Cfg();
+        cfg.StartDelaySeconds = 3;
+        var (mass, crowd, entities, _) = Make(cfg);
+        mass.Start();
+        Run(mass, crowd, entities, 1f);
+        Assert.True(crowd.Arriving);
+        for (var t = 0f; t < 15 && crowd.Arriving; t += Dt) Run(mass, crowd, entities, Dt);
+        Assert.False(crowd.Arriving);
+        Assert.Equal(MassPhase.Gather, mass.Phase);
+        Run(mass, crowd, entities, 2f);
+        Assert.Equal(MassPhase.Gather, mass.Phase);
+        Run(mass, crowd, entities, 1.5f);
+        Assert.Equal(MassPhase.Mass, mass.Phase); // well before the 20 s gather timer
+    }
+
+    [Fact]
+    public void ADeadCitizenOnTheWayDoesNotHoldTheMassUp()
+    {
+        var cfg = Cfg(0);
+        cfg.StartDelaySeconds = 1;
+        var (mass, crowd, entities, _) = Make(cfg);
+        mass.Start();
+        Run(mass, crowd, entities, 2.5f); // all have left their houses, some still walk
+        Assert.True(crowd.Arriving);
+        foreach (var c in crowd.AliveOfRole(CitizenRole.Citizen).Where(c => !c.Seated).ToList()) crowd.Hit(c.HitId, 7, 100);
+        Run(mass, crowd, entities, 2f);
+        Assert.Equal(MassPhase.Mass, mass.Phase);
+    }
+
+    [Fact]
+    public void WhenThePastorTurnsEveryLivingCitizenSprintsHomeAndIsRemoved()
+    {
+        var (mass, crowd, entities, church) = Make(Cfg(0));
+        mass.Start();
+        Run(mass, crowd, entities, 0.5f);
+        var walker = crowd.AliveOfRole(CitizenRole.Citizen).First();
+        Assert.Equal(CitizenState.Walking, walker.State);
+        Run(mass, crowd, entities, 8f);
+        var seated = crowd.AliveOfRole(CitizenRole.Citizen).Where(c => c.Seated).ToList();
+        Assert.NotEmpty(seated);
+        var victim = seated[0];
+        mass.ForceTurn();
+        Assert.Equal(MassPhase.Void, mass.Phase);
+        Assert.All(crowd.AliveOfRole(CitizenRole.Citizen), c => Assert.Equal(CitizenState.Fleeing, c.State));
+        Assert.Equal(2, crowd.AliveOfRole(CitizenRole.Monk).Count()); // the monks stay
+        Assert.Equal(CitizenState.Standing, mass.Pastor!.State);
+        var before = victim.Position;
+        Run(mass, crowd, entities, 1f);
+        Assert.True(Vector3.Distance(before, victim.Position) > 3); // 6 m/s (the sprint, not the 5 m/s walk of the test)
+        crowd.Hit(victim.HitId, 7, 100); // can be killed while fleeing
+        Assert.False(victim.Alive);
+        Run(mass, crowd, entities, 20f);
+        Assert.Equal(0, crowd.AliveOfRole(CitizenRole.Citizen).Count()); // all home, gone
+        Assert.Equal(0, crowd.Waiting);
+    }
+
+    [Fact]
+    public void AFleeingCitizenWalksTheWayItCameBack()
+    {
+        var church = Church.Parse(ChurchJson);
+        var cfg = new CitizensConfig { WalkSpeed = 2, SpeedJitter = 0, FleeSpeed = 10 };
+        var home = new Vector3(-8, 0, 3); var turn = new Vector3(-8, 0, 0);
+        var c = new Citizen(cfg, 0, 0, new[] { home, turn, church.DoorPos }, church.RouteTo(church.Seat(0)!, 0.45f), 1);
+        for (var i = 0; i < 200 && c.State != CitizenState.Seated; i++) c.Tick(0.1f);
+        Assert.Equal(CitizenState.Seated, c.State);
+        c.Flee();
+        Assert.Equal(CitizenState.Fleeing, c.State);
+        var door = false; var corner = false;
+        for (var i = 0; i < 400 && c.Ended == null; i++)
+        {
+            c.Tick(0.05f);
+            door |= Vector3.Distance(c.Position, church.DoorPos) < 0.6f;
+            corner |= Vector3.Distance(c.Position, turn) < 0.6f;
+        }
+        Assert.True(door && corner);
+        Assert.Equal(WorldDespawnReason.Removed, c.Ended);
+        Assert.Equal(home, c.Position);
     }
 
     [Fact]

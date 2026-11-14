@@ -34,6 +34,8 @@ public sealed class CitizensConfig
     /// <summary>The most citizens alive or waiting to spawn at once.</summary>
     public int MaxCount { get; set; } = 60;
     public float WalkSpeed { get; set; } = 1.4f;
+    /// <summary>The sprint home when the demon appears (times the citizen's own speed factor).</summary>
+    public float FleeSpeed { get; set; } = 6;
     /// <summary>Each citizen walks at the walk speed times a factor within this share either way, so a crowd does not step in unison.</summary>
     public float SpeedJitter { get; set; } = 0.12f;
     public float TurnRateDegPerS { get; set; } = 360;
@@ -57,6 +59,8 @@ public sealed class MassConfig
 {
     /// <summary>Citizens walk in during the gather (the farthest house takes house_radius_m / walk_speed s, the stagger adds to it), then the Mass runs for mass_seconds of progress.</summary>
     public float GatherSeconds { get; set; } = 120;
+    /// <summary>The Mass begins this long after the last citizen that was still coming has reached its place (the gather time is the upper limit).</summary>
+    public float StartDelaySeconds { get; set; } = 4;
     public float MassSeconds { get; set; } = 120;
     /// <summary>After the Mass completes: citizens stand and clap, the pastor flexes; then everyone is removed and the event is over.</summary>
     public float CompletedSeconds { get; set; } = 12;
@@ -108,13 +112,13 @@ public sealed class HolyMassFile : IVersioned
         const string F = "holy_mass.json";
         var c = f.Citizens;
         if (c.MaxCount is < 1 or > 200) throw new DataFileException($"{F}: citizens.max_count is 1..200");
-        if (!(c.WalkSpeed > 0) || !(c.SpeedJitter is >= 0 and < 1)) throw new DataFileException($"{F}: citizens.walk_speed must be positive, speed_jitter 0..1");
+        if (!(c.WalkSpeed > 0) || !(c.FleeSpeed > 0) || !(c.SpeedJitter is >= 0 and < 1)) throw new DataFileException($"{F}: citizens.walk_speed and flee_speed must be positive, speed_jitter 0..1");
         if (!(c.TurnRateDegPerS > 0)) throw new DataFileException($"{F}: citizens.turn_rate_deg_per_s must be positive");
         if (!(c.StaggerSeconds >= 0) || !(c.HouseRadiusM > 0) || !(c.HouseMinM >= 0) || !(c.CorpseSeconds > 0) || !(c.SeatHeightM >= 0))
             throw new DataFileException($"{F}: citizens: stagger_seconds, house_min_m and seat_height_m are not negative; house_radius_m and corpse_seconds are positive");
         var mass = f.Mass;
-        if (!(mass.GatherSeconds >= 0) || !(mass.MassSeconds > 0) || !(mass.CompletedSeconds >= 0) || !(mass.StaggerSeconds >= 0) || !(mass.BellsLeadSeconds >= 0) || !(mass.HouseRadiusM > 0))
-            throw new DataFileException($"{F}: mass: gather_seconds, completed_seconds, stagger_seconds and bells_lead_seconds are not negative; mass_seconds and house_radius_m are positive");
+        if (!(mass.GatherSeconds >= 0) || !(mass.MassSeconds > 0) || !(mass.CompletedSeconds >= 0) || !(mass.StaggerSeconds >= 0) || !(mass.BellsLeadSeconds >= 0) || !(mass.StartDelaySeconds >= 0) || !(mass.HouseRadiusM > 0))
+            throw new DataFileException($"{F}: mass: gather_seconds, start_delay_seconds, completed_seconds, stagger_seconds and bells_lead_seconds are not negative; mass_seconds and house_radius_m are positive");
         if (mass.PlayerSeats < 0 || !(mass.SitReachM > 0) || !(mass.BlessedShare is >= 0 and <= 1) || !(mass.ClapShare is >= 0 and <= 1) || !(mass.MonkDabShare is >= 0 and <= 1))
             throw new DataFileException($"{F}: mass: player_seats is not negative, sit_reach_m positive, the shares 0..1");
         if (!(mass.PastorReplaceSeconds >= 0) || !(mass.ResumeSeconds >= 0) || mass.PastorKillsToTurn < 1 || !(mass.GestureMinSeconds > 0) || mass.GestureMaxSeconds < mass.GestureMinSeconds || !(mass.ChantRangeM > 0))

@@ -141,8 +141,8 @@ public partial class NetServer
         if (_crowd != null)
         {
             if (_mass?.Pastor is { } pastor) _crowd.Remove(pastor);
-            var died = _crowd.KillAll();
-            GD.Print($"server: demon: {died} of the congregation burn to death");
+            var died = _crowd.KillAll(citizens: false); // the citizens flee home (HolyMassEvent turns them out); the monks burn
+            GD.Print($"server: demon: {died} of the monks burn to death");
         }
         _dEnt = new DemonEntity { Position = _dSpot, Normal = NVec3.UnitY, Forward = _dSpotForward, State = DemonState.Transforming };
         if (_match.Entities.Spawn(_dEnt) is not { } id) { GD.PrintErr("server: demon: the entity cap is reached; no demon"); _dEnt = null; DemonClear(); return; }

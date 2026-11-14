@@ -5,6 +5,8 @@
     // Most citizens alive or waiting to leave their houses at once (the church's seats limit it further).
     "max_count": 120,
     "walk_speed": 2.2,
+    // The sprint back home when the demon appears (times the same random factor).
+    "flee_speed": 6,
     // Each citizen walks at walk_speed times a random factor within this share either way.
     "speed_jitter": 0.12,
     "turn_rate_deg_per_s": 360,
@@ -34,6 +36,8 @@
     // completed_seconds of standing, clapping and the pastor's flex before everyone is removed. A house 100 m away is 70 s of walking, so with the
     // stagger every citizen is seated before the gather ends.
     "gather_seconds": 120,
+    // The Mass begins this long after the last citizen still coming has reached its place; gather_seconds stays the upper limit.
+    "start_delay_seconds": 4,
     "mass_seconds": 120,
     "completed_seconds": 12,
     "stagger_seconds": 25,

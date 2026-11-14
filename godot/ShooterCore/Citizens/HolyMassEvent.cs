@@ -5,7 +5,7 @@ namespace Drycastle.ShooterCore;
 /// <summary>
 /// Where the Holy Mass is. Idle: nothing runs. Gather: the citizens walk in and sit. Mass: the chant runs and the Mass progresses while the pastor
 /// is there. Completed: the Mass is done (the blessed are chosen; citizens stand and clap, the pastor flexes) and the church is closing. Void: the
-/// pastor was killed too often and turns (the demon's cue); no blessing this event, and it stays until the event is ended.
+/// pastor was killed too often and turns (the demon's cue; the citizens sprint home and are removed there); no blessing this event, and it stays until the event is ended.
 /// </summary>
 public enum MassPhase : byte { Idle = 0, Gather = 1, Mass = 2, Completed = 3, Void = 4 }
 
@@ -35,6 +35,8 @@ public sealed class HolyMassEvent
     readonly Dictionary<ushort, float> _seatedFor = new();  // player -> seconds seated while the Mass progressed
     readonly HashSet<ushort> _sinners = new();
     float _phaseLeft;
+    float _gatherFor;          // seconds of the gather so far (the bells' lead included)
+    float _settleLeft;         // seconds until the Mass begins once everyone has arrived
     float _replaceLeft = -1;   // seconds until a new pastor walks out (<0: none pending)
     float _resumeLeft = -1;    // seconds after the new pastor has arrived until the Mass goes on
     bool _arrived;             // the new pastor stands at his spot
@@ -94,7 +96,8 @@ public sealed class HolyMassEvent
         foreach (var m in _church.Monks) _crowd.SpawnRole(CitizenRole.Monk, new[] { m.Pos }, m.Yaw);
         PastorReady = _pastor != null;
         if (_pastor == null) _replaceLeft = 1; // the entity cap: try again
-        _phaseLeft = _cfg.BellsLeadSeconds + _cfg.GatherSeconds; // the bells ring first, then the gather
+        _phaseLeft = _cfg.BellsLeadSeconds + _cfg.GatherSeconds; // the bells ring first, then the gather: the latest the Mass begins
+        _gatherFor = 0; _settleLeft = _cfg.StartDelaySeconds;
         SetPhase(MassPhase.Gather);
         return sent;
     }
@@ -117,7 +120,11 @@ public sealed class HolyMassEvent
         {
             case MassPhase.Gather:
                 _phaseLeft -= dt;
-                if (_phaseLeft <= 0) { _phaseLeft = 0; SetPhase(MassPhase.Mass); }
+                _gatherFor += dt;
+                // everyone who was coming is in place (the bells have rung): the Mass begins shortly, before the gather timer runs out
+                if (_gatherFor >= _cfg.BellsLeadSeconds && !_crowd.Arriving) _settleLeft -= dt;
+                else _settleLeft = _cfg.StartDelaySeconds;
+                if (_phaseLeft <= 0 || _settleLeft <= 0) { _phaseLeft = 0; SetPhase(MassPhase.Mass); }
                 break;
             case MassPhase.Mass:
                 if (!PastorReady) break;
@@ -167,8 +174,7 @@ public sealed class HolyMassEvent
             _replaceLeft = -1;
             // no death clip and no corpse: the pastor's body goes in the hit itself, the demon takes its place
             if (_pastor != null && _pastor.HitId == k.HitId) _crowd.Remove(_pastor);
-            SetPhase(MassPhase.Void);
-            PastorTurns?.Invoke();
+            Turn();
             return;
         }
         _replaceLeft = _cfg.PastorReplaceSeconds;
@@ -181,7 +187,14 @@ public sealed class HolyMassEvent
         if (Phase == MassPhase.Void) return;
         PastorKills = Math.Max(PastorKills, _cfg.PastorKillsToTurn);
         PastorReady = false; _replaceLeft = _resumeLeft = -1;
+        Turn();
+    }
+
+    /// <summary>The Mass is void: the citizens get up and sprint home, then the demon's cue.</summary>
+    void Turn()
+    {
         SetPhase(MassPhase.Void);
+        _crowd.Flee();
         PastorTurns?.Invoke();
     }
 

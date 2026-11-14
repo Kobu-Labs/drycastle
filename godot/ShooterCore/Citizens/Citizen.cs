@@ -3,8 +3,8 @@ using System.Numerics;
 namespace Drycastle.ShooterCore;
 
 /// <summary>What a citizen is doing: the replicated state byte. Walking is the way to the church door on the navigation mesh, Entering the scripted walk inside to the seat.</summary>
-/// <remarks>Standing is the pastor and monks at their spot, or a citizen on its feet after the Mass; Clapping is the Mass done and the body cheering (the pastor flexes).</remarks>
-public enum CitizenState : byte { Walking = 0, Entering = 1, Seated = 2, Dead = 3, Kneeling = 4, Standing = 5, Clapping = 6 }
+/// <remarks>Standing is the pastor and monks at their spot, or a citizen on its feet after the Mass; Clapping is the Mass done and the body cheering (the pastor flexes). Fleeing is the sprint back to the spawn point (the demon appeared); it ends in removal there.</remarks>
+public enum CitizenState : byte { Walking = 0, Entering = 1, Seated = 2, Dead = 3, Kneeling = 4, Standing = 5, Clapping = 6, Fleeing = 7 }
 
 /// <summary>Who a citizen entity is. It travels in the entity state's hit-point byte (<c>role * 2 + alive</c>).</summary>
 public enum CitizenRole : byte { Citizen = 0, Monk = 1, Pastor = 2 }
@@ -23,7 +23,7 @@ public static class CitizenRules
 
     public static bool IsHitId(ushort id) => id >= FirstHitId && id < FirstHitId + HitIdCount;
 
-    public static CitizenState StateOf(byte state) => state <= (byte)CitizenState.Clapping ? (CitizenState)state : CitizenState.Dead;
+    public static CitizenState StateOf(byte state) => state <= (byte)CitizenState.Fleeing ? (CitizenState)state : CitizenState.Dead;
 
     public static void Register(WorldEntityRegistry registry)
     {
@@ -44,6 +44,8 @@ public sealed class Citizen : IWorldEntity
     readonly List<Vector3> _walk;
     readonly List<Vector3> _enter;
     readonly float _speed;
+    readonly float _factor;
+    List<Vector3> _flee = new();
     int _next = 1;          // the next point of the route being walked
     float _deadFor;
 
@@ -57,6 +59,7 @@ public sealed class Citizen : IWorldEntity
         _walk = walk.ToList();
         _enter = enter.ToList();
         Look = look;
+        _factor = speedFactor;
         _speed = cfg.WalkSpeed * speedFactor;
         Position = _walk[0];
         State = CitizenState.Walking;
@@ -121,6 +124,9 @@ public sealed class Citizen : IWorldEntity
             case CitizenState.Entering:
                 if (Follow(_enter, dt)) Sit();
                 break;
+            case CitizenState.Fleeing:
+                if (Follow(_flee, dt, _cfg.FleeSpeed * _factor)) Ended = WorldDespawnReason.Removed; // home: gone
+                break;
         }
     }
 
@@ -135,8 +141,29 @@ public sealed class Citizen : IWorldEntity
     /// <summary>The Mass is done: a living citizen on its feet or in its seat takes this state (standing up from the pew is the client's: it follows the state).</summary>
     public void Finish(bool clap)
     {
-        if (!Alive || State is CitizenState.Walking or CitizenState.Entering) return;
+        if (!Alive || State is CitizenState.Walking or CitizenState.Entering or CitizenState.Fleeing) return;
         State = clap ? CitizenState.Clapping : CitizenState.Standing;
+    }
+
+    /// <summary>
+    /// The demon is here: a living citizen gets up and sprints home along the way it came (the scripted route out of the church, then the walk
+    /// route backwards to its spawn point, where it is removed). The pastor and monks stay.
+    /// </summary>
+    public void Flee()
+    {
+        if (!Alive || Role != CitizenRole.Citizen || State == CitizenState.Fleeing) return;
+        var route = new List<Vector3> { Position };
+        if (State == CitizenState.Walking)
+            for (var i = _next - 1; i >= 0; i--) route.Add(_walk[i]);
+        else
+        {
+            var from = State == CitizenState.Entering ? _next - 1 : _enter.Count - 1; // Entering: the points already passed; in place: all of them
+            for (var i = from; i >= 0; i--) route.Add(_enter[i]);
+            for (var i = _walk.Count - 1; i >= 0; i--) route.Add(_walk[i]);
+        }
+        _flee = route;
+        _next = 0;
+        State = CitizenState.Fleeing;
     }
 
     // ---- behaviour ----
@@ -156,9 +183,9 @@ public sealed class Citizen : IWorldEntity
     }
 
     /// <summary>Walks <paramref name="route"/> from the current point at the citizen's speed, turning towards the leg. True when its end is reached.</summary>
-    bool Follow(List<Vector3> route, float dt)
+    bool Follow(List<Vector3> route, float dt, float speed = 0)
     {
-        var budget = _speed * dt;
+        var budget = (speed > 0 ? speed : _speed) * dt;
         var turn = _cfg.TurnRateDegPerS * MathF.PI / 180f * dt;
         while (_next < route.Count)
         {

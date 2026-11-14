@@ -87,6 +87,17 @@ public sealed class CitizenCrowd : ICitizenHits
         foreach (var c in _byHit.Values) c.Finish(c.Role == CitizenRole.Pastor || _rng.NextDouble() < clapFraction);
     }
 
+    /// <summary>A citizen is still to leave its house, or walks or enters and has not reached its place yet (the dead do not count).</summary>
+    public bool Arriving => _pending.Count > 0 || _byHit.Values.Any(c => c.Role == CitizenRole.Citizen && c.State is CitizenState.Walking or CitizenState.Entering);
+
+    /// <summary>The demon is here: every living citizen sprints home and is removed there; those still waiting in their houses stay home. The pastor and monks stay.</summary>
+    public void Flee()
+    {
+        foreach (var p in _pending) _taken.Remove(p.SeatId);
+        _pending.Clear();
+        foreach (var c in _byHit.Values) c.Flee();
+    }
+
     /// <summary>The living pastor or monks, for the event.</summary>
     public IEnumerable<Citizen> AliveOfRole(CitizenRole role) => _byHit.Values.Where(c => c.Role == role && c.Alive);
 
@@ -146,11 +157,11 @@ public sealed class CitizenCrowd : ICitizenHits
         if (_entityOfHit.TryGetValue(c.HitId, out var entity)) _entities.Despawn(entity, WorldDespawnReason.Removed);
     }
 
-    /// <summary>Kills every living citizen, monk and pastor in place (the demon's fire): each plays its death clip and is removed after the corpse time. Nobody is credited (killer 0). Returns how many died.</summary>
-    public int KillAll()
+    /// <summary>Kills every living citizen (unless <paramref name="citizens"/> is false), monk and pastor in place (the demon's fire): each plays its death clip and is removed after the corpse time. Nobody is credited (killer 0). Returns how many died.</summary>
+    public int KillAll(bool citizens = true)
     {
         var n = 0;
-        foreach (var c in _byHit.Values.Where(c => c.Alive).ToList())
+        foreach (var c in _byHit.Values.Where(c => c.Alive && (citizens || c.Role != CitizenRole.Citizen)).ToList())
             if (_entityOfHit.TryGetValue(c.HitId, out var entity)) { _entities.Damage(entity, 1, 0); n++; }
         return n;
     }

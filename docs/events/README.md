@@ -151,6 +151,9 @@ Both are a status, not an Item: no slot, no drop. They survive a round change an
 - audio: `chant_sound` loops positionally with a reverb bus (no asset yet; a missing file is skipped and logged once); `bells_sound` plays once everywhere (`assets/drycastle-generated-sounds/church_bells.ogg`, made by `scripts/make_church_bells.py`)
 - bells: ring when the gather starts; the first citizen leaves `bells_lead_seconds` later (the gather clock includes the lead)
 - a killed monk or pastor (kills 1 and 2) lies until the event is cleared (citizens' corpses still expire); dead monks do not react to later pastor kills
+- the Mass begins `start_delay_seconds` (4) after the last citizen still coming has reached its place (dead ones do not count, nor the bells' lead); `gather_seconds` is the upper limit
+- when the pastor turns (phase Void) every living citizen (walking, seated, kneeling, standing) sprints home at `flee_speed` (6 m/s): scripted route out, then the walk route backwards to its spawn point, removed there (citizen state 7 Fleeing, protocol v39; client clip `sprint_up25f_femn`, the walk sped up when it is missing). Killable while fleeing; the doors do not stop them. Monks stay and burn; the demon's fire spares citizens
+- a monk who sees the pastor killed picks one of calm down, crying, `emote_taunt_shhh_femn` (a third each; 3% dab)
 - third pastor kill: the pastor entity is removed in the hit (no death clip, no corpse) and the demon transforms at once (`transform_delay_s` is 0)
 ## Implemented (ticket 4: demon and curse)
 - `/event demon` turns the pastor now (`HolyMassEvent.ForceTurn`); the third pastor kill does the same. Numbers: `holy_mass_demon.json` (`fight` section: delays, turning, climb, door grace, corpse time). Server: `NetServer.Demon.cs`, client: `NetClient.Demon.cs`, `DemonView.cs` (body, head, emotes, death), `DemonPose.cs` (crawl modifier), `DemonFx.cs`

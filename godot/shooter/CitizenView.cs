@@ -22,7 +22,9 @@ public sealed partial class CitizenView : Node3D
         public const string Clap = "emote_celebrate_clapping_polite_femn", Flex = "emote_sporty_flex_combo_femn", Dab = "emote_celebrate_dab_femn";
         public const string PrayIn = "idle_pray_standing_enter_femn", PrayLoop = "idle_pray_standing_loop_femn", PrayOut = "idle_pray_standing_exit_femn";
         public const string PastorIdle = "idle_base_masc", MonkIdle = "idle_standing_masc", Walk = "walk_f_masc";
-        public static readonly string[] MonkShock = { "emote_reproach_calm_down_femn", "emote_sad_crying_masc" };
+        public const string Sprint = "sprint_up25f_femn";
+        /// <summary>What a living monk plays when the pastor is killed (one in three each; a few dab instead).</summary>
+        public static readonly string[] MonkShock = { "emote_reproach_calm_down_femn", "emote_sad_crying_masc", "emote_taunt_shhh_femn" };
         /// <summary>The pastor's gestures between the praying clips; each is a run of clips played one after another.</summary>
         public static readonly string[][] Gestures =
         {
@@ -87,10 +89,14 @@ public sealed partial class CitizenView : Node3D
         _idle = _role switch { CitizenRole.Pastor => MassClips.PastorIdle, CitizenRole.Monk => MassClips.MonkIdle, _ => Idles[(int)((h >> 20) % (uint)Idles.Length)] };
         _death = Deaths[(int)((h >> 24) % (uint)Deaths.Length)];
         var lib = new AnimationLibrary();
-        var names = new List<string> { _walk, _idle, _death, KneelIn, KneelLoop, MassClips.Clap };
+        var names = new List<string> { _walk, _idle, _death, KneelIn, KneelLoop, MassClips.Clap, MassClips.Sprint };
         if (_role != CitizenRole.Citizen) names.AddRange(MassClips.All);
         foreach (var name in names.Distinct())
-            if (SyntyLib.Clip(name) is { } clip) lib.AddAnimation(name, clip);
+            if (SyntyLib.Clip(name) is { } clip)
+            {
+                if (name == MassClips.Sprint) clip.LoopMode = Animation.LoopModeEnum.Linear; // looped whatever the manifest says
+                lib.AddAnimation(name, clip);
+            }
         _anim = new AnimationPlayer { Name = "Clips" };
         _model.AddChild(_anim); // root node "..": the tracks are Skeleton3D:Bone under the model
         _anim.AddAnimationLibrary("", lib);
@@ -115,7 +121,7 @@ public sealed partial class CitizenView : Node3D
         {
             var to = state == CitizenState.Seated ? 1f : 0f;
             if (first) _sit.Influence = to;
-            else CreateTween().TweenProperty(_sit, "influence", to, state == CitizenState.Seated ? 0.7 : was == CitizenState.Seated ? 0.6 : 0.2); // standing up after the Mass takes a moment
+            else CreateTween().TweenProperty(_sit, "influence", to, state == CitizenState.Seated ? 0.7 : state == CitizenState.Fleeing ? 0.25 : was == CitizenState.Seated ? 0.6 : 0.2); // standing up after the Mass takes a moment
         }
         switch (state)
         {
@@ -136,6 +142,11 @@ public sealed partial class CitizenView : Node3D
             case CitizenState.Clapping:
                 _seq.Clear(); _praying = false;
                 Play(_role == CitizenRole.Pastor ? MassClips.Flex : MassClips.Clap, blend);
+                break;
+            case CitizenState.Fleeing:
+                _seq.Clear(); _praying = false;
+                if (_anim.HasAnimation(MassClips.Sprint)) Play(MassClips.Sprint, blend);
+                else if (_anim.HasAnimation(_walk)) _anim.Play(_walk, blend, Math.Max(1f, _cfg.FleeSpeed / _cfg.WalkSpeed)); // no sprint clip yet: the walk, sped up
                 break;
             default: _seq.Clear(); _praying = false; Play(_walk, blend); break;
         }
@@ -183,7 +194,8 @@ public sealed partial class CitizenView : Node3D
         if (_model == null || _anim == null) return;
         _shocked = true;
         var dab = new Random((int)(_hash ^ ((uint)_kills * 7919u))).NextDouble() < _mass.MonkDabShare;
-        var clip = dab ? MassClips.Dab : MassClips.MonkShock[(int)((_hash >> 4) % (uint)MassClips.MonkShock.Length)];
+        var pool = MassClips.MonkShock.Where(n => _anim.HasAnimation(n)).ToArray(); // a clip that is not baked yet is not picked
+        var clip = dab ? MassClips.Dab : pool.Length > 0 ? pool[(int)((_hash >> 4) % (uint)pool.Length)] : _idle;
         StartSeq(0.2, clip, _idle);
         Face(true);
     }
