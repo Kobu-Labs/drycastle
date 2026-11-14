@@ -111,8 +111,9 @@
     // Pets (ticket 05).
     "pet": { "weight": 1, "steal_seconds": 4 },
 
-    // Dishes (ticket 06).
-    "dish": { "weight": 1, "steal_seconds": 8 },
+    // Dishes (ticket 06): the placed objects with the generated dish model. The Thief stands base_out_m out from the dish along the way the wall faces, on the ground and on the navigation mesh (a base
+    // more than snap_max_m (flat) or snap_max_dy_m (height) from the mesh makes the dish no target), climbs straight up to reach_below_m under the dish's origin (at least min_climb_m up), works there.
+    "dish": { "weight": 1, "steal_seconds": 8, "base_out_m": 0.9, "snap_max_m": 1.2, "snap_max_dy_m": 1.0, "reach_below_m": 1.3, "min_climb_m": 0.4 },
 
     // Connectors (ticket 07).
     "connector": { "weight": 1, "steal_seconds": 6 }

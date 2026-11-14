@@ -96,7 +96,10 @@ public partial class NetServer
     }
 
     /// <summary>Join: what a joiner needs to see of a running Thieves event. Nothing: the vans and crews are world entities, which a joiner is sent with the rest of the world (the intel board is sent by <see cref="SendIntelOnJoin"/>).</summary>
-    void SendThievesOnJoin(Client c) { }
+    void SendThievesOnJoin(Client c)
+    {
+        SendDishesOnJoin(c); // the dishes taken (ticket 06)
+    }
 
     /// <summary>A new round clears the event (the world's entities went with it): a running run is despawned without a reward, the phase is Idle. What it stole is put back (<see cref="ResetLoot"/>).</summary>
     void ThievesRoundReset()

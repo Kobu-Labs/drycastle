@@ -180,6 +180,7 @@ public partial class NetClient
     void OnThievesEvent(EventKind kind, byte[] payload)
     {
         if (kind == EventKind.ThievesFx && ThievesFxCodec.Decode(payload) is { } m) OnThievesFx(m);
+        OnDishEvent(kind, payload); // the dishes taken (ticket 06)
     }
 
     void OnThievesFx(ThievesFxMsg m)

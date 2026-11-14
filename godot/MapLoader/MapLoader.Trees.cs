@@ -65,6 +65,7 @@ public sealed partial class MapLoader
     /// <summary>The collision of the placed objects of one asset, as children of the object's node (scaled with it).</summary>
     void AddObjectColliders(Node3D node, string asset)
     {
+        if (ObjectColliders.IsPassThrough(asset)) return; // a satellite dish: no collision on the server or the client
         if (_assetManifest == null) ReadAssetManifest();
         var category = _assetManifest!.TryGetValue(asset, out var entry) ? entry.Category : "";
         var size = entry?.Size ?? GVector3.One;
