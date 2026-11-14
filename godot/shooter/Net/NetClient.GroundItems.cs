@@ -19,10 +19,13 @@ public partial class NetClient
     float _groundNearDist;
     /// <summary>The ground item in reach is nearer than any corpse in reach, so the interact key is its.</summary>
     bool _groundNearest;
-    bool _groundUseWas;
+    Edge _groundUse; // the interact key's press: a tap takes
 
     /// <summary>The nearest ground item in reach has the interact key: no care package in reach, none of the corpse chooser's.</summary>
-    bool GroundItemOwnsKey => _groundNear != null && _groundNearest && _crateNear == null && !ChooserOpen;
+    bool GroundItemOwnsKey => KeyOwner == InteractOwner.GroundItem;
+
+    /// <summary>Who has the interact key on foot: the crate, the ground item, the corpse (<see cref="InteractArbiter"/>).</summary>
+    InteractOwner KeyOwner => InteractArbiter.Owner(_crateNear != null, _groundNear != null, _groundNearest, _near != null, ChooserOpen);
 
     /// <summary>Called once from <see cref="_Ready"/>: registers the type and follows the ground item entities.</summary>
     void InitGroundItems()
@@ -129,7 +132,6 @@ public partial class NetClient
     void TickGroundItems()
     {
         var use = Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("interact");
-        if (use && !_groundUseWas && GroundItemOwnsKey && _groundNear is { } id) RequestTakeGroundItem(id);
-        _groundUseWas = use;
+        if (_groundUse.Pressed(use) && GroundItemOwnsKey && _groundNear is { } id) RequestTakeGroundItem(id);
     }
 }

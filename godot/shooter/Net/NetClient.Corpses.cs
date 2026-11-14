@@ -37,7 +37,8 @@ public partial class NetClient
     /// <summary>The corpse within reach, from the last render (null when none, or when the player cannot take one).</summary>
     ushort? _near;
     double _useHeld;
-    bool _useWas, _holdSent;
+    InteractKey _useKey; // the interact key's press and release, one reading per tick
+    bool _holdSent;
 
     /// <summary>True while the corpse chooser is up; the hotbar keys and wheel belong to it then.</summary>
     bool ChooserOpen => _chooser.IsOpen;
@@ -136,7 +137,7 @@ public partial class NetClient
     /// <summary>The corpse prompt in reach (hidden while the chooser is up); null otherwise.</summary>
     string? CorpsePrompt()
     {
-        if (_near is not { } id || ChooserOpen || GroundItemOwnsKey) return null;
+        if (_near is not { } id || !InteractArbiter.CorpseShowsPrompt(_crateNear != null, _groundNear != null, _groundNearest, true, ChooserOpen)) return null;
         var key = InputBindings.Name("interact");
         if (IsGiantCorpse(id)) // the Bigfoot's corpse has no weapon to take, only what it carries (#264)
             return CorpseItems(id).Count switch { 0 => null, 1 => Strings.F("hud.corpse.giant.item", key, ItemName(CorpseItem(id)!)), _ => Strings.F("hud.corpse.giant.items", key) };
@@ -157,21 +158,21 @@ public partial class NetClient
     {
         var use = Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("interact");
         if (ChooserOpen && (Dead || _driving || _near != _chooser.Corpse)) _chooser.Close();
-        if (use && !_useWas) { _useHeld = 0; _holdSent = false; }
+        var (pressed, released) = _useKey.Step(use);
+        if (pressed) { _useHeld = 0; _holdSent = false; }
         if (use) _useHeld += dt;
-        var near = _crateNear != null || GroundItemOwnsKey ? null : _near; // a care package in reach owns the key (ticket #143), and so does a ground item nearer than the corpse (#267)
+        var near = KeyOwner == InteractOwner.Corpse ? _near : null; // a care package in reach owns the key (ticket #143), and so does a ground item nearer than the corpse (#267)
         if (use && !_holdSent && !ChooserOpen && near is { } id && _useHeld >= CorpseHoldSeconds && CorpseWeapon(id) is { } w
             && CorpseRules.CanReplace(w, CorpseRules.PrimaryPos))
         {
             SendPickUp(id, CorpseRules.PrimaryPos);
             _holdSent = true;
         }
-        if (!use && _useWas && !_holdSent && !ChooserOpen && near is { } tap)
+        if (released && !_holdSent && !ChooserOpen && near is { } tap)
         {
             if (IsGiantCorpse(tap)) OpenChooser(tap, null);
             else if (CorpseWeapon(tap) is { } tw) OpenChooser(tap, tw);
         }
-        _useWas = use;
     }
 
     /// <summary>The corpse's Items as the chooser's cells, in the server's order.</summary>
