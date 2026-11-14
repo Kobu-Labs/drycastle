@@ -17,19 +17,51 @@ public sealed class LoadoutAutosave
     public const long AckTimeoutMs = 5000;
     public const int MaxUndoSteps = 50;
 
+    /// <summary>
+    /// Real transitions, per slot (who takes them). The state is authoritative: "on the wire" and "has unsent changes" are derived from it.
+    /// <list type="bullet">
+    /// <item>Saved/Rejected -> Pending: Edit, Undo (a new draft; a rejection is not retried, only a newer edit sends again)</item>
+    /// <item>Pending -> Saving: Poll, once due</item>
+    /// <item>Saving -> Saved: Acknowledge ok, no newer edit queued (the draft becomes the server copy)</item>
+    /// <item>Saving -> Pending: Acknowledge (ok or rejected) while a newer edit waited: the newer value goes next</item>
+    /// <item>Saving -> Rejected: Acknowledge not ok, nothing newer (draft kept, shown, not resent)</item>
+    /// <item>Saving -> Retrying: ack timeout (Poll) or Abandon (no connection); backoff in DueAt</item>
+    /// <item>Retrying -> Saving: Poll, once the backoff has run out</item>
+    /// </list>
+    /// An edit or undo in Saving stays Saving; in Retrying it stays Retrying and keeps the backoff clock and reason: the new draft rides the next try.
+    /// </summary>
+    public static readonly StateMachineSpec<AutosaveState> Spec = StateMachineSpec<AutosaveState>.Define(
+            "Loadout.Autosave", "One loadout slot's save: debounce, one send on the wire, ack or retry with backoff; an explicit rejection stops the retries.", AutosaveState.Saved)
+        .Allow(AutosaveState.Saved, AutosaveState.Pending)
+        .Allow(AutosaveState.Pending, AutosaveState.Saving)
+        .Allow(AutosaveState.Saving, AutosaveState.Saved, AutosaveState.Pending, AutosaveState.Rejected, AutosaveState.Retrying)
+        .Allow(AutosaveState.Retrying, AutosaveState.Saving)
+        .Allow(AutosaveState.Rejected, AutosaveState.Pending)
+        .Note(AutosaveState.Saved, "Nothing unsent or in flight; no draft.")
+        .Note(AutosaveState.Pending, "Draft waiting for its quiet period (or for the answer to an older send) before it goes out.")
+        .Note(AutosaveState.Saving, "One save for the slot is on the wire. An edit meanwhile only marks the draft newer; it goes after the answer.")
+        .Note(AutosaveState.Retrying, "The send failed (timeout, no connection): resent with backoff. An edit meanwhile keeps the backoff clock and rides the next try.")
+        .Note(AutosaveState.Rejected, "The server refused the draft: shown with its reason, kept, never resent until the next edit or undo.")
+        .Build();
+
     sealed class SlotState
     {
         public Loadout? Server;       // the last copy the server confirmed (or the profile sent)
         public Loadout? Draft;        // the local value, while it is not yet confirmed by an ack
-        public bool Unsent;           // Draft has changes that have not been sent yet
-        public bool InFlight;         // one save for this slot is on the wire
+        public readonly StateMachine<AutosaveState> Fsm = new(Spec);
+        public bool EditedWhileSaving; // Saving only: Draft is newer than the value on the wire
         public uint InFlightSeq;
         public Loadout? InFlightValue;
-        public long SentAt, DueAt;
+        public long SentAt, DueAt;     // absolute ms on the caller's clock (a deadline, not a countdown)
         public int Attempts;
-        public AutosaveState State = AutosaveState.Saved;
         public string Reason = "";
         public readonly List<Loadout> Undo = new();
+
+        public AutosaveState State => Fsm.Current;
+        /// <summary>One save for this slot is on the wire.</summary>
+        public bool InFlight => Fsm.Is(AutosaveState.Saving);
+        /// <summary>The draft has changes that have not been sent yet.</summary>
+        public bool Unsent => Fsm.Current is AutosaveState.Pending or AutosaveState.Retrying || (InFlight && EditedWhileSaving);
     }
 
     readonly SlotState[] _slots = Enumerable.Range(0, Loadout.SlotCount).Select(_ => new SlotState()).ToArray();
@@ -68,11 +100,7 @@ public sealed class LoadoutAutosave
             s.Undo.Add(before);
             if (s.Undo.Count > MaxUndoSteps) s.Undo.RemoveAt(0);
         }
-        s.Draft = next;
-        s.Unsent = true;
-        s.DueAt = nowMs + DebounceMs;
-        s.State = s.InFlight ? AutosaveState.Saving : AutosaveState.Pending;
-        s.Reason = "";
+        Dirty(s, next, nowMs + DebounceMs);
     }
 
     /// <summary>Steps the slot back to its previous value (an edit, so it saves). False when there is nothing to undo.</summary>
@@ -81,12 +109,31 @@ public sealed class LoadoutAutosave
         if (Slot(slot) is not { } s || s.Undo.Count == 0) return false;
         var previous = s.Undo[^1];
         s.Undo.RemoveAt(s.Undo.Count - 1);
-        s.Draft = previous;
-        s.Unsent = true;
-        s.DueAt = nowMs;
-        s.State = s.InFlight ? AutosaveState.Saving : AutosaveState.Pending;
-        s.Reason = "";
+        Dirty(s, previous, nowMs);
         return true;
+    }
+
+    /// <summary>
+    /// A new draft (edit or undo), due at <paramref name="dueAt"/>. Saved/Pending/Rejected: Pending. Saving: stays Saving, the draft is marked newer than
+    /// the wire. Retrying: stays Retrying with its backoff clock and reason, so a typing user cannot cut the backoff down to the debounce and the screen
+    /// keeps saying "retrying"; the new draft goes with the next try.
+    /// </summary>
+    static void Dirty(SlotState s, Loadout draft, long dueAt)
+    {
+        s.Draft = draft;
+        switch (s.State)
+        {
+            case AutosaveState.Retrying:
+                return;
+            case AutosaveState.Saving:
+                s.EditedWhileSaving = true;
+                break;
+            default:
+                s.Fsm.Enter(AutosaveState.Pending);
+                break;
+        }
+        s.DueAt = dueAt;
+        s.Reason = "";
     }
 
     /// <summary>
@@ -102,18 +149,17 @@ public sealed class LoadoutAutosave
             if (s.InFlight && nowMs - s.SentAt >= AckTimeoutMs) Retry(s, nowMs, "no answer from the server");
             if (s.InFlight || !s.Unsent || s.Draft is not { } value || nowMs < s.DueAt) continue;
             var seq = ++_seq;
-            s.InFlight = true;
+            s.Fsm.Enter(AutosaveState.Saving);
+            s.EditedWhileSaving = false;
             s.InFlightSeq = seq;
             s.InFlightValue = value;
             s.SentAt = nowMs;
-            s.Unsent = false;
-            s.State = AutosaveState.Saving;
             due.Add((i, seq, value));
         }
         return due;
     }
 
-    /// <summary>Makes every unsent draft due now (leaving the editor, switching slots). Saves still go out through <see cref="Poll"/>.</summary>
+    /// <summary>Makes every unsent draft due now (leaving the editor, switching slots). Saves still go out through <see cref="Poll"/>. Also ends a retry's backoff wait: leaving is worth one more try.</summary>
     public void Flush(long nowMs)
     {
         foreach (var s in _slots)
@@ -130,32 +176,32 @@ public sealed class LoadoutAutosave
     public void Acknowledge(LoadoutAckInfo ack)
     {
         if (Slot(ack.Slot) is not { } s || !s.InFlight || s.InFlightSeq != ack.Seq) return;
-        s.InFlight = false;
+        var newer = s.EditedWhileSaving;
+        s.EditedWhileSaving = false;
         s.Attempts = 0;
         if (ack.Ok)
         {
             s.Server = s.InFlightValue;
             s.Reason = "";
-            if (s.Unsent) s.State = AutosaveState.Pending; // edited while it was on the wire: the newer value goes next
-            else { s.Draft = null; s.State = AutosaveState.Saved; }
+            if (newer) s.Fsm.Enter(AutosaveState.Pending); // edited while it was on the wire: the newer value goes next
+            else { s.Draft = null; s.Fsm.Enter(AutosaveState.Saved); }
         }
         else
         {
             // a validation answer would repeat on a retry, so it is shown instead of retried; the draft stays
             s.Reason = ack.Reason;
-            s.State = s.Unsent ? AutosaveState.Pending : AutosaveState.Rejected;
+            s.Fsm.Enter(newer ? AutosaveState.Pending : AutosaveState.Rejected);
         }
         s.InFlightValue = null;
     }
 
     static void Retry(SlotState s, long nowMs, string reason)
     {
-        s.InFlight = false;
         s.InFlightValue = null;
-        s.Unsent = true; // the draft is still held, so the same (or a newer) value is sent again
+        s.EditedWhileSaving = false; // Retrying is unsent by definition: the draft (same or newer) is sent again
         s.Attempts++;
         s.DueAt = nowMs + Backoff(s.Attempts);
-        s.State = AutosaveState.Retrying;
+        s.Fsm.Enter(AutosaveState.Retrying);
         s.Reason = reason;
     }
 

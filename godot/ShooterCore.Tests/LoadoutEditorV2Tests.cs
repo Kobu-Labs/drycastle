@@ -116,6 +116,111 @@ public class LoadoutEditorV2Tests
     }
 
     [Fact]
+    public void AnEditDuringARetryKeepsTheBackoffClockAndTheLabelButSendsTheNewDraft()
+    {
+        var a = Seeded();
+        a.Edit(L(0, "m4a1"), 0);
+        Assert.Single(a.Poll(300));
+        a.Abandon(0, 300); // retry due at 1300
+        a.Edit(L(0, "g36"), 400);
+        Assert.Equal(AutosaveState.Retrying, a.StateOf(0));
+        Assert.Equal("not connected", a.RejectReason(0));
+        Assert.Empty(a.Poll(1299)); // not shortened to the 300 ms debounce
+        var again = Assert.Single(a.Poll(1300));
+        Assert.Equal("g36", again.Value.PrimaryWeapon);
+    }
+
+    [Fact]
+    public void AnUndoDuringARetryKeepsTheBackoffClock()
+    {
+        var a = Seeded("ak47");
+        a.Edit(L(0, "m4a1"), 0);
+        Assert.Single(a.Poll(300));
+        a.Abandon(0, 300);
+        Assert.True(a.Undo(0, 400));
+        Assert.Equal(AutosaveState.Retrying, a.StateOf(0));
+        Assert.Empty(a.Poll(1299));
+        Assert.Equal("ak47", Assert.Single(a.Poll(1300)).Value.PrimaryWeapon);
+    }
+
+    [Fact]
+    public void RepeatedFailuresKeepGrowingTheBackoffEvenWhenTheUserKeepsEditing()
+    {
+        var a = Seeded();
+        a.Edit(L(0, "m4a1"), 0);
+        Assert.Single(a.Poll(300));
+        a.Abandon(0, 300);                       // attempt 1: +1 s
+        a.Edit(L(0, "g36"), 500);
+        Assert.Single(a.Poll(1300));
+        a.Abandon(0, 1300);                      // attempt 2: +2 s
+        a.Edit(L(0, "aug"), 1400);
+        Assert.Empty(a.Poll(3299));
+        Assert.Single(a.Poll(3300));
+    }
+
+    [Fact]
+    public void AnEditAfterARejectionIsSentAfterTheDebounce()
+    {
+        var a = Seeded();
+        a.Edit(L(0, "m4a1"), 0);
+        var sent = Assert.Single(a.Poll(300));
+        a.Acknowledge(new LoadoutAckInfo(0, sent.Seq, false, "nope"));
+        a.Edit(L(0, "g36"), 1000);
+        Assert.Equal(AutosaveState.Pending, a.StateOf(0));
+        Assert.Equal("", a.RejectReason(0));
+        Assert.Empty(a.Poll(1299));
+        Assert.Single(a.Poll(1300));
+    }
+
+    [Fact]
+    public void ARejectionOfAnOlderValueWhileANewerEditWaitsSendsTheNewerOne()
+    {
+        var a = Seeded();
+        a.Edit(L(0, "m4a1"), 0);
+        var first = Assert.Single(a.Poll(300));
+        a.Edit(L(0, "g36"), 400);
+        a.Acknowledge(new LoadoutAckInfo(0, first.Seq, false, "nope"));
+        Assert.Equal(AutosaveState.Pending, a.StateOf(0));
+        Assert.Equal("g36", Assert.Single(a.Poll(700)).Value.PrimaryWeapon);
+    }
+
+    [Fact]
+    public void ATimeoutWithANewerEditQueuedRetriesTheNewerValue()
+    {
+        var a = Seeded();
+        a.Edit(L(0, "m4a1"), 0);
+        Assert.Single(a.Poll(300));
+        a.Edit(L(0, "g36"), 400);
+        a.Poll(300 + LoadoutAutosave.AckTimeoutMs);
+        Assert.Equal(AutosaveState.Retrying, a.StateOf(0));
+        Assert.Equal("g36", Assert.Single(a.Poll(300 + LoadoutAutosave.AckTimeoutMs + 1000)).Value.PrimaryWeapon);
+    }
+
+    /// <summary>Strict mode throws on a transition the spec does not declare, so a long random drive proves the table covers every real path.</summary>
+    [Fact]
+    public void ARandomDriveOnlyTakesDeclaredTransitions()
+    {
+        var rng = new Random(145);
+        var a = Seeded();
+        long now = 0;
+        var inFlight = new List<uint>();
+        for (var i = 0; i < 5000; i++)
+        {
+            now += rng.Next(0, 700);
+            switch (rng.Next(7))
+            {
+                case 0: a.Edit(L(0, "w" + rng.Next(6)), now); break;
+                case 1: a.Undo(0, now); break;
+                case 2: foreach (var d in a.Poll(now)) inFlight.Add(d.Seq); break;
+                case 3: a.Flush(now); break;
+                case 4: a.Abandon(0, now); break;
+                case 5 when inFlight.Count > 0: a.Acknowledge(new LoadoutAckInfo(0, inFlight[rng.Next(inFlight.Count)], rng.Next(3) != 0, "no")); break;
+                default: break;
+            }
+        }
+    }
+
+    [Fact]
     public void AFailedSendGoesBackIntoTheQueue()
     {
         var a = Seeded();
