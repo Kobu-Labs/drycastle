@@ -12,8 +12,10 @@ namespace Drycastle.Shooter;
 public sealed partial class DemonMouth : SkeletonModifier3D
 {
     /// <summary>The mouth line at the lips (height, how far forward), how much it rises towards the hinge per metre back, and where the jaw ends at the back.</summary>
-    const float LipY = 1.517f, LipZ = 0.19f, RiseBack = 0.15f, HingeZ = 0.02f, ChinY = 1.30f;
-    const float MaxAngle = 0.62f, OpenPerS = 9f;
+    const float LipY = 1.553f, LipZ = 0.2f, RiseBack = 0.1f, HingeZ = 0.02f, ChinY = 1.30f;
+    /// <summary>Half the muzzle's width (the mane beside it stays on the head), and the heights between which the beard under the jaw follows it less and less.</summary>
+    const float HalfWidth = 0.08f, BeardY0 = 1.36f, BeardY1 = 1.50f, BeardMin = 0.35f;
+    const float MaxAngle = 0.5f, OpenPerS = 9f;
 
     /// <summary>0 shut .. 1 wide open. Set by the view every frame.</summary>
     public float Target;
@@ -53,41 +55,46 @@ public sealed partial class DemonMouth : SkeletonModifier3D
             AlbedoColor = new Color(0.22f, 0.02f, 0.02f), Roughness = 0.5f, CullMode = BaseMaterial3D.CullModeEnum.Disabled,
             EmissionEnabled = true, Emission = new Color(0.9f, 0.12f, 0.02f), EmissionEnergyMultiplier = 0.35f,
         };
-        Add(onHead, new BoxMesh { Size = new Vector3(0.17f, 0.12f, 0.14f), Material = flesh }, toHead * new Vector3(0, 1.49f, 0.07f), Basis.Identity);
-        m._glow = new OmniLight3D { LightColor = new Color(1f, 0.35f, 0.1f), LightEnergy = 0, OmniRange = 1.6f, ShadowEnabled = false, Position = toHead * new Vector3(0, 1.50f, 0.12f) };
+        Box(onHead, toHead, flesh, -0.045f, 0.045f, 1.527f, 1.565f, 0.03f, 0.16f); // the roof and the sides, inside the muzzle
+        Box(onHead, toHead, flesh, -0.04f, 0.04f, 1.44f, 1.56f, 0.02f, 0.05f); // the throat behind
+        Box(onJaw, toJaw, flesh, -0.04f, 0.04f, 1.522f, 1.534f, 0.04f, 0.165f); // the floor, on the jaw
+        m._glow = new OmniLight3D { LightColor = new Color(1f, 0.35f, 0.1f), LightEnergy = 0, OmniRange = 1.6f, ShadowEnabled = false, Position = toHead * new Vector3(0, 1.53f, 0.12f) };
         onHead.AddChild(m._glow);
 
         // teeth: two rows of cones along the lip's arc, the second pair out from the middle long (fangs); the lower row a little behind the upper
         var bone = new StandardMaterial3D { AlbedoColor = new Color(0.93f, 0.88f, 0.74f), Roughness = 0.4f };
-        for (var i = -4; i <= 4; i++)
+        for (var i = -3; i <= 3; i++)
         {
-            var x = i * 0.02f;
-            var z = 0.168f - x * x / (0.09f * 0.09f) * 0.045f;
+            var x = i * 0.016f;
+            var z = 0.172f - x * x / (0.055f * 0.055f) * 0.04f;
             var fang = Math.Abs(i) == 2;
-            float up = fang ? 0.058f : 0.03f, low = fang ? 0.045f : 0.026f;
-            Add(onHead, Cone(up, bone), toHead * new Vector3(x, LipY + 0.006f - up / 2, z), new Basis(Vector3.Forward, MathF.PI));
-            Add(onJaw, Cone(low, bone), toJaw * new Vector3(x, LipY - 0.012f + low / 2, z - 0.012f), Basis.Identity);
+            float up = fang ? 0.05f : 0.026f, low = fang ? 0.034f : 0.022f;
+            Add(onHead, Cone(up, bone), toHead * new Vector3(x, LipY + 0.004f - up / 2, z), new Basis(Vector3.Forward, MathF.PI));
+            Add(onJaw, Cone(low, bone), toJaw * new Vector3(x, LipY - 0.03f + low / 2, z - 0.012f), Basis.Identity);
         }
 
         // the tongue: three joints from the back of the jaw, lying forward; it stays inside while the mouth is shut
         var meat = new StandardMaterial3D { AlbedoColor = new Color(0.45f, 0.05f, 0.09f), Roughness = 0.35f };
-        m._tongueRoot = new Node3D { Position = toJaw * new Vector3(0, 1.487f, 0.055f) };
+        m._tongueRoot = new Node3D { Position = toJaw * new Vector3(0, 1.54f, 0.05f) };
         onJaw.AddChild(m._tongueRoot);
         var parent = m._tongueRoot;
         for (var k = 0; k < 3; k++)
         {
-            var seg = new Node3D { Position = new Vector3(0, 0, k == 0 ? 0 : 0.06f) };
+            var seg = new Node3D { Position = new Vector3(0, 0, k == 0 ? 0 : 0.05f) };
             parent.AddChild(seg);
-            var w = 0.05f - 0.012f * k;
-            seg.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(w, 0.012f, 0.064f), Material = meat }, Position = new Vector3(0, 0, 0.03f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+            var w = 0.042f - 0.01f * k;
+            seg.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(w, 0.01f, 0.054f), Material = meat }, Position = new Vector3(0, 0, 0.025f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
             m._tongue.Add(seg);
             parent = seg;
         }
         return m;
     }
 
+    static void Box(Node3D parent, Transform3D toBone, Material mat, float x0, float x1, float y0, float y1, float z0, float z1) =>
+        Add(parent, new BoxMesh { Size = new Vector3(x1 - x0, y1 - y0, z1 - z0), Material = mat }, toBone * new Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), Basis.Identity);
+
     static MeshInstance3D Cone(float length, Material mat) =>
-        new() { Mesh = new CylinderMesh { TopRadius = 0, BottomRadius = 0.009f, Height = length, RadialSegments = 5, Rings = 0, Material = mat }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        new() { Mesh = new CylinderMesh { TopRadius = 0, BottomRadius = 0.007f, Height = length, RadialSegments = 5, Rings = 0, Material = mat }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
 
     static void Add(Node3D parent, Mesh mesh, Vector3 at, Basis basis) =>
         Add(parent, new MeshInstance3D { Mesh = mesh, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off }, at, basis);
@@ -108,7 +115,7 @@ public sealed partial class DemonMouth : SkeletonModifier3D
         return -1;
     }
 
-    static bool InJaw(Vector3 c) => c.Z > HingeZ && c.Y > ChinY && c.Y < LipY + (LipZ - c.Z) * RiseBack;
+    static bool InJaw(Vector3 c) => MathF.Abs(c.X) < HalfWidth && c.Z > HingeZ && c.Y > ChinY && c.Y < LipY + (LipZ - c.Z) * RiseBack;
 
     /// <summary>Gives the jaw's triangles vertices of their own on the Jaw bone, in a copy of the mesh. Returns how many vertices that made.</summary>
     static int SplitJaw(MeshInstance3D mi, ArrayMesh mesh, int headBind, int jawBind)
@@ -183,8 +190,10 @@ public sealed partial class DemonMouth : SkeletonModifier3D
         for (var j = 0; j < src.Count; j++)
             for (var k = 0; k < per; k++)
             {
-                bones[(n + j) * per + k] = k == 0 ? jawBind : 0;
-                weights[(n + j) * per + k] = k == 0 ? 1f : 0f;
+                // the beard hangs from the jaw and follows it less towards its tip, so it does not swing into the chest
+                var w = Mathf.Clamp((verts[src[j]].Y - BeardY0) / (BeardY1 - BeardY0), BeardMin, 1f);
+                bones[(n + j) * per + k] = k == 0 ? jawBind : k == 1 ? headBind : 0;
+                weights[(n + j) * per + k] = k == 0 ? w : k == 1 ? 1f - w : 0f;
             }
         arrays[B] = bones;
         arrays[W] = weights;
@@ -212,7 +221,7 @@ public sealed partial class DemonMouth : SkeletonModifier3D
         // wide open it trembles a little
         var a = MaxAngle * _open * (1f + 0.06f * MathF.Sin((float)_t * 31f) * _open);
         skel.SetBonePoseRotation(_jaw, skel.GetBonePoseRotation(_jaw) * new Quaternion(Vector3.Right, a));
-        if (_glow != null) _glow.LightEnergy = 1.6f * _open;
+        if (_glow != null) _glow.LightEnergy = 1.0f * _open;
         if (_tongueRoot == null) return;
         _tongueRoot.Scale = new Vector3(1, 1, 0.55f + 1.0f * _open); // it comes out past the teeth
         for (var k = 0; k < _tongue.Count; k++)

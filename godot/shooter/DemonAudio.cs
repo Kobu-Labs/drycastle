@@ -11,7 +11,7 @@ public sealed partial class DemonAudio : Node3D
 {
     const string Dir = "audio/holy_mass";
     const float FadeInS = 9f, FadeOutS = 3f, SilentDb = -50f;
-    static readonly (string File, float Db)[] Loops = { ("demon_music.ogg", 6f), ("demon_ambient.ogg", 3f) };
+    static readonly (string File, float Db)[] Loops = { ("demon_music.ogg", 14f), ("demon_ambient.ogg", 9f) };
     static readonly string[] Screams = { "scream1.ogg", "scream2.ogg" };
 
     readonly List<(AudioStreamPlayer3D Player, float Db)> _loops = new();
@@ -48,7 +48,7 @@ public sealed partial class DemonAudio : Node3D
                 var p = new AudioStreamPlayer3D
                 {
                     Stream = stream, Bus = "Music", VolumeDb = SilentDb, PanningStrength = 0f,
-                    AttenuationModel = AudioStreamPlayer3D.AttenuationModelEnum.Disabled, MaxDistance = 30f, MaxDb = 12f,
+                    AttenuationModel = AudioStreamPlayer3D.AttenuationModelEnum.Disabled, MaxDistance = 30f, MaxDb = 20f,
                 };
                 AddChild(p);
                 _loops.Add((p, db));
