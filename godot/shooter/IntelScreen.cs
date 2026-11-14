@@ -120,6 +120,18 @@ public partial class IntelScreen : Node3D
             Position = new Vector3(0, 0, depth / 2),
             MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.10f, 0.115f, 0.10f), Roughness = 0.75f, Metallic = 0.4f },
         });
+        if (_anchor.HostId.StartsWith("o-"))
+        {
+            // in a placed object (the hangar: an arched vault, no flat wall) the board stands free on two posts that run into the floor
+            const float post = 0.09f, below = 1.4f;
+            foreach (var side in new[] { -1f, 1f })
+                _rig.AddChild(new MeshInstance3D
+                {
+                    Mesh = new BoxMesh { Size = new Vector3(post, below, post) },
+                    Position = new Vector3(side * (_anchor.Width / 2f - post), -(_anchor.Height / 2f + frame + below / 2f), depth / 2),
+                    MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.10f, 0.115f, 0.10f), Roughness = 0.75f, Metallic = 0.4f },
+                });
+        }
         _rig.AddChild(new MeshInstance3D
         {
             Mesh = new QuadMesh { Size = new Vector2(_anchor.Width, _anchor.Height) },
