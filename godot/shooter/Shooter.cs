@@ -60,9 +60,21 @@ public partial class Shooter : Node3D
     Drycastle.ShooterServer.Persistence.IProgressionStore? _progression;
     bool _smoke;
     bool _smokeMove;
+    /// <summary>Where the application is (see <see cref="AppFlow"/>); every change goes through <see cref="EnterPhase"/>.</summary>
+    readonly StateMachine<AppPhase> _phase = new(AppFlow.Spec);
     readonly Random _rng = new();
     GameData _data = null!;
     int _frames;
+
+    void EnterPhase(AppPhase next) => _phase.Enter(next);
+
+    /// <summary>Startup failed: quit with 2 and make sure a smoke run cannot still print its OK line.</summary>
+    void FailStartup(Exception e)
+    {
+        GD.PrintErr($"startup failed: {e.Message}");
+        GetTree().Quit(2);
+        EnterPhase(AppPhase.Failed);
+    }
 
     // Client frame cap: VSync already limits to the refresh rate; this stops VSync-off from pegging the GPU, and idles in the background.
     const int FocusedFps = 120, UnfocusedFps = 20;
@@ -95,19 +107,18 @@ public partial class Shooter : Node3D
             try { GD.Print($"sounds: {Sfx.Init(this).SoundCount} events, table and files ok"); }
             catch (Exception e)
             {
-                GD.PrintErr($"startup failed: {e.Message}");
-                GetTree().Quit(2);
-                _smoke = false;
-                _frames = int.MinValue;
+                FailStartup(e);
                 return;
             }
         }
         if (role == "client" && !_smoke && !_smokeMove && !cfg.Flag("move-parity") && !cfg.Flag("offline") && !cfg.Flag("headless-bot") && DisplayServer.GetName() != "headless")
         {
             GameSettings.RestoreWindowSize();
+            EnterPhase(AppPhase.Menu);
             StartMenus(cfg);
             return;
         }
+        EnterPhase(AppPhase.Direct);
         try
         {
             if (role is not ("server" or "client")) throw new InvalidOperationException($"unknown role {role} (server|client)");
@@ -129,10 +140,7 @@ public partial class Shooter : Node3D
         }
         catch (Exception e)
         {
-            GD.PrintErr($"startup failed: {e.Message}");
-            GetTree().Quit(2);
-            _smoke = false;
-            _frames = int.MinValue;
+            FailStartup(e);
         }
     }
 
@@ -160,7 +168,7 @@ public partial class Shooter : Node3D
     public override void _Process(double delta)
     {
         // let a few frames run so physics and the scene tree settle before a smoke exit
-        if (_smoke && ++_frames >= 3)
+        if (_smoke && !_phase.Is(AppPhase.Failed) && ++_frames >= 3)
         {
             GD.Print("SHOOTER_SMOKE_OK");
             GetTree().Quit(0);
@@ -256,10 +264,11 @@ public partial class Shooter : Node3D
 
     async Task BeginGame(string host, int port, string name)
     {
+        EnterPhase(AppPhase.Loading);
         var ld = new LoadingScreen($"{host}:{port}");
         _shell.SetGameActive(false);
         _shell.Reset(ld);
-        string? failure = null;
+        JoinResult result;
         try
         {
             await Step(ld, "loading.data", 0.05f);
@@ -275,17 +284,17 @@ public partial class Shooter : Node3D
             await Step(ld, "loading.world", 0.75f);
             if (!_worldLit) { AddLightAndSky(); _worldLit = true; }
             await Step(ld, "loading.connect", 0.85f);
-            var done = new TaskCompletionSource<string?>();
-            ld.AllowCancel(() => done.TrySetResult("")); // empty failure = the player cancelled
+            var done = new TaskCompletionSource<JoinResult>();
+            ld.AllowCancel(() => done.TrySetResult(JoinResult.Cancelled));
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
                 World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, BlipConfig = _data.Match, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
-                OnWelcomed = () => done.TrySetResult(null),
+                OnWelcomed = () => done.TrySetResult(JoinResult.Welcomed),
             };
             client.OnFailed = (why, joined) =>
             {
-                if (!joined) done.TrySetResult(Strings.F("connect.err.join", $"{host}:{port}", why));
+                if (!joined) done.TrySetResult(JoinResult.Failed(Strings.F("connect.err.join", $"{host}:{port}", why)));
                 else if (_client == client) LeaveMatch(Strings.F("connect.err.lost", $"{host}:{port}", why));
             };
             client.OpenLoadouts = () => _shell.Push(NewLoadouts());
@@ -295,22 +304,25 @@ public partial class Shooter : Node3D
             client.SandboxNoticed += text => _shell.Toast(text, ToastKind.Warn);
             client.OpenSandbox = () => _shell.Push(new SandboxScreen(client, () => _data ??= LoadData()));
             AddChild(client);
-            failure = await done.Task;
+            result = await done.Task;
         }
         catch (Exception e)
         {
-            failure = e.Message;
+            result = JoinResult.Failed(e.Message);
             GD.PrintErr($"start failed: {e.Message}");
         }
-        if (failure != null)
+        if (!_phase.Is(AppPhase.Loading)) return; // the connection dropped while we waited: LeaveMatch already put the menu back
+        if (result.Outcome != JoinOutcome.Welcomed)
         {
             DropClient();
+            EnterPhase(AppPhase.Menu);
             ShowMain();
-            _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n), failure.Length == 0 ? null : failure));
+            _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n), result.ErrorForScreen)); // a cancel shows the bare form
             return;
         }
         ld.Set("loading.ready", 1f);
         Sfx.MenuMusic(false);
+        EnterPhase(AppPhase.Game);
         _shell.SetGameActive(true);
         _shell.Reset();
         GD.Print("SHOOTER_GAME_STARTED");
@@ -329,6 +341,7 @@ public partial class Shooter : Node3D
     {
         var lostEdits = _client is { } c && Enumerable.Range(0, Loadout.SlotCount).Any(c.Autosave.HasUnconfirmed);
         DropClient();
+        EnterPhase(AppPhase.Menu);
         _shell.SetGameActive(false);
         ShowMain();
         var text = error == null ? Strings.T("disconnect.done") : error + " " + Strings.T("connect.err.help.lost");
