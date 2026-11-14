@@ -41,6 +41,7 @@ public static class S
         ["hint_main"] = "Enter: select    Tab / arrows: move focus",
         ["hint_settings"] = "Esc: back    Tab / arrows: move focus",
         ["hint_busy"] = "Esc: cancel the download",
+        ["hint_installing"] = "Installing the update, this can't be cancelled. It only takes a moment.",
         ["protocol"] = "Network protocol {0}",
     };
 

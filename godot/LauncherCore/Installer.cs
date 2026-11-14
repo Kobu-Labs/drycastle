@@ -74,6 +74,8 @@ public sealed class Installer
         {
             string? gameZip = needGame ? await FetchAsync(m.Game, InstallPhase.DownloadingGame, progress, ct) : null;
             string? mapZip = needMap ? await FetchAsync(m.Map.File, InstallPhase.DownloadingMap, progress, ct) : null;
+            // Point of no return: the Installing report tells the UI to stop offering Cancel (LauncherFlow.CanCancel). This is the last check of ct;
+            // Apply swaps folders and runs to the end (or rolls back on its own failure), so it never takes the token.
             progress.Report(new InstallProgress(InstallPhase.Installing, 0, 1));
             ct.ThrowIfCancellationRequested();
             await Task.Run(() => Apply(m, gameZip, mapZip), CancellationToken.None);

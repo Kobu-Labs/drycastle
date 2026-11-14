@@ -6,21 +6,20 @@ namespace Drycastle.Launcher;
 
 /// <summary>
 /// The launcher screen: checks the release feed, downloads/updates the game and the map (LauncherCore), then starts the game.
-/// States: Checking, Ready, UpdateAvailable, Working (progress, Esc cancels), Failed (message + Try again; the installed version stays playable).
+/// States (<see cref="LauncherFlow"/>): Checking, Ready, UpdateAvailable, Working (progress, Esc cancels the download), Failed (message + Try again; the installed version stays playable).
+/// Once the downloaded files are being swapped in (Installing) nothing can cancel it: the button says Installing and is disabled.
 /// Esc: closes Settings, cancels a running download, otherwise nothing (the launcher never quits without the Quit button).
 /// </summary>
 public partial class LauncherApp : Control
 {
-    enum State { Checking, Ready, UpdateAvailable, Working, Failed }
-
     static readonly int[] Scales = { 75, 100, 125, 150 };
 
-    State _state = State.Checking;
+    readonly LauncherFlow _flow = new();
     Installer _installer = null!;
     ReleaseFeed _feed = null!;
     LauncherSettings _settings = null!;
     Manifest? _latest;
-    CancellationTokenSource? _cts;
+    CancellationTokenSource? _cts, _checkCts;
 
     VBoxContainer _main = null!, _settingsBox = null!;
     Label _version = null!, _status = null!, _error = null!, _detail = null!, _hint = null!;
@@ -157,7 +156,7 @@ public partial class LauncherApp : Control
         }
         _main.Visible = !on;
         _settingsBox.Visible = on;
-        _hint.Text = S.T(on ? "hint_settings" : "hint_main");
+        _hint.Text = S.T(_flow.HintKey(on));
         if (on) _channel.GrabFocus(); else _settingsBtn.GrabFocus();
     }
 
@@ -225,43 +224,63 @@ public partial class LauncherApp : Control
 
     // ---- flow ----
 
+    /// <summary>
+    /// Asks the release feed and decides: up to date, update available, or install now. Every await is followed by a stale check: a newer check
+    /// (settings closed with another channel) or an install owns the state by then, and this older answer must not touch it.
+    /// </summary>
     async Task CheckAsync()
     {
-        _cts?.Cancel();
+        if (!_flow.TryBeginCheck(out var ticket)) return; // an install is running: it owns the install folder
+        _checkCts?.Cancel();
+        _checkCts = new CancellationTokenSource();
+        var ct = _checkCts.Token;
         _checkedChannel = _settings.Channel;
-        SetState(State.Checking);
+        Render();
         var have = _installer.Installed();
+        Manifest? latest;
         try
         {
-            _latest = await _feed.LatestAsync(_settings.Channel, CancellationToken.None);
+            latest = await _feed.LatestAsync(_settings.Channel, ct);
         }
+        catch (OperationCanceledException) when (!_flow.IsCurrent(ticket)) { return; }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or FormatException)
         {
+            if (!_flow.IsCurrent(ticket)) return;
             GD.PrintErr("update check: " + e.Message);
             _latest = null;
             Fail(S.T(have != null ? "offline_installed" : "offline_fresh"), null);
             return;
         }
+        if (!_flow.IsCurrent(ticket)) return;
+        _latest = latest;
         if (_latest is null) { Fail(S.T("no_release", _settings.Channel), null); return; }
         var (game, map, _) = Installer.Plan(have, _latest, Directory.Exists(Path.Combine(_installer.GameDir, "map")));
-        if (!game && !map) { SetState(State.Ready); return; }
+        if (!game && !map) { _flow.Finish(LauncherState.Ready); Render(); return; }
         if (_settings.AutoUpdate || have is null) { _ = InstallAsync(); return; }
-        SetState(State.UpdateAvailable);
+        _flow.Finish(LauncherState.UpdateAvailable);
+        Render();
     }
 
     async Task InstallAsync()
     {
-        if (_latest is null) return;
+        if (_latest is null || !_flow.TryBeginInstall()) return; // one installer at a time
         var m = _latest;
         _cts = new CancellationTokenSource();
-        SetState(State.Working);
+        Render();
         var have = _installer.Installed();
         var plan = Installer.Plan(have, m, Directory.Exists(Path.Combine(_installer.GameDir, "map")));
         long total = Math.Max(1, plan.Bytes);
         long before = 0;
         var progress = new Progress<InstallProgress>(p =>
         {
-            if (p.Phase == InstallPhase.Installing) { _status.Text = S.T("installing"); _detail.Text = ""; _bar.Value = 1000; return; }
+            if (_flow.State != LauncherState.Working) return; // a late report after the install ended
+            if (p.Phase == InstallPhase.Installing)
+            {
+                _flow.MarkInstalling(); // the swap cannot be cancelled: relabel and disable the button
+                Render();
+                _status.Text = S.T("installing"); _detail.Text = ""; _bar.Value = 1000;
+                return;
+            }
             long baseBytes = p.Phase == InstallPhase.DownloadingMap && plan.Game ? m.Game.Size : 0;
             before = baseBytes + p.Done;
             _bar.Value = 1000.0 * Math.Min(before, total) / total;
@@ -271,7 +290,8 @@ public partial class LauncherApp : Control
         try
         {
             await _installer.InstallAsync(m, progress, _cts.Token);
-            SetState(State.Ready);
+            _flow.Finish(LauncherState.Ready);
+            Render();
         }
         catch (OperationCanceledException)
         {
@@ -288,12 +308,12 @@ public partial class LauncherApp : Control
 
     void OnPrimary()
     {
-        switch (_state)
+        switch (_flow.State)
         {
-            case State.Ready: Play(); break;
-            case State.UpdateAvailable: _ = InstallAsync(); break;
-            case State.Working: _cts?.Cancel(); break;
-            case State.Failed:
+            case LauncherState.Ready: Play(); break;
+            case LauncherState.UpdateAvailable: _ = InstallAsync(); break;
+            case LauncherState.Working: if (_flow.CanCancel) _cts?.Cancel(); break;
+            case LauncherState.Failed:
                 if (_installer.Installed() != null) Play(); else _ = CheckAsync();
                 break;
         }
@@ -321,37 +341,42 @@ public partial class LauncherApp : Control
 
     void Fail(string message, string? hint)
     {
-        SetState(State.Failed);
+        _flow.Finish(LauncherState.Failed);
+        Render();
         _status.Text = message;
         _error.Visible = hint != null;
         _error.Text = hint ?? "";
     }
 
-    void SetState(State s)
+    InstalledState? _shownHave;
+
+    /// <summary>Draws the flow's current state into the widgets.</summary>
+    void Render()
     {
-        _state = s;
-        var have = _installer.Installed();
+        var s = _flow.State;
+        // not while the swap runs: the state file is being replaced and would read as "not installed"
+        var have = _flow.Installing ? _shownHave : (_shownHave = _installer.Installed());
         _version.Text = have != null ? S.T("installed", have.Version) : S.T("not_installed");
-        _bar.Visible = _detail.Visible = s == State.Working;
+        _bar.Visible = _detail.Visible = s == LauncherState.Working;
         _error.Visible = false;
-        _retry.Visible = s == State.Failed;
-        _settingsBtn.Disabled = _quit.Disabled = s == State.Working;
-        _primary.Disabled = s == State.Checking || (s == State.Failed && have is null);
+        _retry.Visible = s == LauncherState.Failed;
+        _settingsBtn.Disabled = _quit.Disabled = s == LauncherState.Working;
+        _primary.Disabled = s == LauncherState.Checking || (s == LauncherState.Failed && have is null) || _flow.Installing;
         switch (s)
         {
-            case State.Checking: _status.Text = S.T("checking"); _primary.Text = S.T("play"); break;
-            case State.Ready: _status.Text = S.T("uptodate"); _primary.Text = S.T("play"); break;
-            case State.UpdateAvailable:
+            case LauncherState.Checking: _status.Text = S.T("checking"); _primary.Text = S.T("play"); break;
+            case LauncherState.Ready: _status.Text = S.T("uptodate"); _primary.Text = S.T("play"); break;
+            case LauncherState.UpdateAvailable:
                 _status.Text = S.T("update_available", _latest?.Version ?? "");
                 _primary.Text = S.T("update"); break;
-            case State.Working: _primary.Text = S.T("cancel"); _bar.Value = 0; _status.Text = ""; break;
-            case State.Failed: _primary.Text = S.T("play"); break;
+            case LauncherState.Working: _primary.Text = S.T(_flow.Installing ? "installing" : "cancel"); _bar.Value = 0; _status.Text = ""; break;
+            case LauncherState.Failed: _primary.Text = S.T("play"); break;
         }
-        _hint.Text = S.T(s == State.Working ? "hint_busy" : "hint_main");
+        _hint.Text = S.T(_flow.HintKey(_settingsBox.Visible)); // the settings hint stays while Settings is open
         if (!_settingsBox.Visible)
         {
             // first focus: the primary action, or Try again when there is nothing to play
-            if (s == State.Failed && have is null) _retry.GrabFocus();
+            if (s == LauncherState.Failed && have is null) _retry.GrabFocus();
             else if (!_primary.Disabled) _primary.GrabFocus();
             else _settingsBtn.GrabFocus();
         }
@@ -364,7 +389,7 @@ public partial class LauncherApp : Control
         {
             CloseSettings();
         }
-        else if (_state == State.Working) _cts?.Cancel();
+        else if (_flow.CanCancel) _cts?.Cancel();
         else return;
         GetViewport().SetInputAsHandled();
     }
