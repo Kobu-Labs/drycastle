@@ -126,9 +126,9 @@ public static class ItemRules
     {
         displaced = null;
         if (items.At(stack.Item) is not { } def) return ItemPlace.None;
-        if (worn.Get(def.Slot) == null) { worn.Wear(def.Slot, stack); return ItemPlace.Worn; }
+        if (!def.BagOnly && worn.Get(def.Slot) == null) { worn.Wear(def.Slot, stack); return ItemPlace.Worn; }
         if (bag.Add(stack) >= 0) return ItemPlace.Bagged;
-        if (!swap) return ItemPlace.NoRoom;
+        if (!swap || def.BagOnly) return ItemPlace.NoRoom;
         displaced = worn.Wear(def.Slot, stack);
         return ItemPlace.Swapped;
     }
@@ -139,7 +139,7 @@ public static class ItemRules
     /// </summary>
     public static ItemMove Equip(ItemsFile items, Equipment worn, Bag bag, int cell)
     {
-        if (bag.Get(cell) is not { } stack || items.At(stack.Item) is not { } def) return ItemMove.Nothing;
+        if (bag.Get(cell) is not { } stack || items.At(stack.Item) is not { BagOnly: false } def) return ItemMove.Nothing;
         bag.Set(cell, worn.Wear(def.Slot, stack));
         return ItemMove.Ok;
     }

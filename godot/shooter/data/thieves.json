@@ -48,5 +48,13 @@
       "clips": { "idle": "idle_standing_masc", "walk": "walk_f_masc", "run": "sprint_up25f_femn", "windup": "", "swing": "", "death": ["death_back_sword", "death_left_sword"] },
       "thief_color": "#7d6b4f", "enforcer_color": "#8a3b32", "gang_boss_color": "#c9a227", "capsule_height_m": 1.8
     }
+  },
+  // Ticket 09. Voice lines (server): a living member not in a windup or swing with a human within voice_near_m rolls voice_chance every voice_roll_s; a member that spoke waits
+  // voice_cooldown_s; one line at a time per Raid (voice_busy_s, the server does not know how long a line is). voice_lines = recordings the server picks from; the client plays line mod files found.
+  // Ranges are client only: voice_range_m, speaker_range_m (a member's speaker), van_range_m (a van's song). speaker_chance is rolled once per member.
+  // Files (private, optional): assets-private/audio/thieves/voice/*.ogg and songs/*.ogg; none found = silence.
+  "audio": {
+    "voice_near_m": 8, "voice_chance": 0.3, "voice_roll_s": 2, "voice_cooldown_s": 15, "voice_busy_s": 3, "voice_lines": 15, "voice_range_m": 25,
+    "speaker_chance": 0.05, "speaker_range_m": 30, "van_range_m": 60
   }
 }

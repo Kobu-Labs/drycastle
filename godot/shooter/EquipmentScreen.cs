@@ -57,8 +57,8 @@ public sealed partial class EquipmentScreen : Control
         row.AddChild(left);
         _avatar = new CamoPreview(new Vector2(ShooterTheme.AvatarWidth, ShooterTheme.AvatarHeight)) { Focusable = false };
         _avatar.SetDropTarget(
-            data => ItemCell.TryRead(data, out var from) && EquipmentWishes.CanDrop(from, DropTarget.Avatar, SlotOf),
-            data => { if (ItemCell.TryRead(data, out var from)) Perform(EquipmentWishes.Drag(from, DropTarget.Avatar, SlotOf), null); });
+            data => ItemCell.TryRead(data, out var from) && EquipmentWishes.CanDrop(from, DropTarget.Avatar, SlotOf, Plain),
+            data => { if (ItemCell.TryRead(data, out var from)) Perform(EquipmentWishes.Drag(from, DropTarget.Avatar, SlotOf, Plain), null); });
         var headRow = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
         for (var s = 0; s < _slots.Length; s++) _slots[s] = MakeCell(CellRef.Slot((EquipSlot)s), GhostFor((EquipSlot)s));
         headRow.AddChild(_slots[(int)EquipSlot.Headgear]); // a slot added to EquipSlot gets its place at its body part here
@@ -80,12 +80,12 @@ public sealed partial class EquipmentScreen : Control
     ItemCell MakeCell(CellRef at, Glyph.Kind? ghost)
     {
         var cell = new ItemCell { Ref = at, Draggable = true, Ghost = ghost };
-        cell.Activated += c => Perform(EquipmentWishes.Activate(c.Ref, SlotOf, _client.BagIsFull), c);
+        cell.Activated += c => Perform(EquipmentWishes.Activate(c.Ref, SlotOf, _client.BagIsFull, Plain), c);
         cell.DropPressed += c => Perform(EquipmentWishes.Drop(c.Ref, SlotOf), c);
         cell.Moved += OnMoved;
         cell.FocusChanged += (_, _) => QueueFraming();
-        cell.AcceptDrop = (target, from) => EquipmentWishes.CanDrop(from, DropTarget.Onto(target.Ref), SlotOf);
-        cell.Dropped = (target, from) => Perform(EquipmentWishes.Drag(from, DropTarget.Onto(target.Ref), SlotOf), target);
+        cell.AcceptDrop = (target, from) => EquipmentWishes.CanDrop(from, DropTarget.Onto(target.Ref), SlotOf, Plain);
+        cell.Dropped = (target, from) => Perform(EquipmentWishes.Drag(from, DropTarget.Onto(target.Ref), SlotOf, Plain), target);
         return cell;
     }
 
@@ -123,6 +123,9 @@ public sealed partial class EquipmentScreen : Control
     }
 
     // ---- what it shows ----
+
+    /// <summary>A cell that holds a bag-only item (no slot): it cannot be put on.</summary>
+    bool Plain(CellRef at) => (at.Home == CellHome.Worn ? _client.Worn((EquipSlot)at.Index) : _client.InBag(at.Index))?.Def.BagOnly == true;
 
     EquipSlot? SlotOf(CellRef at) => (at.Home == CellHome.Worn ? _client.Worn((EquipSlot)at.Index) : _client.InBag(at.Index))?.Def.Slot;
 

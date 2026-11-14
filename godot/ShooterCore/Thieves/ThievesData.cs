@@ -9,6 +9,8 @@ public sealed class ThievesFile : IVersioned
     public int Version { get; set; }
 
     public GangConfig Gang { get; set; } = new();
+    /// <summary>Voice lines, the speaker and the songs (ticket 09): <see cref="ThievesAudioConfig"/>.</summary>
+    public ThievesAudioConfig Audio { get; set; } = new();
 
     public static ThievesFile Load(string path) => Validate(DataFile.Load<ThievesFile>(path));
 
@@ -42,6 +44,7 @@ public sealed class ThievesFile : IVersioned
         Positive(g.Spawn.MinM, "gang.spawn.min_m"); Positive(g.Spawn.MaxM, "gang.spawn.max_m"); Positive(g.Spawn.SpreadM, "gang.spawn.spread_m");
         if (!(g.Spawn.MaxM > g.Spawn.MinM)) throw new DataFileException($"{F}: gang.spawn.max_m is not above min_m");
         if (g.View.Models.Count == 0) throw new DataFileException($"{F}: gang.view.models lists at least one model");
+        f.Audio.Validate(F);
         return f;
     }
 }

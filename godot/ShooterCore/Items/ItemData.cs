@@ -23,6 +23,8 @@ public sealed class ItemDef
     public int? PickupLimit { get; set; }
     /// <summary>A headshot on the wearer is a body hit (<see cref="HitTarget.HeadGuarded"/>).</summary>
     public bool HeadshotImmune { get; set; }
+    /// <summary>A plain item with no slot (the Thieves' speaker): it rides in the bag and cannot be worn. <see cref="Slot"/> is then unused.</summary>
+    public bool BagOnly { get; set; }
 }
 
 /// <summary>
