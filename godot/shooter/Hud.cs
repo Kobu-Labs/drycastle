@@ -134,7 +134,16 @@ public partial class Hud : CanvasLayer
         _gap = -1;
         _seatsDef = null; // the seat hint names the (maybe rebound) keys: rebuilt on the next frame
         foreach (var tri in _indTri) tri.Color = ShooterTheme.Danger; // read at build time otherwise; the palette may have switched
-        if (_crossRoot != null) _crossRoot.Visible = Settings.ShowCrosshair;
+        if (_crossRoot != null) _crossRoot.Visible = Settings.ShowCrosshair && !_crossCovered;
+    }
+
+    bool _crossCovered;
+    /// <summary>A panel stands in the middle of the screen (the corpse chooser): the crosshair would show through it, so it is hidden meanwhile.</summary>
+    public void CoverCrosshair(bool on)
+    {
+        if (_crossCovered == on) return;
+        _crossCovered = on;
+        if (_crossRoot != null) _crossRoot.Visible = Settings.ShowCrosshair && !on && !(_scope?.Visible ?? false);
     }
 
     public override void _ExitTree() => GameSettings.Changed -= OnSettingsChanged;
@@ -751,7 +760,7 @@ public partial class Hud : CanvasLayer
     void UpdateCrosshair()
     {
         var scoped = Scoped?.Invoke() ?? false;
-        if (_scope.Visible != scoped) { _scope.Visible = scoped; _scope.QueueRedraw(); _crossRoot.Visible = Settings.ShowCrosshair && !scoped; }
+        if (_scope.Visible != scoped) { _scope.Visible = scoped; _scope.QueueRedraw(); _crossRoot.Visible = Settings.ShowCrosshair && !scoped && !_crossCovered; }
         if (scoped) return;
         var alpha = 1f - Math.Clamp(Aim?.Invoke() ?? 0f, 0f, 1f);
         if (Math.Abs(alpha - _crossAlpha) > 0.004f) { _crossAlpha = alpha; _crossRoot.Modulate = new Color(1, 1, 1, alpha); }

@@ -245,8 +245,12 @@ public partial class NetClient
             if (radius >= BigfootData.Stomp.WaveMaxRadiusM) { node.QueueFree(); _waveRings.RemoveAt(i); continue; }
             _waveRings[i] = (node, radius, born);
             var r = MathF.Max(radius, 0.1f);
-            node.Scale = new Vector3(r, 0.12f * MathF.Min(r, 3f), r); // a flat ring that thickens a little as it grows
-            if (node is MeshInstance3D { MaterialOverride: StandardMaterial3D m }) m.AlbedoColor = new Color(0.86f, 0.74f, 0.52f, 0.55f * (1f - radius / BigfootData.Stomp.WaveMaxRadiusM));
+            // the wall rises in its first metres, runs out at full height and sinks as it dies away
+            var life = radius / BigfootData.Stomp.WaveMaxRadiusM;
+            var h = MathF.Max(0.05f, WaveWallM * MathF.Min(1f, r / 3f) * (1f - 0.6f * life * life));
+            node.Scale = new Vector3(r, h, r);
+            var p = node.GlobalPosition; p.Y = (float)node.GetMeta("ground_y") + h / 2f; node.GlobalPosition = p;
+            if (node is MeshInstance3D { MaterialOverride: StandardMaterial3D m }) m.AlbedoColor = new Color(0.86f, 0.74f, 0.52f, 0.8f * (1f - life * life));
         }
     }
 
@@ -295,22 +299,34 @@ public partial class NetClient
         }
     }
 
+    /// <summary>The height of the shockwave's wall of dust at full size (the wave itself is hit below <see cref="BigfootStomp.WaveHeightM"/>: a jump clears it).</summary>
+    const float WaveWallM = 1.5f;
+
     void AddRing(Vector3 at)
     {
         if (!ShotFx.Enabled) return;
-        var ring = new MeshInstance3D
+        // a standing wall of dust, dense at the ground and thinning to nothing at its top, with a second, lower one just inside it for depth
+        var fade = new GradientTexture2D
         {
-            Mesh = new TorusMesh { InnerRadius = 0.9f, OuterRadius = 1f, Rings = 24, RingSegments = 6 },
-            MaterialOverride = new StandardMaterial3D
-            {
-                AlbedoColor = new Color(0.86f, 0.74f, 0.52f, 0.55f), Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-            },
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            Scale = new Vector3(0.1f, 0.05f, 0.1f),
+            Gradient = new Gradient { Colors = new[] { new Color(1, 1, 1, 0), new Color(1, 1, 1, 0.55f), new Color(1, 1, 1, 1) }, Offsets = new[] { 0f, 0.6f, 1f } },
+            Fill = GradientTexture2D.FillEnum.Linear, FillFrom = new Vector2(0, 0), FillTo = new Vector2(0, 0.5f), // a cylinder's side uses the upper half of the texture
+            Width = 4, Height = 64,
         };
+        var dust = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.86f, 0.74f, 0.52f, 0.8f), AlbedoTexture = fade, Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+        };
+        var tube = new CylinderMesh { TopRadius = 1.04f, BottomRadius = 1f, Height = 1f, RadialSegments = 48, Rings = 1, CapTop = false, CapBottom = false };
+        var ring = new MeshInstance3D { Mesh = tube, MaterialOverride = dust, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Scale = new Vector3(0.1f, 0.05f, 0.1f) };
+        ring.AddChild(new MeshInstance3D
+        {
+            Mesh = tube, MaterialOverride = dust, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            Scale = new Vector3(0.93f, 0.55f, 0.93f), Position = new Vector3(0, -0.225f, 0), // its foot on the same ground
+        });
         Owned.AddChild(ring);
-        ring.GlobalPosition = at + Vector3.Up * 0.12f;
+        ring.GlobalPosition = at;
+        ring.SetMeta("ground_y", at.Y);
         _waveRings.Add((ring, 0, Now));
     }
 
@@ -356,5 +372,15 @@ public partial class NetClient
             }
         }
         return new CorpseView { Node = node, View = null, Giant = true };
+    }
+
+    /// <summary>The giant's corpse with or without its head: the head is the Item it carries, so once that is taken the body lies there headless.</summary>
+    void ShowGiantHead(ushort corpse)
+    {
+        if (!_corpses.TryGetValue(corpse, out var v) || !v.Giant) return;
+        if (v.Node.FindChildren("*", "Skeleton3D", true, false).FirstOrDefault() is not Skeleton3D sk) return;
+        var head = sk.FindBone("Head");
+        if (head < 0) return;
+        sk.SetBonePoseScale(head, CorpseItems(corpse).Count > 0 ? Vector3.One : Vector3.One * 0.001f); // the clip is paused: the pose stays as set
     }
 }

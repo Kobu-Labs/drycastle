@@ -42,6 +42,8 @@ public sealed partial class ItemCell : Control
 
     /// <summary>Whether a drag can start here (the Equipment screen's cells; not the chooser's).</summary>
     public bool Draggable { get; set; }
+    /// <summary>Off where the name stands next to the cell (the corpse chooser's list): no tooltip then.</summary>
+    public bool NameTip { get; set; } = true;
     /// <summary>The kind of ghost drawn while the cell is empty (the slot's type); null for a plain empty cell.</summary>
     public Glyph.Kind? Ghost { get; set; }
 
@@ -370,7 +372,7 @@ public sealed partial class ItemCell : Control
 
     void UpdateTip()
     {
-        var want = _item != null && !_disabled && !_dragActive && !_dragSource && (_hover || HasFocus()) && IsVisibleInTree();
+        var want = NameTip && _item != null && !_disabled && !_dragActive && !_dragSource && (_hover || HasFocus()) && IsVisibleInTree();
         if (!want)
         {
             if (_tip != null) _tip.Visible = false;

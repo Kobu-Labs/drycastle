@@ -8,8 +8,8 @@ public readonly record struct ChooserItem(HeldItem Item, Texture2D? Icon, string
 
 /// <summary>
 /// The chooser opened by a tap of the interact key at a corpse (ticket #130): pick which hotbar position the corpse's weapon replaces (keys 1 and 2), and,
-/// when the corpse carries Items (issues #261, #269: up to seven, worn and bagged), take one of them. The Items are a row of the same cells as the
-/// Equipment screen (<see cref="ItemCell"/>: icon, pickup pips, name tooltip). A click or Enter on a cell takes that Item (the server puts it in its
+/// when the corpse carries Items (issues #261, #269: up to seven, worn and bagged), take one of them. The Items are a list, one row each: the same cell as the
+/// Equipment screen (<see cref="ItemCell"/>: icon, pickup pips) with the Item's name beside it, so nothing covers the title. A click or Enter on a cell takes that Item (the server puts it in its
 /// slot if empty, else the bag, else swaps it with what is worn) and the cell leaves the list when the server's next list for the corpse arrives
 /// (<see cref="SetItems"/>); a take the server never answers is given up on after <see cref="ItemCell.PendingGiveUp"/> seconds. A corpse with no Items shows
 /// no list, and then the chooser is keyboard only as before, with the mouse captured; with a list the mouse is released (the shell asks
@@ -28,7 +28,11 @@ public sealed partial class CorpseChooser : CanvasLayer
     readonly PanelContainer _panel = new();
     readonly Label _title = new();
     readonly VBoxContainer _rows = new();
-    readonly HBoxContainer _cells = new();
+    readonly VBoxContainer _cells = new();
+    readonly List<HBoxContainer> _lines = new();
+    readonly List<Label> _names = new();
+    /// <summary>The panel is never narrower than this (1080p units), so a short title and one Item do not make a cramped box.</summary>
+    const float MinWidth = 360;
     readonly List<int> _valid = new();
     readonly List<ItemCell> _pool = new();
     int _shown;
@@ -52,8 +56,11 @@ public sealed partial class CorpseChooser : CanvasLayer
         center.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _root.AddChild(center);
         _panel.AddThemeStyleboxOverride("panel", ShooterTheme.Box(ShooterTheme.Surface, ShooterTheme.Space * 2, ShooterTheme.Line));
+        _panel.CustomMinimumSize = new Vector2(MinWidth, 0);
         center.AddChild(_panel);
         var column = new VBoxContainer();
+        column.AddThemeConstantOverride("separation", ShooterTheme.Space);
+        _cells.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
         _panel.AddChild(column);
         _title.ThemeTypeVariation = "HudHead";
         _title.MouseFilter = Control.MouseFilterEnum.Ignore;
@@ -132,16 +139,23 @@ public sealed partial class CorpseChooser : CanvasLayer
         while (_pool.Count < items.Count)
         {
             var index = _pool.Count;
-            var cell = new ItemCell { Ref = CellRef.BagCell(index) }; // a list: only the index of the cell means something
+            var cell = new ItemCell { Ref = CellRef.BagCell(index), NameTip = false }; // a list: only the index of the cell means something
             cell.Activated += c => Pick(c.Ref.Index);
             cell.Moved += OnMoved;
             _pool.Add(cell);
-            _cells.AddChild(cell);
+            var line = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+            line.AddThemeConstantOverride("separation", ShooterTheme.Space);
+            var name = new Label { MouseFilter = Control.MouseFilterEnum.Ignore, VerticalAlignment = VerticalAlignment.Center, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+            line.AddChild(cell);
+            line.AddChild(name);
+            _lines.Add(line); _names.Add(name);
+            _cells.AddChild(line);
         }
         for (var i = 0; i < _pool.Count; i++)
         {
             var on = i < items.Count;
-            _pool[i].Visible = on;
+            _lines[i].Visible = on;
+            _names[i].Text = on ? items[i].Name : "";
             if (on) _pool[i].SetItem(items[i].Item, items[i].Icon, items[i].Name);
             else _pool[i].SetItem(null, null, "");
         }

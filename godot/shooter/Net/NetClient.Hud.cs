@@ -82,6 +82,7 @@ public partial class NetClient
     {
         _hud?.SetControlMode(_gunship != null || _controlling); // one mode switch: a turret or the missile owns the screen (ticket #152)
         _hud?.SetHealth(Mathf.CeilToInt(_me?.Health ?? 100));
+        _hud?.CoverCrosshair(_chooser.IsOpen);
         if (_me != null) _me.MoveWithFreeMouse = (_hud?.EquipmentOpen ?? false) || (_hud?.TacticalMapOpen ?? false); // the Equipment screen and the tactical map free the mouse, not the legs (#268)
         if (_hud is { EquipmentOpen: true } && (MenuOpen?.Invoke() == true || ChooserOpen)) _hud.CloseEquipment(); // a menu or the corpse chooser takes the screen
         UavTick();

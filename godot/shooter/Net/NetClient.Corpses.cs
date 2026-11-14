@@ -58,6 +58,7 @@ public partial class NetClient
             _chooser.Close();
         };
         _chooser.ItemPicked += index => { if (_chooser.IsOpen) RequestTakeCorpseItem(_chooser.Corpse, index); }; // the cell leaves with the server's next list
+        CorpseItemsChanged += ShowGiantHead;
         CorpseItemsChanged += corpse => { if (_chooser.IsOpen && _chooser.Corpse == corpse) _chooser.SetItems(ChooserItems(corpse)); };
         AddChild(_chooser);
     }
@@ -190,7 +191,7 @@ public partial class NetClient
         var items = ChooserItems(corpse);
         if (options.Count == 0 && items.Count == 0) return;
         var title = options.Count == 0 // nothing of the weapon can be taken: the Items are the offer
-            ? items.Count == 1 ? Strings.F("corpse.title", items[0].Name) : Strings.T("corpse.title.items")
+            ? Strings.T("corpse.title.items") // each Item's name stands in its row
             : items.Count == 0 ? Strings.F("corpse.title", WeaponName(weapon!.Id))
             : Strings.F("corpse.title.with_items", WeaponName(weapon!.Id));
         _chooser.Open(corpse, title, options, items);
