@@ -61,6 +61,9 @@ public sealed class ThiefGang : IGangHits, IDisposable
     /// <summary>Raised once per member killed by a hit (not by the end of the event).</summary>
     public event Action<GangKilled>? Killed;
 
+    /// <summary>Raised once per member that reached the van's door (it ended there: ticket 03).</summary>
+    public event Action<GangMember>? Boarded;
+
     /// <summary>Error log for members that could not spawn (the entity cap, no free hit id). Null means silent.</summary>
     public Action<string>? Log { get; set; }
 
@@ -71,6 +74,8 @@ public sealed class ThiefGang : IGangHits, IDisposable
     public IReadOnlyList<GangMember> Members => _members;
     public int Count => _members.Count;
     public int AliveCount => _members.Count(m => m.Alive);
+    /// <summary>Members alive and not fleeing: the ones the van waits for (a member that boarded is gone from the list).</summary>
+    public int Afoot => _members.Count(m => m.Alive && m.State != GangMemberState.Flee);
 
     /// <summary>The van's place (ticket 03: its side door); every member's <see cref="GangMember.Home"/>.</summary>
     public Vector3 Post
@@ -95,7 +100,8 @@ public sealed class ThiefGang : IGangHits, IDisposable
         if (_ids.Allocate() is not { } hit) { Log?.Invoke("gang: every hit id is in use, no member spawned"); return null; }
         var member = new GangMember(_cfg, kind, _world, at, yaw, (ushort)_rng.Next(ushort.MaxValue + 1), hit, _rng.Next()) { Home = _post };
         member.Died += OnDied;
-        if (_entities.Spawn(member) is not { } entity) { member.Died -= OnDied; _ids.Release(hit); return null; }
+        member.Boarded += OnBoarded;
+        if (_entities.Spawn(member) is not { } entity) { member.Died -= OnDied; member.Boarded -= OnBoarded; _ids.Release(hit); return null; }
         _members.Add(member);
         _byHit[hit] = member;
         _entityOfHit[hit] = entity;
@@ -284,6 +290,14 @@ public sealed class ThiefGang : IGangHits, IDisposable
 
     // ---- ending ----
 
+    /// <summary>The van calls the crew back: every living member that is not fleeing runs to <paramref name="door"/> and boards (ticket 03). The aggro list is dropped: nobody fights while boarding.</summary>
+    public void BoardAll(Vector3 door)
+    {
+        Post = door;
+        foreach (var m in _members) m.Board(door);
+        _aggro.Clear();
+    }
+
     /// <summary>Every living member runs for <paramref name="edge"/> and ends there (the van was destroyed, ticket 03).</summary>
     public void FleeAll(Vector3 edge)
     {
@@ -302,11 +316,13 @@ public sealed class ThiefGang : IGangHits, IDisposable
 
     void OnDied(GangMember m) => Killed?.Invoke(new GangKilled(m.HitId, m.Killer, m.Kind, m.Position, m.Carried));
 
+    void OnBoarded(GangMember m) => Boarded?.Invoke(m);
+
     void OnDespawned(WorldDespawned d)
     {
         if (!_hitOfEntity.Remove(d.Id, out var hit)) return;
         _entityOfHit.Remove(hit);
-        if (_byHit.Remove(hit, out var m)) { _members.Remove(m); m.Died -= OnDied; }
+        if (_byHit.Remove(hit, out var m)) { _members.Remove(m); m.Died -= OnDied; m.Boarded -= OnBoarded; }
         _ids.Release(hit);
     }
 

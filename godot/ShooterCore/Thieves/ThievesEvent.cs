@@ -3,10 +3,14 @@ namespace Drycastle.ShooterCore;
 /// <summary>Where the Thieves event is: not started, its Raids are in the village, or it is over (won or cancelled; what was stolen stays stolen until the round resets).</summary>
 public enum ThievesPhase : byte { Idle, Raiding, Over }
 
+/// <summary>What <see cref="ThievesEvent.Tick"/> asks the server to do.</summary>
+public enum ThievesStep : byte { None, Launch, Won }
+
 /// <summary>
-/// The Thieves event's own phase (GLOSSARY "Thieves event", "Raid"), pure. The lifecycle every Event shares (running, won, despawned) is the
-/// <see cref="EventRun"/> of the <see cref="EventBook"/>; this is what the kind adds. For now it only keeps time: <see cref="Begin"/> starts a placeholder
-/// timer and <see cref="Tick"/> ends the run when it runs out. The Raids, the vans and the Loot replace the timer (the event is won when the last van is gone).
+/// The Thieves event's own phase and Raid sequence (GLOSSARY "Thieves event", "Raid"), pure. The lifecycle every Event shares (running, won, despawned) is the
+/// <see cref="EventRun"/> of the <see cref="EventBook"/>; this is what the kind adds: how many Raids come and when. The first comes at once; the next one when fewer than
+/// <see cref="RaidsConfig.MaxVans"/> vans are in the village and either <see cref="RaidsConfig.NextRaidSeconds"/> passed since the last began or the gap after a van left
+/// or was destroyed (<see cref="RaidsConfig.GapSeconds"/>) has. After the last Raid is launched and no van is left, the event is won. It cannot be lost.
 /// </summary>
 public sealed class ThievesEvent
 {
@@ -19,20 +23,49 @@ public sealed class ThievesEvent
         .Allow(ThievesPhase.Raiding, ThievesPhase.Over, ThievesPhase.Idle)
         .Allow(ThievesPhase.Over, ThievesPhase.Raiding, ThievesPhase.Idle)
         .Note(ThievesPhase.Idle, "Nothing runs: never started, or a round reset cleared it.")
-        .Note(ThievesPhase.Raiding, "The Raids come and go (clock: the placeholder timer until the Raids exist). Left by Finish (won or cancelled) or by a round reset.")
+        .Note(ThievesPhase.Raiding, "The Raids come and go (no clock of its own: the next-Raid clock runs beside). Left by Finish (won when the last van is gone, or an admin's end or cancel) or by a round reset.")
         .Note(ThievesPhase.Over, "Won or cancelled; what was stolen stays stolen. A new /event thieves starts it again, a round reset clears it.")
         .Build();
 
     readonly StateMachine<ThievesPhase> _fsm = new(Spec);
+    RaidsConfig _cfg = new();
+    Countdown _next;
+    int _launched, _lastActive;
 
     public ThievesPhase Phase => _fsm.Current;
     public bool Running => Phase == ThievesPhase.Raiding;
+    /// <summary>Raids launched so far and how many the run has (<see cref="RaidsConfig.Count"/>).</summary>
+    public int Launched => _launched;
+    public int Total => _cfg.Count;
 
-    /// <summary>Starts a run; <paramref name="placeholderSeconds"/> is how long it lasts until the Raids end it. False when one already runs.</summary>
-    public bool Begin(float placeholderSeconds) => !Running && _fsm.Enter(ThievesPhase.Raiding, placeholderSeconds);
+    /// <summary>Starts a run: the first Raid is due at once. False when one already runs.</summary>
+    public bool Begin(RaidsConfig cfg)
+    {
+        if (Running) return false;
+        _cfg = cfg; _launched = 0; _lastActive = 0; _next.Cancel();
+        return _fsm.Enter(ThievesPhase.Raiding);
+    }
 
-    /// <summary>Advances the run. True once, on the tick the placeholder timer runs out (the caller then wins the event with <see cref="Finish"/>).</summary>
-    public bool Tick(float dt) => Running && _fsm.Tick(dt);
+    /// <summary>
+    /// Advances the run; <paramref name="activeVans"/> is how many Raids have a van in the village (not driven off or destroyed). <see cref="ThievesStep.Launch"/> once for every Raid
+    /// that is due (the caller launches it); <see cref="ThievesStep.Won"/> once the last Raid is over (the caller finishes the run with <see cref="Finish"/>).
+    /// </summary>
+    public ThievesStep Tick(float dt, int activeVans)
+    {
+        if (!Running) return ThievesStep.None;
+        _next.Tick(dt);
+        if (activeVans < _lastActive && _launched < _cfg.Count) _next.Start(MathF.Min(_next.Left, _cfg.GapSeconds)); // a van left or was destroyed: the next comes soon
+        _lastActive = activeVans;
+        if (_launched < _cfg.Count)
+        {
+            if (activeVans >= _cfg.MaxVans || (_launched > 0 && !_next.Ready)) return ThievesStep.None;
+            _launched++;
+            _lastActive = activeVans + 1;
+            _next.Start(_cfg.NextRaidSeconds);
+            return ThievesStep.Launch;
+        }
+        return activeVans == 0 ? ThievesStep.Won : ThievesStep.None;
+    }
 
     /// <summary>Ends the run (won or cancelled: the book records which). False when none runs.</summary>
     public bool Finish() => Running && _fsm.Enter(ThievesPhase.Over);

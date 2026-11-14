@@ -165,6 +165,9 @@ public sealed class MatchSim
     /// <summary>The Gang members of the Thieves event, set by the server; a hit on a victim id in their range goes to them (a Hit count, no score, no kill feed).</summary>
     public IGangHits? Gang { get; set; }
 
+    /// <summary>The Raid vans of the Thieves event, set by the server; a hit on a victim id in their range (<see cref="RaidVanRules.IsHitId"/>) goes to them (a Hit count, no score).</summary>
+    public IGangHits? Vans { get; set; }
+
     public void SetTargets(IReadOnlyList<TargetSpot> spots) => Targets = new TargetDummies(spots, TargetDummies.RespawnDelay);
     public event Action<MatchEvent>? Event;
 
@@ -317,6 +320,7 @@ public sealed class MatchSim
     {
         if (CitizenRules.IsHitId(victim)) return Phase == MatchPhase.Running && Citizens != null ? Citizens.Hit(victim, attacker, amount) : DamageResult.Ignored;
         if (PetRules.IsHitId(victim)) return Phase == MatchPhase.Running && Pets != null ? Pets.Hit(victim, attacker, amount) : DamageResult.Ignored;
+        if (RaidVanRules.IsHitId(victim)) return Phase == MatchPhase.Running && Vans != null ? Vans.Hit(victim, attacker, weapon, amount, cause) : DamageResult.Ignored;
         if (GangRules.IsHitId(victim)) return Phase == MatchPhase.Running && Gang != null ? Gang.Hit(victim, attacker, weapon, amount, cause) : DamageResult.Ignored;
         if (TargetDummies.IsDummyId(victim)) return ApplyTargetDamage(victim, attacker, weapon, amount, cause);
         _players.TryGetValue(victim, out var found);

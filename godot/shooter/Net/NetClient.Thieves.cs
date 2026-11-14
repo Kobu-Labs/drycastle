@@ -4,9 +4,10 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The Thieves event on the client (docs/events/thieves/): the Gang members, world entities of type <see cref="GangRules.TypeId"/>. Each is a <see cref="GangMemberView"/> (the
-/// look number in the state's owner field picks the body, the hp byte says the kind), placed from the interpolated state and shown by its state byte. The server owns
-/// the member; the client only draws it.
+/// The Thieves event on the client (docs/events/thieves/): the Gang members, world entities of type <see cref="GangRules.TypeId"/>, and the Raid vans (<see cref="RaidVanRules.TypeId"/>). A member is a
+/// <see cref="GangMemberView"/> (the look number in the state's owner field picks the body, the hp byte says the kind), placed from the interpolated state and shown by its state byte. A van is a
+/// <see cref="RaidVanView"/> (door and damage from its state, hp and owner fields) with a solid box for the player's own movement while it stands (the one the server builds, so the prediction
+/// agrees). The server owns both; the client only draws them and the van's honk.
 /// </summary>
 public partial class NetClient
 {
@@ -23,16 +24,40 @@ public partial class NetClient
 
     readonly Dictionary<ushort, GangNode> _gang = new();
 
+    sealed class VanNode
+    {
+        public RaidVanView View = null!;
+        public StaticBody3D? Solid;
+        public Vector3 Last;
+        public bool Placed;
+        public RaidVanState Shown;
+        public (int X, int Y, int Z, ushort Yaw, bool Solid)? SolidAt;
+    }
+
+    readonly Dictionary<ushort, VanNode> _vans = new();
+
+    /// <summary>The sound a honk plays: no horn exists yet, so the closest the game has (a short low buzz of the UI sounds; ticket 09 replaces it). It is not positional by itself, so <see cref="OnThievesFx"/> keeps it to its range.</summary>
+    const string HonkSound = "helper.warning";
+
     /// <summary>Called once from <see cref="_Ready"/>: registers the Gang member type and follows its entities.</summary>
     void InitThieves()
     {
         GangRules.Register(WorldEntityRegistry.Shared);
+        RaidVanRules.Register(WorldEntityRegistry.Shared);
         WorldEntities.Spawned += OnGangSpawned;
         WorldEntities.Despawned += OnGangDespawned;
     }
 
     void OnGangSpawned(WorldReplica.Entity e)
     {
+        if (e.Type == RaidVanRules.TypeId)
+        {
+            var van = RaidVanView.Make(ThievesData.Van);
+            van.Name = $"RaidVan{e.Id}";
+            Owned.AddChild(van);
+            _vans[e.Id] = new VanNode { View = van, Shown = RaidVanRules.StateOf(e.State.State) };
+            return;
+        }
         if (e.Type != GangRules.TypeId) return;
         var view = GangMemberView.Make(ThievesData.Gang, GangRules.KindOf(e.State.Hp), e.State.Owner);
         view.Name = $"GangMember{e.Id}";
@@ -43,11 +68,13 @@ public partial class NetClient
     void OnGangDespawned(ushort id)
     {
         if (_gang.Remove(id, out var g)) g.View.QueueFree();
+        if (_vans.Remove(id, out var v)) { v.View.QueueFree(); v.Solid?.QueueFree(); }
     }
 
     /// <summary>Places the Gang members (interpolated, a little in the past like every remote body) and shows the state they are in.</summary>
     void RenderGang(double delta)
     {
+        RenderVans(delta);
         if (_gang.Count == 0 || _lastTick == 0) return;
         var rt = RenderTickNow();
         foreach (var (id, g) in _gang)
@@ -77,5 +104,86 @@ public partial class NetClient
             if (d < bestD) { bestD = d; best = g.View.GlobalPosition; }
         }
         return best;
+    }
+
+    // ---- Raid vans ----
+
+    /// <summary>Places the Raid vans (interpolated like every remote body), shows the door, the damage and the wreck, turns the wheels, and keeps the solid box where the van stands.</summary>
+    void RenderVans(double delta)
+    {
+        if (_vans.Count == 0 || _lastTick == 0) return;
+        var rt = RenderTickNow();
+        foreach (var (id, v) in _vans)
+        {
+            if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
+            var state = RaidVanRules.StateOf(e.State.State);
+            if (e.Buf.At(rt) is { } s)
+            {
+                var p = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
+                v.View.GlobalPosition = p;
+                v.View.Rotation = new Vector3(e.State.PitchRad, s.Yaw, 0);
+                if (v.Placed) v.View.Roll((p - v.Last).Length() * (state == RaidVanState.Destroyed ? 0f : 1f));
+                v.Last = p; v.Placed = true;
+            }
+            v.View.Apply(state, RaidVanRules.DoorOf(e.State.Owner), RaidVanRules.LeftOf(e.State.Owner), RaidVanRules.StageOf(e.State.Hp));
+            if (state == RaidVanState.Destroyed && v.Shown != RaidVanState.Destroyed && ShotFx.Enabled) ExplodeVan(v.View.GlobalPosition);
+            v.Shown = state;
+            PlaceVanSolid(v, e.State, RaidVanRules.IsSolid(state));
+        }
+    }
+
+    /// <summary>The van was destroyed in front of us: the vehicle blast at its middle (the wreck stays).</summary>
+    void ExplodeVan(Vector3 at)
+    {
+        var radius = Vehicles?.Explosion.Splash.Radius ?? 9f;
+        at.Y += 1.0f;
+        VehicleFx.Explode(Owned, at, radius);
+        if (Sfx.Enabled) Sfx.Play3D("explosion.vehicle", at);
+        ShakeFor(at, radius);
+    }
+
+    /// <summary>The box a van that stands is solid with, built from its last state as the server builds it (rounded as the record is), so the predicted move meets what the server's does.</summary>
+    void PlaceVanSolid(VanNode v, WorldState s, bool solid)
+    {
+        var vc = ThievesData.Van;
+        var at = (s.X, s.Y, s.Z, s.Yaw, solid);
+        if (v.Solid != null && v.SolidAt == at) return;
+        v.Solid ??= VehicleCollider.Make(Owned, vc.HalfWidthM, vc.HalfLengthM, vc.HeightM);
+        v.SolidAt = at;
+        VehicleCollider.Place(v.Solid, new Vector3(Quant.Pos(s.X), Quant.Pos(s.Y), Quant.Pos(s.Z)), Quant.Yaw(s.Yaw), solid);
+    }
+
+    /// <summary>The nearest Raid van to <paramref name="from"/>, or null: the damage marker of a run-over points at it (the hit event names the van by its hit id, which a client does not know).</summary>
+    Vector3? NearestVan(Vector3 from)
+    {
+        Vector3? best = null;
+        var bestD = float.MaxValue;
+        foreach (var v in _vans.Values)
+        {
+            var d = v.View.GlobalPosition.DistanceSquaredTo(from);
+            if (d < bestD) { bestD = d; best = v.View.GlobalPosition; }
+        }
+        return best;
+    }
+
+    /// <summary>The Thieves event's one-shot effects. Called for every event the client receives.</summary>
+    void OnThievesEvent(EventKind kind, byte[] payload)
+    {
+        if (kind == EventKind.ThievesFx && ThievesFxCodec.Decode(payload) is { } m) OnThievesFx(m);
+    }
+
+    void OnThievesFx(ThievesFxMsg m)
+    {
+        var at = new Vector3(m.Position.X, m.Position.Y, m.Position.Z);
+        switch (m.Kind)
+        {
+            case ThievesFxKind.Honk:
+            {
+                var d = Sfx.ListenerDistance(at);
+                var range = ThievesData.Van.View.HonkHearM;
+                if (d <= range) Sfx.Play3D(HonkSound, at, -12f * d / range); // the stand-in sound has no range of its own: it fades with the distance here
+                break;
+            }
+        }
     }
 }

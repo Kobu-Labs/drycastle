@@ -9,6 +9,10 @@ public sealed class ThievesFile : IVersioned
     public int Version { get; set; }
 
     public GangConfig Gang { get; set; } = new();
+    /// <summary>The Raid van (ticket 03): its numbers, the road choices and the look.</summary>
+    public VanConfig Van { get; set; } = new();
+    /// <summary>The sequence of Raids that makes the event (ticket 03): how many, how fast, how the crew grows with the players.</summary>
+    public RaidsConfig Raids { get; set; } = new();
 
     public static ThievesFile Load(string path) => Validate(DataFile.Load<ThievesFile>(path));
 
@@ -38,10 +42,31 @@ public sealed class ThievesFile : IVersioned
         Positive(g.GuardFollowM, "gang.guard_follow_m"); Positive(g.WanderM, "gang.wander_m");
         Positive(g.IdleMinSeconds, "gang.idle_min_seconds");
         if (!(g.IdleMaxSeconds >= g.IdleMinSeconds)) throw new DataFileException($"{F}: gang.idle_max_seconds is not below idle_min_seconds");
-        Positive(g.WalkGiveUpSeconds, "gang.walk_give_up_seconds"); Positive(g.FleeSeconds, "gang.flee_seconds"); Positive(g.EdgeArriveM, "gang.edge_arrive_m");
+        Positive(g.WalkGiveUpSeconds, "gang.walk_give_up_seconds"); Positive(g.FleeSeconds, "gang.flee_seconds"); Positive(g.EdgeArriveM, "gang.edge_arrive_m"); Positive(g.BoardReachM, "gang.board_reach_m");
         Positive(g.Spawn.MinM, "gang.spawn.min_m"); Positive(g.Spawn.MaxM, "gang.spawn.max_m"); Positive(g.Spawn.SpreadM, "gang.spawn.spread_m");
         if (!(g.Spawn.MaxM > g.Spawn.MinM)) throw new DataFileException($"{F}: gang.spawn.max_m is not above min_m");
         if (g.View.Models.Count == 0) throw new DataFileException($"{F}: gang.view.models lists at least one model");
+        var v = f.Van;
+        Positive(v.SpeedMps, "van.speed_mps"); Positive(v.ParkSpeedMps, "van.park_speed_mps"); Positive(v.AccelMps2, "van.accel_mps2"); Positive(v.DecelMps2, "van.decel_mps2"); Positive(v.TurnDegPerS, "van.turn_deg_per_s");
+        if (v.ParkSpeedMps > v.SpeedMps) throw new DataFileException($"{F}: van.park_speed_mps is above speed_mps");
+        Positive(v.Hits, "van.hits"); Positive(v.HitScale, "van.hit_scale"); NotNegative(v.HitOffsetM, "van.hit_offset_m");
+        Positive(v.Hit.HeadshotWeight, "van.hit.headshot_weight"); NotNegative(v.Hit.ExplosiveWeight, "van.hit.explosive_weight"); NotNegative(v.Hit.VehicleWeaponWeight, "van.hit.vehicle_weapon_weight");
+        Positive(v.HalfWidthM, "van.half_width_m"); Positive(v.HalfLengthM, "van.half_length_m"); Positive(v.HeightM, "van.height_m");
+        if (v.Capacity < 1 || v.Capacity > RaidVanRules.MaxLoad) throw new DataFileException($"{F}: van.capacity is between 1 and {RaidVanRules.MaxLoad}");
+        Positive(v.StaySeconds, "van.stay_seconds"); Positive(v.BoardWaitSeconds, "van.board_wait_seconds"); Positive(v.DoorSeconds, "van.door_seconds");
+        Positive(v.CrewStaggerSeconds, "van.crew_stagger_seconds"); Positive(v.WreckSeconds, "van.wreck_seconds"); NotNegative(v.DoorOutM, "van.door_out_m");
+        Positive(v.HonkMinSeconds, "van.honk_min_seconds");
+        if (!(v.HonkMaxSeconds >= v.HonkMinSeconds)) throw new DataFileException($"{F}: van.honk_max_seconds is below honk_min_seconds");
+        Positive(v.HonkNearM, "van.honk_near_m"); Positive(v.HonkNearGapSeconds, "van.honk_near_gap_seconds");
+        Positive(v.MinRoadWidthM, "van.min_road_width_m"); Positive(v.StopRadiusM, "van.stop_radius_m"); Positive(v.StopStepM, "van.stop_step_m"); Positive(v.StopInsetM, "van.stop_inset_m");
+        NotNegative(v.UsedApartM, "van.used_apart_m"); NotNegative(v.UTurnPenaltyM, "van.u_turn_penalty_m"); Positive(v.ExitStraightM, "van.exit_straight_m"); Positive(v.RamMassScale, "van.ram_mass_scale"); NotNegative(v.RamFallbackDamage, "van.ram_fallback_damage");
+        Positive(v.View.HonkHearM, "van.view.honk_hear_m");
+        var r = f.Raids;
+        if (r.Count < 1) throw new DataFileException($"{F}: raids.count is at least 1");
+        if (r.MaxVans < 1) throw new DataFileException($"{F}: raids.max_vans is at least 1");
+        Positive(r.NextRaidSeconds, "raids.next_raid_seconds"); NotNegative(r.GapSeconds, "raids.gap_seconds");
+        if (r.PlayersPerExtra < 1 || r.MaxExtraThieves < 0 || r.MaxExtraEnforcers < 0) throw new DataFileException($"{F}: raids.players_per_extra is at least 1, the extras are not negative");
+        if (g.Raid.Size + r.MaxExtraThieves + r.MaxExtraEnforcers > GangRules.MaxCrew) throw new DataFileException($"{F}: raids can grow a crew past {GangRules.MaxCrew} members");
         return f;
     }
 }
@@ -75,6 +100,8 @@ public sealed class GangConfig
     /// <summary>The longest a member runs for the map edge before it is removed where it is, and how near the edge point it counts as arrived.</summary>
     public float FleeSeconds { get; set; } = 180;
     public float EdgeArriveM { get; set; } = 3;
+    /// <summary>A member called back by the van counts as boarded within this of the side door point.</summary>
+    public float BoardReachM { get; set; } = 1.5f;
     public GangSpawn Spawn { get; set; } = new();
     public GangView View { get; set; } = new();
 
@@ -157,4 +184,94 @@ public sealed class GangClips
     public string Windup { get; set; } = "";
     public string Swing { get; set; } = "";
     public List<string> Death { get; set; } = new() { "death_back_sword", "death_left_sword" };
+}
+
+/// <summary>The Raids of the event, one after another (GLOSSARY "Raid"): how many, when the next one comes, and how a crew grows with the players.</summary>
+public sealed class RaidsConfig
+{
+    /// <summary>The Raids the event consists of; it is won when the last van is gone.</summary>
+    public int Count { get; set; } = 3;
+    /// <summary>The most vans in the village at once.</summary>
+    public int MaxVans { get; set; } = 2;
+    /// <summary>The next Raid comes this long after the last one began, even when that van is still there (while fewer than <see cref="MaxVans"/> are).</summary>
+    public float NextRaidSeconds { get; set; } = 150;
+    /// <summary>When a van leaves or is destroyed, the next Raid comes at the latest this long after it.</summary>
+    public float GapSeconds { get; set; } = 8;
+    /// <summary>The crew grows by one extra member for every this many players beyond the first (Thieves first, then Enforcers), up to the maxima below.</summary>
+    public int PlayersPerExtra { get; set; } = 2;
+    public int MaxExtraThieves { get; set; } = 3;
+    public int MaxExtraEnforcers { get; set; } = 1;
+
+    /// <summary>The crew of a Raid for <paramref name="players"/> human players: the base counts of <see cref="GangConfig.Raid"/> plus the extras.</summary>
+    public GangRaidCounts CrewFor(GangRaidCounts baseCrew, int players)
+    {
+        var extra = Math.Max(0, players - 1) / PlayersPerExtra;
+        var thieves = Math.Min(extra, MaxExtraThieves);
+        var enforcers = Math.Min(extra - thieves, MaxExtraEnforcers);
+        return new GangRaidCounts { GangBosses = baseCrew.GangBosses, Enforcers = baseCrew.Enforcers + enforcers, Thieves = baseCrew.Thieves + thieves };
+    }
+}
+
+/// <summary>The Raid van (GLOSSARY "Raid van", ADR 0021): a scripted entity that follows the road graph, not a vehicle. Lengths are metres, speeds metres per second, times seconds.</summary>
+public sealed class VanConfig
+{
+    /// <summary>Driving speed on the way in and out, the creep it parks at, and how fast it speeds up and brakes (it brakes by the distance left to the stop).</summary>
+    public float SpeedMps { get; set; } = 13;
+    public float ParkSpeedMps { get; set; } = 1.5f;
+    public float AccelMps2 { get; set; } = 4;
+    public float DecelMps2 { get; set; } = 4;
+    /// <summary>How fast its heading turns towards the road; a van that is not facing its way slows down (down to a quarter) so a corner is not cut sideways.</summary>
+    public float TurnDegPerS { get; set; } = 110;
+    /// <summary>Its Hit count (GLOSSARY "Hit count"): a bullet 1, a headshot is a body hit, an explosive and a vehicle weapon the weights below; ramming it counts nothing.</summary>
+    public float Hits { get; set; } = 300;
+    public GangHitWeights Hit { get; set; } = new() { HeadshotWeight = 1, ExplosiveWeight = 25, VehicleWeaponWeight = 6 };
+    /// <summary>Its hit volume: two prone player capsules grown by hit_scale, hit_offset_m ahead of and behind its centre (the weapon paths know capsules only).</summary>
+    public float HitScale { get; set; } = 2.2f;
+    public float HitOffsetM { get; set; } = 0.9f;
+    /// <summary>The box: half width, half length, height. What rams, shoves vehicles aside and what a parked van is solid with.</summary>
+    public float HalfWidthM { get; set; } = 1.1f;
+    public float HalfLengthM { get; set; } = 2.8f;
+    public float HeightM { get; set; } = 2.5f;
+    /// <summary>How much Loot it takes before it leaves (the counter ticket 04 feeds), and the longest it stays after it stopped.</summary>
+    public int Capacity { get; set; } = 8;
+    public float StaySeconds { get; set; } = 240;
+    /// <summary>When it must leave, the living crew is called back and the van waits at most this long for them; the door takes door_seconds to open and to close.</summary>
+    public float BoardWaitSeconds { get; set; } = 25;
+    public float DoorSeconds { get; set; } = 1.5f;
+    /// <summary>One crew member gets out every this many seconds once the door opens.</summary>
+    public float CrewStaggerSeconds { get; set; } = 0.8f;
+    /// <summary>A destroyed van lies this long, then goes.</summary>
+    public float WreckSeconds { get; set; } = 25;
+    /// <summary>The side door: how far outside the van's side the crew steps out (the door point), a little ahead of the centre.</summary>
+    public float DoorOutM { get; set; } = 1.1f;
+    public float DoorAlongM { get; set; } = 0.4f;
+    /// <summary>It honks at random between these, and when a player is within honk_near_m (not more often than the gap).</summary>
+    public float HonkMinSeconds { get; set; } = 9;
+    public float HonkMaxSeconds { get; set; } = 22;
+    public float HonkNearM { get; set; } = 25;
+    public float HonkNearGapSeconds { get; set; } = 6;
+    /// <summary>The roads it may use: at least this wide (footpaths are out). It stops where most targets are within stop_radius_m, on candidates every stop_step_m at least stop_inset_m inside the map, not within used_apart_m of a stop used earlier this event.</summary>
+    public float MinRoadWidthM { get; set; } = 3;
+    public float StopRadiusM { get; set; } = 80;
+    public float StopStepM { get; set; } = 20;
+    public float StopInsetM { get; set; } = 30;
+    public float UsedApartM { get; set; } = 60;
+    /// <summary>Turning round costs this much extra when the way out is planned (it drives on by preference); with no road out it drives this far straight on.</summary>
+    public float UTurnPenaltyM { get; set; } = 150;
+    public float ExitStraightM { get; set; } = 150;
+    /// <summary>Ramming: the van's mass over the car's for the run-over damage (<c>vehicles.json</c> numbers), and the damage when there is no such table.</summary>
+    public float RamMassScale { get; set; } = 3;
+    public float RamFallbackDamage { get; set; } = 100;
+    public VanView View { get; set; } = new();
+}
+
+/// <summary>How the van is drawn (client only): a box van of boxes and cylinders, no private assets.</summary>
+public sealed class VanView
+{
+    public string BodyColor { get; set; } = "#b9b3a2";
+    public string CabColor { get; set; } = "#8c3f33";
+    public string DoorColor { get; set; } = "#9b9585";
+    public string WreckColor { get; set; } = "#2b2724";
+    /// <summary>How far from the camera a honk is heard (the sound is a stand-in with no range of its own).</summary>
+    public float HonkHearM { get; set; } = 180;
 }

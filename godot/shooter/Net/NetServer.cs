@@ -249,6 +249,7 @@ public partial class NetServer : Node
         BotsTick((float)delta); // fills the roster and queues each bot's input for this tick (#214)
         PerfLap(ServerPerf.Ph.Bots);
         foreach (var car in _cars) car.PlaceSolid(); // the boxes on-foot players are stopped by, where the vehicles stand after the last tick (#217)
+        PlaceVanSolids(); // and the Raid vans' (a van that stands is solid)
         PerfLap(ServerPerf.Ph.PlaceSolids);
         _simClients.Clear(); _simClients.AddRange(_byId.Values); // a copy: a client may leave while the others are simulated
         foreach (var c in _simClients) SimulateClient(c, (float)delta); // every joined player, bots included
@@ -839,6 +840,7 @@ public partial class NetServer : Node
         if (BigfootTarget() is { } bigfoot) list.Add(bigfoot); // the Bigfoot is a hit target like a player (issue #264)
         _crowd?.AddTargets(list); // the citizens of the Holy Mass
         AddGangTargets(list); // the Gang members of the Thieves event
+        AddVanTargets(list); // and their Raid vans
         AddPetTargets(list);
         _workers?.AddTargets(list); // the workers of the Urad
         AddDemonTarget(list);
@@ -1021,7 +1023,7 @@ public partial class NetServer : Node
         if (DemonRules.IsHitId(victim)) return DemonHit(attackerId, weaponIdx, damage); // the demon: a hit count, no hit points
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
-        if (CitizenRules.IsHitId(victim) || PetRules.IsHitId(victim) || GangRules.IsHitId(victim)) // a citizen, a pet or a Gang member: the hit marker, but no assist, streak, refill or kill feed
+        if (CitizenRules.IsHitId(victim) || PetRules.IsHitId(victim) || GangRules.IsHitId(victim) || RaidVanRules.IsHitId(victim)) // a citizen, a pet, a Gang member or a Raid van: the hit marker, but no assist, streak, refill or kill feed
         {
             if (_byId.TryGetValue(attackerId, out var shooter)) Send(shooter, new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attackerId, weaponIdx, (ushort)damage, head, backstab, r == DamageResult.Killed))));
             return r;

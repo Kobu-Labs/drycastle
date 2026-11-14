@@ -1,0 +1,271 @@
+using Godot;
+using Drycastle.ShooterCore;
+using NVec2 = System.Numerics.Vector2;
+using NVec3 = System.Numerics.Vector3;
+
+namespace Drycastle.Shooter;
+
+/// <summary>
+/// The Raids of the Thieves event on the server (GLOSSARY "Raid", "Raid van"; ADR 0021; docs/events/thieves/03). A Raid is a <see cref="RaidVan"/> (world entity 55) and its
+/// <see cref="ThiefGang"/>; <see cref="ThievesEvent"/> says when the next one is due and this file launches it: a road in from the map edge, the stop with the most targets (the road
+/// graph of roads.json, <see cref="RoadGraph"/>), the way out. The van is not a vehicle: it rams players (<see cref="RaidContacts"/>), shoves vehicles aside
+/// (<see cref="ShoveCarsByVans"/>), is solid for players while it stands (<see cref="PlaceVanSolids"/>) and is a hit target of two capsules (<see cref="AddVanTargets"/>), rewound from its own
+/// pose ring like the Bigfoot's (ADR 0013, <see cref="CaptureVanPoses"/>). Everything it needs from the world is a function: the ground height, the navigation mesh, the cars.
+/// </summary>
+public partial class NetServer
+{
+    RaidRoster? _raids;
+    RoadGraph? _raidRoads;
+    ushort _thievesAdmin;
+    readonly Dictionary<RaidVan, VanBody> _vanBodies = new();
+
+    /// <summary>What the server keeps of one van besides the entity: the box players are stopped by, and who it ran over lately (the cooldown of a run-over, as a car's).</summary>
+    sealed class VanBody
+    {
+        public StaticBody3D Solid = null!;
+        public bool WasSolid;
+        public readonly Dictionary<ushort, double> HitCooldown = new();
+    }
+
+    /// <summary>The Raids of the Thieves event (null until <c>_Ready</c>). Ticket 04 reads their vans (<see cref="RaidVan.LoadLoot"/>, <see cref="RaidVan.DoorPoint"/>) and gangs.</summary>
+    public RaidRoster? Raids => _raids;
+
+    /// <summary>Mass of a van as one side of a bump: nothing moves it.</summary>
+    const float VanMass = 1e7f;
+
+    /// <summary>Called once from <see cref="InitGangs"/>: the van's entity type, the roster behind the match's hit routing, its events.</summary>
+    void InitRaids()
+    {
+        RaidVanRules.Register(WorldEntityRegistry.Shared);
+        _raids = new RaidRoster(ThievesData, new GangWorld(this), _match.Entities, _gangs!, System.Environment.TickCount) { Log = s => GD.PrintErr($"server: {s}") };
+        _raids.SourceOf = _gangs!.SourceOf;
+        _match.Vans = _raids;
+        _raids.Honked += r => BroadcastEvent(EventKind.ThievesFx, ThievesFxCodec.Encode(new ThievesFxMsg(ThievesFxKind.Honk, r.Van.Position + NVec3.UnitY, r.VanEntity)));
+        _raids.RaidOver += r => GD.Print($"server: Thieves Raid over: its van was {(r.Van.State == RaidVanState.Destroyed ? "destroyed" : "driven off")}, {r.Boarded} of the crew boarded");
+        _raids.LootReturned += (r, n) => LootReturnAll(r, n);
+    }
+
+    /// <summary>
+    /// HOOK for ticket 04: a van was destroyed with <paramref name="loaded"/> Loot in it (<see cref="RaidVan.LootReturnAll"/> already counted it out). The Loot goes back to its places by
+    /// itself. Nothing is stolen yet, so nothing to do.
+    /// </summary>
+    void LootReturnAll(Raid raid, int loaded)
+    {
+        if (loaded > 0) GD.Print($"server: Thieves: {loaded} Loot of a destroyed van goes back (no Loot exists yet: ticket 04)");
+    }
+
+    /// <summary>The road graph of the map's roads.json, cut to the roads a van may use (nothing is read as a graph before the first Raid).</summary>
+    RoadGraph RaidRoads => _raidRoads ??= Map != null ? RoadGraph.Parse(Map.RoadsJson, ThievesData.Van.MinRoadWidthM) : RoadGraph.Empty;
+
+    /// <summary>The map's extent as the Raids see it (the parcels' box: where a road crosses it, a van comes in). Infinite on both sides without a map: no road crosses it.</summary>
+    (NVec2 Min, NVec2 Max) RaidExtent()
+    {
+        var b = MapFlightBounds;
+        return (new NVec2(b.MinX, b.MinZ), new NVec2(b.MaxX, b.MaxZ));
+    }
+
+    float RaidGround(float x, float z) => Map == null ? float.NaN : Map.GroundHeight(x, z);
+
+    /// <summary>Humans in the match (the crew grows with them); at least one.</summary>
+    int RaidHumans() => Math.Max(1, _byId.Values.Count(c => !c.IsBot));
+
+    /// <summary>
+    /// The places something can be stolen at, for the stop choice (<see cref="RaidPlanner"/>). HOOK for tickets 04 to 07: each target kind adds its places here. Until there are targets
+    /// it is the cars that stand in the village (the tires of ticket 04 are theirs).
+    /// </summary>
+    List<NVec2> RaidTargetPoints()
+    {
+        var list = new List<NVec2>();
+        foreach (var car in _cars)
+            if (!car.Destroyed) list.Add(new NVec2(car.GlobalPosition.X, car.GlobalPosition.Z));
+        return list;
+    }
+
+    /// <summary>A point to bring a fallback van near: the admin who started the event, else any human, else the map's middle.</summary>
+    NVec2 RaidNearPoint()
+    {
+        if (_thievesAdmin != 0 && _byId.TryGetValue(_thievesAdmin, out var admin)) return new NVec2(admin.Body.GlobalPosition.X, admin.Body.GlobalPosition.Z);
+        foreach (var c in _byId.Values)
+            if (!c.IsBot) return new NVec2(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Z);
+        var (min, max) = RaidExtent();
+        return float.IsFinite(min.X) && float.IsFinite(max.X) ? (min + max) / 2 : NVec2.Zero;
+    }
+
+    /// <summary>Whether a van can stop at a road spot: the crew steps out on the navigation mesh beside a side door. Returns the side (1 right, -1 left) that reaches the mesh, or null.</summary>
+    int? AcceptRaidStop(NVec2 at, float yaw)
+    {
+        if (_nav == null) return null;
+        var y = RaidGround(at.X, at.Y);
+        if (float.IsNaN(y)) return null;
+        var vc = ThievesData.Van;
+        var fwd = new NVec2(-MathF.Sin(yaw), -MathF.Cos(yaw));
+        var right = new NVec2(MathF.Cos(yaw), -MathF.Sin(yaw));
+        foreach (var side in new[] { 1, -1 })
+        {
+            var door = at + right * (side * (vc.HalfWidthM + vc.DoorOutM)) + fwd * vc.DoorAlongM;
+            var snap = _nav.Snap(new Vector3(door.X, y, door.Y));
+            if (MathF.Abs(snap.X - door.X) <= 3f && MathF.Abs(snap.Z - door.Y) <= 3f && MathF.Abs(snap.Y - y) <= 4f) return side;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The next Raid is due (<see cref="ThievesEvent.Tick"/>): a road in from the map edge to the stop with the most targets, the way out, the van and its crew. When the map has no
+    /// usable road graph, no entry point or no stop that can be reached, the van is put parked at a road point near the admin instead and the server log says so.
+    /// </summary>
+    void LaunchRaid()
+    {
+        if (_raids == null || _nav == null) return;
+        var vc = ThievesData.Van;
+        var roads = RaidRoads;
+        var (min, max) = RaidExtent();
+        var players = _byId.Values.Where(c => !c.IsBot && _match.Get(c.Id)?.Life == PlayerLife.Alive).Select(c => new NVec2(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Z)).ToList();
+        var plan = RaidPlanner.Plan(roads, min, max, RaidTargetPoints(), _raids.UsedStops, players, vc, _rng, AcceptRaidStop);
+        if (plan == null)
+        {
+            GD.Print($"server: Thieves Raid {_thieves!.Launched}/{_thieves.Total}: no way in from the map edge ({(roads.IsEmpty ? "no road graph" : "no entry point or no reachable stop")}), the van is parked near the admin instead (fallback)");
+            plan = RaidPlanner.Fallback(roads, RaidNearPoint(), 25f, _rng, AcceptRaidStop);
+        }
+        if (plan == null) { GD.PrintErr($"server: Thieves Raid {_thieves!.Launched}/{_thieves.Total}: no road with the navigation mesh beside it was found, no van launched"); return; }
+        var exit = RaidPlanner.Exit(roads, plan, min, max, vc);
+        var first = plan.In.IsEmpty ? plan.StopAt : plan.In.Start;
+        var y = Map?.GroundHeightOrMean(first.X, first.Y) ?? 0f; // the map edge may lie past the terrain: the mean height then, and the van takes the ground's as soon as it has one
+        var start = new NVec3(first.X, y, first.Y);
+        var crew = ThievesData.Raids.CrewFor(ThievesData.Gang.Raid, RaidHumans());
+        var raid = _raids.Launch(plan, exit, start, crew, p => N(_nav!.Snap(new Vector3(p.X, p.Y, p.Z))), RaidFleePoint, RaidGround);
+        if (raid == null) return;
+        GD.Print($"server: Thieves Raid {_thieves!.Launched}/{_thieves.Total}: van {(plan.Fallback ? "parked (fallback)" : $"in from ({first.X:F0},{first.Y:F0}), {plan.In.Length:F0} m of road")} to the stop at ({plan.StopAt.X:F0},{plan.StopAt.Y:F0}) with {plan.Targets} targets near, crew of {crew.Size}");
+    }
+
+    /// <summary>Where a crew that flees heads for: the nearest point of the map's edge (a point far to the east without a map).</summary>
+    NVec3 RaidFleePoint(NVec3 from)
+    {
+        var (min, max) = RaidExtent();
+        return float.IsFinite(min.X) && float.IsFinite(max.X) ? GangPlacement.NearestEdge(from, min, max) : from + new NVec3(1000, 0, 0);
+    }
+
+    // ---- the tick ----
+
+    /// <summary>Once a tick after the entities tick: the Raids (the crew gets out, the end of a Raid is seen) and the vans' contact with the world.</summary>
+    void RaidsTick(float dt)
+    {
+        if (_raids == null) return;
+        _raids.Tick(dt);
+        RaidContacts();
+    }
+
+    /// <summary>
+    /// The van rams what its box sweeps over this tick (it never brakes): players on foot as a car does (<see cref="RunOver"/> by its speed and mass, a roadkill thrown ahead) and the Gang members
+    /// of other Raids (dead outright). Its own crew is not run over.
+    /// </summary>
+    void RaidContacts()
+    {
+        if (_raids == null || _match.Phase != MatchPhase.Running) return;
+        foreach (var raid in _raids.Raids)
+        {
+            var van = raid.Van;
+            if (!van.Alive || van.Ended != null || van.Speed < 0.3f || !_vanBodies.TryGetValue(van, out var body)) continue;
+            var dmg = Vehicles != null ? RunOver.Damage(Vehicles, van.Speed, ThievesData.Van.RamMassScale) : ThievesData.Van.RamFallbackDamage;
+            if (dmg <= 0) continue;
+            var vc = ThievesData.Van;
+            var prev = van.PrevPosition; var now = van.Position;
+            var hitId = RaidVanRules.HitIdOf(van.Slot, 0);
+            foreach (var t in _byId.Values)
+            {
+                if (t.Car != null || _match.Get(t.Id)?.Life != PlayerLife.Alive) continue;
+                if (!CarFootprint.Hits(prev, now, van.Yaw, vc.HalfWidthM, vc.HalfLengthM, N(t.Body.GlobalPosition), MoveConsts.CapsuleRadius)) continue;
+                if (body.HitCooldown.TryGetValue(t.Id, out var until) && _elapsed < until) continue;
+                body.HitCooldown[t.Id] = _elapsed + RunOverCooldown;
+                PushOnDeath(t.Id, CorpseRules.ThrowFromCar(van.Forward, van.Speed)); // a roadkill is thrown ahead of the van (the ragdoll)
+                var r = Deal(hitId, SpecialWeapons.Vehicle, t.Id, dmg, false, false, KillCause.Roadkill);
+                ClearPush(t.Id, r);
+                if (r != DamageResult.Ignored) GD.Print($"server: a Raid van ran over #{t.Id} at {van.Speed:F1} m/s for {dmg:F0}");
+            }
+            foreach (var other in _raids.Raids)
+            {
+                if (other == raid) continue;
+                foreach (var m in other.Gang.Members.ToList())
+                    if (m.Alive && CarFootprint.Hits(prev, now, van.Yaw, vc.HalfWidthM, vc.HalfLengthM, m.Position, MoveConsts.CapsuleRadius)) other.Gang.Hit(m.HitId, 0, SpecialWeapons.Vehicle, 1, KillCause.Roadkill);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The van's box against every vehicle (called from <see cref="ResolveVehicleContacts"/>): a vehicle that overlaps it is shoved out, by the van's heading when it drives (it never brakes)
+    /// and just out of the way when it stands (it is solid for vehicles too). A shoved car takes crash damage by the speed it lost, as in a bump between cars.
+    /// </summary>
+    void ShoveCarsByVans()
+    {
+        if (_raids == null || _raids.Raids.Count == 0 || Vehicles == null) return;
+        foreach (var raid in _raids.Raids)
+        {
+            var van = raid.Van;
+            if (van.Ended != null) continue;
+            var shape = van.Shape;
+            var body = new BumpBody(VanMass, van.Velocity, false);
+            foreach (var car in _cars)
+            {
+                if (car.Destroyed || car.Thrown != null) continue;
+                var p = car.GlobalPosition;
+                if (MathF.Abs(p.X - van.Position.X) > ContactBroadRange || MathF.Abs(p.Z - van.Position.Z) > ContactBroadRange) continue;
+                if (VehicleContact.Test(shape, car.ContactShape(), car.Flies) is not { } hit) continue;
+                var bump = VehicleContact.Bump(hit, body, car.BumpBody(), Vehicles.BumpRestitution);
+                car.ApplyBump(bump.MoveB, bump.DeltaVB);
+                if (car.Def.CrashDamage && bump.SpeedLossB > Vehicles.CrashMinSpeedLoss)
+                    DamageVehicle(car, (bump.SpeedLossB - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, 0, SpecialWeapons.Vehicle, 0);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Before the players move: the box each van that stands is solid with (the clients build the same one from the van's state, so a predicted move and the server's are stopped by the
+    /// same box), and any player the van stopped on is put out of it. Boxes of vans that are gone are freed.
+    /// </summary>
+    void PlaceVanSolids()
+    {
+        if (_raids == null) return;
+        if (_vanBodies.Count > 0)
+            foreach (var van in _vanBodies.Keys.ToList())
+                if (van.Ended != null || !_raids.Raids.Any(r => r.Van == van)) { _vanBodies[van].Solid.QueueFree(); _vanBodies.Remove(van); }
+        foreach (var raid in _raids.Raids)
+        {
+            var van = raid.Van;
+            if (van.Ended != null) continue;
+            var vc = ThievesData.Van;
+            if (!_vanBodies.TryGetValue(van, out var body)) _vanBodies[van] = body = new VanBody { Solid = VehicleCollider.Make(World, vc.HalfWidthM, vc.HalfLengthM, vc.HeightM) };
+            var p = van.Position;
+            var at = new Vector3(Quant.Pos(Quant.Pos(p.X)), Quant.Pos(Quant.Pos(p.Y)), Quant.Pos(Quant.Pos(p.Z)));
+            VehicleCollider.Place(body.Solid, at, Quant.Yaw(Quant.Yaw(van.Yaw)), van.Solid);
+            if (van.Solid && !body.WasSolid) PushOutOfVan(van);
+            body.WasSolid = van.Solid;
+        }
+    }
+
+    /// <summary>A van just stopped: whoever is inside its box walks out through the nearest side (they would be stuck in its solid box).</summary>
+    void PushOutOfVan(RaidVan van)
+    {
+        var vc = ThievesData.Van;
+        foreach (var c in _byId.Values)
+        {
+            if (c.Car != null) continue;
+            var feet = N(c.Body.GlobalPosition);
+            var to = RaidVanRules.PushOut(van.Position, van.Yaw, vc.HalfWidthM, vc.HalfLengthM, feet, 0.7f);
+            if (to == feet) continue;
+            c.Body.Teleport(new Vector3(to.X, to.Y, to.Z));
+            _match.SetPosition(c.Id, to);
+        }
+    }
+
+    // ---- hit targets ----
+
+    /// <summary>The living vans as hit targets (two capsules each), only while damage can apply to them. With a view tick: where the shooter saw them.</summary>
+    void AddVanTargets(List<HitTarget> into, uint? view = null)
+    {
+        if (_raids != null && _match.Phase == MatchPhase.Running) _raids.AddTargets(into, view);
+    }
+
+    void CaptureVanPoses() => _raids?.RecordPoses(_tick);
+
+    /// <summary>The event ended or a new round began: every Raid goes, vans, crews and the dead too; the boxes are freed on the next tick.</summary>
+    void ClearRaids() => _raids?.Clear();
+}

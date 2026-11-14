@@ -81,6 +81,8 @@ public partial class NetClient
         }
         else if (h.Victim == _myId && GangRules.IsHitId(h.Attacker) && _me != null && NearestGangMember(_me.GlobalPosition) is { } member)
             _hud.Damage(HudLogic.DamageAngle(_me.GlobalPosition.X, _me.GlobalPosition.Z, _me.Yaw, member.X, member.Z)); // a blow of a Gang member: the marker points at the nearest one
+        else if (h.Victim == _myId && RaidVanRules.IsHitId(h.Attacker) && _me != null && NearestVan(_me.GlobalPosition) is { } van)
+            _hud.Damage(HudLogic.DamageAngle(_me.GlobalPosition.X, _me.GlobalPosition.Z, _me.Yaw, van.X, van.Z)); // a Raid van ran into the player: the marker points at the nearest van
         else if (h.Victim == _myId && h.Attacker == BigfootRules.TargetId && _me != null && _bigfoots.Values.FirstOrDefault() is { } giant)
         {
             var me = _me.GlobalPosition; var src = giant.Node.GlobalPosition; // the Bigfoot's logs, shockwave and launch: the marker points at it (#264)

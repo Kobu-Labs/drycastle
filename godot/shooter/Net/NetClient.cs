@@ -338,6 +338,7 @@ public partial class NetClient : Node
                 OnItemEvent((EventKind)e.Kind, e.Payload); // what the player wears, what a corpse carries, an item crumbling
                 OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
                 OnBigfootEvent((EventKind)e.Kind, e.Payload); // the Bigfoot's effects and the footprints to its corpse (#264)
+                OnThievesEvent((EventKind)e.Kind, e.Payload); // the Raid vans' honk
                 OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
                 OnRozhlasEvent((EventKind)e.Kind, e.Payload); // the village loudspeaker's phase, broadcast and offset
                 OnUradDoorEvent((EventKind)e.Kind, e.Payload); // the Obecny Urad's door

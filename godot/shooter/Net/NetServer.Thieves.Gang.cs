@@ -22,7 +22,6 @@ public partial class NetServer
 {
     GangRoster? _gangs;
     readonly List<GangPlayer> _gangPlayers = new();
-    List<RoadLine>? _thievesRoads;
     uint _navTurnTick;
 
     /// <summary>The Raids of the Thieves event (null until <c>_Ready</c>). Ticket 03 makes one per van; ticket 04 reads their members.</summary>
@@ -108,35 +107,6 @@ public partial class NetServer
             }
     }
 
-    /// <summary>
-    /// A point of the navigation mesh on a road between the data's distances of <paramref name="around"/> (the dev fallback: <c>/event thieves</c> before the van exists
-    /// brings the crew to the admin), or null when the map has no road there or no mesh.
-    /// </summary>
-    NVec3? FindGangSpot(NVec3 around)
-    {
-        if (_nav == null || Map == null) return null;
-        _thievesRoads ??= RoadNetwork.Parse(Map.RoadsJson);
-        var s = ThievesData.Gang.Spawn;
-        var tries = 0;
-        foreach (var p in GangPlacement.RoadPoints(_thievesRoads, around, s.MinM, s.MaxM, 4f, _rng))
-        {
-            if (++tries > 80) break;
-            var snap = _nav.Snap(new Vector3(p.X, p.Y, p.Z));
-            if (MathF.Abs(snap.X - p.X) > 3f || MathF.Abs(snap.Z - p.Z) > 3f || MathF.Abs(snap.Y - around.Y) > 8f) continue; // the road is not on the mesh here
-            return N(snap);
-        }
-        return null;
-    }
-
-    /// <summary>Puts the crew of one Raid on the navigation mesh round <paramref name="at"/>. Returns how many were spawned.</summary>
-    int SpawnCrew(NVec3 at)
-    {
-        var gang = _gangs!.NewGang(at);
-        var n = gang.SpawnCrew(at, p => _nav == null ? p : N(_nav.Snap(new Vector3(p.X, p.Y, p.Z))));
-        GD.Print($"server: Thieves crew of {n} at ({at.X:F1},{at.Y:F1},{at.Z:F1})");
-        return n;
-    }
-
-    /// <summary>The event ended or a new round began: every member goes, the dead too.</summary>
-    void ClearGangs() => _gangs?.Clear();
+    /// <summary>The event ended (by an admin) or a new round began: every Raid goes, vans and members, the dead too.</summary>
+    void ClearGangs() { ClearRaids(); _gangs?.Clear(); }
 }

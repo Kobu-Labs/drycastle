@@ -406,6 +406,7 @@ public partial class NetServer
         // each origin is read once here (a native call per read, and every pair asks): only a bump moves a vehicle inside this pass, so only those are read again
         if (_contactAt.Length < _cars.Count) _contactAt = new Vector3[_cars.Count];
         for (var i = 0; i < _cars.Count; i++) _contactAt[i] = _cars[i].GlobalPosition;
+        ShoveCarsByVans(); // the Raid vans push through: a vehicle in a van's box is shoved out
         const float range2 = ContactBroadRange * ContactBroadRange;
         for (var i = 0; i < _cars.Count; i++)
         {

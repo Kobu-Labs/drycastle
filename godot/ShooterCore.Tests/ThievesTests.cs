@@ -97,34 +97,38 @@ public class ThievesTests
     // ---- the phase ----
 
     [Fact]
-    public void ThePhaseGoesIdleRaidingOverAndAPlaceholderTimerEndsTheRun()
+    public void ThePhaseGoesIdleRaidingOverAndTheLastVanGoneWinsTheRun()
     {
+        var cfg = new RaidsConfig { Count = 1, MaxVans = 1, NextRaidSeconds = 10, GapSeconds = 1 };
         var t = new ThievesEvent();
         Assert.Equal(ThievesPhase.Idle, t.Phase);
-        Assert.False(t.Tick(1)); // idle: nothing runs
+        Assert.Equal(ThievesStep.None, t.Tick(1, 0)); // idle: nothing runs
         Assert.False(t.Finish());
-        Assert.True(t.Begin(2));
-        Assert.False(t.Begin(2)); // already raiding
+        Assert.True(t.Begin(cfg));
+        Assert.False(t.Begin(cfg)); // already raiding
         Assert.Equal(ThievesPhase.Raiding, t.Phase);
-        Assert.False(t.Tick(1));
-        Assert.True(t.Tick(1)); // the timer ran out: the caller finishes the run
+        Assert.Equal(ThievesStep.Launch, t.Tick(1, 0));
+        Assert.Equal(ThievesStep.None, t.Tick(1, 1)); // the van is in the village
+        Assert.Equal(ThievesStep.Won, t.Tick(1, 0)); // and gone: the caller finishes the run
         Assert.True(t.Finish());
         Assert.Equal(ThievesPhase.Over, t.Phase);
-        Assert.False(t.Tick(1));
+        Assert.Equal(ThievesStep.None, t.Tick(1, 0));
         Assert.False(t.Finish());
     }
 
     [Fact]
     public void ARoundResetClearsAnyPhaseAndAnOverEventCanStartAgain()
     {
+        var cfg = new RaidsConfig();
         var t = new ThievesEvent();
-        t.Begin(10);
+        t.Begin(cfg);
         Assert.True(t.Reset()); // mid-run: the round ended it
         Assert.Equal(ThievesPhase.Idle, t.Phase);
         Assert.False(t.Reset());
-        t.Begin(10);
+        t.Begin(cfg);
         t.Finish();
-        Assert.True(t.Begin(10)); // Over -> Raiding: a new /event thieves
+        Assert.True(t.Begin(cfg)); // Over -> Raiding: a new /event thieves
+        Assert.Equal(0, t.Launched); // from the first Raid again
         t.Finish();
         Assert.True(t.Reset());
         Assert.Equal(ThievesPhase.Idle, t.Phase);

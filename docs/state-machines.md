@@ -361,24 +361,31 @@ stateDiagram-v2
     Idle --> Guard
     Idle --> Chase
     Idle --> Flee
+    Idle --> Board
     Walk --> Idle
     Walk --> Chase
     Walk --> Flee
+    Walk --> Board
     Guard --> Idle
     Guard --> Chase
     Guard --> Flee
+    Guard --> Board
     Chase --> Windup
     Chase --> Idle
     Chase --> Guard
     Chase --> Flee
+    Chase --> Board
     Windup --> Swing
     Windup --> Idle
     Windup --> Guard
     Windup --> Flee
+    Windup --> Board
     Swing --> Chase
     Swing --> Idle
     Swing --> Guard
     Swing --> Flee
+    Swing --> Board
+    Board --> Flee
     Flee --> [*]
     Dead --> [*]
 ```
@@ -393,6 +400,7 @@ From any state: Dead
 - **Swing**: The blow lands at its start, only if the target is still within reach; then recovers (clock: interval minus windup) and chases or stands again.
 - **Flee**: Runs for the map edge on a route (clock: flee_seconds); the entity ends there (no state follows).
 - **Dead**: Lies for corpse_seconds (the clock's elapsed time), then the entity ends. Reached from any state; never left.
+- **Board**: Called back by the van: runs to its side door on a route (never fights) and ends there, counted as boarded. Flee when the van is destroyed or leaves without it.
 
 ## HelicopterGunner.Phase
 
@@ -713,6 +721,33 @@ stateDiagram-v2
 - **Pinned**: The victim lies pinned. Locally: the body is the server's (no prediction, no weapon), the camera is on the floor. A joiner can start here.
 - **Rising**: The local victim was let go: the camera rises back to standing height while the red fades. Only after a pin of the local player.
 
+## RaidVan.State
+
+What a Raid van is doing; the replicated state byte.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Arriving
+    Arriving --> Opening
+    Opening --> Parked
+    Parked --> Boarding
+    Parked --> Closing
+    Boarding --> Closing
+    Closing --> Leaving
+    Leaving --> [*]
+    Destroyed --> [*]
+```
+
+From any state: Destroyed
+
+- **Arriving**: Drives the road path from the map edge to the stop at its speed (it brakes only for the stop, never for what is in its way); no clock. Ends in Opening at the stop.
+- **Opening**: Stopped; the side door slides open (clock: door seconds) and the crew starts getting out, one every stagger seconds.
+- **Parked**: The crew works (the stay clock runs beside). Leaves for Boarding (or Closing when nobody is afoot) when the Loot loaded reaches capacity, the stay time ran out, or the crew is gone (dead or aboard).
+- **Boarding**: The living crew is called back (clock: board wait seconds); ends when none is afoot, or the wait ran out (those left behind flee).
+- **Closing**: The door slides shut (clock: door seconds), then the van drives off.
+- **Leaving**: Drives the way out to the map edge, accelerating; the entity ends at its end (no state follows).
+- **Destroyed**: Hit count taken, from any state: the Raid is over. The wreck lies where it stopped (clock: wreck seconds), then the entity ends. Never left.
+
 ## Rozhlas.Phase
 
 The village loudspeaker: a detour broadcast, and the hijack after the announcer is killed.
@@ -810,7 +845,7 @@ stateDiagram-v2
 ```
 
 - **Idle**: Nothing runs: never started, or a round reset cleared it.
-- **Raiding**: The Raids come and go (clock: the placeholder timer until the Raids exist). Left by Finish (won or cancelled) or by a round reset.
+- **Raiding**: The Raids come and go (no clock of its own: the next-Raid clock runs beside). Left by Finish (won when the last van is gone, or an admin's end or cancel) or by a round reset.
 - **Over**: Won or cancelled; what was stolen stays stolen. A new /event thieves starts it again, a round reset clears it.
 
 ## Turret.State

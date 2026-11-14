@@ -6,10 +6,10 @@ namespace Drycastle.ShooterCore;
 public enum GangMemberKind : byte { Thief = 0, Enforcer = 1, GangBoss = 2 }
 
 /// <summary>
-/// What a Gang member is doing: the replicated state byte. Values 8 and up are free for the stealing states (ticket 04: Seek, Approach, Steal, Haul, Load)
-/// and the van's (ticket 03: Board); the client treats an unknown value as standing.
+/// What a Gang member is doing: the replicated state byte. Values 9 and up are free for the stealing states (ticket 04: Seek, Approach, Steal, Haul, Load);
+/// 8 is the van's (ticket 03: Board). The client treats an unknown value as standing.
 /// </summary>
-public enum GangMemberState : byte { Idle = 0, Walk = 1, Guard = 2, Chase = 3, Windup = 4, Swing = 5, Flee = 6, Dead = 7 }
+public enum GangMemberState : byte { Idle = 0, Walk = 1, Guard = 2, Chase = 3, Windup = 4, Swing = 5, Flee = 6, Dead = 7, Board = 8 }
 
 /// <summary>A living player as the Gang members see them: where their feet are and whether they stand on the ground (a rider in a vehicle cannot be struck).</summary>
 public readonly record struct GangPlayer(ushort Id, Vector3 Feet, bool OnFoot);
@@ -65,7 +65,7 @@ public static class GangRules
     public static byte CarriedOf(byte hp) => (byte)((hp >> CarriedShift) & CarriedMask);
 
     /// <summary>A state byte as a state; a value this build does not know stands.</summary>
-    public static GangMemberState StateOf(byte state) => state <= (byte)GangMemberState.Dead ? (GangMemberState)state : GangMemberState.Idle;
+    public static GangMemberState StateOf(byte state) => state <= (byte)GangMemberState.Board ? (GangMemberState)state : GangMemberState.Idle;
 
     public static void Register(WorldEntityRegistry registry)
     {
@@ -100,12 +100,13 @@ public sealed class GangMember : IWorldEntity
     /// </summary>
     public static readonly StateMachineSpec<GangMemberState> Spec = StateMachineSpec<GangMemberState>
         .Define("GangMember.State", "What a Gang member of a Raid is doing; the replicated state byte.", GangMemberState.Idle)
-        .Allow(GangMemberState.Idle, GangMemberState.Walk, GangMemberState.Guard, GangMemberState.Chase, GangMemberState.Flee)
-        .Allow(GangMemberState.Walk, GangMemberState.Idle, GangMemberState.Chase, GangMemberState.Flee)
-        .Allow(GangMemberState.Guard, GangMemberState.Idle, GangMemberState.Chase, GangMemberState.Flee)
-        .Allow(GangMemberState.Chase, GangMemberState.Windup, GangMemberState.Idle, GangMemberState.Guard, GangMemberState.Flee)
-        .Allow(GangMemberState.Windup, GangMemberState.Swing, GangMemberState.Idle, GangMemberState.Guard, GangMemberState.Flee)
-        .Allow(GangMemberState.Swing, GangMemberState.Chase, GangMemberState.Idle, GangMemberState.Guard, GangMemberState.Flee)
+        .Allow(GangMemberState.Idle, GangMemberState.Walk, GangMemberState.Guard, GangMemberState.Chase, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.Walk, GangMemberState.Idle, GangMemberState.Chase, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.Guard, GangMemberState.Idle, GangMemberState.Chase, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.Chase, GangMemberState.Windup, GangMemberState.Idle, GangMemberState.Guard, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.Windup, GangMemberState.Swing, GangMemberState.Idle, GangMemberState.Guard, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.Swing, GangMemberState.Chase, GangMemberState.Idle, GangMemberState.Guard, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.Board, GangMemberState.Flee)
         .FromAnywhere(GangMemberState.Dead)
         .Note(GangMemberState.Idle, "A Thief standing (clock: a random time, then it walks to a point near the post). Steals nothing until ticket 04.")
         .Note(GangMemberState.Walk, "A Thief on a route to a point near the post (clock: the time budget to arrive, then it stands again).")
@@ -114,6 +115,7 @@ public sealed class GangMember : IWorldEntity
         .Note(GangMemberState.Windup, "The swing's telegraph (clock: windup_seconds): a player can step out of reach. Ends in Swing, or in a stand if the target is gone.")
         .Note(GangMemberState.Swing, "The blow lands at its start, only if the target is still within reach; then recovers (clock: interval minus windup) and chases or stands again.")
         .Note(GangMemberState.Flee, "Runs for the map edge on a route (clock: flee_seconds); the entity ends there (no state follows).")
+        .Note(GangMemberState.Board, "Called back by the van: runs to its side door on a route (never fights) and ends there, counted as boarded. Flee when the van is destroyed or leaves without it.")
         .Note(GangMemberState.Dead, "Lies for corpse_seconds (the clock's elapsed time), then the entity ends. Reached from any state; never left.")
         .Build();
 
@@ -130,6 +132,7 @@ public sealed class GangMember : IWorldEntity
     Countdown _repath;
     GangPlayer? _target;
     Vector3 _edge;
+    Vector3 _door;
     float _taken;                   // the hit count taken so far, weighted
 
     public GangMember(GangConfig cfg, GangMemberKind kind, IGangWorld world, Vector3 position, float yaw, ushort look, ushort hitId, int seed)
@@ -160,7 +163,7 @@ public sealed class GangMember : IWorldEntity
     /// <summary>Hands not free: working or carrying Loot. A busy Thief does not join a fight.</summary>
     public bool Busy => Carried != 0 || Working;
     /// <summary>Enforcers and the Gang boss fight when the Raid does; a Thief with free hands joins.</summary>
-    public bool CanFight => Alive && State != GangMemberState.Flee && (Kind != GangMemberKind.Thief || !Busy);
+    public bool CanFight => Alive && State != GangMemberState.Flee && State != GangMemberState.Board && (Kind != GangMemberKind.Thief || !Busy);
     /// <summary>The player it fights now, or null.</summary>
     public GangPlayer? Target => _target;
     /// <summary>The weighted hits taken, and the Hit count that kills it (GLOSSARY "Hit count").</summary>
@@ -179,6 +182,8 @@ public sealed class GangMember : IWorldEntity
 
     /// <summary>Raised once, when the hit that kills it lands.</summary>
     public event Action<GangMember>? Died;
+    /// <summary>Raised once, when it reaches the van's door (the entity ends there).</summary>
+    public event Action<GangMember>? Boarded;
 
     public byte TypeId => GangRules.TypeId;
     public ushort Owner => 0;
@@ -240,6 +245,19 @@ public sealed class GangMember : IWorldEntity
         Request(edge);
     }
 
+    /// <summary>
+    /// The van calls it back: it drops what it was doing (a fight too), runs to <paramref name="door"/> and ends there as boarded. Not for the dead, the fleeing or one that already boards.
+    /// </summary>
+    public void Board(Vector3 door)
+    {
+        if (!Alive || Ended != null || State is GangMemberState.Flee or GangMemberState.Board) return;
+        _target = null;
+        _door = door;
+        ClearRoute();
+        _fsm.Enter(GangMemberState.Board);
+        Request(door);
+    }
+
     /// <summary>The route the gang found for the request (empty: none). A route replaces the one being followed.</summary>
     public void SetRoute(IReadOnlyList<Vector3> route)
     {
@@ -254,6 +272,7 @@ public sealed class GangMember : IWorldEntity
         _repath.Start(_d.RepathSeconds * 2); // do not ask again at once
         if (State == GangMemberState.Flee) Ended = WorldDespawnReason.Removed; // nowhere to run on foot: gone
         else if (State == GangMemberState.Walk) Settle();
+        // a boarding member with no route asks again after the pause (TickBoard)
     }
 
     // ---- the tick ----
@@ -270,6 +289,9 @@ public sealed class GangMember : IWorldEntity
                 return;
             case GangMemberState.Flee:
                 TickFlee(dt);
+                return;
+            case GangMemberState.Board:
+                TickBoard(dt);
                 return;
             case GangMemberState.Windup:
                 if (_target is not { } wt || !CanFight) { Settle(); return; } // the target is gone: no blow
@@ -343,6 +365,20 @@ public sealed class GangMember : IWorldEntity
         if (_fsm.Tick(dt)) { Ended = WorldDespawnReason.Removed; return; } // out of time: gone where it stands
         if (Flat(Position, _edge) <= _d.EdgeArriveM) { Ended = WorldDespawnReason.Removed; return; }
         if (_next < _route.Count && Follow(dt, _k.RunSpeed)) Ended = WorldDespawnReason.Removed; // the end of the route is the edge, or the nearest it can be reached
+    }
+
+    void TickBoard(float dt)
+    {
+        var reach = _d.BoardReachM;
+        if (GoTo(_door, dt, _k.RunSpeed, reach)) { Arrive(); return; }
+        if (_route.Count == 0 && RouteRequest == null && Flat(Position, _door) <= DirectM) { Step(_door, dt, _k.RunSpeed); if (Flat(Position, _door) <= reach) Arrive(); } // no route and nearly there: straight in
+    }
+
+    void Arrive()
+    {
+        if (Ended != null) return;
+        Ended = WorldDespawnReason.Removed;
+        Boarded?.Invoke(this);
     }
 
     void Strike()

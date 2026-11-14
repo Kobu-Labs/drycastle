@@ -134,7 +134,7 @@ public sealed partial class GangMemberView : Node3D
         var want = state switch
         {
             GangMemberState.Dead => _death,
-            GangMemberState.Chase or GangMemberState.Flee => c.Run,
+            GangMemberState.Chase or GangMemberState.Flee or GangMemberState.Board => c.Run,
             GangMemberState.Windup => c.Windup != "" ? c.Windup : c.Idle,
             GangMemberState.Swing => c.Swing != "" ? c.Swing : c.Idle,
             _ => moving ? c.Walk : c.Idle,
