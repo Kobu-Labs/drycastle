@@ -68,6 +68,8 @@ public static class ShooterTheme
     public static readonly Color MapGrid = new(0.94f, 0.95f, 0.84f, 0.40f);
     public static readonly Color MapFrame = new(0.82f, 0.84f, 0.70f);
     public static readonly Color MapRoadCasing = new(0.07f, 0.08f, 0.06f, 0.85f);
+    /// <summary>The waypoint's ink in the world and on the maps: a light green (friendly, as in other shooters), never on a dark plate; its text is outlined instead.</summary>
+    public static readonly Color Waypoint = new(0.70f, 1.00f, 0.66f);
     public const int MapGutter = 28;
     public const float MapFadeSeconds = 0.15f;
 

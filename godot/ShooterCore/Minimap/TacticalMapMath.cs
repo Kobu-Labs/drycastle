@@ -54,6 +54,10 @@ public static class TacticalMapMath
     public static Vector2 ToSheet(Vector2 groundXZ, float originX, float southZ, float extentMetres) =>
         extentMetres > 0 ? new Vector2((groundXZ.X - originX) / extentMetres, 1f - (southZ - groundXZ.Y) / extentMetres) : Vector2.Zero;
 
+    /// <summary>The ground point (x, z) at a fraction of the sheet (from its west edge, from its north edge down). The inverse of <see cref="ToSheet"/>.</summary>
+    public static Vector2 FromSheet(Vector2 fraction, float originX, float southZ, float extentMetres) =>
+        new(originX + fraction.X * extentMetres, southZ - (1f - fraction.Y) * extentMetres);
+
     /// <summary>The zero-based (column, row) of a map position, clamped onto the grid so a player on the edge, or just off it, still has a reference.</summary>
     public static (int Column, int Row) CellOf(Vector2 map, float extentMetres, float cellMetres)
     {

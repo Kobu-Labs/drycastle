@@ -22,6 +22,8 @@ public sealed class MapMarkers
     public MinimapPings Pings { get; } = new();
     /// <summary>Gunfire blips (enemy shots near the player); null until the client has the match data's radius and lifetime.</summary>
     public GunfireBlips? Blips { get; set; }
+    /// <summary>The player's waypoint (set by clicking the tactical map): drawn on both maps and in the world.</summary>
+    public Waypoint Waypoint { get; } = new();
     /// <summary>Team deathmatch: pings use the enemy colour (orange) and friends are drawn, as outlined circles in the friend colour.</summary>
     public bool TeamColours { get; set; }
 
