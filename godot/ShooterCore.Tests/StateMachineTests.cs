@@ -89,17 +89,14 @@ public class StateMachineTests
         Assert.Throws<InvalidOperationException>(() => m.Enter(Door.Open));
         Assert.True(m.Is(Door.Closed)); // the throw came before the change
 
-        StateMachineDiagnostics.Strict = false;
         var reports = new List<string>();
-        StateMachineDiagnostics.Report = reports.Add;
-        try
+        using (StateMachineDiagnostics.Capture(reports)) // thread-local: tests running in parallel stay strict
         {
             Assert.True(m.Enter(Door.Open));
             Assert.True(m.Is(Door.Open));
-            Assert.Single(reports);
-            Assert.Contains("Test.Door: Closed -> Open", reports[0]);
         }
-        finally { StateMachineDiagnostics.Strict = true; StateMachineDiagnostics.Report = null; }
+        Assert.Single(reports);
+        Assert.Contains("Test.Door: Closed -> Open", reports[0]);
     }
 
     [Fact]

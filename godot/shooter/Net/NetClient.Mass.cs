@@ -11,7 +11,7 @@ namespace Drycastle.Shooter;
 public partial class NetClient
 {
     MassStateMsg _massNow;
-    Change<byte> _massPhase; // the MassPhase last heard, as a byte (an enum is not IEquatable): MassState also goes out for every kill and chant change
+    Change<byte> _massPhase; // the MassPhase last heard, as a byte: MassState also goes out for every kill and chant change
     MassSeatState _massSeat;
     ChurchChant? _chant;
 

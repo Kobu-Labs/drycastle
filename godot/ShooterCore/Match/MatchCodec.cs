@@ -171,7 +171,7 @@ public sealed class ClientMatchState
     float _timeLeft;
 
     /// <summary>The one place the phase edge is detected (the first state message counts as an edge, so a view that has drawn nothing yet draws).</summary>
-    Change<byte> _phaseSeen; // the enum's byte: Change<T> wants IEquatable, which an enum is not
+    Change<byte> _phaseSeen; // the enum's byte
 
     /// <summary>
     /// The phase changed: (from, to). <c>from</c> is null for the first state message of the connection, so a sound or banner that marks a change (round start,

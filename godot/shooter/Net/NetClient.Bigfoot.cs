@@ -30,7 +30,7 @@ public partial class NetClient
         public AnimationPlayer? Anim;
         /// <summary>The clip name the model uses for each plain clip name ("Attack" is "EnemyArmature|EnemyArmature|EnemyArmature|Attack").</summary>
         public readonly Dictionary<string, string> Clips = new();
-        /// <summary>The act whose clip is playing, as the byte of its <see cref="BigfootAct"/> (an enum is not <c>IEquatable</c>). A change means the clip is due; <c>Reset</c> after a hit reaction makes it due again.</summary>
+        /// <summary>The act whose clip is playing, as the byte of its <see cref="BigfootAct"/>. A change means the clip is due; <c>Reset</c> after a hit reaction makes it due again.</summary>
         public Change<byte> Drawn;
         /// <summary>The replicated hit bit last seen: a flip is a hit that did not kill.</summary>
         public Change<bool> HitBit;

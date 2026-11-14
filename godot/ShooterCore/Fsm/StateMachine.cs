@@ -9,9 +9,25 @@ public static class StateMachineDiagnostics
     /// <summary>Called with a one-line message for every illegal transition (when not <see cref="Strict"/>). The server wires it to its log.</summary>
     public static Action<string>? Report { get; set; }
 
+    [ThreadStatic] static List<string>? _captured;
+
+    /// <summary>
+    /// For a test that drives an undeclared transition on purpose: on THIS thread only, illegal transitions are collected into <paramref name="into"/> (taken, not thrown)
+    /// until the scope is disposed. Other threads, and tests running in parallel, keep the global <see cref="Strict"/> behaviour.
+    /// </summary>
+    public static IDisposable Capture(List<string> into)
+    {
+        var before = _captured;
+        _captured = into;
+        return new Scope(() => _captured = before);
+    }
+
+    sealed class Scope(Action undo) : IDisposable { public void Dispose() => undo(); }
+
     internal static void Illegal(string machine, string from, string to)
     {
         var msg = $"illegal transition {machine}: {from} -> {to} (not declared in its spec)";
+        if (_captured != null) { _captured.Add(msg); return; }
         if (Strict) throw new InvalidOperationException(msg);
         Report?.Invoke(msg);
     }

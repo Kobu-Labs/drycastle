@@ -23,7 +23,7 @@ public static class StateMachineCatalog
             foreach (var field in type.GetFields(flags))
             {
                 if (!typeof(IStateMachineSpec).IsAssignableFrom(field.FieldType) || field.GetValue(null) is not IStateMachineSpec spec) continue;
-                found[spec.Name] = spec;
+                if (!found.TryAdd(spec.Name, spec)) throw new InvalidOperationException($"two state machine specs are named {spec.Name}: names are the id in logs and docs/state-machines.md, make one unique");
             }
         }
         return found.Values.OrderBy(s => s.Name, StringComparer.Ordinal).ToList();

@@ -3,7 +3,7 @@
 Generated from the specs in `godot/ShooterCore/Fsm/StateMachineCatalog.cs` by `StateMachineCatalogTests`. Do not edit by hand: change the spec, then run
 `UPDATE_STATE_DOCS=1 dotnet test godot/ShooterCore.Tests --filter StateMachineCatalogTests`.
 
-How to add or change one: see `godot/ShooterCore/Fsm/StateMachine.cs`. `*` means "from any state".
+How to add or change one: see `godot/ShooterCore/Fsm/StateMachine.cs`. "From any state" lines list the transitions that need no edge.
 
 ## Animal.Behaviour
 
@@ -94,9 +94,10 @@ stateDiagram-v2
     GrabReach --> Idle
     Hold --> Idle
     Launch --> Idle
-    [*] --> Dead
     Dead --> [*]
 ```
+
+From any state: Dead
 
 - **Idle**: Standing: nobody in reach, a stop distance reached, or waiting after a wipe. Every ended act comes back here.
 - **TrunkWindup**: Log on the shoulder, turning to its target; the log flies when the wind-up ends (back to Idle).
@@ -132,9 +133,10 @@ stateDiagram-v2
     [*] --> Fighting
     Fighting --> Waiting
     Waiting --> Fighting
-    [*] --> Dead
     Dead --> [*]
 ```
+
+From any state: Dead
 
 - **Waiting**: Wiped: healed to full, standing where it was, until a living player comes within the wake radius or a shot lands.
 - **Dead**: Reachable from Fighting and Waiting (a shot can also kill a waiting one).
@@ -250,9 +252,10 @@ stateDiagram-v2
     Pouncing --> LeapWind
     Pinning --> LeapWind
     Pinning --> Waiting
-    [*] --> Dead
     Dead --> [*]
 ```
+
+From any state: Dead
 
 - **Waiting**: Still at its anchor: nobody has come in yet, or a wipe happened and the rearm delay is not over. A wipe in a crawl, leap or pounce lets that finish first (it waits where it gets to).
 - **Dwelling**: Resting on an anchor facing its target: picks the next move when the dwell runs out (a due leap, flame and fireball come first).

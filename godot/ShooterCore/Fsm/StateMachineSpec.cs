@@ -115,16 +115,21 @@ public static class StateMachineDocs
         sb.Append("# State machines\n\n");
         sb.Append("Generated from the specs in `godot/ShooterCore/Fsm/StateMachineCatalog.cs` by `StateMachineCatalogTests`. Do not edit by hand: change the spec, then run\n");
         sb.Append("`UPDATE_STATE_DOCS=1 dotnet test godot/ShooterCore.Tests --filter StateMachineCatalogTests`.\n\n");
-        sb.Append("How to add or change one: see `godot/ShooterCore/Fsm/StateMachine.cs`. `*` means \"from any state\".\n\n");
+        sb.Append("How to add or change one: see `godot/ShooterCore/Fsm/StateMachine.cs`. \"From any state\" lines list the transitions that need no edge.\n\n");
         foreach (var spec in specs.OrderBy(s => s.Name, StringComparer.Ordinal))
         {
             sb.Append("## ").Append(spec.Name).Append("\n\n").Append(spec.Summary).Append("\n\n");
             sb.Append("```mermaid\nstateDiagram-v2\n");
             sb.Append("    [*] --> ").Append(spec.InitialName).Append('\n');
+            var anywhere = new List<string>();
             foreach (var (from, to) in spec.TransitionNames)
-                sb.Append("    ").Append(from == "*" ? "[*]" : from).Append(" --> ").Append(to).Append('\n');
+            {
+                if (from == "*") { anywhere.Add(to); continue; }
+                sb.Append("    ").Append(from).Append(" --> ").Append(to).Append('\n');
+            }
             foreach (var end in spec.Terminal) sb.Append("    ").Append(end).Append(" --> [*]\n");
             sb.Append("```\n\n");
+            if (anywhere.Count > 0) sb.Append("From any state: ").Append(string.Join(", ", anywhere)).Append("\n\n");
             foreach (var s in spec.StateNames)
                 if (spec.NoteOf(s) is { } note) sb.Append("- **").Append(s).Append("**: ").Append(note).Append('\n');
             sb.Append('\n');
