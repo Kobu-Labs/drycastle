@@ -56,10 +56,7 @@ public partial class NetServer
         {
             GD.Print($"server: holy mass: {p}");
             if (p == MassPhase.Idle) { foreach (var id in _sitters.Keys.ToList()) MassStandUp(id); DemonClear(); }
-            // the doors: open for the event, slammed shut when the pastor turns, and shut again afterwards once nobody is left inside
-            if (p == MassPhase.Gather) { _closeWhenEmpty = false; ChurchDoors.Open(); }
-            else if (p == MassPhase.Void) ChurchDoors.Close();
-            else if (p == MassPhase.Idle) _closeWhenEmpty = true;
+            DoorsFollowMass(p); // open for the event, slammed shut when the pastor turns, shut again afterwards once nobody is left inside
             MassPhaseChanged?.Invoke(p);
         };
         _mass.PastorTurns += () => { GD.Print($"server: holy mass: the pastor turns after {_mass.PastorKills} kills"); PastorTurns?.Invoke(); };
@@ -107,11 +104,9 @@ public partial class NetServer
     }
 
     /// <summary>Once a tick: the event's clock, the changes the clients show, and every player's seat.</summary>
-    bool _closeWhenEmpty;
-
     void MassTick(float dt)
     {
-        if (_closeWhenEmpty && ChurchDoors.PlayersInside().Count == 0) { _closeWhenEmpty = false; ChurchDoors.Close(); }
+        DoorsTick();
         if (_mass == null) return;
         _mass.Update(dt);
         DemonTick(dt);

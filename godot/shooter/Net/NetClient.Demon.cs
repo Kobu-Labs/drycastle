@@ -116,7 +116,7 @@ public partial class NetClient
                     view.Place(new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z), new Vector3(n.X, n.Y, n.Z), new Vector3(f.X, f.Y, f.Z), dt);
                 }
                 view.PinMuzzleAt = PounceFacePoint();
-                view.PinMine = _pStage != null && _pVictim == _myId; // marked at the wind: the world state can come before the pin event
+                view.PinMine = _pv.MarkedMe(_myId); // marked at the wind: the world state can come before the pin event
                 view.Calm = GameSettings.Current.ReduceMotion;
                 view.Show(DemonRules.StateOf(e.State.State));
                 if (e.State.Hp < d.Hp) view.Hurt();

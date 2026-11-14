@@ -27,7 +27,7 @@ public partial class NetClient
             var turning = WorldEntities.Entities.TryGetValue(id, out var e) && DemonRules.StateOf(e.State.State) == DemonState.Transforming;
             if (!turning)
             {
-                if (_quakeT.Remove(id)) ChurchDecor.Current?.SetTransform(-1f);
+                EndQuake(id);
                 continue;
             }
             _quakeT.TryGetValue(id, out var t);
@@ -43,6 +43,12 @@ public partial class NetClient
             if (near <= 0) continue;
             _shakeAmp = Math.Max(_shakeAmp, (QuakeBase + QuakePeak * build) * near);
         }
-        if (_quakeT.Count > _demons.Count) foreach (var id in _quakeT.Keys.Where(k => !_demons.ContainsKey(k)).ToList()) { _quakeT.Remove(id); ChurchDecor.Current?.SetTransform(-1f); }
+        if (_quakeT.Count > _demons.Count) foreach (var id in _quakeT.Keys.Where(k => !_demons.ContainsKey(k)).ToList()) EndQuake(id);
+    }
+
+    /// <summary>A demon's turning is over (it left the Transforming state, or its view is gone): its clock goes and the church's lights are released.</summary>
+    void EndQuake(ushort id)
+    {
+        if (_quakeT.Remove(id)) ChurchDecor.Current?.SetTransform(-1f);
     }
 }

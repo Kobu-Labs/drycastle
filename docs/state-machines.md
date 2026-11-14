@@ -71,6 +71,32 @@ stateDiagram-v2
 - **Marked**: The victim is marked from the crouch to the landing; the host holds them back from health changes. Gone before the landing: Aborted, the demon finishes its leap with nobody pinned.
 - **Pinned**: Lying flat on the floor under the demon. Pin time over: Released (the host sets their health). Gone, or the demon dies: Aborted.
 
+## Demon.Stage
+
+The server's script around the demon brain: the pastor turns, burns into the demon, climbs the wall, fights, dies; anything can end it early.
+
+```mermaid
+stateDiagram-v2
+    [*] --> None
+    None --> Delay
+    Delay --> Transforming
+    Delay --> None
+    Transforming --> Climbing
+    Transforming --> None
+    Climbing --> Fighting
+    Climbing --> None
+    Fighting --> Dying
+    Fighting --> None
+    Dying --> None
+```
+
+- **None**: No demon: the Mass is not void or the fight is cleared. Nothing ticks.
+- **Delay**: The pastor has turned; his body still lies there for transform_delay_s. A failed spawn (entity cap) clears from here: the doors must still open.
+- **Transforming**: The pastor's body is gone, the monks burn, the demon entity exists and cannot be hit (transform_s).
+- **Climbing**: Scripted leap from the floor to the first anchor (climb_s); the entity is replicated as Crawling. Not yet hittable.
+- **Fighting**: The DemonBrain runs; the demon is a hit target. Ends by its death (a weapon hit) or by a clear.
+- **Dying**: The corpse lies for corpse_s; fireballs in the air still fly. Then the server ends the Mass.
+
 ## Demon.Wake
 
 Whether the demon fights: it sleeps from the start of an event and after a wipe, wakes when a player is inside and the rearm delay is over.
@@ -84,4 +110,28 @@ stateDiagram-v2
 
 - **Asleep**: Resting phases show as Waiting; the health is back to full and the pounce, flame and leap clocks are cleared.
 - **Awake**: Fighting: the hits needed grow with the players inside and never shrink; the fight clock, the roar clock and the leap clock run.
+
+## Pounce.View
+
+The client's view of the demon's pounce: a victim is marked (Wind), pinned flat, then let go; the local victim's camera rises back afterwards.
+
+```mermaid
+stateDiagram-v2
+    [*] --> None
+    None --> Wind
+    None --> Pinned
+    Wind --> Pinned
+    Wind --> None
+    Pinned --> Rising
+    Pinned --> None
+    Pinned --> Wind
+    Rising --> None
+    Rising --> Wind
+    Rising --> Pinned
+```
+
+- **None**: Nobody is marked or held (also after the demon is gone).
+- **Wind**: A victim is marked: the local victim's look is locked on the demon. A joiner can start here.
+- **Pinned**: The victim lies pinned. Locally: the body is the server's (no prediction, no weapon), the camera is on the floor. A joiner can start here.
+- **Rising**: The local victim was let go: the camera rises back to standing height while the red fades. Only after a pin of the local player.
 
