@@ -11,6 +11,7 @@ namespace Drycastle.Shooter;
 public partial class NetClient
 {
     MassStateMsg _massNow;
+    Change<byte> _massPhase; // the MassPhase last heard, as a byte (an enum is not IEquatable): MassState also goes out for every kill and chant change
     MassSeatState _massSeat;
     ChurchChant? _chant;
 
@@ -23,7 +24,7 @@ public partial class NetClient
         {
             case EventKind.MassState when MassCodec.DecodeState(payload) is { } m:
                 _massNow = m;
-                if (m.Phase == MassPhase.Gather) ChurchDecor.Current?.ResetBlood(); // a new Mass: the last one's stains are gone
+                if (_massPhase.Update((byte)m.Phase) && m.Phase == MassPhase.Gather) ChurchDecor.Current?.ResetBlood(); // a new Mass: the last one's stains are gone (once, not on every state while it gathers)
                 var chant = Chant();
                 chant?.SetChant(m.Chanting, m.Phase == MassPhase.Mass, new Vector3(m.ChantAt.X, m.ChantAt.Y, m.ChantAt.Z));
                 if (m.Bells)

@@ -24,11 +24,13 @@ public partial class NetServer
     sealed class Sitter
     {
         public ChurchSeat Seat = null!;
-        public bool JumpHeld = true; // the jump that may still be held as they sit is not a stand-up
+        public Edge Jump = new(startHeld: true); // the jump that may still be held as they sit is not a stand-up
     }
 
     readonly Dictionary<ushort, Sitter> _sitters = new();
-    readonly Dictionary<ushort, MassSeatState> _seatHint = new(); // what each player was last told
+    readonly Dictionary<ushort, StateMachine<MassSeatState>> _seatHint = new(); // what each player was last told (a player never told is None)
+
+    MassSeatState SeatTold(ushort id) => _seatHint.TryGetValue(id, out var m) ? m.Current : MassSeatState.None;
 
     /// <summary>The Holy Mass event; null until the first <c>/event mass</c>.</summary>
     public HolyMassEvent? Mass => _mass;
@@ -120,13 +122,14 @@ public partial class NetServer
                 continue;
             }
             var want = _mass.Running && c.Car == null && _match.Get(c.Id)?.Life == PlayerLife.Alive && _mass.SeatNear(N(c.Body.GlobalPosition)) != null ? MassSeatState.CanSit : MassSeatState.None;
-            if (_seatHint.GetValueOrDefault(c.Id) != want) SendSeat(c, want, 0);
+            if (SeatTold(c.Id) != want) SendSeat(c, want, 0);
         }
     }
 
     void SendSeat(Client c, MassSeatState state, float yaw)
     {
-        _seatHint[c.Id] = state;
+        if (!_seatHint.TryGetValue(c.Id, out var told)) _seatHint[c.Id] = told = new StateMachine<MassSeatState>(MassSeatRules.Spec);
+        told.Enter(state); // checked against the spec; what is told is sent either way
         Send(c, new EventMsg((byte)EventKind.MassSeat, MassCodec.EncodeSeat(new MassSeatMsg(state, yaw))));
     }
 
@@ -161,8 +164,7 @@ public partial class NetServer
         c.Body.Yaw = Quant.Yaw(i.Yaw);
         c.Body.Pitch = Quant.Pitch(i.Pitch);
         var jump = (i.Buttons & (ushort)MoveButtons.Jump) != 0;
-        var jumpEdge = jump && !s.JumpHeld;
-        s.JumpHeld = jump;
+        var jumpEdge = s.Jump.Pressed(jump);
         if (useEdge || jumpEdge) MassStandUp(c.Id);
     }
 

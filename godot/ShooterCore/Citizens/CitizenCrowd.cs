@@ -41,8 +41,7 @@ public sealed class CitizenCrowd : ICitizenHits
     readonly WorldEntityManager _entities;
     readonly Random _rng;
     readonly List<Pending> _pending = new();
-    readonly HashSet<int> _taken = new();                       // seats of waiting and living citizens
-    readonly HashSet<int> _reserved = new();                    // seats kept for players: no citizen is sent to them
+    readonly SeatBook _seats = new();                           // which seats citizens hold and which are kept for players
     readonly Dictionary<ushort, Citizen> _byHit = new();
     readonly Dictionary<ushort, ushort> _entityOfHit = new();
     readonly Dictionary<ushort, ushort> _hitOfEntity = new();
@@ -74,12 +73,12 @@ public sealed class CitizenCrowd : ICitizenHits
     public IEnumerable<int> FreeSeats => _church.Seats.Where(s => IsSeatFree(s.Id)).Select(s => s.Id);
 
     /// <summary>No citizen is on its way to, in or lying at the seat, and it is not kept for a player.</summary>
-    public bool IsSeatFree(int seatId) => !_taken.Contains(seatId) && !_reserved.Contains(seatId);
+    public bool IsSeatFree(int seatId) => _seats.IsFree(seatId);
 
     /// <summary>Keeps a seat for players (no citizen is sent to it from now on). False when a citizen has it.</summary>
-    public bool Reserve(int seatId) => !_taken.Contains(seatId) && _reserved.Add(seatId);
+    public bool Reserve(int seatId) => _seats.Reserve(seatId);
 
-    public void Unreserve(int seatId) => _reserved.Remove(seatId);
+    public void Unreserve(int seatId) => _seats.Unreserve(seatId);
 
     /// <summary>The Mass is done: every living citizen in place stands, a share of them clapping (<paramref name="clapFraction"/>). The pastor and monks too.</summary>
     public void Finish(float clapFraction)
@@ -93,7 +92,7 @@ public sealed class CitizenCrowd : ICitizenHits
     /// <summary>The demon is here: every living citizen sprints home and is removed there; those still waiting in their houses stay home. The pastor and monks stay.</summary>
     public void Flee()
     {
-        foreach (var p in _pending) _taken.Remove(p.SeatId);
+        foreach (var p in _pending) _seats.Release(p.SeatId);
         _pending.Clear();
         foreach (var c in _byHit.Values) c.Flee();
     }
@@ -138,7 +137,7 @@ public sealed class CitizenCrowd : ICitizenHits
         if (doors.Count == 0) { Log?.Invoke($"citizens: no house within {houseRadiusM:0} m of the church door, nobody leaves"); return 0; }
         for (var i = 0; i < take.Count; i++)
         {
-            _taken.Add(take[i]);
+            _seats.Assign(take[i]);
             _pending.Add(new Pending(_clock + leadSeconds + staggerSeconds * i / take.Count, take[i], doors));
         }
         return take.Count;
@@ -171,8 +170,7 @@ public sealed class CitizenCrowd : ICitizenHits
     {
         _pending.Clear();
         foreach (var entity in _hitOfEntity.Keys.ToList()) _entities.Despawn(entity, WorldDespawnReason.Removed);
-        _taken.Clear();
-        _reserved.Clear();
+        _seats.Clear();
     }
 
     /// <summary>Lets the citizens whose time has come leave their houses. The entities are ticked by the world entity manager.</summary>
@@ -183,7 +181,7 @@ public sealed class CitizenCrowd : ICitizenHits
         {
             var p = _pending[0];
             _pending.RemoveAt(0);
-            if (!Leave(p)) _taken.Remove(p.SeatId);
+            if (!Leave(p)) _seats.Release(p.SeatId);
         }
     }
 
@@ -219,7 +217,7 @@ public sealed class CitizenCrowd : ICitizenHits
     {
         if (!_hitOfEntity.Remove(d.Id, out var hit)) return;
         _entityOfHit.Remove(hit);
-        if (_byHit.Remove(hit, out var c)) _taken.Remove(c.SeatId);
+        if (_byHit.Remove(hit, out var c)) _seats.Release(c.SeatId);
     }
 
     public DamageResult Hit(ushort hitId, ushort attacker, float amount)

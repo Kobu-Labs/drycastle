@@ -6,6 +6,22 @@ namespace Drycastle.ShooterCore;
 /// <summary>What a player sees of their seat: nothing near, a free seat in reach (the prompt), or sitting in one.</summary>
 public enum MassSeatState : byte { None = 0, CanSit = 1, Seated = 2 }
 
+/// <summary>
+/// What the server last told one player about their seat (the machine the server keeps per player, the client mirrors what it hears). A press of interact can sit a
+/// player before the CanSit hint went out, so None goes to Seated too; a stand-up always goes through None (the hint is recomputed the tick after).
+/// </summary>
+public static class MassSeatRules
+{
+    public static readonly StateMachineSpec<MassSeatState> Spec = StateMachineSpec<MassSeatState>.Define("Mass.Seat", "What a player is told about the Holy Mass seats: nothing, a free seat in reach, or sitting.", MassSeatState.None)
+        .Allow(MassSeatState.None, MassSeatState.CanSit, MassSeatState.Seated)
+        .Allow(MassSeatState.CanSit, MassSeatState.None, MassSeatState.Seated)
+        .Allow(MassSeatState.Seated, MassSeatState.None)
+        .Note(MassSeatState.None, "No seat in reach, not in the event, or just stood up.")
+        .Note(MassSeatState.CanSit, "A free seat is in reach: the client shows the sit prompt.")
+        .Note(MassSeatState.Seated, "Sitting: the server holds the body, the client does not predict it. Interact or jump stands up; death, a car, the end of the Mass and the blessing end it too.")
+        .Build();
+}
+
 /// <summary>The Mass as every client sees it: the phase, whether the chant plays, how often the pastor was killed, where the chant comes from, and (once, at the start) whether the bells ring.</summary>
 public readonly record struct MassStateMsg(MassPhase Phase, bool Chanting, byte PastorKills, Vector3 ChantAt, bool Bells = false);
 

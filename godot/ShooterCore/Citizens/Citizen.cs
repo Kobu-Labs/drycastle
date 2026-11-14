@@ -40,14 +40,37 @@ public static class CitizenRules
 /// </summary>
 public sealed class Citizen : IWorldEntity
 {
+    /// <summary>
+    /// What a citizen can go from and to. The route cursor (<c>_next</c>) belongs to the route state a citizen is in (Walking, Entering, Fleeing), not to the
+    /// machine: it is reset by hand where a route starts. <see cref="Role"/> picks which state the arrival ends in (Seated, Kneeling or Standing), so the
+    /// table below is the union over the roles.
+    /// </summary>
+    public static readonly StateMachineSpec<CitizenState> Spec = StateMachineSpec<CitizenState>.Define("Citizen.State", "What a citizen of the Holy Mass is doing; the replicated state byte.", CitizenState.Walking)
+        .Allow(CitizenState.Walking, CitizenState.Entering, CitizenState.Fleeing, CitizenState.Dead)
+        .Allow(CitizenState.Entering, CitizenState.Seated, CitizenState.Kneeling, CitizenState.Standing, CitizenState.Fleeing, CitizenState.Dead)
+        .Allow(CitizenState.Seated, CitizenState.Clapping, CitizenState.Standing, CitizenState.Fleeing, CitizenState.Dead)
+        .Allow(CitizenState.Kneeling, CitizenState.Clapping, CitizenState.Standing, CitizenState.Fleeing, CitizenState.Dead)
+        .Allow(CitizenState.Standing, CitizenState.Clapping, CitizenState.Fleeing, CitizenState.Dead)
+        .Allow(CitizenState.Clapping, CitizenState.Standing, CitizenState.Fleeing, CitizenState.Dead)
+        .Allow(CitizenState.Fleeing, CitizenState.Dead)
+        .Note(CitizenState.Walking, "On the navigation-mesh route from the house to the church door.")
+        .Note(CitizenState.Entering, "On the scripted route inside the church to the seat.")
+        .Note(CitizenState.Seated, "In a pew (a citizen; the client plays the sit pose).")
+        .Note(CitizenState.Kneeling, "At a standing spot (a citizen).")
+        .Note(CitizenState.Standing, "The pastor or a monk at their spot, or a citizen on its feet after the Mass.")
+        .Note(CitizenState.Clapping, "The Mass is done and the body cheers (the pastor flexes).")
+        .Note(CitizenState.Fleeing, "Sprinting home because the demon came; ends in removal at the spawn point (the entity ends, no state follows).")
+        .Note(CitizenState.Dead, "Lies where it fell: a citizen's body is removed after the corpse time, the pastor's and a monk's lie until the event is cleared. Any hit kills in one.")
+        .Build();
+
+    readonly StateMachine<CitizenState> _fsm = new(Spec);
     readonly CitizensConfig _cfg;
     readonly List<Vector3> _walk;
     readonly List<Vector3> _enter;
     readonly float _speed;
     readonly float _factor;
     List<Vector3> _flee = new();
-    int _next = 1;          // the next point of the route being walked
-    float _deadFor;
+    int _next = 1;          // the next point of the route being walked (reset where a route starts: BeginEntering, Flee)
 
     /// <param name="walk">The route from the house to the church door (at least its first point: where it spawns).</param>
     /// <param name="enter">The scripted route inside, ending at the feet position under the seat.</param>
@@ -62,7 +85,6 @@ public sealed class Citizen : IWorldEntity
         _factor = speedFactor;
         _speed = cfg.WalkSpeed * speedFactor;
         Position = _walk[0];
-        State = CitizenState.Walking;
         if (_walk.Count < 2) BeginEntering();
         else Yaw = TurnTo(_walk[1], float.MaxValue);
     }
@@ -73,7 +95,7 @@ public sealed class Citizen : IWorldEntity
     public Vector3 Position { get; private set; }
     /// <summary>Godot convention: 0 faces -Z.</summary>
     public float Yaw { get; private set; }
-    public CitizenState State { get; private set; }
+    public CitizenState State => _fsm.Current;
     public bool Alive => State != CitizenState.Dead;
     public bool Seated => State is CitizenState.Seated or CitizenState.Kneeling;
     /// <summary>Pastor and monks are citizen entities that never sit: they walk to a spot and stand there.</summary>
@@ -102,7 +124,7 @@ public sealed class Citizen : IWorldEntity
     {
         if (Ended != null || !Alive || !(amount > 0)) return;
         DiedSeated = Seated;
-        State = CitizenState.Dead;
+        _fsm.Enter(CitizenState.Dead);
         Killer = attacker;
         Died?.Invoke(this, attacker);
     }
@@ -115,8 +137,8 @@ public sealed class Citizen : IWorldEntity
             case CitizenState.Dead:
                 // a killed monk or pastor lies until the event is over (the crowd clears it); a citizen's body goes after the corpse time
                 if (Role != CitizenRole.Citizen) break;
-                _deadFor += dt;
-                if (_deadFor >= _cfg.CorpseSeconds) Ended = WorldDespawnReason.Expired;
+                _fsm.Tick(dt); // Elapsed is the time it has lain: summed exactly as the old _deadFor was
+                if (_fsm.Elapsed >= _cfg.CorpseSeconds) Ended = WorldDespawnReason.Expired;
                 break;
             case CitizenState.Walking:
                 if (Follow(_walk, dt)) BeginEntering();
@@ -142,7 +164,7 @@ public sealed class Citizen : IWorldEntity
     public void Finish(bool clap)
     {
         if (!Alive || State is CitizenState.Walking or CitizenState.Entering or CitizenState.Fleeing) return;
-        State = clap ? CitizenState.Clapping : CitizenState.Standing;
+        _fsm.Enter(clap ? CitizenState.Clapping : CitizenState.Standing);
     }
 
     /// <summary>
@@ -163,21 +185,21 @@ public sealed class Citizen : IWorldEntity
         }
         _flee = route;
         _next = 0;
-        State = CitizenState.Fleeing;
+        _fsm.Enter(CitizenState.Fleeing);
     }
 
     // ---- behaviour ----
 
     void BeginEntering()
     {
-        State = CitizenState.Entering;
+        _fsm.Enter(CitizenState.Entering);
         _next = 0; // the enter route starts at the door: the first leg is from where the walk ended
         if (_enter.Count == 0) Sit();
     }
 
     void Sit()
     {
-        State = Role != CitizenRole.Citizen ? CitizenState.Standing : Stand ? CitizenState.Kneeling : CitizenState.Seated;
+        _fsm.Enter(Role != CitizenRole.Citizen ? CitizenState.Standing : Stand ? CitizenState.Kneeling : CitizenState.Seated);
         if (_enter.Count > 0) Position = _enter[^1];
         Yaw = SeatYaw;
     }

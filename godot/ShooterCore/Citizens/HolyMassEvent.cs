@@ -10,6 +10,12 @@ namespace Drycastle.ShooterCore;
 public enum MassPhase : byte { Idle = 0, Gather = 1, Mass = 2, Completed = 3, Void = 4 }
 
 /// <summary>
+/// Where the pastor is in the Mass. Only the pastor of a Gather or Mass is tracked; the Mass progresses only while he is <see cref="Ready"/>.
+/// Not on the wire (the clients get <see cref="HolyMassEvent.Chanting"/>).
+/// </summary>
+public enum PastorState : byte { Off = 0, Ready = 1, Gone = 2, Arriving = 3, Settling = 4 }
+
+/// <summary>
 /// The Holy Mass event: the timeline, the pastor and the monks, the seats players take, and the blessing. Godot-free; the server calls
 /// <see cref="Update"/> every tick and wires the events to the world. It owns no clock beyond the seconds it is given.
 /// <para>
@@ -26,7 +32,44 @@ public enum MassPhase : byte { Idle = 0, Gather = 1, Mass = 2, Completed = 3, Vo
 public sealed class HolyMassEvent
 {
     const float SeatReachDy = 2.5f;
+    const float RetrySeconds = 1f; // after a refused pastor spawn (the entity cap)
 
+    /// <summary>
+    /// The timeline. One clock per state: Gather counts down to the latest the Mass begins, Completed counts down the linger; Mass has none (it ends on progress,
+    /// which stops while the pastor is gone) and Void waits for <see cref="End"/>. The doors, the demon and the clients all follow <see cref="MassPhaseChanged"/>.
+    /// </summary>
+    public static readonly StateMachineSpec<MassPhase> PhaseSpec = StateMachineSpec<MassPhase>.Define("Mass.Phase", "The Holy Mass event timeline: gather, Mass, done or void.", MassPhase.Idle)
+        .Allow(MassPhase.Idle, MassPhase.Gather, MassPhase.Void)
+        .Allow(MassPhase.Gather, MassPhase.Mass, MassPhase.Completed, MassPhase.Void, MassPhase.Idle)
+        .Allow(MassPhase.Mass, MassPhase.Completed, MassPhase.Void, MassPhase.Idle)
+        .Allow(MassPhase.Completed, MassPhase.Void, MassPhase.Idle)
+        .Allow(MassPhase.Void, MassPhase.Idle)
+        .Note(MassPhase.Idle, "No event. Start begins the gather; an admin ForceTurn from here starts one that is void at once.")
+        .Note(MassPhase.Gather, "The bells ring, citizens walk in and sit. Ends when everyone is in place (StartDelaySeconds) or when the gather timer runs out, whichever comes first; Conclude skips to Completed.")
+        .Note(MassPhase.Mass, "The chant runs; progress counts only while the pastor is ready. Ends at MassSeconds of progress, or by Conclude.")
+        .Note(MassPhase.Completed, "The blessed are chosen, citizens stand and clap, the pastor flexes. Lingers CompletedSeconds, then the event ends. An admin ForceTurn can still void it.")
+        .Note(MassPhase.Void, "The pastor turned (third kill or ForceTurn): the demon's cue, citizens sprint home, no blessing. Stays until End or Conclude.")
+        .Build();
+
+    /// <summary>
+    /// The pastor of a Gather or Mass. A killed pastor is replaced after a pause (Gone), the replacement walks out of the sacristy (Arriving), and the Mass goes on
+    /// some seconds after he stands at his spot (Settling, then Ready). A refused spawn (the entity cap) stays in Gone: the countdown starts over at one second.
+    /// </summary>
+    public static readonly StateMachineSpec<PastorState> PastorSpec = StateMachineSpec<PastorState>.Define("Mass.Pastor", "Whether the pastor stands ready, so the Mass progresses, or a killed one is being replaced.", PastorState.Off)
+        .Allow(PastorState.Off, PastorState.Ready, PastorState.Gone)
+        .Allow(PastorState.Ready, PastorState.Gone, PastorState.Off)
+        .Allow(PastorState.Gone, PastorState.Arriving, PastorState.Off)
+        .Allow(PastorState.Arriving, PastorState.Settling, PastorState.Gone, PastorState.Off)
+        .Allow(PastorState.Settling, PastorState.Ready, PastorState.Gone, PastorState.Off)
+        .Note(PastorState.Off, "Not tracked: no event, or the Mass is over or void (the pastor no longer pauses anything).")
+        .Note(PastorState.Ready, "He stands at his spot and the pause after a kill is over: the chant plays.")
+        .Note(PastorState.Gone, "Killed (or the first spawn was refused): a new one walks out after PastorReplaceSeconds; a refused spawn retries every second.")
+        .Note(PastorState.Arriving, "The replacement walks from the sacristy door to the pastor's spot.")
+        .Note(PastorState.Settling, "He stands at his spot; the Mass resumes after ResumeSeconds.")
+        .Build();
+
+    readonly StateMachine<MassPhase> _phase = new(PhaseSpec);
+    readonly StateMachine<PastorState> _pastorFsm = new(PastorSpec);
     readonly MassConfig _cfg;
     readonly Church _church;
     readonly CitizenCrowd _crowd;
@@ -34,12 +77,7 @@ public sealed class HolyMassEvent
     readonly Dictionary<ushort, int> _seatOf = new();       // player -> seat
     readonly Dictionary<ushort, float> _seatedFor = new();  // player -> seconds seated while the Mass progressed
     readonly HashSet<ushort> _sinners = new();
-    float _phaseLeft;
-    float _gatherFor;          // seconds of the gather so far (the bells' lead included)
-    float _settleLeft;         // seconds until the Mass begins once everyone has arrived
-    float _replaceLeft = -1;   // seconds until a new pastor walks out (<0: none pending)
-    float _resumeLeft = -1;    // seconds after the new pastor has arrived until the Mass goes on
-    bool _arrived;             // the new pastor stands at his spot
+    Countdown _settle;         // seconds until the Mass begins once everyone has arrived (the gather's own clock is _phase's)
     Citizen? _pastor;
 
     public HolyMassEvent(MassConfig cfg, Church church, CitizenCrowd crowd)
@@ -48,14 +86,14 @@ public sealed class HolyMassEvent
         crowd.Killed += OnKilled;
     }
 
-    public MassPhase Phase { get; private set; }
+    public MassPhase Phase => _phase.Current;
     public bool Running => Phase != MassPhase.Idle;
     /// <summary>How often the pastor has been killed this event.</summary>
     public int PastorKills { get; private set; }
     /// <summary>Seconds of Mass progress so far.</summary>
     public float Progress { get; private set; }
     /// <summary>The pastor stands at his spot and the pause after a kill is over.</summary>
-    public bool PastorReady { get; private set; }
+    public bool PastorReady => _pastorFsm.Is(PastorState.Ready);
     /// <summary>The chant plays and the Mass progresses.</summary>
     public bool Chanting => Phase == MassPhase.Mass && PastorReady;
     public bool IsSinner(ushort player) => _sinners.Contains(player);
@@ -89,16 +127,15 @@ public sealed class HolyMassEvent
     {
         if (WhyNot() != null) return 0;
         _kept.Clear(); _seatOf.Clear(); _seatedFor.Clear(); _sinners.Clear();
-        PastorKills = 0; Progress = 0; PastorReady = false; _replaceLeft = _resumeLeft = -1; _arrived = false;
+        PastorKills = 0; Progress = 0; _pastorFsm.Reset(PastorState.Off);
         foreach (var id in KeepSeatsFor()) if (_crowd.Reserve(id)) _kept.Add(id);
         var sent = _crowd.Spawn(_crowd.FreeSeats.ToList(), _cfg.StaggerSeconds, _cfg.HouseRadiusM, _cfg.BellsLeadSeconds);
         _pastor = _crowd.SpawnRole(CitizenRole.Pastor, new[] { _church.Pastor!.Pos }, _church.Pastor.Yaw);
         foreach (var m in _church.Monks) _crowd.SpawnRole(CitizenRole.Monk, new[] { m.Pos }, m.Yaw);
-        PastorReady = _pastor != null;
-        if (_pastor == null) _replaceLeft = 1; // the entity cap: try again
-        _phaseLeft = _cfg.BellsLeadSeconds + _cfg.GatherSeconds; // the bells ring first, then the gather: the latest the Mass begins
-        _gatherFor = 0; _settleLeft = _cfg.StartDelaySeconds;
-        SetPhase(MassPhase.Gather);
+        if (_pastor != null) _pastorFsm.Enter(PastorState.Ready);
+        else _pastorFsm.Enter(PastorState.Gone, RetrySeconds); // the entity cap: try again
+        _settle.Start(_cfg.StartDelaySeconds);
+        SetPhase(MassPhase.Gather, _cfg.BellsLeadSeconds + _cfg.GatherSeconds); // the bells ring first, then the gather: the latest the Mass begins
         return sent;
     }
 
@@ -119,12 +156,11 @@ public sealed class HolyMassEvent
         switch (Phase)
         {
             case MassPhase.Gather:
-                _phaseLeft -= dt;
-                _gatherFor += dt;
+                var gatherOver = _phase.Tick(dt); // Elapsed is the gather so far (the bells' lead included)
                 // everyone who was coming is in place (the bells have rung): the Mass begins shortly, before the gather timer runs out
-                if (_gatherFor >= _cfg.BellsLeadSeconds && !_crowd.Arriving) _settleLeft -= dt;
-                else _settleLeft = _cfg.StartDelaySeconds;
-                if (_phaseLeft <= 0 || _settleLeft <= 0) { _phaseLeft = 0; SetPhase(MassPhase.Mass); }
+                if (_phase.Elapsed >= _cfg.BellsLeadSeconds && !_crowd.Arriving) _settle.Tick(dt);
+                else _settle.Start(_cfg.StartDelaySeconds);
+                if (gatherOver || _settle.Ready) SetPhase(MassPhase.Mass);
                 break;
             case MassPhase.Mass:
                 if (!PastorReady) break;
@@ -133,8 +169,7 @@ public sealed class HolyMassEvent
                 if (Progress >= _cfg.MassSeconds) Complete();
                 break;
             case MassPhase.Completed:
-                _phaseLeft -= dt;
-                if (_phaseLeft <= 0) End();
+                if (_phase.Tick(dt)) End();
                 break;
         }
     }
@@ -142,23 +177,26 @@ public sealed class HolyMassEvent
     /// <summary>A killed pastor is replaced after a pause: a new one walks out of the sacristy and the Mass resumes some seconds after he has arrived.</summary>
     void TickPastor(float dt)
     {
-        if (_replaceLeft >= 0)
+        switch (_pastorFsm.Current)
         {
-            _replaceLeft -= dt;
-            if (_replaceLeft > 0) return;
-            var spot = _church.Pastor!;
-            var from = _church.SacristyDoor?.Pos ?? spot.Pos;
-            _pastor = _crowd.SpawnRole(CitizenRole.Pastor, new[] { from, spot.Pos }, spot.Yaw);
-            if (_pastor == null) { _replaceLeft = 1; return; }
-            _replaceLeft = -1; _arrived = false; _resumeLeft = _cfg.ResumeSeconds;
-            Changed?.Invoke();
-            return;
+            case PastorState.Gone:
+                if (!_pastorFsm.Tick(dt)) return;
+                var spot = _church.Pastor!;
+                var from = _church.SacristyDoor?.Pos ?? spot.Pos;
+                _pastor = _crowd.SpawnRole(CitizenRole.Pastor, new[] { from, spot.Pos }, spot.Yaw);
+                if (_pastor == null) { _pastorFsm.Restart(RetrySeconds); return; }
+                _pastorFsm.Enter(PastorState.Arriving);
+                Changed?.Invoke();
+                return;
+            case PastorState.Arriving:
+                if (_pastor is not { Alive: true } p || p.State is not (CitizenState.Standing or CitizenState.Clapping)) return;
+                _pastorFsm.Enter(PastorState.Settling, _cfg.ResumeSeconds);
+                goto case PastorState.Settling; // the arrival tick already counts
+            case PastorState.Settling:
+                if (_pastor is not { Alive: true }) return;
+                if (_pastorFsm.Tick(dt)) { _pastorFsm.Enter(PastorState.Ready); Changed?.Invoke(); }
+                return;
         }
-        if (PastorReady || _pastor is not { Alive: true } p) return;
-        if (!_arrived && p.State is CitizenState.Standing or CitizenState.Clapping) _arrived = true;
-        if (!_arrived) return;
-        _resumeLeft -= dt;
-        if (_resumeLeft <= 0) { PastorReady = true; Changed?.Invoke(); }
     }
 
     void OnKilled(CitizenKilled k)
@@ -166,18 +204,17 @@ public sealed class HolyMassEvent
         if (!Running) return;
         if (k.Killer != 0) { _sinners.Add(k.Killer); Sinned?.Invoke(k); }
         if (k.Role != CitizenRole.Pastor) return;
-        PastorKills++;
-        PastorReady = false; _arrived = false;
-        if (Phase is not (MassPhase.Gather or MassPhase.Mass)) { Changed?.Invoke(); return; }
+        PastorKills++; // also in Completed and Void, where only the clients' count changes
+        if (Phase is not (MassPhase.Gather or MassPhase.Mass)) { Changed?.Invoke(); return; } // the pastor is Off already
         if (PastorKills >= _cfg.PastorKillsToTurn)
         {
-            _replaceLeft = -1;
+            _pastorFsm.Enter(PastorState.Off);
             // no death clip and no corpse: the pastor's body goes in the hit itself, the demon takes its place
             if (_pastor != null && _pastor.HitId == k.HitId) _crowd.Remove(_pastor);
             Turn();
             return;
         }
-        _replaceLeft = _cfg.PastorReplaceSeconds;
+        if (!_pastorFsm.Enter(PastorState.Gone, _cfg.PastorReplaceSeconds)) _pastorFsm.Restart(_cfg.PastorReplaceSeconds); // killed while already waiting: the pause starts over
         Changed?.Invoke();
     }
 
@@ -186,7 +223,7 @@ public sealed class HolyMassEvent
     {
         if (Phase == MassPhase.Void) return;
         PastorKills = Math.Max(PastorKills, _cfg.PastorKillsToTurn);
-        PastorReady = false; _replaceLeft = _resumeLeft = -1;
+        _pastorFsm.Enter(PastorState.Off);
         Turn();
     }
 
@@ -250,9 +287,8 @@ public sealed class HolyMassEvent
         var blessed = _seatOf.Keys.Where(p => IsBlessed(true, _sinners.Contains(p), SeatedSeconds(p), Progress, _cfg.BlessedShare)).OrderBy(p => p).ToList();
         _crowd.Finish(_cfg.ClapShare);
         foreach (var p in _seatOf.Keys.ToList()) Stand(p);
-        PastorReady = false;
-        _phaseLeft = _cfg.CompletedSeconds;
-        SetPhase(MassPhase.Completed);
+        _pastorFsm.Enter(PastorState.Off);
+        SetPhase(MassPhase.Completed, _cfg.CompletedSeconds);
         Completed?.Invoke(blessed);
     }
 
@@ -266,14 +302,13 @@ public sealed class HolyMassEvent
         if (Phase == MassPhase.Idle) return;
         _crowd.Clear();
         _seatOf.Clear(); _kept.Clear();
-        _pastor = null; PastorReady = false; _replaceLeft = _resumeLeft = -1;
+        _pastor = null; _pastorFsm.Enter(PastorState.Off);
         SetPhase(MassPhase.Idle);
     }
 
-    void SetPhase(MassPhase phase)
+    void SetPhase(MassPhase phase, float seconds = float.PositiveInfinity)
     {
-        if (Phase == phase) return;
-        Phase = phase;
+        if (!_phase.Enter(phase, seconds)) return;
         MassPhaseChanged?.Invoke(phase);
         Changed?.Invoke();
     }
