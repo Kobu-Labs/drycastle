@@ -19,7 +19,9 @@ namespace Drycastle.Shooter;
 public partial class ChurchBlood : Node3D
 {
     /// <summary>The stains of the windows start at random moments inside this many seconds after the demon appears.</summary>
-    public const float StartSpreadS = 20f;
+    public const float StartSpreadS = 8f;
+    /// <summary>How much faster than the shader's own pace the blood runs, spreads and dries (its streaks are about 0.06-0.45 m/s at 1).</summary>
+    const float FlowSpeed = 2.5f;
     /// <summary>A joiner finds the demon already fighting: the stains start this old.</summary>
     public const float JoinAgeS = 75f;
     /// <summary>The quad lies this far off the wall face (the shader pushes it a little further with distance, against z-fighting); the pane is in the middle of the 0.4 m wall.</summary>
@@ -29,7 +31,7 @@ public partial class ChurchBlood : Node3D
     /// <summary>The arcades below the clerestory are open under this height above the floor: an inside streak there stops at it.</summary>
     const float ArchTopM = 3.7f;
     /// <summary>A pool on the floor under an inside stain: its size, how far off the wall it lies, when it begins to grow (the streaks fall at about this speed) and how long it takes to grow.</summary>
-    const float PoolSizeM = 1.8f, PoolSetM = 0.3f, StreakMps = 0.25f, PoolGrowS = 60f;
+    const float PoolSizeM = 1.8f, PoolSetM = 0.3f, StreakMps = 0.25f * FlowSpeed, PoolGrowS = 60f / FlowSpeed;
 
     sealed class Stain
     {
@@ -366,7 +368,7 @@ void fragment() {
         {
             var a = (float)(_age - s.Start);
             s.Wall.Visible = a > 0;
-            if (a > 0) s.Mat.SetShaderParameter("age", a);
+            if (a > 0) s.Mat.SetShaderParameter("age", a * FlowSpeed);
             if (s.Pool != null && s.PoolMat != null)
             {
                 var p = Mathf.Clamp(((float)_age - s.PoolStart) / PoolGrowS, 0f, 1f);
