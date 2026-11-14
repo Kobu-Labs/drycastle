@@ -7,15 +7,17 @@ namespace Drycastle.Shooter;
 /// <summary>
 /// The church on the server (ADR 0019): the doors and the shelter. The doors are a two-state door in the doorway, closed by default; their box lives
 /// in <see cref="ChurchDoorNode"/> (made with the map, on the World layer, so players, bullets and citizens stop at it), the state is replicated as
-/// <see cref="EventKind.ChurchDoor"/> (a joiner gets it when the doors are open). The event code drives them through <see cref="ChurchDoors"/>;
-/// <c>/church open|close</c> is the admin's test. The church rooms are loaded into the <see cref="Shelters"/> (<see cref="MapShelters"/>).
+/// <see cref="EventKind.ChurchDoor"/> (a joiner gets it when the doors are open). What the doors should do is decided in ONE place, <see cref="ChurchDoorPolicy"/>
+/// (ShooterCore): the Mass and the demon name a <see cref="DoorReason"/> through <see cref="DoorsFor"/>, and <see cref="ApplyDoors"/> moves the box once.
+/// <c>/church open|close</c> (<see cref="ChurchDoors"/>) is the admin's test. The church rooms are loaded into the <see cref="Shelters"/> (<see cref="MapShelters"/>).
 /// </summary>
 public partial class NetServer
 {
     ChurchShell? _mapChurch;
     bool _mapChurchTried;
     ChurchDoors? _churchDoors;
-    bool _churchOpen;
+    /// <summary>The decider of the doors (open/closed, the close-when-empty latch, the demon fight's grace clock).</summary>
+    readonly ChurchDoorPolicy _doorPolicy = new();
 
     /// <summary>The church of the map (church.json with a doorway), or null: no map, an older church.json, or a broken one (logged).</summary>
     ChurchShell? MapChurch
@@ -38,7 +40,7 @@ public partial class NetServer
     /// <summary>The joiner's catch-up: the doors are closed by default, so only open doors are told.</summary>
     void SendChurchOnJoin(Client c)
     {
-        if (_churchOpen) Send(c, new EventMsg((byte)EventKind.ChurchDoor, ChurchDoorCodec.Encode(true)));
+        if (_doorPolicy.IsOpen) Send(c, new EventMsg((byte)EventKind.ChurchDoor, ChurchDoorCodec.Encode(true)));
     }
 
     /// <summary>"/church [open|close]": opens or closes the doors, or says which they are.</summary>
@@ -46,18 +48,43 @@ public partial class NetServer
     {
         if (!ChurchDoors.Exists) { ChatTo(c, ChatLineKind.Error, "This map has no church doors (no church.json with a doorway yet)."); return; }
         if (args.Count == 0) { ChatTo(c, ChatLineKind.Info, $"The church doors are {(ChurchDoors.IsOpen ? "open" : "closed")}; {ChurchDoors.PlayersInside().Count} inside."); return; }
-        if (args[0] == "open") ChurchDoors.Open(); else ChurchDoors.Close();
+        if (args[0] == "open") ChurchDoors.Open(); else ChurchDoors.Close(); // the admin's word is one-off: a pending close-when-empty still fires
         ChatToAll(ChatLineKind.System, "", $"{c.Name} {(ChurchDoors.IsOpen ? "opened" : "closed")} the church doors.");
     }
 
     internal bool HasChurch => MapChurch != null;
-    internal bool ChurchOpen => _churchOpen;
+    internal bool ChurchOpen => _doorPolicy.IsOpen;
     internal IReadOnlyList<ushort> PlayersInChurchRooms() => PlayersInChurch();
 
-    internal void SetChurchDoorsOpen(bool open)
+    /// <summary>A decider (the Mass, the demon) names why the doors move; the policy decides, the world follows.</summary>
+    void DoorsFor(DoorReason reason)
     {
-        if (open == _churchOpen) return;
-        _churchOpen = open;
+        if (_doorPolicy.Apply(reason)) ApplyDoors();
+    }
+
+    /// <summary>The Mass changed phase: gather opens, void slams shut, the end shuts them once the church is empty (<see cref="MassPhaseChanged"/>).</summary>
+    void DoorsFollowMass(MassPhase p)
+    {
+        if (p == MassPhase.Gather) DoorsFor(DoorReason.MassGathering);
+        else if (p == MassPhase.Void) DoorsFor(DoorReason.MassVoid);
+        else if (p == MassPhase.Idle) DoorsFor(DoorReason.MassOver);
+    }
+
+    /// <summary>Once a tick: the close that waits for an empty church (the head count is only taken while one waits).</summary>
+    void DoorsTick()
+    {
+        if (_doorPolicy.TickDeferredClose(() => ChurchDoors.PlayersInside().Count)) ApplyDoors();
+    }
+
+    internal void SetDoorsByAdmin(bool open)
+    {
+        if (_doorPolicy.SetByAdmin(open)) ApplyDoors();
+    }
+
+    /// <summary>The ONE place the doors move in the world: the policy's state goes to the box, the push out of the doorway, and every client.</summary>
+    void ApplyDoors()
+    {
+        var open = _doorPolicy.IsOpen;
         ChurchDoorNode.Current?.SetOpen(open, animate: false); // the box first: nobody can walk into the doorway behind the push
         if (!open) PushOutOfDoorway();
         BroadcastEvent(EventKind.ChurchDoor, ChurchDoorCodec.Encode(open));
@@ -108,8 +135,9 @@ public sealed class ChurchDoors
     public bool Exists => _s.HasChurch;
 
     public bool IsOpen => _s.ChurchOpen;
-    public void Open() => _s.SetChurchDoorsOpen(true);
-    public void Close() => _s.SetChurchDoorsOpen(false);
+    /// <summary>The admin's one-off open/close; the event code does not use these (it names a <see cref="DoorReason"/>).</summary>
+    public void Open() => _s.SetDoorsByAdmin(true);
+    public void Close() => _s.SetDoorsByAdmin(false);
 
     /// <summary>The ids of the living players (bots too) whose feet are in the nave or the chancel (the <c>rooms</c> of church.json). Empty without a church.</summary>
     public IReadOnlyList<ushort> PlayersInside() => _s.PlayersInChurchRooms();

@@ -32,17 +32,15 @@ public partial class NetServer
     /// <summary>holy_mass_demon.json (set by the host). Without it (zero hits) the demon does not appear.</summary>
     public DemonFile Demon = new();
 
-    enum DemonStage : byte { None, Delay, Transforming, Climbing, Fighting, Dying }
-
-    DemonStage _dStage;
-    float _dTime;
+    /// <summary>The stage and its clock (pure, ShooterCore): this file only does the world work of each stage. It reads <see cref="Demon"/> live, as the host may replace it.</summary>
+    DemonLifecycle? _life;
+    DemonLifecycle Life => _life ??= new DemonLifecycle(() => Demon.Fight);
     DemonEntity? _dEnt;
     ushort _dEntId;
     DemonBrain? _brain;
     AnchorGraph? _anchors;
     int _dStartAnchor;
     NVec3 _dSpot, _dSpotForward;
-    float _dDoorT;
     int _dInside;
     readonly List<DemonEvent> _dEvents = new();
     readonly List<DemonPlayer> _dPlayers = new();
@@ -53,7 +51,7 @@ public partial class NetServer
     readonly Dictionary<ushort, double> _pounceImmune = new();
 
     /// <summary>A demon is in the church (any stage): the Mass is void and nothing else can start it.</summary>
-    public bool DemonActive => _dStage != DemonStage.None;
+    public bool DemonActive => Life.Active;
 
     /// <summary>Once, with the match: the curse's burn follows holy_mass_demon.json (the same numbers), and the pastor's third death starts the fight.</summary>
     void DemonInit()
@@ -67,37 +65,47 @@ public partial class NetServer
     /// <summary>The pastor turns: the fight starts after the transformation delay. Everyone who sat stands up.</summary>
     void DemonBegin()
     {
-        if (_dStage != DemonStage.None) return;
-        if (Demon.Hits.Base <= 0) { GD.PrintErr("server: demon: holy_mass_demon.json is not loaded; the pastor turns into nothing"); return; }
-        if (_church?.Pastor is not { } spot) return;
+        if (Life.Active) return;
+        if (DemonLifecycle.WhyNot(Demon) is { } why) { DemonStartFailed($"{why}; the pastor turns into nothing"); return; }
+        if (_church?.Pastor is not { } spot) { DemonStartFailed("the church has no pastor spot; the pastor turns into nothing"); return; }
         try { _anchors = AnchorGraph.FromJson(File.ReadAllText(Path.Combine(MapDir, "church.json"))); }
         catch (Exception e) when (e is DataFileException or IOException or System.Text.Json.JsonException)
         {
-            GD.PrintErr($"server: demon: church.json has no usable anchors ({e.Message}); the pastor turns into nothing");
+            DemonStartFailed($"church.json has no usable anchors ({e.Message}); the pastor turns into nothing");
             return;
         }
         foreach (var id in _sitters.Keys.ToList()) MassStandUp(id);
-        _closeWhenEmpty = false;
+        DoorsFor(DoorReason.DemonStarting);
         _dSpot = spot.Pos;
         _dSpotForward = new NVec3(-MathF.Sin(spot.Yaw), 0, -MathF.Cos(spot.Yaw));
         _dStartAnchor = _anchors.Anchors.OrderBy(a => NVec3.DistanceSquared(a.Pos, spot.Pos)).First().Id;
-        _dStage = DemonStage.Delay; _dTime = Demon.Fight.TransformDelayS;
-        GD.Print($"server: demon: the pastor turns in {_dTime:0.0} s (first anchor {_dStartAnchor})");
+        Life.Begin();
+        GD.Print($"server: demon: the pastor turns in {Life.Left:0.0} s (first anchor {_dStartAnchor})");
+    }
+
+    /// <summary>
+    /// The demon cannot be made (no data, no pastor spot, no anchors, no entity). The Mass is already void and the doors were slammed shut for the fight that
+    /// will not come: open them (nobody is locked in with nothing), say so in the log and in chat, and leave the event to be ended (<c>/event current end</c>).
+    /// </summary>
+    void DemonStartFailed(string why)
+    {
+        GD.PrintErr($"server: demon: {why}");
+        DoorsFor(DoorReason.DemonFailed);
+        ChatToAll(ChatLineKind.System, "", $"The demon could not start ({why}). The church doors are open; /event current end ends the Mass.");
     }
 
     /// <summary>The event is over (ended, concluded, a new round): the demon, its fireballs and the fight's state go; the doors open for whoever is locked in.</summary>
     void DemonClear()
     {
-        if (_dStage == DemonStage.None) return;
-        var was = _dStage;
-        _dStage = DemonStage.None;
+        if (!Life.Active) return;
+        var was = Life.Clear();
         foreach (var b in _balls) BroadcastEvent(EventKind.DemonImpact, DemonCodec.EncodeImpact(new DemonImpactMsg((ushort)b.Id, b.Pos, false, true)));
         _balls.Clear();
         if (_brain?.PounceVictim is { } marked) PounceLetGo(marked, false); // the mark and the hold go with the event
         foreach (var id in _pins.Keys.ToList()) PounceLetGo(id, false);
         if (_dEnt != null) { _match.Entities.Despawn(_dEntId, WorldDespawnReason.Removed); _dEnt = null; }
         _brain = null; _anchors = null;
-        if (was != DemonStage.Delay) ChurchDoors.Open(); // nobody stays locked in; MassTick shuts them once the church is empty
+        DoorsFor(DoorReason.DemonCleared); // nobody stays locked in (also from Delay: Void had shut them); the deferred close shuts them once the church is empty
         GD.Print($"server: demon: cleared (was {was})");
     }
 
@@ -105,28 +113,28 @@ public partial class NetServer
     void DemonTick(float dt)
     {
         PounceSweep();
-        if (_dStage == DemonStage.None) return;
+        if (!Life.Active) return;
         if (_mass is not { Running: true }) { DemonClear(); return; }
-        _dTime -= dt;
-        switch (_dStage)
+        var due = Life.Tick(dt);
+        switch (Life.Stage)
         {
             case DemonStage.Delay:
-                if (_dTime <= 0) DemonTransform();
+                if (due) DemonTransform();
                 break;
             case DemonStage.Transforming:
                 if (_dEnt == null) { DemonClear(); return; }
-                if (_dTime <= 0)
+                if (due)
                 {
-                    _dStage = DemonStage.Climbing; _dTime = Demon.Fight.ClimbS;
-                    _dEnt.State = DemonState.Crawling;
+                    Life.BeginClimb();
+                    _dEnt.State = DemonLifecycle.WireStateOf(DemonStage.Climbing);
                 }
                 break;
             case DemonStage.Climbing:
                 if (_dEnt == null) { DemonClear(); return; }
                 DemonClimb();
-                if (_dTime <= 0)
+                if (due)
                 {
-                    _dStage = DemonStage.Fighting;
+                    Life.BeginFight();
                     _brain = new DemonBrain(Demon, _anchors!, new Random(), DemonSight, _dStartAnchor, DemonFloorY);
                     GD.Print("server: demon: the fight begins");
                 }
@@ -137,7 +145,7 @@ public partial class NetServer
                 break;
             case DemonStage.Dying:
                 StepFireballs(dt);
-                if (_dTime <= 0)
+                if (due)
                 {
                     GD.Print("server: demon: the corpse is gone, the Mass is over");
                     _mass.End(); // phase Idle: DemonClear
@@ -145,7 +153,7 @@ public partial class NetServer
                 }
                 break;
         }
-        if (_dEnt != null && _dStage != DemonStage.None) _dEnt.HitsLeft = _dStage == DemonStage.Dying ? 0 : _brain is { } b ? 1f - Math.Min(1f, b.HitsTaken / (float)Math.Max(1, b.HitsNeeded)) : 1f;
+        if (_dEnt != null && Life.Active) _dEnt.HitsLeft = Life.Is(DemonStage.Dying) ? 0 : _brain is { } b ? 1f - Math.Min(1f, b.HitsTaken / (float)Math.Max(1, b.HitsNeeded)) : 1f;
     }
 
     /// <summary>The delay is over: the dead pastor is taken away, everyone else dies in the fire, the demon is made.</summary>
@@ -158,17 +166,17 @@ public partial class NetServer
             GD.Print($"server: demon: {died} of the monks burn to death");
         }
         _dEnt = new DemonEntity { Position = _dSpot, Normal = NVec3.UnitY, Forward = _dSpotForward, State = DemonState.Transforming };
-        if (_match.Entities.Spawn(_dEnt) is not { } id) { GD.PrintErr("server: demon: the entity cap is reached; no demon"); _dEnt = null; DemonClear(); return; }
+        if (_match.Entities.Spawn(_dEnt) is not { } id) { _dEnt = null; DemonStartFailed("the entity cap is reached; no demon"); DemonClear(); return; }
         _dEntId = id;
-        _dStage = DemonStage.Transforming; _dTime = Demon.Fight.TransformS;
-        _dDoorT = 0;
+        Life.BeginTransform();
+        _doorPolicy.FightBegins();
     }
 
     /// <summary>The leap from the floor to the first anchor: a smooth slide with a little arc, turning from upright to the surface.</summary>
     void DemonClimb()
     {
         var a = _anchors![_dStartAnchor];
-        var t = 1f - Math.Clamp(_dTime / Demon.Fight.ClimbS, 0f, 1f);
+        var t = Life.ClimbProgress;
         var k = t * t * (3 - 2 * t);
         var from = _dSpot;
         var to = a.Pos;
@@ -202,21 +210,7 @@ public partial class NetServer
         _brain!.Step(dt, _dPlayers, _dEvents);
         var pose = _brain.Pose;
         _dEnt!.Position = pose.Position; _dEnt.Normal = pose.Normal; _dEnt.Forward = pose.Forward;
-        _dEnt.State = _brain.Phase switch
-        {
-            DemonPhase.Waiting => DemonState.Waiting,
-            DemonPhase.Dwelling => DemonState.Dwelling,
-            DemonPhase.Crawling => DemonState.Crawling,
-            DemonPhase.Telegraphing => DemonState.Telegraphing,
-            DemonPhase.Roaring => DemonState.Roaring,
-            DemonPhase.LeapWind => DemonState.Crouching,
-            DemonPhase.Leaping => DemonState.Leaping,
-            DemonPhase.Breathing => DemonState.Breathing,
-            DemonPhase.PounceWind => DemonState.PounceWind,
-            DemonPhase.Pouncing => DemonState.Pouncing,
-            DemonPhase.Pinning => DemonState.Pinning,
-            _ => DemonState.Dead,
-        };
+        _dEnt.State = DemonLifecycle.WireStateOf(_brain.Phase);
         DemonHandle(_dEvents);
         DemonDoors(dt);
         StepFireballs(dt);
@@ -318,7 +312,7 @@ public partial class NetServer
         if (_pounceImmune.Count > 0)
             foreach (var id in _pounceImmune.Where(kv => kv.Value <= _elapsed).Select(kv => kv.Key).ToList()) _pounceImmune.Remove(id);
         if (_pins.Count == 0) return;
-        var brain = _dStage == DemonStage.Fighting ? _brain : null;
+        var brain = Life.Is(DemonStage.Fighting) ? _brain : null;
         foreach (var id in PounceRules.Stuck(_pins.Keys, brain, i => _byId.ContainsKey(i) && _match.Get(i)?.Life == PlayerLife.Alive)) PounceLetGo(id, false);
     }
 
@@ -327,7 +321,7 @@ public partial class NetServer
     /// <summary>Join: the pounce as it is, for a client that arrives during one (the victim's mark or the pin).</summary>
     void SendPounceOnJoin(Client c)
     {
-        if (_brain is not { PounceVictim: { } v } || _dStage != DemonStage.Fighting) return;
+        if (_brain is not { PounceVictim: { } v } || !Life.Is(DemonStage.Fighting)) return;
         var pinned = _pins.TryGetValue(v, out var yaw);
         Send(c, new EventMsg((byte)EventKind.DemonPounce, DemonCodec.EncodePounce(new DemonPounceMsg(v, pinned ? PounceStage.Pinned : PounceStage.Wind, pinned ? yaw : 0))));
     }
@@ -335,10 +329,9 @@ public partial class NetServer
     /// <summary>The demon is dead: the curse to everyone who hit it and still lives, the doors open (the church closes once everyone has left), the corpse lies a while.</summary>
     void DemonKilled(IReadOnlyList<ushort> credited)
     {
-        _dStage = DemonStage.Dying; _dTime = Demon.Fight.CorpseS;
+        Life.Die();
         if (_dEnt != null) { _dEnt.State = DemonState.Dead; _dEnt.HitsLeft = 0; }
-        ChurchDoors.Open();
-        _closeWhenEmpty = true;
+        DoorsFor(DoorReason.DemonKilled);
         var cursed = 0;
         foreach (var id in credited)
         {
@@ -352,17 +345,10 @@ public partial class NetServer
     /// <summary>Locked while someone is inside; open and waiting when nobody is.</summary>
     void DemonDoors(float dt)
     {
-        if (_dInside > 0)
-        {
-            if (!ChurchDoors.IsOpen) { _dDoorT = 0; return; }
-            _dDoorT += dt;
-            if (_dDoorT >= Demon.Fight.DoorGraceS) { ChurchDoors.Close(); GD.Print("server: demon: the doors shut"); }
-        }
-        else
-        {
-            _dDoorT = 0;
-            if (!ChurchDoors.IsOpen) { ChurchDoors.Open(); GD.Print("server: demon: nobody inside; the doors open and it waits"); }
-        }
+        var wasOpen = ChurchDoors.IsOpen;
+        if (!_doorPolicy.TickFight(dt, _dInside, Demon.Fight.DoorGraceS)) return;
+        ApplyDoors();
+        GD.Print(wasOpen ? "server: demon: the doors shut" : "server: demon: nobody inside; the doors open and it waits");
     }
 
     // ---- fireballs ----
@@ -414,7 +400,7 @@ public partial class NetServer
     /// <summary>Adds the demon as a hit target while it can be hurt (once the fight has begun, until it dies).</summary>
     void AddDemonTarget(List<HitTarget> into)
     {
-        if (_dEnt == null || _dStage != DemonStage.Fighting) return;
+        if (_dEnt == null || !Life.Is(DemonStage.Fighting)) return;
         var yaw = MathF.Atan2(-_dEnt.Forward.X, -_dEnt.Forward.Z);
         into.Add(DemonRules.Target(_dEnt.Position, _dEnt.Normal, Demon.BodyM, yaw, Demon.Scale));
     }
@@ -429,7 +415,7 @@ public partial class NetServer
     DamageResult DemonHit(ushort attacker, byte weapon, float damage)
     {
         // the brain starts after the leap to the wall: it cannot be hurt before that (and not after it died)
-        if (_brain == null || _dStage != DemonStage.Fighting || DemonKindOf(weapon) is not { } kind || !_byId.ContainsKey(attacker)) return DamageResult.Ignored;
+        if (_brain == null || !Life.Is(DemonStage.Fighting) || DemonKindOf(weapon) is not { } kind || !_byId.ContainsKey(attacker)) return DamageResult.Ignored;
         var events = new List<DemonEvent>();
         var r = _brain.RegisterHit(attacker, kind, events);
         if (r == DemonHitResult.Ignored) return DamageResult.Ignored;
