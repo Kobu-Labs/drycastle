@@ -423,6 +423,26 @@ _Avoid_: quest, mission, mode (a match mode is another thing), wave
 The first Event: a giant, twice a player's height, that spawns at a baked point of an area with `event spawn: bigfoot` (or, on a map with none, near a random player as a dev fallback) and hunts the players. It is a **world entity** with its own brain (`Bigfoot`), not a bot: it has no player health or weapons, ignores the navmesh, walks a straight line over the terrain towards the nearest player (trees do not stop it, buildings do), and has a **Hit count** instead of hit points. Its attacks come with its phases: it hurls tree trunks (phase one); stomps and throws vehicles (two); grabs a player, flails with them and launches them, at another player when there is one (three); everything it does to a player is 2 to 5 damage. When it dies the Event is won: players credited get XP, and footsteps lead to a Corpse that carries the Bigfoot head. Every number is in `bigfoot.json`.
 _Avoid_: boss (alone), monster, sasquatch, yeti
 
+**Thieves event**:
+The Event started with `/event thieves`: three Raids come to the village one after another to steal Loot. It cannot be lost: it is won when the last van is gone (destroyed or driven off), and it runs to its end even with no player near. What is stolen stays stolen until the round resets. Every number is in `thieves.json`; the design is in `docs/events/README.md`.
+_Avoid_: invasion, heist, robbery
+
+**Raid**:
+One van of the Thieves event and its crew of Gang members (a Gang boss, Enforcers, Thieves). The van drives in from the map edge, stops where the most targets are, the crew steals and loads Loot, and the van leaves when it is full, its stay timer runs out or its crew is dead. At most two Raids are in the village at once.
+_Avoid_: wave, attack, round (a round is the match's)
+
+**Raid van**:
+The vehicle of a Raid: a scripted world entity that follows the road graph, not a vehicle a player can use (ADR 0021). Nobody enters it and nothing pushes it; it pushes through what is in its way and honks. It has a Hit count; destroyed, its Raid is over, everything loaded in it goes back to its place and its crew flees on foot.
+_Avoid_: truck, transport, car
+
+**Gang member**:
+A person of a Raid: a world entity with its own brain and a Hit count, not a Citizen (a Citizen dies of one hit and never reacts) and not a bot. Three kinds: a **Thief** steals Loot and carries it to the van; an **Enforcer** carries a pipe, steals nothing and guards the Thieves and the van; the **Gang boss** stays by the van and wears the Gold chain. They attack a player only when interfered with (a member of their Raid was hit, or the player crowds a working Thief).
+_Avoid_: NPC (alone), enemy, bandit, robber; boss (alone: say Gang boss)
+
+**Loot**:
+What a Thief takes: a tire off a car, a Pet, a satellite dish off a house, a connector off a utility pole. It is carried, lying (its carrier was killed: another Thief may take it, a player holds use on it to send it back to its place; a Pet walks home by itself) or loaded in a Raid van. Loaded Loot of a van that drove off is gone until the round resets. Not an Item: a player never carries it.
+_Avoid_: item, pickup, cargo, stolen goods
+
 **Hit count**:
 How the Bigfoot is killed: not hit points but a number of hits, `hits.per_player` times the participants (at least one), tuned for about a minute. A bullet hit counts 1, with no headshot bonus (a headshot on it is a body hit); an explosive hit (a rocket, the attack missile, the MOAB) and a vehicle-weapon hit count a larger, configurable weight; ramming it counts nothing. The count only goes up while it fights.
 _Avoid_: health, hit points, HP bar
