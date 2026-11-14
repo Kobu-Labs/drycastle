@@ -25,13 +25,27 @@ public sealed record HelperRoundAction(ushort Target, Vector3 From, Vector3 End,
 /// </summary>
 public sealed class HelicopterGunner
 {
-    enum Phase : byte { Waiting, Warning, Burst }
+    public enum Phase : byte { Waiting, Warning, Burst }
+
+    /// <summary>The cycle: wait, pick and warn, fire a burst, back to waiting. A target that hides or dies ends the warning or the burst early.</summary>
+    public static readonly StateMachineSpec<Phase> Spec = StateMachineSpec<Phase>.Define(
+            "HelicopterGunner.Phase", "The helicopter's gun cycle: wait, warn the picked enemy, fire a burst, wait again.", Phase.Waiting)
+        .Allow(Phase.Waiting, Phase.Warning)
+        .Allow(Phase.Warning, Phase.Burst, Phase.Waiting)
+        .Allow(Phase.Burst, Phase.Waiting)
+        .Note(Phase.Waiting, "Counting down the cycle gap; at zero it picks the best visible enemy (none: waits another gap). No target.")
+        .Note(Phase.Warning, "The target has its red-dot warning; at zero the burst starts if it is still visible, else back to Waiting.")
+        .Note(Phase.Burst, "One round each round interval while the target stays visible; the last round or a lost target goes back to Waiting.")
+        .Build();
 
     readonly HelicopterHelperTuning _t;
     readonly Func<double> _roll;
-    Phase _phase = Phase.Waiting;
-    /// <summary>Time left in the current phase (Waiting, Warning) or until the next round (Burst).</summary>
-    float _timer;
+    /// <summary>
+    /// The phase and its clock: the time left in Waiting and Warning, or until the next round in Burst. The clock CARRIES OVER (see <see cref="Carry"/> and
+    /// <see cref="Extend"/>): a long step runs several phases in one <see cref="Tick"/>, so the overshoot of one phase counts towards the next.
+    /// </summary>
+    readonly StateMachine<Phase> _fsm = new(Spec);
+    /// <summary>Who is warned or shot at; only meaningful outside Waiting.</summary>
     ushort _target;
     int _roundsLeft;
 
@@ -41,14 +55,14 @@ public sealed class HelicopterGunner
     {
         _t = tuning;
         _roll = roll;
-        _timer = NextCycle();
+        _fsm.Restart(NextCycle());
     }
 
     /// <summary>The player the gunner is warning or firing at, or null while it waits.</summary>
-    public ushort? Target => _phase == Phase.Waiting ? null : _target;
+    public ushort? Target => _fsm.Is(Phase.Waiting) ? null : _target;
 
     /// <summary>True while a burst is in progress.</summary>
-    public bool Firing => _phase == Phase.Burst;
+    public bool Firing => _fsm.Is(Phase.Burst);
 
     /// <summary>
     /// Advances the gunner by <paramref name="dt"/> seconds. <paramref name="enemies"/> are the live enemies now and
@@ -57,27 +71,27 @@ public sealed class HelicopterGunner
     /// </summary>
     public void Tick(float dt, Vector3 muzzle, IReadOnlyList<HelperCandidate> enemies, Func<Vector3, Vector3, bool> clear, List<HelperAction> actions)
     {
-        _timer -= dt;
-        while (_timer <= 0)
+        _fsm.Tick(dt);
+        while (_fsm.Expired)
         {
-            switch (_phase)
+            switch (_fsm.Current)
             {
                 case Phase.Waiting:
                     if (Pick(muzzle, enemies, clear) is not { } pick)
                     {
-                        _timer += NextCycle();
+                        Extend(NextCycle());
                         break;
                     }
                     _target = pick;
-                    _phase = Phase.Warning;
-                    _timer += _t.WarningS;
+                    Carry(Phase.Warning);
+                    Extend(_t.WarningS);
                     actions.Add(new HelperWarnAction(pick, _t.WarningS));
                     break;
 
                 case Phase.Warning:
                     if (Visible(muzzle, enemies, clear, _target) is not null)
                     {
-                        _phase = Phase.Burst; // the first round goes at the end of the warning (the timer is still due)
+                        Carry(Phase.Burst); // the first round goes at the end of the warning (the clock is still due)
                         _roundsLeft = _t.Rounds;
                     }
                     else EndBurst();
@@ -94,17 +108,29 @@ public sealed class HelicopterGunner
                     actions.Add(new HelperRoundAction(_target, muzzle, end, hit, _t.Damage));
                     _roundsLeft--;
                     if (_roundsLeft <= 0) EndBurst();
-                    else _timer += _t.RoundIntervalS;
+                    else Extend(_t.RoundIntervalS);
                     break;
             }
         }
     }
 
+    /// <summary>Back to waiting for the next cycle (a burst finished, or its target hid or died). Also ends a warning whose target is gone.</summary>
     void EndBurst()
     {
-        _phase = Phase.Waiting;
-        _timer += NextCycle();
+        Carry(Phase.Waiting);
+        Extend(NextCycle());
     }
+
+    /// <summary>Changes phase keeping the clock as it is, overshoot included (<c>Enter</c> alone would reset it).</summary>
+    void Carry(Phase next)
+    {
+        var left = _fsm.Left;
+        _fsm.Enter(next);
+        _fsm.SetLeft(left);
+    }
+
+    /// <summary>Adds <paramref name="seconds"/> to the clock: the next event is that much later than the one just handled.</summary>
+    void Extend(float seconds) => _fsm.SetLeft(_fsm.Left + seconds);
 
     float NextCycle() => _t.CycleMinS + (float)_roll() * (_t.CycleMaxS - _t.CycleMinS);
 
