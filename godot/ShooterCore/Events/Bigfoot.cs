@@ -76,6 +76,9 @@ public interface IBigfootWorld
     /// <summary>The server lifts the vehicle from where it stands to <paramref name="hold"/> in <paramref name="seconds"/> and keeps it there, nobody steering, until <see cref="ThrowVehicle"/>.</summary>
     void LiftVehicle(ushort vehicle, Vector3 hold, float seconds);
 
+    /// <summary>The Bigfoot lost the vehicle it lifted before it threw it (it was wiped, died or was removed): the server puts it down where it stood, at once.</summary>
+    void DropVehicle(ushort vehicle);
+
     /// <summary>The server throws the vehicle on a scripted arc to <paramref name="landing"/>, in <paramref name="seconds"/>, turning at <paramref name="spinRadPerS"/>.</summary>
     void ThrowVehicle(ushort vehicle, Vector3 landing, float seconds, float spinRadPerS);
 
@@ -100,20 +103,19 @@ public sealed class Bigfoot : IWorldEntity
     bool _hitToggle;
     readonly Dictionary<ushort, int> _hitsBy = new();
     HashSet<ushort> _near = new();    // the living players within the participant radius at the last tick
-    bool _waiting;                    // wiped: healed, standing, waiting for a player to come
     float _alone;                     // seconds with no living player within the despawn radius
     float _deadFor;
 
     // behaviour
-    float _actLeft;                   // seconds left of a timed act
+    readonly StateMachine<BigfootAct> _act = new(BigfootSpecs.Act);     // the act and the seconds left of a timed one
+    readonly StateMachine<BigfootLife> _life = new(BigfootSpecs.Life);  // fighting, waiting after a wipe, dead
     ushort _target;
     float _retarget;
     float _fight;                     // seconds awake with a target: the phases also begin by this clock
     float _trunkCd, _stompCd, _vehicleCd, _grabCd;
     ushort _vehicleToThrow;
     Vector3 _vehicleFrom;             // where the vehicle it lifts stood
-    ushort _held;
-    float _holdLeft;
+    ushort _held;                     // the hold's clock is the Hold act's countdown
     readonly List<Wave> _waves = new();
     readonly List<Flyer> _flyers = new();
     Vector3 _targetSeen, _targetVelocity; // where the target was last tick and how fast it moves (the aim leads by it)
@@ -134,12 +136,14 @@ public sealed class Bigfoot : IWorldEntity
     public Vector3 Position { get; private set; }
     /// <summary>Godot convention: 0 faces -Z.</summary>
     public float Yaw { get; private set; }
-    public BigfootAct Act { get; private set; } = BigfootAct.Idle;
+    public BigfootAct Act => _act.Current;
+    /// <summary>Fighting, waiting after a wipe, or dead (see <see cref="BigfootSpecs.Life"/>).</summary>
+    public BigfootLife Life => _life.Current;
     public int Phase { get; private set; }
     public bool Enraged { get; private set; }
-    public bool Alive => Act != BigfootAct.Dead;
+    public bool Alive => !_life.Is(BigfootLife.Dead);
     /// <summary>True from a wipe until a living player comes near again.</summary>
-    public bool Waiting => _waiting;
+    public bool Waiting => _life.Is(BigfootLife.Waiting);
     /// <summary>The hit count that kills it now.</summary>
     public int HitsNeeded => _need;
     /// <summary>The hits taken, weighted (a rocket counts many).</summary>
@@ -177,7 +181,7 @@ public sealed class Bigfoot : IWorldEntity
         if (Ended != null || !Alive || !(weight > 0)) return false;
         _taken += weight;
         _hitsBy[attacker] = _hitsBy.GetValueOrDefault(attacker) + 1;
-        if (_waiting) { _waiting = false; } // shot while it waited: it is awake
+        if (Waiting) Wake(_near.Count); // shot while it waited: it is awake, and the hit count it needs is the one for who is near
         if (_taken >= _need) { Die(attacker); return true; }
         _hitToggle = !_hitToggle;
         UpdatePhase();
@@ -193,6 +197,7 @@ public sealed class Bigfoot : IWorldEntity
     public void Remove(WorldDespawnReason reason)
     {
         ReleaseHeld();
+        DropLiftedVehicle();
         Ended ??= reason;
     }
 
@@ -201,10 +206,11 @@ public sealed class Bigfoot : IWorldEntity
         Killer = killer;
         _taken = _need;
         ReleaseHeld();
+        DropLiftedVehicle();
         _waves.Clear();
         _flyers.Clear();
-        Act = BigfootAct.Dead;
-        _actLeft = 0;
+        _act.Enter(BigfootAct.Dead);
+        _life.Enter(BigfootLife.Dead);
         var credited = new HashSet<ushort>(_near);
         foreach (var (p, n) in _hitsBy) if (n >= _d.Reward.CreditMinHits) credited.Add(p);
         if (killer != 0) credited.Add(killer);
@@ -240,32 +246,30 @@ public sealed class Bigfoot : IWorldEntity
         TickWaves(players, dt);
         TickFlyers(players, dt);
         _trunkCd -= dt; _stompCd -= dt; _vehicleCd -= dt; _grabCd -= dt;
-        if (_waiting) { Act = BigfootAct.Idle; return; }
+        if (Waiting) { Rest(); return; }
         if (_target != 0) { _fight += dt; UpdatePhase(); }
 
         switch (Act)
         {
             case BigfootAct.TrunkWindup:
                 FaceTarget(players, dt);
-                if ((_actLeft -= dt) <= 0) ReleaseTrunk(players);
+                if (_act.Tick(dt)) ReleaseTrunk(players);
                 break;
             case BigfootAct.StompWindup:
-                if ((_actLeft -= dt) <= 0) Stomp();
-                break;
-            case BigfootAct.Stomp:
-                if ((_actLeft -= dt) <= 0) Act = BigfootAct.Idle;
+                if (_act.Tick(dt)) Stomp();
                 break;
             case BigfootAct.VehicleWindup:
-                if ((_actLeft -= dt) <= 0) ThrowTheVehicle();
+                if (_act.Tick(dt)) ThrowTheVehicle();
                 break;
             case BigfootAct.GrabReach:
-                if ((_actLeft -= dt) <= 0) TakeHold(players);
+                if (_act.Tick(dt)) TakeHold(players);
                 break;
             case BigfootAct.Hold:
                 TickHold(players, dt);
                 break;
+            case BigfootAct.Stomp:
             case BigfootAct.Launch:
-                if ((_actLeft -= dt) <= 0) Act = BigfootAct.Idle;
+                if (_act.Tick(dt)) Rest();
                 break;
             default:
                 Decide(players, dt);
@@ -294,9 +298,9 @@ public sealed class Bigfoot : IWorldEntity
         _alone = anyInDespawn ? 0 : _alone + dt;
         if (_alone >= _d.Wipe.DespawnMinutes * 60f) { Remove(WorldDespawnReason.Expired); return; }
 
-        if (_waiting)
+        if (Waiting)
         {
-            if (anyWake) { _waiting = false; _need = Math.Max(_need, BigfootRules.HitsNeeded(_d.Hits, near.Count)); }
+            if (anyWake) Wake(near.Count);
             return;
         }
         _need = Math.Max(_need, BigfootRules.HitsNeeded(_d.Hits, near.Count)); // the count only goes up: players who leave do not make it easier
@@ -306,15 +310,26 @@ public sealed class Bigfoot : IWorldEntity
     /// <summary>Every participant died: it heals to full and waits where it stands.</summary>
     void Wipe()
     {
-        _taken = 0; _hitsBy.Clear(); _waiting = true;
+        _taken = 0; _hitsBy.Clear(); _life.Enter(BigfootLife.Waiting);
         Phase = 0; Enraged = false; _fight = 0;
         _need = BigfootRules.HitsNeeded(_d.Hits, 0);
         ReleaseHeld();
+        DropLiftedVehicle();
         _waves.Clear(); _flyers.Clear();
-        Act = BigfootAct.Idle;
+        Rest();
         _target = 0;
         _w.Fx(BigfootFxKind.Heal, Position);
     }
+
+    /// <summary>A living player came within the wake radius, or a shot landed: it fights again, needing the hit count for the players near it (the count only goes up).</summary>
+    void Wake(int near)
+    {
+        _life.Enter(BigfootLife.Fighting);
+        _need = Math.Max(_need, BigfootRules.HitsNeeded(_d.Hits, near));
+    }
+
+    /// <summary>Back to standing: where every ended act, a lost target and a wipe go.</summary>
+    void Rest() => _act.Enter(BigfootAct.Idle);
 
     float SpeedMul => Enraged ? _d.Hits.EnrageSpeedMultiplier : 1f;
     float CooldownMul => Enraged ? _d.Hits.EnrageCooldownMultiplier : 1f;
@@ -323,31 +338,31 @@ public sealed class Bigfoot : IWorldEntity
     void Decide(IReadOnlyList<BigfootPlayer> players, float dt)
     {
         var target = Retarget(players, dt);
-        if (target is not { } t) { Act = BigfootAct.Idle; return; }
+        if (target is not { } t) { Rest(); return; }
         var dist = Flat(t.Feet, Position);
 
         if (_vehicleCd <= 0 && FindVehicleInContact() is { } car) // every attack is its from the start; the phases only make it angrier
         {
             // it takes the vehicle in both hands and lifts it over its head for the wind-up; the throw starts from up there
-            _vehicleToThrow = car.Id; _vehicleFrom = car.Feet; Act = BigfootAct.VehicleWindup; _actLeft = _d.VehicleThrow.WindupSeconds; FaceYaw(car.Feet, dt, snap: true);
+            _vehicleToThrow = car.Id; _vehicleFrom = car.Feet; _act.Enter(BigfootAct.VehicleWindup, _d.VehicleThrow.WindupSeconds); FaceYaw(car.Feet, dt, snap: true);
             _w.LiftVehicle(car.Id, Position + new Vector3(0, _d.VehicleThrow.HoldHeightM, 0), _d.VehicleThrow.WindupSeconds * 0.75f);
             _w.Fx(BigfootFxKind.VehicleThrow, car.Feet, car.Id, (byte)Math.Clamp((int)MathF.Round((_d.VehicleThrow.WindupSeconds + _d.VehicleThrow.FlightSeconds) * 10), 1, 255));
             return;
         }
         if (_grabCd <= 0 && NearestOnFoot(players, _d.Grab.RangeM) is { } grab)
         {
-            _target = grab.Id; Act = BigfootAct.GrabReach; _actLeft = _d.Grab.ReachSeconds; FaceYaw(grab.Feet, dt, snap: true);
+            _target = grab.Id; _act.Enter(BigfootAct.GrabReach, _d.Grab.ReachSeconds); FaceYaw(grab.Feet, dt, snap: true);
             return;
         }
         if (_stompCd <= 0 && NearestOnFoot(players, _d.Stomp.TriggerM) != null)
         {
-            Act = BigfootAct.StompWindup; _actLeft = _d.Stomp.WindupSeconds;
+            _act.Enter(BigfootAct.StompWindup, _d.Stomp.WindupSeconds);
             _w.Fx(BigfootFxKind.StompWindup, Position);
             return;
         }
         if (_trunkCd <= 0 && dist >= _d.Trunk.MinRangeM && dist <= _d.Trunk.MaxRangeM && !_w.Blocked(Chest, ChestOf(t.Feet), 0.3f))
         {
-            Act = BigfootAct.TrunkWindup; _actLeft = _d.Trunk.WindupSeconds; FaceYaw(t.Feet, dt, snap: true);
+            _act.Enter(BigfootAct.TrunkWindup, _d.Trunk.WindupSeconds); FaceYaw(t.Feet, dt, snap: true);
             return;
         }
         Chase(t, dist, dt);
@@ -419,9 +434,9 @@ public sealed class Bigfoot : IWorldEntity
     void Chase(BigfootPlayer t, float dist, float dt)
     {
         var run = dist > _d.Movement.RunBeyondM;
-        if (dist <= _d.Movement.StopDistanceM) { FaceYaw(t.Feet, dt); Act = BigfootAct.Idle; return; }
+        if (dist <= _d.Movement.StopDistanceM) { FaceYaw(t.Feet, dt); Rest(); return; }
         var speed = (run ? _d.Movement.RunSpeed : _d.Movement.WalkSpeed) * SpeedMul;
-        Act = Step(t.Feet, speed, dt) ? (run ? BigfootAct.Run : BigfootAct.Walk) : BigfootAct.Idle;
+        _act.Enter(Step(t.Feet, speed, dt) ? (run ? BigfootAct.Run : BigfootAct.Walk) : BigfootAct.Idle);
     }
 
     void FaceTarget(IReadOnlyList<BigfootPlayer> players, float dt)
@@ -467,7 +482,7 @@ public sealed class Bigfoot : IWorldEntity
 
     void ReleaseTrunk(IReadOnlyList<BigfootPlayer> players)
     {
-        Act = BigfootAct.Idle;
+        Rest();
         _trunkCd = _d.Trunk.CooldownSeconds * CooldownMul * (0.8f + 0.4f * (float)_rng.NextDouble());
         BigfootPlayer? t = null;
         foreach (var p in players) if (p.Id == _target) t = p;
@@ -483,7 +498,7 @@ public sealed class Bigfoot : IWorldEntity
 
     void Stomp()
     {
-        Act = BigfootAct.Stomp; _actLeft = 0.6f;
+        _act.Enter(BigfootAct.Stomp, BigfootRules.StompSeconds);
         _stompCd = _d.Stomp.CooldownSeconds * CooldownMul;
         _waves.Add(new Wave { Origin = Position, Radius = 0 });
         _w.Fx(BigfootFxKind.Shockwave, Position);
@@ -515,7 +530,7 @@ public sealed class Bigfoot : IWorldEntity
 
     void ThrowTheVehicle()
     {
-        Act = BigfootAct.Launch; _actLeft = 0.5f; // the swing of the throw
+        _act.Enter(BigfootAct.Launch, BigfootRules.LaunchSwingSeconds); // the swing of the throw
         _vehicleCd = _d.VehicleThrow.CooldownSeconds * CooldownMul;
         if (_vehicleToThrow == 0) return;
         var c = new BigfootVehicle(_vehicleToThrow, _vehicleFrom); // it is overhead now, lifted from here
@@ -538,12 +553,11 @@ public sealed class Bigfoot : IWorldEntity
 
     void TakeHold(IReadOnlyList<BigfootPlayer> players)
     {
-        Act = BigfootAct.Idle;
         _grabCd = _d.Grab.CooldownSeconds * CooldownMul;
         BigfootPlayer? p = null;
         foreach (var q in players) if (q.Id == _target && !q.InVehicle && Flat(q.Feet, Position) <= _d.Grab.RangeM + 1.5f) p = q;
-        if (p is not { } held) return;
-        _held = held.Id; _holdLeft = _d.Grab.HoldSeconds; Act = BigfootAct.Hold;
+        if (p is not { } held) { Rest(); return; } // the player got away (or boarded a vehicle) during the reach
+        _held = held.Id; _act.Enter(BigfootAct.Hold, _d.Grab.HoldSeconds);
         _w.Fx(BigfootFxKind.Grab, Position, held.Id);
         _w.Hold(held.Id, Hand);
     }
@@ -552,9 +566,8 @@ public sealed class Bigfoot : IWorldEntity
     {
         var still = false;
         foreach (var p in players) if (p.Id == _held) still = true;
-        if (!still) { ReleaseHeld(); Act = BigfootAct.Idle; return; } // the held player died or left
-        _holdLeft -= dt;
-        if (_holdLeft > 0) { _w.Hold(_held, Hand); return; }
+        if (!still) { ReleaseHeld(); Rest(); return; } // the held player died or left
+        if (!_act.Tick(dt)) { _w.Hold(_held, Hand); return; } // the hold time is the Hold act's countdown
         LaunchHeld(players);
     }
 
@@ -586,7 +599,19 @@ public sealed class Bigfoot : IWorldEntity
         _flyers.Add(new Flyer { Player = who, Left = _d.Grab.LaunchGraceSeconds });
         _w.Launch(who, v, _d.Grab.LaunchGraceSeconds);
         _w.Fx(BigfootFxKind.Launch, from, who);
-        Act = BigfootAct.Launch; _actLeft = 0.5f;
+        _act.Enter(BigfootAct.Launch, BigfootRules.LaunchSwingSeconds);
+    }
+
+    /// <summary>
+    /// A vehicle it lifted for a throw that will not happen (wipe, death, removal) is put down at once; without this it hung overhead until the lift's own
+    /// time-out. A throw that happened already cleared <c>_vehicleToThrow</c>.
+    /// </summary>
+    void DropLiftedVehicle()
+    {
+        if (_vehicleToThrow == 0) return;
+        var car = _vehicleToThrow;
+        _vehicleToThrow = 0;
+        _w.DropVehicle(car);
     }
 
     void ReleaseHeld()

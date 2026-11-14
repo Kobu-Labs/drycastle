@@ -50,6 +50,8 @@ public class BigfootTests
         public readonly List<(ushort Car, Vector3 Hold, float Seconds)> VehicleLifts = new();
         public void LiftVehicle(ushort vehicle, Vector3 hold, float seconds) { VehicleLifts.Add((vehicle, hold, seconds)); VehicleList.RemoveAll(v => v.Id == vehicle); } // the server lists no vehicle in its hands
         public void ThrowVehicle(ushort vehicle, Vector3 landing, float seconds, float spinRadPerS) => VehicleThrows.Add((vehicle, landing, seconds));
+        public readonly List<ushort> VehicleDrops = new();
+        public void DropVehicle(ushort vehicle) => VehicleDrops.Add(vehicle);
         public void Fx(BigfootFxKind kind, Vector3 at, ushort id = 0, byte extra = 0) => Fxs.Add((kind, at, id));
 
         public FakeWorld Player(ushort id, float x, float z, bool onFloor = true, bool inVehicle = false) { PlayerList.Add(new BigfootPlayer(id, new Vector3(x, 0, z), onFloor, inVehicle)); return this; }
@@ -1024,4 +1026,228 @@ public class BigfootTests
     const ulong PinnedWipeHash = 10882475949325797536UL;
     const string PinnedDeath = "0.00 GrabReach\n0.70 Hold\n0.00 Hold\n1.20 Launch\n1.73 Idle\n1.77 StompWindup\n2.87 Stomp\n3.47 Idle\n0.00 Dead";
     const ulong PinnedDeathHash = 4960527982406786367UL;
+
+    // ---- the act and life machines ----
+
+    /// <summary>A Bigfoot with a car overhead (phase two, in the wind-up) and its world.</summary>
+    static (Bigfoot B, FakeWorld W) WithACarOverhead()
+    {
+        var w = new FakeWorld().Player(1, 0, -12);
+        w.VehicleList.Add(new BigfootVehicle(0x4001, new Vector3(2, 0, 1)));
+        var b = Make(w);
+        HitUntil(b, Shipped.Hits.SecondPhaseAt);
+        Run(b, Shipped.VehicleThrow.WindupSeconds * 0.5f);
+        Assert.Equal(BigfootAct.VehicleWindup, b.Act);
+        Assert.Single(w.VehicleLifts);
+        return (b, w);
+    }
+
+    [Fact]
+    public void ADeathWithACarOverheadPutsTheCarDown()
+    {
+        var (b, w) = WithACarOverhead();
+        while (b.Alive) b.Hit(1, 50);
+        Assert.Equal(new ushort[] { 0x4001 }, w.VehicleDrops);
+        Run(b, Shipped.VehicleThrow.WindupSeconds * 2);
+        Assert.Empty(w.VehicleThrows); // and it is never thrown after
+        Assert.Single(w.VehicleDrops);
+    }
+
+    [Fact]
+    public void AWipeWithACarOverheadPutsTheCarDown()
+    {
+        var (b, w) = WithACarOverhead();
+        w.Remove(1);
+        b.Tick(Dt);
+        Assert.True(b.Waiting);
+        Assert.Equal(new ushort[] { 0x4001 }, w.VehicleDrops);
+        Assert.Equal(BigfootAct.Idle, b.Act);
+        Run(b, Shipped.VehicleThrow.WindupSeconds * 2);
+        Assert.Empty(w.VehicleThrows);
+        Assert.Single(w.VehicleDrops);
+    }
+
+    [Fact]
+    public void ARemovedBigfootWithACarOverheadPutsTheCarDown()
+    {
+        var (b, w) = WithACarOverhead();
+        b.Remove(WorldDespawnReason.Removed);
+        Assert.Equal(new ushort[] { 0x4001 }, w.VehicleDrops);
+    }
+
+    [Fact]
+    public void AThrownCarIsNotDropped()
+    {
+        var w = new FakeWorld().Player(1, 0, -12);
+        w.VehicleList.Add(new BigfootVehicle(0x4001, new Vector3(2, 0, 1)));
+        var b = Make(w);
+        HitUntil(b, Shipped.Hits.SecondPhaseAt);
+        Run(b, Shipped.VehicleThrow.WindupSeconds + 0.5f);
+        Assert.Single(w.VehicleThrows);
+        while (b.Alive) b.Hit(1, 50);
+        Assert.Empty(w.VehicleDrops);
+    }
+
+    [Fact]
+    public void AShotThatWakesItNeedsTheHitCountForWhoIsNear()
+    {
+        var w = new FakeWorld().Player(1, 0, -20);
+        var b = Make(w);
+        Run(b, 3);
+        b.Hit(1, 1);
+        w.Remove(1);
+        b.Tick(Dt);
+        Assert.Equal(BigfootLife.Waiting, b.Life);
+        Assert.Equal(BigfootRules.HitsNeeded(Shipped.Hits, 0), b.HitsNeeded);
+        // three players stand between the wake radius and the participant radius: they are near but do not wake it
+        var ring = (Shipped.Wipe.WakeRadiusM + Shipped.Hits.ParticipantRadiusM) / 2;
+        w.Player(2, b.Position.X + ring, b.Position.Z).Player(3, b.Position.X, b.Position.Z + ring).Player(4, b.Position.X - ring, b.Position.Z);
+        b.Tick(Dt);
+        Assert.True(b.Waiting);
+        // a heavy shot from one of them wakes it, and it must not die of the count meant for one player
+        Assert.False(b.Hit(2, BigfootRules.HitsNeeded(Shipped.Hits, 0)));
+        Assert.Equal(BigfootLife.Fighting, b.Life);
+        Assert.Equal(BigfootRules.HitsNeeded(Shipped.Hits, 3), b.HitsNeeded);
+        Assert.True(b.Alive);
+    }
+
+    [Fact]
+    public void TheLifeFollowsTheFightWipeWakeAndDeath()
+    {
+        var w = new FakeWorld().Player(1, 0, -20);
+        var b = Make(w);
+        Assert.Equal(BigfootLife.Fighting, b.Life);
+        Run(b, 3);
+        b.Hit(1, 1);
+        w.Remove(1);
+        b.Tick(Dt);
+        Assert.Equal(BigfootLife.Waiting, b.Life);
+        Assert.Equal(BigfootAct.Idle, b.Act);
+        w.Player(2, b.Position.X + 30, b.Position.Z);
+        b.Tick(Dt);
+        Assert.Equal(BigfootLife.Fighting, b.Life);
+        b.Kill();
+        Assert.Equal(BigfootLife.Dead, b.Life);
+        Assert.Equal(BigfootAct.Dead, b.Act);
+        Assert.False(b.Alive);
+        // a waiting one can be killed too (a shot wakes it, a big one kills)
+        var w2 = new FakeWorld().Player(1, 0, -20);
+        var asleep = Make(w2);
+        Run(asleep, 3);
+        asleep.Hit(1, 1);
+        w2.Remove(1);
+        asleep.Tick(Dt);
+        Assert.True(asleep.Waiting);
+        Assert.True(asleep.Hit(1, 100000));
+        Assert.Equal(BigfootLife.Dead, asleep.Life);
+        Assert.Equal(BigfootAct.Dead, asleep.Act);
+    }
+
+    [Fact]
+    public void TheSpecsOfTheBigfootsActsAndLifeDeclareWhatTheCodeDoes()
+    {
+        // every attack starts from a chase act, ends at rest, and a death or a wipe is reachable from any of them
+        Assert.True(BigfootSpecs.Act.Allows(BigfootAct.Walk, BigfootAct.VehicleWindup));
+        Assert.True(BigfootSpecs.Act.Allows(BigfootAct.VehicleWindup, BigfootAct.Launch));
+        Assert.True(BigfootSpecs.Act.Allows(BigfootAct.Hold, BigfootAct.Launch));
+        Assert.False(BigfootSpecs.Act.Allows(BigfootAct.Stomp, BigfootAct.Hold));
+        Assert.False(BigfootSpecs.Act.Allows(BigfootAct.Dead, BigfootAct.Idle));
+        foreach (var act in Enum.GetValues<BigfootAct>().Where(a => a != BigfootAct.Dead))
+        {
+            Assert.True(BigfootSpecs.Act.Allows(act, BigfootAct.Dead), act.ToString());
+            Assert.True(BigfootSpecs.Act.Allows(act, BigfootAct.Idle), act.ToString());
+        }
+        Assert.Equal(new[] { "Dead" }, BigfootSpecs.Act.Terminal);
+        Assert.Equal(new[] { "Dead" }, BigfootSpecs.Life.Terminal);
+    }
+
+    // ---- the server's Bigfoot lifecycle and the event book ----
+
+    [Fact]
+    public void TheLifecycleGoesNoneAliveDyingNoneAndTellsTheAdminWhy()
+    {
+        var events = new EventBook();
+        var life = new BigfootLifecycle();
+        Assert.Null(life.WhyNotStart(events));
+        life.Appeared();
+        events.Start(EventBook.Bigfoot, 1);
+        Assert.Contains("already running", life.WhyNotStart(events));
+        Assert.Contains("/event current cancel", life.WhyNotStart(events));
+        // it fell: the book books the win at once, the body still lies
+        life.Fell();
+        events.End(EventPhase.Won, 50);
+        Assert.Contains("lying where it fell", life.WhyNotStart(events));
+        Assert.True(life.Gone());
+        Assert.Null(life.WhyNotStart(events));
+        // despawned instead of dying: gone without a reward
+        life.Appeared();
+        events.Start(EventBook.Bigfoot, 100);
+        events.End(EventPhase.Despawned, 101);
+        Assert.False(life.Gone());
+        Assert.Equal(BigfootStage.None, life.Stage);
+    }
+
+    [Fact]
+    public void AnyEventRunningRefusesAnotherAndEachBooksOnlyItsOwnEnd()
+    {
+        var events = new EventBook();
+        Assert.Null(events.WhyNotStart(EventBook.Mass));
+        Assert.NotNull(events.Start(EventBook.Mass, 1));
+        Assert.Contains("mass event is already running", events.WhyNotStart(EventBook.Bigfoot));
+        Assert.DoesNotContain("cancel", events.WhyNotStart(EventBook.Bigfoot)); // the Holy Mass only ends
+        Assert.Null(events.Start(EventBook.Bigfoot, 2));
+        Assert.Null(events.Start(EventBook.Demon, 2));
+        Assert.Null(events.End(EventBook.Bigfoot, EventPhase.Despawned, 3)); // not the Bigfoot's to end
+        Assert.NotNull(events.Current);
+        Assert.NotNull(events.End(EventBook.Mass, EventPhase.Won, 4));
+        Assert.Null(events.Current);
+        Assert.Contains("Unknown event", events.WhyNotStart("fireworks"));
+    }
+
+    [Fact]
+    public void AVehicleThrowGoesLiftingHeldFlyingDone()
+    {
+        var t = new VehicleThrow(new Vector3(2, 0, 1), 0.5f, new Vector3(0, 4.2f, 0), 1f);
+        Assert.Equal(VehicleThrowPhase.Lifting, t.Phase);
+        t.Step(0.5f);
+        Assert.Equal(VehicleThrowPhase.Lifting, t.Phase);
+        t.Step(0.5f);
+        Assert.Equal(VehicleThrowPhase.Held, t.Phase);
+        Assert.False(t.Released);
+        t.Release(new Vector3(30, 0, 0), 2f, 1f);
+        Assert.Equal(VehicleThrowPhase.Flying, t.Phase);
+        Assert.True(t.Released);
+        t.Step(1.9f);
+        Assert.Equal(VehicleThrowPhase.Flying, t.Phase);
+        t.Step(0.1f);
+        Assert.Equal(VehicleThrowPhase.Done, t.Phase);
+        Assert.True(t.Done);
+        // thrown before it is up: Lifting straight to Flying; a throw without a lift starts Flying
+        var early = new VehicleThrow(new Vector3(2, 0, 1), 0f, new Vector3(0, 4.2f, 0), 1f);
+        early.Step(0.2f);
+        early.Release(new Vector3(10, 0, 0), 1f, 0);
+        Assert.Equal(VehicleThrowPhase.Flying, early.Phase);
+        Assert.Equal(VehicleThrowPhase.Flying, new VehicleThrow(Vector3.Zero, 0, new Vector3(5, 0, 0), 1f, 0).Phase);
+    }
+
+    [Fact]
+    public void ALiftedVehicleIsPutDownWhereItStoodAtOnceOrAfterTheGrace()
+    {
+        var down = new VehicleThrow(new Vector3(2, 0, 1), 0f, new Vector3(0, 4.2f, 0), 1f);
+        down.Step(1.2f);
+        down.PutDown();
+        Assert.Equal(VehicleThrowPhase.Flying, down.Phase);
+        for (var i = 0; i < 10 && !down.Done; i++) down.Step(0.1f);
+        Assert.True(down.Done);
+        Assert.Equal(new Vector3(2, 0, 1), down.Position);
+        down.PutDown(); // a flying one is left alone
+        Assert.True(down.Done);
+        // nobody throws it: it comes down by itself 1.5 s after it is up
+        var left = new VehicleThrow(new Vector3(2, 0, 1), 0f, new Vector3(0, 4.2f, 0), 1f);
+        left.Step(1f);
+        left.Step(1.4f);
+        Assert.Equal(VehicleThrowPhase.Held, left.Phase);
+        left.Step(0.2f);
+        Assert.Equal(VehicleThrowPhase.Flying, left.Phase);
+    }
 }
