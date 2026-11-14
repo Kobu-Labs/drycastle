@@ -215,3 +215,31 @@ def test_seats_keep_the_pews_and_add_standing_spots_in_the_aisles(info) -> None:
     assert any(s["pos"][0] < ci.NX0 for s in standing) and any(s["pos"][0] > ci.NX1 for s in standing)
     assert [s["id"] for s in info["seats"]] == list(range(len(info["seats"])))
     assert info["doorway"]["width"] == ci.DOOR_W
+
+
+def _paintings(info):
+    return [p for p in info["props"] if p["kind"] == "painting"]
+
+
+def test_paintings_are_props_with_a_size_and_the_other_props_are_unchanged(info) -> None:
+    paintings = _paintings(info)
+    assert 8 <= len(paintings) <= 12 and len(paintings) == len(ci.PAINTINGS)
+    assert {p["kind"] for p in info["props"]} == {"pew", "altar", "lectern", "holy_water", "painting"}
+    assert len([p for p in info["props"] if p["kind"] == "pew"]) == ci.ROWS_RIGHT + ci.ROWS_LEFT + len(ci.GALLERY_PEWS)
+    assert all(set(p) == {"kind", "pos", "yaw"} for p in info["props"] if p["kind"] != "painting")
+    assert all(set(p) == {"kind", "pos", "yaw", "w", "h"} and 0.8 <= p["w"] <= 1.4 and 0.8 <= p["h"] <= 1.4 for p in paintings)
+    assert any(p["h"] > p["w"] for p in paintings) and any(p["w"] > p["h"] for p in paintings) and any(p["w"] == p["h"] for p in paintings)
+
+
+def test_paintings_hang_at_eye_height_on_solid_wall_with_free_air_before_them(collision, info) -> None:
+    for p in _paintings(info):
+        c = np.array(p["pos"])
+        yaw = math.radians(p["yaw"])
+        n = np.array([math.sin(yaw), math.cos(yaw), 0.0])  # facing into the room
+        along = np.array([-n[1], n[0], 0.0])
+        assert 1.0 < c[2] - p["h"] / 2 and c[2] + p["h"] / 2 < 3.1, p
+        for du in np.linspace(-p["w"] / 2 - 0.08, p["w"] / 2 + 0.08, 5):  # canvas and frame: wall behind, nothing (window, arch, pilaster, stair) before
+            for dz in np.linspace(-p["h"] / 2 - 0.08, p["h"] / 2 + 0.08, 5):
+                q = c + along * du + [0, 0, dz]
+                assert _blocked(collision, q + n * 0.02, q - n * 0.2), (p, du, dz)  # backed by the wall
+                assert not _blocked(collision, q + n * 0.01, q + n * 0.3), (p, du, dz)  # free in front

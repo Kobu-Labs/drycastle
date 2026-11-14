@@ -314,6 +314,7 @@ public partial class ChurchDecor : Node3D
         if (active && !_demon) _blood?.Begin(snap ? ChurchBlood.JoinAgeS : 0f);
         else if (!active && _demon) _blood?.Freeze();
         _demon = active;
+        ChurchPaintings.Current?.SetDemon(active, snap); // the paintings turn with it
         if (!snap) return;
         _angle = active ? MathF.PI : 0;
         _burn = active ? 1 : 0;

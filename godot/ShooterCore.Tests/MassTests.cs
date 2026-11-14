@@ -47,6 +47,22 @@ public class MassTests
     }
 
     [Fact]
+    public void ChurchFileGivesItsPaintingsAndToleratesProps()
+    {
+        var json = """
+        {"door":{"x":0,"y":0,"z":0},"seats":[{"id":0,"pos":[0,0,0]}],
+         "props":[{"kind":"pew","pos":[1,2,0],"yaw":180},{"kind":"painting","pos":[3,4,1.75],"yaw":90,"w":0.9,"h":1.4}]}
+        """;
+        var c = Church.Parse(json);
+        var p = Assert.Single(c.Paintings);
+        Assert.Equal(new Vector3(3, 1.75f, -4), p.Pos); // y north -> -z
+        Assert.Equal(0.9f, p.W);
+        Assert.Equal(1.4f, p.H);
+        Assert.Empty(Church.Parse(ChurchJson).Paintings); // a file without props has none
+        Assert.Throws<DataFileException>(() => Church.Parse(json.Replace("\"w\":0.9,", "")));
+    }
+
+    [Fact]
     public void ChurchFileGivesTheMassItsSpots()
     {
         var c = Church.Parse(ChurchJson);
