@@ -751,6 +751,24 @@ stateDiagram-v2
 - **Standing**: Hits register. Killed by the hit that takes its health to zero.
 - **Down**: Ignores hits until RespawnAt (the match clock), unless Respawns is off (sandbox): then until the round restarts.
 
+## Thieves.Phase
+
+The Thieves event: idle until started, raiding while its Raids are in the village, then over until the round resets.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Raiding
+    Raiding --> Over
+    Raiding --> Idle
+    Over --> Raiding
+    Over --> Idle
+```
+
+- **Idle**: Nothing runs: never started, or a round reset cleared it.
+- **Raiding**: The Raids come and go (clock: the placeholder timer until the Raids exist). Left by Finish (won or cancelled) or by a round reset.
+- **Over**: Won or cancelled; what was stolen stays stolen. A new /event thieves starts it again, a round reset clears it.
+
 ## Turret.State
 
 A sentry turret: the placing ghost, then armed and idle, acquiring a target (the outplay delay), or aiming and firing.

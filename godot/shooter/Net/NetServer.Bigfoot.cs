@@ -167,27 +167,20 @@ public partial class NetServer
         return null;
     }
 
-    /// <summary>"/event current end" (a win, for testing) or "/event current cancel" (gone, no reward).</summary>
-    void ChatCurrentEvent(Client c, string action)
+    /// <summary>"/event current end" while the Bigfoot runs (the handler table, <see cref="InitEvents"/>): a win, for testing; it dies by the same path as a kill (<see cref="OnBigfootDied"/>).</summary>
+    void EndBigfoot(Client c)
     {
-        if (action is not ("end" or "cancel")) { ChatTo(c, ChatLineKind.Error, "Usage: /event current end (conclude it as a win) or /event current cancel (remove it, no reward)."); return; }
-        if (_events.Current is not { Kind: EventBook.Bigfoot } || _bigfoot is not { } bf)
-        {
-            // not the Bigfoot: the Holy Mass keeps its own run (it can only be ended)
-            if (action == "end" || _mass is not { Running: true }) ChatCurrentEnd(c);
-            else ChatTo(c, ChatLineKind.Error, "The Holy Mass takes /event current end.");
-            return;
-        }
-        if (action == "end")
-        {
-            ChatToAll(ChatLineKind.System, "", $"{c.Name} ended the Bigfoot event as a win.");
-            bf.Kill(); // the same path as a kill: OnBigfootDied
-        }
-        else
-        {
-            ChatToAll(ChatLineKind.System, "", $"{c.Name} cancelled the Bigfoot event.");
-            bf.Remove(WorldDespawnReason.Removed); // the manager despawns it on this tick; OnBigfootWorldDespawn ends the run
-        }
+        if (_bigfoot is not { } bf) { ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
+        ChatToAll(ChatLineKind.System, "", $"{c.Name} ended the Bigfoot event as a win.");
+        bf.Kill();
+    }
+
+    /// <summary>"/event current cancel" while the Bigfoot runs: gone, no reward.</summary>
+    void CancelBigfoot(Client c)
+    {
+        if (_bigfoot is not { } bf) { ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
+        ChatToAll(ChatLineKind.System, "", $"{c.Name} cancelled the Bigfoot event.");
+        bf.Remove(WorldDespawnReason.Removed); // the manager despawns it on this tick; OnBigfootWorldDespawn ends the run
     }
 
     /// <summary>It fell: the event is won. The line, the XP for everyone credited, and the effect; the body lies out its death clip and then the tracks begin.</summary>

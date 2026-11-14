@@ -46,14 +46,14 @@ public sealed class EventRun
 /// <summary>
 /// The events a server can run, and the one that is running: at most one at a time (the first version has no scheduler). Every kind an admin can start with
 /// <c>/event &lt;kind&gt;</c> registers its run here (<see cref="Start"/>) and books its end (<see cref="End(EventPhase, double)"/>), so "an event is running"
-/// is one fact the Bigfoot, the Holy Mass and the Demon all see: <see cref="WhyNotStart"/> is the one refusal each start command asks before it begins anything.
+/// is one fact the Bigfoot, the Holy Mass, the Demon and the Thieves all see: <see cref="WhyNotStart"/> is the one refusal each start command asks before it begins anything.
 /// </summary>
 public sealed class EventBook
 {
-    public const string Bigfoot = "bigfoot", Mass = "mass", Demon = "demon";
+    public const string Bigfoot = "bigfoot", Mass = "mass", Demon = "demon", Thieves = "thieves";
 
     /// <summary>The kinds an admin can start with <c>/event &lt;kind&gt;</c> that take part in "one at a time".</summary>
-    public static readonly IReadOnlyList<string> Startable = new[] { Bigfoot, Mass, Demon };
+    public static readonly IReadOnlyList<string> Startable = new[] { Bigfoot, Mass, Demon, Thieves };
 
     /// <summary>The running event, or null.</summary>
     public EventRun? Current { get; private set; }
@@ -68,9 +68,7 @@ public sealed class EventBook
     {
         if (!IsStartable(kind)) return $"Unknown event '{kind}'.";
         if (Current is not { } run) return null;
-        // the Bigfoot can be cancelled as well as ended; the others only end
-        var how = run.Kind == Bigfoot ? "/event current end ends it as a win, /event current cancel removes it." : "/event current end ends it.";
-        return $"The {run.Kind} event is already running. {how}";
+        return $"The {run.Kind} event is already running. /event current end concludes it, /event current cancel removes it (not every kind can be cancelled).";
     }
 
     /// <summary>Starts a run of <paramref name="kind"/>; null when one is already running or the kind is unknown.</summary>

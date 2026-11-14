@@ -90,8 +90,8 @@ public partial class NetServer
         ChatTo(c, ChatLineKind.Info, $"Holy Mass: {sent} citizens walk to the church, the Mass begins {HolyMass.Mass.StartDelaySeconds:0} s after the last one has sat down (at the latest in {HolyMass.Mass.BellsLeadSeconds + HolyMass.Mass.GatherSeconds:0} s) and lasts {HolyMass.Mass.MassSeconds:0} s. /event current end concludes it.");
     }
 
-    /// <summary>"/event current end": concludes the running event as if it was completed. Done once more, it removes what is left.</summary>
-    void ChatCurrentEnd(Client c)
+    /// <summary>"/event current end" while the Mass runs (the handler table, <see cref="InitEvents"/>): concludes it as if it was completed. Done once more, it removes what is left.</summary>
+    void EndMass(Client c)
     {
         if (_mass is not { Running: true }) { ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
         var was = _mass.Phase;

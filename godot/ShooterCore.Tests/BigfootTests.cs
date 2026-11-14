@@ -1194,7 +1194,7 @@ public class BigfootTests
         Assert.Null(events.WhyNotStart(EventBook.Mass));
         Assert.NotNull(events.Start(EventBook.Mass, 1));
         Assert.Contains("mass event is already running", events.WhyNotStart(EventBook.Bigfoot));
-        Assert.DoesNotContain("cancel", events.WhyNotStart(EventBook.Bigfoot)); // the Holy Mass only ends
+        Assert.Contains("/event current end", events.WhyNotStart(EventBook.Thieves)); // the same generic text for every kind, naming the one that runs
         Assert.Null(events.Start(EventBook.Bigfoot, 2));
         Assert.Null(events.Start(EventBook.Demon, 2));
         Assert.Null(events.End(EventBook.Bigfoot, EventPhase.Despawned, 3)); // not the Bigfoot's to end

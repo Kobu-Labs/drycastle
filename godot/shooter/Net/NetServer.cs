@@ -192,6 +192,8 @@ public partial class NetServer : Node
         _corpses = new CorpseBook(_match.Entities);
         InitBigfoot(); // after the corpse book, which follows the same despawns
         InitPets();
+        InitThieves();
+        InitEvents(); // after the kinds above: the handler table names their start, end and cancel
         InitAircraft();
         BuildCarePackages();
         BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
@@ -238,6 +240,7 @@ public partial class NetServer : Node
         CitizensTick((float)delta);
         PetsTick((float)delta);
         MassTick((float)delta); // the Holy Mass: its clock, the pastor, the seats
+        ThievesTick((float)delta); // the Thieves event: its phase clock
         RozhlasTick((float)delta); // the village loudspeaker: the schedule and the hijack clock
         PerfLap(ServerPerf.Ph.Match);
         StreakTick((float)delta);
@@ -504,6 +507,7 @@ public partial class NetServer : Node
         SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
         SendIntelOnJoin(c); // the events on the intel screen
         SendMassOnJoin(c); // the Holy Mass, when one runs
+        SendThievesOnJoin(c); // the Thieves event, when one runs
         SendRozhlasOnJoin(c); // the village loudspeaker, when a detour broadcast is on
         SendUradDoorOnJoin(c); // and the Urad door, when it is open
         SendPounceOnJoin(c); // and the demon's pounce, when one is on

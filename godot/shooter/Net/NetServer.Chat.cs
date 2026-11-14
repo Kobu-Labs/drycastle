@@ -172,8 +172,8 @@ public partial class NetServer
 
     /// <summary>
     /// "/event rozhlas": starts a detour broadcast of the village loudspeaker now (<see cref="ChatEventRozhlas"/>). "/event intel [clear]": the test announcement (<see cref="ChatIntel"/>).
-    /// "/event bigfoot": starts the Bigfoot event (<see cref="StartBigfoot"/>); "/event current end" concludes the running event as a win (for testing) and
-    /// "/event current cancel" removes it with no reward (<see cref="ChatCurrentEvent"/>). Everyone is told who did.
+    /// "/event bigfoot", "mass" and "thieves" start that kind through the handler table (<see cref="InitEvents"/>); "/event current end" concludes the running
+    /// event as a win (for testing) and "/event current cancel" removes it with no reward, by its kind (<see cref="ChatCurrentEvent"/>). Everyone is told who did.
     /// </summary>
     void ChatEvent(Client c, IReadOnlyList<string> args)
     {
@@ -191,9 +191,8 @@ public partial class NetServer
                 ChatEventRozhlas(c);
                 break;
             case "intel": ChatIntel(c, action == "clear"); break;
-            case "bigfoot": StartBigfoot(c); break;
-            case "mass": ChatMass(c); break;
             case "demon": ChatDemon(c); break;
+            default: _eventHandlers.Start(args[0], c); break; // bigfoot, mass, thieves: the kinds of the handler table
         }
     }
 

@@ -4,7 +4,7 @@ Throwaway. Delete this folder when the event is done. Design: `docs/events/READM
 
 | # | Ticket | Needs | State |
 |---|---|---|---|
-| 01 | Event plumbing | | todo |
+| 01 | Event plumbing | | done |
 | 02 | Gang member | 01 | todo |
 | 03 | Raid van | 01, 02 | todo |
 | 04 | Loot + tires | 02, 03 | todo |

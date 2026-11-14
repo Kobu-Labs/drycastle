@@ -18,3 +18,9 @@ Make a third event kind possible without special cases, and add the empty `thiev
 ## Accept
 - `/event thieves` starts; `/event current end` and `cancel` end it; a second start is refused with the generic text; Bigfoot and Mass commands behave as before (existing tests pass).
 - Tests: handler dispatch per kind, `ThievesEvent` phases.
+
+## Done: notes
+- Handler table: `NetServer.Events.cs` `InitEvents()`, `_eventHandlers.Register(kind, name, start, end, cancel?)`; pure part `EventHandlers<TWho>` (`ShooterCore/Events/EventHandlers.cs`).
+- Hooks marked HOOK in `NetServer.Thieves.cs`: `InitThieves`, `ThievesTick`, `ThievesFinish(won, by)`, `SendThievesOnJoin`, `ThievesRoundReset`.
+- Placeholder: the event wins itself after `PlaceholderSeconds` (60, in code): remove with the first Raid (03).
+- No wire change, protocol still 42. Intel text is a placeholder.

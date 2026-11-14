@@ -23,6 +23,8 @@ public class GameData
     public PetsFile Pets { get; init; } = new();
     /// <summary>bigfoot.json (every number of the Bigfoot event, issue #264). The defaults of the file when it is absent.</summary>
     public BigfootFile Bigfoot { get; init; } = new();
+    /// <summary>thieves.json (every number of the Thieves event). Only the version so far; defaults when the file is absent.</summary>
+    public ThievesFile Thieves { get; init; } = new();
     /// <summary>holy_mass.json (the citizens of the Holy Mass and, later, the event itself). Defaults when the file is absent.</summary>
     public HolyMassFile HolyMass { get; init; } = new();
     /// <summary>holy_mass_demon.json (the demon of the Holy Mass, its fireball and the burn). Defaults when the file is absent (the numbers are then zero: the demon fight needs the file).</summary>
@@ -45,7 +47,7 @@ public class GameData
         """;
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string thievesJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -67,6 +69,7 @@ public class GameData
             Pets = petsJson == "" ? new() : PetsFile.Parse(petsJson).CheckAgainst(animals),
             Items = itemsJson == "" ? new() : ItemsFile.Parse(itemsJson),
             Bigfoot = bigfootJson == "" ? new() : BigfootFile.Parse(bigfootJson),
+            Thieves = thievesJson == "" ? new() : ThievesFile.Parse(thievesJson),
             HolyMass = holyMassJson == "" ? new() : HolyMassFile.Parse(holyMassJson),
             Demon = demonJson == "" ? new() : DemonFile.Parse(demonJson),
         };
@@ -94,6 +97,7 @@ public class GameData
             Pets = File.Exists(Path.Combine(dir, "pets.json")) ? PetsFile.Load(Path.Combine(dir, "pets.json")).CheckAgainst(animals) : new(),
             Items = File.Exists(Path.Combine(dir, "items.json")) ? ItemsFile.Load(Path.Combine(dir, "items.json")) : new(),
             Bigfoot = File.Exists(Path.Combine(dir, "bigfoot.json")) ? BigfootFile.Load(Path.Combine(dir, "bigfoot.json")) : new(),
+            Thieves = File.Exists(Path.Combine(dir, "thieves.json")) ? ThievesFile.Load(Path.Combine(dir, "thieves.json")) : new(),
             HolyMass = File.Exists(Path.Combine(dir, "holy_mass.json")) ? HolyMassFile.Load(Path.Combine(dir, "holy_mass.json")) : new(),
             Demon = File.Exists(Path.Combine(dir, "holy_mass_demon.json")) ? DemonFile.Load(Path.Combine(dir, "holy_mass_demon.json")) : new(),
         };

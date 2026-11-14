@@ -119,6 +119,7 @@ public static class ChatCommands
                 ("rozhlas", "a detour broadcast of the village loudspeaker, for everyone, now (as a scheduled one: the mic is live)"),
                 ("intel", "TEST: announce a made-up event and put it on the intel screen at the base"),
                 ("mass", "the Holy Mass: the bells ring, the village walks to the church, the pastor leads the Mass"),
+                ("thieves", "the Thieves event: Raids of thieves drive into the village in vans to steal Loot (cannot be lost)"),
                 ("demon", "TEST: the pastor turns into the demon now; stand in the church to fight it"),
                 ("current", "the running event (with end)"),
             },
@@ -126,7 +127,7 @@ public static class ChatCommands
             {
                 ("clear", "take the test event off the intel screen again (with intel)"),
                 ("end", "conclude the running event as if it was completed (with current)"),
-                ("cancel", "remove the running Bigfoot event with no reward (with current)"),
+                ("cancel", "remove the running event with no reward (with current; the Holy Mass cannot be cancelled)"),
             },
             ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },
             ChatArgKind.Choice when cmd.Name == "rozhlas" => new[] { ("hijack", "the announcement cuts and the mic stays live for 3 minutes (only while a detour broadcast is on air)"), ("take", "TEST: hold the set yourself (stands in for holding E at the dictation table; only while hijacked)"), ("release", "TEST: let the set holder go"), ("goto", "TEST: stand at the dictation table (where E takes the set during a hijack)"), ("feedtest", "TEST: push a few seconds of test voice and a shot through the live feed (ffmpeg voice chain, 2 s delay) to every megaphone"), ("combattest", "TEST: push a shot, a blast and a death sound through the live feed, wherever you stand") },

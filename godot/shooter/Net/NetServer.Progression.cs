@@ -35,6 +35,7 @@ public partial class NetServer
         _flakShells.Clear();
         _xp.Reset();
         BigfootRoundReset();
+        ThievesRoundReset(); // the Thieves event does not outlive the round either, and what it stole is back
         foreach (var c in _clients.Values) c.RoundXp.Clear();
     }
 
