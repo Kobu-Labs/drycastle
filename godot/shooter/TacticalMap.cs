@@ -79,6 +79,18 @@ public sealed partial class TacticalMap : Control
         AddChild(_right);
     }
 
+    /// <summary>Sandbox: the map also teleports (middle click). Shown as a second line of the hint; read when the map opens.</summary>
+    public bool TeleportHint;
+
+    /// <summary>The ground point (x, z) under the mouse, or null when the mouse is off the sheet or there is no map data.</summary>
+    public Vector2? GroundAtMouse()
+    {
+        if (!_open || _base is not { } b || _side <= 0) return null;
+        var f = (_sheet.GetLocalMousePosition() - new Vector2(Gutter, Gutter)) / _side;
+        if (f.X < 0 || f.X > 1 || f.Y < 0 || f.Y > 1) return null;
+        return new Vector2(b.Origin.X + f.X * b.SideMetres, b.Origin.Y + f.Y * b.SideMetres);
+    }
+
     // ---- open and close ----
 
     /// <summary>Shows the map over <paramref name="map"/> (null: no map data, the sheet says so).</summary>

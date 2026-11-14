@@ -139,6 +139,26 @@ public partial class NetServer
         BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(c.Id, s, 0)));
     }
 
+    /// <summary>
+    /// Teleport to a point picked on the tactical map (middle click): onto the highest surface there (a roof when the point is on a building),
+    /// out of any vehicle. Same wire event as a spawn. Refused outside the map or where there is nothing to stand on.
+    /// </summary>
+    void OnSandboxTeleportTo(Client c, byte[] payload)
+    {
+        if (!c.Sandbox || SandboxEvents.DecodeTeleportTo(payload) is not { } at) return;
+        if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { SandboxNote(c, "Sandbox actions work while alive."); return; }
+        var q = PhysicsRayQueryParameters3D.Create(new Vector3(at.X, 2000f, at.Z), new Vector3(at.X, -500f, at.Z), CollisionLayers.World);
+        var hit = World.GetWorld3D().DirectSpaceState.PerfRay(q);
+        if (hit.Count == 0) { SandboxNote(c, "Nothing to stand on there."); return; }
+        var p = hit["position"].AsVector3();
+        if (c.Car != null) LeaveSeat(c, false);
+        c.Body.Teleport(new Vector3(p.X, p.Y + 0.1f, p.Z));
+        c.Inputs.Clear();
+        var s = new System.Numerics.Vector3(p.X, p.Y, p.Z);
+        _match.SetPosition(c.Id, s);
+        BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(c.Id, s, 0)));
+    }
+
     /// <summary>Sandbox vehicles per server run. Spawned cars are never removed, so an uncapped count would eventually wrap the vehicle id (T3-016).</summary>
     const int SandboxVehicleCap = 8, AdminVehicleCap = 32;
     int _sandboxVehicles;

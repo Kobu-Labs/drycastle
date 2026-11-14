@@ -214,6 +214,7 @@ public partial class NetClient : Node
         PerfClientFrame(delta);
         if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
         if (_done) return;
+        UpdateMapCursor();
         Poll();
         if (!_welcomed)
         {

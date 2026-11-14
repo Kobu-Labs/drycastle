@@ -17,6 +17,9 @@ public partial class Hud
 
     public bool TacticalMapOpen => _tacticalMap.IsOpen;
 
+    /// <summary>The ground point (x, z) under the mouse on the open map, or null.</summary>
+    public Vector2? TacticalMapGroundAtMouse() => _tacticalMap.GroundAtMouse();
+
     void BuildTacticalMap()
     {
         _waypointMarker = new WaypointMarker(_mapMarkers.Waypoint, () => _minimap.Base) { MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -40,6 +43,7 @@ public partial class Hud
         if (_tacticalMap.IsOpen) { _tacticalMap.Close(); return true; }
         if (MapBlocked) return false;
         _equipment?.Close(); // the two overlays never show together
+        _tacticalMap.TeleportHint = _sandboxOn;
         _tacticalMap.Open(_minimap.Base);
         return true;
     }
