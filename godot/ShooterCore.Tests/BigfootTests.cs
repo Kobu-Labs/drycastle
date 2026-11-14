@@ -949,4 +949,79 @@ public class BigfootTests
         var ahead = HitMath.Raycast(new Vector3(0, 2, 0), new Vector3(0, 0, -1), 200, float.PositiveInfinity, new[] { Person(new Vector3(5, 0, -10)), at }, 99);
         Assert.Equal(BigfootRules.TargetId, ahead!.Value.Id);
     }
+
+    // ---- characterization: the whole act trace, pinned before the state machines were made explicit ----
+
+    /// <summary>A fingerprint of everything the brain did, tick by tick: the act, the replicated byte, where it stood and faced, and what it told the world.</summary>
+    static ulong Trace(Bigfoot b, FakeWorld w, float seconds, Action<float>? each = null, List<string>? acts = null)
+    {
+        var h = 14695981039346656037UL;
+        void Mix(ulong v) { h ^= v; h *= 1099511628211UL; }
+        var last = (BigfootAct)255;
+        Run(b, seconds, t =>
+        {
+            each?.Invoke(t);
+            Mix((ulong)b.Act); Mix(b.Serialize().State);
+            Mix((ulong)BitConverter.SingleToInt32Bits(b.Position.X)); Mix((ulong)BitConverter.SingleToInt32Bits(b.Position.Z)); Mix((ulong)BitConverter.SingleToInt32Bits(b.Yaw));
+            Mix((ulong)w.Fxs.Count); Mix((ulong)w.Hurts.Count); Mix((ulong)w.Holds.Count); Mix((ulong)w.Trunks.Count); Mix((ulong)w.VehicleThrows.Count);
+            if (b.Act != last) { acts?.Add($"{t:F2} {b.Act}"); last = b.Act; }
+        });
+        return h;
+    }
+
+    [Fact]
+    public void TheActTraceOfAFullFightIsPinned()
+    {
+        var w = new FakeWorld().Player(1, 0, -14).Player(2, 4, -3);
+        w.VehicleList.Add(new BigfootVehicle(0x4001, new Vector3(2, 0, 1)));
+        var b = Make(w);
+        var acts = new List<string>();
+        var h = Trace(b, w, 6, acts: acts);
+        HitUntil(b, Shipped.Hits.SecondPhaseAt);
+        h ^= Trace(b, w, 8, acts: acts);
+        HitUntil(b, Shipped.Hits.ThirdPhaseAt);
+        h ^= Trace(b, w, 25, acts: acts);
+        Assert.Equal(PinnedFight, string.Join("\n", acts));
+        Assert.Equal(PinnedFightHash, h);
+    }
+
+    [Fact]
+    public void TheActTraceOfAWipeAndAWakeIsPinned()
+    {
+        var w = new FakeWorld().Player(1, 0, -20);
+        var b = Make(w);
+        var acts = new List<string>();
+        var h = Trace(b, w, 4, acts: acts);
+        HitUntil(b, Shipped.Hits.ThirdPhaseAt);
+        h ^= Trace(b, w, 3, acts: acts);
+        w.Remove(1);
+        h ^= Trace(b, w, 2, acts: acts);
+        w.Player(3, b.Position.X + 50, b.Position.Z);
+        h ^= Trace(b, w, 10, acts: acts);
+        h ^= Trace(b, w, 1, each: _ => { }, acts: acts);
+        Assert.Equal(PinnedWipe, string.Join("\n", acts));
+        Assert.Equal(PinnedWipeHash, h);
+    }
+
+    [Fact]
+    public void TheActTraceOfADeathIsPinned()
+    {
+        var w = new FakeWorld().Player(1, 0, -3);
+        var b = Make(w);
+        var acts = new List<string>();
+        var h = Trace(b, w, 2, acts: acts);
+        HitUntil(b, Shipped.Hits.ThirdPhaseAt);
+        h ^= Trace(b, w, 3 + Shipped.Grab.HoldSeconds, acts: acts);
+        while (b.Alive) b.Hit(1, 50);
+        h ^= Trace(b, w, 3, acts: acts);
+        Assert.Equal(PinnedDeath, string.Join("\n", acts));
+        Assert.Equal(PinnedDeathHash, h);
+    }
+
+    const string PinnedFight = "0.00 VehicleWindup\n1.63 Launch\n2.17 Idle\n2.20 StompWindup\n3.30 Stomp\n3.90 Idle\n3.93 Walk\n4.20 GrabReach\n4.90 Hold\n0.00 Hold\n1.40 Launch\n1.93 Idle\n1.97 Walk\n2.40 Idle\n4.30 StompWindup\n5.40 Stomp\n6.00 Idle\n0.00 Idle\n1.83 GrabReach\n2.53 Hold\n5.07 Launch\n5.60 Idle\n5.63 StompWindup\n6.73 Stomp\n7.33 Idle\n13.53 GrabReach\n14.23 Hold\n16.77 Launch\n17.30 Idle\n17.33 StompWindup\n18.43 Stomp\n19.03 Idle";
+    const ulong PinnedFightHash = 17521742334228743959UL;
+    const string PinnedWipe = "0.00 Run\n0.30 Walk\n1.50 TrunkWindup\n2.50 Idle\n2.53 Walk\n3.07 StompWindup\n0.00 StompWindup\n0.13 Stomp\n0.73 Idle\n0.77 Walk\n2.37 GrabReach\n0.00 Idle\n0.00 TrunkWindup\n1.00 Idle\n1.03 Run\n3.50 Walk\n4.43 TrunkWindup\n5.43 Idle\n5.47 Walk\n6.23 StompWindup\n7.33 Stomp\n7.93 Idle\n7.97 Walk\n8.07 TrunkWindup\n9.07 Idle\n9.10 Walk\n0.00 Walk\n0.60 GrabReach";
+    const ulong PinnedWipeHash = 10882475949325797536UL;
+    const string PinnedDeath = "0.00 GrabReach\n0.70 Hold\n0.00 Hold\n1.20 Launch\n1.73 Idle\n1.77 StompWindup\n2.87 Stomp\n3.47 Idle\n0.00 Dead";
+    const ulong PinnedDeathHash = 4960527982406786367UL;
 }
