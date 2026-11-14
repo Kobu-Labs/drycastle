@@ -275,7 +275,7 @@ Terms: **Detour** = the Urad being open during a broadcast. **Hijack** = the 3 m
 - Detour opens on every scheduled broadcast (10 min slot) and on `/event rozhlas`. Intel/event announcements over the megaphones don't open it.
 
 ### Building
-- Built (ADR 0020, `pipeline/src/drycastle_pipeline/office_interior.py`): hollow south-west bar (clerks' office, mayor's room) and entry in the middle bar; middle bar's road wall set back 1.4 m behind a covered walkway; entrance in the set-back wall; baked desks, chairs, dictation desk; `urad.json` exported with the map.
+- Built (ADR 0020, `pipeline/src/drycastle_pipeline/office_interior.py`): hollow south-west bar (clerks' office, mayor's room) and entry in the middle bar; middle bar's road wall set back 1.4 m behind a covered walkway; entrance in the set-back wall; furniture as `props` of `urad.json` (Synty SIMPLE Office models placed by the game, boxes drawn without the pack); `urad.json` exported with the map.
 - CCTV station in the mayor's room: reserved, issue #270.
 - Outside a detour: sealed, interior not rendered, workers don't exist.
 - Doors never trap: interior always exitable (see the door, below: a shut door shows everyone out), no kill. Bots never enter.

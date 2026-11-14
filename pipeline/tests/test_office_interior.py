@@ -20,6 +20,9 @@ def test_urad_info_puts_everyone_in_their_room():
     assert [w["role"] for w in info["workers"]].count("clerk") == 2
     assert all(w["pos"][2] == pytest.approx(100.0 + oi.F + oi.SEAT_H) for w in info["workers"])
     assert rooms["office"].contains(Point(info["table"]["pos"][:2])) and rooms["mayor"].contains(Point(info["cctv"]["pos"][:2]))
+    for p in info["props"]:  # every prop stands in a room, on or above its floor
+        assert any(r.contains(Point(p["pos"][:2])) for r in rooms.values()), p
+        assert p["pos"][2] >= 100.0 + oi.F - 1e-6 and p["model"].startswith("office/") and all(len(b) == 6 for b in p["boxes"])
     door = info["doorway"]
     assert rooms["entry"].distance(Point(door["pos"][:2])) < 0.2  # in the entry's front wall
     assert door["yaw"] == pytest.approx(117.9, abs=0.5) and door["pos"][2] == pytest.approx(100.0 + oi.F)
