@@ -306,4 +306,48 @@ public class MassMachineTests
         Assert.Equal(TicksToReach(0.7f), n);
         Assert.Equal(WorldDespawnReason.Expired, c.Ended);
     }
+
+    [Fact]
+    public void ASeatIsHeldByOneSideAtATime()
+    {
+        var book = new SeatBook();
+        Assert.Equal(SeatHolder.Free, book.HolderOf(1));
+        Assert.True(book.Reserve(1));
+        Assert.Equal(SeatHolder.Reserved, book.HolderOf(1));
+        Assert.False(book.Reserve(1)); // already kept
+        book.Assign(2);
+        Assert.Equal(SeatHolder.Citizen, book.HolderOf(2));
+        Assert.False(book.Reserve(2)); // a citizen has it
+        Assert.False(book.IsFree(2));
+        book.Release(2);
+        Assert.True(book.IsFree(2));
+        book.Unreserve(1);
+        Assert.True(book.IsFree(1));
+        book.Assign(3); book.Reserve(4);
+        book.Clear();
+        Assert.True(book.IsFree(3) && book.IsFree(4));
+    }
+
+    [Fact]
+    public void TheSeatMessageStatesFollowTheDeclaredHints()
+    {
+        var spec = MassSeatRules.Spec;
+        Assert.True(spec.Allows(MassSeatState.None, MassSeatState.CanSit));
+        Assert.True(spec.Allows(MassSeatState.None, MassSeatState.Seated)); // interact before the hint went out
+        Assert.True(spec.Allows(MassSeatState.CanSit, MassSeatState.None));
+        Assert.True(spec.Allows(MassSeatState.Seated, MassSeatState.None));
+        Assert.False(spec.Allows(MassSeatState.Seated, MassSeatState.CanSit)); // a stand-up goes through None
+        foreach (var s in Enum.GetValues<MassSeatState>())
+            Assert.Equal(s, MassCodec.DecodeSeat(MassCodec.EncodeSeat(new MassSeatMsg(s, 0)))!.Value.State);
+    }
+
+    [Fact]
+    public void TheMassSpecsAreInTheCatalog()
+    {
+        var names = StateMachineCatalog.All.Select(x => x.Name).ToHashSet();
+        Assert.Contains("Mass.Phase", names);
+        Assert.Contains("Mass.Pastor", names);
+        Assert.Contains("Mass.Seat", names);
+        Assert.Contains("Citizen.State", names);
+    }
 }
