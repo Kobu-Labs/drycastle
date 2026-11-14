@@ -1,5 +1,17 @@
 namespace Drycastle.ShooterCore;
 
+/// <summary>Another look of a species (animals.json, "variants"): its own model, with the species' scale, hit box and numbers.</summary>
+public sealed class AnimalVariant
+{
+    /// <summary>The asset id that names the species' base model (pets.json "pinned"); no variant may use it.</summary>
+    public const string BaseAssetId = "base";
+
+    /// <summary>Lower-case id, unique in the species ("corgi"), never <see cref="BaseAssetId"/>; what a pinned pet names as its asset.</summary>
+    public string Id { get; set; } = "";
+    /// <summary>The GLB, relative to the asset library, like <see cref="AnimalDef.Model"/>.</summary>
+    public string Model { get; set; } = "";
+}
+
 /// <summary>
 /// One species of wildlife or livestock (animals.json). Lengths are metres, speeds metres per second, angles degrees,
 /// times seconds. The numbers are placeholders tuned by feel (hp, speeds, radii) or measured from the model (scale, hit box).
@@ -21,12 +33,25 @@ public sealed class AnimalDef
     /// <summary>Flee speed (the gallop clip).</summary>
     public float RunSpeed { get; set; }
     public float TurnRateDegPerS { get; set; } = 200;
+    /// <summary>False for a pet: it never flees, not from threats nor when shot (a hit still plays its reaction, and still kills). The flee numbers below are then unused.</summary>
+    public bool Flees { get; set; } = true;
     /// <summary>A threat (a player or a vehicle) closer than this makes the animal flee.</summary>
     public float FleeRadius { get; set; }
     /// <summary>How far from where it spawned the animal wanders. It walks back when a flight took it further out.</summary>
     public float WanderRadius { get; set; }
     /// <summary>Body box in the entity's frame: [width, height, length], feet on the ground, centred on the position. For hit tests.</summary>
     public List<float> HitBox { get; set; } = new();
+    /// <summary>Other models of the same species. Variant index 0 is <see cref="Model"/>; index i (1 up) is <c>Variants[i - 1]</c>. The index travels on the wire.</summary>
+    public List<AnimalVariant> Variants { get; set; } = new();
+
+    /// <summary>How many looks the species has: the base model and its variants.</summary>
+    public int VariantCount => Variants.Count + 1;
+
+    /// <summary>The model of a variant index (0 or out of range: the base model).</summary>
+    public string ModelOf(int variant) => variant >= 1 && variant <= Variants.Count ? Variants[variant - 1].Model : Model;
+
+    /// <summary>The variant index of an asset id: a variant's id (1 up), or -1.</summary>
+    public int VariantIndex(string asset) => Variants.FindIndex(v => v.Id == asset) is >= 0 and var i ? i + 1 : -1;
 }
 
 /// <summary>
@@ -92,6 +117,15 @@ public sealed class AnimalsFile : IVersioned
             if (!(a.TurnRateDegPerS > 0)) throw new DataFileException($"{F}: {a.Id}: turn_rate_deg_per_s must be positive");
             if (!(a.FleeRadius > 0)) throw new DataFileException($"{F}: {a.Id}: flee_radius must be positive");
             if (!(a.WanderRadius >= f.WanderMinM)) throw new DataFileException($"{F}: {a.Id}: wander_radius must be at least wander_min_m");
+            if (a.Variants.Count > 255) throw new DataFileException($"{F}: {a.Id}: at most 255 variants (the wire carries the index in one byte)");
+            var variants = new HashSet<string>();
+            foreach (var v in a.Variants)
+            {
+                if (v is null || v.Id == "" || v.Id.Any(c => !(char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '_')) || !variants.Add(v.Id))
+                    throw new DataFileException($"{F}: {a.Id}: a variant id is lower case letters, digits and underscores, unique in the species");
+                if (v.Id == AnimalVariant.BaseAssetId) throw new DataFileException($"{F}: {a.Id}: variant id \"{AnimalVariant.BaseAssetId}\" is reserved for the base model");
+                if (!v.Model.EndsWith(".glb", StringComparison.Ordinal)) throw new DataFileException($"{F}: {a.Id}: variant {v.Id}: model must be a .glb path in the asset library");
+            }
             if (a.HitBox.Count != 3 || a.HitBox.Any(x => !(x > 0))) throw new DataFileException($"{F}: {a.Id}: hit_box is [width, height, length], all positive");
         }
         return f;

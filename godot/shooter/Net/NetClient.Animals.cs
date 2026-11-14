@@ -43,7 +43,7 @@ public partial class NetClient
     void OnAnimalSpawned(WorldReplica.Entity e)
     {
         if (e.Type != AnimalRules.TypeId) return;
-        var species = e.State.Owner;
+        var species = AnimalRules.SpeciesOf(e.State.Owner);
         if (species >= AnimalData.Animals.Count)
         {
             GD.PrintErr($"client: animal {e.Id} has species {species}, animals.json has {AnimalData.Animals.Count}; not drawn (data files differ from the server's?)");
@@ -52,7 +52,7 @@ public partial class NetClient
         var def = AnimalData.Animals[species];
         var node = new Node3D { Name = $"Animal{e.Id}" };
         AnimationPlayer? anim = null;
-        if (ModelLib.Instance(def.Model) is { } model)
+        if (ModelLib.Instance(def.ModelOf(AnimalRules.VariantOf(e.State.Owner))) is { } model)
         {
             model.Scale = Vector3.One * def.Scale;
             model.RotationDegrees = new Vector3(0, def.ModelYawDeg, 0);

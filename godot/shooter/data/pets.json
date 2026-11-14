@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  // Pets live in the property groups of the village (GLOSSARY: Pet, Pen). Each round, every property group has "group_chance" to keep
+  // pets; the pets of a group are "pets_per_group_min".."pets_per_group_max", each one of "species" by weight (ids of animals.json).
+  // "max_pets" caps all pets in the map at once.
+  "group_chance": 0.25,
+  "max_pets": 40,
+  "pets_per_group_min": 1,
+  "pets_per_group_max": 3,
+  "species": [
+    { "id": "dog", "weight": 4 },
+    { "id": "cat", "weight": 3 },
+    { "id": "hen", "weight": 2 },
+    { "id": "chicken", "weight": 2 }
+  ],
+  // Pinned pets: a named property group keeps these on top of the random ones. Each round, each of "count" (default 1) pets of "species"
+  // (any id of animals.json) is there with "chance" (default 1). Rolled first, so "max_pets" never starves them; they count towards it.
+  // "asset" picks the look: a variant id of the species (animals.json "variants") or "base"; without it the look is random, as for any pet.
+  // Example: { "group": "G-0012", "species": "dog", "asset": "corgi", "chance": 0.5, "count": 1 }
+  "pinned": [],
+  // Poop: a pet drops one every poop_min_seconds..poop_max_seconds (waiting until it stands or eats), it lies poop_lifetime_seconds,
+  // and a group keeps at most poop_max_per_group (the oldest goes first).
+  "poop_min_seconds": 60,
+  "poop_max_seconds": 180,
+  "poop_lifetime_seconds": 300,
+  "poop_max_per_group": 6
+}

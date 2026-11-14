@@ -359,6 +359,18 @@ _Avoid_: ping, marker, objective
 A creature of the world that is not a player: a deer, a dog, a cow. It has hit points and can be shot dead (`animals.json` lists the species, their hit points, speeds and models). It stands, eats, wanders around the spot it spawned at, and runs from players, vehicles and the shot that hurt it. A killed animal lies for `corpse_seconds` with its death clip held on the last frame, then is removed. It is a world entity (wire type 50) the server owns; clients only draw it. Not a target dummy (a player-shaped practice target) and not a corpse (what a killed player leaves).
 _Avoid_: NPC (alone), mob, critter
 
+**Pet**:
+An Animal (a dog, cat, hen or chicken) that lives in one property group and never leaves its Pen. It wanders, stands and eats around the point it spawned at, and does not flee: not from players or vehicles, and not when shot. It can still be shot dead (`hp` as any animal; a kill scores nothing, is not in the kill feed, and nothing replaces it until the next round). Each round starts with new pets: `pets.json` gives a property group's chance to keep pets, how many, which species (by weight, ids of `animals.json`) and a cap for the whole map; a parcel in no group gets none. A **pinned pet** (`pinned` in `pets.json`) is added to a named group on top of the random ones: a species, optionally one asset of it (a **variant**: another model of the species, listed in `animals.json`; unpinned pets wear a random one), a count and a chance rolled per pet each round, placed before the random pets so the cap never drops it. Species with no model yet are drawn as a box of their hit box. A world entity of wire type 50 like any Animal; the species' `flees: false` is what makes an animal a pet. Not a stray, wildlife (#254) or livestock in a field.
+_Avoid_: companion, NPC (alone)
+
+**Pen**:
+The ground a Pet may stand on: the union of the polygons of all parcels of one property group (each parcel its outer ring minus its holes). The unit is always the property group, never a lone parcel. A Pet's world has no ground outside its Pen, so its own steps refuse to leave; a house inside it does not stop a Pet (it may walk through). Not a fence (the fence is the property group's wall; a Pen is only the area).
+_Avoid_: enclosure, yard, garden (that is a parcel kind)
+
+**Poop**:
+What a Pet leaves on the ground: a small brown, cosmetic world entity (wire type 53) with no hit points and no collision. Each Pet has its own clock (`poop_min_seconds` to `poop_max_seconds`); when it runs out and the Pet is alive and standing or eating, a Poop drops at its feet and the clock starts over. It lies `poop_lifetime_seconds` and disappears; a property group keeps at most `poop_max_per_group`, and the next one removes the oldest.
+_Avoid_: dung, droppings, mess
+
 **Citizen**:
 A villager of the Holy Mass: leaves a house, walks the navigation mesh to the church door, follows the church's scripted route to its seat and sits. Any hit kills it in one (it lies for `corpse_seconds`, nothing replaces it); it never reacts to combat, and bots do not see it. The server tells who killed it (the event's sinner rule). A world entity (wire type 51) with a pure brain; `holy_mass.json` holds its numbers and bodies, `church.json` (door, aisle, seats) its destination. Not a bot (bots are players with loadouts), not an Animal, not a target dummy.
 _Avoid_: NPC (alone), villager, pedestrian

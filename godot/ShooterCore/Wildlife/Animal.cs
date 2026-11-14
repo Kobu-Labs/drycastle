@@ -14,6 +14,11 @@ public static class AnimalRules
     /// <summary>State byte: bits 0-2 the <see cref="AnimalState"/>, bit 3 flips on every hit that did not kill (a client plays its hit reaction when the bit changes).</summary>
     public const byte StateMask = 7, HitToggle = 8;
 
+    /// <summary>The owner field of an animal's replicated state: the species index in the low byte, the variant index (which model of the species) in the high byte.</summary>
+    public static ushort Look(int species, int variant) => (ushort)(species | variant << 8);
+    public static int SpeciesOf(ushort look) => look & 0xFF;
+    public static int VariantOf(ushort look) => look >> 8;
+
     public static AnimalState StateOf(byte state) => (AnimalState)(state & StateMask);
     public static bool HitToggled(byte state) => (state & HitToggle) != 0;
 
@@ -45,7 +50,7 @@ public interface IAnimalWorld
 
 /// <summary>
 /// An animal (ambient wildlife or livestock). It stands, eats, wanders around the spot it spawned at, runs from threats
-/// and from the shot that hurt it, and dies when its hit points run out: it then lies for
+/// and from the shot that hurt it (a species with <see cref="AnimalDef.Flees"/> off, like a pet, never runs), and dies when its hit points run out: it then lies for
 /// <see cref="AnimalsFile.CorpseSeconds"/> (its death clip plays) and is removed. Godot-free and deterministic for a seed.
 /// A world entity of type <see cref="AnimalRules.TypeId"/>; the species index travels in the owner field of its state.
 /// </summary>
@@ -81,8 +86,9 @@ public sealed class Animal : IWorldEntity
     Vector3 _target;       // the wander target
     bool _hitToggle;
 
-    public Animal(AnimalsFile file, int species, Vector3 home, float yaw, IAnimalWorld world, int seed)
+    public Animal(AnimalsFile file, int species, Vector3 home, float yaw, IAnimalWorld world, int seed, int variant = 0)
     {
+        Variant = variant;
         _file = file;
         Species = species;
         Def = file.Animals[species];
@@ -96,6 +102,8 @@ public sealed class Animal : IWorldEntity
     }
 
     public int Species { get; }
+    /// <summary>Which model of the species it wears (0 the base model); see <see cref="AnimalDef.ModelOf"/>.</summary>
+    public int Variant { get; }
     public AnimalDef Def { get; }
     /// <summary>Where it spawned: the centre of its wandering.</summary>
     public Vector3 Home { get; }
@@ -133,6 +141,7 @@ public sealed class Animal : IWorldEntity
             return;
         }
         _hitToggle = !_hitToggle;
+        if (!Def.Flees) return; // a pet shrugs it off: the hit reaction plays, no alarm, no flight
         // Run from where the shot came from; when the shooter is gone, from behind (the animal bolts the way it faces).
         _alarmFrom = _world.PositionOf(attacker) ?? Position - Forward * 5;
         _alarm = _file.AlarmSeconds;
@@ -151,7 +160,7 @@ public sealed class Animal : IWorldEntity
             return;
         }
 
-        var threat = _world.NearestThreat(Position, Def.FleeRadius);
+        var threat = Def.Flees ? _world.NearestThreat(Position, Def.FleeRadius) : null;
         if (_alarm > 0)
         {
             _alarm -= dt;
@@ -176,7 +185,7 @@ public sealed class Animal : IWorldEntity
     {
         var state = (byte)((byte)State | (_hitToggle ? AnimalRules.HitToggle : 0));
         // a living animal never shows 0 hp (a sliver of health rounds up)
-        return WorldState.Make(Position, Yaw, 0, (ushort)Species, state, Alive ? MathF.Ceiling(Hp) : 0);
+        return WorldState.Make(Position, Yaw, 0, AnimalRules.Look(Species, Variant), state, Alive ? MathF.Ceiling(Hp) : 0);
     }
 
     // ---- behaviour ----

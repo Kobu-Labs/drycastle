@@ -18,7 +18,8 @@ def ws(tmp_path):
 
 
 def export(ws, out=None):
-    return run_export(ws["work"], out or ws["out"], ws["raw"], DEFAULT_RULES, ws["overrides"])
+    # no edits file: the synthetic world must not pick up the groups and edits of the repo's own pipeline/config/edits.json
+    return run_export(ws["work"], out or ws["out"], ws["raw"], DEFAULT_RULES, ws["overrides"], edits_path=ws["out"].parent / "no_edits.json")
 
 
 def test_chunk_glb_has_all_node_groups(ws) -> None:

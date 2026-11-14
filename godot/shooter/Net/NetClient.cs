@@ -128,6 +128,7 @@ public partial class NetClient : Node
         InitMissile();
         InitTurrets();
         InitAnimals();
+        InitPoop();
         InitBigfoot();
         InitCitizens();
         InitDemon();
@@ -180,6 +181,7 @@ public partial class NetClient : Node
         _owned = null;
         _missiles.Clear();
         _animals.Clear(); // the nodes are under Owned
+        _poops.Clear();
         _citizens.Clear();
         _impacts = null; Array.Clear(_impactNext);
         _rings = null; _ringNext = 0; _ringMesh = null;
