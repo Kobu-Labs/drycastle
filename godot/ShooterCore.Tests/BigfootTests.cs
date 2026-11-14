@@ -414,12 +414,18 @@ public class BigfootTests
     static float FlightSeconds(Vector3 from, Vector3 v, float y) => (v.Y + MathF.Sqrt(v.Y * v.Y + 2 * Ballistics.Gravity * (from.Y - y))) / Ballistics.Gravity;
 
     [Fact]
-    public void TheStompComesInPhaseTwoAndOnlyWhenSomeoneIsNear()
+    public void TheStompIsItsFromTheStartAndOnlyWhenSomeoneIsNear()
     {
+        // nobody within its reach: it throws logs, no stomp
+        var far = new FakeWorld().Player(1, 0, -500);
+        far.PlayerList[0] = new BigfootPlayer(1, new Vector3(0, 0, -40), true, false);
+        var calm = Make(far);
+        for (var i = 0; i < 80; i++) { calm.Tick(Dt); far.PlayerList[0] = new BigfootPlayer(1, calm.Position + new Vector3(0, 0, -40), true, false); } // always 40 m ahead
+        Assert.DoesNotContain(far.Fxs, f => f.Kind == BigfootFxKind.Shockwave);
         var w = new FakeWorld().Player(1, 0, -6);
         var b = Make(w);
-        Run(b, 8);
-        Assert.DoesNotContain(w.Fxs, f => f.Kind == BigfootFxKind.Shockwave); // phase one has no stomp
+        Run(b, 4);
+        Assert.Contains(w.Fxs, f => f.Kind == BigfootFxKind.Shockwave); // in its first phase already
         Assert.Equal(0, b.Phase);
         HitUntil(b, Shipped.Hits.SecondPhaseAt);
         Assert.Equal(1, b.Phase);
@@ -716,7 +722,7 @@ public class BigfootTests
         Assert.True(b.Waiting);
         // somebody comes within the wake radius: the fight is on again
         w.Remove(2);
-        w.Player(3, at.X + 30, at.Z);
+        w.Player(3, at.X + 58, at.Z); // beyond a log's reach: it runs at them
         Run(b, 1);
         Assert.False(b.Waiting);
         Assert.NotEqual(at, b.Position);

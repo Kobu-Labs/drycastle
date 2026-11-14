@@ -29,6 +29,7 @@ public sealed class BigfootFile : IVersioned
     public BigfootReward Reward { get; set; } = new();
     /// <summary>Where the event starts when the map has no area that carries <c>event spawn: bigfoot</c> (a dev aid).</summary>
     public BigfootFallbackSpawn FallbackSpawn { get; set; } = new();
+    public BigfootMusic Music { get; set; } = new();
 
     /// <summary>The damage a player takes from anything Bigfoot does (a log, the shockwave, a landing and what the launched player hits): a whole number in this range, both ends included.</summary>
     public int DamageMin { get; set; } = 2;
@@ -74,6 +75,7 @@ public sealed class BigfootFile : IVersioned
         if (t.MaxRangeM <= t.MinRangeM) throw new DataFileException($"{F}: trunk.max_range_m is above min_range_m");
         Positive(t.CooldownSeconds, "trunk.cooldown_seconds"); Positive(t.WindupSeconds, "trunk.windup_seconds"); Positive(t.SpeedMps, "trunk.speed_mps");
         Positive(t.RadiusM, "trunk.radius_m"); Positive(t.LifeSeconds, "trunk.life_seconds"); NotNegative(t.AimLeadSeconds, "trunk.aim_lead_seconds");
+        Positive(t.MinFlightSeconds, "trunk.min_flight_seconds");
 
         var s = f.Stomp;
         Positive(s.TriggerM, "stomp.trigger_m"); Positive(s.CooldownSeconds, "stomp.cooldown_seconds"); Positive(s.WindupSeconds, "stomp.windup_seconds");
@@ -167,6 +169,8 @@ public sealed class BigfootTrunk
     /// <summary>The wind-up before the release, during which it stands and the clients play the Attack clip.</summary>
     public float WindupSeconds { get; set; } = 0.8f;
     public float SpeedMps { get; set; } = 24;
+    /// <summary>A log is in the air at least this long: a near throw is lobbed high, so it is seen coming.</summary>
+    public float MinFlightSeconds { get; set; } = 0.9f;
     /// <summary>A log hits a player whose body passes within this distance of its centre line, besides the body's own radius.</summary>
     public float RadiusM { get; set; } = 0.6f;
     public float LifeSeconds { get; set; } = 6;
@@ -257,6 +261,15 @@ public sealed class BigfootReward
     public int TrailTries { get; set; } = 24;
     /// <summary>A player who hit it at least this many times is credited with the win, as is a living one within the participant radius when it fell.</summary>
     public int CreditMinHits { get; set; } = 3;
+}
+
+/// <summary>Music for the fight: a file of the private asset folder (never in the repository), looped while a living Bigfoot is near the player.</summary>
+public sealed class BigfootMusic
+{
+    /// <summary>Path in the private asset folder, without its extension (.ogg or .mp3 is tried); empty for none.</summary>
+    public string File { get; set; } = "music/bigfoot_fight";
+    public float RadiusM { get; set; } = 150;
+    public float VolumeDb { get; set; } = -6;
 }
 
 public sealed class BigfootFallbackSpawn

@@ -326,7 +326,7 @@ public sealed class Bigfoot : IWorldEntity
         if (target is not { } t) { Act = BigfootAct.Idle; return; }
         var dist = Flat(t.Feet, Position);
 
-        if (Phase >= 1 && _vehicleCd <= 0 && FindVehicleInContact() is { } car)
+        if (_vehicleCd <= 0 && FindVehicleInContact() is { } car) // every attack is its from the start; the phases only make it angrier
         {
             // it takes the vehicle in both hands and lifts it over its head for the wind-up; the throw starts from up there
             _vehicleToThrow = car.Id; _vehicleFrom = car.Feet; Act = BigfootAct.VehicleWindup; _actLeft = _d.VehicleThrow.WindupSeconds; FaceYaw(car.Feet, dt, snap: true);
@@ -334,12 +334,12 @@ public sealed class Bigfoot : IWorldEntity
             _w.Fx(BigfootFxKind.VehicleThrow, car.Feet, car.Id, (byte)Math.Clamp((int)MathF.Round((_d.VehicleThrow.WindupSeconds + _d.VehicleThrow.FlightSeconds) * 10), 1, 255));
             return;
         }
-        if (Phase >= 2 && _grabCd <= 0 && NearestOnFoot(players, _d.Grab.RangeM) is { } grab)
+        if (_grabCd <= 0 && NearestOnFoot(players, _d.Grab.RangeM) is { } grab)
         {
             _target = grab.Id; Act = BigfootAct.GrabReach; _actLeft = _d.Grab.ReachSeconds; FaceYaw(grab.Feet, dt, snap: true);
             return;
         }
-        if (Phase >= 1 && _stompCd <= 0 && NearestOnFoot(players, _d.Stomp.TriggerM) != null)
+        if (_stompCd <= 0 && NearestOnFoot(players, _d.Stomp.TriggerM) != null)
         {
             Act = BigfootAct.StompWindup; _actLeft = _d.Stomp.WindupSeconds;
             _w.Fx(BigfootFxKind.StompWindup, Position);
@@ -474,9 +474,9 @@ public sealed class Bigfoot : IWorldEntity
         if (t is not { } tp) return;
         var from = Position + Forward * 1.2f + new Vector3(0, _d.HeightM * 0.85f, 0);
         // the flight time is the distance over the log's speed; the aim is where the target will be when it arrives, plus the lead
-        var seconds = Math.Clamp(Flat(tp.Feet, from) / MathF.Max(_d.Trunk.SpeedMps, 1f), 0.4f, _d.Trunk.LifeSeconds - 0.2f);
+        var seconds = Math.Clamp(Flat(tp.Feet, from) / MathF.Max(_d.Trunk.SpeedMps, 1f), _d.Trunk.MinFlightSeconds, _d.Trunk.LifeSeconds - 0.2f);
         var aim = ChestOf(tp.Feet + _targetVelocity * (seconds + _d.Trunk.AimLeadSeconds));
-        seconds = Math.Clamp(Flat(aim, from) / MathF.Max(_d.Trunk.SpeedMps, 1f), 0.4f, _d.Trunk.LifeSeconds - 0.2f);
+        seconds = Math.Clamp(Flat(aim, from) / MathF.Max(_d.Trunk.SpeedMps, 1f), _d.Trunk.MinFlightSeconds, _d.Trunk.LifeSeconds - 0.2f);
         _w.SpawnTrunk(from, Ballistics.LaunchVelocity(from, aim, seconds));
         _w.Fx(BigfootFxKind.TrunkThrow, from);
     }

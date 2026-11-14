@@ -238,6 +238,49 @@ public partial class Sfx : Node
 
     internal void FreeLoopSlot(int i) => _loopTaken[i] = false;
 
+    AudioStreamPlayer? _fight;
+    Tween? _fightFade;
+    string? _fightFile;
+    bool _fightOn;
+
+    /// <summary>
+    /// Music of a fight (the Bigfoot's): a looped .ogg or .mp3 of the private asset folder, faded in while <paramref name="on"/> and out after. The
+    /// file is not part of the repository, so a machine without it plays nothing. <paramref name="file"/> is its path there without the extension.
+    /// </summary>
+    public static void FightMusic(bool on, string file, float volumeDb)
+    {
+        if (Instance is not { } s || !Enabled || s._fightOn == on) return;
+        s._fightOn = on;
+        s._fightFade?.Kill();
+        if (on)
+        {
+            if (s._fight == null) { s._fight = new AudioStreamPlayer { Bus = "Music" }; s.AddChild(s._fight); }
+            if (s._fightFile != file) { s._fightFile = file; s._fight.Stream = LoadPrivateMusic(file); }
+            if (s._fight.Stream == null) return;
+            if (!s._fight.Playing) { s._fight.VolumeDb = -40f; s._fight.Play(); }
+            s._fightFade = s.CreateTween();
+            s._fightFade.TweenProperty(s._fight, "volume_db", volumeDb, 1.5f);
+        }
+        else if (s._fight is { Playing: true } p)
+        {
+            s._fightFade = s.CreateTween();
+            s._fightFade.TweenProperty(p, "volume_db", -60f, 3f);
+            s._fightFade.TweenCallback(Callable.From(p.Stop));
+        }
+    }
+
+    static AudioStream? LoadPrivateMusic(string file)
+    {
+        if (string.IsNullOrEmpty(file)) return null;
+        var env = OS.GetEnvironment("DRYCASTLE_ASSETS_PRIVATE");
+        var dir = !string.IsNullOrEmpty(env) ? env : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(GamePaths.Assets().TrimEnd('/', '\\')) ?? "", "assets-private");
+        var ogg = System.IO.Path.Combine(dir, file + ".ogg");
+        if (System.IO.File.Exists(ogg) && AudioStreamOggVorbis.LoadFromFile(ogg) is { } o) { o.Loop = true; return o; }
+        var mp3 = System.IO.Path.Combine(dir, file + ".mp3");
+        if (System.IO.File.Exists(mp3)) return new AudioStreamMP3 { Data = System.IO.File.ReadAllBytes(mp3), Loop = true };
+        return null;
+    }
+
     void DoMusic(bool on)
     {
         if (!Enabled || _music == null) return;

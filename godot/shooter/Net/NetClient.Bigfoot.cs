@@ -39,6 +39,8 @@ public partial class NetClient
         public int ArmL = -1, ArmR = -1;
         public Quaternion ArmLRest, ArmRRest, ArmLUp, ArmRUp;
         public bool ArmsRaised;
+        /// <summary>The log on its shoulder while it winds a throw up (the thrown one is a world entity of its own).</summary>
+        public Node3D? HeldLog;
     }
 
     /// <summary>Finds the arm bones of the giant and works out the pose that points each straight up, from the skeleton's rest (no clip is read).</summary>
@@ -154,15 +156,30 @@ public partial class NetClient
         }
     }
 
+    /// <summary>A log: a thick trunk with a paler cut face at each end and two branch stubs, lying along -Z. The one it throws and the one on its shoulder.</summary>
+    static Node3D MakeLog()
+    {
+        const float length = 3.8f;
+        var node = new Node3D();
+        var bark = new StandardMaterial3D { AlbedoColor = new Color(0.30f, 0.20f, 0.12f), Roughness = 1f };
+        var cut = new StandardMaterial3D { AlbedoColor = new Color(0.78f, 0.62f, 0.40f), Roughness = 1f };
+        node.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.36f, BottomRadius = 0.44f, Height = length, RadialSegments = 10 }, MaterialOverride = bark, RotationDegrees = new Vector3(90, 0, 0) });
+        foreach (var end in new[] { -1f, 1f })
+            node.AddChild(new MeshInstance3D
+            {
+                Mesh = new CylinderMesh { TopRadius = end < 0 ? 0.33f : 0.41f, BottomRadius = end < 0 ? 0.33f : 0.41f, Height = 0.03f, RadialSegments = 10 },
+                MaterialOverride = cut, RotationDegrees = new Vector3(90, 0, 0), Position = new Vector3(0, 0, end * (length / 2f + 0.005f)),
+            });
+        node.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.07f, BottomRadius = 0.12f, Height = 0.7f, RadialSegments = 6 }, MaterialOverride = bark, Position = new Vector3(0.45f, 0.3f, -0.7f), RotationDegrees = new Vector3(0, 0, -50) });
+        node.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.06f, BottomRadius = 0.1f, Height = 0.55f, RadialSegments = 6 }, MaterialOverride = bark, Position = new Vector3(-0.4f, -0.2f, 0.8f), RotationDegrees = new Vector3(0, 0, 120) });
+        return node;
+    }
+
     void SpawnTrunkView(WorldReplica.Entity e)
     {
-        var node = new Node3D { Name = $"Trunk{e.Id}" };
-        node.AddChild(new MeshInstance3D
-        {
-            Mesh = new CylinderMesh { TopRadius = 0.3f, BottomRadius = 0.36f, Height = 3.4f },
-            MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.34f, 0.23f, 0.14f), Roughness = 1f },
-            RotationDegrees = new Vector3(90, 0, 0), // lies along its flight (the node faces -Z)
-        });
+        var node = MakeLog();
+        node.Name = $"Trunk{e.Id}";
+        node.Visible = false; // until the first interpolated position: it must not flash at the world's origin
         Owned.AddChild(node);
         _trunks[e.Id] = node;
     }
@@ -202,11 +219,18 @@ public partial class NetClient
                 if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Buf.At(rt) is not { } s) continue;
                 var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 node.GlobalPosition = at;
+                node.Visible = true;
                 node.Rotation = new Vector3((float)(Now * 5.0), s.Yaw, 0); // it tumbles end over end as it flies
                 _trunkLast[id] = at;
             }
         }
         _heldByBigfoot = held;
+        // its music plays while a living one is near the player (the file is private: without it there is none)
+        var near = false;
+        if (_me != null)
+            foreach (var v in _bigfoots.Values)
+                if (v.Shown != BigfootAct.Dead && v.Node.GlobalPosition.DistanceTo(_me.GlobalPosition) <= BigfootData.Music.RadiusM) near = true;
+        Sfx.FightMusic(near, BigfootData.Music.File, BigfootData.Music.VolumeDb);
         RenderRings();
     }
 
@@ -284,6 +308,24 @@ public partial class NetClient
             case BigfootAct.GrabReach: pitch = 0.35f * MathF.Min(1f, t / BigfootData.Grab.ReachSeconds); break;
             case BigfootAct.Hold: pitch = -0.12f; roll = MathF.Sin(t * 11f) * 0.16f; rise = 1f + 0.03f * MathF.Sin(t * 22f); break; // flails with the player in its hand
             case BigfootAct.Launch: pitch = 0.3f; break;
+        }
+        // the log it is about to throw: up on its right shoulder, drawn back, gone at the release (the flying one takes over)
+        var winding = act == BigfootAct.TrunkWindup;
+        if (winding && v.HeldLog == null)
+        {
+            v.HeldLog = MakeLog();
+            v.Pivot.AddChild(v.HeldLog);
+        }
+        if (v.HeldLog != null)
+        {
+            v.HeldLog.Visible = winding;
+            if (winding)
+            {
+                var k = Math.Clamp(t / BigfootData.Trunk.WindupSeconds, 0f, 1f);
+                var h = BigfootData.HeightM;
+                v.HeldLog.Position = new Vector3(0.85f, h * (0.55f + 0.42f * MathF.Min(1f, k * 2f)), 0.3f + 0.5f * k); // lifted from the hip to over the shoulder, then back
+                v.HeldLog.Rotation = new Vector3(-0.35f * k, 0, 0); // its front end tips up
+            }
         }
         if (enraged) rise *= 1f + 0.025f * MathF.Sin((float)now * 13f);
         v.Pivot.Rotation = new Vector3(pitch, 0, roll);

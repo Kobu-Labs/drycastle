@@ -27,8 +27,8 @@
     "participant_radius_m": 90,
     "explosive_weight": 25,
     "vehicle_weapon_weight": 4,
-    // fractions of the hit count taken: phase two adds the stomp and the vehicle throw, phase three the grab and the launch,
-    // and past enrage_at it is faster and its cooldowns are shorter
+    // fractions of the hit count taken at which it roars into its second and third phase; every attack is its from the start, the
+    // phases only mark its anger, and past enrage_at it is faster and its cooldowns are shorter
     "second_phase_at": 0.30,
     "third_phase_at": 0.60,
     "enrage_at": 0.85,
@@ -57,19 +57,22 @@
     "give_up_m": 150
   },
 
-  // Phase one: it hurls tree trunks, an arc aimed ahead of the target.
+  // Its ranged attack, from the start like all its attacks: it takes a log on its shoulder for the wind-up and hurls it, an arc aimed
+  // ahead of the target. Nearer than min_range_m it does not throw (it stomps and grabs there); a log is in the air at least
+  // min_flight_seconds, so a near throw is lobbed high and is seen coming.
   "trunk": {
-    "min_range_m": 2.5,
+    "min_range_m": 8,
     "max_range_m": 55,
     "cooldown_seconds": 3.2,
-    "windup_seconds": 0.8,
-    "speed_mps": 24,
+    "windup_seconds": 1.0,
+    "speed_mps": 20,
+    "min_flight_seconds": 0.9,
     "radius_m": 0.6,
     "life_seconds": 6,
     "aim_lead_seconds": 0.35
   },
 
-  // Phase two: the stomp. The wind-up is the telegraph (animation and sound); the shockwave then runs outwards along the ground
+  // The stomp. The wind-up is the telegraph (animation and sound); the shockwave then runs outwards along the ground
   // and knocks back every player standing on it once. A player whose feet are more than wave_height_m up when it passes (a jump) is untouched.
   "stomp": {
     "trigger_m": 10,
@@ -83,7 +86,7 @@
     "knockback_lift_mps": 4.5
   },
 
-  // Phase two: a ground vehicle it is in contact with is taken in both hands, lifted hold_height_m over its feet (above its head) during
+  // A vehicle it is in contact with is taken in both hands, lifted hold_height_m over its feet (above its head) during
   // the wind-up, and thrown from there on a scripted arc to a random place; nothing aboard takes damage, the driver's input is ignored
   // from the lift to the landing.
   "vehicle_throw": {
@@ -98,7 +101,7 @@
     "placement_tries": 8
   },
 
-  // Phase three: it picks a player on foot up, flails with them for hold_seconds and launches them, aimed at another player when there is one.
+  // The grab: it picks a player on foot up, flails with them for hold_seconds and launches them, aimed at another player when there is one.
   "grab": {
     "range_m": 4.5,
     "cooldown_seconds": 11,
@@ -134,6 +137,14 @@
     "trail_spacing_m": 1.9,
     "trail_tries": 24,
     "credit_min_hits": 3
+  },
+
+  // Music for the fight: a file in the private asset folder (assets-private/, never in the repository; DRYCASTLE_ASSETS_PRIVATE moves
+  // it), .ogg or .mp3, looped on the Music bus while a living Bigfoot is within radius_m of the player. No file, no music.
+  "music": {
+    "file": "music/bigfoot_fight",
+    "radius_m": 150,
+    "volume_db": -6
   },
 
   // A dev aid: a map with no area that carries "event spawn: bigfoot" has no spawn point for it, so /event bigfoot puts it this far from a
