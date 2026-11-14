@@ -523,7 +523,7 @@ public partial class NetServer : Node
         StreakLeave(c.Id);
         StatusLeave(c.Id);
         MassStandUp(c.Id); _seatHint.Remove(c.Id);
-        if (c.Car != null) { c.Car.Seat.Exit(c.Id); c.Car = null; }
+        DetachFromCar(c);
         foreach (var car in _cars) { car.RemoveCollisionExceptionWith(c.Body); car.Probe?.Unignore(c.Body); car.DriveWorld?.Unignore(c.Body); } // the exception outlives the freed body otherwise (T3-014)
         c.Body.QueueFree();
         _byId.Remove(c.Id);
@@ -607,6 +607,19 @@ public partial class NetServer : Node
         GD.Print($"server: debug kill {c.Name} -> #{target}: {r}");
     }
 
+    /// <summary>
+    /// What a round leaves behind on the server, cleared when the next one starts and when the match drops back to waiting: the Holy Mass, the crowd, the
+    /// vehicles (riders out of their seats, everything back at its origin, repaired), burning, killstreaks, shells in the air and the round's XP.
+    /// </summary>
+    void ResetRoundWorld()
+    {
+        _mass?.End(); // the Holy Mass does not outlive the round
+        _crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
+        ResetCars();
+        StatusRoundStart();
+        RoundStarted();
+    }
+
     void OnMatchEvent(MatchEvent e)
     {
         switch (e)
@@ -617,13 +630,13 @@ public partial class NetServer : Node
                 RoundEnded();
                 GD.Print($"server: round over, winners {string.Join(",", _match.Winners)}");
                 break;
-            case PhaseChanged { Phase: MatchPhase.Running }:
-                _mass?.End(); // the Holy Mass does not outlive the round
-                _crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
-                ResetCars();
+            case PhaseChanged { Phase: MatchPhase.Waiting }: // too few players: the round is over without an end screen, nothing of it stays (the match cleared its entities)
+                ResetRoundWorld();
+                GD.Print("server: match waiting for players");
+                break;
+            case PhaseChanged { Phase: MatchPhase.Running }: // a new round: also an admin's restart of a running one
+                ResetRoundWorld();
                 LossRoundStart();
-                StatusRoundStart();
-                RoundStarted();
                 if (_roundsEnded > 0) { _restarts++; _finishAt = _elapsed + 1.5; }
                 GD.Print("server: round started");
                 break;
@@ -633,6 +646,7 @@ public partial class NetServer : Node
                     sc.Body.Teleport(new Vector3(s.Position.X, s.Position.Y + 0.1f, s.Position.Z));
                     sc.Body.Health = MoveConsts.MaxHealth;
                     sc.Inputs.Clear(); sc.Start = sc.Body.GlobalPosition; sc.MaxMoved = 0;
+                    sc.HeldUntilTick = 0; sc.LaunchGraceUntil = 0; // a new life: no Bigfoot hold or launch grace left over from the last one
                     ApplyLoadout(sc); // a loadout changed while alive applies from this spawn on
                     sc.W.Reset(_elapsed);
                     sc.Recoil.Reset();

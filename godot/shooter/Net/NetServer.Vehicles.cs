@@ -147,7 +147,7 @@ public partial class NetServer
 
     void ResetCars()
     {
-        foreach (var cl in _clients.Values) cl.Car = null;
+        foreach (var cl in _clients.Values) DetachFromCar(cl); // out of the seat for good: Car, and Body.InVehicle with it (a body left flagged cannot go prone)
         foreach (var car in _cars) { car.Seat.Clear(); car.Reset(); RestoreVehicleGlass(car); }
         RestoreGlassForRound();
         _carResets += _cars.Count > 0 ? 1 : 0;
@@ -180,19 +180,27 @@ public partial class NetServer
 
     void ExitCar(Client c) => LeaveSeat(c, true);
 
+    /// <summary>
+    /// The one way a player stops being seated (exit, death, disconnect, round restart, a thrown-out survivor): the seat is freed, the lights go off when the
+    /// vehicle is empty, and <see cref="Client.Car"/> and the body's <c>InVehicle</c> flag are cleared together. A body left flagged would keep prone blocked on
+    /// the server only, so prediction and the server would disagree. Returns the vehicle the player left, null when they were not seated.
+    /// </summary>
+    ServerCar? DetachFromCar(Client c)
+    {
+        var car = c.Car;
+        if (car == null) return null;
+        car.Seat.Exit(c.Id);
+        if (!car.Seat.Occupied) car.Lights = false; // off when empty
+        c.Car = null;
+        c.Body.InVehicle = false;
+        return car;
+    }
+
     /// <summary>The player leaves their seat (any seat); <paramref name="placeOnGround"/> puts the body on a free side of the car (not for death, the respawn moves it).</summary>
     void LeaveSeat(Client c, bool placeOnGround)
     {
-        var car = c.Car;
-        if (car == null) return;
-        car.Seat.Exit(c.Id);
-        car.Seat.Exit(c.Id);
-        if (!car.Seat.Occupied) car.Lights = false; // off when empty
         var seat = c.CarSeat;
-        c.Car = null;
-        c.Body.InVehicle = false;
-        c.Car = null;
-        c.Body.InVehicle = false;
+        if (DetachFromCar(c) is not { } car) return;
         _carExits++;
         if (placeOnGround) c.Body.Teleport(FreeSide(c, car));
         GD.Print($"server: {c.Name} left {car.Def.Id} {car.Id} (seat {seat})");
@@ -345,7 +353,7 @@ public partial class NetServer
             var def = car.Def;
             if (car.Destroyed)
             {
-                if (_elapsed >= car.ReturnAt) { car.Reset(); RestoreVehicleGlass(car); _destroyedReturns++; if (BlastSmoke && _destroyedReturns >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5; GD.Print($"server: {def.Id} {car.Id} returned after its destruction"); }
+                if (car.Life.ReturnDue(_elapsed)) { car.Reset(); RestoreVehicleGlass(car); _destroyedReturns++; if (BlastSmoke && _destroyedReturns >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5; GD.Print($"server: {def.Id} {car.Id} returned after its destruction"); }
                 continue;
             }
             // seats of players who have gone (disconnect, death) are freed; the driver is seat 0 and only the driver steers
@@ -366,7 +374,7 @@ public partial class NetServer
             // a wall takes speed from a driven car; a helicopter is hurt by what it hits whoever flies it, or nobody
             if ((driver != null || car.Flies) && car.Def.CrashDamage && car.LastImpact > Vehicles.CrashMinSpeedLoss)
                 DamageVehicle(car, (car.LastImpact - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, 0, SpecialWeapons.Vehicle, 0);
-            if (car.DetonateAt >= 0 && _elapsed >= car.DetonateAt) { Detonate(car); continue; }
+            if (car.Life.DetonationDue(_elapsed)) { Detonate(car); continue; }
             for (var s = 0; s < car.Seat.Count; s++) // the riders are put on their seats (no list per car per tick)
             {
                 if (OccupantAt(car, s) is not { } o) continue;
@@ -483,11 +491,10 @@ public partial class NetServer
         if (attacker != 0 && _byId.TryGetValue(attacker, out var attackerClient)) amount *= attackerClient.Perks.VehicleDamageDealt; // Tank Hunter
         if (attacker != 0) { car.LastAttacker = attacker; car.LastWeapon = weapon; }
         var before = VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages);
-        car.Hp = MathF.Max(0, car.Hp - amount);
+        car.Life.Damage(amount, _elapsed, delay); // at 0 HP the blast is scheduled `delay` seconds from now (0 = this tick's vehicle step)
         _vehicleHits++;
         var stage = VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages);
         if (stage != before) GD.Print($"server: {car.Def.Id} {car.Id} damage stage {before} -> {stage} (hp {car.Hp:F0}/{car.Def.Hp:F0})");
-        if (car.Hp <= 0 && car.DetonateAt < 0) car.DetonateAt = _elapsed + delay;
     }
 
     /// <summary>
@@ -501,8 +508,7 @@ public partial class NetServer
         var driver = OccupantAt(car, 0);
         var attacker = car.LastAttacker != 0 ? car.LastAttacker : driver?.Id ?? (ushort)0;
         var weapon = car.LastWeapon != 0 ? car.LastWeapon : SpecialWeapons.Vehicle;
-        car.Destroy();
-        car.ReturnAt = _elapsed + Vehicles.DestroyedReturnTime;
+        car.Destroy(_elapsed + Vehicles.DestroyedReturnTime);
         _vehicleBlasts++;
         BroadcastEvent(EventKind.VehicleExplosion, WeaponCodec.Encode(new VehicleExplosionMsg(car.Id, attacker, N(at), e.Splash.Radius)));
         BroadcastImpact(N(car.GlobalPosition), ImpactSize.Plume); // the blast throws up dirt or road where the car sits (ticket #154)
