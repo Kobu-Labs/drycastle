@@ -60,14 +60,15 @@ public partial class ServerCar : CharacterBody3D
     public CarState State;
     public readonly Dictionary<ushort, double> HitCooldown = new();
 
+    /// <summary>The hit points and the life of the vehicle (alive, doomed with a blast scheduled, destroyed until it returns): the pure machine in <see cref="VehicleLifecycle"/>. Built in <see cref="_Ready"/>.</summary>
+    public VehicleLifecycle Life { get; private set; } = null!;
     /// <summary>Hidden hit points (ticket #103): only the stage derived from them ever reaches clients.</summary>
-    public float Hp;
+    public float Hp => Life.Hp;
     /// <summary>Who dealt the last damage (0 = nobody) and with which weapon byte: credited for the blast.</summary>
     public ushort LastAttacker;
     public byte LastWeapon;
-    /// <summary>Server time at which the vehicle blows up (it ran out of HP), or negative.</summary>
-    public double DetonateAt = -1;
-    public bool Destroyed;
+    /// <summary>Blown up and gone from the world until it returns (<see cref="VehicleLife.Destroyed"/>).</summary>
+    public bool Destroyed => Life.Destroyed;
     /// <summary>Counts every <see cref="Reset"/>: the lag compensation starts a new pose history when it changes (ADR 0013, B-02).</summary>
     public int Lives;
     public int LivesSeen;
@@ -75,7 +76,6 @@ public partial class ServerCar : CharacterBody3D
     public uint LifeStart;
     /// <summary>This vehicle's poses at the end of recent ticks, for rewinding a shot (ADR 0013, B-02).</summary>
     public readonly VehiclePoseRing Poses = new();
-    public double ReturnAt;
     /// <summary>Speed lost to a wall in the last <see cref="Step"/> (m/s), for crash damage.</summary>
     public float LastImpact;
 
@@ -109,7 +109,7 @@ public partial class ServerCar : CharacterBody3D
     public override void _Ready()
     {
         CollisionLayer = 2; CollisionMask = 1;
-        Hp = Def.Hp;
+        Life = new VehicleLifecycle(Def.Hp);
         Seat = new VehicleSeat(Def.Seats.Count);
         AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(HalfWidth * 2, Def.Height, HalfLength * 2) }, Position = new Vector3(0, Def.Height / 2, 0) }); // the hit volume (VehicleBox): ground to the top of the body
         FloorSnapLength = 0.4f;
@@ -153,25 +153,25 @@ public partial class ServerCar : CharacterBody3D
     public Vector3 Forward => new(-Mathf.Sin(State.Yaw), 0, -Mathf.Cos(State.Yaw));
     public bool AtOrigin => GlobalPosition.DistanceTo(OriginPos) < 0.5f;
 
-    /// <summary>Gone from the world after the blast: no collision, no driving; comes back through <see cref="Reset"/>.</summary>
-    public void Destroy()
+    /// <summary>Gone from the world after the blast: no collision, no driving; comes back through <see cref="Reset"/> once the server's clock reaches <paramref name="returnAt"/>.</summary>
+    public void Destroy(double returnAt)
     {
-        Destroyed = true; DetonateAt = -1; Asleep = false; RestCount = 0;
+        Life.Destroy(returnAt); Asleep = false; RestCount = 0;
         CollisionLayer = 0;
         Velocity = Vector3.Zero; State.Speed = 0;
         Flight.Velocity = System.Numerics.Vector3.Zero;
         Drive.Speed = 0; Drive.Slip = 0; Drive.VerticalSpeed = 0; Drive.YawRate = 0;
     }
 
-    /// <summary>Back to the origin. <paramref name="repair"/> restores the HP too: not on an abandon return (a smoking vehicle stays damaged).</summary>
+    /// <summary>Back to the origin. <paramref name="repair"/> restores the HP too: not on an abandon return (a smoking vehicle stays damaged), but a doomed or destroyed one always comes back repaired (<see cref="VehicleLifecycle.Reset"/>).</summary>
     public void Reset(bool repair = true)
     {
         Asleep = false; RestCount = 0;
         Lives++; // a new life for the lag compensation's pose history (NetServer.SyncCarLife)
-        if (repair || Destroyed)
+        if (Life.Reset(repair))
         {
-            Hp = Def.Hp; LastAttacker = 0; LastWeapon = 0; DetonateAt = -1;
-            Destroyed = false; CollisionLayer = 2;
+            LastAttacker = 0; LastWeapon = 0;
+            CollisionLayer = 2;
             Gun = Def.Gun is { } g ? new VehicleGun(g) : Def.Flak is { } fk ? new VehicleGun(fk.AsGun()) : null;
             TurretLocalYaw = 0; FlakBarrel = 0;
             GunPitch = Def.Flak is { } f0 ? FlakRules.ClampPitch(f0, 0) : 0;

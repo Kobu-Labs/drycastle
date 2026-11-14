@@ -128,6 +128,7 @@ public partial class NetClient : Node
         InitAircraft();
         InitFlak();
         InitSeats();
+        InitMatchEdges();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
         _peer = _conn.ConnectToHost(Host, Port, Wire.Channels, 0);
@@ -346,8 +347,6 @@ public partial class NetClient : Node
         switch (kind)
         {
             case EventKind.MatchState:
-                SfxPhase(Match.Phase);
-                if (Match.Restarts != _hudRestarts) { _hudRestarts = Match.Restarts; _hud?.ClearKills(); }
                 _hud?.SetTeams(Match);
                 _hud?.SetMatch(Match.Phase, Match.TimeRemaining(Now), Match.Rows, Match.Winners, Match.NameOf);
                 break;

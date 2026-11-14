@@ -8,9 +8,18 @@ public partial class NetClient
 {
     Hud? _hud;
     readonly SpreadEstimator _spread = new();
-    int _hudRestarts;
     /// <summary>The aim button of the last input tick; the crosshair spread uses it as the server uses the input's Aim bit.</summary>
     bool _aimHeld;
+
+    /// <summary>
+    /// The match's phase edges, detected once in <see cref="ClientMatchState"/> and handed to the views that react to them: the round sounds, and the kill feed
+    /// that a restarted round (the end screen's end, or an admin's restart mid-round) empties.
+    /// </summary>
+    void InitMatchEdges()
+    {
+        Match.PhaseChanged += SfxPhase;
+        Match.RoundRestarted += () => _hud?.ClearKills();
+    }
 
     WeaponDef? CurrentWeapon => Ammo is { } a && Weapons != null && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1] : null;
 

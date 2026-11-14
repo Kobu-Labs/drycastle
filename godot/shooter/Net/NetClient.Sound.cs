@@ -11,7 +11,6 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class NetClient
 {
-    MatchPhase? _sfxPhase;
     int _sfxSlot;
     bool _sfxReloading, _sfxWasAir;
     double _sfxDryAt;
@@ -72,11 +71,10 @@ public partial class NetClient
         _sfxReloading = reloading;
     }
 
-    void SfxPhase(MatchPhase p)
+    /// <summary>The round start and end sounds, on a phase change (<see cref="ClientMatchState.PhaseChanged"/>; the first state of a connection is no round start).</summary>
+    void SfxPhase(MatchPhase? prev, MatchPhase p)
     {
-        var prev = _sfxPhase;
-        _sfxPhase = p;
-        if (prev == null || prev == p || !Sfx.Enabled) return;
+        if (prev == null || !Sfx.Enabled) return;
         if (p == MatchPhase.Running) Sfx.Play2D("round.start");
         else if (p == MatchPhase.Ending) Sfx.Play2D("round.end");
     }
