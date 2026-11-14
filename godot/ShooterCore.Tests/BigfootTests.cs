@@ -492,7 +492,7 @@ public class BigfootTests
     [Fact]
     public void ItGrabsFlailsAndLaunchesAtAnotherPlayerInPhaseThree()
     {
-        var w = new FakeWorld().Player(1, 0, -3).Player(2, 30, 0);
+        var w = new FakeWorld().Player(1, 0, -3).Player(2, 60, 0);
         var b = Make(w);
         HitUntil(b, Shipped.Hits.ThirdPhaseAt);
         Assert.Equal(2, b.Phase);
@@ -510,7 +510,7 @@ public class BigfootTests
         // aimed at player 2: from the hand, it lands on them in the flight time
         var hand = w.Holds[^1].At;
         var lands = Ballistics.PositionAt(hand, launch.Velocity, Shipped.Grab.LaunchFlightSeconds);
-        Assert.True(Vector2.Distance(new Vector2(lands.X, lands.Z), new Vector2(30, 0)) < 1f, $"it lands at {lands}");
+        Assert.True(Vector2.Distance(new Vector2(lands.X, lands.Z), new Vector2(60, 0)) < 1f, $"it lands at {lands}");
         Assert.Equal(0, b.HeldPlayer);
     }
 
@@ -524,6 +524,8 @@ public class BigfootTests
         var launch = w.Launches.FirstOrDefault(l => l.Velocity != Vector3.Zero);
         Assert.NotEqual(default, launch);
         Assert.True(launch.Velocity.Y > 0);
+        var flat = new Vector2(launch.Velocity.X, launch.Velocity.Z).Length() * Shipped.Grab.LaunchFlightSeconds;
+        Assert.InRange(flat, Shipped.Grab.MinLaunchDistanceM, 80f); // thrown far
     }
 
     [Fact]

@@ -559,13 +559,18 @@ public sealed class Bigfoot : IWorldEntity
             var d = Flat(p.Feet, from);
             if (d < bd) { bd = d; other = p; }
         }
-        Vector3 v;
-        if (other is { } o) v = Ballistics.LaunchVelocity(from, o.Feet + new Vector3(0, 0.9f, 0), _d.Grab.LaunchFlightSeconds);
+        // at another player when one is far enough; a nearer one only gives the direction, and the throw goes over their head
+        Vector3 to;
+        if (other is { } o && Flat(o.Feet, from) >= _d.Grab.MinLaunchDistanceM) to = o.Feet + new Vector3(0, 0.9f, 0);
         else
         {
             var a = (float)_rng.NextDouble() * MathF.Tau;
-            v = new Vector3(MathF.Cos(a), 0, MathF.Sin(a)) * _d.Grab.RandomLaunchSpeedMps + new Vector3(0, 9f, 0);
+            var dir = new Vector3(MathF.Cos(a), 0, MathF.Sin(a));
+            var far = _d.Grab.RandomLaunchSpeedMps * _d.Grab.LaunchFlightSeconds;
+            if (other is { } near) { dir = near.Feet - from; dir.Y = 0; dir = dir.LengthSquared() > 1e-4f ? Vector3.Normalize(dir) : new Vector3(1, 0, 0); far = _d.Grab.MinLaunchDistanceM; }
+            to = new Vector3(from.X, Position.Y, from.Z) + dir * far;
         }
+        var v = Ballistics.LaunchVelocity(from, to, _d.Grab.LaunchFlightSeconds);
         _held = 0;
         _flyers.Add(new Flyer { Player = who, Left = _d.Grab.LaunchGraceSeconds });
         _w.Launch(who, v, _d.Grab.LaunchGraceSeconds);

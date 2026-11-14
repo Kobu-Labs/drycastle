@@ -102,8 +102,11 @@
     "cooldown_seconds": 11,
     "reach_seconds": 0.7,
     "hold_seconds": 2.5,
-    "launch_flight_seconds": 1.7,
-    "random_launch_speed_mps": 18,
+    "launch_flight_seconds": 2.4,
+    // with nobody else to aim at the throw goes random_launch_speed_mps x launch_flight_seconds far (60 m); another player nearer than
+    // min_launch_distance_m only gives the direction and the thrown one lands that far away
+    "random_launch_speed_mps": 25,
+    "min_launch_distance_m": 45,
     "launch_grace_seconds": 5,
     "launch_hit_radius_m": 1.3,
     "hand_height_m": 2.7,

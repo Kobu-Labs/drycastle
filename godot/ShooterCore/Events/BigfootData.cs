@@ -91,7 +91,7 @@ public sealed class BigfootFile : IVersioned
         Positive(g.RangeM, "grab.range_m"); Positive(g.CooldownSeconds, "grab.cooldown_seconds"); Positive(g.ReachSeconds, "grab.reach_seconds");
         Positive(g.HoldSeconds, "grab.hold_seconds"); Positive(g.LaunchFlightSeconds, "grab.launch_flight_seconds"); NotNegative(g.LaunchGraceSeconds, "grab.launch_grace_seconds");
         Positive(g.LaunchHitRadiusM, "grab.launch_hit_radius_m"); Positive(g.HandHeightM, "grab.hand_height_m"); Positive(g.HandForwardM, "grab.hand_forward_m");
-        Positive(g.RandomLaunchSpeedMps, "grab.random_launch_speed_mps");
+        Positive(g.RandomLaunchSpeedMps, "grab.random_launch_speed_mps"); Positive(g.MinLaunchDistanceM, "grab.min_launch_distance_m");
 
         var w = f.Wipe;
         Positive(w.WakeRadiusM, "wipe.wake_radius_m"); Positive(w.DespawnMinutes, "wipe.despawn_minutes"); Positive(w.DespawnRadiusM, "wipe.despawn_radius_m");
@@ -219,7 +219,9 @@ public sealed class BigfootGrab
     public float HoldSeconds { get; set; } = 2.5f;
     /// <summary>The launch is aimed to land on another player in this time. Without one it throws the player this fast in a random direction.</summary>
     public float LaunchFlightSeconds { get; set; } = 1.7f;
-    public float RandomLaunchSpeedMps { get; set; } = 18;
+    public float RandomLaunchSpeedMps { get; set; } = 25;
+    /// <summary>The shortest throw: another player nearer than this only gives the direction, the launched one lands this far away.</summary>
+    public float MinLaunchDistanceM { get; set; } = 45;
     /// <summary>For this long after a launch the launched player's fall damage is the launch's own (2 to 5) and not the fall's.</summary>
     public float LaunchGraceSeconds { get; set; } = 5;
     /// <summary>The launched player hurts another player they pass within this distance of (once each).</summary>

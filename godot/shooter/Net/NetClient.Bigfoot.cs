@@ -154,7 +154,8 @@ public partial class NetClient
                 if (toggle != v.Toggle)
                 {
                     v.Toggle = toggle;
-                    if (act is BigfootAct.Idle or BigfootAct.Walk or BigfootAct.Run) PlayBigfootHit(v, now);
+                    // a flinch at most every few seconds: under steady fire it would otherwise restart on every hit and never let the act's clip play
+                    if (act is BigfootAct.Idle or BigfootAct.Walk or BigfootAct.Run && now >= v.HitUntil + HitReactionGapSeconds) PlayBigfootHit(v, now);
                 }
                 if (now >= v.HitUntil && v.Shown != act) ShowBigfootAct(v, act, now);
                 MoveBigfoot(v, act, BigfootRules.IsEnraged(raw), now);
@@ -171,6 +172,8 @@ public partial class NetClient
         _heldByBigfoot = held;
         RenderRings();
     }
+
+    const double HitReactionGapSeconds = 4;
 
     void PlayBigfootHit(BigfootView v, double now)
     {
@@ -340,13 +343,18 @@ public partial class NetClient
         var node = new Node3D { Name = $"Corpse{e.Id}" };
         var model = MakeGiant(out var anim);
         node.AddChild(model);
+        Owned.AddChild(node); // in the tree first: an AnimationPlayer outside it poses nothing, and the giant would stand in its rest pose
         if (anim != null)
         {
             var clips = new Dictionary<string, string>();
             IndexClips(clips, anim);
-            if (clips.TryGetValue(BigfootRules.ClipDeath, out var death)) { anim.Play(death); anim.Seek(anim.GetAnimation(death).Length, true); anim.Pause(); }
+            if (clips.TryGetValue(BigfootRules.ClipDeath, out var death))
+            {
+                anim.Play(death);
+                anim.Seek(Math.Max(0, anim.GetAnimation(death).Length - 0.01), true); // just short of the end: it lies as it fell
+                anim.Pause();
+            }
         }
-        Owned.AddChild(node);
         return new CorpseView { Node = node, View = null, Giant = true };
     }
 }
