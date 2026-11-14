@@ -94,6 +94,7 @@ Settled design (2026-11-13). Numbers live in `data/holy_mass.json`.
 - permanent in the model (`church_solids`), real shell collision like bunkers; new ADR extending 0009
 - doors are solid outside the event, the event opens them; client hides the interior while doors are shut
 - nave, aisle, bench rows, altar, sacristy door next to the altar, gallery (second floor) with seats and stairs
+- the two side aisles are hollow too (as wide as the plan), open to the nave by arcades; side altars at the aisle ends, standing spots in the aisles; real windows (dark frame, breakable glass pane) in the aisle walls, the clerestory, the chancel and the front facade above the door
 - door at least 2 m wide (NPC navigation, 0.5 m radius)
 - blast shelter like a bunker room: a blast outside does not hurt players inside and the other way round
 - pipeline exports `church.json`: seat poses, aisle path, altar and monk spots, demon wall anchors, doors

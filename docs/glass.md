@@ -55,7 +55,7 @@ The motorcycle, bicycle, quad and amphibious transport have no glass. The utilit
 - The bus's two cab partition glass and the helicopter's chin and overhead windows are not panes (they are glass that does not break), and the flak truck's rear window has none either.
 - A door leaf's crack overlay stays where the leaf is closed when the door is open.
 - Outlines must be convex; the crack shader takes at most 12 points per pane.
-- Buildings without a detail file, the flats and the loggia houses (their panes are part of the wall mesh) and the landmarks have no panes.
+- Buildings without a detail file, the flats and the loggia houses (their panes are part of the wall mesh) and the landmarks (but the church, whose 23 window openings are panes) have no panes.
 - Gunship rounds, flak bursts, the MOAB, a vehicle crash and a knife do not damage glass.
 - No sound for a crack or a shatter.
 - The server tests a vehicle's panes and open sides in its upright hit box frame (yaw only), so a banking helicopter's are tested level.
