@@ -23,7 +23,7 @@ public partial class UiShell : CanvasLayer
     public bool Instant { get; set; }
 
     Control _root = null!, _stackHost = null!;
-    readonly List<MenuScreen> _stack = new();
+    readonly ScreenStack<MenuScreen> _stack = new();
     PanelContainer _toast = null!;
     Label _toastText = null!;
     TextureRect _toastIcon = null!;
@@ -32,7 +32,7 @@ public partial class UiShell : CanvasLayer
     MenuScreen? _fading;
     Vector2 _lastSize;
 
-    public MenuScreen? Top => _stack.Count > 0 ? _stack[^1] : null;
+    public MenuScreen? Top => _stack.Top;
     public int Depth => _stack.Count;
 
     public override void _Ready()
@@ -103,33 +103,45 @@ public partial class UiShell : CanvasLayer
 
     public void Push(MenuScreen s)
     {
+        if (_stack.Contains(s)) return; // a screen is on the stack once
+        FinishFade(); // a fade still running belongs to the screen about to be covered: leave it fully opaque
         Top?.Park(s.Overlay);
-        _stack.Add(s);
+        _stack.Push(s);
         _stackHost.AddChild(s);
         Present(s);
     }
 
-    public void Pop()
+    /// <summary>
+    /// Closes <paramref name="s"/>: it goes only when it is the top screen. A screen that was already closed, or is covered by another, is left alone and
+    /// false comes back, so a stale or repeated Back (Esc and a timer in one frame, a button after Esc) never pops the screen underneath. The caller
+    /// then also skips what it would have done after closing.
+    /// </summary>
+    public bool Pop(MenuScreen s)
     {
-        if (_stack.Count == 0) return;
+        if (!_stack.Pop(s)) return false;
         Sfx.Ui("ui.back");
-        var s = _stack[^1];
-        _stack.RemoveAt(_stack.Count - 1);
+        if (_fading == s) { _fade?.Kill(); _fade = null; _fading = null; }
         s.QueueFree();
-        if (_fading == s) { _fade?.Kill(); _fading = null; }
         if (Top is { } t) { t.Unpark(); Present(t, false); }
         else UpdateMouse();
-        UpdateMouse();
+        return true;
     }
 
     /// <summary>Drops every screen (no transition) and shows <paramref name="s"/> (or nothing).</summary>
     public void Reset(MenuScreen? s = null)
     {
-        _fade?.Kill(); _fading = null;
-        foreach (var o in _stack) o.QueueFree();
-        _stack.Clear();
-        if (s != null) { _stack.Add(s); _stackHost.AddChild(s); Present(s); }
+        _fade?.Kill(); _fade = null; _fading = null;
+        foreach (var o in _stack.Clear()) o.QueueFree();
+        if (s != null) { _stack.Push(s); _stackHost.AddChild(s); Present(s); }
         UpdateMouse();
+    }
+
+    /// <summary>Ends a running transition at once: the screen it was fading in ends fully opaque (a killed tween would leave it half transparent for good).</summary>
+    void FinishFade()
+    {
+        _fade?.Kill(); _fade = null;
+        if (_fading != null && IsInstanceValid(_fading)) _fading.Modulate = Colors.White;
+        _fading = null;
     }
 
     void Present(MenuScreen s, bool fade = true)
@@ -138,7 +150,7 @@ public partial class UiShell : CanvasLayer
         s.Modulate = Colors.White;
         if (fade && !Instant && !GameSettings.Current.ReduceMotion)
         {
-            _fade?.Kill();
+            FinishFade();
             s.Modulate = new Color(1, 1, 1, 0);
             _fading = s;
             _fade = CreateTween();
@@ -173,18 +185,17 @@ public partial class UiShell : CanvasLayer
     public override void _Input(InputEvent e)
     {
         // any press skips a running transition (the event still goes on)
-        if (_fading != null && (e is InputEventKey or InputEventMouseButton) && e.IsPressed())
-        {
-            _fade?.Kill();
-            _fading.Modulate = Colors.White;
-            _fading = null;
-        }
+        if (_fading != null && (e is InputEventKey or InputEventMouseButton) && e.IsPressed()) FinishFade();
         if (Top is { } t && t.HandleInput(e)) { GetViewport().SetInputAsHandled(); return; }
-        if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape } && BackHandler?.Invoke() == true) { GetViewport().SetInputAsHandled(); return; }
         if (e is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
         {
-            if (Top is { } top) { top.Back(); GetViewport().SetInputAsHandled(); }
-            else if (GameActive && PauseFactory != null) { Push(PauseFactory()); GetViewport().SetInputAsHandled(); }
+            // the topmost layer gets Esc first: a screen over the match closes before the match's own chat, Equipment screen or map behind it
+            switch (MenuEsc.Decide(Top != null, BackHandler, GameActive, PauseFactory != null))
+            {
+                case EscAction.ScreenBack: Top!.Back(); GetViewport().SetInputAsHandled(); break;
+                case EscAction.MatchClosed: GetViewport().SetInputAsHandled(); break;
+                case EscAction.OpenPause: Push(PauseFactory!()); GetViewport().SetInputAsHandled(); break;
+            }
         }
         // re-grab focus after a mouse click on empty space so the keyboard keeps working
         else if (e is InputEventKey { Pressed: true } && Top != null && GetViewport().GuiGetFocusOwner() == null) Top.FocusFirst();
@@ -252,7 +263,7 @@ public abstract partial class MenuScreen : Control
     protected abstract Control Build();
     protected abstract Control? FirstFocusTarget();
     /// <summary>Esc / Back: one level up. Default pops the screen.</summary>
-    public virtual void Back() => Shell.Pop();
+    public virtual void Back() => Shell.Pop(this);
     /// <summary>Gets every input before Esc handling; return true to consume it (rebinding capture).</summary>
     public virtual bool HandleInput(InputEvent e) => false;
 

@@ -36,7 +36,11 @@ public partial class CustomizationScreen : MenuScreen
     readonly List<CamoSpec> _undo = new(), _redo = new();
     string _lastEditKey = "";
     ulong _lastEditMs;
-    bool _hasProfile, _awaitingSave, _syncing, _previewStale, _pickerOpen;
+    bool _hasProfile, _syncing, _previewStale, _pickerOpen;
+    /// <summary>Apply is waiting for the server (the matching profile, an error, or the deadline).</summary>
+    CamoSaveWait _wait;
+    bool AwaitingSave => _wait.Waiting;
+    static double Now() => Time.GetTicksMsec() / 1000.0;
     CamoPreview _preview = null!;
 
     readonly record struct Row(CamoParam P, Control Input, Label? Value, Control Line, Label Name);
@@ -86,6 +90,12 @@ public partial class CustomizationScreen : MenuScreen
     public override void _Process(double delta)
     {
         base._Process(delta);
+        if (_wait.GaveUp(Now()))
+        {
+            // no answer (the server rate-limits saves silently): unlock Apply, Revert and Undo, and say so
+            Shell.Toast(Strings.T("camo.err.noanswer"), ToastKind.Error);
+            Sync();
+        }
         FitToViewport();
         if (!_previewStale) return;
         _previewStale = false;
@@ -436,7 +446,8 @@ public partial class CustomizationScreen : MenuScreen
         var before = _saved;
         _saved = ServerCopy(p, _slot);
         if (first || _draft == before) { _draft = _saved; ClearHistory(); }
-        if (_awaitingSave) { _awaitingSave = false; Shell.Toast(Strings.F("camo.toast.saved", _slot + 1)); }
+        // only the profile that carries the look we sent is the answer; a loadout acknowledgement's profile is not
+        if (_wait.Acked(_slot, _saved)) Shell.Toast(Strings.F("camo.toast.saved", _slot + 1));
         _level.Text = Strings.F("loadout.level", p.Level);
         for (var i = 0; i < Loadout.SlotCount; i++)
             _slotTabs[i].Text = Strings.F("loadout.slot", i + 1) + (p.ActiveSlot == i ? "   " + Strings.T("loadout.active") : "");
@@ -448,8 +459,8 @@ public partial class CustomizationScreen : MenuScreen
 
     void OnServerError(string reason)
     {
-        if (!_awaitingSave) return;
-        _awaitingSave = false;
+        if (!_wait.Waiting) return;
+        _wait.Cancel();
         Shell.Toast(reason, ToastKind.Error);
         Sync();
     }
@@ -473,7 +484,7 @@ public partial class CustomizationScreen : MenuScreen
         _saved = _net?.Profile is { } p ? ServerCopy(p, slot) : CamoSpec.Default;
         _draft = _saved;
         ClearHistory();
-        _awaitingSave = false;
+        _wait.Cancel();
         PushToControls();
         Preview();
         Sync();
@@ -533,7 +544,7 @@ public partial class CustomizationScreen : MenuScreen
     /// <summary>Moves the draft one step along the history: the newest entry of <paramref name="from"/> becomes the draft, the draft goes on <paramref name="to"/>.</summary>
     void Step(List<CamoSpec> from, List<CamoSpec> to)
     {
-        if (from.Count == 0 || _awaitingSave) return;
+        if (from.Count == 0 || AwaitingSave) return;
         to.Add(_draft);
         var next = from[^1];
         from.RemoveAt(from.Count - 1);
@@ -586,9 +597,9 @@ public partial class CustomizationScreen : MenuScreen
 
     void Apply()
     {
-        if (_net == null || !Dirty || _awaitingSave) return;
+        if (_net == null || !Dirty || AwaitingSave) return;
         if (!_net.SaveCamo(_slot, _draft)) { Shell.Toast(Strings.T("net.not_sent"), ToastKind.Error); return; }
-        _awaitingSave = true;
+        _wait.Begin(_slot, _draft, Now());
         Sync();
     }
 
@@ -596,7 +607,7 @@ public partial class CustomizationScreen : MenuScreen
     public override void Back()
     {
         if (!_hasProfile || !Dirty) { base.Back(); return; }
-        Shell.Push(Discard(() => Shell.Pop()));
+        Shell.Push(Discard(() => Shell.Pop(this)));
     }
 
     /// <summary>1-5 pick a slot, Ctrl+Z undoes, Ctrl+Y or Ctrl+Shift+Z redoes. Nothing is taken while a colour picker is open (its hex field needs the digits).</summary>
@@ -672,12 +683,12 @@ public partial class CustomizationScreen : MenuScreen
             Refresh();
             return;
         }
-        _note.Text = _awaitingSave ? Strings.T("camo.saving") : Dirty ? Strings.T("camo.unsaved") : Strings.T("camo.saved");
-        _note.ThemeTypeVariation = Dirty && !_awaitingSave ? "HudWarn" : "HudDim";
-        _apply.Disabled = !Dirty || _awaitingSave || _net == null;
-        _revert.Disabled = !Dirty || _awaitingSave;
-        _undoBtn.Disabled = _undo.Count == 0 || _awaitingSave;
-        _redoBtn.Disabled = _redo.Count == 0 || _awaitingSave;
+        _note.Text = AwaitingSave ? Strings.T("camo.saving") : Dirty ? Strings.T("camo.unsaved") : Strings.T("camo.saved");
+        _note.ThemeTypeVariation = Dirty && !AwaitingSave ? "HudWarn" : "HudDim";
+        _apply.Disabled = !Dirty || AwaitingSave || _net == null;
+        _revert.Disabled = !Dirty || AwaitingSave;
+        _undoBtn.Disabled = _undo.Count == 0 || AwaitingSave;
+        _redoBtn.Disabled = _redo.Count == 0 || AwaitingSave;
         Refresh();
     }
 

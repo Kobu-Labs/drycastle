@@ -178,7 +178,7 @@ public static class Strings
         ("camo.inert.face_off", "Face paint is off. Raise Coverage to paint the face; the other controls then apply."),
         ("camo.inert.no_headgear", "This body has no helmet, so Headgear does not apply."),
         ("camo.randomize", "Randomize"), ("camo.reset", "Reset to default"), ("camo.undo", "Undo"), ("camo.redo", "Redo"), ("camo.copy", "Copy share code"), ("camo.paste", "Paste share code"),
-        ("camo.revert", "Revert"), ("camo.apply", "Apply"), ("camo.saving", "Saving..."),
+        ("camo.revert", "Revert"), ("camo.apply", "Apply"), ("camo.saving", "Saving..."), ("camo.err.noanswer", "The server did not confirm the save. Check your connection, then press Apply again."),
         ("camo.saved", "Saved on this loadout."), ("camo.unsaved", "Unsaved changes. Apply saves them to this loadout."),
         ("camo.toast.saved", "Slot {0} camouflage saved"), ("camo.toast.copied", "Share code copied to the clipboard"),
         ("camo.toast.pasted", "Share code applied (not saved yet)"), ("camo.paste.failed", "Could not apply the share code: {0}"),
