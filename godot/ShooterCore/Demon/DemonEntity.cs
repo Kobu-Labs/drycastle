@@ -27,11 +27,11 @@ public static class DemonRules
         if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "demon", HasHp: true));
     }
 
-    /// <summary>The hit volume of a demon at the pose: a crouching figure's capsule centred <paramref name="bodyHeightM"/> off the surface along its normal.</summary>
-    public static HitTarget Target(Vector3 surface, Vector3 normal, float bodyHeightM, float yaw)
+    /// <summary>The hit volume of a demon at the pose: a crouching figure's capsule, <paramref name="scale"/> times as big as a player's, centred <paramref name="bodyHeightM"/> off the surface along its normal.</summary>
+    public static HitTarget Target(Vector3 surface, Vector3 normal, float bodyHeightM, float yaw, float scale = 1f)
     {
         var centre = surface + normal * bodyHeightM;
-        return new HitTarget(HitId, centre - new Vector3(0, MoveConsts.CrouchHeight / 2, 0), Stance.Crouch, yaw);
+        return new HitTarget(HitId, centre - new Vector3(0, MoveConsts.CrouchHeight * scale / 2, 0), Stance.Crouch, yaw, false, scale);
     }
 
     /// <summary>A unit vector in two bytes (octahedral, about 1.5 degrees off at worst; the axes of the church are exact).</summary>

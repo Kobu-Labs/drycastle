@@ -313,7 +313,7 @@ public partial class NetServer
     {
         if (_dEnt == null || _dStage != DemonStage.Fighting) return;
         var yaw = MathF.Atan2(-_dEnt.Forward.X, -_dEnt.Forward.Z);
-        into.Add(DemonRules.Target(_dEnt.Position, _dEnt.Normal, Demon.Fight.BodyHeightM, yaw));
+        into.Add(DemonRules.Target(_dEnt.Position, _dEnt.Normal, Demon.BodyM, yaw, Demon.Scale));
     }
 
     DemonHitKind? DemonKindOf(byte weapon)
