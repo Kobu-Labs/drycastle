@@ -2,7 +2,7 @@
 # MAP: the map folder the viewer, editor and shooter targets load (override with MAP=<dir>).
 MAP ?= out/village/map
 
-.PHONY: rozhlas editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run region-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: rozhlas thief-voices editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run region-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -285,6 +285,10 @@ shooter-nav-spike:
 # Bake the rozhlas broadcast from assets/drycastle-rozhlas/source/{song,announcement,opakujem}.* (scripts/make_rozhlas.py).
 rozhlas:
 	python3 -I scripts/make_rozhlas.py
+
+# Bake the thieves' voice lines from ~/downloads/New Recording*.mov into assets-private/audio/thieves/voice/ (scripts/make_thief_voices.py, chain: godot/shooter/data/thief_voice.json).
+thief-voices:
+	python3 -I scripts/make_thief_voices.py
 
 shooter-test:
 	dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "_note": "The thieves' voice chain (a raspy 'heavy smoker' voice), read only by the offline bake scripts/make_thief_voices.py. Each 'chain' entry is one ffmpeg filter, in order, with {name} replaced by the literal text of params[name] (numbers keep the spelling written here). The dry recording is first trimmed of silence and peak-normalised to dry_peak_db (so gain_db drives every line into the clipper alike), then runs through 'chain'; 'noise_chain' shapes a pink-noise bed (the breath) that is mixed under the result at params.noise (linear, 0 = none); the bake peak-normalises the sum to out_peak_db (the vorbis encode overshoots it by up to ~1 dB, so -2 keeps the ogg under 0). Edit the values or the order here, nowhere else. First guess, tune by ear: pitch (1 = unchanged, lower = deeper), rough_hz/rough_depth (fast tremolo: the crackle of a ruined voice), gain_db/clip (grit), low/high (band limit), noise (breath).",
+  "params": {
+    "dry_peak_db": -3,
+    "silence_db": -42,
+    "silence_pad_s": 0.04,
+    "pitch": 0.9,
+    "low": 110,
+    "chest_hz": 190,
+    "chest_db": 3,
+    "rasp_hz": 2600,
+    "rasp_db": 5,
+    "high": 6500,
+    "gain_db": 5,
+    "clip": 0.55,
+    "rough_hz": 55,
+    "rough_depth": 0.25,
+    "noise": 0.012,
+    "noise_low": 1200,
+    "noise_high": 5500,
+    "out_peak_db": -2
+  },
+  "chain": [
+    "rubberband=pitch={pitch}",
+    "highpass=f={low}",
+    "equalizer=f={chest_hz}:t=q:w=0.9:g={chest_db}",
+    "equalizer=f={rasp_hz}:t=q:w=1.0:g={rasp_db}",
+    "volume={gain_db}dB",
+    "asoftclip=type=tanh:threshold={clip}",
+    "tremolo=f={rough_hz}:d={rough_depth}",
+    "lowpass=f={high}"
+  ],
+  "noise_chain": [
+    "highpass=f={noise_low}",
+    "lowpass=f={noise_high}"
+  ]
+}
