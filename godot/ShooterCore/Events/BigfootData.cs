@@ -293,6 +293,9 @@ public static class BigfootRules
     /// <summary>Phase and flags in the replicated state byte: bits 0-3 the <see cref="BigfootAct"/>, bit 4 flips on every hit that did not kill, bits 5-6 the phase (0 to 2), bit 7 enraged.</summary>
     public const byte ActMask = 15, HitToggle = 16, PhaseShift = 5, PhaseMask = 3, Enraged = 128;
 
+    /// <summary>How long the Stomp act lasts once the shockwave starts, and the Launch act's swing after a vehicle throw or a player launch (seconds, then back to Idle).</summary>
+    public const float StompSeconds = 0.6f, LaunchSwingSeconds = 0.5f;
+
     /// <summary>Registers the Bigfoot and its log once (idempotent): the Bigfoot carries its hit count left in the hp byte, the log nothing.</summary>
     public static void Register(WorldEntityRegistry registry)
     {

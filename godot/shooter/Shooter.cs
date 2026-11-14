@@ -89,6 +89,8 @@ public partial class Shooter : Node3D
 
     public override void _Ready()
     {
+        // an undeclared state-machine transition is taken anyway (a rare bad edge must not end a match) but is logged, so the spec in docs/state-machines.md can be corrected
+        StateMachineDiagnostics.Report = msg => GD.PrintErr("state machine: " + msg);
         var cfg = Config.Parse(OS.GetCmdlineUserArgs());
         var role = cfg.Str("role", "client");
         _smoke = cfg.Flag("smoke");

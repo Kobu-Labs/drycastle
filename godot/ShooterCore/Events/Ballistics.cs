@@ -26,15 +26,34 @@ public static partial class Ballistics
     public static Vector3 VelocityAt(Vector3 velocity, float t, float gravity = Gravity) => velocity - new Vector3(0, gravity * t, 0);
 }
 
+/// <summary>Where a <see cref="VehicleThrow"/> is: rising to the hold point, held overhead, on its arc, or landed.</summary>
+public enum VehicleThrowPhase : byte { Lifting, Held, Flying, Done }
+
 /// <summary>
 /// A vehicle thrown by the Bigfoot: a scripted arc from where it stood to the chosen landing, turning about its vertical axis meanwhile. It is
 /// over after <see cref="Seconds"/>, at exactly the landing. Nothing about it is damage: the vehicle and what is aboard take none from the throw.
 /// </summary>
 public sealed class VehicleThrow
 {
+    /// <summary>A throw that starts with a lift goes Lifting, Held, Flying, Done; one without a lift starts Flying. A lift thrown before it is up goes Lifting straight to Flying.</summary>
+    public static readonly StateMachineSpec<VehicleThrowPhase> Spec = StateMachineSpec<VehicleThrowPhase>
+        .Define("Bigfoot.VehicleThrow", "A vehicle the Bigfoot throws: lifted overhead, held until it is thrown (or put down), flying its scripted arc, landed.", VehicleThrowPhase.Lifting)
+        .Allow(VehicleThrowPhase.Lifting, VehicleThrowPhase.Held, VehicleThrowPhase.Flying)
+        .Allow(VehicleThrowPhase.Held, VehicleThrowPhase.Flying)
+        .Allow(VehicleThrowPhase.Flying, VehicleThrowPhase.Done)
+        .Note(VehicleThrowPhase.Held, "Overhead and still; one nobody throws is put down after a grace time (the Bigfoot died or was wiped with it up there).")
+        .Note(VehicleThrowPhase.Flying, "Also the put-down: the arc back to where it stood.")
+        .Build();
+
+    /// <summary>The lift's grace after it is up, and the length of the arc that puts an unthrown vehicle back where it stood.</summary>
+    const float HeldGraceSeconds = 1.5f, PutDownSeconds = 0.8f;
+
+    readonly StateMachine<VehicleThrowPhase> _fsm = new(Spec);
+
     public VehicleThrow(Vector3 from, float yaw, Vector3 landing, float seconds, float spinRadPerS)
     {
-        From = from; Yaw0 = yaw; Released = true;
+        From = from; Yaw0 = yaw;
+        _fsm.Enter(VehicleThrowPhase.Flying);
         Aim(landing, seconds, spinRadPerS);
     }
 
@@ -58,9 +77,12 @@ public sealed class VehicleThrow
     public void Release(Vector3 landing, float seconds, float spinRadPerS)
     {
         if (Released) return;
-        From = Position; Released = true; Elapsed = 0;
+        From = Position; _fsm.Enter(VehicleThrowPhase.Flying); Elapsed = 0;
         Aim(landing, seconds, spinRadPerS);
     }
+
+    /// <summary>Puts a lifted vehicle down where it stood (an arc of <see cref="PutDownSeconds"/>, no spin): the Bigfoot lost it. Nothing happens once it flies.</summary>
+    public void PutDown() => Release(Ground, PutDownSeconds, 0);
 
     /// <summary>Where it stood before a lift (the hold point's ground).</summary>
     public Vector3 Ground { get; }
@@ -71,11 +93,12 @@ public sealed class VehicleThrow
     public float Seconds { get; private set; }
     public float SpinRadPerS { get; private set; }
     public float LiftSeconds { get; }
+    public VehicleThrowPhase Phase => _fsm.Current;
     /// <summary>False while it is lifted and held; the arc runs once it is true.</summary>
-    public bool Released { get; private set; }
+    public bool Released => Phase is VehicleThrowPhase.Flying or VehicleThrowPhase.Done;
     public float Elapsed { get; private set; }
     float _lifted;
-    public bool Done => Released && Elapsed >= Seconds;
+    public bool Done => Phase == VehicleThrowPhase.Done;
 
     /// <summary>Advances the lift or the flight by <paramref name="dt"/> and returns where the vehicle is now (the landing once it is over).</summary>
     public Vector3 Step(float dt)
@@ -84,10 +107,12 @@ public sealed class VehicleThrow
         if (!Released)
         {
             _lifted += dt;
-            if (_lifted > LiftSeconds + 1.5f) Release(Ground, 0.8f, 0); // nobody threw it (the Bigfoot died with it overhead): it comes down where it stood
+            if (_lifted >= LiftSeconds) _fsm.Enter(VehicleThrowPhase.Held);
+            if (_lifted > LiftSeconds + HeldGraceSeconds) PutDown(); // nobody threw it (the Bigfoot died with it overhead): it comes down where it stood
             return Position;
         }
         Elapsed = MathF.Min(Seconds, Elapsed + dt);
+        if (Elapsed >= Seconds) _fsm.Enter(VehicleThrowPhase.Done);
         return Position;
     }
 

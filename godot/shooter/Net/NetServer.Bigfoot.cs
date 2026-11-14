@@ -16,15 +16,16 @@ public partial class NetServer
     /// <summary>bigfoot.json: every number of the fight.</summary>
     public BigfootFile BigfootData = new();
 
+    /// <summary>Which event runs (shared by every <c>/event</c> kind: one at a time) and, for the Bigfoot, how far its own lifecycle has come (a dead one lies out its clip after the win is booked).</summary>
     readonly EventBook _events = new();
+    readonly BigfootLifecycle _bigfootLife = new();
     Bigfoot? _bigfoot;
     ushort _bigfootId;
     BigfootEnv? _bigfootEnv;
     /// <summary>The Bigfoot's hit volume at the end of recent ticks, for the rewind of a shot (ADR 0013), and the tick it appeared.</summary>
     readonly PoseRing _bigfootPoses = new();
     uint _bigfootLifeStart;
-    /// <summary>It died: its body lies out the death clip, and when the clip is over it is a corpse to loot where it fell.</summary>
-    bool _bigfootWon;
+    /// <summary>Where it fell and how it lay: when its death clip is over (<see cref="BigfootStage.Dying"/> ends) the body is a corpse to loot there.</summary>
     NVec3 _bigfootFell;
     float _bigfootFellYaw;
     /// <summary>The living players and the throwable vehicles of this tick, refilled once a tick before the entities tick (<see cref="BigfootPrepare"/>).</summary>
@@ -113,12 +114,7 @@ public partial class NetServer
     /// <summary>"/event bigfoot": spawns it at a baked point of an area that carries <c>event spawn: bigfoot</c>, or, with none on the map, near a random living player (a dev fallback, said to the admin and in the log).</summary>
     void StartBigfoot(Client admin)
     {
-        if (_events.Current is { } running)
-        {
-            ChatTo(admin, ChatLineKind.Error, $"The {running.Kind} event is already running. /event current end ends it as a win, /event current cancel removes it.");
-            return;
-        }
-        if (_bigfoot != null) { ChatTo(admin, ChatLineKind.Error, "The last Bigfoot is still lying where it fell. Try again in a few seconds."); return; }
+        if (_bigfootLife.WhyNotStart(_events) is { } why) { ChatTo(admin, ChatLineKind.Error, why); return; } // an event runs, or the last Bigfoot still lies where it fell
         if (_match.Phase != MatchPhase.Running) { ChatTo(admin, ChatLineKind.Error, "No round is running."); return; }
         var living = _byId.Values.Where(o => _match.Get(o.Id)?.Life == PlayerLife.Alive).ToList();
         var spawn = PickEventSpawn(EventBook.Bigfoot);
@@ -147,7 +143,8 @@ public partial class NetServer
         bf.Died += OnBigfootDied;
         var id = _match.Entities.Spawn(bf);
         if (id is not { } eid) { ChatTo(admin, ChatLineKind.Error, "The world is full of entities; the Bigfoot could not be spawned."); return; }
-        _bigfoot = bf; _bigfootId = eid; _bigfootWon = false;
+        _bigfoot = bf; _bigfootId = eid;
+        _bigfootLife.Appeared();
         _bigfootLifeStart = _tick;
         _events.Start(EventBook.Bigfoot, _elapsed);
         BigfootFxEvent(BigfootFxKind.Appear, bf.Position);
@@ -174,9 +171,9 @@ public partial class NetServer
     void ChatCurrentEvent(Client c, string action)
     {
         if (action is not ("end" or "cancel")) { ChatTo(c, ChatLineKind.Error, "Usage: /event current end (conclude it as a win) or /event current cancel (remove it, no reward)."); return; }
-        if (_events.Current == null || _bigfoot is not { } bf)
+        if (_events.Current is not { Kind: EventBook.Bigfoot } || _bigfoot is not { } bf)
         {
-            // no Bigfoot: the Holy Mass keeps its own run (it can only be ended)
+            // not the Bigfoot: the Holy Mass keeps its own run (it can only be ended)
             if (action == "end" || _mass is not { Running: true }) ChatCurrentEnd(c);
             else ChatTo(c, ChatLineKind.Error, "The Holy Mass takes /event current end.");
             return;
@@ -196,8 +193,8 @@ public partial class NetServer
     /// <summary>It fell: the event is won. The line, the XP for everyone credited, and the effect; the body lies out its death clip and then the tracks begin.</summary>
     void OnBigfootDied(Bigfoot bf)
     {
-        _events.End(EventPhase.Won, _elapsed);
-        _bigfootWon = true;
+        _events.End(EventBook.Bigfoot, EventPhase.Won, _elapsed);
+        _bigfootLife.Fell();
         _bigfootFell = bf.Position; _bigfootFellYaw = bf.Yaw;
         BigfootFxEvent(BigfootFxKind.Death, bf.Position);
         var credited = bf.Credited.Where(id => _byId.ContainsKey(id)).ToList();
@@ -211,14 +208,14 @@ public partial class NetServer
     void OnBigfootWorldDespawn(WorldDespawned w)
     {
         if (w.Id != _bigfootId || _bigfoot == null) return;
-        var won = _bigfootWon;
-        _bigfoot = null; _bigfootId = 0; _bigfootEnv = null; _bigfootWon = false;
+        var won = _bigfootLife.Gone();
+        _bigfoot = null; _bigfootId = 0; _bigfootEnv = null;
         if (won)
         {
             if (w.Reason != WorldDespawnReason.Removed) SpawnBigfootReward(_bigfootFell); // a round end clears the world: no reward then
             return;
         }
-        if (_events.End(EventPhase.Despawned, _elapsed) != null)
+        if (_events.End(EventBook.Bigfoot, EventPhase.Despawned, _elapsed) != null)
         {
             ChatToAll(ChatLineKind.System, "", w.Reason == WorldDespawnReason.Expired ? "The Bigfoot went back into the woods. Nobody came for it." : "The Bigfoot event is over.");
             GD.Print($"server: Bigfoot despawned ({w.Reason}), no reward");
@@ -239,10 +236,10 @@ public partial class NetServer
         GD.Print($"server: Bigfoot corpse {cid} at ({fell.X:F1},{fell.Y:F1},{fell.Z:F1}), lasts {r.CorpseSeconds:F0} s");
     }
 
-    /// <summary>A new round clears the world, the Bigfoot and its tracks with it; nothing of the event is left running.</summary>
+    /// <summary>A new round clears the world, the Bigfoot and its tracks with it (the despawn handler ends the run); this is the net for a run the clear did not reach.</summary>
     void BigfootRoundReset()
     {
-        if (_events.Current != null && _bigfoot == null) _events.End(EventPhase.Despawned, _elapsed);
+        if (_bigfootLife.Stage == BigfootStage.None) _events.End(EventBook.Bigfoot, EventPhase.Despawned, _elapsed);
     }
 
     // ---- the terrain and the solid world ----
@@ -354,6 +351,11 @@ public partial class NetServer
             car.Thrown = new VehicleThrow(N(car.GlobalPosition), car.State.Yaw, hold, seconds);
             car.Wake();
             car.HitCooldown.Clear();
+        }
+
+        public void DropVehicle(ushort vehicle)
+        {
+            if (_s._cars.FirstOrDefault(v => v.Id == vehicle) is { Destroyed: false, Thrown: { Released: false } lifted }) lifted.PutDown();
         }
 
         public void ThrowVehicle(ushort vehicle, NVec3 landing, float seconds, float spinRadPerS)

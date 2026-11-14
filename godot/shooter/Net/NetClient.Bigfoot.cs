@@ -30,14 +30,19 @@ public partial class NetClient
         public AnimationPlayer? Anim;
         /// <summary>The clip name the model uses for each plain clip name ("Attack" is "EnemyArmature|EnemyArmature|EnemyArmature|Attack").</summary>
         public readonly Dictionary<string, string> Clips = new();
-        public BigfootAct Shown = (BigfootAct)255;
-        public bool Toggle;
+        /// <summary>The act whose clip is playing, as the byte of its <see cref="BigfootAct"/> (an enum is not <c>IEquatable</c>). A change means the clip is due; <c>Reset</c> after a hit reaction makes it due again.</summary>
+        public Change<byte> Drawn;
+        /// <summary>The replicated hit bit last seen: a flip is a hit that did not kill.</summary>
+        public Change<bool> HitBit;
+        /// <summary>An act was drawn at least once: a giant already dead when first seen lies in its last pose, one that dies in front of us falls.</summary>
+        public bool Introduced;
         /// <summary>Client time (s) the shown act began, and until which a hit reaction holds the act's clip back.</summary>
         public double Since, HitUntil;
         /// <summary>The skeleton and its two arm bones (-1 without them), with each arm's pose at rest and raised straight up: the vehicle lift poses them by hand.</summary>
         public Skeleton3D? Skel;
         public int ArmL = -1, ArmR = -1;
         public Quaternion ArmLRest, ArmRRest, ArmLUp, ArmRUp;
+        /// <summary>The arms are posed by hand (the vehicle lift) and the clip is paused: <see cref="LiftArms"/> sets it, <see cref="LowerArms"/> clears it.</summary>
         public bool ArmsRaised;
         /// <summary>The log on its shoulder while it winds a throw up (the thrown one is a world entity of its own).</summary>
         public Node3D? HeldLog;
@@ -103,7 +108,8 @@ public partial class NetClient
     {
         if (e.Type == BigfootRules.TrunkTypeId) { SpawnTrunkView(e); return; }
         if (e.Type != BigfootRules.TypeId) return;
-        var v = new BigfootView { Node = new Node3D { Name = $"Bigfoot{e.Id}" }, Pivot = new Node3D { Name = "Pivot" }, Toggle = BigfootRules.HitToggled(e.State.State) };
+        var v = new BigfootView { Node = new Node3D { Name = $"Bigfoot{e.Id}" }, Pivot = new Node3D { Name = "Pivot" } };
+        v.HitBit.Update(BigfootRules.HitToggled(e.State.State)); // the bit it spawned with is no hit
         v.Node.AddChild(v.Pivot);
         var model = MakeGiant(out var anim);
         v.Pivot.AddChild(model);
@@ -208,14 +214,12 @@ public partial class NetClient
                 var raw = e.State.State;
                 var act = BigfootRules.ActOf(raw);
                 if (_myId != 0 && e.State.Owner == _myId && act == BigfootAct.Hold) held = true;
-                var toggle = BigfootRules.HitToggled(raw);
-                if (toggle != v.Toggle)
+                if (v.HitBit.Update(BigfootRules.HitToggled(raw)))
                 {
-                    v.Toggle = toggle;
                     // a flinch at most every few seconds: under steady fire it would otherwise restart on every hit and never let the act's clip play
                     if (act is BigfootAct.Idle or BigfootAct.Walk or BigfootAct.Run && now >= v.HitUntil + HitReactionGapSeconds) PlayBigfootHit(v, now);
                 }
-                if (now >= v.HitUntil && v.Shown != act) ShowBigfootAct(v, act, now);
+                if (now >= v.HitUntil && v.Drawn.Update((byte)act)) ShowBigfootAct(v, act, now);
                 MoveBigfoot(v, act, BigfootRules.IsEnraged(raw), now);
                 if (_myId != 0 && e.State.Owner == _myId && act == BigfootAct.Hold) holder = v;
             }
@@ -247,7 +251,7 @@ public partial class NetClient
         var near = false;
         if (_me != null)
             foreach (var v in _bigfoots.Values)
-                if (v.Shown != BigfootAct.Dead && v.Node.GlobalPosition.DistanceTo(_me.GlobalPosition) <= BigfootData.Music.RadiusM) near = true;
+                if ((BigfootAct)v.Drawn.Last != BigfootAct.Dead && v.Node.GlobalPosition.DistanceTo(_me.GlobalPosition) <= BigfootData.Music.RadiusM) near = true;
         Sfx.FightMusic(near, BigfootData.Music.File, BigfootData.Music.VolumeDb);
         RenderRings();
     }
@@ -260,37 +264,54 @@ public partial class NetClient
         v.Anim.SpeedScale = 1;
         v.Anim.Play(clip, 0.05);
         v.HitUntil = now + Math.Min(0.45, v.Anim.GetAnimation(clip).Length);
-        v.Shown = (BigfootAct)254; // the act's clip is due again when the reaction is over
+        v.Drawn.Reset(); // the act's clip is due again when the reaction is over
     }
 
-    /// <summary>Picks the clip of an act. The windups stretch the Attack clip over the telegraph's time, so its blow lands when the server's does.</summary>
+    /// <summary>
+    /// The clip an act plays, the seconds the clip is stretched over (0: its own length) and the blend into it. The windups stretch the Attack clip over the
+    /// telegraph's time, so its blow lands when the server's does; the rest of the figure's motion is <see cref="MoveBigfoot"/>.
+    /// </summary>
+    (string Clip, float Seconds, double Blend) ClipFor(BigfootAct act) => act switch
+    {
+        BigfootAct.Walk => (BigfootRules.ClipWalk, 0, 0.2),
+        BigfootAct.Run => (BigfootRules.ClipRun, 0, 0.2),
+        BigfootAct.TrunkWindup => (BigfootRules.ClipAttack, BigfootData.Trunk.WindupSeconds, 0.1),
+        BigfootAct.StompWindup => (BigfootRules.ClipAttack, BigfootData.Stomp.WindupSeconds, 0.1),
+        BigfootAct.VehicleWindup => (BigfootRules.ClipAttack, BigfootData.VehicleThrow.WindupSeconds, 0.1),
+        BigfootAct.GrabReach => (BigfootRules.ClipAttack, BigfootData.Grab.ReachSeconds, 0.1),
+        BigfootAct.Stomp => (BigfootRules.ClipAttack, StompClipSeconds, 0.05),
+        BigfootAct.Launch => (BigfootRules.ClipAttack, BigfootRules.LaunchSwingSeconds, 0.05),
+        BigfootAct.Hold => (BigfootRules.ClipAttack, HoldClipSeconds, 0.2), // flails: the clip loops fast
+        BigfootAct.Dead => (BigfootRules.ClipDeath, 0, 0.1),
+        _ => (BigfootRules.ClipIdle, 0, 0.2),
+    };
+
+    /// <summary>The Stomp pose (clip and rise) runs a little shorter than the server's act (<see cref="BigfootRules.StompSeconds"/>): the foot is down before the shockwave's act ends. The Hold clip's loop time.</summary>
+    const float StompClipSeconds = 0.5f, HoldClipSeconds = 0.8f;
+
+    /// <summary>The vehicle lift is posed by hand (<see cref="MoveBigfoot"/>): it stands in its idle pose, held still, and the arms go up with the vehicle.</summary>
+    void LiftArms(BigfootView v)
+    {
+        if (v.Clips.TryGetValue(BigfootRules.ClipIdle, out var idle)) { v.Anim!.SpeedScale = 1; v.Anim.Play(idle, 0.1); v.Anim.Seek(0, true); v.Anim.Pause(); }
+        v.ArmsRaised = true;
+    }
+
+    /// <summary>The clips pose the arms again.</summary>
+    static void LowerArms(BigfootView v)
+    {
+        v.ArmsRaised = false;
+        v.Anim!.Play();
+    }
+
+    /// <summary>Picks the clip of an act (<see cref="ClipFor"/>) and starts it.</summary>
     void ShowBigfootAct(BigfootView v, BigfootAct act, double now)
     {
-        var first = v.Shown == (BigfootAct)255;
-        v.Shown = act; v.Since = now;
+        var first = !v.Introduced;
+        v.Introduced = true; v.Since = now;
         if (v.Anim == null) return;
-        string plain; float seconds = 0; var blend = 0.2;
-        if (v.ArmsRaised) { v.ArmsRaised = false; v.Anim.Play(); } // the clips pose the arms again
-        if (act == BigfootAct.VehicleWindup && v.Skel != null && v.ArmL >= 0 && v.ArmR >= 0)
-        {
-            // the lift is posed by hand (MoveBigfoot): it stands in its idle pose, held still, and the arms go up with the vehicle
-            if (v.Clips.TryGetValue(BigfootRules.ClipIdle, out var idle)) { v.Anim.SpeedScale = 1; v.Anim.Play(idle, 0.1); v.Anim.Seek(0, true); v.Anim.Pause(); }
-            v.ArmsRaised = true;
-            return;
-        }
-        switch (act)
-        {
-            case BigfootAct.Walk: plain = BigfootRules.ClipWalk; break;
-            case BigfootAct.Run: plain = BigfootRules.ClipRun; break;
-            case BigfootAct.TrunkWindup: plain = BigfootRules.ClipAttack; seconds = BigfootData.Trunk.WindupSeconds; blend = 0.1; break;
-            case BigfootAct.StompWindup: plain = BigfootRules.ClipAttack; seconds = BigfootData.Stomp.WindupSeconds; blend = 0.1; break;
-            case BigfootAct.VehicleWindup: plain = BigfootRules.ClipAttack; seconds = BigfootData.VehicleThrow.WindupSeconds; blend = 0.1; break;
-            case BigfootAct.GrabReach: plain = BigfootRules.ClipAttack; seconds = BigfootData.Grab.ReachSeconds; blend = 0.1; break;
-            case BigfootAct.Stomp: case BigfootAct.Launch: plain = BigfootRules.ClipAttack; seconds = 0.5f; blend = 0.05; break;
-            case BigfootAct.Hold: plain = BigfootRules.ClipAttack; seconds = 0.8f; break; // flails: the clip loops fast
-            case BigfootAct.Dead: plain = BigfootRules.ClipDeath; blend = 0.1; break;
-            default: plain = BigfootRules.ClipIdle; break;
-        }
+        if (v.ArmsRaised) LowerArms(v);
+        if (act == BigfootAct.VehicleWindup && v.Skel != null && v.ArmL >= 0 && v.ArmR >= 0) { LiftArms(v); return; }
+        var (plain, seconds, blend) = ClipFor(act);
         if (!v.Clips.TryGetValue(plain, out var clip)) return;
         var length = v.Anim.GetAnimation(clip).Length;
         v.Anim.SpeedScale = seconds > 0 && length > 0.05 ? (float)(length / seconds) : 1f;
@@ -312,7 +333,7 @@ public partial class NetClient
             case BigfootAct.StompWindup: // rises up on its toes
                 rise = 1f + 0.14f * MathF.Min(1f, t / BigfootData.Stomp.WindupSeconds); pitch = -0.1f * MathF.Min(1f, t / BigfootData.Stomp.WindupSeconds);
                 break;
-            case BigfootAct.Stomp: rise = 0.88f + 0.12f * MathF.Min(1f, t / 0.5f); pitch = 0.12f; break; // comes down hard
+            case BigfootAct.Stomp: rise = 0.88f + 0.12f * MathF.Min(1f, t / StompClipSeconds); pitch = 0.12f; break; // comes down hard
             case BigfootAct.VehicleWindup:
             {
                 // bends down to the vehicle, takes it in both hands, straightens with it and holds it over its head, leaning back for the throw

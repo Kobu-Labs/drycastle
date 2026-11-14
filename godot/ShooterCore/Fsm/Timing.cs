@@ -48,7 +48,7 @@ public struct Countdown
 /// "Did it change since I last looked?" for a value (the replicated byte, the held key, the phase a view last drew). The first value always counts as a change,
 /// so a view that has drawn nothing yet draws. Replaces the <c>_shown = 255</c> / <c>_prev</c> / <c>_wasX</c> fields and their sentinels.
 /// </summary>
-public struct Change<T> where T : IEquatable<T>
+public struct Change<T>
 {
     T _last;
     bool _has;

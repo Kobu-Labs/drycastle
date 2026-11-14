@@ -429,6 +429,7 @@ public partial class NetServer
     void ChatDemon(Client c)
     {
         if (Demon.Hits.Base <= 0) { ChatTo(c, ChatLineKind.Error, "holy_mass_demon.json is not loaded."); return; }
+        if (_events.Current is { Kind: not EventBook.Mass } && _events.WhyNotStart(EventBook.Demon) is { } busy) { ChatTo(c, ChatLineKind.Error, busy); return; }
         if (EnsureMass(c) is { } why) { ChatTo(c, ChatLineKind.Error, why); return; }
         if (_mass!.Phase == MassPhase.Void || DemonActive) { ChatTo(c, ChatLineKind.Error, "The demon is already here. /event current end removes it."); return; }
         if (_church?.Pastor == null || MapChurch == null) { ChatTo(c, ChatLineKind.Error, "The church has no pastor spot or doorway: export the map again."); return; }

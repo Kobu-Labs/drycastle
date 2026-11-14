@@ -9,12 +9,22 @@ public enum EventPhase : byte { Active, Won, Despawned }
 /// </summary>
 public sealed class EventRun
 {
+    /// <summary>A run is Active until it is won or despawned; both are final.</summary>
+    public static readonly StateMachineSpec<EventPhase> Spec = StateMachineSpec<EventPhase>
+        .Define("Event.Run", "One run of an event: active, then won (reward given) or despawned (no reward). Both ends are final.", EventPhase.Active)
+        .Allow(EventPhase.Active, EventPhase.Won, EventPhase.Despawned)
+        .Note(EventPhase.Won, "Concluded: the reward is due.")
+        .Note(EventPhase.Despawned, "Timed out, cancelled or cleared by a round: no reward.")
+        .Build();
+
+    readonly StateMachine<EventPhase> _fsm = new(Spec);
+
     public EventRun(string kind, double startedAt) { Kind = kind; StartedAt = startedAt; }
 
     /// <summary>The event's name as the admin types it (<see cref="EventBook.Bigfoot"/>).</summary>
     public string Kind { get; }
     public double StartedAt { get; }
-    public EventPhase Phase { get; private set; } = EventPhase.Active;
+    public EventPhase Phase => _fsm.Current;
     public double EndedAt { get; private set; }
     public bool Active => Phase == EventPhase.Active;
 
@@ -27,18 +37,23 @@ public sealed class EventRun
     bool End(EventPhase phase, double now)
     {
         if (!Active) return false;
-        Phase = phase; EndedAt = now;
+        _fsm.Enter(phase);
+        EndedAt = now;
         return true;
     }
 }
 
-/// <summary>The events a server can run, and the one that is running: at most one at a time (the first version has no scheduler).</summary>
+/// <summary>
+/// The events a server can run, and the one that is running: at most one at a time (the first version has no scheduler). Every kind an admin can start with
+/// <c>/event &lt;kind&gt;</c> registers its run here (<see cref="Start"/>) and books its end (<see cref="End(EventPhase, double)"/>), so "an event is running"
+/// is one fact the Bigfoot, the Holy Mass and the Demon all see: <see cref="WhyNotStart"/> is the one refusal each start command asks before it begins anything.
+/// </summary>
 public sealed class EventBook
 {
-    public const string Bigfoot = "bigfoot";
+    public const string Bigfoot = "bigfoot", Mass = "mass", Demon = "demon";
 
-    /// <summary>The kinds an admin can start with <c>/event &lt;kind&gt;</c>.</summary>
-    public static readonly IReadOnlyList<string> Startable = new[] { Bigfoot };
+    /// <summary>The kinds an admin can start with <c>/event &lt;kind&gt;</c> that take part in "one at a time".</summary>
+    public static readonly IReadOnlyList<string> Startable = new[] { Bigfoot, Mass, Demon };
 
     /// <summary>The running event, or null.</summary>
     public EventRun? Current { get; private set; }
@@ -48,10 +63,20 @@ public sealed class EventBook
 
     public static bool IsStartable(string kind) => Startable.Contains(kind);
 
+    /// <summary>The player-facing refusal when <paramref name="kind"/> cannot start now (another event runs, or the kind is unknown); null when it may.</summary>
+    public string? WhyNotStart(string kind)
+    {
+        if (!IsStartable(kind)) return $"Unknown event '{kind}'.";
+        if (Current is not { } run) return null;
+        // the Bigfoot can be cancelled as well as ended; the others only end
+        var how = run.Kind == Bigfoot ? "/event current end ends it as a win, /event current cancel removes it." : "/event current end ends it.";
+        return $"The {run.Kind} event is already running. {how}";
+    }
+
     /// <summary>Starts a run of <paramref name="kind"/>; null when one is already running or the kind is unknown.</summary>
     public EventRun? Start(string kind, double now)
     {
-        if (Current != null || !IsStartable(kind)) return null;
+        if (WhyNotStart(kind) != null) return null;
         return Current = new EventRun(kind, now);
     }
 
@@ -64,4 +89,7 @@ public sealed class EventBook
         Current = null;
         return run;
     }
+
+    /// <summary>Ends the running event only if it is of <paramref name="kind"/> (a kind books its own end, never another's). Null when nothing of that kind runs.</summary>
+    public EventRun? End(string kind, EventPhase outcome, double now) => Current?.Kind == kind ? End(outcome, now) : null;
 }
