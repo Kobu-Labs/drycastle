@@ -83,6 +83,7 @@ class MapScene:
     windows: list[dict] = field(default_factory=list)  # tagged window panes, see building_detail
     bunkers: list[dict] = field(default_factory=list)  # rooms of the enterable bunkers, see bunker.bunker_rooms
     church: dict | None = None  # the inside of the church, see church_interior.church_info
+    urad: dict | None = None  # the inside of the municipal office, see office_interior.urad_info
 
     def chunks(self) -> list[Chunk]:
         return sorted(set(self.parcels) | set(self.nodes) | set(self.parcel_props))
@@ -161,6 +162,18 @@ def build_scene(
 
                         scene.church = {"id": bid, "parcel": p["id"], **church_info(b, dz)}
                         for node, tris, meta in church_panes({**b, "id": bid}):  # see-through, breakable glass
+                            meta["centre"][2] = round(meta["centre"][2] + dz, 3)
+                            scene.windows.append({**meta, "parcel": p["id"]})
+                            scene.nodes.setdefault(tuple(p["chunk"]), {})[node] = Mesh(
+                                np.array(tris, float) + [0, 0, dz], np.array([PANE_GLASS] * len(tris), np.uint8)
+                            )
+                    if b["model"] == "office" and fn is building_mesh:
+                        from drycastle_pipeline import office_interior
+                        from drycastle_pipeline.office import _details as office_details
+
+                        if bid == office_interior.MIDDLE_BAR:
+                            scene.urad = {"id": bid, "parcel": p["id"], **office_interior.urad_info(scene.building_elevation)}
+                        for node, tris, meta in office_interior.office_panes({**b, "id": bid}, office_details().get(bid)):
                             meta["centre"][2] = round(meta["centre"][2] + dz, 3)
                             scene.windows.append({**meta, "parcel": p["id"]})
                             scene.nodes.setdefault(tuple(p["chunk"]), {})[node] = Mesh(

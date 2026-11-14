@@ -7,7 +7,7 @@ namespace Drycastle.Shooter;
 /// Shooter entry point. Args after "--":
 ///   --role server|client      (default client; the server is for --headless)
 ///   --map DIR                 map folder (else DRYCASTLE_MAP, else ../../out/village/map relative to the project)
-///   --connect HOST[:PORT] --name NAME   join a server (default port 27015); --headless-bot [--bot-seconds N] scripts a walk
+///   --connect HOST[:PORT] --name NAME   join a server (default port 27015); --headless-bot [--bot-seconds N] scripts a walk; --bot-chat "3:/event rozhlas;6:/rozhlas feedtest" sends chat lines at those seconds and reports the rozhlas feed it received
 ///   --port N                  server listen port (default 27015); --quit-after SECONDS ends the server with a verdict
 ///   --net-sim latency_ms=50,jitter_ms=5,loss=0.03   server and client: delay every outgoing packet, drop that share of the unreliable ones (see NetSim.cs)
 ///   --loss-test N [--loss-measure S] [--loss-out DIR]   server: loss/latency test round for N bots (use with --match-set min_players=N); --loss-bot walker|shooter on the bots (make shooter-loss-test)
@@ -376,6 +376,7 @@ public partial class Shooter : Node3D
         if (!_map.CollisionOnly && ChurchDecor.Create(Path.GetFullPath(dir)) is { } churchDecor) AddChild(churchDecor); // the cross and the interior lights (client only)
         if (!_map.CollisionOnly && ChurchPaintings.Create(Path.GetFullPath(dir)) is { } churchPaintings) AddChild(churchPaintings); // the wall paintings, hellish once the demon is in (client only)
         if (ChurchDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } churchDoors) AddChild(churchDoors); // closed doors in the doorway, solid on the server too (ADR 0019)
+        if (UradDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } uradDoor) AddChild(uradDoor); // the Obecny Urad's door: shut unless a rozhlas detour is open, solid on the server too
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {
             var bunkers = Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));
@@ -395,6 +396,7 @@ public partial class Shooter : Node3D
                 CollisionOnly = _map.CollisionOnly,
             });
         if (!_map.CollisionOnly) AddChild(new Rozhlas { Speakers = _map.MegaphoneSpeakers() }); // the megaphone poles
+        if (!_map.CollisionOnly) AddChild(new RozhlasFeedPlayer { Speakers = _map.MegaphoneSpeakers() }); // the live feed (a hijacker's voice) from the same poles
         GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} pole_lamps={poleLamps.Count} load={s.LoadSeconds:F2}s");
     }
 
@@ -552,7 +554,7 @@ public partial class Shooter : Node3D
         AddChild(new NetClient
         {
             World = this, Host = host, Port = port, PlayerName = cfg.Str("name", "player"), Bot = bot, KillY = killY, SandboxRequested = SandboxAsked(cfg),
-            BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6,
+            BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6, BotChat = cfg.Str("bot-chat"),
             Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"), PerfStreaks = cfg.Str("perf-streaks"), PerfOut = cfg.Str("perf-out"), PerfStreakPeriod = double.TryParse(cfg.Str("perf-streak-period", "2"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var psp) ? psp : 2, PerfVehicles = cfg.Str("perf-vehicles"),
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
             FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), CarLoop = cfg.Flag("car-loop"), CarLoopSeconds = double.TryParse(cfg.Str("car-loop-seconds", "120"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var cls) ? cls : 120, BazookaBot = cfg.Str("bazooka-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, Map = _map,

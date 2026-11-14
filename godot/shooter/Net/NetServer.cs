@@ -73,6 +73,8 @@ public partial class NetServer : Node
         /// <summary>The flak status last sent to this client as the gunner (magazine, reserve, reloading), so only a change is sent; null until the first.</summary>
         public (int Mag, int Reserve, bool Reloading)? FlakSent;
         public bool UseHeld, LightsHeld, Handbrake, StreakHeld;
+        /// <summary>The interact key's hold at the rozhlas dictation table (NetServer.RozhlasSet.cs).</summary>
+        public InteractHold SetHold;
         /// <summary>The Bigfoot holds this player (issue #264) through this tick: their input is read and acknowledged but their body stays where it puts them.</summary>
         public uint HeldUntilTick;
         /// <summary>Until this server time a launched player's fall damage is the Bigfoot's own (the brain hurts them 2 to 5 on landing).</summary>
@@ -204,6 +206,7 @@ public partial class NetServer : Node
     public override void _Process(double delta)
     {
         if (Sim != null && Sim.Pump()) _host.Flush(); // delayed packets go out at frame rate, not only on physics ticks
+        RozhlasFeedPump(); // the live rozhlas feed's due frames (a thread feeds ffmpeg; the sending is here, on the game thread)
     }
 
     public override void _PhysicsProcess(double delta)
@@ -233,6 +236,7 @@ public partial class NetServer : Node
         _match.Entities.Tick((float)delta);
         CitizensTick((float)delta);
         MassTick((float)delta); // the Holy Mass: its clock, the pastor, the seats
+        RozhlasTick((float)delta); // the village loudspeaker: the schedule and the hijack clock
         PerfLap(ServerPerf.Ph.Match);
         StreakTick((float)delta);
         PerfLap(ServerPerf.Ph.Streaks);
@@ -422,6 +426,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) OnChatSend(c, cs.Payload);
             else if (c.Joined) OnProfileMessage(c, m);
         }
+        else if (c.Joined && d[0] == Wire.TRozhlasMic) OnRozhlasMic(c, d); // the set holder's voice (NetServer.RozhlasSet.cs)
         else if (c.Joined && d[0] == Wire.TInput)
         {
             _scratch.Clear();
@@ -497,6 +502,8 @@ public partial class NetServer : Node
         SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
         SendIntelOnJoin(c); // the events on the intel screen
         SendMassOnJoin(c); // the Holy Mass, when one runs
+        SendRozhlasOnJoin(c); // the village loudspeaker, when a detour broadcast is on
+        SendUradDoorOnJoin(c); // and the Urad door, when it is open
         SendPounceOnJoin(c); // and the demon's pounce, when one is on
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
@@ -522,6 +529,7 @@ public partial class NetServer : Node
     {
         StreakLeave(c.Id);
         StatusLeave(c.Id);
+        RozhlasSetLeave(c.Id);
         MassStandUp(c.Id); _seatHint.Remove(c.Id);
         DetachFromCar(c);
         foreach (var car in _cars) { car.RemoveCollisionExceptionWith(c.Body); car.Probe?.Unignore(c.Body); car.DriveWorld?.Unignore(c.Body); } // the exception outlives the freed body otherwise (T3-014)
@@ -575,6 +583,7 @@ public partial class NetServer : Node
     {
         ReliableMsg m = new EventMsg((byte)kind, payload);
         PerfEventSent(kind, payload);
+        RozhlasCombatEvent(kind, payload); // shots, launches and blasts inside the Urad go to the rozhlas live feed while the mic is live
         var bytes = Wire.Encode(m); // encoded once: every recipient gets the same bytes (Tx copies them into the packet)
         // effects that may be lost go unreliable on their own channel, so they never hold back the reliable events (A-03)
         var effect = Wire.IsEffect(kind);
@@ -615,6 +624,7 @@ public partial class NetServer : Node
     {
         _mass?.End(); // the Holy Mass does not outlive the round
         _crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
+        WorkersAfterRoundReset(); // the Urad workers of a detour still open sit down again
         ResetCars();
         StatusRoundStart();
         RoundStarted();
@@ -668,7 +678,7 @@ public partial class NetServer : Node
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon, k.Cause)));
                 break;
             case TargetKilled tk: OnTargetKilled(tk); break;
-            case PlayerDied d: OnStatusDeath(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
+            case PlayerDied d: OnStatusDeath(d.Victim); RozhlasSetDeath(d.Victim); RozhlasCombatDeath(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
         }
     }
 
@@ -710,6 +720,7 @@ public partial class NetServer : Node
             if (controlled) i.Buttons &= (ushort)(ushort.MaxValue ^ (ushort)(MoveButtons.Fire | MoveButtons.Use));
             var useDown = (i.Buttons & (ushort)MoveButtons.Use) != 0;
             var useEdge = useDown && !c.UseHeld;
+            RozhlasSetUse(c, useDown);
             c.UseHeld = useDown;
             var lightsEdge = Headlights.Edge((i.Buttons & (ushort)MoveButtons.Headlights) != 0, ref c.LightsHeld);
             var streakDown = (i.Buttons & (ushort)MoveButtons.Killstreak) != 0;
@@ -819,6 +830,7 @@ public partial class NetServer : Node
         }
         if (BigfootTarget() is { } bigfoot) list.Add(bigfoot); // the Bigfoot is a hit target like a player (issue #264)
         _crowd?.AddTargets(list); // the citizens of the Holy Mass
+        _workers?.AddTargets(list); // the workers of the Urad
         AddDemonTarget(list);
         PerfCounters.LiveTargetsCalls++; PerfCounters.LiveTargetsElems += list.Count;
         return list;

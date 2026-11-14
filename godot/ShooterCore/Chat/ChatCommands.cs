@@ -90,6 +90,7 @@ public static class ChatCommands
         new("event", "Trigger a village event now", new[] { new ChatArg("event", ChatArgKind.Choice), new ChatArg("action", ChatArgKind.Choice, false) }),
         new("citizens", "Send citizens to the church to sit on its pews (a number), or remove them all (clear)", new[] { new ChatArg("count", ChatArgKind.IntOrChoice, true, 1, MaxCitizens) }),
         new("church", "TEST: open or close the church doors, or show whether they are open", new[] { new ChatArg("action", ChatArgKind.Choice, false) }),
+        new("rozhlas", "TEST: kill the rozhlas announcer now (hijack the mic for 3 minutes), take or release the set, or show the loudspeaker's phase", new[] { new ChatArg("action", ChatArgKind.Choice, false) }),
         new("status", "Give a player (name or #id), or yourself, the divine blessing or the devil's curse, or clear their statuses", new[] { new ChatArg("status", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
     };
@@ -115,7 +116,7 @@ public static class ChatCommands
             ChatArgKind.Choice when cmd.Name == "event" && argIndex == 0 => new[]
             {
                 ("bigfoot", "start the Bigfoot event: it spawns, hunts the players and drops its head when it falls"),
-                ("rozhlas", "the village loudspeaker broadcast, for everyone, now"),
+                ("rozhlas", "a detour broadcast of the village loudspeaker, for everyone, now (as a scheduled one: the mic is live)"),
                 ("intel", "TEST: announce a made-up event and put it on the intel screen at the base"),
                 ("mass", "the Holy Mass: the bells ring, the village walks to the church, the pastor leads the Mass"),
                 ("demon", "TEST: the pastor turns into the demon now; stand in the church to fight it"),
@@ -128,6 +129,7 @@ public static class ChatCommands
                 ("cancel", "remove the running Bigfoot event with no reward (with current)"),
             },
             ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },
+            ChatArgKind.Choice when cmd.Name == "rozhlas" => new[] { ("hijack", "the announcement cuts and the mic stays live for 3 minutes (only while a detour broadcast is on air)"), ("take", "TEST: hold the set yourself (stands in for holding E at the dictation table; only while hijacked)"), ("release", "TEST: let the set holder go"), ("goto", "TEST: stand at the dictation table (where E takes the set during a hijack)"), ("feedtest", "TEST: push a few seconds of test voice and a shot through the live feed (ffmpeg voice chain, 2 s delay) to every megaphone"), ("combattest", "TEST: push a shot, a blast and a death sound through the live feed, wherever you stand") },
             ChatArgKind.IntOrChoice when cmd.Name == "citizens" => new[] { ("clear", "remove every citizen") },
             ChatArgKind.Choice when cmd.Name == "help" => Visible(ctx).Select(c => (c.Name, c.Summary)).ToList(),
             _ => Array.Empty<(string, string)>(),

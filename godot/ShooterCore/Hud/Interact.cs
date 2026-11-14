@@ -54,10 +54,10 @@ public struct InteractKey
 }
 
 /// <summary>
-/// Hold the interact key at a landed crate for <c>holdSeconds</c> to open it (it sends once per hold). Releasing resets; leaving reach resets the time but a
-/// sent hold stays sent until the key is released (so the crate that is opening does not open twice). The exact logic of the old inline code.
+/// Hold the interact key at something in reach (a landed crate, the rozhlas set) for <c>holdSeconds</c> to use it (it fires once per hold). Releasing resets; leaving reach
+/// resets the time but a sent hold stays sent until the key is released (so the crate that is opening does not open twice). The exact logic of the old inline code.
 /// </summary>
-public struct CrateHold
+public struct InteractHold
 {
     /// <summary>Seconds held at a crate in reach; 0 when not holding. Stays at its value after the send until release or leaving reach.</summary>
     public double Held;
@@ -68,10 +68,10 @@ public struct CrateHold
     public void Reset() { Held = 0; Sent = false; }
 
     /// <summary>One input tick. True on the tick the hold completes (send once).</summary>
-    public bool Tick(bool use, bool crateInReach, double dt, double holdSeconds)
+    public bool Tick(bool use, bool inReach, double dt, double holdSeconds)
     {
         if (!use) { Held = 0; Sent = false; }
-        else if (!crateInReach) Held = 0;
+        else if (!inReach) Held = 0;
         else if (!Sent)
         {
             Held += dt;

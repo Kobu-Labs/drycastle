@@ -53,6 +53,7 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # "tint" flag; meadow.bin is format 2 (a tint flag per layer) and then 3 (a species-zone plane and kind mixes); more
 # clutter kinds (grasses, wild and garden flowers) in clutter_meshes.glb. A loader that reads only 0.9.0 clutter would refuse
 # meadow.bin's new format and draw no meadow.
+# (no bump) urad.json (files.urad): the inside of the municipal office: entrance, rooms, worker seats, dictation desk.
 # (no bump) church.json (files.church): the inside of the church: door, seats with routes, spots, anchors, rooms.
 # (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
 # Only maps with a bunker have it; a loader that does not know it gives no shelter from blasts. A bunker may carry "intel", the
@@ -346,6 +347,16 @@ def run_export(
             **scene.church,
         })
         files["church"] = "church.json"
+    stale_urad = out_dir / "urad.json"
+    stale_urad.unlink(missing_ok=True)
+    if scene.urad:
+        # the inside of the municipal office (office_interior.urad_info): entrance, rooms, worker seats, dictation desk
+        _dump(stale_urad, {
+            "version": 1,
+            "axes": "points: local metres [x east, y north, z up] (x, y as parcels.json, z as terrain.json); yaw: compass degrees",
+            **scene.urad,
+        })
+        files["urad"] = "urad.json"
 
     parcels_file = {
         "version": ARTIFACT_FORMAT_VERSION,

@@ -261,8 +261,8 @@ public partial class SettingsScreen : MenuScreen
         var swapped = _draft.Keys.Assign(action, b);
         EndCapture();
         Changed();
-        if (swapped != null)
-            Shell.Toast(Strings.F("controls.swapped", InputBindings.Name(b), Strings.T(InputBindings.LabelKey(swapped)), InputBindings.Name(_draft.Keys.Get(swapped))), ToastKind.Warn);
+        if (swapped.Count > 0) // every action that moved is named: two that share a key (vehicle view, rozhlas talk) move together
+            Shell.Toast(Strings.F(swapped.Count == 1 ? "controls.swapped" : "controls.swapped.many", InputBindings.Name(b), string.Join(", ", swapped.Select(a => Strings.T(InputBindings.LabelKey(a)))), InputBindings.Name(_draft.Keys.Get(swapped[0]))), ToastKind.Warn);
         return true;
     }
 

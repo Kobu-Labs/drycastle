@@ -5,13 +5,13 @@ using Num = System.Numerics;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The village loudspeaker (rozhlas): a baked broadcast (rozhlas.json) heard across the village. It is one shared recording,
-/// not one per speaker: which broadcast is on the air and how far into it comes from the clock alone
-/// (<see cref="RozhlasRules.OnAir"/>), so every client hears the same moment without any message, and only the distance from
-/// the camera to the nearest megaphone pole sets how loud (<see cref="RozhlasRules.GainDb"/>) and how dull
-/// (<see cref="RozhlasRules.CutoffHz"/>, a low-pass on the player's own bus) it is. Walking toward a pole brings the announcement
-/// up and away from it takes it down; poles next to each other do not add up. The audio is optional: with no file the game stays
-/// silent. Client only, and silent on headless runs.
+/// The village loudspeaker (rozhlas): a baked broadcast (rozhlas.json) heard across the village. It is one shared recording, not one per speaker.
+/// The SERVER owns the schedule and the phase (<see cref="RozhlasBroadcast"/>): it tells every client when a detour broadcast starts, which variant and how far
+/// into it (<see cref="EventKind.RozhlasState"/>, <see cref="Apply"/>), so a client that joins mid-broadcast plays from the right position, and nothing here reads
+/// a wall clock. When the announcer is killed (Hijacked) the announcement is cut at once (<see cref="OnHijackCut"/>). Only the distance from the player to the nearest
+/// megaphone pole sets how loud (<see cref="RozhlasRules.GainDb"/>) and how dull (<see cref="RozhlasRules.CutoffHz"/>, a low-pass on the player's own bus) it is.
+/// An intel or event announcement over the megaphones (<see cref="PlayAnnouncement"/>) is a separate, client-side one-shot on its own player: it does not move the
+/// phase, plays over a hijack and does not end it. The audio is optional: with no file the game stays silent. Client only, and silent on headless runs.
 /// </summary>
 public partial class Rozhlas : Node
 {
@@ -21,19 +21,31 @@ public partial class Rozhlas : Node
     /// <summary>Where the speakers hang (Godot axes); the horns of the megaphone poles.</summary>
     public IReadOnlyList<Vector3> Speakers { get; init; } = Array.Empty<Vector3>();
 
-    /// <summary>The loudspeaker of this client, for the network layer to trigger (null before the map is loaded and on headless runs).</summary>
+    /// <summary>The loudspeaker of this client, for the network layer (null before the map is loaded and on headless runs).</summary>
     public static Rozhlas? Current { get; private set; }
+
+    // The server's last word, kept apart from the node so one that arrives before the map is loaded (a joiner's catch-up) is not lost.
+    static RozhlasMsg _told = new(RozhlasPhase.Idle, -1, 0, 0);
+    static ulong _toldAtMs;
+    static int _toldSeq;
+
+    /// <summary>The server told us the loudspeaker's phase (<see cref="EventKind.RozhlasState"/>): the broadcast plays from <paramref name="m"/>'s offset, counted from now.</summary>
+    public static void Apply(RozhlasMsg m)
+    {
+        _told = m; _toldAtMs = Time.GetTicksMsec(); _toldSeq++;
+    }
+
+    /// <summary>Forgets the server's word (a new connection starts Idle).</summary>
+    public static void Reset() { _told = new(RozhlasPhase.Idle, -1, 0, 0); _toldSeq++; }
 
     RozhlasFile _cfg = null!;
     Num.Vector3[] _spk = Array.Empty<Num.Vector3>();
     AudioStream?[] _streams = Array.Empty<AudioStream?>();
-    AudioStreamPlayer _player = null!;
+    AudioStreamPlayer _player = null!;   // the detour broadcast the server says is on air
+    AudioStreamPlayer _overlay = null!;  // an intel / event announcement (client-side one-shot)
     int _bus = -1;
-    /// <summary>Unix seconds an admin's /event rozhlas started a broadcast at, while it is still playing; it takes the place of the scheduled one.</summary>
-    double? _triggeredAt;
-    const long TriggeredSlot = -1;
-    long _slot = long.MinValue;
-    int _variant = -1;
+    int _seen = -1;
+    RozhlasPhase _phase;
 
     public override void _Ready()
     {
@@ -52,7 +64,9 @@ public partial class Rozhlas : Node
         AudioServer.SetBusSend(_bus, "SFX");
         AudioServer.AddBusEffect(_bus, new AudioEffectLowPassFilter { CutoffHz = _cfg.NearCutoffHz, Db = AudioEffectFilter.FilterDB.Filter24Db });
         _player = new AudioStreamPlayer { Bus = BusName };
+        _overlay = new AudioStreamPlayer { Bus = BusName };
         AddChild(_player);
+        AddChild(_overlay);
     }
 
     Vector3? _listener;
@@ -60,13 +74,18 @@ public partial class Rozhlas : Node
     /// <summary>Where the player is (their body, riding in a vehicle too), set every frame by the network client. A vehicle's chase or orbit camera can be far from the player, so the distance to the poles is taken from here; the camera is only the fallback when nothing sets it (offline runs).</summary>
     public void SetListener(Vector3 at) => _listener = at;
 
-    /// <summary>Starts the broadcast now, from its beginning (a broadcast already on the air starts over).</summary>
-    public void Trigger()
+    /// <summary>
+    /// An intel / event announcement over the megaphones: the baked broadcast from its beginning, now, on its own player. It is not a detour broadcast: the server's phase is
+    /// untouched, and it plays over a hijack without ending it. A detour broadcast on air is silent while it plays (the same single recording, as before).
+    /// </summary>
+    public void PlayAnnouncement()
     {
         if (!IsProcessing()) return; // no audio here
-        _triggeredAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
-        Stop();
+        _overlay.Stream = _streams.FirstOrDefault(s => s != null);
+        _overlayAtMs = Time.GetTicksMsec();
+        if (_overlay.Playing) _overlay.Stop(); // starts over (from its beginning) as soon as the next frame sees it
     }
+    ulong? _overlayAtMs; // when the announcement began, while it is still playing out
 
     public override void _ExitTree()
     {
@@ -83,38 +102,54 @@ public partial class Rozhlas : Node
         return st;
     }
 
+    /// <summary>
+    /// HOOK, not built yet: the announcer was killed and the announcement was just cut. The scream, the mic thump and the feedback over the megaphones go here (a later slice).
+    /// </summary>
+    void OnHijackCut() { }
+
     public override void _Process(double delta)
     {
         var cam = GetViewport().GetCamera3D();
-        if (_listener == null && cam == null) return;
-        var length = _streams.Where(s => s != null).Select(s => s!.GetLength()).DefaultIfEmpty(0).Max();
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
-        if (_triggeredAt is { } t0 && now - t0 >= length) _triggeredAt = null; // the triggered one has played out
-        var scheduled = _triggeredAt is { } t
-            ? new RozhlasOnAir(TriggeredSlot, Array.FindIndex(_streams, s => s != null), now - t)
-            : RozhlasRules.OnAir(now, _cfg.PeriodS, length, _streams.Length);
-        if (scheduled is not { } air || _streams[air.Variant] is not { } stream
-            || air.Offset >= stream.GetLength()) // this variant is shorter than the slot's window
+        if (_seen != _toldSeq)
         {
-            Stop();
-            return;
+            _seen = _toldSeq;
+            var was = _phase; _phase = _told.Phase;
+            Stop(); // a new word from the server: replay from its offset
+            if (was == RozhlasPhase.OnAir && _phase == RozhlasPhase.Hijacked) OnHijackCut(); // the announcement stops at once, nothing else of the broadcast comes back
         }
-        var p = _listener ?? cam!.GlobalPosition;
-        var distance = RozhlasRules.NearestDistance(_spk, new Num.Vector3(p.X, p.Y, p.Z));
-        if (distance >= _cfg.MaxDistance) { Stop(); return; } // out of range: stop, and join mid-broadcast again on the way back
-        if (air.Slot != _slot || air.Variant != _variant) { Stop(); _slot = air.Slot; _variant = air.Variant; }
-
-        _player.VolumeDb = _cfg.VolumeDb + RozhlasRules.GainDb(distance, _cfg.ReferenceDistance, _cfg.MaxDistance, _cfg.RolloffDb);
+        var p = _listener ?? cam?.GlobalPosition;
+        if (p is not { } at) return;
+        var distance = RozhlasRules.NearestDistance(_spk, new Num.Vector3(at.X, at.Y, at.Z));
+        var inRange = distance < _cfg.MaxDistance;
+        var gain = _cfg.VolumeDb + RozhlasRules.GainDb(distance, _cfg.ReferenceDistance, _cfg.MaxDistance, _cfg.RolloffDb);
         if (AudioServer.GetBusEffect(_bus, 0) is AudioEffectLowPassFilter f)
             f.CutoffHz = RozhlasRules.CutoffHz(distance, _cfg.ReferenceDistance, _cfg.MaxDistance, _cfg.NearCutoffHz, _cfg.FarCutoffHz);
+
+        // the announcement over the megaphones: a one-shot on its own player, not tied to the phase; out of range and back it rejoins at the right moment
+        if (_overlayAtMs is { } t0 && _overlay.Stream is { } ann)
+        {
+            var at0 = (Time.GetTicksMsec() - t0) / 1000.0;
+            if (at0 >= ann.GetLength()) { _overlayAtMs = null; if (_overlay.Playing) _overlay.Stop(); }
+            else if (!inRange) { if (_overlay.Playing) _overlay.Stop(); }
+            else { _overlay.VolumeDb = gain; if (!_overlay.Playing) _overlay.Play((float)at0); }
+        }
+
+        // the detour broadcast: the server's variant and offset (OnAir only; Hijacked and Idle play nothing)
+        if (_phase != RozhlasPhase.OnAir || !inRange || _overlayAtMs != null || _told.Variant < 0 || _told.Variant >= _streams.Length || _streams[_told.Variant] is not { } stream)
+        {
+            if (_player.Playing) _player.Stop();
+            return;
+        }
+        var offset = _told.OffsetS + (Time.GetTicksMsec() - _toldAtMs) / 1000.0;
+        if (offset >= stream.GetLength()) { if (_player.Playing) _player.Stop(); return; } // this variant is shorter than the slot's window
+        _player.VolumeDb = gain;
         if (_player.Playing && _player.Stream == stream) return;
         _player.Stream = stream;
-        _player.Play((float)air.Offset); // the clock says where in the recording the village is
+        _player.Play((float)offset); // the server says where in the recording the village is; out of range and back rejoins at the right moment
     }
 
     void Stop()
     {
         if (_player.Playing) _player.Stop();
-        _slot = long.MinValue; _variant = -1;
     }
 }

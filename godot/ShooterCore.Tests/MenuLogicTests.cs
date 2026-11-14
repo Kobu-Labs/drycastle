@@ -39,9 +39,9 @@ public class MenuLogicTests
     public void AssignSwapsOnConflictAndResets()
     {
         var m = Map();
-        Assert.Equal("b", m.Assign("a", Binding.Key(2)));
+        Assert.Equal(new[] { "b" }, m.Assign("a", Binding.Key(2)));
         Assert.Equal(Binding.Key(2), m.Get("a")); Assert.Equal(Binding.Key(1), m.Get("b"));
-        Assert.Null(m.Assign("c", Binding.Key(9)));
+        Assert.Empty(m.Assign("c", Binding.Key(9)));
         Assert.False(m.IsDefault);
         m.Reset();
         Assert.True(m.IsDefault);

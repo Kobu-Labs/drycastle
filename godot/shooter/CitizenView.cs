@@ -13,6 +13,10 @@ namespace Drycastle.Shooter;
 /// standing while the Mass runs, with a gesture now and then, and flexes when it completes. A monk stands idle, and when the pastor is killed is
 /// shocked and turns to where he stood. Every clip name of the Mass is in <see cref="MassClips"/>; a name that is off is skipped (SyntyLib logs it).
 /// </para>
+/// <para>
+/// The Urad workers (mayor, clerk, announcer) are the same entity with a worker <see cref="CitizenRole"/>: a peasant body like a citizen's, sitting (<see cref="SitPose"/>) at their spot. The
+/// look number's lowest bit is the female body; the mayor is the male body drawn wide (no fat model in the packs). The chair is baked into the map.
+/// </para>
 /// </summary>
 public sealed partial class CitizenView : Node3D
 {
@@ -68,9 +72,18 @@ public sealed partial class CitizenView : Node3D
     {
         var h = look * 2654435761u;
         var v = new CitizenView(cfg, mass, role) { _hash = h };
-        v.Build(cfg.Models[(int)((h >> 8) % cfg.Models.Count)], h);
-        v.SetProcess(role != CitizenRole.Citizen);
+        v.Build(CitizenRules.IsWorker(role) ? WorkerModel(cfg, look, h) : cfg.Models[(int)((h >> 8) % cfg.Models.Count)], h);
+        v.SetProcess(role is CitizenRole.Monk or CitizenRole.Pastor);
         return v;
+    }
+
+    /// <summary>A worker's body: female when the look's lowest bit is set (urad.json's "female"), else male; the variant among those follows the look.</summary>
+    static CitizenModelDef WorkerModel(CitizensConfig cfg, ushort look, uint h)
+    {
+        var female = (look & 1) == 1;
+        var pool = cfg.Models.Where(m => m.File.Contains("female") == female).ToList();
+        if (pool.Count == 0) pool = cfg.Models;
+        return pool[(int)((h >> 8) % pool.Count)];
     }
 
     void Build(CitizenModelDef def, uint h)
@@ -85,12 +98,20 @@ public sealed partial class CitizenView : Node3D
         if (_model == null) return;
         _model.RotationDegrees = new Vector3(0, 180, 0); // the pack faces +Z, an entity's forward is -Z
         AddChild(_model);
-        _walk = _role != CitizenRole.Citizen ? MassClips.Walk : def.File.Contains("female") ? "walk_f_femn" : "walk_f_masc";
-        _idle = _role switch { CitizenRole.Pastor => MassClips.PastorIdle, CitizenRole.Monk => MassClips.MonkIdle, _ => Idles[(int)((h >> 20) % (uint)Idles.Length)] };
+        var mass = _role is CitizenRole.Monk or CitizenRole.Pastor; // the Holy Mass's own bodies and clips
+        _walk = mass ? MassClips.Walk : def.File.Contains("female") ? "walk_f_femn" : "walk_f_masc";
+        _idle = _role switch
+        {
+            CitizenRole.Pastor => MassClips.PastorIdle,
+            CitizenRole.Monk => MassClips.MonkIdle,
+            CitizenRole.Mayor => "idle_arms_folded_casual_masc",
+            CitizenRole.Clerk or CitizenRole.Announcer => def.File.Contains("female") ? "idle_base_femn" : "idle_base_masc",
+            _ => Idles[(int)((h >> 20) % (uint)Idles.Length)],
+        };
         _death = Deaths[(int)((h >> 24) % (uint)Deaths.Length)];
         var lib = new AnimationLibrary();
         var names = new List<string> { _walk, _idle, _death, KneelIn, KneelLoop, MassClips.Clap, MassClips.Sprint };
-        if (_role != CitizenRole.Citizen) names.AddRange(MassClips.All);
+        if (mass) names.AddRange(MassClips.All);
         foreach (var name in names.Distinct())
             if (SyntyLib.Clip(name) is { } clip)
             {
@@ -100,11 +121,12 @@ public sealed partial class CitizenView : Node3D
         _anim = new AnimationPlayer { Name = "Clips" };
         _model.AddChild(_anim); // root node "..": the tracks are Skeleton3D:Bone under the model
         _anim.AddAnimationLibrary("", lib);
-        if (_role == CitizenRole.Citizen && _model.FindChildren("*", "Skeleton3D", true, false).FirstOrDefault() is Skeleton3D skeleton)
+        if (!mass && _model.FindChildren("*", "Skeleton3D", true, false).FirstOrDefault() is Skeleton3D skeleton)
         {
             _sit = new SitPose { Name = "Sit", Influence = 0, PelvisM = _cfg.SeatHeightM + 0.09f };
             skeleton.AddChild(_sit);
         }
+        if (_role == CitizenRole.Mayor) _model.Scale = new Vector3(1.4f, 1, 1.35f); // fat: the packs have no fat body
     }
 
     /// <summary>Shows what the citizen is doing. A body that is already seated, kneeling or dead when first seen takes its final pose at once.</summary>
@@ -155,7 +177,7 @@ public sealed partial class CitizenView : Node3D
     /// <summary>The Mass as the client knows it (called every frame; it acts on changes). <paramref name="chantAt"/> is where the pastor stands.</summary>
     public void SetMass(bool chanting, int pastorKills, Vector3 chantAt)
     {
-        if (_role == CitizenRole.Citizen) return;
+        if (_role is not (CitizenRole.Monk or CitizenRole.Pastor)) return;
         _pastorAt = chantAt; _hasPastorAt = true;
         var killed = _kills >= 0 && pastorKills > _kills;
         _kills = pastorKills;

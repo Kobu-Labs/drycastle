@@ -76,7 +76,7 @@ public class InteractTests
         for (var run = 0; run < 100; run++)
         {
             var old = new OldCrate();
-            var hold = new CrateHold();
+            var hold = new InteractHold();
             var sends = 0;
             bool use = false, near = false;
             for (var i = 0; i < 600; i++)
@@ -97,7 +97,7 @@ public class InteractTests
     [Fact]
     public void Crate_opens_once_per_hold_and_not_after_leaving_reach_mid_hold()
     {
-        var h = new CrateHold();
+        var h = new InteractHold();
         var sent = 0;
         for (var i = 0; i < 90; i++) if (h.Tick(true, true, 1.0 / 30, 2.0)) sent++;
         Assert.Equal(1, sent);

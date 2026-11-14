@@ -67,6 +67,7 @@ public partial class NetServer
             case "event": ChatEvent(c, args); break;
             case "citizens": ChatCitizens(c, args); break;
             case "church": ChatChurch(c, args); break;
+            case "rozhlas": ChatRozhlas(c, args); break;
             case "status": ChatStatus(c, args); break;
         }
         GD.Print($"server: {c.Name} #{c.Id} ran {text}");
@@ -170,7 +171,7 @@ public partial class NetServer
     }
 
     /// <summary>
-    /// "/event rozhlas": starts the village loudspeaker broadcast on every client now. "/event intel [clear]": the test announcement (<see cref="ChatIntel"/>).
+    /// "/event rozhlas": starts a detour broadcast of the village loudspeaker now (<see cref="ChatEventRozhlas"/>). "/event intel [clear]": the test announcement (<see cref="ChatIntel"/>).
     /// "/event bigfoot": starts the Bigfoot event (<see cref="StartBigfoot"/>); "/event current end" concludes the running event as a win (for testing) and
     /// "/event current cancel" removes it with no reward (<see cref="ChatCurrentEvent"/>). Everyone is told who did.
     /// </summary>
@@ -187,9 +188,7 @@ public partial class NetServer
         switch (args[0])
         {
             case "rozhlas":
-                BroadcastEvent(EventKind.RozhlasStart, Array.Empty<byte>());
-                ChatToAll(ChatLineKind.System, "", $"{c.Name} started the rozhlas.");
-                GD.Print($"server: rozhlas started by {c.Name} #{c.Id}");
+                ChatEventRozhlas(c);
                 break;
             case "intel": ChatIntel(c, action == "clear"); break;
             case "bigfoot": StartBigfoot(c); break;

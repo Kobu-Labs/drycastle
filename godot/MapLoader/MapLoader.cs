@@ -66,6 +66,8 @@ public sealed partial class MapLoader
     void GeometryChanged() => GeometryVersion++;
     /// <summary>Per-parcel props visuals and colliders by parcel ID (for the runtime props swap).</summary>
     public IReadOnlyDictionary<string, MeshInstance3D> PropsVisuals => _propsVisuals;
+    /// <summary>The building visual of a parcel (parcel_&lt;ID&gt;_visual); null when it has none.</summary>
+    public Node3D? ParcelVisual(string parcelId) => _visuals.GetValueOrDefault(parcelId);
     public IReadOnlyDictionary<string, List<CollisionShape3D>> PropsShapes => _propsShapes;
     public IReadOnlyDictionary<string, ParcelInfo> Parcels => _parcels;
     public IReadOnlyList<SpawnPoint> SpawnPoints => _spawns;

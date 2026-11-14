@@ -6,8 +6,11 @@ namespace Drycastle.ShooterCore;
 /// <remarks>Standing is the pastor and monks at their spot, or a citizen on its feet after the Mass; Clapping is the Mass done and the body cheering (the pastor flexes). Fleeing is the sprint back to the spawn point (the demon appeared); it ends in removal there.</remarks>
 public enum CitizenState : byte { Walking = 0, Entering = 1, Seated = 2, Dead = 3, Kneeling = 4, Standing = 5, Clapping = 6, Fleeing = 7 }
 
-/// <summary>Who a citizen entity is. It travels in the entity state's hit-point byte (<c>role * 2 + alive</c>).</summary>
-public enum CitizenRole : byte { Citizen = 0, Monk = 1, Pastor = 2 }
+/// <summary>
+/// Who a citizen entity is. It travels in the entity state's hit-point byte (<c>role * 2 + alive</c>, so up to 127 roles fit). Monk and Pastor belong to the Holy Mass;
+/// Mayor, Clerk and Announcer are the workers of the Obecny Urad while a rozhlas detour is open (<see cref="WorkerCrowd"/>): they sit at their spots, passive.
+/// </summary>
+public enum CitizenRole : byte { Citizen = 0, Monk = 1, Pastor = 2, Mayor = 3, Clerk = 4, Announcer = 5 }
 
 /// <summary>Citizen world entity rules: the wire type, the state byte and the ids a citizen is hit under.</summary>
 public static class CitizenRules
@@ -21,7 +24,15 @@ public static class CitizenRules
     /// </summary>
     public const ushort FirstHitId = 40000, HitIdCount = 10000;
 
+    /// <summary>The last <see cref="WorkerHitIdCount"/> ids of the range belong to the Urad workers (<see cref="WorkerCrowd"/>); the Mass crowd cycles through the rest.</summary>
+    public const int WorkerHitIdCount = 100;
+    public const int CrowdHitIdCount = HitIdCount - WorkerHitIdCount;
+    public const ushort FirstWorkerHitId = FirstHitId + CrowdHitIdCount;
+
     public static bool IsHitId(ushort id) => id >= FirstHitId && id < FirstHitId + HitIdCount;
+
+    /// <summary>A worker of the Obecny Urad (mayor, clerk, announcer): seated at a desk, never walks or flees, belongs to the detour and not to the Mass.</summary>
+    public static bool IsWorker(CitizenRole role) => role is CitizenRole.Mayor or CitizenRole.Clerk or CitizenRole.Announcer;
 
     public static CitizenState StateOf(byte state) => state <= (byte)CitizenState.Fleeing ? (CitizenState)state : CitizenState.Dead;
 
@@ -55,12 +66,12 @@ public sealed class Citizen : IWorldEntity
         .Allow(CitizenState.Fleeing, CitizenState.Dead)
         .Note(CitizenState.Walking, "On the navigation-mesh route from the house to the church door.")
         .Note(CitizenState.Entering, "On the scripted route inside the church to the seat.")
-        .Note(CitizenState.Seated, "In a pew (a citizen; the client plays the sit pose).")
+        .Note(CitizenState.Seated, "In a pew (a citizen) or at a desk (an Urad worker, spawned in place); the client plays the sit pose.")
         .Note(CitizenState.Kneeling, "At a standing spot (a citizen).")
         .Note(CitizenState.Standing, "The pastor or a monk at their spot, or a citizen on its feet after the Mass.")
         .Note(CitizenState.Clapping, "The Mass is done and the body cheers (the pastor flexes).")
         .Note(CitizenState.Fleeing, "Sprinting home because the demon came; ends in removal at the spawn point (the entity ends, no state follows).")
-        .Note(CitizenState.Dead, "Lies where it fell: a citizen's body is removed after the corpse time, the pastor's and a monk's lie until the event is cleared. Any hit kills in one.")
+        .Note(CitizenState.Dead, "Lies where it fell: a citizen's body is removed after the corpse time, the pastor's, a monk's and an Urad worker's lie until the event is cleared or the detour ends. Any hit kills in one.")
         .Build();
 
     readonly StateMachine<CitizenState> _fsm = new(Spec);
@@ -98,7 +109,7 @@ public sealed class Citizen : IWorldEntity
     public CitizenState State => _fsm.Current;
     public bool Alive => State != CitizenState.Dead;
     public bool Seated => State is CitizenState.Seated or CitizenState.Kneeling;
-    /// <summary>Pastor and monks are citizen entities that never sit: they walk to a spot and stand there.</summary>
+    /// <summary>Pastor and monks are citizen entities that never sit: they walk to a spot and stand there. A worker of the Urad sits at its spot.</summary>
     public CitizenRole Role { get; init; }
     /// <summary>The place is a standing spot, not a pew: on arrival the citizen kneels (<see cref="CitizenState.Kneeling"/>) instead of sitting.</summary>
     public bool Stand { get; init; }
@@ -158,7 +169,7 @@ public sealed class Citizen : IWorldEntity
     public void Settle() { if (State is CitizenState.Walking or CitizenState.Entering && _walk.Count < 2) Sit(); }
 
     /// <summary>The role in an entity state's hit-point byte.</summary>
-    public static CitizenRole RoleOf(byte hp) => (CitizenRole)Math.Min(hp >> 1, (int)CitizenRole.Pastor);
+    public static CitizenRole RoleOf(byte hp) => (CitizenRole)Math.Min(hp >> 1, (int)CitizenRole.Announcer);
 
     /// <summary>The Mass is done: a living citizen on its feet or in its seat takes this state (standing up from the pew is the client's: it follows the state).</summary>
     public void Finish(bool clap)
@@ -199,7 +210,7 @@ public sealed class Citizen : IWorldEntity
 
     void Sit()
     {
-        _fsm.Enter(Role != CitizenRole.Citizen ? CitizenState.Standing : Stand ? CitizenState.Kneeling : CitizenState.Seated);
+        _fsm.Enter(Role is CitizenRole.Monk or CitizenRole.Pastor ? CitizenState.Standing : Stand ? CitizenState.Kneeling : CitizenState.Seated); // a worker sits at its desk
         if (_enter.Count > 0) Position = _enter[^1];
         Yaw = SeatYaw;
     }

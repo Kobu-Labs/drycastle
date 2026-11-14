@@ -160,6 +160,7 @@ public partial class EditorMode
         page.AddChild(new HSeparator());
         page.AddChild(new Label { Text = "Layers", ThemeTypeVariation = "Header" });
         BuildLayersToggle(page);
+        BuildFloorPlanToggle(page);
         _orthoCheck = new CheckBox
         {
             Text = "Aerial photo  (O)", FocusMode = Control.FocusModeEnum.None,

@@ -210,8 +210,8 @@ stateDiagram-v2
 
 - **Walking**: On the navigation-mesh route from the house to the church door.
 - **Entering**: On the scripted route inside the church to the seat.
-- **Seated**: In a pew (a citizen; the client plays the sit pose).
-- **Dead**: Lies where it fell: a citizen's body is removed after the corpse time, the pastor's and a monk's lie until the event is cleared. Any hit kills in one.
+- **Seated**: In a pew (a citizen) or at a desk (an Urad worker, spawned in place); the client plays the sit pose.
+- **Dead**: Lies where it fell: a citizen's body is removed after the corpse time, the pastor's, a monk's and an Urad worker's lie until the event is cleared or the detour ends. Any hit kills in one.
 - **Kneeling**: At a standing spot (a citizen).
 - **Standing**: The pastor or a monk at their spot, or a citizen on its feet after the Mass.
 - **Clapping**: The Mass is done and the body cheers (the pastor flexes).
@@ -658,6 +658,74 @@ stateDiagram-v2
 - **Wind**: A victim is marked: the local victim's look is locked on the demon. A joiner can start here.
 - **Pinned**: The victim lies pinned. Locally: the body is the server's (no prediction, no weapon), the camera is on the floor. A joiner can start here.
 - **Rising**: The local victim was let go: the camera rises back to standing height while the red fades. Only after a pin of the local player.
+
+## Rozhlas.Phase
+
+The village loudspeaker: a detour broadcast, and the hijack after the announcer is killed.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> OnAir
+    OnAir --> Idle
+    OnAir --> Hijacked
+    Hijacked --> Idle
+```
+
+- **Idle**: Nothing runs; the Urad is sealed. A scheduled slot (every PeriodS) or an admin's /event rozhlas starts a broadcast.
+- **OnAir**: A detour broadcast plays for the length of its recording (the Urad is open, the mic is live). Ends by itself, or on AnnouncerKilled.
+- **Hijacked**: The announcer was killed: the announcement is cut and the mic stays live for exactly HijackSeconds from the kill. One per broadcast, never refreshed.
+
+## Rozhlas.Set
+
+Who holds the rozhlas set (the mic at the dictation table): nobody, or one player while the mic is hijacked.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Free
+    Free --> Held
+    Held --> Free
+```
+
+- **Free**: Nobody is on the mic. A player may take it, only while the loudspeaker is Hijacked.
+- **Held**: One player holds it (Holder). Released by their death, disconnect, hijack end, entering a vehicle, walking more than 2 m from the table (once it exists) or an explicit release.
+
+## RozhlasFeed.Jitter
+
+The client's jitter buffer for the live feed: wait for ~100 ms of frames, play them out, wait again after running dry.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Priming
+    Priming --> Playing
+    Playing --> Priming
+```
+
+- **Priming**: Frames are collected; nothing plays until the target depth is reached.
+- **Playing**: One frame per 20 ms in sequence order; a missing one is concealed, a late one dropped; an empty buffer goes back to Priming.
+
+## RozhlasFeed.Session
+
+Whether the live feed (ffmpeg subprocess, 2 s delay line) is running for a mic-live phase.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Live
+    Idle --> Failed
+    Live --> Draining
+    Live --> Failed
+    Draining --> Idle
+    Draining --> Live
+    Draining --> Failed
+    Failed --> Idle
+    Failed --> Live
+```
+
+- **Idle**: No process. Nothing is sent.
+- **Live**: Start() ran: input is accepted and pulled at a steady 50 blocks/s into ffmpeg; the degraded output goes out 2 s after its input.
+- **Draining**: Stop() ran: no new input; what was written still plays out, then the echo tail, then ffmpeg ends. A Start() here cuts the tail short.
+- **Failed**: ffmpeg missing, died, or stopped producing audio: logged once, the feed is silent until the next phase. Never unprocessed audio.
 
 ## Target.Dummy
 
