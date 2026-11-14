@@ -61,22 +61,61 @@ public sealed class MapBase
     bool Parse()
     {
         var roads = RoadNetwork.Parse(_map.RoadsJson);
+        // the extent is the parcels' box only: the parcels are the village polygon, while the road network and the terrain reach far past it
         var box = default(Rect2);
         var any = false;
-        void Grow(Rect2 r) { box = any ? box.Merge(r) : r; any = true; }
-        foreach (var p in _map.Parcels.Values) Grow(p.Bounds);
+        foreach (var p in _map.Parcels.Values) { box = any ? box.Merge(p.Bounds) : p.Bounds; any = true; }
+        if (!any) return false;
+        SideMetres = Math.Max(box.Size.X, box.Size.Y) + 2 * PadMetres;
+        Origin = box.GetCenter() - new Vector2(SideMetres / 2, SideMetres / 2);
+        var extent = new Rect2(Origin, new Vector2(SideMetres, SideMetres));
         foreach (var r in roads)
         {
             var g = new Vector2[r.Points.Length];
             for (var i = 0; i < g.Length; i++) g[i] = new Vector2(r.Points[i].X, -r.Points[i].Y); // local north-up to ground z
-            var bounds = new Rect2(g[0], Vector2.Zero);
-            foreach (var q in g) bounds = bounds.Expand(q);
-            Grow(bounds);
-            _roads.Add(new MapRoad { Ground = g, Screen = new Vector2[g.Length], Bounds = bounds, WidthM = r.WidthM, Colour = RoadColour(r.Highway) });
+            foreach (var part in ClipPolyline(g, extent))
+            {
+                var bounds = new Rect2(part[0], Vector2.Zero);
+                foreach (var q in part) bounds = bounds.Expand(q);
+                _roads.Add(new MapRoad { Ground = part, Screen = new Vector2[part.Length], Bounds = bounds, WidthM = r.WidthM, Colour = RoadColour(r.Highway) });
+            }
         }
-        if (!any) return false;
-        SideMetres = Math.Max(box.Size.X, box.Size.Y) + 2 * PadMetres;
-        Origin = box.GetCenter() - new Vector2(SideMetres / 2, SideMetres / 2);
+        return true;
+    }
+
+    /// <summary>The pieces of <paramref name="line"/> inside <paramref name="r"/> (a road leaves the extent and may come back; each re-entry starts a new piece). Segments are cut at the rectangle's edge.</summary>
+    static List<Vector2[]> ClipPolyline(Vector2[] line, Rect2 r)
+    {
+        var parts = new List<Vector2[]>();
+        var cur = new List<Vector2>();
+        void Flush() { if (cur.Count >= 2) parts.Add(cur.ToArray()); cur.Clear(); }
+        for (var i = 0; i + 1 < line.Length; i++)
+        {
+            if (!ClipSegment(line[i], line[i + 1], r, out var a, out var b)) { Flush(); continue; }
+            if (cur.Count > 0 && cur[^1].DistanceSquaredTo(a) > 1e-6f) Flush();
+            if (cur.Count == 0) cur.Add(a);
+            cur.Add(b);
+        }
+        Flush();
+        return parts;
+    }
+
+    /// <summary>Liang-Barsky: the part of segment p0-p1 inside <paramref name="r"/>; false when none.</summary>
+    static bool ClipSegment(Vector2 p0, Vector2 p1, Rect2 r, out Vector2 a, out Vector2 b)
+    {
+        float t0 = 0f, t1 = 1f, dx = p1.X - p0.X, dy = p1.Y - p0.Y;
+        bool Edge(float p, float q)
+        {
+            if (p == 0f) return q >= 0f;
+            var t = q / p;
+            if (p < 0f) { if (t > t1) return false; if (t > t0) t0 = t; }
+            else { if (t < t0) return false; if (t < t1) t1 = t; }
+            return true;
+        }
+        a = b = default;
+        if (!(Edge(-dx, p0.X - r.Position.X) && Edge(dx, r.End.X - p0.X) && Edge(-dy, p0.Y - r.Position.Y) && Edge(dy, r.End.Y - p0.Y))) return false;
+        a = new Vector2(p0.X + t0 * dx, p0.Y + t0 * dy);
+        b = new Vector2(p0.X + t1 * dx, p0.Y + t1 * dy);
         return true;
     }
 
@@ -114,9 +153,20 @@ public sealed class MapBase
             foreach (var v in region.Ring) box = box.Expand(v);
             Fill(px, side, metresPerTexel, Rgba(region.Colour), new List<NVector2[]> { region.Ring.Select(v => new NVector2(v.X, v.Y)).ToArray() }, box);
         }
+        BlankOutsideParcels(px, side, metresPerTexel, terrain);
         using var img = Image.CreateFromData(side, side, false, Image.Format.Rgba8, px);
         img.GenerateMipmaps();
         return ImageTexture.CreateFromImage(img);
+    }
+
+    /// <summary>The ground outside every parcel is not part of the game: it takes the plain terrain colour, so the terrain mesh and the region paints that reach past the village polygon do not show.</summary>
+    void BlankOutsideParcels(byte[] px, int side, float metresPerTexel, byte[] blank)
+    {
+        var inside = new byte[side * side * 4];
+        foreach (var parcel in _map.Parcels.Values)
+            Fill(inside, side, metresPerTexel, new byte[] { 255, 255, 255, 255 }, parcel.Rings.Select(r => r.Select(v => new NVector2(v.X, v.Y)).ToArray()).ToList(), parcel.Bounds);
+        for (var i = 0; i < px.Length; i += 4)
+            if (inside[i + 3] == 0) Buffer.BlockCopy(blank, 0, px, i, 4);
     }
 
     /// <summary>Rasterises the terrain meshes' triangles with their interpolated vertex colours (top-down, so each texel is the ground colour at that point). False when there is no coloured terrain.</summary>
