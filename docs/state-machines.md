@@ -5,6 +5,32 @@ Generated from the specs in `godot/ShooterCore/Fsm/StateMachineCatalog.cs` by `S
 
 How to add or change one: see `godot/ShooterCore/Fsm/StateMachine.cs`. `*` means "from any state".
 
+## Hud.MoabBanner
+
+The MOAB's top-centre banner: countdown, then the blast or the cancelled line.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Countdown
+    Idle --> Blast
+    Idle --> Cancelled
+    Countdown --> Idle
+    Countdown --> Blast
+    Countdown --> Cancelled
+    Blast --> Idle
+    Blast --> Countdown
+    Blast --> Cancelled
+    Cancelled --> Idle
+    Cancelled --> Countdown
+    Cancelled --> Blast
+```
+
+- **Idle**: No panel. The countdown running out without a Blast event (the server's) also ends here.
+- **Countdown**: Armed: the seconds left, rounded up, until detonation. Armed again restarts it; a banner still showing is replaced.
+- **Blast**: Detonation: the owner's name for 3 s; the flash (0.6 s, none with reduce motion) runs on its own clock and may outlive a re-armed banner.
+- **Cancelled**: The countdown was stopped: the line for 3 s.
+
 ## Hud.PanelFade
 
 A full-screen overlay's open/close fade (Equipment screen, tactical map).

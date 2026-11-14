@@ -60,6 +60,16 @@ public partial class NetClient
         if (streakId == AttackMissileStreak.StreakId) _controlling = false;
     }
 
+    /// <summary>
+    /// The owner died: the server has ended every streak of theirs (OwnerDied) and sent StreakEnded, but the views must not depend on that one event arriving
+    /// (a lost or reordered one left the missile's point of view, or the AC-130's turret def, stuck on). Idempotent with the real StreakEnded.
+    /// </summary>
+    void ClearStreakViewsOnDeath()
+    {
+        _controlling = false;
+        Ac130Ended();
+    }
+
     /// <summary>Places the missiles from the replicated state (dead-reckoning is not needed: the state is the full pose), with their flight sound.</summary>
     void RenderMissiles()
     {

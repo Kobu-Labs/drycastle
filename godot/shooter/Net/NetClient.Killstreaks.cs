@@ -90,6 +90,7 @@ public partial class NetClient
     void OnStreakDeath()
     {
         _streaks?.OnDeath();
+        ClearStreakViewsOnDeath();
         RefreshStreaks();
     }
 

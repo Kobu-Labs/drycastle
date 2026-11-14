@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.ShooterCore;
 
 namespace Drycastle.Shooter;
 
@@ -10,17 +11,11 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class MoabBanner : Control
 {
-    /// <summary>How long the "MOAB by X" banner stays after detonation.</summary>
-    const double BlastBannerSeconds = 3.0;
-    const double FlashSeconds = 0.6;
-
     readonly Label _label;
     readonly PanelContainer _panel;
     readonly ColorRect _flash;
-    double _countdownEnds = -1;   // match-independent wall clock (seconds), -1 = not counting
-    double _bannerEnds = -1;
-    double _flashEnds = -1;
-    int _shownSeconds = -1;
+    readonly MoabBannerModel _model = new(); // the phase and its deadlines, on the match-independent wall clock
+    Change<int> _shownSeconds; // the seconds the label last drew: it only redraws when they change
 
     public MoabBanner()
     {
@@ -62,9 +57,8 @@ public partial class MoabBanner : Control
     public void Armed(float seconds)
     {
         Rescale();
-        _countdownEnds = Now() + Math.Max(0, seconds);
-        _bannerEnds = -1;
-        _shownSeconds = -1;
+        _model.Armed(Now(), seconds);
+        _shownSeconds.Reset();
         ShowCountdown();
     }
 
@@ -72,49 +66,38 @@ public partial class MoabBanner : Control
     public void Blast(string owner)
     {
         Rescale();
-        _countdownEnds = -1;
-        _bannerEnds = Now() + BlastBannerSeconds;
-        _flashEnds = GameSettings.Current.ReduceMotion ? -1 : Now() + FlashSeconds;
-        _flash.Visible = _flashEnds > 0;
+        _model.Blast(Now(), owner, GameSettings.Current.ReduceMotion);
+        _flash.Visible = _model.FlashActive;
         SetText(Strings.F("moab.blast", owner));
-        _panel.Visible = true;
+        _panel.Visible = _model.PanelVisible;
     }
 
     /// <summary>The countdown was stopped: the banner says so briefly.</summary>
     public void Cancelled()
     {
-        _countdownEnds = -1;
-        _bannerEnds = Now() + BlastBannerSeconds;
+        _model.Cancelled(Now());
         SetText(Strings.T("moab.cancelled"));
-        _panel.Visible = true;
+        _panel.Visible = _model.PanelVisible;
     }
 
     public override void _Process(double delta)
     {
         var now = Now();
-        if (_countdownEnds >= 0)
-        {
-            if (now >= _countdownEnds) { _countdownEnds = -1; }
-            else ShowCountdown();
-        }
-        if (_bannerEnds >= 0 && now >= _bannerEnds && _countdownEnds < 0) { _bannerEnds = -1; _panel.Visible = false; }
-        if (_flashEnds > 0)
-        {
-            var k = (float)Math.Clamp((_flashEnds - now) / FlashSeconds, 0, 1);
-            _flash.Color = new Color(1f, 0.97f, 0.85f, 0.85f * k);
-            if (now >= _flashEnds) { _flashEnds = -1; _flash.Visible = false; }
-        }
-        if (_countdownEnds < 0 && _bannerEnds < 0) _panel.Visible = false;
+        _model.Tick(now);
+        if (_model.Phase == MoabBannerPhase.Countdown) ShowCountdown();
+        if (_model.FlashActive) _flash.Color = new Color(1f, 0.97f, 0.85f, _model.FlashAlpha(now));
+        else if (_flash.Visible) _flash.Color = new Color(1f, 0.97f, 0.85f, 0f); // ended: the next flash starts clear
+        _flash.Visible = _model.FlashActive;
+        _panel.Visible = _model.PanelVisible; // shown exactly while a phase is up
     }
 
     /// <summary>Whole seconds left, rounded up so the banner reads 5, 4, 3, 2, 1.</summary>
     void ShowCountdown()
     {
-        var left = (int)Math.Ceiling(Math.Max(0, _countdownEnds - Now()));
-        if (left == _shownSeconds && _panel.Visible) return;
-        _shownSeconds = left;
+        var left = _model.SecondsLeft(Now());
+        if (!_shownSeconds.Update(left) && _panel.Visible) return;
         SetText(Strings.F("moab.inbound", left));
-        _panel.Visible = true;
+        _panel.Visible = _model.PanelVisible;
     }
 
     void SetText(string text) { if (_label.Text != text) _label.Text = text; }
