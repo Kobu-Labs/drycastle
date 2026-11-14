@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_note": "The thieves' voice chain (a raspy 'heavy smoker' voice), read only by the offline bake scripts/make_thief_voices.py. Each 'chain' entry is one ffmpeg filter, in order, with {name} replaced by the literal text of params[name] (numbers keep the spelling written here). The dry recording is first trimmed of silence and peak-normalised to dry_peak_db (so gain_db drives every line into the clipper alike), then runs through 'chain'; 'noise_chain' shapes a pink-noise bed (the breath) that is mixed under the result at params.noise (linear, 0 = none); the bake peak-normalises the sum to out_peak_db (the vorbis encode overshoots it by up to ~1 dB, so -2 keeps the ogg under 0). Edit the values or the order here, nowhere else. First guess, tune by ear: pitch (1 = unchanged, lower = deeper), rough_hz/rough_depth (fast tremolo: the crackle of a ruined voice), gain_db/clip (grit), low/high (band limit), noise (breath).",
+  "_note": "v1 (owner's pick, 2026-11-14): DRY. The recordings are only trimmed of silence and peak-normalised; 'chain' is a no-op and noise is 0. The raspy first guess is kept in _raspy_chain_unused (put it back in 'chain' and set params.noise to 0.012 to use it); eight tried variants are in assets-private/audio/thieves/voice-variants/. The thieves' voice chain (a raspy 'heavy smoker' voice), read only by the offline bake scripts/make_thief_voices.py. Each 'chain' entry is one ffmpeg filter, in order, with {name} replaced by the literal text of params[name] (numbers keep the spelling written here). The dry recording is first trimmed of silence and peak-normalised to dry_peak_db (so gain_db drives every line into the clipper alike), then runs through 'chain'; 'noise_chain' shapes a pink-noise bed (the breath) that is mixed under the result at params.noise (linear, 0 = none); the bake peak-normalises the sum to out_peak_db (the vorbis encode overshoots it by up to ~1 dB, so -2 keeps the ogg under 0). Edit the values or the order here, nowhere else. First guess, tune by ear: pitch (1 = unchanged, lower = deeper), rough_hz/rough_depth (fast tremolo: the crackle of a ruined voice), gain_db/clip (grit), low/high (band limit), noise (breath).",
   "params": {
     "dry_peak_db": -3,
     "silence_db": -42,
@@ -16,12 +16,19 @@
     "clip": 0.55,
     "rough_hz": 55,
     "rough_depth": 0.25,
-    "noise": 0.012,
+    "noise": 0,
     "noise_low": 1200,
     "noise_high": 5500,
     "out_peak_db": -2
   },
   "chain": [
+    "anull"
+  ],
+  "noise_chain": [
+    "highpass=f={noise_low}",
+    "lowpass=f={noise_high}"
+  ],
+  "_raspy_chain_unused": [
     "rubberband=pitch={pitch}",
     "highpass=f={low}",
     "equalizer=f={chest_hz}:t=q:w=0.9:g={chest_db}",
@@ -30,9 +37,5 @@
     "asoftclip=type=tanh:threshold={clip}",
     "tremolo=f={rough_hz}:d={rough_depth}",
     "lowpass=f={high}"
-  ],
-  "noise_chain": [
-    "highpass=f={noise_low}",
-    "lowpass=f={noise_high}"
   ]
 }
