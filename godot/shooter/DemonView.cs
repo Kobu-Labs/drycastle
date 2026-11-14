@@ -65,7 +65,7 @@ public sealed partial class DemonView : Node3D
     public Action? Bitten;
     /// <summary>Where the muzzle (the front of the mouth) is, world space, as the pose last put it.</summary>
     public Vector3 MuzzleWorld => _muzzle != null && _muzzle.IsInsideTree() ? _muzzle.GlobalPosition : GlobalPosition;
-    float _prey, _lunge;
+    float _prey, _lunge, _tear, _tearSign = 1f, _tearPhase, _tearSide;
     double _nextBite, _biteSnapAt = -1;
     Vector3 _pinShift;
 
@@ -250,6 +250,7 @@ public sealed partial class DemonView : Node3D
         _biteSnapAt = -1;
         _nextBite = _t + Math.Max(0.05, (1.0 / Math.Max(0.5f, pd.BitesPerS)) * (0.65 + _rng.NextDouble() * 0.7) - 0.21);
         _lunge = 1f;
+        _tear = 1f; _tearSign = _rng.NextDouble() < 0.5 ? -1f : 1f; _tearPhase = 0; // it has hold: it wrenches its head from side to side and pulls
         var at = MuzzleWorld;
         if (_blood != null) DemonFx.BloodBurst(_blood, at, Vector3.Down + new Vector3(((float)_rng.NextDouble() - 0.5f) * 0.4f, 0, ((float)_rng.NextDouble() - 0.5f) * 0.4f));
         Bitten?.Invoke();
@@ -536,6 +537,8 @@ public sealed partial class DemonView : Node3D
 
     /// <summary>How far the head looks down while it bites: nearly straight down at the face under it.</summary>
     const float PreyPitch = -1.38f;
+    /// <summary>The tearing after each bite: how far the muzzle swings to each side and is pulled up, how fast it shakes, and how far the head turns and rolls with it.</summary>
+    const float TearSideM = 0.16f, TearPullM = 0.1f, TearHz = 7f, TearYaw = 0.55f, TearRoll = 0.7f;
 
     /// <summary>
     /// While it pins, the root is shifted so the muzzle is exactly at <see cref="PinMuzzleAt"/> (less a lunge on each bite): a correction of what the pose put there a frame ago, taken in steps.
@@ -544,9 +547,14 @@ public sealed partial class DemonView : Node3D
     void PlaceOverPrey(float dt)
     {
         _lunge = Mathf.MoveToward(_lunge, 0f, dt * 7f);
+        _tear = Mathf.MoveToward(_tear, 0f, dt * 2.6f);
+        _tearPhase += dt * MathF.Tau * TearHz;
+        _tearSide = _state == DemonState.Pinning ? _tearSign * MathF.Sin(_tearPhase) * _tear : 0f;
         if (_state == DemonState.Pinning && PinMuzzleAt is { } at && _muzzle != null && IsInsideTree())
         {
             var want = at + Vector3.Down * (Calm ? 0f : _lunge * _data.Pounce.LungeM);
+            // tearing: after the snap the muzzle is thrown side to side and dragged up and back, like something pulling meat off a bone
+            if (!Calm) want += GlobalTransform.Basis.X.Normalized() * (_tearSide * TearSideM) + Vector3.Up * (_tear * (1f - _lunge) * TearPullM);
             var err = want - MuzzleWorld;
             if (err.Length() > 4f) err = err.Normalized() * 4f;
             _pinShift += err * Mathf.Min(1f, 0.6f * (dt * 60f) * _prey);
@@ -591,11 +599,11 @@ public sealed partial class DemonView : Node3D
         var limit = Mathf.Lerp(1.3f, 2.4f, over);
         var yawT = Mathf.Clamp(wantYaw, -limit, limit) + _overSign * over * 0.5f + (twitching ? _twitchYaw : 0);
         var pitchT = Mathf.Lerp(Mathf.Clamp(wantPitch, -0.75f, 0.55f) + (twitching ? _twitchPitch : 0), PreyPitch, _prey);
-        if (_prey > 0) yawT = Mathf.Lerp(yawT, 0f, _prey);
+        if (_prey > 0) yawT = Mathf.Lerp(yawT, _tearSide * TearYaw, _prey);
         if (_state == DemonState.Dead) { yawT = 0.4f; pitchT = -0.7f; }
-        var rate = twitching ? 40f : 4f; // radians per second: a twitch is a snap, tracking is a slow turn
+        var rate = twitching || _tear > 0.05f ? 40f : 4f; // radians per second: a twitch is a snap, tracking is a slow turn
         _yaw = Mathf.MoveToward(_yaw, yawT, rate * dt);
         _pitch = Mathf.MoveToward(_pitch, pitchT, rate * dt);
-        _pose.LookYaw = _yaw; _pose.LookPitch = _pitch; _pose.HeadRoll = _roll;
+        _pose.LookYaw = _yaw; _pose.LookPitch = _pitch; _pose.HeadRoll = _roll + _tearSide * TearRoll * _prey;
     }
 }

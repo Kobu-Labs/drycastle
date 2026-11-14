@@ -54,7 +54,7 @@ public partial class ChurchDecor : Node3D
     StandardMaterial3D? _crossMat;
     readonly List<CpuParticles3D> _flames = new();
     bool _demon, _flamesOn;
-    float _angle, _burn, _lightK = 1;
+    float _angle, _burn, _lightK = 1, _gloom;
     double _t;
     ChurchBlood? _blood;
     /// <summary>How far the turning is, 0 to 1 (the lights flicker, ever worse, and are out at 1); negative: not turning.</summary>
@@ -183,6 +183,7 @@ public partial class ChurchDecor : Node3D
     public override void _ExitTree()
     {
         if (Current == this) Current = null;
+        if (DayNightCycle.Current is { } cycle) cycle.Gloom = 0;
         ChurchInterior.Changed -= OnInterior;
         if (_blood != null) { if (_blood.GetParent() != null) _blood.QueueFree(); else _blood.Free(); }
     }
@@ -359,6 +360,11 @@ public partial class ChurchDecor : Node3D
         if (_transK >= 0) _lightK = TurningLight(_transK, 0f); // the fade to dark carries on from where the flicker left it
         else _lightK = Mathf.MoveToward(_lightK, _demon ? 0f : 1f, dt / (_demon ? LightsOutS : LightsOnS));
         ClearGlass(dt);
+        // the dark: for someone inside, daylight itself goes as the pastor turns, and stays gone while the demon lives
+        var cam = GetViewport()?.GetCamera3D();
+        var want = cam != null && InAir(cam.GlobalPosition) ? (_transK >= 0 ? Mathf.SmoothStep(0f, 1f, _transK) : _demon ? 1f : 0f) : 0f;
+        _gloom = Mathf.MoveToward(_gloom, want, dt * (_transK >= 0 ? 4f : 0.8f));
+        if (DayNightCycle.Current is { } cycle) cycle.Gloom = _gloom;
         if (!Visible) return;
 
         if (_rot != null) _rot.Rotation = new Vector3(0, 0, _angle);

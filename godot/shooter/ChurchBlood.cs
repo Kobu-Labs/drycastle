@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Godot;
+using Drycastle.ShooterCore;
 
 namespace Drycastle.Shooter;
 
@@ -223,13 +224,16 @@ void fragment() {
                     if (r.Z1 < sill - 0.05f && r.Z1 > outLow && r.Contains(c + n * 0.6f)) outLow = r.Z1;
                 if (overDoor) outLow = MathF.Max(outLow, doorTop);
                 // inside: the floor, or the arch tops of the arcades
-                var inLow = sill - floorZ > ArchTopM + 0.3f ? floorZ + ArchTopM : floorZ;
+                var high = sill - floorZ > ArchTopM + 0.3f;
+                var inLow = floorZ;
                 if (overDoor) inLow = MathF.Max(inLow, doorTop);
 
                 node.AddStain(id + "o", c, n, ww, sill, outLow, false, floorZ);
-                node.AddStain(id + "i", c, n, ww, sill, inLow, true, floorZ);
+                // a high window may stand over an arcade's opening or the gallery: where its wall ends is found by probing the wall when the blood starts
+                if (high) node._probes.Add((id + "i", c, n, ww, sill, inLow, floorZ));
+                else node.AddStain(id + "i", c, n, ww, sill, inLow, true, floorZ);
             }
-            if (node._stains.Count == 0) { node.Free(); return null; }
+            if (node._stains.Count == 0 && node._probes.Count == 0) { node.Free(); return null; }
             return node;
         }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
@@ -248,6 +252,44 @@ void fragment() {
     }
 
     /// <summary>One stain under a window: the wall quad from the sill down to <paramref name="low"/> on one face of the wall.</summary>
+    readonly List<(string Key, Vector2 C, Vector2 N, float W, float Sill, float Low, float FloorZ)> _probes = new();
+
+    /// <summary>
+    /// The high inside stains, once the map's colliders are there: each runs down its wall to the floor, or stops where the wall does (the top of an
+    /// arcade's opening under it) or on what stands against the wall (the gallery). Probed with short rays into the wall, at the middle and both edges.
+    /// </summary>
+    public override void _PhysicsProcess(double delta)
+    {
+        if (_probes.Count == 0 || _age < 0) return;
+        var space = GetWorld3D().DirectSpaceState;
+        foreach (var p in _probes)
+        {
+            var g = -new Vector3(p.N.X, 0, -p.N.Y); // into the church
+            var right = (-g).Cross(Vector3.Up);
+            var low = p.Low;
+            foreach (var dx in new[] { -(p.W + MarginM) * 0.4f, 0f, (p.W + MarginM) * 0.4f })
+            {
+                var face = new Vector3(p.C.X, 0, -p.C.Y) + g * WallHalfM + right * dx;
+                var end = p.Low;
+                for (var h = p.Sill - 0.3f; h > p.Low + 0.1f; h -= 0.2f)
+                {
+                    var at = face + Vector3.Up * h;
+                    if (space.IntersectRay(PhysicsRayQueryParameters3D.Create(at + g * 0.35f, at - g * 0.15f, CollisionLayers.World)).Count > 0) continue;
+                    end = h + 0.2f; // no wall here: the streak ends just above
+                    break;
+                }
+                // something standing against the wall under the window (the gallery's floor)
+                var top = face + g * 0.12f + Vector3.Up * (p.Sill - 0.05f);
+                var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(top, new Vector3(top.X, p.Low + 0.3f, top.Z), CollisionLayers.World));
+                if (hit.Count > 0) end = MathF.Max(end, hit["position"].AsVector3().Y);
+                low = MathF.Max(low, end);
+            }
+            AddStain(p.Key, p.C, p.N, p.W, p.Sill, low, true, p.FloorZ);
+        }
+        _probes.Clear();
+        _dirty = true;
+    }
+
     void AddStain(string key, Vector2 c, Vector2 n, float winW, float sill, float low, bool inside, float floorZ)
     {
         var length = sill - low;

@@ -36,6 +36,10 @@ public partial class DayNightCycle : Node3D
     /// <summary>0 outdoors, 1 inside a bunker room: set each frame by <see cref="BunkerLights"/>; turns the ambient light down.</summary>
     public float Indoor { get; set; }
 
+    /// <summary>0..1: the world goes dark for this client (the church while the pastor turns and the demon lives): the sun, the moon, the ambient light and the sky are turned down to almost nothing, so only fires light the scene. Set every frame by the church's decor.</summary>
+    public float Gloom { get; set; }
+    const float GloomFloor = 0.03f;
+
     readonly DirectionalLight3D _sun = new() { ShadowEnabled = true };
     readonly DirectionalLight3D _moon = new() { ShadowEnabled = false };
     readonly WorldEnvironment _worldEnv = new();
@@ -103,15 +107,17 @@ public partial class DayNightCycle : Node3D
 
         _sun.RotationDegrees = new Vector3(-l.SunElevationDeg, SunAzimuthDeg, 0);
         _sun.LightColor = Col(l.SunColour);
-        _sun.LightEnergy = l.SunEnergy;
+        var gloom = Mathf.Lerp(1f, GloomFloor, Mathf.Clamp(Gloom, 0f, 1f));
+        _sun.LightEnergy = l.SunEnergy * gloom;
         _sun.ShadowEnabled = l.SunEnergy > 0.01f; // shadows fade with the sun and are gone at night
 
         _moon.RotationDegrees = new Vector3(-l.MoonElevationDeg, SunAzimuthDeg + 180f, 0);
         _moon.LightColor = Col(l.MoonColour);
-        _moon.LightEnergy = l.MoonEnergy;
+        _moon.LightEnergy = l.MoonEnergy * gloom;
 
         _env.AmbientLightColor = Col(l.AmbientColour);
-        _env.AmbientLightEnergy = l.AmbientEnergy * Mathf.Lerp(1f, IndoorAmbient, Indoor);
+        _env.AmbientLightEnergy = l.AmbientEnergy * Mathf.Lerp(1f, IndoorAmbient, Indoor) * gloom;
+        _env.BackgroundEnergyMultiplier = Mathf.Lerp(1f, 0.12f, Mathf.Clamp(Gloom, 0f, 1f));
         _env.TonemapExposure = l.Exposure * brightness;
         _env.FogDensity = l.FogDensity;
         _env.FogLightColor = Col(l.SkyHorizon);

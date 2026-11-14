@@ -137,7 +137,7 @@ public partial class NetClient
         if (view != null)
         {
             var m = view.MuzzleWorld;
-            _pLook = _pLookSet ? _pLook.Lerp(m, 1f - MathF.Exp(-30f * dt)) : m;
+            _pLook = _pLookSet ? _pLook.Lerp(m, 1f - MathF.Exp(-3.5f * dt)) : m;
             _pLookSet = true;
         }
         var calm = GameSettings.Current.ReduceMotion;
