@@ -29,6 +29,7 @@ public partial class NetClient
         if (!ShotFx.Enabled || _hud != null) return; // headless runs have no HUD
         _hud = new Hud { MyId = _myId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => _me is { ZoomFov: > 0 }, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Spread = CrosshairSpread };
         AddChild(_hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
+        _hud.TacticalMapTeleport = OnMapTeleport;
         _hud.SetSandbox(SandboxGranted, SandboxHeldStreak, SandboxTakesDamage); // the SANDBOX badge (#156)
         WireLoadoutHud(_hud);
         _hud.AttachEquipment(this); // F (#268)

@@ -25,20 +25,17 @@ public partial class NetClient
         else if (MenuOpen?.Invoke() != true) Input.MouseMode = Input.MouseModeEnum.Captured;
     }
 
+    /// <summary>Sandbox: a middle click on the sheet (the map's own control gets it) teleports there; the map closes so the player sees where they landed.</summary>
+    void OnMapTeleport(Vector2 g)
+    {
+        if (!SandboxGranted) return;
+        SendSandboxEvent(EventKind.SandboxTeleportTo, SandboxEvents.EncodeTeleportTo(g.X, g.Y));
+        _hud?.CloseTacticalMap();
+    }
+
     bool HandleMapInput(InputEvent e)
     {
         if (_hud == null || Bot) return false;
-        if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Middle } && _hud.TacticalMapOpen && SandboxGranted)
-        {
-            // sandbox: a middle click on the sheet teleports there; the map closes so the player sees where they landed
-            if (_hud.TacticalMapGroundAtMouse() is { } g)
-            {
-                SendSandboxEvent(EventKind.SandboxTeleportTo, SandboxEvents.EncodeTeleportTo(g.X, g.Y));
-                _hud.CloseTacticalMap();
-            }
-            GetViewport().SetInputAsHandled();
-            return true;
-        }
         if (e.IsEcho() || !e.IsActionPressed("map")) return false;
         if (MenuOpen?.Invoke() == true) return false;
         if (!_hud.ToggleTacticalMap()) return false;
