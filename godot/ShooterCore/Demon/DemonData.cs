@@ -25,12 +25,20 @@ public sealed class DemonCrawlDef
     public float[] DwellS { get; set; } = Array.Empty<float>();
     /// <summary>The distance to its target it likes to keep.</summary>
     public float PreferredRangeM { get; set; }
-    /// <summary>Anchors this many links away are considered as a goal.</summary>
+    /// <summary>Anchors this many links away are considered as a goal, and ones fewer than <see cref="MinHops"/> away are only taken when nothing else is.</summary>
     public int MaxHops { get; set; }
+    /// <summary>The shortest route it likes (links): it walks, not shuffles.</summary>
+    public int MinHops { get; set; } = 1;
     /// <summary>Score for an anchor that sees the target.</summary>
     public float LosBonus { get; set; }
     /// <summary>Score lost per link on the way.</summary>
     public float HopCost { get; set; }
+    /// <summary>Score for a goal on another surface than the one it is on (the other wall, the ceiling): it does not stay on one wall.</summary>
+    public float SurfaceChangeBonus { get; set; }
+    /// <summary>Score for a goal on the ceiling, plus <see cref="CeilingHungerPerS"/> for each second since it was last up there, at most <see cref="CeilingHungerCap"/>.</summary>
+    public float CeilingBonus { get; set; }
+    public float CeilingHungerPerS { get; set; }
+    public float CeilingHungerCap { get; set; }
     /// <summary>Score lost for an anchor it was on a moment ago.</summary>
     public float RevisitPenalty { get; set; }
     /// <summary>Random score added to each candidate (seeded), so it is not predictable.</summary>
@@ -92,8 +100,9 @@ public sealed class DemonRoarDef
 }
 
 /// <summary>
-/// The leap across the nave to an anchor of the opposite wall (0 <see cref="Chance"/> turns it off): a crouch of <see cref="CrouchS"/> on the anchor, then a scripted arc
-/// at <see cref="SpeedMps"/> (it rises <see cref="ArcHeightM"/> above the straight line), then <see cref="LandRecoverS"/> on the new anchor.
+/// The leap to an anchor on another surface (0 <see cref="Chance"/> turns it off): the opposite wall, or wall to ceiling and back. A crouch of <see cref="CrouchS"/> on the anchor, then a scripted arc
+/// at <see cref="SpeedMps"/> (it bows <see cref="ArcHeightM"/> off the straight line, into the room), then <see cref="LandRecoverS"/> on the new anchor.
+/// Each time it would crawl on it leaps with <see cref="Chance"/> once <see cref="CooldownS"/> has passed; once <see cref="DueS"/> seconds of fighting have passed without one it leaps at the next chance.
 /// </summary>
 public sealed class DemonLeapDef
 {
@@ -106,8 +115,12 @@ public sealed class DemonLeapDef
     public float ArcHeightM { get; set; }
     public float LandRecoverS { get; set; }
     public float CooldownS { get; set; }
-    /// <summary>A landing anchor's normal must point against its own: <c>dot &lt;= -MinOppositeDot</c>.</summary>
-    public float MinOppositeDot { get; set; } = 0.7f;
+    /// <summary>Score for the opposite wall (normals against each other): the leap across the nave it is known for, over the one up to the ceiling.</summary>
+    public float AcrossBonus { get; set; }
+    /// <summary>Fighting seconds since the last leap after which the next one is certain (0: never forced).</summary>
+    public float DueS { get; set; }
+    /// <summary>A landing anchor's normal must not point with its own: <c>dot &lt;= MaxNormalDot</c> (-1 opposite walls only, 0 also wall and ceiling, 1 anything but the same direction).</summary>
+    public float MaxNormalDot { get; set; } = 0.5f;
 }
 
 /// <summary>
@@ -156,6 +169,9 @@ public sealed class DemonFightDef
 public sealed class DemonFile : IVersioned
 {
     public int Version { get; set; }
+    /// <summary>How big the demon is: 1 is the pack's model. The view scales the model, and every length that belongs to its body (<see cref="BodyM"/>, <see cref="MuzzleM"/>,
+    /// <see cref="FlameUpM"/>, <see cref="FlameForwardM"/>, the hit volume) follows; the numbers in the sections below stay those of a scale 1 demon.</summary>
+    public float Scale { get; set; } = 1f;
     public DemonHitsDef Hits { get; set; } = new();
     public DemonHitWeights HitWeights { get; set; } = new();
     public DemonCrawlDef Crawl { get; set; } = new();
@@ -171,6 +187,14 @@ public sealed class DemonFile : IVersioned
     public static DemonFile Parse(string json) => Validate(DataFile.Parse<DemonFile>(json, "holy_mass_demon.json"));
 
     /// <summary>The number of hits that kill the demon with this many players inside (at least one is assumed).</summary>
+    /// <summary>The middle of the body off the surface it holds on to.</summary>
+    public float BodyM => Fight.BodyHeightM * Scale;
+    /// <summary>The fireball's launch point and the sight lines' start: this far off the surface along its normal.</summary>
+    public float MuzzleM => Fireball.MuzzleOffsetM * Scale;
+    /// <summary>The mouth: off the surface along the normal, and ahead along the facing.</summary>
+    public float FlameUpM => Flame.HeadUpM * Scale;
+    public float FlameForwardM => Flame.HeadForwardM * Scale;
+
     public int HitsNeeded(int players)
     {
         var n = MathF.Round(Hits.Base + Hits.PerExtraPlayer * (Math.Max(players, 1) - 1));
@@ -190,6 +214,7 @@ public sealed class DemonFile : IVersioned
         static void Pos(float v, string field) { if (!float.IsFinite(v) || v <= 0) throw new DataFileException($"{F}: \"{field}\" is required and must be above 0"); }
         static void NonNeg(float v, string field) { if (!float.IsFinite(v) || v < 0) throw new DataFileException($"{F}: \"{field}\" must be 0 or more"); }
 
+        Pos(f.Scale, "scale");
         var h = f.Hits;
         Pos(h.Base, "hits.base"); NonNeg(h.PerExtraPlayer, "hits.per_extra_player");
         if (h.Min < 1 || h.Max < h.Min) throw new DataFileException($"{F}: \"hits.min\" must be 1 or more and \"hits.max\" at least \"hits.min\"");
@@ -200,7 +225,10 @@ public sealed class DemonFile : IVersioned
         Pos(c.SpeedMps, "crawl.speed_mps"); Pos(c.PreferredRangeM, "crawl.preferred_range_m"); Pos(c.RetargetS, "crawl.retarget_s");
         NonNeg(c.LosBonus, "crawl.los_bonus"); NonNeg(c.HopCost, "crawl.hop_cost"); NonNeg(c.RevisitPenalty, "crawl.revisit_penalty");
         NonNeg(c.Jitter, "crawl.jitter"); NonNeg(c.RearmDelayS, "crawl.rearm_delay_s");
+        NonNeg(c.SurfaceChangeBonus, "crawl.surface_change_bonus"); NonNeg(c.CeilingBonus, "crawl.ceiling_bonus");
+        NonNeg(c.CeilingHungerPerS, "crawl.ceiling_hunger_per_s"); NonNeg(c.CeilingHungerCap, "crawl.ceiling_hunger_cap");
         if (c.MaxHops < 1) throw new DataFileException($"{F}: \"crawl.max_hops\" is required and must be 1 or more");
+        if (c.MinHops < 1 || c.MinHops > c.MaxHops) throw new DataFileException($"{F}: \"crawl.min_hops\" must be between 1 and \"crawl.max_hops\"");
         if (c.DwellS is not { Length: 2 } d || !(d[0] > 0) || d[1] < d[0] || !float.IsFinite(d[1]))
             throw new DataFileException($"{F}: \"crawl.dwell_s\" must be [min, max] with 0 < min <= max");
 
@@ -237,7 +265,8 @@ public sealed class DemonFile : IVersioned
             Pos(lp.MinRangeM, "leap.min_range_m"); Pos(lp.MaxRangeM, "leap.max_range_m"); Pos(lp.CrouchS, "leap.crouch_s"); Pos(lp.SpeedMps, "leap.speed_mps");
             NonNeg(lp.ArcHeightM, "leap.arc_height_m"); NonNeg(lp.LandRecoverS, "leap.land_recover_s"); NonNeg(lp.CooldownS, "leap.cooldown_s");
             if (lp.MinRangeM >= lp.MaxRangeM) throw new DataFileException($"{F}: \"leap.min_range_m\" must be below \"leap.max_range_m\"");
-            if (!(lp.MinOppositeDot > 0 && lp.MinOppositeDot <= 1)) throw new DataFileException($"{F}: \"leap.min_opposite_dot\" must be above 0 and at most 1");
+            NonNeg(lp.DueS, "leap.due_s"); NonNeg(lp.AcrossBonus, "leap.across_bonus");
+            if (!(lp.MaxNormalDot >= -1 && lp.MaxNormalDot < 1)) throw new DataFileException($"{F}: \"leap.max_normal_dot\" must be from -1 up to (not including) 1");
         }
         var fl = f.Flame;
         if (fl.DurationS > 0)

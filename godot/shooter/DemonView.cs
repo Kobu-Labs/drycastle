@@ -81,6 +81,9 @@ public sealed partial class DemonView : Node3D
 
     DemonView(DemonFile data, MassConfig mass) { _data = data; _mass = mass; }
 
+    /// <summary>How big the demon is (<see cref="DemonFile.Scale"/>): the model's scale, and the offsets of the lights and flames that sit on its body.</summary>
+    float Sz => _data.Scale;
+
     /// <summary>True once it let go of the surface (dead): the caller stops placing it.</summary>
     public bool Detached => _detached;
 
@@ -101,6 +104,7 @@ public sealed partial class DemonView : Node3D
         if (_demon != null)
         {
             Prepare(_demon, _demonMats, out _demonAnim, Idle, true);
+            _demon.Scale = Vector3.One * Sz; // the pose's offsets, the hand, the head and the mouth are all in the model's space: they grow with it
             _demon.Visible = false;
             _skel = _demon.FindChildren("*", "Skeleton3D", true, false).OfType<Skeleton3D>().FirstOrDefault();
             if (_skel != null)
@@ -122,13 +126,13 @@ public sealed partial class DemonView : Node3D
         }
         if (ShotFx.Enabled)
         {
-            _fireLight = new OmniLight3D { LightColor = new Color(1f, 0.55f, 0.15f), LightEnergy = 0, OmniRange = 12f, ShadowEnabled = false, Position = new Vector3(0, 1f, 0) };
-            _eyeLight = new OmniLight3D { LightColor = new Color(1f, 0.15f, 0.05f), LightEnergy = 0, OmniRange = 6f, ShadowEnabled = false, Position = new Vector3(0, 0.6f, 0) };
+            _fireLight = new OmniLight3D { LightColor = new Color(1f, 0.55f, 0.15f), LightEnergy = 0, OmniRange = 12f, ShadowEnabled = false, Position = new Vector3(0, 1f * Sz, 0) };
+            _eyeLight = new OmniLight3D { LightColor = new Color(1f, 0.15f, 0.05f), LightEnergy = 0, OmniRange = 6f * Sz, ShadowEnabled = false, Position = new Vector3(0, 0.6f * Sz, 0) };
             _flameLight = new OmniLight3D { LightColor = new Color(1f, 0.5f, 0.12f), LightEnergy = 0, OmniRange = 11f, ShadowEnabled = false };
             AddChild(_fireLight); AddChild(_eyeLight); AddChild(_flameLight);
         }
-        _stream = DemonFx.Stream(this, _data.Flame.RangeM > 0 ? _data.Flame.RangeM : 10f);
-        _flames = DemonFx.Flames(this, 70, 1.2f, new Vector3(0, 0.9f, 0));
+        _stream = DemonFx.Stream(this, _data.Flame.RangeM > 0 ? _data.Flame.RangeM : 10f, Sz);
+        _flames = DemonFx.Flames(this, 70, 1.2f * Sz, new Vector3(0, 0.9f * Sz, 0));
         _nextTwitch = 1; _nextEmote = 3;
     }
 
@@ -227,7 +231,7 @@ public sealed partial class DemonView : Node3D
         if (_hasLast && dt > 1e-4)
         {
             var moved = pos.DistanceTo(_lastPos);
-            if (moved < 3f) { _speed = Mathf.Lerp(_speed, moved / (float)dt, 1f - MathF.Exp(-8f * (float)dt)); _gait += moved / DemonPose.CycleM; }
+            if (moved < 3f) { _speed = Mathf.Lerp(_speed, moved / (float)dt, 1f - MathF.Exp(-8f * (float)dt)); _gait += moved / (DemonPose.CycleM * Sz); } // a bigger body takes longer strides
         }
         _lastPos = pos; _hasLast = true;
     }
@@ -508,7 +512,7 @@ public sealed partial class DemonView : Node3D
         float wantYaw, wantPitch;
         if (LookAtWorld is { } p && _state != DemonState.Dead)
         {
-            var local = GlobalTransform.AffineInverse() * p - new Vector3(0, 0.55f, 0.45f);
+            var local = GlobalTransform.AffineInverse() * p - new Vector3(0, 0.55f, 0.45f) * Sz;
             var sk = new Vector3(-local.X, local.Y, -local.Z); // the model is turned half a circle
             wantYaw = MathF.Atan2(sk.X, sk.Z);
             wantPitch = MathF.Asin(Mathf.Clamp(sk.Y / Math.Max(sk.Length(), 0.01f), -1f, 1f));

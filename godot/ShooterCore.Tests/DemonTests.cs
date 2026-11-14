@@ -73,7 +73,7 @@ public class DemonTests
         var json = File.ReadAllText(Path.Combine(DataDir, "holy_mass_demon.json"));
         var e = Assert.Throws<DataFileException>(() => DemonFile.Parse(json.Replace("\"burn\"", "\"burnt\"")));
         Assert.Contains("burn.dps", e.Message);
-        Assert.Throws<DataFileException>(() => DemonFile.Parse(json.Replace("[1.5, 4.0]", "[4.0, 1.5]")));
+        Assert.Throws<DataFileException>(() => DemonFile.Parse(json.Replace("[0.8, 2.2]", "[2.2, 0.8]")));
         Assert.Throws<DataFileException>(() => DemonFile.Parse(json.Replace("\"version\": 1", "\"version\": 99")));
     }
 
@@ -476,14 +476,14 @@ public class DemonTests
             if (b.Phase == DemonPhase.Leaping)
             {
                 flew = true;
-                Assert.True(g[b.LeapTarget].Normal.X > 0.9f, "lands on the west wall");
+                Assert.True(Vector3.Dot(g[b.LeapTarget].Normal, g[5].Normal) <= Full.Leap.MaxNormalDot, "lands on another surface: the west wall or the ceiling");
                 Assert.True(Vector3.Distance(prev, pose.Position) <= Full.Leap.SpeedMps / 30 * 1.6f + 0.2f, "scripted speed");
             }
             else if (flew) land = i;
             prev = pose.Position;
         }
         Assert.True(wound && flew && land >= 0);
-        Assert.True(g[b.Anchor].Normal.X > 0.9f);
+        Assert.True(Vector3.Dot(g[b.Anchor].Normal, g[5].Normal) <= Full.Leap.MaxNormalDot);
         Assert.True(Vector3.Distance(b.Pose.Position, g[b.Anchor].Pos) < 1e-3f);
         Assert.Equal(g[b.Anchor].Normal, b.Pose.Normal);
     }
@@ -508,5 +508,112 @@ public class DemonTests
         var hits = ev.OfType<DemonFlameHit>().Select(h => h.Player).ToList();
         Assert.True(hits.Count >= 4 && hits.All(p => p == 1), "only the target stands in the cone");
         Assert.Contains(ev, e => e is DemonFlameHit);
+    }
+
+    // ---- the real church's anchor layout: leaps and the ceiling ----
+
+    // church_interior.py: u across (inner walls IU0..IU1), v along (bays -5, -1, 3, 7), per bay low wall, high wall, vault, high wall, low wall; heights above the building base
+    const float IU0 = -2.48f, IU1 = 4.46f, VaultZ = 6.85f, FloorZ = 0.25f;
+
+    static string NaveJson()
+    {
+        var slots = new (float u, float z, string n)[] { (IU0, 2.2f, "[1,0,0]"), (IU0, 4.4f, "[1,0,0]"), ((IU0 + IU1) / 2, VaultZ, "[0,0,-1]"), (IU1, 4.4f, "[-1,0,0]"), (IU1, 2.2f, "[-1,0,0]") };
+        var bays = new[] { -5f, -1f, 3f, 7f };
+        var items = new List<string>();
+        for (var i = 0; i < bays.Length; i++)
+            for (var j = 0; j < 5; j++)
+            {
+                var links = new List<int>();
+                foreach (var k in new[] { j - 1, j + 1 }) if (k >= 0 && k < 5) links.Add(i * 5 + k);
+                foreach (var k in new[] { i - 1, i + 1 }) if (k >= 0 && k < bays.Length) links.Add(k * 5 + j);
+                var (u, z, n) = slots[j];
+                items.Add(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{{ \"id\": {i * 5 + j}, \"pos\": [{u}, {bays[i]}, {z}], \"normal\": {n}, \"links\": [{string.Join(",", links)}] }}"));
+            }
+        return "{ \"anchors\": [" + string.Join(",", items) + "] }";
+    }
+
+    /// <summary>The nave as an empty box: a line is clear when both ends are inside it (it is convex). Game axes: z is minus the v along the nave.</summary>
+    static bool InNave(Vector3 p) => p.X >= IU0 - 0.01f && p.X <= IU1 + 0.01f && p.Y >= FloorZ && p.Y <= VaultZ + 0.01f && p.Z <= 7.3f && p.Z >= -13.7f;
+
+    /// <summary>The shipped numbers, all of it on (roar, fireballs, flame), two people on the nave's floor, 300 s of fight: when it leaps, from where to where, and when it gets up on the ceiling.</summary>
+    static (List<(float t, int from, int to)> leaps, List<float> ceiling) Fight(int seed, float seconds = 300)
+    {
+        var g = AnchorGraph.FromJson(NaveJson());
+        var b = new DemonBrain(Full, g, new Random(seed), (a, c) => InNave(a) && InNave(c), 7);
+        var players = new[]
+        {
+            new DemonPlayer(1, new Vector3(0.985f, FloorZ, -3f), true), new DemonPlayer(2, new Vector3(2.2f, FloorZ, 2f), true),
+        };
+        var leaps = new List<(float, int, int)>(); var ceiling = new List<float>();
+        var inLeap = false; var onCeiling = false; var from = -1;
+        var ev = new List<DemonEvent>();
+        for (var i = 0; i < (int)(seconds * 30); i++)
+        {
+            b.Step(1f / 30, players, ev);
+            if (b.Phase == DemonPhase.LeapWind && !inLeap) { inLeap = true; from = b.Anchor; }
+            if (inLeap && b.Phase is not (DemonPhase.LeapWind or DemonPhase.Leaping)) { inLeap = false; leaps.Add((i / 30f, from, b.Anchor)); }
+            var up = b.Pose.Normal.Y < -0.7f && b.Phase is DemonPhase.Dwelling or DemonPhase.Crawling;
+            if (up && !onCeiling) ceiling.Add(i / 30f);
+            onCeiling = up;
+        }
+        return (leaps, ceiling);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void It_leaps_every_ten_to_fifteen_seconds_between_walls_and_ceiling(int seed)
+    {
+        var g = AnchorGraph.FromJson(NaveJson());
+        var (leaps, _) = Fight(seed);
+        Assert.InRange(leaps.Count, 18, 40); // 300 s: about one in 10 to 15 s
+        var times = leaps.Select(l => l.t).Prepend(0f).ToList();
+        for (var i = 1; i < times.Count; i++) Assert.True(times[i] - times[i - 1] < 25f, $"{times[i] - times[i - 1]:0} s without a leap");
+        bool Ceil(int a) => g[a].Normal.Y < -0.7f;
+        Assert.True(leaps.Count(l => !Ceil(l.from) && !Ceil(l.to)) >= 3, "wall to wall, the leap it is known for"); // in 300 s
+        Assert.Contains(leaps, l => Ceil(l.from) && !Ceil(l.to)); // ceiling to wall
+        Assert.All(leaps, l => Assert.True(Vector3.Dot(g[l.from].Normal, g[l.to].Normal) <= Full.Leap.MaxNormalDot));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void It_goes_up_on_the_ceiling_regularly_and_takes_both_walls(int seed)
+    {
+        var g = AnchorGraph.FromJson(NaveJson());
+        var (leaps, ceiling) = Fight(seed);
+        Assert.True(ceiling.Count >= 10, $"only {ceiling.Count} visits to the ceiling in 300 s");
+        Assert.True(ceiling.Prepend(0f).Zip(ceiling, (a, b) => b - a).Max() < 45f, "a long time without the ceiling");
+        Assert.True(leaps.Any(l => g[l.to].Normal.X > 0.9f) && leaps.Any(l => g[l.to].Normal.X < -0.9f), "it lands on both walls");
+    }
+
+    [Fact]
+    public void It_also_leaps_from_a_wall_up_to_the_ceiling()
+    {
+        var g = AnchorGraph.FromJson(NaveJson());
+        var up = Enumerable.Range(1, 6).Sum(seed => Fight(seed).leaps.Count(l => g[l.from].Normal.Y > -0.7f && g[l.to].Normal.Y < -0.7f));
+        Assert.True(up >= 3, $"{up} wall to ceiling leaps in six fights");
+    }
+
+    [Fact]
+    public void A_scaled_demon_scales_its_body_its_mouth_its_muzzle_and_its_hit_volume()
+    {
+        var d = Full;
+        Assert.Equal(1.6f, d.Scale, 3);
+        Assert.Equal(d.Fight.BodyHeightM * 1.6f, d.BodyM, 4);
+        Assert.Equal(d.Fireball.MuzzleOffsetM * 1.6f, d.MuzzleM, 4);
+        var b = new DemonBrain(d, AnchorGraph.FromJson(NaveJson()), new Random(1), null, 0);
+        var mouth = b.FlameOrigin - b.Pose.Position;
+        Assert.Equal(d.Flame.HeadUpM * 1.6f, Vector3.Dot(mouth, b.Pose.Normal), 3);
+        Assert.Equal(d.Flame.HeadForwardM * 1.6f, Vector3.Dot(mouth, b.Pose.Forward), 3);
+        var small = DemonRules.Target(Vector3.Zero, Vector3.UnitX, d.Fight.BodyHeightM, 0f);
+        var big = DemonRules.Target(Vector3.Zero, Vector3.UnitX, d.BodyM, 0f, d.Scale);
+        var from = new Vector3(8, 0f, 0.8f); // a shot that passes 0.8 m beside the body's axis
+        Assert.Null(HitMath.Raycast(from, -Vector3.UnitX, 30, float.PositiveInfinity, new[] { small }, 1));
+        Assert.NotNull(HitMath.Raycast(from, -Vector3.UnitX, 30, float.PositiveInfinity, new[] { big }, 1));
+        Assert.True(HitMath.Centre(big).X > HitMath.Centre(small).X, "its middle is further off the surface");
     }
 }

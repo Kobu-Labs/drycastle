@@ -64,9 +64,9 @@ public static class DemonFx
 
     /// <summary>
     /// The demon's flame stream: world-space particles shot along the node's -Z (the view turns it at the target each frame), reaching about <paramref name="rangeM"/>,
-    /// fatter as they go. Hidden until <see cref="ParticleFx.Run"/>. Null headless.
+    /// fatter as they go (<paramref name="size"/> times). Hidden until <see cref="ParticleFx.Run"/>. Null headless.
     /// </summary>
-    public static CpuParticles3D? Stream(Node3D parent, float rangeM)
+    public static CpuParticles3D? Stream(Node3D parent, float rangeM, float size = 1f)
     {
         if (!ShotFx.Enabled) return null;
         const float life = 0.6f;
@@ -75,8 +75,8 @@ public static class DemonFx
         {
             Name = "FlameStream", Mesh = rc.Fire, ColorRamp = rc.FireRamp, ScaleAmountCurve = rc.Grow, LocalCoords = false, OneShot = false, Emitting = false, Visible = false,
             Direction = Vector3.Forward, Spread = 5, Amount = 110, Lifetime = life, InitialVelocityMin = rangeM / life * 0.85f, InitialVelocityMax = rangeM / life * 1.05f,
-            Gravity = new Vector3(0, 1.5f, 0), ScaleAmountMin = 0.45f, ScaleAmountMax = 0.8f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            EmissionShape = CpuParticles3D.EmissionShapeEnum.Sphere, EmissionSphereRadius = 0.12f,
+            Gravity = new Vector3(0, 1.5f, 0), ScaleAmountMin = 0.45f * size, ScaleAmountMax = 0.8f * size, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            EmissionShape = CpuParticles3D.EmissionShapeEnum.Sphere, EmissionSphereRadius = 0.12f * size,
         };
         parent.AddChild(p);
         return p;

@@ -8,18 +8,30 @@ namespace Drycastle.Shooter;
 /// What hangs in the church, built from church.json alone (no map rebuild; the server never draws it): the <b>cross</b> on the chancel wall behind the altar
 /// and the <b>lights</b> of the interior. Both follow <see cref="ChurchInterior"/>.
 /// <para>
-/// Cross: a dark wooden box cross (<see cref="CrossHeightM"/> tall) on the wall straight behind the altar (or the pastor's spot): the altar's pose gives where and which way, a ray
-/// to the edge of the room it stands in gives the wall. While a demon is in the church (<see cref="SetDemon"/>) it burns (a faint orange glow, small flames, a faint light) and slowly
+/// Cross: a wooden box cross (<see cref="CrossHeightM"/> tall) hung in front of the end wall straight behind the altar (or the pastor's spot): the altar's pose gives where and which way, a ray
+/// to the edge of the room it stands in gives the wall (the room outlines of church.json stop <see cref="WallInsetM"/> inside the wall), and the cross hangs <see cref="RetableM"/> (the
+/// retable's depth) and a hand's breadth in front of its inner face, with its foot <see cref="CrossFootM"/> above the floor so it clears the altar table. While a demon is in the church (<see cref="SetDemon"/>) it burns (a faint orange glow, small flames, a faint light) and slowly
 /// turns over <see cref="InvertS"/> seconds until it hangs upside down; when the demon is gone it burns out and turns upright again in <see cref="ReturnS"/>.
 /// </para>
 /// <para>
-/// Lights: warm point lights, none of them casting shadows: chandeliers along the nave's long axis near the vault, candles on the altar and one over the chancel. They are on in
+/// Lights: warm point lights, none of them casting shadows: chandeliers along the nave's long axis hung <see cref="ChandelierDropM"/> under the vault (the lowest ceiling anchor of the demon's
+/// graph; without anchors, under the room's top), candles on the altar and one over the chancel. A light that would land outside every room or above its vault is dropped with a warning. They are on in
 /// every phase but the demon's: it appears, they go out, and the church is lit by fire only (the demon, its fireballs, the burning cross).
 /// </para>
 /// </summary>
 public partial class ChurchDecor : Node3D
 {
     public const float CrossHeightM = 2.2f;
+    /// <summary>The room outlines of church.json run this far inside the walls' thickness (the pipeline's <c>room()</c>: the wall's inner face is 0.2 m nearer the room).</summary>
+    const float WallInsetM = 0.2f;
+    /// <summary>The high altar's backdrop (the retable) stands this deep off the end wall; the cross hangs <see cref="CrossClearM"/> before it.</summary>
+    const float RetableM = 0.4f, CrossClearM = 0.2f;
+    /// <summary>The cross's foot above the chancel floor (the altar table is about 1 m), and the room kept free over its top.</summary>
+    const float CrossFootM = 1.9f, CrossHeadroomM = 0.6f;
+    /// <summary>Chandeliers hang this far under the vault.</summary>
+    const float ChandelierDropM = 1.2f;
+    /// <summary>The cross's beam: its width and its depth.</summary>
+    const float BeamW = 0.26f, CrossDepthM = 0.14f;
     /// <summary>Seconds the cross takes to turn over after the demon appears, and to turn back upright when it is gone.</summary>
     public const float InvertS = 35f, ReturnS = 4f;
     /// <summary>Seconds the cross takes to catch and to burn out, and the lights to go out and to come back.</summary>
@@ -35,6 +47,8 @@ public partial class ChurchDecor : Node3D
     }
 
     readonly List<Lamp> _lamps = new();
+    List<Room> _rooms = new();
+    float? _vaultZ;
     Node3D? _rot;
     OmniLight3D? _crossLight;
     StandardMaterial3D? _crossMat;
@@ -63,7 +77,16 @@ public partial class ChurchDecor : Node3D
             foreach (var p in props.EnumerateArray())
                 if (p.GetProperty("kind").GetString() == "altar") { altar = SpotOf(p); break; }
         if (root.TryGetProperty("pastor", out var pa) && pa.ValueKind == JsonValueKind.Object) pastor = SpotOf(pa);
-        var node = new ChurchDecor { Name = "ChurchDecor" };
+        // the vault: the lowest anchor whose normal points down (the demon's ceiling anchors sit just under it)
+        float? vault = null;
+        if (root.TryGetProperty("anchors", out var anchors) && anchors.ValueKind == JsonValueKind.Array)
+            foreach (var an in anchors.EnumerateArray())
+            {
+                if (!an.TryGetProperty("normal", out var n) || !an.TryGetProperty("pos", out var ap) || n.GetArrayLength() != 3 || ap.GetArrayLength() != 3 || n[2].GetSingle() > -0.7f) continue;
+                var z = ap[2].GetSingle();
+                if (vault == null || z < vault) vault = z;
+            }
+        var node = new ChurchDecor { Name = "ChurchDecor", _rooms = list, _vaultZ = vault };
         node.Build(list, altar ?? pastor, altar, pastor);
         return node;
     }
@@ -155,8 +178,21 @@ public partial class ChurchDecor : Node3D
 
     static readonly Color Warm = new(1f, 0.74f, 0.42f);
 
+    /// <summary>Is a point in the air of a room: inside an outline, between its floor and the vault (or its top)?</summary>
+    bool InAir(Vector3 p)
+    {
+        var xy = new Vector2(p.X, -p.Z);
+        foreach (var r in _rooms)
+            if (r.Contains(xy) && p.Y > r.Z0 && p.Y < VaultOf(r)) return true;
+        return false;
+    }
+
+    /// <summary>The ceiling of a room: the vault when the anchors name one inside its height, else its top.</summary>
+    float VaultOf(Room r) => _vaultZ is { } v && v < r.Z1 && v > r.Z0 + 2f ? v : r.Z1;
+
     void AddLamp(Vector3 at, float energy, float range, float flicker, bool glow, float glowSize = 0.1f)
     {
+        if (!InAir(at)) { GD.PushWarning($"ChurchDecor: a light at {at} is outside the church's rooms or above its vault; left out"); return; }
         var l = new Lamp
         {
             Energy = energy, Flicker = flicker, Seed = _lamps.Count * 2.7f,
@@ -194,7 +230,7 @@ public partial class ChurchDecor : Node3D
         var c = nave.Centroid();
         float lo = float.MaxValue, hi = float.MinValue;
         foreach (var p in poly) { var d = (p - c).Dot(axis); lo = MathF.Min(lo, d); hi = MathF.Max(hi, d); }
-        var height = nave.Z1 - 2.1f;
+        var height = VaultOf(nave) < nave.Z1 ? VaultOf(nave) - ChandelierDropM : nave.Z1 - 2.1f;
         foreach (var f in new[] { 0.2f, 0.5f, 0.8f })
             AddLamp(G(c + axis * Mathf.Lerp(lo, hi, f), height), 1.5f, 13f, 0.04f, glow: true, glowSize: 0.14f);
     }
@@ -207,24 +243,28 @@ public partial class ChurchDecor : Node3D
             AddLamp(G(altar.Pos + across * s, altar.Z + 1.2f), 0.9f, 6f, 0.25f, glow: true, glowSize: 0.05f);
     }
 
-    /// <summary>The cross on the wall behind the altar: the ray from the altar away from the congregation (opposite its facing) to the room's edge.</summary>
+    /// <summary>The cross in front of the end wall behind the altar: the ray from the altar away from the congregation (opposite its facing) to the room's edge, back to the wall's inner face, then out again past the retable.</summary>
     void BuildCross(Room room, Spot at)
     {
         var back = -Dir(at.Bearing);
-        var t = room.RayToEdge(at.Pos, back) ?? 2.5f;
-        var wall = at.Pos + back * (t - 0.12f);
-        var centre = G(wall, at.Z + MathF.Min(3.1f, room.Z1 - at.Z - 1.4f));
+        var t = room.RayToEdge(at.Pos, back) ?? 2.5f + WallInsetM;
+        var face = t - WallInsetM; // the wall's inner face, from the altar
+        var d = MathF.Max(0.8f, face - RetableM - CrossClearM - CrossDepthM / 2); // the cross's middle, never nearer the altar than a table's depth
+        var wall = at.Pos + back * d;
+        var height = MathF.Min(CrossFootM + CrossHeightM / 2, room.Z1 - at.Z - CrossHeadroomM - CrossHeightM / 2);
+        var centre = G(wall, at.Z + height);
         var b = G(back, 0); // towards the wall in the game's axes (y = 0)
-        var root = new Node3D { Name = "Cross", Position = centre, Rotation = new Vector3(0, MathF.Atan2(b.X, b.Z), 0) }; // local +Z points at the wall
+        var root = new Node3D { Name = "Cross", Position = centre, Rotation = new Vector3(0, MathF.Atan2(b.X, b.Z), 0) }; // local +Z points at the wall, -Z at the nave
         AddChild(root);
         _rot = new Node3D { Name = "Turn" };
         root.AddChild(_rot);
-        _crossMat = new StandardMaterial3D { AlbedoColor = new Color(0.17f, 0.095f, 0.05f), Roughness = 0.9f, EmissionEnabled = true, Emission = new Color(1f, 0.4f, 0.08f), EmissionEnergyMultiplier = 0 };
+        // light oak, so it reads against the retable's dark canvas; the burn's glow is added to it
+        _crossMat = new StandardMaterial3D { AlbedoColor = new Color(0.58f, 0.38f, 0.19f), Roughness = 0.75f, EmissionEnabled = true, Emission = new Color(1f, 0.4f, 0.08f), EmissionEnergyMultiplier = 0 };
         // the beam is centred on the pivot, the arm a third from the top: turned half a circle, the cross is upside down
-        _rot.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(0.2f, CrossHeightM, 0.14f), Material = _crossMat }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        _rot.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(BeamW, CrossHeightM, CrossDepthM), Material = _crossMat }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
         _rot.AddChild(new MeshInstance3D
         {
-            Mesh = new BoxMesh { Size = new Vector3(1.3f, 0.2f, 0.14f), Material = _crossMat }, Position = new Vector3(0, CrossHeightM * 0.2f, 0),
+            Mesh = new BoxMesh { Size = new Vector3(1.4f, BeamW, CrossDepthM), Material = _crossMat }, Position = new Vector3(0, CrossHeightM * 0.2f, 0),
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         });
         if (ShotFx.Enabled)

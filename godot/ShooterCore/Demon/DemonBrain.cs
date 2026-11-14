@@ -61,6 +61,9 @@ public sealed record DemonDied(IReadOnlyList<ushort> Credited) : DemonEvent;
 public sealed class DemonBrain
 {
     const float Up = 1.5f; // eye height above the feet, for sight lines
+    const float SameSurface = 0.9f; // normals this close (dot) are one surface: the same wall, the ceiling
+    const float CeilingY = -0.7f; // a normal pointing down this much is the ceiling
+    const float TooShort = 50f; // score lost by a route under the preferred length: only taken when nothing else is
 
     readonly DemonFile _def;
     readonly AnchorGraph _graph;
@@ -74,12 +77,12 @@ public sealed class DemonBrain
     float _segDist, _dwell, _cooldown, _tele, _rearm, _retarget;
     bool _asleep, _engaged;
     // roar, leap, flame
-    float _roarT, _nextRoar, _leapCd, _leapWind, _leapDur, _leapU, _flameCd, _flameWind, _flameT, _flameTick;
+    float _roarT, _nextRoar, _leapCd, _leapWind, _leapDur, _leapU, _flameCd, _flameWind, _flameT, _flameTick, _sinceLeap, _sinceCeiling;
     bool _roarPending;
     int _roarFired;
     int _leapTo;
     ushort _flameTarget;
-    Vector3 _leapF0, _flameDir;
+    Vector3 _leapF0, _flameDir, _leapDir;
     ushort? _target;
     Vector3 _pos, _normal, _forward;
 
@@ -101,7 +104,7 @@ public sealed class DemonBrain
     public int HitsNeeded { get; private set; }
     public IReadOnlyCollection<ushort> Credited => _credited;
     /// <summary>The mouth: where the flame leaves.</summary>
-    public Vector3 FlameOrigin => _pos + _normal * _def.Flame.HeadUpM + _forward * _def.Flame.HeadForwardM;
+    public Vector3 FlameOrigin => _pos + _normal * _def.FlameUpM + _forward * _def.FlameForwardM;
     /// <summary>The axis of the flame (unit), turning after its target.</summary>
     public Vector3 FlameDir => _flameDir;
     /// <summary>The stream is burning now (the windup is over).</summary>
@@ -120,7 +123,7 @@ public sealed class DemonBrain
         _path.Clear(); _credited.Clear(); _recent.Clear();
         _target = null; _pathIdx = 0; _segDist = 0; _dwell = 0; _cooldown = 0; _tele = 0; _rearm = 0; _retarget = 0;
         _asleep = true; _engaged = false;
-        _roarPending = false; _roarFired = 0; _roarT = 0; _leapCd = 0; _flameCd = 0; _flameWind = 0; _flameT = 0;
+        _roarPending = false; _roarFired = 0; _roarT = 0; _leapCd = 0; _flameCd = 0; _flameWind = 0; _flameT = 0; _sinceLeap = 0; _sinceCeiling = 0;
         _nextRoar = RollRoar();
         HitsTaken = 0; HitsNeeded = _def.HitsNeeded(1);
         Phase = DemonPhase.Waiting;
@@ -168,7 +171,12 @@ public sealed class DemonBrain
         _cooldown = MathF.Max(0, _cooldown - dt);
         _leapCd = MathF.Max(0, _leapCd - dt);
         _flameCd = MathF.Max(0, _flameCd - dt);
-        if (!_asleep) _nextRoar -= dt;
+        if (!_asleep)
+        {
+            _nextRoar -= dt;
+            _sinceLeap += dt;
+            _sinceCeiling = _normal.Y < CeilingY ? 0 : _sinceCeiling + dt;
+        }
 
         switch (Phase)
         {
@@ -200,7 +208,7 @@ public sealed class DemonBrain
         HitsTaken = 0; HitsNeeded = _def.HitsNeeded(1);
         _credited.Clear();
         _target = null; _cooldown = 0; _tele = 0;
-        _roarPending = false; _roarFired = 0; _flameCd = 0; _leapCd = 0; _flameWind = 0; _flameT = 0;
+        _roarPending = false; _roarFired = 0; _flameCd = 0; _leapCd = 0; _flameWind = 0; _flameT = 0; _sinceLeap = 0; _sinceCeiling = 0;
         _asleep = true; _engaged = false; _rearm = _def.Crawl.RearmDelayS;
         if (Phase is not (DemonPhase.Crawling or DemonPhase.Leaping)) Phase = DemonPhase.Waiting; // a crawl or leap is finished first: it waits where it gets to
         events.Add(new DemonWiped());
@@ -250,6 +258,7 @@ public sealed class DemonBrain
         if (t is { } tp)
         {
             Face(tp.Feet);
+            if (LeapDue && TryLeap(tp, true)) return; // overdue: it leaps before it does anything else
             if (_flameCd <= 0 && TryFlame(tp)) { BeginFlame(tp, events); return; }
             if (_cooldown <= 0 && TryAim(tp, out _))
             {
@@ -260,7 +269,7 @@ public sealed class DemonBrain
         }
         _dwell -= dt;
         if (_dwell > 0) return;
-        if (t is { } tgt && (TryLeap(tgt) || BeginCrawl(tgt))) return;
+        if (t is { } tgt && (TryLeap(tgt, false) || BeginCrawl(tgt))) return;
         _dwell = RollDwell();
     }
 
@@ -363,40 +372,65 @@ public sealed class DemonBrain
 
     // ---- leap ----
 
-    /// <summary>The point of the arc at <paramref name="u"/> (0..1) between two anchors: the straight line plus a parabola of height <paramref name="h"/>.</summary>
-    static Vector3 ArcPoint(Vector3 a, Vector3 b, float u, float h) => Vector3.Lerp(a, b, u) + Vector3.UnitY * (4 * h * u * (1 - u));
+    /// <summary>The point of the arc at <paramref name="u"/> (0..1) between two points: the straight line plus a bow of height <paramref name="h"/> along <paramref name="dir"/>.</summary>
+    static Vector3 ArcPoint(Vector3 a, Vector3 b, float u, float h, Vector3 dir) => Vector3.Lerp(a, b, u) + dir * (4 * h * u * (1 - u));
 
-    /// <summary>Picks an anchor on the opposite wall and starts to crouch for the leap; false when it does not leap (chance, cooldown, nothing across).</summary>
-    bool TryLeap(DemonPlayer target)
+    /// <summary>Which way a leap between surfaces bows: into the room. Across the nave that is up (over the pews); wall to ceiling it is the way both normals point, away from the corner.</summary>
+    static Vector3 ArcDir(Vector3 na, Vector3 nb)
+    {
+        if (Vector3.Dot(na, nb) < -0.5f) return Vector3.UnitY;
+        var d = na + nb;
+        return d.LengthSquared() > 1e-4f ? Vector3.Normalize(d) : Vector3.UnitY;
+    }
+
+    static bool OnCeiling(Vector3 normal) => normal.Y < CeilingY;
+
+    /// <summary>It has gone <see cref="DemonLeapDef.DueS"/> fighting seconds without a leap and the cooldown is over: it leaps at the next chance.</summary>
+    bool LeapDue => _def.Leap.Chance > 0 && _def.Leap.DueS > 0 && _leapCd <= 0 && _sinceLeap >= _def.Leap.DueS;
+
+    /// <summary>
+    /// Picks an anchor on another surface (the opposite wall, the ceiling from a wall, a wall from the ceiling) and starts to crouch for the leap; false when it does not leap
+    /// (chance, cooldown, nothing within reach). <paramref name="force"/> skips the chance; when nothing qualifies a forced leap is tried again in a second.
+    /// </summary>
+    bool TryLeap(DemonPlayer target, bool force)
     {
         var l = _def.Leap;
-        if (l.Chance <= 0 || _leapCd > 0 || _rng.NextDouble() >= l.Chance) return false;
+        if (l.Chance <= 0 || _leapCd > 0 || (!force && _rng.NextDouble() >= l.Chance)) return false;
         var c = _def.Crawl;
         var eye = target.Feet + new Vector3(0, Up, 0);
-        var off = _def.Fireball.MuzzleOffsetM;
+        var off = _def.MuzzleM;
         var from = _pos + _normal * off;
         var best = -1; var bestScore = float.NegativeInfinity;
         foreach (var a in _graph.Anchors)
         {
-            if (a.Id == _anchor || Vector3.Dot(a.Normal, _normal) > -l.MinOppositeDot) continue;
+            if (a.Id == _anchor || Vector3.Dot(a.Normal, _normal) > l.MaxNormalDot) continue;
             var dist = Vector3.Distance(a.Pos, _pos);
             if (dist < l.MinRangeM || dist > l.MaxRangeM) continue;
             var land = a.Pos + a.Normal * off;
-            var mid = ArcPoint(from, land, 0.5f, l.ArcHeightM);
+            var mid = ArcPoint(from, land, 0.5f, _def.Leap.ArcHeightM, ArcDir(_normal, a.Normal));
             if (!_sight(from, mid) || !_sight(mid, land)) continue;
             var score = -MathF.Abs(Vector3.Distance(a.Pos, eye) - c.PreferredRangeM) + (float)_rng.NextDouble() * c.Jitter;
             if (_sight(land, eye)) score += c.LosBonus;
+            if (OnCeiling(a.Normal)) score += CeilingScore(c);
+            else if (Vector3.Dot(a.Normal, _normal) < -0.7f) score += l.AcrossBonus;
             if (_recent.Contains(a.Id)) score -= c.RevisitPenalty;
             if (score > bestScore) { bestScore = score; best = a.Id; }
         }
-        if (best < 0) return false;
+        if (best < 0)
+        {
+            if (force) _sinceLeap = MathF.Max(0, l.DueS - 1f);
+            return false;
+        }
         _leapTo = best;
         _leapWind = l.CrouchS;
         _leapDur = MathF.Max(0.35f, Vector3.Distance(_graph[best].Pos, _pos) / l.SpeedMps);
-        _leapU = 0;
+        _leapU = 0; _sinceLeap = 0;
         Phase = DemonPhase.LeapWind;
         return true;
     }
+
+    /// <summary>What a goal on the ceiling is worth: the base, and more the longer it has been down on the walls.</summary>
+    float CeilingScore(DemonCrawlDef c) => c.CeilingBonus + MathF.Min(c.CeilingHungerCap, c.CeilingHungerPerS * _sinceCeiling);
 
     void StepLeapWind(float dt, IReadOnlyList<DemonPlayer> players)
     {
@@ -405,6 +439,7 @@ public sealed class DemonBrain
         _leapWind -= dt;
         if (_leapWind > 0) return;
         _leapF0 = _forward; _leapU = 0;
+        _leapDir = ArcDir(_graph[_anchor].Normal, _graph[_leapTo].Normal);
         Phase = DemonPhase.Leaping;
     }
 
@@ -423,12 +458,13 @@ public sealed class DemonBrain
             return;
         }
         var u = _leapU;
-        _pos = ArcPoint(a.Pos, b.Pos, u, _def.Leap.ArcHeightM);
-        // its up turns from the wall it left through the room's up to the wall it lands on; its head leads across
+        _pos = ArcPoint(a.Pos, b.Pos, u, _def.Leap.ArcHeightM, _leapDir);
+        // its up turns from the surface it left to the one it lands on (across the nave through the room's up); its head leads across
         var s = MathF.Sin(MathF.PI * u);
-        var n = Vector3.Lerp(a.Normal, b.Normal, u) * (1 - s) + Vector3.UnitY * s;
+        var n = Vector3.Dot(a.Normal, b.Normal) < -0.5f ? Vector3.Lerp(a.Normal, b.Normal, u) * (1 - s) + Vector3.UnitY * s : Vector3.Lerp(a.Normal, b.Normal, u);
         _normal = n.LengthSquared() > 1e-6f ? Vector3.Normalize(n) : Vector3.UnitY;
-        var across = b.Pos - a.Pos; across.Y = 0;
+        var across = b.Pos - a.Pos;
+        if (Vector3.Dot(a.Normal, b.Normal) < -0.5f) across.Y = 0;
         across = across.LengthSquared() > 1e-6f ? Vector3.Normalize(across) : _leapF0;
         var g = Vector3.Lerp(_leapF0, across, s);
         _forward = ProjectOnto(g.LengthSquared() > 1e-6f ? Vector3.Normalize(g) : _leapF0, _normal, _forward);
@@ -459,7 +495,7 @@ public sealed class DemonBrain
         else _cooldown = 0.5f; // the target is gone or out of reach: look again soon
     }
 
-    Vector3 Muzzle => _pos + _normal * _def.Fireball.MuzzleOffsetM;
+    Vector3 Muzzle => _pos + _normal * _def.MuzzleM;
 
     /// <summary>Can it hit this player from here: in range, a clear line, and an arc that reaches. The velocity is the launch velocity.</summary>
     bool TryAim(DemonPlayer p, out Vector3 vel)
@@ -494,7 +530,10 @@ public sealed class DemonBrain
             {
                 var a = _graph[id];
                 var score = -MathF.Abs(Vector3.Distance(a.Pos, eye) - c.PreferredRangeM) - c.HopCost * h + (float)_rng.NextDouble() * c.Jitter;
-                if (_sight(a.Pos + a.Normal * _def.Fireball.MuzzleOffsetM, eye)) score += c.LosBonus;
+                if (_sight(a.Pos + a.Normal * _def.MuzzleM, eye)) score += c.LosBonus;
+                if (Vector3.Dot(a.Normal, _normal) < SameSurface) score += c.SurfaceChangeBonus;
+                if (OnCeiling(a.Normal)) score += CeilingScore(c);
+                if (h < c.MinHops) score -= TooShort;
                 if (_recent.Contains(id)) score -= c.RevisitPenalty;
                 if (score > bestScore) { bestScore = score; best = id; }
             }
