@@ -8,6 +8,10 @@ Issues are tracked in GitHub Issues for Kobu-Labs/drycastle (via the `gh` CLI). 
 
 Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+### State machines
+
+Every state machine has a `StateMachineSpec<T>` (godot/ShooterCore/Fsm/) and is listed in generated `docs/state-machines.md`: read it before touching phase/state logic, never grow a new `bool`/`_xLeft` flag cluster. New or changed machine: enum + spec next to the owner, `StateMachine<T>` for the clock, then `UPDATE_STATE_DOCS=1 dotnet test godot/ShooterCore.Tests --filter StateMachineCatalogTests`. Timers/edges: `Countdown`, `Edge`, `Change<T>`, `Ramp`, `PendingAnswer`, `Lifetime`. Tests run Strict (undeclared transition throws); production logs and takes it.
+
 ### UI/UX standard
 
 All UI, including the map editor, meets `docs/standards/ui-ux.md` (non-negotiable). Invoke the `ui-work` skill before writing or changing UI.

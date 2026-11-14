@@ -265,6 +265,7 @@ public partial class NetClient
         v.Anim.Play(clip, 0.05);
         v.HitUntil = now + Math.Min(0.45, v.Anim.GetAnimation(clip).Length);
         v.Drawn.Reset(); // the act's clip is due again when the reaction is over
+        v.Introduced = true; // a reaction counts as the first sight: a death inside its window plays the fall, not the lying pose
     }
 
     /// <summary>

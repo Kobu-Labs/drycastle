@@ -38,6 +38,7 @@ public partial class NetServer
     /// <summary>The Mass changed phase (Gather, Mass, Completed, Void, and Idle at the end). The church doors follow this.</summary>
     public event Action<MassPhase>? MassPhaseChanged;
 
+    bool _massWon; // the demon was killed: the event is a win although the Mass itself was void
     MassPhase _massWas; // the phase before the one just announced: a Mass that ran to Completed is a win, anything else is cancelled
 
     /// <summary>The pastor was killed the third time: he turns into the demon and the Mass is void. HOOK for the demon ticket; the event stays until <c>/event current end</c>.</summary>
@@ -61,7 +62,7 @@ public partial class NetServer
             GD.Print($"server: holy mass: {p}");
             // the Holy Mass and the demon that follows it are one event of the book (so the Bigfoot cannot start beside it): booked by the first phase change, closed when it is Idle again
             if (p != MassPhase.Idle) _events.Start(EventBook.Mass, _elapsed);
-            else _events.End(EventBook.Mass, _massWas == MassPhase.Completed ? EventPhase.Won : EventPhase.Despawned, _elapsed);
+            else { _events.End(EventBook.Mass, _massWon || _massWas == MassPhase.Completed ? EventPhase.Won : EventPhase.Despawned, _elapsed); _massWon = false; }
             _massWas = p;
             if (p == MassPhase.Idle) { foreach (var id in _sitters.Keys.ToList()) MassStandUp(id); DemonClear(); }
             DoorsFollowMass(p); // open for the event, slammed shut when the pastor turns, shut again afterwards once nobody is left inside

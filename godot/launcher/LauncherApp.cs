@@ -292,6 +292,7 @@ public partial class LauncherApp : Control
             await _installer.InstallAsync(m, progress, _cts.Token);
             _flow.Finish(LauncherState.Ready);
             Render();
+            if (_settings.Channel != _checkedChannel) _ = CheckAsync(); // the channel was changed while the install ran (CloseSettings could not check then)
         }
         catch (OperationCanceledException)
         {

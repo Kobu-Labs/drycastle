@@ -330,6 +330,7 @@ public partial class NetServer
     void DemonKilled(IReadOnlyList<ushort> credited)
     {
         Life.Die();
+        _massWon = true; // killing the demon wins the event (the book's run ends as Won when the Mass goes Idle)
         if (_dEnt != null) { _dEnt.State = DemonState.Dead; _dEnt.HitsLeft = 0; }
         DoorsFor(DoorReason.DemonKilled);
         var cursed = 0;
@@ -434,7 +435,7 @@ public partial class NetServer
         if (_mass!.Phase == MassPhase.Void || DemonActive) { ChatTo(c, ChatLineKind.Error, "The demon is already here. /event current end removes it."); return; }
         if (_church?.Pastor == null || MapChurch == null) { ChatTo(c, ChatLineKind.Error, "The church has no pastor spot or doorway: export the map again."); return; }
         _mass.ForceTurn();
-        if (!DemonActive) { _mass.End(); ChatTo(c, ChatLineKind.Error, "The demon could not start (see the server log)."); return; }
+        if (!DemonActive) { _mass.End(); return; } // DemonStartFailed has told everyone why
         ChatToAll(ChatLineKind.System, "", $"{c.Name} turned the pastor into the demon.");
     }
 }
