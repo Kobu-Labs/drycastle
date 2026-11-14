@@ -44,7 +44,7 @@ public partial class NetClient
     void TickBreath(MoveInput mi)
     {
         if (_me == null || CurrentWeapon is not { } w) return;
-        var scoped = mi.Has(MoveButtons.Aim) && w.ZoomFov > 0 && !_driving && !_controlling;
+        var scoped = mi.Has(MoveButtons.Aim) && w.ZoomFov > 0 && Mode.CanScope;
         _breath.Tick(Now, scoped, mi.Has(MoveButtons.Sprint), w, Perks.HoldBreathTime);
         var v = BreathState.VisualSway(Now, _breath.SwayDegrees(w));
         _me.ViewSway = GameSettings.Current.ReduceMotion ? Vector2.Zero : new Vector2(v.X, v.Y);
@@ -61,7 +61,7 @@ public partial class NetClient
     /// <summary>Predicts this tick's trigger pull / reload key; plays sounds and own-shot effects at once.</summary>
     void PredictFire(MoveInput mi)
     {
-        if (!PredictionOn || Dead || _heldByBigfoot || _massSeated || _pinned || _driving && !InArmedSeat || _controlling || Ammo is not { } a || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count || a.Slot != _wantSlot) return;
+        if (!PredictionOn || !Mode.CanPredictFire || Ammo is not { } a || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count || a.Slot != _wantSlot) return;
         var w = Weapons.Weapons[a.Slot - 1];
         var now = Now;
         if (_pReloadUntil > 0 && now >= _pReloadUntil) { _pMag = _pMagAfter; _pReloadUntil = 0; }

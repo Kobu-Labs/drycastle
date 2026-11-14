@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.ShooterCore;
 
 namespace Drycastle.Shooter;
 
@@ -25,17 +26,18 @@ public partial class Hud
     }
 
     /// <summary>
-    /// The equipment key: opens the screen, or closes it when open. Does nothing (false) while the chat box is open, on the respawn screen, after the match
-    /// ends and in a missile or turret view.
+    /// The equipment key: opens the screen, or closes it when open. Does nothing (false) while a menu or the corpse chooser is up, while the chat box is open,
+    /// on the respawn screen, after the match ends and in a missile or turret view (<see cref="OverlayArbiter.Key"/>).
     /// </summary>
-    public bool ToggleEquipment()
+    public bool ToggleEquipment(bool menuOpen = false, bool chooserOpen = false)
     {
-        if (_equipment == null || ChatOpen) return false;
-        if (_equipment.IsOpen) { _equipment.Close(); return true; }
-        if (MapBlocked) return false;
-        _tacticalMap.Close();
-        _equipment.Open();
-        return true;
+        if (_equipment == null) return false;
+        switch (OverlayArbiter.Key(Overlay.Equipment, _equipment.IsOpen, Overlays(menuOpen, chooserOpen)))
+        {
+            case OverlayKeyVerdict.Close: _equipment.Close(); return true;
+            case OverlayKeyVerdict.Open: _tacticalMap.Close(); _equipment.Open(); return true; // the two overlays never show together
+            default: return false;
+        }
     }
 
     /// <summary>Closes the screen (Esc). True when it was open, so the Esc is used and Pause does not open.</summary>
@@ -50,6 +52,6 @@ public partial class Hud
     /// <summary>Per frame: closes the screen when death, the end of the match or a control session takes the screen. One flag check while closed.</summary>
     void UpdateEquipment()
     {
-        if (_equipment is { IsOpen: true } && MapBlocked) _equipment.Close();
+        if (_equipment is { IsOpen: true } && OverlayArbiter.ScreenTaken(Overlays())) _equipment.Close();
     }
 }

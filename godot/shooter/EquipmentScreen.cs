@@ -26,11 +26,12 @@ public sealed partial class EquipmentScreen : Control
     readonly Label _openKey = new(), _activateKey = new(), _dropKey = new();
     InputDevice _device = InputDevice.KeyboardMouse;
     CamoSpec? _shownLook;
-    bool _open, _framingQueued, _quietFraming;
-    float _alpha;
-    bool _pending, _dimmed;
-    double _pendingSince;
+    bool _framingQueued, _quietFraming;
+    PanelFade _fade; // open/close and the alpha: the same fade as the tactical map's
+    PendingAnswer _wait; // a wish waiting for the server's answer
+    bool _dimmed;
 
+    bool _open => _fade.Wanted;
     public bool IsOpen => _open;
 
     public EquipmentScreen(NetClient client)
@@ -152,7 +153,7 @@ public sealed partial class EquipmentScreen : Control
     public void Open()
     {
         if (_open) return;
-        _open = true;
+        _fade.Show(GameSettings.Current.ReduceMotion);
         Visible = true;
         MouseFilter = MouseFilterEnum.Stop;
         MouseBehaviorRecursive = MouseBehaviorRecursiveEnum.Inherited;
@@ -161,7 +162,7 @@ public sealed partial class EquipmentScreen : Control
         _avatar.Frame(CamoPreview.Framing.Body);
         SetHintNames();
         Refresh();
-        SetAlpha(GameSettings.Current.ReduceMotion ? 1f : _alpha);
+        ApplyAlpha();
         SetProcess(true);
         Callable.From(FocusFirst).CallDeferred();
     }
@@ -170,26 +171,23 @@ public sealed partial class EquipmentScreen : Control
     public void Close()
     {
         if (!_open) return;
-        _open = false;
+        var finished = _fade.Hide(GameSettings.Current.ReduceMotion);
         MouseFilter = MouseFilterEnum.Ignore;
         MouseBehaviorRecursive = MouseBehaviorRecursiveEnum.Disabled; // the fading screen takes no clicks: the mouse is captured again already
         GetViewport().GuiReleaseFocus(); // nor keys
         EndPending();
-        if (GameSettings.Current.ReduceMotion) FinishClose();
+        if (finished) FinishClose();
     }
 
+    /// <summary>The fade is over (its alpha is zero): hide the screen and stop processing.</summary>
     void FinishClose()
     {
-        SetAlpha(0f);
+        ApplyAlpha();
         Visible = false;
         SetProcess(false);
     }
 
-    void SetAlpha(float a)
-    {
-        _alpha = a;
-        Modulate = new Color(1, 1, 1, a);
-    }
+    void ApplyAlpha() => Modulate = new Color(1, 1, 1, _fade.Alpha);
 
     /// <summary>
     /// Gives the first cell the focus for the keys. The figure keeps the whole-body framing it opens with: the head close-up is for a player who points at
@@ -205,10 +203,10 @@ public sealed partial class EquipmentScreen : Control
 
     public override void _Process(double delta)
     {
-        var target = _open ? 1f : 0f;
-        if (!Mathf.IsEqualApprox(_alpha, target)) SetAlpha(Mathf.MoveToward(_alpha, target, (float)delta / UiShell.FadeTime));
-        if (!_open && _alpha <= 0f) { FinishClose(); return; }
-        if (_pending) UpdatePending();
+        var (changed, finished) = _fade.Tick((float)delta, UiShell.FadeTime);
+        if (changed) ApplyAlpha();
+        if (finished) { FinishClose(); return; }
+        if (_wait.Active) UpdatePending();
     }
 
     // ---- the player's wishes ----
@@ -219,7 +217,7 @@ public sealed partial class EquipmentScreen : Control
     /// </summary>
     void Perform(ItemWish wish, ItemCell? at)
     {
-        if (_pending || !_open) return;
+        if (_wait.Active || !_open) return;
         switch (wish.Kind)
         {
             case WishKind.Equip: _client.RequestEquip(wish.Index); break;
@@ -234,20 +232,19 @@ public sealed partial class EquipmentScreen : Control
             default: return;
         }
         Sfx.Ui("ui.click");
-        _pending = true;
-        _pendingSince = Time.GetTicksMsec() / 1000.0;
+        _wait.Begin(Time.GetTicksMsec() / 1000.0);
     }
 
     void UpdatePending()
     {
-        var waited = Time.GetTicksMsec() / 1000.0 - _pendingSince;
-        if (waited >= ItemCell.PendingGiveUp) { EndPending(); return; }
-        if (waited >= ItemCell.PendingDimAfter && !_dimmed) SetDimmed(true);
+        var now = Time.GetTicksMsec() / 1000.0;
+        if (_wait.GiveUp(now, ItemCell.PendingGiveUp)) { EndPending(); return; }
+        if (_wait.Dimmed(now, ItemCell.PendingDimAfter) && !_dimmed) SetDimmed(true);
     }
 
     void EndPending()
     {
-        _pending = false;
+        _wait.End();
         if (_dimmed) SetDimmed(false);
     }
 

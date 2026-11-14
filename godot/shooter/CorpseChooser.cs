@@ -36,8 +36,8 @@ public sealed partial class CorpseChooser : CanvasLayer
     readonly List<int> _valid = new();
     readonly List<ItemCell> _pool = new();
     int _shown;
-    bool _pending, _dimmed;
-    double _pendingSince;
+    PendingAnswer _wait; // a take waiting for the server's answer
+    bool _dimmed;
 
     public bool IsOpen { get; private set; }
     /// <summary>The corpse the chooser is about (valid while open).</summary>
@@ -112,7 +112,7 @@ public sealed partial class CorpseChooser : CanvasLayer
             _rows.AddChild(new Label { Text = Strings.F("corpse.option", pos + 1, text), MouseFilter = Control.MouseFilterEnum.Ignore });
         }
         _title.Text = title;
-        _pending = false;
+        _wait.End();
         FillCells(items);
         IsOpen = true;
         Visible = true;
@@ -164,10 +164,9 @@ public sealed partial class CorpseChooser : CanvasLayer
 
     void Pick(int index)
     {
-        if (!IsOpen || _pending || index < 0 || index >= _shown) return;
+        if (!IsOpen || _wait.Active || index < 0 || index >= _shown) return;
         Sfx.Ui("ui.click");
-        _pending = true;
-        _pendingSince = Time.GetTicksMsec() / 1000.0;
+        _wait.Begin(Time.GetTicksMsec() / 1000.0);
         ItemPicked?.Invoke(index);
     }
 
@@ -180,15 +179,15 @@ public sealed partial class CorpseChooser : CanvasLayer
 
     public override void _Process(double delta)
     {
-        if (!_pending) return;
-        var waited = Time.GetTicksMsec() / 1000.0 - _pendingSince;
-        if (waited >= ItemCell.PendingGiveUp) EndPending();
-        else if (waited >= ItemCell.PendingDimAfter && !_dimmed) SetDimmed(true);
+        if (!_wait.Active) return;
+        var now = Time.GetTicksMsec() / 1000.0;
+        if (_wait.GiveUp(now, ItemCell.PendingGiveUp)) EndPending();
+        else if (_wait.Dimmed(now, ItemCell.PendingDimAfter) && !_dimmed) SetDimmed(true);
     }
 
     void EndPending()
     {
-        _pending = false;
+        _wait.End();
         if (_dimmed) SetDimmed(false);
     }
 

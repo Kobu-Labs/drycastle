@@ -77,7 +77,7 @@ public partial class NetClient
         var nodes = v.DoorGun!;
         var vehicle = Vehicles!.Vehicles[v.Kind];
         var def = vehicle.DoorGun!;
-        var mine = _driving && !Dead && _me != null && _gunship == null && !_controlling && _seats is { } st && st.CarId == v.Id && st.Mine >= 0 && st.Mine == GunnerSeat(vehicle);
+        var mine = Mode.SeatKeysLive && _me != null && _seats is { } st && st.CarId == v.Id && st.Mine >= 0 && st.Mine == GunnerSeat(vehicle);
         if (mine)
         {
             // the look is the aim, and it is held inside the arc: the view cannot go where the gun cannot

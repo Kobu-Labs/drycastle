@@ -37,18 +37,21 @@ public partial class Hud
     }
 
     /// <summary>
-    /// The map key: opens the map, or closes it when open. Does nothing (false) while the chat box is open, on the respawn
-    /// screen, after the match ends and in a missile or turret view, where the HUD hides its overlays too.
+    /// The map key: opens the map, or closes it when open. Does nothing (false) while a menu is up, while the chat box is open (the key is typing), on the
+    /// respawn screen, after the match ends and in a missile or turret view, where the HUD hides its overlays too (<see cref="OverlayArbiter.Key"/>).
     /// </summary>
-    public bool ToggleTacticalMap()
+    public bool ToggleTacticalMap(bool menuOpen = false)
     {
-        if (ChatOpen) return false; // the key is typing
-        if (_tacticalMap.IsOpen) { _tacticalMap.Close(); return true; }
-        if (MapBlocked) return false;
-        _equipment?.Close(); // the two overlays never show together
-        _tacticalMap.TeleportHint = _sandboxOn;
-        _tacticalMap.Open(_minimap.Base);
-        return true;
+        switch (OverlayArbiter.Key(Overlay.TacticalMap, _tacticalMap.IsOpen, Overlays(menuOpen, false)))
+        {
+            case OverlayKeyVerdict.Close: _tacticalMap.Close(); return true;
+            case OverlayKeyVerdict.Open:
+                _equipment?.Close(); // the two overlays never show together
+                _tacticalMap.TeleportHint = _sandboxOn;
+                _tacticalMap.Open(_minimap.Base);
+                return true;
+            default: return false;
+        }
     }
 
     /// <summary>Closes the map (Esc). True when it was open, so the Esc is used and Pause does not open.</summary>
@@ -59,12 +62,13 @@ public partial class Hud
         return true;
     }
 
-    bool MapBlocked => _dead || _phase == MatchPhase.Ending || ControlMode;
+    /// <summary>What <see cref="OverlayArbiter"/> needs: the HUD knows the chat box, death, the end of the match and the control mode; the caller adds the menu and the chooser.</summary>
+    public OverlayContext Overlays(bool menuOpen = false, bool chooserOpen = false) => new(ChatOpen, _dead, _phase == MatchPhase.Ending, ControlMode, menuOpen, chooserOpen);
 
     /// <summary>Per frame: closes the map when death, the end of the match or a control session takes the screen. One flag check while closed.</summary>
     void UpdateTacticalMap()
     {
-        if (_tacticalMap.IsOpen && MapBlocked) _tacticalMap.Close();
+        if (_tacticalMap.IsOpen && OverlayArbiter.ScreenTaken(Overlays())) _tacticalMap.Close();
         if (_mapMarkers.HasPlayer) _mapMarkers.Waypoint.ClearIfReached(new System.Numerics.Vector2(_mapMarkers.Player.X, _mapMarkers.Player.Y));
     }
 }

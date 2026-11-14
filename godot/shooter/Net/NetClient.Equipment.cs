@@ -16,12 +16,11 @@ public partial class NetClient
     /// <summary>Closes the Equipment screen. True when it was open (the shell then does not open Pause for this Esc).</summary>
     public bool CloseEquipment() => _hud?.CloseEquipment() ?? false;
 
-    /// <summary>The equipment key toggles the screen, but not while a menu, the chat box or the corpse chooser is up (the HUD checks the chat). True when the key was used.</summary>
+    /// <summary>The equipment key toggles the screen, but not while a menu, the chat box or the corpse chooser is up (<see cref="OverlayArbiter"/>). True when the key was used.</summary>
     bool HandleEquipmentInput(InputEvent e)
     {
         if (_hud == null || Bot || e.IsEcho() || !e.IsActionPressed("inventory")) return false;
-        if (MenuOpen?.Invoke() == true || ChooserOpen) return false;
-        if (!_hud.ToggleEquipment()) return false;
+        if (!_hud.ToggleEquipment(MenuOpen?.Invoke() == true, ChooserOpen)) return false; // not under a menu or the chooser: the arbiter says
         GetViewport().SetInputAsHandled();
         return true;
     }
