@@ -574,6 +574,11 @@ The server reads it as `ShooterCore.AttributePoints` (`Parse`, format version 1;
 ground axes (x east, y the terrain height, z = -north), or `null` when there is none (the map has no file, no area carries the
 event, or nothing usable was left): the caller must handle it. A broken or newer file is logged and counts as no points.
 
+**Property groups (`groups.json`).** The export copies the `groups` of `edits.json` into the map as
+`{"version": 1, "groups": {"G-0001": {"parcels": ["P-0412", ...]}}}` (sorted; only parcels the map has; no fence), so the server
+builds the pets' pens from the built map and never reads `edits.json`. Listed under `files.groups`; written only when some group has a
+parcel of the map, otherwise absent (a stale file is deleted), which the server reads as "no pets". No map version bump.
+
 `make preview` renders `out/village/preview/topdown.png` (parcels by kind, buildings in wall colour),
 `iso.png` (isometric view from the mesh data: terrain relief, roads, buildings, fences, trees;
 `make preview EXAG=5` changes the relief exaggeration, default 3) and `iso_close.png` (the same,

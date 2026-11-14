@@ -157,6 +157,9 @@ public sealed class MatchSim
     /// <summary>The citizens of the Holy Mass, set by the server; a hit on a victim id in their range goes to them (no score, no kill feed).</summary>
     public ICitizenHits? Citizens { get; set; }
 
+    /// <summary>The pets (property groups' animals), set by the server; a hit on a victim id in their range goes to them (no score, no kill feed).</summary>
+    public IAnimalHits? Pets { get; set; }
+
     public void SetTargets(IReadOnlyList<TargetSpot> spots) => Targets = new TargetDummies(spots, TargetDummies.RespawnDelay);
     public event Action<MatchEvent>? Event;
 
@@ -308,6 +311,7 @@ public sealed class MatchSim
     public DamageResult ApplyDamage(ushort victim, ushort attacker, byte weapon, float amount, bool ignoreProtection = false, KillCause cause = KillCause.Standard)
     {
         if (CitizenRules.IsHitId(victim)) return Phase == MatchPhase.Running && Citizens != null ? Citizens.Hit(victim, attacker, amount) : DamageResult.Ignored;
+        if (PetRules.IsHitId(victim)) return Phase == MatchPhase.Running && Pets != null ? Pets.Hit(victim, attacker, amount) : DamageResult.Ignored;
         if (TargetDummies.IsDummyId(victim)) return ApplyTargetDamage(victim, attacker, weapon, amount, cause);
         _players.TryGetValue(victim, out var found);
         if (DamageGates.FirstBlock(FactsOf(found, victim, attacker, amount, ignoreProtection)) != null) return DamageResult.Ignored; // the ladder and its order: DamageGates

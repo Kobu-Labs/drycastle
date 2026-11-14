@@ -7,18 +7,26 @@ How to add or change one: see `godot/ShooterCore/Fsm/StateMachine.cs`. "From any
 
 ## Animal.Behaviour
 
-What an animal is doing: stand, eat, wander, run from a threat or a shot, lie dead until the corpse is removed.
+What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot, lie dead until the corpse is removed.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
     Idle --> Eat
     Idle --> Walk
+    Idle --> Sit
+    Idle --> Bark
     Idle --> Flee
     Idle --> Dead
     Eat --> Idle
     Eat --> Flee
     Eat --> Dead
+    Sit --> Idle
+    Sit --> Flee
+    Sit --> Dead
+    Bark --> Idle
+    Bark --> Flee
+    Bark --> Dead
     Walk --> Idle
     Walk --> Flee
     Walk --> Dead
@@ -27,11 +35,13 @@ stateDiagram-v2
     Dead --> [*]
 ```
 
-- **Idle**: Stands for a random while (clock: idle seconds), then Choose: eat, or walk to a spot near home.
+- **Idle**: Stands for a random while (clock: idle seconds), then Choose: sit or bark (species that opt in), eat, or walk to a spot near home.
 - **Eat**: Grazes (clock: eat seconds), then stands.
 - **Walk**: Walks to a wander target (clock: the time budget to arrive, then it gives up and stands).
 - **Flee**: Runs from the threat or the shooter; no clock of its own (calm and alarm timers run beside). Calms down into Idle.
-- **Dead**: Lies for corpse_seconds (the clock's elapsed time), then the entity ends. Never left.
+- **Dead**: Lies for corpse_seconds (the clock's elapsed time), then the entity ends; a one-hit species' entity ends at once. Never left.
+- **Sit**: Sits for a random while (clock: sit seconds; the client plays sit-down, holds, stands up after), then stands. Species with a sit rule only.
+- **Bark**: Barks once (clock: the bark clip's length), then stands. Species with a bark rule only.
 
 ## App.Phase
 

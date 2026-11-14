@@ -20,7 +20,7 @@ from drycastle_pipeline.attribute_points import (
 )
 from drycastle_pipeline.buildings import DEFAULT_OVERRIDES
 from drycastle_pipeline.config import DEFAULT_RAW_DIR, REPO_ROOT, map_paths
-from drycastle_pipeline.edits import DEFAULT_EDITS, GROUND_RECIPES
+from drycastle_pipeline.edits import DEFAULT_EDITS, GROUND_RECIPES, load_edits
 from drycastle_pipeline.detail_meshes import clutter_meshes
 from drycastle_pipeline.meshes import Mesh
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
@@ -60,6 +60,8 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # (no bump) attribute_points.json (files.attribute_points): candidate points per runtime attribute (rules.yaml runtime_points,
 # first: event_spawn bigfoot) that the server picks from. Only maps where some area carries one have it; a loader that does not
 # know it, or a map without it, means "no points".
+# (no bump) groups.json (files.groups): the property groups of the edits (group id -> parcel ids), for the game server's pets.
+# Only maps with a group have it; a loader that does not know it, or a map without it, means "no groups".
 MAP_VERSION_BASE = "0.10.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
@@ -202,6 +204,22 @@ def _edit_defaults(rules_path: Path) -> dict:
             "colour": fences["colour"],
         },
     }
+
+
+GROUPS_FILE = "groups.json"
+
+
+def build_groups(edits_path: Path, parcel_ids) -> dict | None:
+    """The ``groups.json`` document (``{"version": 1, "groups": {"G-0001": {"parcels": [...]}}}``) or None when no group has a parcel of the map.
+
+    The shape is the ``groups`` section of the edits file, which the game's ``PropertyGroups.Parse`` reads; only the parcels the map has are kept."""
+    known = set(parcel_ids)
+    groups = {}
+    for gid, entry in sorted(load_edits(edits_path).groups.items()):
+        members = sorted({pid for pid in entry.get("parcels", []) if pid in known})
+        if members:
+            groups[gid] = {"parcels": members}
+    return {"version": 1, "groups": groups} if groups else None
 
 
 def run_export(
@@ -397,6 +415,13 @@ def run_export(
         files["attribute_points"] = ATTRIBUTE_POINTS_FILE
     else:
         points_file.unlink(missing_ok=True)  # no area carries a runtime attribute (any more): no file, "no points"
+    groups_doc = build_groups(edits_path, (p["id"] for p in parcels_doc["parcels"]))
+    groups_file = out_dir / GROUPS_FILE
+    if groups_doc is not None:
+        _dump(groups_file, groups_doc)
+        files["groups"] = GROUPS_FILE
+    else:
+        groups_file.unlink(missing_ok=True)  # no property group (any more): no file, "no pets"
     regions_file = out_dir / "regions.json"
     if scene.regions:
         # ground paint for the minimap: local metres (x east, y north), drawn in ID order so the higher ID wins

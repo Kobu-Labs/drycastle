@@ -60,7 +60,8 @@ public class AnimalMachineTests
             a.Tick(Dt);
             seen.Add(a.State);
         }
-        Assert.Equal(Enum.GetValues<AnimalState>().Length, seen.Count);
+        // every state this species can be in: Sit and Bark are for the species that opt in (see PetBehaviourTests)
+        Assert.Equal(Enum.GetValues<AnimalState>().Where(s => s is not (AnimalState.Sit or AnimalState.Bark)).Order(), seen.Order());
     }
 
     [Fact]

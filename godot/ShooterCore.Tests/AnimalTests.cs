@@ -13,6 +13,38 @@ public class AnimalTests
     static string DataDir => Path.Combine(AppContext.BaseDirectory, "data");
     static readonly AnimalsFile Shipped = GameData.Load(DataDir).Animals;
 
+    /// <summary>Models under this folder are in the private packs (assets-private/, the paid Synty packs): never in the repo, so a machine without them has no file and the client draws the hit box as a cube.</summary>
+    const string PrivateFolder = "synty/";
+
+    static bool InPrivatePack(string model) => model.StartsWith(PrivateFolder, StringComparison.Ordinal);
+
+    /// <summary>The private packs folder, when this machine has it: DRYCASTLE_ASSETS_PRIVATE, else assets-private/ beside assets/ (the repo root). Null without the packs.</summary>
+    static string? PrivateDir()
+    {
+        var env = Environment.GetEnvironmentVariable("DRYCASTLE_ASSETS_PRIVATE");
+        if (!string.IsNullOrEmpty(env)) return Directory.Exists(env) ? env : null;
+        var candidate = Path.Combine(Path.GetDirectoryName(AssetsDir())!, "assets-private");
+        return Directory.Exists(Path.Combine(candidate, "synty")) ? candidate : null;
+    }
+
+    /// <summary>Every model of every species (the base and its variants) with the species it belongs to.</summary>
+    static IEnumerable<(AnimalDef Species, string Model)> AllModels() =>
+        Shipped.Animals.SelectMany(a => a.Variants.Select(v => v.Model).Prepend(a.Model).Select(m => (a, m)));
+
+    static HashSet<string> ClipNames(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        using var doc = JsonDocument.Parse(bytes.AsMemory(20, BitConverter.ToInt32(bytes, 12)));
+        return doc.RootElement.GetProperty("animations").EnumerateArray().Select(c => c.GetProperty("name").GetString()!).ToHashSet();
+    }
+
+    static void AssertHasTheClipsItPlays(AnimalDef species, string model, string path)
+    {
+        var have = ClipNames(path);
+        var resolved = AnimalClips.Resolve(have.Contains);
+        foreach (var clip in AnimalClips.Needed(species)) Assert.True(resolved[(int)clip] != null, $"{species.Id}: {model} has no clip for {clip} (has {string.Join(", ", have)})");
+    }
+
     static string AssetsDir()
     {
         for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
@@ -67,7 +99,7 @@ public class AnimalTests
     [Fact]
     public void ShippedSpeciesLoad()
     {
-        Assert.Equal(12, Shipped.Animals.Count);
+        Assert.Equal(18, Shipped.Animals.Count);
         Assert.NotNull(Shipped.Find("deer"));
         Assert.Equal(Shipped.IndexOf("deer"), Shipped.Animals.IndexOf(Shipped.Find("deer")!));
         Assert.Equal(-1, Shipped.IndexOf("dragon"));
@@ -75,25 +107,54 @@ public class AnimalTests
     }
 
     [Fact]
-    public void EveryShippedModelExistsAndHasTheClipsTheClientPlays()
+    public void EveryShippedPublicModelExistsAndHasTheClipsTheClientPlays()
     {
-        foreach (var a in Shipped.Animals)
+        foreach (var (a, model) in AllModels().Where(m => !InPrivatePack(m.Model)))
         {
-            var path = Path.Combine(AssetsDir(), a.Model);
+            var path = Path.Combine(AssetsDir(), model);
             Assert.True(File.Exists(path), $"{a.Id}: {path} is missing");
-            var bytes = File.ReadAllBytes(path);
-            using var doc = JsonDocument.Parse(bytes.AsMemory(20, BitConverter.ToInt32(bytes, 12)));
-            var clips = doc.RootElement.GetProperty("animations").EnumerateArray().Select(c => c.GetProperty("name").GetString()).ToHashSet();
-            foreach (var clip in AnimalRules.Clips) Assert.True(clips.Contains(clip), $"{a.Id}: no clip {clip}");
+            AssertHasTheClipsItPlays(a, model, path);
         }
     }
 
     [Fact]
-    public void EveryShippedModelIsInTheManifest()
+    public void EveryShippedPrivateModelIsInThePackWhenThePackIsHereAndHasTheClipsTheClientPlays()
+    {
+        Assert.Contains(AllModels(), m => InPrivatePack(m.Model)); // the pets: the check below has something to look at
+        if (PrivateDir() is not { } dir) return; // a machine without the paid packs: the client draws a box for these, nothing to check
+        foreach (var (a, model) in AllModels().Where(m => InPrivatePack(m.Model)))
+        {
+            var path = Path.Combine(dir, model);
+            Assert.True(File.Exists(path), $"{a.Id}: {path} is missing from the private pack (rebuild it: assets-private/synty/tools/build_pets.sh)");
+            AssertHasTheClipsItPlays(a, model, path);
+        }
+    }
+
+    [Fact]
+    public void EveryShippedPetHitBoxIsTheMeasuredSizeOfItsModelWhenThePackIsHere()
+    {
+        if (PrivateDir() is not { } dir || !File.Exists(Path.Combine(dir, "synty/glb/pets/manifest.json"))) return;
+        using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "synty/glb/pets/manifest.json")));
+        var measured = doc.RootElement.EnumerateArray().Where(e => e.GetProperty("kind").GetString() == "animal")
+            .ToDictionary(e => "synty/glb/pets/" + e.GetProperty("file").GetString(), e => e.GetProperty("size_m").EnumerateArray().Select(x => x.GetSingle()).ToArray());
+        foreach (var a in Shipped.Animals.Where(a => InPrivatePack(a.Model)))
+        {
+            for (var variant = 0; variant < a.VariantCount; variant++)
+            {
+                var model = a.ModelOf(variant);
+                Assert.True(measured.TryGetValue(model, out var size), $"{model} is not in the pack's manifest");
+                var box = a.HitBoxOf(variant);
+                for (var k = 0; k < 3; k++) Assert.InRange(box[k], size![k] - Math.Max(size[k] * 0.05f, 0.01f), size[k] + Math.Max(size[k] * 0.05f, 0.01f)); // written to the centimetre
+            }
+        }
+    }
+
+    [Fact]
+    public void EveryShippedPublicModelIsInTheManifest()
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(AssetsDir(), "manifest.json")));
         var files = doc.RootElement.GetProperty("unverified_models").EnumerateArray().Select(m => m.GetProperty("file").GetString()).ToHashSet();
-        foreach (var a in Shipped.Animals) Assert.Contains(a.Model, files);
+        foreach (var (_, model) in AllModels().Where(m => !InPrivatePack(m.Model))) Assert.Contains(model, files);
     }
 
     [Fact]
@@ -103,7 +164,7 @@ public class AnimalTests
         {
             Assert.True(a.Hp is > 0 and <= 255, a.Id);
             Assert.Equal(3, a.HitBox.Count);
-            Assert.True(a.HitBox[1] is > 0.3f and < 3f, $"{a.Id}: height {a.HitBox[1]} m");
+            for (var v = 0; v < a.VariantCount; v++) Assert.True(a.HitBoxOf(v)[1] is > 0.05f and < 3f, $"{a.Id}: height {a.HitBoxOf(v)[1]} m");
             Assert.True(a.RunSpeed > a.WalkSpeed, a.Id);
         }
     }
