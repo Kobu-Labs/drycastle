@@ -19,14 +19,14 @@ public static class PetRules
 
     public static bool IsHitId(ushort id) => id >= FirstHitId && id < FirstHitId + HitIdCount;
 
-    /// <summary>A pet's hit volume is the player capsule scaled to the species' hit box height (a head hit counts as a body hit).</summary>
+    /// <summary>A pet's hit volume is the player capsule scaled to the height of its own hit box (its variant's, else the species'; a head hit counts as a body hit).</summary>
     public static HitTarget TargetOf(ushort hitId, Animal pet) =>
-        new(hitId, pet.Position, Stance.Stand, pet.Yaw, HeadGuarded: true, Scale: pet.Def.HitBox[1] / PlayerHitBox.StandHeight);
+        new(hitId, pet.Position, Stance.Stand, pet.Yaw, HeadGuarded: true, Scale: pet.HitBox[1] / PlayerHitBox.StandHeight);
 }
 
 /// <summary>
 /// The pets of a match: <see cref="Populate"/> picks property groups by pets.json's rules and puts pets into each group's <see cref="Pen"/>, as
-/// <see cref="Animal"/> world entities that never leave it. A pet can be shot dead (nothing scores, nothing replaces it this round) and leaves poop
+/// <see cref="Animal"/> world entities that never leave it. A pet can be shot dead (nothing scores, nothing replaces it this round; one that dies of one hit leaves no corpse) and leaves poop
 /// on a clock of its own (<see cref="PoopSchedule"/>, kept per group by <see cref="PoopBook"/>). Godot-free; the server supplies the ground and calls
 /// <see cref="Update"/> each tick.
 /// </summary>
@@ -186,6 +186,7 @@ public sealed class PetKeeper : IAnimalHits
     {
         if (!_byHit.TryGetValue(hitId, out var pet) || !pet.Animal.Alive || !(amount > 0)) return DamageResult.Ignored;
         pet.Animal.OnDamage(amount, attacker);
+        if (pet.Animal.Ended is { } reason) _entities.Despawn(pet.Entity, reason); // a one-hit pet leaves no corpse: it is gone before the next tick
         return pet.Animal.Alive ? DamageResult.Damaged : DamageResult.Killed;
     }
 

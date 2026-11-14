@@ -11,7 +11,9 @@
     { "id": "dog", "weight": 4 },
     { "id": "cat", "weight": 3 },
     { "id": "hen", "weight": 2 },
-    { "id": "chicken", "weight": 2 }
+    { "id": "rooster", "weight": 1 },
+    { "id": "chick", "weight": 1 },
+    { "id": "duck", "weight": 1 }
   ],
   // Pinned pets: a named property group keeps these on top of the random ones. Each round, each of "count" (default 1) pets of "species"
   // (any id of animals.json) is there with "chance" (default 1). Rolled first, so "max_pets" never starves them; they count towards it.

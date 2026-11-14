@@ -3,7 +3,7 @@ using System.Numerics;
 namespace Drycastle.ShooterCore;
 
 /// <summary>What an animal is doing; the low three bits of its replicated state byte (the clients pick the clip from it).</summary>
-public enum AnimalState : byte { Idle = 0, Eat = 1, Walk = 2, Flee = 3, Dead = 4 }
+public enum AnimalState : byte { Idle = 0, Eat = 1, Walk = 2, Flee = 3, Dead = 4, Sit = 5, Bark = 6 }
 
 /// <summary>Animal world entity rules: the wire type id and the state byte the clients read.</summary>
 public static class AnimalRules
@@ -21,13 +21,6 @@ public static class AnimalRules
 
     public static AnimalState StateOf(byte state) => (AnimalState)(state & StateMask);
     public static bool HitToggled(byte state) => (state & HitToggle) != 0;
-
-    /// <summary>The clips every animal of the pack has (the plain names; the same clips also exist under an "AnimalArmature|" prefix, which is not used).</summary>
-    public const string ClipIdle = "Idle", ClipIdleAlt = "Idle_2", ClipEat = "Eating", ClipWalk = "Walk", ClipRun = "Gallop",
-        ClipDeath = "Death", ClipHitLeft = "Idle_HitReact_Left", ClipHitRight = "Idle_HitReact_Right";
-
-    /// <summary>Every clip the client plays, for the check that a model really has them.</summary>
-    public static readonly string[] Clips = { ClipIdle, ClipIdleAlt, ClipEat, ClipWalk, ClipRun, ClipDeath, ClipHitLeft, ClipHitRight };
 
     public static void Register(WorldEntityRegistry registry)
     {
@@ -49,9 +42,10 @@ public interface IAnimalWorld
 }
 
 /// <summary>
-/// An animal (ambient wildlife or livestock). It stands, eats, wanders around the spot it spawned at, runs from threats
-/// and from the shot that hurt it (a species with <see cref="AnimalDef.Flees"/> off, like a pet, never runs), and dies when its hit points run out: it then lies for
-/// <see cref="AnimalsFile.CorpseSeconds"/> (its death clip plays) and is removed. Godot-free and deterministic for a seed.
+/// An animal (ambient wildlife, livestock or a pet). It stands, eats, wanders around the spot it spawned at, runs from threats
+/// and from the shot that hurt it (a species with <see cref="AnimalDef.Flees"/> off, like a pet, never runs), now and then sits or barks (species that opt in with
+/// <see cref="AnimalDef.Sit"/>, <see cref="AnimalDef.Bark"/>), and dies when its hit points run out: it then lies for
+/// <see cref="AnimalsFile.CorpseSeconds"/> (its death clip plays) and is removed. A <see cref="AnimalDef.OneHit"/> species dies from any hit and is removed at once. Godot-free and deterministic for a seed.
 /// A world entity of type <see cref="AnimalRules.TypeId"/>; the species index travels in the owner field of its state.
 /// </summary>
 public sealed class Animal : IWorldEntity
@@ -62,16 +56,20 @@ public sealed class Animal : IWorldEntity
 
     /// <summary>Who may follow whom. Idle is the hub: an animal stands, then eats or walks, and goes back to standing; a threat (or a hit that did not kill) sends any living state to Flee; Flee only ends by calming down into Idle.</summary>
     public static readonly StateMachineSpec<AnimalState> Spec = StateMachineSpec<AnimalState>.Define(
-            "Animal.Behaviour", "What an animal is doing: stand, eat, wander, run from a threat or a shot, lie dead until the corpse is removed.", AnimalState.Idle)
-        .Allow(AnimalState.Idle, AnimalState.Eat, AnimalState.Walk, AnimalState.Flee, AnimalState.Dead)
+            "Animal.Behaviour", "What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot, lie dead until the corpse is removed.", AnimalState.Idle)
+        .Allow(AnimalState.Idle, AnimalState.Eat, AnimalState.Walk, AnimalState.Sit, AnimalState.Bark, AnimalState.Flee, AnimalState.Dead)
         .Allow(AnimalState.Eat, AnimalState.Idle, AnimalState.Flee, AnimalState.Dead)
+        .Allow(AnimalState.Sit, AnimalState.Idle, AnimalState.Flee, AnimalState.Dead)
+        .Allow(AnimalState.Bark, AnimalState.Idle, AnimalState.Flee, AnimalState.Dead)
         .Allow(AnimalState.Walk, AnimalState.Idle, AnimalState.Flee, AnimalState.Dead)
         .Allow(AnimalState.Flee, AnimalState.Idle, AnimalState.Dead)
-        .Note(AnimalState.Idle, "Stands for a random while (clock: idle seconds), then Choose: eat, or walk to a spot near home.")
+        .Note(AnimalState.Idle, "Stands for a random while (clock: idle seconds), then Choose: sit or bark (species that opt in), eat, or walk to a spot near home.")
         .Note(AnimalState.Eat, "Grazes (clock: eat seconds), then stands.")
+        .Note(AnimalState.Sit, "Sits for a random while (clock: sit seconds; the client plays sit-down, holds, stands up after), then stands. Species with a sit rule only.")
+        .Note(AnimalState.Bark, "Barks once (clock: the bark clip's length), then stands. Species with a bark rule only.")
         .Note(AnimalState.Walk, "Walks to a wander target (clock: the time budget to arrive, then it gives up and stands).")
         .Note(AnimalState.Flee, "Runs from the threat or the shooter; no clock of its own (calm and alarm timers run beside). Calms down into Idle.")
-        .Note(AnimalState.Dead, "Lies for corpse_seconds (the clock's elapsed time), then the entity ends. Never left.")
+        .Note(AnimalState.Dead, "Lies for corpse_seconds (the clock's elapsed time), then the entity ends; a one-hit species' entity ends at once. Never left.")
         .Build();
 
     // The machine's clock is the behaviour timer: idle and eat count the stand/graze seconds down, walk its time budget to arrive, dead how long it has lain
@@ -124,19 +122,29 @@ public sealed class Animal : IWorldEntity
     public ushort Owner => 0;
     public WorldDespawnReason? Ended { get; private set; }
 
+    /// <summary>The body box [width, height, length]: its variant's own, or the species'.</summary>
+    public IReadOnlyList<float> HitBox => Def.HitBoxOf(Variant);
+
     /// <summary>The body box for hit tests: its centre, half the width, height and length, and the yaw it is turned by (the box's length lies along the heading).</summary>
-    public (Vector3 Centre, Vector3 Half, float Yaw) Bounds =>
-        (Position + Vector3.UnitY * (Def.HitBox[1] / 2), new Vector3(Def.HitBox[0], Def.HitBox[1], Def.HitBox[2]) / 2, Yaw);
+    public (Vector3 Centre, Vector3 Half, float Yaw) Bounds
+    {
+        get
+        {
+            var b = HitBox;
+            return (Position + Vector3.UnitY * (b[1] / 2), new Vector3(b[0], b[1], b[2]) / 2, Yaw);
+        }
+    }
 
     /// <summary>Applies damage (already scaled by the weapon, headshots and range). A dead animal takes none.</summary>
     public void OnDamage(float amount, ushort attacker)
     {
         if (Ended != null || !Alive || !(amount > 0)) return;
-        Hp = MathF.Max(0, Hp - amount);
+        Hp = Def.OneHit ? 0 : MathF.Max(0, Hp - amount);
         if (Hp <= 0)
         {
             _fsm.Enter(AnimalState.Dead);
             Killer = attacker;
+            if (Def.OneHit) Ended = WorldDespawnReason.Destroyed; // no corpse: gone now, the clients show a puff where it stood
             Died?.Invoke(this, attacker);
             return;
         }
@@ -208,11 +216,11 @@ public sealed class Animal : IWorldEntity
         if (State != AnimalState.Flee) Go(AnimalState.Flee);
     }
 
-    /// <summary>Idle and eat: wait out the timer, then decide what to do next.</summary>
+    /// <summary>Idle, eat, sit and bark: wait out the timer; standing then decides what to do next, anything else goes back to standing.</summary>
     void Rest(float dt)
     {
         if (!_fsm.Tick(dt)) return;
-        if (State == AnimalState.Eat)
+        if (State != AnimalState.Idle)
         {
             StandStill();
             return;
@@ -220,10 +228,23 @@ public sealed class Animal : IWorldEntity
         Choose();
     }
 
-    /// <summary>After standing: walk back home when it strayed, otherwise eat or walk to a spot near home. Stands on when no spot has ground.</summary>
+    /// <summary>True with chance <paramref name="p"/>; no chance (a species without the behaviour) draws nothing, so the others' random sequence does not change.</summary>
+    bool Roll(float? p) => p > 0 && _rng.NextDouble() < p;
+
+    /// <summary>After standing: walk back home when it strayed, otherwise sit, bark, eat or walk to a spot near home. Stands on when no spot has ground.</summary>
     void Choose()
     {
         var strayed = HorizontalDistance(Position, Home) > Def.WanderRadius;
+        if (!strayed && Def.Sit is { } sit && Roll(sit.Chance))
+        {
+            Go(AnimalState.Sit, Between(sit.MinSeconds, sit.MaxSeconds));
+            return;
+        }
+        if (!strayed && Def.Bark is { } bark && Roll(bark.Chance))
+        {
+            Go(AnimalState.Bark, bark.Seconds);
+            return;
+        }
         if (!strayed && _rng.NextDouble() < _file.EatChance)
         {
             Go(AnimalState.Eat, Between(_file.EatMinSeconds, _file.EatMaxSeconds));

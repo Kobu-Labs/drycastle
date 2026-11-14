@@ -1,6 +1,6 @@
 namespace Drycastle.ShooterCore;
 
-/// <summary>Another look of a species (animals.json, "variants"): its own model, with the species' scale, hit box and numbers.</summary>
+/// <summary>Another look of a species (animals.json, "variants"): its own model, with the species' numbers; its hit box may differ (a Chihuahua is not a Saint Bernard).</summary>
 public sealed class AnimalVariant
 {
     /// <summary>The asset id that names the species' base model (pets.json "pinned"); no variant may use it.</summary>
@@ -10,6 +10,27 @@ public sealed class AnimalVariant
     public string Id { get; set; } = "";
     /// <summary>The GLB, relative to the asset library, like <see cref="AnimalDef.Model"/>.</summary>
     public string Model { get; set; } = "";
+    /// <summary>The body box of this look, [width, height, length] like <see cref="AnimalDef.HitBox"/>; null: the species' box.</summary>
+    public List<float>? HitBox { get; set; }
+}
+
+/// <summary>Opt-in "sits" behaviour of a species (animals.json, "sit"): from standing it now and then sits for a random while, then stands up again.</summary>
+public sealed class AnimalSit
+{
+    /// <summary>Chance, 0..1, that the next thing after standing still is sitting (rolled first, then barking, then eating; each only for a species that has it).</summary>
+    public float Chance { get; set; }
+    /// <summary>How long it sits, the sit-down and stand-up clips included (the client plays them inside this time and the stand-up just after).</summary>
+    public float MinSeconds { get; set; }
+    public float MaxSeconds { get; set; }
+}
+
+/// <summary>Opt-in "barks" behaviour of a species (animals.json, "bark"): from standing it now and then barks once, then stands on.</summary>
+public sealed class AnimalBark
+{
+    /// <summary>Chance, 0..1, that the next thing after standing still (and not sitting) is a bark.</summary>
+    public float Chance { get; set; }
+    /// <summary>The length of the bark clip: how long it stays in the bark state.</summary>
+    public float Seconds { get; set; }
 }
 
 /// <summary>
@@ -21,7 +42,7 @@ public sealed class AnimalDef
     /// <summary>Lower-case id ("deer", "shiba_inu"); the record of one species in the match and in tests.</summary>
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
-    /// <summary>The GLB, relative to the asset library (assets/), for example "animated-animals/deer.glb".</summary>
+    /// <summary>The GLB, relative to the asset library (assets/), for example "animated-animals/deer.glb"; when it is not there, relative to the private packs (assets-private/, "synty/glb/pets/dog/beagle_01.glb"), and when it is in neither the client draws a box.</summary>
     public string Model { get; set; } = "";
     /// <summary>Uniform scale that brings the model, as it imports, to its real size (the packs are authored about 3 to 5 units tall).</summary>
     public float Scale { get; set; } = 1;
@@ -35,6 +56,12 @@ public sealed class AnimalDef
     public float TurnRateDegPerS { get; set; } = 200;
     /// <summary>False for a pet: it never flees, not from threats nor when shot (a hit still plays its reaction, and still kills). The flee numbers below are then unused.</summary>
     public bool Flees { get; set; } = true;
+    /// <summary>True for a pet that any hit that deals damage kills (whatever its hit points): it then has no hit reaction and no corpse, the entity ends at once and the client shows a puff.</summary>
+    public bool OneHit { get; set; }
+    /// <summary>Null: never sits. Set: the sit behaviour.</summary>
+    public AnimalSit? Sit { get; set; }
+    /// <summary>Null: never barks. Set: the bark behaviour.</summary>
+    public AnimalBark? Bark { get; set; }
     /// <summary>A threat (a player or a vehicle) closer than this makes the animal flee.</summary>
     public float FleeRadius { get; set; }
     /// <summary>How far from where it spawned the animal wanders. It walks back when a flight took it further out.</summary>
@@ -49,6 +76,9 @@ public sealed class AnimalDef
 
     /// <summary>The model of a variant index (0 or out of range: the base model).</summary>
     public string ModelOf(int variant) => variant >= 1 && variant <= Variants.Count ? Variants[variant - 1].Model : Model;
+
+    /// <summary>The body box of a variant index (0 or out of range: the species' box; a variant without its own: the species' box).</summary>
+    public IReadOnlyList<float> HitBoxOf(int variant) => variant >= 1 && variant <= Variants.Count && Variants[variant - 1].HitBox is { } b ? b : HitBox;
 
     /// <summary>The variant index of an asset id: a variant's id (1 up), or -1.</summary>
     public int VariantIndex(string asset) => Variants.FindIndex(v => v.Id == asset) is >= 0 and var i ? i + 1 : -1;
@@ -125,8 +155,13 @@ public sealed class AnimalsFile : IVersioned
                     throw new DataFileException($"{F}: {a.Id}: a variant id is lower case letters, digits and underscores, unique in the species");
                 if (v.Id == AnimalVariant.BaseAssetId) throw new DataFileException($"{F}: {a.Id}: variant id \"{AnimalVariant.BaseAssetId}\" is reserved for the base model");
                 if (!v.Model.EndsWith(".glb", StringComparison.Ordinal)) throw new DataFileException($"{F}: {a.Id}: variant {v.Id}: model must be a .glb path in the asset library");
+                if (v.HitBox is { } vb && (vb.Count != 3 || vb.Any(x => !(x > 0)))) throw new DataFileException($"{F}: {a.Id}: variant {v.Id}: hit_box is [width, height, length], all positive");
             }
             if (a.HitBox.Count != 3 || a.HitBox.Any(x => !(x > 0))) throw new DataFileException($"{F}: {a.Id}: hit_box is [width, height, length], all positive");
+            if (a.Sit is { } sit && (sit.Chance is < 0 or > 1 || !(sit.MinSeconds > 0) || sit.MaxSeconds < sit.MinSeconds))
+                throw new DataFileException($"{F}: {a.Id}: sit chance is 0..1, min_seconds positive and not above max_seconds");
+            if (a.Bark is { } bark && (bark.Chance is < 0 or > 1 || !(bark.Seconds > 0)))
+                throw new DataFileException($"{F}: {a.Id}: bark chance is 0..1, seconds positive");
         }
         return f;
     }

@@ -563,7 +563,7 @@ public class PetTests
     }
 
     [Fact]
-    public void APetIsAHitTargetAndDiesOfEnoughDamageWithoutScoring()
+    public void APetIsAHitTargetAndDiesOfOneHitWithoutScoring()
     {
         var (keeper, _, _) = MakeKeeper(PetsFile.Parse(GoodPets.Replace("\"group_chance\":0.5", "\"group_chance\":1")));
         keeper.Populate(Pens(1), new FlatWorld());
@@ -574,14 +574,14 @@ public class PetTests
         Assert.True(PetRules.IsHitId(t.Id));
         Assert.True(t.HeadGuarded);
         var pet = keeper.Pets.First();
-        Assert.InRange(t.Scale * PlayerHitBox.StandHeight, pet.Def.HitBox[1] - 0.001f, pet.Def.HitBox[1] + 0.001f);
-        Assert.Equal(DamageResult.Damaged, keeper.Hit(t.Id, 1, 5));
-        Assert.NotEqual(AnimalState.Flee, pet.State); // never runs
+        Assert.InRange(t.Scale * PlayerHitBox.StandHeight, pet.HitBox[1] - 0.001f, pet.HitBox[1] + 0.001f); // the box of its own look
+        Assert.True(pet.Def.OneHit);
         ushort by = 0;
         keeper.Killed += (_, k) => by = k;
-        Assert.Equal(DamageResult.Killed, keeper.Hit(t.Id, 9, 5000));
+        Assert.Equal(DamageResult.Killed, keeper.Hit(t.Id, 9, 1)); // one hit of any size kills; it never ran
         Assert.Equal((ushort)9, by);
-        Assert.Equal(DamageResult.Ignored, keeper.Hit(t.Id, 1, 5)); // a corpse takes nothing
+        Assert.Equal(AnimalState.Dead, pet.State);
+        Assert.Equal(DamageResult.Ignored, keeper.Hit(t.Id, 1, 5)); // gone, nothing left to hit
         var left = new List<HitTarget>();
         keeper.AddTargets(left);
         Assert.DoesNotContain(left, x => x.Id == t.Id);

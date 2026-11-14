@@ -5,9 +5,11 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// Animals on the client (#254): the world entities of type <see cref="AnimalRules.TypeId"/>. Each is drawn as its species'
-/// model (animals.json) and plays the clip of the state the server sends: idle, eating, walking, galloping, a hit reaction when
-/// a hit that did not kill lands, and the death clip, whose last frame holds while the body lies. Without a model (headless,
-/// or the file is missing) a box of the species' size stands in. The server owns the animal; the client only shows it.
+/// model (animals.json; looked up in the asset library, then the private packs) and plays the clip of the state the server sends: idle, eating,
+/// walking, running, sitting (sit-down, hold, stand-up when it ends), barking once, a hit reaction when a hit that did not kill lands, and the
+/// death clip, whose last frame holds while the body lies. The clips are found by <see cref="AnimalClips"/> (the pet packs and the animal pack name
+/// them differently). A one-hit pet is simply despawned by the server (<see cref="WorldDespawnReason.Destroyed"/>) and leaves a puff. Without a model
+/// (headless, or the file is missing) a box of the model's hit box stands in. The server owns the animal; the client only shows it.
 /// </summary>
 public partial class NetClient
 {
@@ -19,6 +21,10 @@ public partial class NetClient
         public Node3D Node = null!;
         public AnimationPlayer? Anim;
         public AnimalDef Def = null!;
+        /// <summary>The model's name for each <see cref="AnimalClip"/> (indexed by it), null where it has none; empty without a model.</summary>
+        public string?[] Clips = Array.Empty<string?>();
+        /// <summary>The body box of the look: for the puff's size.</summary>
+        public IReadOnlyList<float> HitBox = Array.Empty<float>();
         /// <summary>The state whose clip is showing; 255 = none yet.</summary>
         public byte Shown = 255;
         public bool Toggle;
@@ -37,6 +43,7 @@ public partial class NetClient
     {
         AnimalRules.Register(WorldEntityRegistry.Shared);
         WorldEntities.Spawned += OnAnimalSpawned;
+        WorldEntities.DespawnedFor += OnAnimalDespawnedFor;
         WorldEntities.Despawned += OnAnimalDespawned;
     }
 
@@ -50,9 +57,12 @@ public partial class NetClient
             return;
         }
         var def = AnimalData.Animals[species];
+        var variant = AnimalRules.VariantOf(e.State.Owner);
+        var box = def.HitBoxOf(variant);
         var node = new Node3D { Name = $"Animal{e.Id}" };
         AnimationPlayer? anim = null;
-        if (ModelLib.Instance(def.ModelOf(AnimalRules.VariantOf(e.State.Owner))) is { } model)
+        var clips = Array.Empty<string?>();
+        if (ModelLib.Instance(def.ModelOf(variant)) is { } model)
         {
             model.Scale = Vector3.One * def.Scale;
             model.RotationDegrees = new Vector3(0, def.ModelYawDeg, 0);
@@ -60,19 +70,26 @@ public partial class NetClient
             anim = model.FindChildren("*", "AnimationPlayer", true, false).FirstOrDefault() as AnimationPlayer;
             if (anim != null)
             {
-                foreach (var n in new[] { AnimalRules.ClipIdle, AnimalRules.ClipIdleAlt, AnimalRules.ClipEat, AnimalRules.ClipWalk, AnimalRules.ClipRun })
-                    if (anim.HasAnimation(n)) anim.GetAnimation(n).LoopMode = Animation.LoopModeEnum.Linear;
-                foreach (var n in new[] { AnimalRules.ClipDeath, AnimalRules.ClipHitLeft, AnimalRules.ClipHitRight })
-                    if (anim.HasAnimation(n)) anim.GetAnimation(n).LoopMode = Animation.LoopModeEnum.None;
+                clips = AnimalClips.Resolve(n => anim.HasAnimation(n));
+                for (var c = 0; c < clips.Length; c++)
+                    if (clips[c] is { } name) anim.GetAnimation(name).LoopMode = AnimalClips.Loops((AnimalClip)c) ? Animation.LoopModeEnum.Linear : Animation.LoopModeEnum.None;
             }
         }
         else
         {
-            var (w, h, l) = (def.HitBox[0], def.HitBox[1], def.HitBox[2]);
+            var (w, h, l) = (box[0], box[1], box[2]);
             node.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(w, h, l) }, Position = new Vector3(0, h / 2, 0) });
         }
         Owned.AddChild(node);
-        _animals[e.Id] = new AnimalView { Node = node, Anim = anim, Def = def, Toggle = AnimalRules.HitToggled(e.State.State) };
+        _animals[e.Id] = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Toggle = AnimalRules.HitToggled(e.State.State) };
+    }
+
+    /// <summary>A pet that died of a hit (it has no corpse) goes in a puff where it stood; an animal that expired or was removed just leaves. Runs before <see cref="OnAnimalDespawned"/> frees the node.</summary>
+    void OnAnimalDespawnedFor(ushort id, WorldDespawnReason reason)
+    {
+        if (reason != WorldDespawnReason.Destroyed || !_animals.TryGetValue(id, out var v)) return;
+        var height = v.HitBox.Count == 3 ? v.HitBox[1] : 0.5f;
+        PetFx.Puff(Owned, v.Node.GlobalPosition + Vector3.Up * (height / 2), height);
     }
 
     void OnAnimalDespawned(ushort id)
@@ -112,9 +129,9 @@ public partial class NetClient
 
     void PlayAnimalHit(AnimalView v, double now)
     {
-        var clip = v.HitLeft ? AnimalRules.ClipHitLeft : AnimalRules.ClipHitRight;
+        var clip = v.Clips.Length == 0 ? null : v.Clips[(int)(v.HitLeft ? AnimalClip.HitLeft : AnimalClip.HitRight)];
         v.HitLeft = !v.HitLeft;
-        if (v.Anim == null || !v.Anim.HasAnimation(clip)) return;
+        if (v.Anim == null || clip == null) return;
         v.Anim.Play(clip, 0.05);
         v.HitUntil = now + Math.Min(v.Anim.GetAnimation(clip).Length, AnimalHitReactMaxSeconds);
         v.Shown = 254; // the state's clip is due again when the reaction is over
@@ -122,18 +139,36 @@ public partial class NetClient
 
     static void ShowAnimalState(AnimalView v, AnimalState state)
     {
-        var first = v.Shown == 255;
+        var was = v.Shown;
+        var first = was == 255;
         v.Shown = (byte)state;
-        if (v.Anim == null) return;
+        if (v.Anim == null || v.Clips.Length == 0) return;
+        string? Clip(AnimalClip c) => v.Clips[(int)c];
+        if (state == AnimalState.Sit)
+        {
+            // sits down, then holds the sat pose; one that was already sitting when we saw it just sits
+            if (Clip(AnimalClip.SitIdle) is not { } hold) return;
+            if (!first && Clip(AnimalClip.SitStart) is { } down) { v.Anim.Play(down, 0.2); v.Anim.Queue(hold); }
+            else v.Anim.Play(hold, 0.2);
+            return;
+        }
         var clip = state switch
         {
-            AnimalState.Eat => AnimalRules.ClipEat,
-            AnimalState.Walk => AnimalRules.ClipWalk,
-            AnimalState.Flee => AnimalRules.ClipRun,
-            AnimalState.Dead => AnimalRules.ClipDeath,
-            _ => GD.Randf() < 0.25f ? AnimalRules.ClipIdleAlt : AnimalRules.ClipIdle,
+            AnimalState.Eat => Clip(AnimalClip.Eat),
+            AnimalState.Walk => Clip(AnimalClip.Walk),
+            AnimalState.Flee => Clip(AnimalClip.Run),
+            AnimalState.Dead => Clip(AnimalClip.Death),
+            AnimalState.Bark => Clip(AnimalClip.Bark),
+            _ => Clip(GD.Randf() < 0.25f ? AnimalClip.IdleAlt : AnimalClip.Idle),
         };
-        if (!v.Anim.HasAnimation(clip)) return;
+        if (clip == null) return;
+        if (was == (byte)AnimalState.Sit && state == AnimalState.Idle && Clip(AnimalClip.SitUp) is { } up)
+        {
+            // the sit ended: it stands up, then stands (the server keeps it still for at least the idle time)
+            v.Anim.Play(up, 0.2);
+            v.Anim.Queue(clip);
+            return;
+        }
         v.Anim.Play(clip, state == AnimalState.Dead ? 0.1 : 0.2);
         // an animal that was already dead when we saw it lies in its final pose; one that dies in front of us falls
         if (state == AnimalState.Dead && first) v.Anim.Seek(v.Anim.GetAnimation(clip).Length, true);
