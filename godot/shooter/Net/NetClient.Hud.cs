@@ -85,7 +85,12 @@ public partial class NetClient
         _hud?.SetHealth(Mathf.CeilToInt(_me?.Health ?? 100));
         _hud?.CoverCrosshair(_chooser.IsOpen);
         if (_me != null) _me.MoveWithFreeMouse = (_hud?.EquipmentOpen ?? false) || (_hud?.TacticalMapOpen ?? false); // the Equipment screen and the tactical map free the mouse, not the legs (#268)
-        if (_hud is { EquipmentOpen: true } && (MenuOpen?.Invoke() == true || ChooserOpen)) _hud.CloseEquipment(); // a menu or the corpse chooser takes the screen
+        if (_hud is { EquipmentOpen: true } or { TacticalMapOpen: true })
+        {
+            var overlays = _hud.Overlays(MenuOpen?.Invoke() == true, ChooserOpen); // a menu or the corpse chooser takes the screen from the Equipment screen, a menu from the map
+            if (_hud.EquipmentOpen && OverlayArbiter.YieldsToMenu(Overlay.Equipment, overlays)) _hud.CloseEquipment();
+            if (_hud.TacticalMapOpen && OverlayArbiter.YieldsToMenu(Overlay.TacticalMap, overlays)) _hud.CloseTacticalMap();
+        }
         UavTick();
         if (_me != null) Rozhlas.Current?.SetListener(_me.GlobalPosition); // the loudspeaker is heard where the player is, not where a vehicle's orbiting camera is
         if (_me != null) _hud?.SetBreath(Breath.AirLeft(_me.State), _me.HeadUnder);

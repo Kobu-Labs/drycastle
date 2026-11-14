@@ -56,7 +56,7 @@ public partial class NetClient
     bool HandleChatInput(InputEvent e)
     {
         if (_hud == null || Bot || e is not InputEventKey { Pressed: true, Echo: false } k) return false;
-        if (_hud.ChatOpen || MenuOpen?.Invoke() == true) return false;
+        if (!OverlayArbiter.CanOpenChat(_hud.ChatOpen, MenuOpen?.Invoke() == true)) return false;
         var slash = k.Unicode == '/';
         if (!slash && !e.IsActionPressed("chat")) return false;
         _hud.OpenChat(slash ? "/" : "");

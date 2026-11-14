@@ -26,8 +26,9 @@ public sealed partial class TacticalMap : Control
     MapBase? _base;
     ImageTexture? _tex;
     int _texSide;
-    bool _open, _layoutDirty = true;
-    float _alpha;
+    PanelFade _fade; // open/close and the alpha: the same fade as the Equipment screen's
+    bool _layoutDirty = true;
+    bool _open => _fade.Wanted;
     Vector2 _laidOutFor;
     /// <summary>Side of the square map in HUD units, HUD units per metre, the grid cell in metres and the cells per side.</summary>
     float _side, _k, _cell;
@@ -104,41 +105,39 @@ public sealed partial class TacticalMap : Control
         _shownCell = (-1, -1); _shownHeading = -1; _shownNone = false;
         _cursorShown = false;
         _layoutDirty = true;
-        _open = true;
+        var reduce = GameSettings.Current.ReduceMotion;
+        _fade.Show(reduce);
         Visible = true;
         SetProcess(true);
         SetProcessInput(true);
-        if (GameSettings.Current.ReduceMotion) SetAlpha(1f);
+        ApplyAlpha(); // always: the Modulate starts opaque, and a map opened without reduce motion fades in from the stored alpha (the Equipment screen did this already)
     }
 
     /// <summary>Starts hiding the map (a short fade, none with reduce motion). It stops processing once it is gone.</summary>
     public void Close()
     {
-        _open = false;
+        var finished = _fade.Hide(GameSettings.Current.ReduceMotion);
         SetProcessInput(false);
-        if (GameSettings.Current.ReduceMotion) FinishClose();
+        if (finished) FinishClose();
     }
 
-    void SetAlpha(float a)
-    {
-        _alpha = a;
-        Modulate = new Color(1, 1, 1, a);
-    }
+    void ApplyAlpha() => Modulate = new Color(1, 1, 1, _fade.Alpha);
 
+    /// <summary>The fade is over (its alpha is zero): hide the map and stop processing.</summary>
     void FinishClose()
     {
-        SetAlpha(0f);
+        ApplyAlpha();
         Visible = false;
         SetProcess(false);
     }
 
     public override void _Process(double delta)
     {
-        var target = _open ? 1f : 0f;
-        if (!Mathf.IsEqualApprox(_alpha, target)) SetAlpha(Mathf.MoveToward(_alpha, target, (float)delta / ShooterTheme.MapFadeSeconds));
+        var (changed, finished) = _fade.Tick((float)delta, ShooterTheme.MapFadeSeconds);
+        if (changed) ApplyAlpha();
         if (!_open)
         {
-            if (_alpha <= 0f) FinishClose();
+            if (finished) FinishClose();
             return; // fading out: nothing else changes
         }
         if (_layoutDirty || Size != _laidOutFor) Layout();
