@@ -9,7 +9,7 @@ using Drycastle.MapLoader;
 /// <summary>
 /// Map viewer root. Loads the map, adds light and sky, spawns the player.
 /// Options (after "--"): --map DIR, --seed N, --smoke, --screenshot PATH,
-/// --view overview|oblique|street|player, --frames N, --assets DIR, --watch, --edits PATH,
+/// --view overview|oblique|street|player, --frames N, --topdown PNG [--topdown-mpp M --topdown-tile PX] (whole map from above, Viewer.TopDown.cs), --assets DIR, --watch, --edits PATH,
 /// --state PATH, --edit-smoke --edit-smoke-plan FILE, --regions-smoke --regions-smoke-plan FILE,
 /// --editor (editor mode, implies --watch; F2 toggles walk/editor), --editor-smoke --editor-smoke-plan FILE,
 /// --panel-smoke --panel-smoke-plan FILE (Fence panel), --objects-smoke --objects-smoke-plan FILE (objects, gizmo, undo), --region-editor-smoke --region-editor-smoke-plan FILE (Region tool),
@@ -59,7 +59,7 @@ public partial class Viewer : Node3D
                  $"colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} " +
                  $"visual_triangles={s.Triangles} load_time={s.LoadSeconds:F2}s");
 
-        AddEnvironment();
+        if (_opts.ContainsKey("topdown")) AddTopDownEnvironment(); else AddEnvironment();
         _player = new Player { Name = "Player" };
         AddChild(_player);
 
@@ -101,6 +101,7 @@ public partial class Viewer : Node3D
         else if (_flags.Contains("edit-smoke")) _ = RunEditSmoke();
         else if (_flags.Contains("regions-smoke")) _ = RunRegionsSmoke();
         else if (_flags.Contains("smoke")) _ = RunSmoke(rng);
+        else if (_opts.ContainsKey("topdown")) _ = RunTopDown();
         else if (_opts.ContainsKey("screenshot")) _ = RunScreenshot();
     }
 

@@ -176,6 +176,13 @@ viewer-shot:
 	godot --path godot/viewer --resolution 1600x900 -- --view street --screenshot $(abspath out/screens)/street.png $(MAP_ARG)
 	godot --path godot/viewer --resolution 1600x900 -- --view player --seed $(SEED) --screenshot $(abspath out/screens)/player.png $(MAP_ARG)
 
+# The whole map from above (orthographic, north up) as one PNG + .json with its extent: the tactical map's real colours.
+# CI attaches it to the release (release.yml, job tactical-map). TOPDOWN_MPP = metres per pixel. Output: out/tactical-map.png
+TOPDOWN_MPP ?= 1
+tactical-map:
+	dotnet build godot/viewer/viewer.csproj
+	godot --path godot/viewer --rendering-method gl_compatibility --resolution 256x256 -- $(MAP_ARG) --topdown $(abspath out/tactical-map.png) --topdown-mpp $(TOPDOWN_MPP)
+
 # 64-client netcode spike (see godot/netspike/README in the main README). Needs a map folder:
 # MAP=/path/to/out/village/map or DRYCASTLE_MAP. Results go to out/netspike/<timestamp>/.
 NETSPIKE_MAP = $(if $(MAP),--map $(abspath $(MAP)),)

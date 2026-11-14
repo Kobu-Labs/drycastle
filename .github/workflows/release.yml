@@ -1,7 +1,8 @@
 # Release pipeline. Merging a PR into the `release` branch (usually main -> release):
 #   build   tests, Windows + Linux + macOS game zips, server export with the map
 #   deploy  rsync + docker compose to the production VPS (environment `production`: secrets, optional required reviewers)
-#   publish GitHub release vX (stable channel): game zips + launcher zips + manifest.json, which the launcher reads (docs/launcher.md)
+#   tactical-map top-down render of the map (tactical-map.png + .json), best effort
+#   publish GitHub release vX (stable channel): game zips + launcher zips + tactical map + manifest.json, which the launcher reads (docs/launcher.md)
 # Clients only see the new release after the server is live. A manual run on any other branch skips deploy and publishes a `dev-<run>` prerelease.
 name: release
 on:
@@ -70,6 +71,38 @@ jobs:
           path: out/shooter/linux-server
           if-no-files-found: error
 
+  # The world seen from above, for the tactical map's real colours (Viewer.TopDown.cs). Software GL on a virtual display.
+  # Never blocks a release: if it fails the release goes out without these two files (the publish job only warns).
+  tactical-map:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 8.0.x }
+      - name: Install Godot mono
+        uses: ./.github/actions/setup-godot
+      - name: Software GL and a virtual display
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 libegl1
+      - name: Download the map named in map-version.txt
+        run: |
+          mkdir -p "$RUNNER_TEMP/map" out/village/map
+          gh release download "$(tr -d '[:space:]' < map-version.txt)" --pattern map.zip --pattern map.json --dir "$RUNNER_TEMP/map"
+          unzip -q "$RUNNER_TEMP/map/map.zip" -d out/village/map
+      - name: Render
+        run: |
+          dotnet build godot/viewer/viewer.csproj
+          xvfb-run -a -s "-screen 0 1280x720x24" godot --path godot/viewer --rendering-driver opengl3 --rendering-method gl_compatibility --resolution 256x256 \
+            -- --map "$PWD/out/village/map" --topdown "$PWD/out/tactical/tactical-map.png" --topdown-mpp 1 | tee render.log
+          grep -q 'topdown: saved' render.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tactical-map
+          path: |
+            out/tactical/tactical-map.png
+            out/tactical/tactical-map.png.json
+          if-no-files-found: error
+
   deploy:
     needs: build
     if: github.ref == 'refs/heads/release'
@@ -113,7 +146,7 @@ jobs:
         run: deploy/deploy.sh "$DEPLOY_HOST"
 
   publish:
-    needs: [build, deploy]
+    needs: [build, deploy, tactical-map]
     # deploy is skipped on manual dev runs; anything else must have succeeded
     if: ${{ !cancelled() && needs.build.result == 'success' && (needs.deploy.result == 'success' || needs.deploy.result == 'skipped') }}
     runs-on: ubuntu-latest
@@ -123,6 +156,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: release-assets
+          path: release-assets
+      - name: Tactical map render (top-down PNG + extent), attached as release assets
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: tactical-map
           path: release-assets
       - name: Fetch the newest launcher build (attached so players find it on the release page)
         run: |

@@ -32,7 +32,9 @@ Merging a PR into the **`release`** branch (open it as `main` -> `release`) runs
 1. **build**: tests, Windows, Linux and macOS game zips, the server export with the map named in `map-version.txt`.
 2. **deploy** (environment `production`): backs up the database on the VPS (`/opt/drycastle/backups/pre-deploy-<sha>.sql`, last 10 kept), then runs `deploy/deploy.sh`
    (rsync plus `docker compose up --wait`; the job fails if the server does not become healthy, and then nothing is published).
-3. **publish**: creates release `v0.<run>` with the game zips and `manifest.json`; the launcher picks it up as the stable channel.
+3. **publish**: creates release `v0.<run>` with the game zips, `manifest.json` and the tactical map render; the launcher picks it up as the stable channel.
+
+A side job, **tactical-map**, renders the map named in `map-version.txt` from straight above (viewer `--topdown`, `godot/viewer/Viewer.TopDown.cs`; software GL under xvfb, 1 m per pixel) into `tactical-map.png` (transparent outside the map) and `tactical-map.png.json` (`origin_x`, `origin_z` = ground x and z of the north-west corner, `width_px`, `height_px`, `metres_per_px`; north is -z). Publish attaches both to the release. It is best effort: if it fails the release still goes out without them. Locally: `make tactical-map` (`TOPDOWN_MPP=2` for a smaller picture). The viewer has no water surface, so water shows as its ground colour. Nothing in the game reads the picture yet.
 
 Clients only learn about the new version after the server is live. Nothing else publishes release assets (a manual run on another branch publishes a `dev-<run>` prerelease without deploying).
 
