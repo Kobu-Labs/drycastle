@@ -148,6 +148,7 @@ def main():
     ap.add_argument("--src", type=Path, default=Path.home() / "downloads", help="folder with 'New Recording*.mov'")
     ap.add_argument("--out", type=Path, default=ROOT / "assets-private/audio/thieves/voice")
     ap.add_argument("--only", type=int, default=0, help="bake only line N (1 = 'New Recording.mov')")
+    ap.add_argument("--voice", type=Path, default=VOICE_FILE, help="another chain file to try (default: the game's thief_voice.json)")
     ap.add_argument("--keep-wavs", action="store_true", help="keep the dry and processed wavs (in OUT/parts) for listening")
     a = ap.parse_args()
     for tool in ("ffmpeg", "ffprobe"):
@@ -156,7 +157,7 @@ def main():
     files = recordings(a.src.expanduser())
     if a.only and not 1 <= a.only <= len(files):
         sys.exit(f"--only {a.only}: there are {len(files)} recordings")
-    v = load_voice()
+    v = load_voice(a.voice)
     a.out.mkdir(parents=True, exist_ok=True)
     failed = []
     for n, f in enumerate(files, 1):
