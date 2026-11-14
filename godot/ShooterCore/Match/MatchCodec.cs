@@ -165,9 +165,44 @@ public sealed class ClientMatchState
     public Dictionary<ushort, double> SpawnedAt { get; } = new();
     public Dictionary<ushort, double> DiedAt { get; } = new();
     public int RoundsEnded { get; private set; }
+    /// <summary>How many times a round started over: after the end screen, or by an admin's restart while it ran (see <see cref="RoundRestarted"/>).</summary>
     public int Restarts { get; private set; }
     double _timeAt;
     float _timeLeft;
+
+    /// <summary>The one place the phase edge is detected (the first state message counts as an edge, so a view that has drawn nothing yet draws).</summary>
+    Change<byte> _phaseSeen; // the enum's byte: Change<T> wants IEquatable, which an enum is not
+
+    /// <summary>
+    /// The phase changed: (from, to). <c>from</c> is null for the first state message of the connection, so a sound or banner that marks a change (round start,
+    /// round end) can skip it: someone joining mid-round has not seen a round start. Raised after the store is updated.
+    /// </summary>
+    public event Action<MatchPhase?, MatchPhase>? PhaseChanged;
+
+    /// <summary>
+    /// A fresh round began over the old one: the end screen ended, or an admin restarted a running round (<see cref="Restarts"/> counts both). The kill feed is
+    /// already cleared; the HUD clears its own copy here. The wire has no restart flag: see <see cref="IsRestart"/> for how a restart of a running round is told.
+    /// </summary>
+    public event Action? RoundRestarted;
+
+    /// <summary>A running round's remaining time that jumps up by more than this many seconds is a restart (it only runs down); more than any latency difference between two messages.</summary>
+    public const float RestartTimeJump = 3f;
+
+    /// <summary>
+    /// Whether <paramref name="m"/> starts a new round over what the store holds. After the end screen that is the phase change itself. An admin's restart of a
+    /// running round (Running to Running) has no phase change and no flag on the wire, so it is read from what it resets: the time left jumps back up to the
+    /// limit, and the score of someone who is still here falls (kills and deaths only ever rise within a round).
+    /// </summary>
+    bool IsRestart(MatchStateMsg m, double now)
+    {
+        if (Phase == MatchPhase.Ending && m.Phase == MatchPhase.Running) return true;
+        if (Phase != MatchPhase.Running || m.Phase != MatchPhase.Running) return false;
+        if (m.TimeRemaining > TimeRemaining(now) + RestartTimeJump) return true;
+        foreach (var r in m.Rows)
+            foreach (var old in Rows)
+                if (old.Id == r.Id && (r.Kills < old.Kills || r.Deaths < old.Deaths)) return true;
+        return false;
+    }
 
     public float TimeRemaining(double now) => Math.Max(0f, _timeLeft - (float)(now - _timeAt));
 
@@ -176,9 +211,14 @@ public sealed class ClientMatchState
         switch (kind)
         {
             case EventKind.MatchState when MatchCodec.DecodeMatchState(payload) is { } m:
-                if (Phase == MatchPhase.Ending && m.Phase == MatchPhase.Running) { Restarts++; KillFeed.Clear(); }
+                var restarted = IsRestart(m, now);
+                if (restarted) { Restarts++; KillFeed.Clear(); }
                 if (Phase != MatchPhase.Ending && m.Phase == MatchPhase.Ending) RoundsEnded++;
+                var hadPhase = _phaseSeen.HasValue;
+                var changed = _phaseSeen.Update((byte)m.Phase, out var before);
                 Phase = m.Phase; Rows = m.Rows; Winners = m.Winners; Mode = m.Mode; ScoreA = m.ScoreA; ScoreB = m.ScoreB; _timeLeft = m.TimeRemaining; _timeAt = now;
+                if (changed) PhaseChanged?.Invoke(hadPhase ? (MatchPhase)before : null, m.Phase);
+                if (restarted) RoundRestarted?.Invoke();
                 return true;
             case EventKind.Kill when MatchCodec.DecodeKill(payload) is { } k:
                 KillFeed.Add(k);

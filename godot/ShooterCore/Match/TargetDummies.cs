@@ -55,6 +55,9 @@ public static class TargetPlacement
     }
 }
 
+/// <summary>Whether a target dummy stands. The machine is <see cref="TargetDummies.LifeSpec"/>.</summary>
+public enum DummyLife : byte { Standing, Down }
+
 /// <summary>
 /// The live state of the target dummies of one match: health, death, and the respawn timer. Dummies are not in
 /// <see cref="MatchSim"/>'s player roster, so they never count toward the player cap, the scoreboard player count or
@@ -74,12 +77,25 @@ public sealed class TargetDummies
         public string Name = "";
         public TargetSpot Spot;
         public float Health;
-        public bool Alive;
+        /// <summary>The dummy's life machine (<see cref="LifeSpec"/>), the same shape as a player's death and respawn.</summary>
+        public DummyLife Life => _life.Current;
+        readonly StateMachine<DummyLife> _life = new(LifeSpec);
+        /// <summary>Standing: hits register. False while it lies down awaiting <see cref="RespawnAt"/>.</summary>
+        public bool Alive => _life.Is(DummyLife.Standing);
+        internal void SetLife(DummyLife next) => _life.Enter(next);
         /// <summary>Time (seconds, the match clock) at which a dead dummy stands again at its spot.</summary>
         public double RespawnAt;
         /// <summary>Where the dummy lies: its spot, or where a blast or car threw it (the ragdoll). Back on the spot when it stands again.</summary>
         public ThrownBody Body = null!;
     }
+
+    /// <summary>A killed dummy lies down until its respawn time (RespawnDelay, or never when <see cref="Respawns"/> is off), a round start stands every one up.</summary>
+    public static readonly StateMachineSpec<DummyLife> LifeSpec = StateMachineSpec<DummyLife>.Define("Target.Dummy", "A target dummy: standing, or down until it respawns.", DummyLife.Standing)
+        .Allow(DummyLife.Standing, DummyLife.Down)
+        .Allow(DummyLife.Down, DummyLife.Standing)
+        .Note(DummyLife.Standing, "Hits register. Killed by the hit that takes its health to zero.")
+        .Note(DummyLife.Down, "Ignores hits until RespawnAt (the match clock), unless Respawns is off (sandbox): then until the round restarts.")
+        .Build();
 
     readonly List<Dummy> _all = new();
     readonly float _respawnDelay;
@@ -90,7 +106,7 @@ public sealed class TargetDummies
     {
         _respawnDelay = respawnDelay;
         for (int i = 0; i < spots.Count; i++)
-            _all.Add(new Dummy { Id = (ushort)(FirstId + i), Name = NameFor(i), Spot = spots[i], Health = MaxHealth, Alive = true, Body = new ThrownBody(spots[i].Feet) });
+            _all.Add(new Dummy { Id = (ushort)(FirstId + i), Name = NameFor(i), Spot = spots[i], Health = MaxHealth, Body = new ThrownBody(spots[i].Feet) });
     }
 
     public IReadOnlyList<Dummy> All => _all;
@@ -116,7 +132,7 @@ public sealed class TargetDummies
         d.Health -= amount;
         if (d.Health > 0) return DamageResult.Damaged;
         d.Health = 0;
-        d.Alive = false;
+        d.SetLife(DummyLife.Down);
         d.RespawnAt = now + _respawnDelay;
         return DamageResult.Killed;
     }
@@ -124,7 +140,7 @@ public sealed class TargetDummies
     /// <summary>Round start: every dummy stands at full health on its spot.</summary>
     public void ResetAll()
     {
-        foreach (var d in _all) { d.Alive = true; d.Health = MaxHealth; d.RespawnAt = 0; d.Body.Reset(d.Spot.Feet); }
+        foreach (var d in _all) { d.SetLife(DummyLife.Standing); d.Health = MaxHealth; d.RespawnAt = 0; d.Body.Reset(d.Spot.Feet); }
     }
 
     /// <summary>Stands every dead dummy whose respawn time has come, at full health on its spot. Returns the ids that stood up.</summary>
@@ -134,7 +150,7 @@ public sealed class TargetDummies
         foreach (var d in _all)
         {
             if (d.Alive || now < d.RespawnAt || !Respawns) continue;
-            d.Alive = true;
+            d.SetLife(DummyLife.Standing);
             d.Health = MaxHealth;
             d.Body.Reset(d.Spot.Feet);
             up.Add(d.Id);

@@ -189,14 +189,27 @@ public sealed class VehicleSeat
     }
 }
 
+/// <summary>Whether a vehicle gun can fire. The machine is <see cref="VehicleGun.Spec"/>.</summary>
+public enum VehicleGunState : byte { Ready, Reloading }
+
 /// <summary>A vehicle gun's magazine, reserve and reload. Hitscan rounds are resolved by the server; this only says when a round leaves the barrel.</summary>
 public sealed class VehicleGun
 {
+    /// <summary>A reload starts on request (not when full, empty of reserve or already reloading) or when a trigger pull finds the magazine empty, and ends on the first <see cref="TryFire"/> after its time.</summary>
+    public static readonly StateMachineSpec<VehicleGunState> Spec = StateMachineSpec<VehicleGunState>.Define("Vehicle.Gun", "A vehicle gun: ready to fire, or reloading.", VehicleGunState.Ready)
+        .Allow(VehicleGunState.Ready, VehicleGunState.Reloading)
+        .Allow(VehicleGunState.Reloading, VehicleGunState.Ready)
+        .Note(VehicleGunState.Ready, "Fires one round per FireInterval while the trigger is held and the magazine has one.")
+        .Note(VehicleGunState.Reloading, "No rounds until the reload time is over; the magazine is topped up from the reserve when it ends. The end is noticed by the next trigger update, not by a timer.")
+        .Build();
+
+    readonly StateMachine<VehicleGunState> _state = new(Spec);
     public VehicleGunDef Def { get; }
     public int Magazine { get; private set; }
     public int Reserve { get; private set; }
     double _nextShot;
-    double _reloadDone = -1;
+    /// <summary>When the running reload ends (the server's absolute clock); only meaningful while reloading.</summary>
+    double _reloadDone;
 
     public VehicleGun(VehicleGunDef def)
     {
@@ -205,16 +218,17 @@ public sealed class VehicleGun
         Reserve = def.Reserve;
     }
 
-    public bool Reloading => _reloadDone >= 0;
+    public bool Reloading => _state.Is(VehicleGunState.Reloading);
 
     /// <summary>Seconds of reload left at <paramref name="now"/> (0 when not reloading).</summary>
-    public float ReloadRemaining(double now) => _reloadDone >= 0 ? (float)Math.Max(0, _reloadDone - now) : 0f;
+    public float ReloadRemaining(double now) => Reloading ? (float)Math.Max(0, _reloadDone - now) : 0f;
 
     /// <summary>Starts a reload: not when full, empty of reserve or already reloading.</summary>
     public bool TryReload(double now)
     {
         if (Reloading || Magazine == Def.Magazine || Reserve == 0) return false;
         _reloadDone = now + Def.ReloadTime;
+        _state.Enter(VehicleGunState.Reloading);
         return true;
     }
 
@@ -224,10 +238,11 @@ public sealed class VehicleGun
     /// </summary>
     public bool TryFire(double now, bool trigger)
     {
-        if (_reloadDone >= 0 && now >= _reloadDone)
+        if (Reloading && now >= _reloadDone)
         {
             var take = Math.Min(Def.Magazine - Magazine, Reserve);
-            Magazine += take; Reserve -= take; _reloadDone = -1;
+            Magazine += take; Reserve -= take;
+            _state.Enter(VehicleGunState.Ready);
         }
         if (!trigger || Reloading || now < _nextShot) return false;
         if (Magazine == 0) { TryReload(now); return false; }
@@ -237,7 +252,7 @@ public sealed class VehicleGun
     }
 }
 
-/// <summary>Counts seconds a vehicle has stood empty; fires once when it reaches the return time.</summary>
+/// <summary>Counts seconds a vehicle has stood empty and away from its origin; fires once when it reaches the return time. A count-up beside the vehicle's life (<see cref="VehicleLifecycle"/>), reset by any return.</summary>
 public sealed class AbandonTimer
 {
     public float Empty { get; private set; }

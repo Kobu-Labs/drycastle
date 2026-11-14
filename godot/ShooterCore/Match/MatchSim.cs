@@ -2,6 +2,7 @@ using System.Numerics;
 
 namespace Drycastle.ShooterCore;
 
+/// <summary>Where the match is. The machine is <see cref="MatchSim.PhaseSpec"/>; the values travel in the MatchState event, so they never change.</summary>
 public enum MatchPhase : byte { Waiting = 0, Running = 1, Ending = 2 }
 
 /// <summary>Saved: a lethal hit was negated (a blessing, <see cref="BlessingRules"/>); the victim is at full health and the shooter has no kill.</summary>
@@ -48,6 +49,7 @@ public sealed record PlayerDied(ushort Victim, ushort Killer, float RespawnDelay
 /// <summary>A target dummy (#148) was killed: no roster change, no round end.</summary>
 public sealed record TargetKilled(ushort Killer, TargetDummies.Dummy Target, byte Weapon, KillCause Cause) : MatchEvent;
 
+/// <summary>Whether a player is in the world. The machine is <see cref="MatchPlayer.LifeSpec"/>; <see cref="MatchSim.StateOf"/> turns it (with protection) into the wire's <see cref="EntityState"/>.</summary>
 public enum PlayerLife : byte { Unspawned, Alive, Dead }
 
 /// <summary>Team ids (the wire byte too). Two teams only; 0 means no team.</summary>
@@ -70,7 +72,23 @@ public sealed class MatchPlayer
     public bool Sandbox;
     /// <summary>A sandbox player who chose to take damage (the panel's switch): hurt and killed like anyone, still unscored. Meaningless without <see cref="Sandbox"/>.</summary>
     public bool Vulnerable;
-    public PlayerLife Life;
+    /// <summary>The player's life machine (<see cref="LifeSpec"/>). Only the match changes it.</summary>
+    public PlayerLife Life => _life.Current;
+    readonly StateMachine<PlayerLife> _life = new(LifeSpec);
+    internal void SetLife(PlayerLife next) => _life.Enter(next);
+
+    /// <summary>
+    /// Alive from a spawn until a lethal hit, dead until the respawn delay is over, then alive again. A round start or a drop to waiting puts everyone back to
+    /// unspawned (the match spawns them again at once when a round starts). Protection, invulnerability and being held are timers beside the life, not states of it.
+    /// </summary>
+    public static readonly StateMachineSpec<PlayerLife> LifeSpec = StateMachineSpec<PlayerLife>.Define("Match.PlayerLife", "Whether a player is in the world: unspawned, alive or dead awaiting the respawn.", PlayerLife.Unspawned)
+        .Allow(PlayerLife.Unspawned, PlayerLife.Alive)
+        .Allow(PlayerLife.Alive, PlayerLife.Dead, PlayerLife.Unspawned)
+        .Allow(PlayerLife.Dead, PlayerLife.Alive, PlayerLife.Unspawned)
+        .Note(PlayerLife.Unspawned, "Not in the world: before the first spawn, or between a round reset and the spawn that follows it. Hits are ignored.")
+        .Note(PlayerLife.Alive, "In the world with health. Spawn protection (ProtectedUntil), a blessing's invulnerability and the demon's hold are timers beside this state.")
+        .Note(PlayerLife.Dead, "Awaiting RespawnAt (the respawn delay after the lethal hit).")
+        .Build();
     public float Health;
     public Vector3 Position;
     public double RespawnAt, ProtectedUntil;
@@ -92,6 +110,20 @@ public sealed class MatchSim
     readonly IReadOnlyList<Vector3> _spawns;
     readonly Random _rng;
     readonly SortedDictionary<ushort, MatchPlayer> _players = new();
+    /// <summary>
+    /// What can follow what: a round starts from waiting or the end screen (and an admin's restart starts a fresh one even while running, which announces
+    /// <see cref="PhaseChanged"/> again without a transition); it ends by the time limit or the score goal; too few players drop any phase back to waiting.
+    /// </summary>
+    public static readonly StateMachineSpec<MatchPhase> PhaseSpec = StateMachineSpec<MatchPhase>.Define("Match.Phase", "The match loop: waiting for players, a running round, the end screen.", MatchPhase.Waiting)
+        .Allow(MatchPhase.Waiting, MatchPhase.Running)
+        .Allow(MatchPhase.Running, MatchPhase.Ending, MatchPhase.Waiting)
+        .Allow(MatchPhase.Ending, MatchPhase.Running, MatchPhase.Waiting)
+        .Note(MatchPhase.Waiting, "Fewer than MinPlayers (nobody, in the shipped match.json). Scores and lives are reset; the next join or restart starts a round.")
+        .Note(MatchPhase.Running, "Time limit counts down from the round start. Left by the time limit or score goal (Ending), too few players (Waiting). An admin restart re-enters it with a fresh round.")
+        .Note(MatchPhase.Ending, "End screen for EndScreenTime; hits are ignored. Then a new round starts by itself.")
+        .Build();
+    readonly StateMachine<MatchPhase> _phase = new(PhaseSpec);
+    /// <summary>The round started and the end screen's end on the injected clock (absolute seconds, compared with <c>now &gt;=</c> each <see cref="Update"/>, so no countdown to tick).</summary>
     double _roundStart, _endsAt;
 
     public MatchSim(MatchConfig cfg, Func<double> clock, IReadOnlyList<Vector3> spawnCandidates, Random? rng = null, WorldEntityRegistry? worldTypes = null)
@@ -113,7 +145,7 @@ public sealed class MatchSim
     public bool AreFriends(ushort a, ushort b) =>
         IsTeamMode && a != b && _players.TryGetValue(a, out var pa) && _players.TryGetValue(b, out var pb) && pa.Team != Teams.None && pa.Team == pb.Team;
 
-    public MatchPhase Phase { get; private set; } = MatchPhase.Waiting;
+    public MatchPhase Phase => _phase.Current;
     public IReadOnlyList<ushort> Winners { get; private set; } = Array.Empty<ushort>();
     /// <summary>Team deathmatch: the team that won the finished round, <see cref="Teams.None"/> for a tie, in free-for-all and while no round has ended.</summary>
     public byte WinningTeam { get; private set; }
@@ -254,22 +286,32 @@ public sealed class MatchSim
         return true;
     }
 
+    /// <summary>The facts the damage gates ask about one hit on <paramref name="v"/> (null: not in the match).</summary>
+    DamageFacts FactsOf(MatchPlayer? v, ushort victim, ushort attacker, float amount, bool ignoreProtection)
+    {
+        var now = _now();
+        var alive = v is { Life: PlayerLife.Alive };
+        return new DamageFacts(Phase == MatchPhase.Running, amount, alive,
+            Held: alive && v!.Held,
+            Godmode: alive && v!.Sandbox && !v.Vulnerable,
+            FriendlyFireBlocked: alive && !_cfg.FriendlyFire && AreFriends(victim, attacker), // teammates cannot hurt each other (self damage is not friendly fire)
+            SpawnProtected: alive && now < v!.ProtectedUntil,
+            Invulnerable: alive && now < v!.InvulnerableUntil, // just saved by a blessing
+            IgnoreProtection: ignoreProtection);
+    }
+
     /// <summary>
     /// Damage from <paramref name="attacker"/> (the victim itself or an unknown id for suicides and the world).
-    /// Ignored outside a running round, on dead players and during spawn protection (unless
-    /// <paramref name="ignoreProtection"/>, used for falling out of the world). Death scores the attacker +1 unless it is a suicide.
+    /// Ignored by the first <see cref="DamageGate"/> that applies (outside a running round, on dead players, a held or godmode victim, a teammate, spawn protection
+    /// and a blessing's invulnerability unless <paramref name="ignoreProtection"/>, used for falling out of the world). Death scores the attacker +1 unless it is a suicide.
     /// </summary>
     public DamageResult ApplyDamage(ushort victim, ushort attacker, byte weapon, float amount, bool ignoreProtection = false, KillCause cause = KillCause.Standard)
     {
         if (CitizenRules.IsHitId(victim)) return Phase == MatchPhase.Running && Citizens != null ? Citizens.Hit(victim, attacker, amount) : DamageResult.Ignored;
         if (TargetDummies.IsDummyId(victim)) return ApplyTargetDamage(victim, attacker, weapon, amount, cause);
-        if (Phase != MatchPhase.Running || amount <= 0) return DamageResult.Ignored;
-        if (!_players.TryGetValue(victim, out var v) || v.Life != PlayerLife.Alive) return DamageResult.Ignored;
-        if (v.Held) return DamageResult.Ignored; // pinned by the demon: nothing touches them
-        if (v.Sandbox && !v.Vulnerable) return DamageResult.Ignored; // godmode (#156): nothing hurts a sandbox player, unless they switched damage on
-        if (!_cfg.FriendlyFire && AreFriends(victim, attacker)) return DamageResult.Ignored; // teammates cannot hurt each other (self damage is not friendly fire)
-        if (!ignoreProtection && IsProtected(victim)) return DamageResult.Ignored;
-        if (!ignoreProtection && _now() < v.InvulnerableUntil) return DamageResult.Ignored; // just saved by a blessing
+        _players.TryGetValue(victim, out var found);
+        if (DamageGates.FirstBlock(FactsOf(found, victim, attacker, amount, ignoreProtection)) != null) return DamageResult.Ignored; // the ladder and its order: DamageGates
+        var v = found!; // a gate lets only a living victim through
         v.Health -= amount;
         if (v.Health > 0) return DamageResult.Damaged;
         if (!ignoreProtection && SaveFromDeath?.Invoke(victim) == true)
@@ -279,7 +321,7 @@ public sealed class MatchSim
             return DamageResult.Saved;
         }
 
-        v.Health = 0; v.Life = PlayerLife.Dead; v.Deaths++;
+        v.Health = 0; v.SetLife(PlayerLife.Dead); v.Deaths++;
         v.RespawnAt = _now() + _cfg.RespawnDelay;
         var credited = attacker != victim && _players.TryGetValue(attacker, out var a) ? a : null;
         // a sandbox shooter's kill is shown but counts for nothing: no score, no score goal (#156)
@@ -358,12 +400,12 @@ public sealed class MatchSim
     {
         if (IsTeamMode) Rebalance();
         Array.Clear(_teamScore); WinningTeam = Teams.None;
-        foreach (var p in _players.Values) { p.Kills = 0; p.Deaths = 0; p.Life = PlayerLife.Unspawned; }
+        foreach (var p in _players.Values) { p.Kills = 0; p.Deaths = 0; p.SetLife(PlayerLife.Unspawned); }
         Entities.Clear();
         Targets.ResetAll();
         Winners = Array.Empty<ushort>();
         _roundStart = _now();
-        Phase = MatchPhase.Running;
+        _phase.Enter(MatchPhase.Running);
         Emit(new PhaseChanged(Phase));
         foreach (var p in _players.Values.ToList()) Spawn(p);
     }
@@ -371,9 +413,10 @@ public sealed class MatchSim
     void ToWaiting()
     {
         Array.Clear(_teamScore); WinningTeam = Teams.None;
-        foreach (var p in _players.Values) { p.Kills = 0; p.Deaths = 0; p.Life = PlayerLife.Unspawned; }
+        foreach (var p in _players.Values) { p.Kills = 0; p.Deaths = 0; p.SetLife(PlayerLife.Unspawned); }
         Winners = Array.Empty<ushort>();
-        Phase = MatchPhase.Waiting;
+        Entities.Clear(); // nothing of the round outlives it, as at a round start
+        _phase.Enter(MatchPhase.Waiting);
         Emit(new PhaseChanged(Phase));
     }
 
@@ -392,7 +435,7 @@ public sealed class MatchSim
         else if (top.Count > 0 && top[0].Kills > 0) // nobody wins a round without a kill
             winners = top.Where(p => p.Kills == top[0].Kills && p.Deaths == top[0].Deaths).Select(p => p.Id).ToList();
         Winners = winners;
-        Phase = MatchPhase.Ending;
+        _phase.Enter(MatchPhase.Ending);
         _endsAt = _now() + _cfg.EndScreenTime;
         Emit(new PhaseChanged(Phase));
     }
@@ -402,7 +445,7 @@ public sealed class MatchSim
         // team deathmatch: only enemies count, so a team may spawn together and never next to the other side
         var others = _players.Values.Where(o => o.Id != p.Id && o.Life == PlayerLife.Alive && (!IsTeamMode || p.Team == Teams.None || o.Team != p.Team)).Select(o => o.Position);
         p.Position = SpawnChooser.Choose(_spawns, others, _cfg.MinSpawnDistance, _rng);
-        p.Life = PlayerLife.Alive;
+        p.SetLife(PlayerLife.Alive);
         p.Health = MoveConsts.MaxHealth;
         p.InvulnerableUntil = 0; p.Held = false;
         p.ProtectedUntil = _now() + _cfg.SpawnProtection;

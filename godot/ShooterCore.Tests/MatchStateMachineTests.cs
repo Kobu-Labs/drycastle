@@ -131,6 +131,43 @@ public class MatchStateMachineTests
         Assert.Equal(new[] { MatchPhase.Waiting }, r.Phases());
     }
 
+    [Fact]
+    public void The_match_phase_spec_lists_what_can_follow_what()
+    {
+        var s = MatchSim.PhaseSpec;
+        Assert.True(s.Allows(MatchPhase.Waiting, MatchPhase.Running));
+        Assert.True(s.Allows(MatchPhase.Running, MatchPhase.Ending));
+        Assert.True(s.Allows(MatchPhase.Ending, MatchPhase.Running));
+        Assert.True(s.Allows(MatchPhase.Running, MatchPhase.Waiting));
+        Assert.True(s.Allows(MatchPhase.Ending, MatchPhase.Waiting));
+        Assert.False(s.Allows(MatchPhase.Waiting, MatchPhase.Ending)); // a round has to run before it can end
+    }
+
+    sealed class Pod : IWorldEntity
+    {
+        public byte TypeId => 9;
+        public ushort Owner => 1;
+        public WorldDespawnReason? Ended => null;
+        public void Tick(float dt) { }
+        public void OnDamage(float amount, ushort attacker) { }
+        public WorldState Serialize() => WorldState.Make(Vector3.Zero, 0, 0, 1, 1, 0);
+    }
+
+    [Fact]
+    public void Dropping_to_waiting_clears_the_world_entities_like_a_round_start_does()
+    {
+        var types = new WorldEntityRegistry();
+        types.Register(new WorldEntityDef(9, "pod", HasHp: false));
+        var t = 0.0;
+        var m = new MatchSim(new MatchConfig { MinPlayers = 2 }, () => t, new[] { Vector3.Zero }, new Random(1), types);
+        m.AddPlayer(1, "a"); m.AddPlayer(2, "b");
+        m.Entities.Spawn(new Pod());
+        Assert.Equal(1, m.Entities.Count);
+        m.RemovePlayer(2);
+        Assert.Equal(MatchPhase.Waiting, m.Phase);
+        Assert.Equal(0, m.Entities.Count);
+    }
+
     // ---- the player life machine ----
 
     [Fact]
@@ -264,5 +301,110 @@ public class MatchStateMachineTests
         r.M.SetHeld(2, true);
         Assert.Equal(DamageResult.Ignored, r.M.ApplyDamage(2, 1, 0, 50));
         Assert.Equal(1, r.M.Get(2)!.Deaths);
+    }
+
+    [Fact]
+    public void The_life_spec_lists_what_can_follow_what()
+    {
+        var s = MatchPlayer.LifeSpec;
+        Assert.True(s.Allows(PlayerLife.Unspawned, PlayerLife.Alive));
+        Assert.True(s.Allows(PlayerLife.Alive, PlayerLife.Dead));
+        Assert.True(s.Allows(PlayerLife.Dead, PlayerLife.Alive));
+        Assert.True(s.Allows(PlayerLife.Alive, PlayerLife.Unspawned));
+        Assert.True(s.Allows(PlayerLife.Dead, PlayerLife.Unspawned));
+        Assert.False(s.Allows(PlayerLife.Unspawned, PlayerLife.Dead));
+    }
+
+    // ---- the client's view of the phase ----
+
+    static byte[] State(MatchPhase p, float left, params (ushort Id, int Kills, int Deaths)[] rows) =>
+        MatchCodec.Encode(new MatchStateMsg(p, left, Array.Empty<ushort>(), rows.Select(r => new ScoreRow(r.Id, "p" + r.Id, r.Kills, r.Deaths, 10)).ToList()));
+
+    [Fact]
+    public void The_client_reports_each_phase_change_once_and_the_first_state_has_no_earlier_phase()
+    {
+        var c = new ClientMatchState();
+        var seen = new List<(MatchPhase?, MatchPhase)>();
+        c.PhaseChanged += (from, to) => seen.Add((from, to));
+        c.Apply(EventKind.MatchState, State(MatchPhase.Running, 500), 0);
+        c.Apply(EventKind.MatchState, State(MatchPhase.Running, 499), 1); // the once-a-second resend
+        c.Apply(EventKind.MatchState, State(MatchPhase.Ending, 10), 2);
+        c.Apply(EventKind.MatchState, State(MatchPhase.Running, 600), 12);
+        Assert.Equal(new (MatchPhase?, MatchPhase)[] { (null, MatchPhase.Running), (MatchPhase.Running, MatchPhase.Ending), (MatchPhase.Ending, MatchPhase.Running) }, seen);
+    }
+
+    [Fact]
+    public void An_admin_restart_of_a_running_round_clears_the_feed_when_a_score_falls()
+    {
+        var c = new ClientMatchState();
+        var restarts = 0;
+        c.RoundRestarted += () => restarts++;
+        c.Apply(EventKind.MatchState, State(MatchPhase.Running, 590, (1, 0, 0), (2, 0, 0)), 0);
+        c.Apply(EventKind.Kill, MatchCodec.Encode(new KillMsg(1, 2, 0)), 1);
+        c.Apply(EventKind.MatchState, State(MatchPhase.Running, 589, (1, 1, 0), (2, 0, 1)), 1.1);
+        Assert.Equal(0, restarts);
+        Assert.Single(c.KillFeed);
+        c.Apply(EventKind.MatchState, State(MatchPhase.Running, 588, (1, 1, 0), (2, 0, 1)), 2); // the periodic resend
+        Assert.Equal(0, restarts);
+        c.Apply(EventKind.MatchState, State(MatchPhase.Running, 586, (1, 0, 0), (2, 0, 0)), 4); // scores back to zero, time barely moved: the restart came at once
+        Assert.Equal(1, restarts);
+        Assert.Equal(1, c.Restarts);
+        Assert.Empty(c.KillFeed);
+    }
+
+    [Fact]
+    public void An_admin_restart_of_a_running_round_is_also_told_by_the_time_jumping_back_up()
+    {
+        var c = new ClientMatchState();
+        c.Apply(EventKind.MatchState, State(MatchPhase.Running, 300), 0);
+        c.Apply(EventKind.Kill, MatchCodec.Encode(new KillMsg(1, 1, 0)), 1); // a suicide: nobody's score moved
+        c.Apply(EventKind.MatchState, State(MatchPhase.Running, 299, (1, 0, 0)), 1.5);
+        c.Apply(EventKind.MatchState, State(MatchPhase.Running, 600), 10); // restarted: back to the limit, not the 290 s it ran down to
+        Assert.Equal(1, c.Restarts);
+        Assert.Empty(c.KillFeed);
+        c.Apply(EventKind.MatchState, State(MatchPhase.Running, 598), 12.5); // a little behind the clock: jitter, not a restart
+        Assert.Equal(1, c.Restarts);
+    }
+
+    [Fact]
+    public void Joining_a_running_match_and_the_end_screen_do_not_look_like_restarts()
+    {
+        var c = new ClientMatchState();
+        c.Apply(EventKind.MatchState, State(MatchPhase.Running, 120, (1, 5, 2)), 0); // the first state of a mid-round joiner
+        Assert.Equal(0, c.Restarts);
+        c.Apply(EventKind.MatchState, State(MatchPhase.Ending, 10, (1, 25, 2)), 5);
+        Assert.Equal(0, c.Restarts);
+        Assert.Equal(1, c.RoundsEnded);
+    }
+
+    // ---- the gate ladder on its own (pure) ----
+
+    [Fact]
+    public void The_ladder_names_the_first_gate_that_applies_in_the_documented_order()
+    {
+        // everything blocks: peel the gates off one by one, each next to answer is the next in Order
+        var f = new DamageFacts(RoundRunning: false, Amount: 0, VictimAlive: false, Held: true, Godmode: true, FriendlyFireBlocked: true, SpawnProtected: true, Invulnerable: true, IgnoreProtection: false);
+        var seen = new List<DamageGate>();
+        seen.Add(DamageGates.FirstBlock(f)!.Value);
+        f = f with { RoundRunning = true, Amount = 5 }; seen.Add(DamageGates.FirstBlock(f)!.Value);
+        f = f with { VictimAlive = true }; seen.Add(DamageGates.FirstBlock(f)!.Value);
+        f = f with { Held = false }; seen.Add(DamageGates.FirstBlock(f)!.Value);
+        f = f with { Godmode = false }; seen.Add(DamageGates.FirstBlock(f)!.Value);
+        f = f with { FriendlyFireBlocked = false }; seen.Add(DamageGates.FirstBlock(f)!.Value);
+        f = f with { SpawnProtected = false }; seen.Add(DamageGates.FirstBlock(f)!.Value);
+        f = f with { Invulnerable = false };
+        Assert.Null(DamageGates.FirstBlock(f));
+        Assert.Equal(DamageGates.Order, seen);
+        Assert.Equal(Enum.GetValues<DamageGate>(), DamageGates.Order); // every gate is in the list, in declaration order
+    }
+
+    [Fact]
+    public void Ignore_protection_lifts_only_spawn_protection_and_invulnerability()
+    {
+        var all = new DamageFacts(true, 5, true, Held: true, Godmode: true, FriendlyFireBlocked: true, SpawnProtected: true, Invulnerable: true, IgnoreProtection: true);
+        Assert.Equal(DamageGate.Held, DamageGates.FirstBlock(all));
+        Assert.Equal(DamageGate.Godmode, DamageGates.FirstBlock(all with { Held = false }));
+        Assert.Equal(DamageGate.FriendlyFire, DamageGates.FirstBlock(all with { Held = false, Godmode = false }));
+        Assert.Null(DamageGates.FirstBlock(all with { Held = false, Godmode = false, FriendlyFireBlocked = false }));
     }
 }
