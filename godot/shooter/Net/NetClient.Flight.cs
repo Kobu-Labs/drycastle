@@ -100,7 +100,7 @@ public partial class NetClient
     }
 
     /// <summary>The pilot's controls of one input, as the server will read them: hands off while a killstreak has the keys.</summary>
-    FlightInput PilotInput(in NetInput ni) => FlightInput.FromNet(ni, handsOff: _controlling || _gunship != null);
+    FlightInput PilotInput(in NetInput ni) => FlightInput.FromNet(ni, handsOff: Mode.RemoteViewOwnsScreen);
 
     /// <summary>On the input tick: the prediction steps with the input that was just sent.</summary>
     void PredictFlight(in NetInput ni, float dt)

@@ -30,7 +30,7 @@ public partial class NetClient
     /// </summary>
     bool HandleSeatInput(InputEvent e)
     {
-        if (!_driving || Dead || _gunship != null || _controlling || _seats is not { Mine: >= 0 } s || _peer == null) return false;
+        if (!Mode.SeatKeysLive || _seats is not { Mine: >= 0 } s || _peer == null) return false;
         if (Input.MouseMode != Input.MouseModeEnum.Captured || e is not InputEventKey { Echo: false }) return false;
         for (var n = 1; n <= s.Occupants.Length; n++)
         {

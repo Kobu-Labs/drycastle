@@ -228,7 +228,7 @@ public partial class NetClient
         else _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
         string? prompt = null;
         if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
-        if (hasCockpit && prompt != null && _gunship == null && !_controlling) prompt = WithViewHint(prompt);
+        if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
         _hud?.SetPrompt(TurretPrompt() ?? prompt ?? MassPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
     }
