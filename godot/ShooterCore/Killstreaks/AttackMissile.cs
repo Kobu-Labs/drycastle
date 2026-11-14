@@ -191,7 +191,8 @@ public sealed class AttackMissileEntity : IWorldEntity
 {
     readonly MissileTuning _t;
     readonly IMissileWorld _world;
-    float _wantYaw, _wantPitch, _age;
+    float _wantYaw, _wantPitch;
+    Lifetime _life;
 
     public AttackMissileEntity(ushort owner, MissileTuning tuning, IMissileWorld world, Vector3 start, float yaw, float pitch)
     {
@@ -205,7 +206,7 @@ public sealed class AttackMissileEntity : IWorldEntity
     public Vector3 Position { get; private set; }
     public float Yaw { get; private set; }
     public float Pitch { get; private set; }
-    public float Age => _age;
+    public float Age => _life.Age;
     public byte TypeId => AttackMissileRules.TypeId;
     public ushort Owner { get; }
     public WorldDespawnReason? Ended { get; private set; }
@@ -223,7 +224,7 @@ public sealed class AttackMissileEntity : IWorldEntity
     public void Tick(float dt)
     {
         if (Ended != null) return;
-        _age += dt;
+        var outOfFuel = _life.Tick(dt, _t.LifeSeconds); // acted on after the step: a missile that hits on its last tick still detonates
         Steer(dt);
         var dir = HitMath.Forward(Yaw, Pitch);
         var len = _t.SpeedMps * dt;
@@ -240,7 +241,7 @@ public sealed class AttackMissileEntity : IWorldEntity
             return;
         }
         Position += dir * len;
-        if (_age >= _t.LifeSeconds) Ended = WorldDespawnReason.Expired;
+        if (outOfFuel) Ended = WorldDespawnReason.Expired;
     }
 
     void Steer(float dt)

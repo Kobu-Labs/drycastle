@@ -61,7 +61,7 @@ public sealed class CarePackage : IWorldEntity
 {
     readonly Vector3 _landing;
     float _altitude;
-    float _age;
+    Lifetime _life;
 
     public CarePackage(ushort owner, Vector3 landing)
     {
@@ -80,9 +80,9 @@ public sealed class CarePackage : IWorldEntity
 
     public void Tick(float dt)
     {
-        _age += dt;
+        var expired = _life.Tick(dt, CarePackageRules.LifetimeSeconds);
         if (!Landed) _altitude = MathF.Max(_landing.Y, _altitude - CarePackageRules.FallSpeedMetresPerSecond * dt);
-        if (Ended == null && _age >= CarePackageRules.LifetimeSeconds) Ended = WorldDespawnReason.Expired;
+        if (Ended == null && expired) Ended = WorldDespawnReason.Expired;
     }
 
     public void OnDamage(float amount, ushort attacker) { }

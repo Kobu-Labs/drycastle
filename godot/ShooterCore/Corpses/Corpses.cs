@@ -72,7 +72,7 @@ public enum PickUpResult : byte { Ok, Gone, OutOfReach, BadSlot, WrongKind, Alre
 public sealed class Corpse : IWorldEntity
 {
     readonly float _yaw;
-    float _age;
+    Lifetime _life;
     readonly float _lifetime;
 
     readonly List<ItemStack> _items = new();
@@ -103,8 +103,7 @@ public sealed class Corpse : IWorldEntity
 
     public void Tick(float dt)
     {
-        _age += dt;
-        if (_age >= _lifetime) Ended = WorldDespawnReason.Expired;
+        if (_life.Tick(dt, _lifetime)) Ended = WorldDespawnReason.Expired;
     }
 
     public void OnDamage(float amount, ushort attacker) { }
