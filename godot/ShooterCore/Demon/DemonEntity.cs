@@ -20,6 +20,23 @@ public static class DemonRules
 
     public static bool IsHitId(ushort id) => id == HitId;
 
+    /// <summary>The wire state of a brain phase (the numbers of <see cref="DemonState"/> are the protocol's). Every phase has one; the crouch of a leap is Crouching.</summary>
+    public static DemonState StateOf(DemonPhase phase) => phase switch
+    {
+        DemonPhase.Waiting => DemonState.Waiting,
+        DemonPhase.Dwelling => DemonState.Dwelling,
+        DemonPhase.Crawling => DemonState.Crawling,
+        DemonPhase.Telegraphing => DemonState.Telegraphing,
+        DemonPhase.Roaring => DemonState.Roaring,
+        DemonPhase.LeapWind => DemonState.Crouching,
+        DemonPhase.Leaping => DemonState.Leaping,
+        DemonPhase.Breathing => DemonState.Breathing,
+        DemonPhase.PounceWind => DemonState.PounceWind,
+        DemonPhase.Pouncing => DemonState.Pouncing,
+        DemonPhase.Pinning => DemonState.Pinning,
+        _ => DemonState.Dead,
+    };
+
     public static DemonState StateOf(byte state) => state <= (byte)DemonState.Pinning ? (DemonState)state : DemonState.Dwelling;
 
     public static void Register(WorldEntityRegistry registry)

@@ -513,9 +513,9 @@ public class DemonTests
     // ---- the real church's anchor layout: leaps and the ceiling ----
 
     // church_interior.py: u across (inner walls IU0..IU1), v along (bays -5, -1, 3, 7), per bay low wall, high wall, vault, high wall, low wall; heights above the building base
-    const float IU0 = -2.48f, IU1 = 4.46f, VaultZ = 6.85f, FloorZ = 0.25f;
+    internal const float IU0 = -2.48f, IU1 = 4.46f, VaultZ = 6.85f, FloorZ = 0.25f;
 
-    static string NaveJson()
+    internal static string NaveJson()
     {
         var slots = new (float u, float z, string n)[] { (IU0, 2.2f, "[1,0,0]"), (IU0, 4.4f, "[1,0,0]"), ((IU0 + IU1) / 2, VaultZ, "[0,0,-1]"), (IU1, 4.4f, "[-1,0,0]"), (IU1, 2.2f, "[-1,0,0]") };
         var bays = new[] { -5f, -1f, 3f, 7f };
@@ -616,5 +616,76 @@ public class DemonTests
         Assert.Null(HitMath.Raycast(from, -Vector3.UnitX, 30, float.PositiveInfinity, new[] { small }, 1));
         Assert.NotNull(HitMath.Raycast(from, -Vector3.UnitX, 30, float.PositiveInfinity, new[] { big }, 1));
         Assert.True(HitMath.Centre(big).X > HitMath.Centre(small).X, "its middle is further off the surface");
+    }
+
+    // ---- the state machines ----
+
+    [Fact]
+    public void Every_phase_has_a_wire_state_and_the_numbers_are_the_protocols()
+    {
+        var want = new Dictionary<DemonPhase, (DemonState State, byte Wire)>
+        {
+            [DemonPhase.Waiting] = (DemonState.Waiting, 1), [DemonPhase.Dwelling] = (DemonState.Dwelling, 2), [DemonPhase.Crawling] = (DemonState.Crawling, 3),
+            [DemonPhase.Telegraphing] = (DemonState.Telegraphing, 4), [DemonPhase.Dead] = (DemonState.Dead, 5), [DemonPhase.Roaring] = (DemonState.Roaring, 6),
+            [DemonPhase.LeapWind] = (DemonState.Crouching, 7), [DemonPhase.Leaping] = (DemonState.Leaping, 8), [DemonPhase.Breathing] = (DemonState.Breathing, 9),
+            [DemonPhase.PounceWind] = (DemonState.PounceWind, 10), [DemonPhase.Pouncing] = (DemonState.Pouncing, 11), [DemonPhase.Pinning] = (DemonState.Pinning, 12),
+        };
+        foreach (var phase in Enum.GetValues<DemonPhase>())
+        {
+            Assert.True(want.ContainsKey(phase), $"{phase} has no expected wire state: add it here and to DemonRules.StateOf");
+            Assert.Equal(want[phase].State, DemonRules.StateOf(phase));
+            Assert.Equal(want[phase].Wire, (byte)DemonRules.StateOf(phase));
+        }
+        Assert.Equal(want.Count, want.Values.Select(v => v.State).Distinct().Count()); // no two phases look alike on the wire
+    }
+
+    /// <summary>The shipped numbers, the nave, two players who come and go and die, hits that kill it: 4 x 8 seeds of 150 s. The test assembly throws on a transition the specs do not declare.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void A_long_fight_with_wipes_and_deaths_only_takes_declared_transitions_and_visits_every_phase(int variant)
+    {
+        var seen = new HashSet<DemonPhase>();
+        for (var seed = 1; seed <= 8; seed++)
+        {
+            var d = Full;
+            if (variant == 1) { d.Pounce.Chance = 1; d.Pounce.FirstAfterS = 0; d.Leap.Chance = 0; d.Flame.DurationS = 0; d.Roar.DurationS = 0; }
+            if (variant == 2) d.Pounce.PinS = 0;
+            if (variant == 3) { d.Roar.OnWake = true; d.Pounce.Chance = 0.5f; }
+            var b = new DemonBrain(d, AnchorGraph.FromJson(NaveJson()), new Random(seed), (a, c) => InNave(a) && InNave(c), 7);
+            var rng = new Random(seed * 77 + variant);
+            var ev = new List<DemonEvent>();
+            bool inside = true, p1Alive = true, p2Alive = true, p2In = true;
+            var hits = 0;
+            for (var i = 0; i < 30 * 150; i++)
+            {
+                if (i % 30 == 0)
+                {
+                    var r = rng.Next(100);
+                    if (r < 6) inside = !inside; else if (r < 10) p1Alive = !p1Alive; else if (r < 14) p2In = !p2In; else if (r < 17) p2Alive = !p2Alive;
+                    if (r > 90) hits += 3;
+                }
+                var players = new List<DemonPlayer>();
+                if (inside)
+                {
+                    players.Add(new DemonPlayer(1, new Vector3(0.985f + MathF.Sin(i / 30f) * 0.5f, FloorZ, -3f), p1Alive, new Vector3(1, 0, 0), (i / 45) % 5 != 0));
+                    if (p2In) players.Add(new DemonPlayer(2, new Vector3(2.2f, FloorZ, 2f), p2Alive, default, true, (i / 100) % 7 == 3));
+                }
+                ev.Clear();
+                if (hits > 0 && i % 5 == 0) { hits--; b.RegisterHit(1, hits % 3 == 0 ? DemonHitKind.Explosive : DemonHitKind.Bullet, ev); }
+                b.Step(1f / 30, players, ev);
+                seen.Add(b.Phase);
+                if (b.Phase == DemonPhase.Dead) { b.Reset(7); hits = 0; }
+            }
+        }
+        var must = variant switch
+        {
+            0 => new[] { DemonPhase.Waiting, DemonPhase.Dwelling, DemonPhase.Crawling, DemonPhase.Roaring, DemonPhase.Breathing, DemonPhase.Dead },
+            1 => new[] { DemonPhase.Waiting, DemonPhase.Dwelling, DemonPhase.PounceWind, DemonPhase.Pouncing, DemonPhase.Pinning, DemonPhase.LeapWind, DemonPhase.Leaping },
+            _ => new[] { DemonPhase.Waiting, DemonPhase.Dwelling },
+        };
+        foreach (var phase in must) Assert.Contains(phase, seen);
     }
 }
