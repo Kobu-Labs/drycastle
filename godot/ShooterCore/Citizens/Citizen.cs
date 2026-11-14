@@ -34,7 +34,7 @@ public static class CitizenRules
 /// <summary>
 /// A citizen of the village on its way to Mass. It starts at a house door, walks the route the server found on the navigation mesh to the
 /// church door, follows the church's scripted route to its seat and sits. Any damage kills it: it lies for
-/// <see cref="CitizensConfig.CorpseSeconds"/> and is removed, and nothing replaces it. It never reacts to combat. Godot-free and
+/// <see cref="CitizensConfig.CorpseSeconds"/> and is removed, and nothing replaces it (a killed monk or pastor lies until the event is cleared). It never reacts to combat. Godot-free and
 /// deterministic. A world entity of type <see cref="CitizenRules.TypeId"/>: the look (an opaque number the client turns into a body) travels in
 /// the owner field of its state, the position is where its feet stand.
 /// </summary>
@@ -110,6 +110,8 @@ public sealed class Citizen : IWorldEntity
         switch (State)
         {
             case CitizenState.Dead:
+                // a killed monk or pastor lies until the event is over (the crowd clears it); a citizen's body goes after the corpse time
+                if (Role != CitizenRole.Citizen) break;
                 _deadFor += dt;
                 if (_deadFor >= _cfg.CorpseSeconds) Ended = WorldDespawnReason.Expired;
                 break;

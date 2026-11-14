@@ -83,9 +83,11 @@ public sealed class MassConfig
     public float GestureMinSeconds { get; set; } = 5;
     public float GestureMaxSeconds { get; set; } = 11;
     public float MonkDabShare { get; set; } = 0.03f;
-    /// <summary>Audio files under the shipped assets (no asset exists yet: a missing file is skipped, logged once). The chant loops while the Mass progresses; the bells play village-wide once at the start.</summary>
+    /// <summary>Audio files under the shipped assets (a missing file is skipped, logged once; the chant is not made yet). The chant loops while the Mass progresses; the bells play village-wide once at the start.</summary>
     public string ChantSound { get; set; } = "audio/holy_mass/chant.ogg";
-    public string BellsSound { get; set; } = "audio/holy_mass/bells.ogg";
+    public string BellsSound { get; set; } = "drycastle-generated-sounds/church_bells.ogg";
+    /// <summary>The bells ring at the start of the gather; the first citizen leaves its house this long after (the gather's clock starts then too).</summary>
+    public float BellsLeadSeconds { get; set; }
     /// <summary>The chant is heard within this distance of the pastor, fading out (positional, with the church's echo).</summary>
     public float ChantRangeM { get; set; } = 40;
 }
@@ -111,8 +113,8 @@ public sealed class HolyMassFile : IVersioned
         if (!(c.StaggerSeconds >= 0) || !(c.HouseRadiusM > 0) || !(c.HouseMinM >= 0) || !(c.CorpseSeconds > 0) || !(c.SeatHeightM >= 0))
             throw new DataFileException($"{F}: citizens: stagger_seconds, house_min_m and seat_height_m are not negative; house_radius_m and corpse_seconds are positive");
         var mass = f.Mass;
-        if (!(mass.GatherSeconds >= 0) || !(mass.MassSeconds > 0) || !(mass.CompletedSeconds >= 0) || !(mass.StaggerSeconds >= 0) || !(mass.HouseRadiusM > 0))
-            throw new DataFileException($"{F}: mass: gather_seconds, completed_seconds and stagger_seconds are not negative; mass_seconds and house_radius_m are positive");
+        if (!(mass.GatherSeconds >= 0) || !(mass.MassSeconds > 0) || !(mass.CompletedSeconds >= 0) || !(mass.StaggerSeconds >= 0) || !(mass.BellsLeadSeconds >= 0) || !(mass.HouseRadiusM > 0))
+            throw new DataFileException($"{F}: mass: gather_seconds, completed_seconds, stagger_seconds and bells_lead_seconds are not negative; mass_seconds and house_radius_m are positive");
         if (mass.PlayerSeats < 0 || !(mass.SitReachM > 0) || !(mass.BlessedShare is >= 0 and <= 1) || !(mass.ClapShare is >= 0 and <= 1) || !(mass.MonkDabShare is >= 0 and <= 1))
             throw new DataFileException($"{F}: mass: player_seats is not negative, sit_reach_m positive, the shares 0..1");
         if (!(mass.PastorReplaceSeconds >= 0) || !(mass.ResumeSeconds >= 0) || mass.PastorKillsToTurn < 1 || !(mass.GestureMinSeconds > 0) || mass.GestureMaxSeconds < mass.GestureMinSeconds || !(mass.ChantRangeM > 0))

@@ -134,9 +134,12 @@ public class MassTests
         Run(mass, crowd, entities, 21);
         for (var i = 0; i < 2; i++) { Kill(mass, crowd); Run(mass, crowd, entities, 6); Assert.True(mass.Chanting); }
         Assert.Equal(0, turned);
-        Kill(mass, crowd);
+        var before = crowd.Count;
+        var last = Kill(mass, crowd);
         Assert.Equal(3, mass.PastorKills);
         Assert.Equal(1, turned);
+        Assert.Equal(before - 1, crowd.Count); // no corpse: the body went with the hit
+        Assert.Equal(DamageResult.Ignored, crowd.Hit(last.HitId, 7, 100));
         Assert.Equal(MassPhase.Void, mass.Phase);
         Run(mass, crowd, entities, 20);
         Assert.False(mass.Chanting);
@@ -144,6 +147,47 @@ public class MassTests
         mass.Conclude(); // /event current end cleans up
         Assert.Equal(MassPhase.Idle, mass.Phase);
         Assert.Equal(0, crowd.Count);
+    }
+
+    [Fact]
+    public void AKilledPastorOrMonkLiesUntilTheEventIsOverAndCannotBeHitAgain()
+    {
+        var (mass, crowd, entities, _) = Make();
+        mass.Start();
+        Run(mass, crowd, entities, 21);
+        var monk = crowd.AliveOfRole(CitizenRole.Monk).First();
+        var corpse = Kill(mass, crowd);
+        Assert.Equal(DamageResult.Killed, crowd.Hit(monk.HitId, 7, 100));
+        Run(mass, crowd, entities, 8); // well beyond the corpse time (2 s)
+        Assert.Equal(CitizenState.Dead, corpse.State);
+        Assert.Equal(CitizenState.Dead, monk.State);
+        Assert.Null(corpse.Ended);
+        Assert.Null(monk.Ended);
+        Assert.Equal(DamageResult.Ignored, crowd.Hit(corpse.HitId, 7, 100));
+        Assert.Equal(DamageResult.Ignored, crowd.Hit(monk.HitId, 7, 100));
+        Assert.Equal(1, mass.PastorKills);
+        Assert.True(mass.Pastor!.Alive); // the replacement came regardless
+        Assert.NotSame(corpse, mass.Pastor);
+        mass.End();
+        Assert.Equal(0, crowd.Count);
+    }
+
+    [Fact]
+    public void TheCitizensLeaveOnlyAfterTheBellsLeadIn()
+    {
+        var cfg = Cfg();
+        cfg.BellsLeadSeconds = 5;
+        var (mass, crowd, entities, _) = Make(cfg);
+        var sent = mass.Start();
+        Assert.True(sent > 0);
+        Run(mass, crowd, entities, 4.5f);
+        Assert.Equal(0, crowd.AliveOfRole(CitizenRole.Citizen).Count());
+        Run(mass, crowd, entities, 1f);
+        Assert.True(crowd.AliveOfRole(CitizenRole.Citizen).Any());
+        Run(mass, crowd, entities, 19f); // gather = lead 5 + 20 s
+        Assert.Equal(MassPhase.Gather, mass.Phase);
+        Run(mass, crowd, entities, 2f);
+        Assert.Equal(MassPhase.Mass, mass.Phase);
     }
 
     [Fact]

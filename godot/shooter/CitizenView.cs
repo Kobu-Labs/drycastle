@@ -125,7 +125,7 @@ public sealed partial class CitizenView : Node3D
                 else { Play(KneelIn, blend); _anim.Queue(KneelLoop); }
                 break;
             case CitizenState.Dead:
-                _seq.Clear();
+                _seq.Clear(); _praying = false; _shocked = false;
                 Play(_death, blend);
                 if (first && _anim.HasAnimation(_death)) _anim.Seek(_anim.GetAnimation(_death).Length, true);
                 break;
@@ -150,7 +150,7 @@ public sealed partial class CitizenView : Node3D
         _kills = pastorKills;
         if (chanting == _chanting && !killed) return;
         _chanting = chanting;
-        if (_role == CitizenRole.Monk)
+        if (_role == CitizenRole.Monk && _state != CitizenState.Dead) // a dead monk stays dead: only the living react
         {
             if (killed && !chanting) Shock();
             else if (chanting && _shocked) Unshock();

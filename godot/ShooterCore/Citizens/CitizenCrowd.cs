@@ -110,9 +110,10 @@ public sealed class CitizenCrowd : ICitizenHits
 
     /// <summary>
     /// Sends one citizen to each seat of <paramref name="seatIds"/> that is free, spread evenly over <paramref name="staggerSeconds"/> from houses between
-    /// the config's minimum and <paramref name="houseRadiusM"/> of the church door. Returns how many were accepted (0 when there are no houses).
+    /// the config's minimum and <paramref name="houseRadiusM"/> of the church door, the first leaving <paramref name="leadSeconds"/> from now (the bells ring first).
+    /// Returns how many were accepted (0 when there are no houses).
     /// </summary>
-    public int Spawn(IReadOnlyList<int> seatIds, float staggerSeconds, float houseRadiusM)
+    public int Spawn(IReadOnlyList<int> seatIds, float staggerSeconds, float houseRadiusM, float leadSeconds = 0)
     {
         var take = new List<int>();
         foreach (var id in seatIds)
@@ -127,7 +128,7 @@ public sealed class CitizenCrowd : ICitizenHits
         for (var i = 0; i < take.Count; i++)
         {
             _taken.Add(take[i]);
-            _pending.Add(new Pending(_clock + staggerSeconds * i / take.Count, take[i], doors));
+            _pending.Add(new Pending(_clock + leadSeconds + staggerSeconds * i / take.Count, take[i], doors));
         }
         return take.Count;
     }

@@ -79,7 +79,7 @@ public partial class NetServer
         _massDirty = false;
         SendMassState(bells: true);
         ChatToAll(ChatLineKind.System, "", $"{c.Name} started the Holy Mass.");
-        ChatTo(c, ChatLineKind.Info, $"Holy Mass: {sent} citizens walk to the church, the Mass begins in {HolyMass.Mass.GatherSeconds:0} s and lasts {HolyMass.Mass.MassSeconds:0} s. /event current end concludes it.");
+        ChatTo(c, ChatLineKind.Info, $"Holy Mass: {sent} citizens walk to the church, the Mass begins in {HolyMass.Mass.BellsLeadSeconds + HolyMass.Mass.GatherSeconds:0} s and lasts {HolyMass.Mass.MassSeconds:0} s. /event current end concludes it.");
     }
 
     /// <summary>"/event current end": concludes the running event as if it was completed. Done once more, it removes what is left.</summary>

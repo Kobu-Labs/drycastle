@@ -15,7 +15,7 @@
     "rearm_delay_s": 5
   },
   "fight": {
-    "transform_delay_s": 1.0,
+    "transform_delay_s": 0.0,
     "transform_s": 7.0,
     "transform_swap_s": 3.0,
     "transform_drop_s": 1.0,

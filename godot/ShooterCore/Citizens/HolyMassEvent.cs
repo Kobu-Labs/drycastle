@@ -89,12 +89,12 @@ public sealed class HolyMassEvent
         _kept.Clear(); _seatOf.Clear(); _seatedFor.Clear(); _sinners.Clear();
         PastorKills = 0; Progress = 0; PastorReady = false; _replaceLeft = _resumeLeft = -1; _arrived = false;
         foreach (var id in KeepSeatsFor()) if (_crowd.Reserve(id)) _kept.Add(id);
-        var sent = _crowd.Spawn(_crowd.FreeSeats.ToList(), _cfg.StaggerSeconds, _cfg.HouseRadiusM);
+        var sent = _crowd.Spawn(_crowd.FreeSeats.ToList(), _cfg.StaggerSeconds, _cfg.HouseRadiusM, _cfg.BellsLeadSeconds);
         _pastor = _crowd.SpawnRole(CitizenRole.Pastor, new[] { _church.Pastor!.Pos }, _church.Pastor.Yaw);
         foreach (var m in _church.Monks) _crowd.SpawnRole(CitizenRole.Monk, new[] { m.Pos }, m.Yaw);
         PastorReady = _pastor != null;
         if (_pastor == null) _replaceLeft = 1; // the entity cap: try again
-        _phaseLeft = _cfg.GatherSeconds;
+        _phaseLeft = _cfg.BellsLeadSeconds + _cfg.GatherSeconds; // the bells ring first, then the gather
         SetPhase(MassPhase.Gather);
         return sent;
     }
@@ -165,6 +165,8 @@ public sealed class HolyMassEvent
         if (PastorKills >= _cfg.PastorKillsToTurn)
         {
             _replaceLeft = -1;
+            // no death clip and no corpse: the pastor's body goes in the hit itself, the demon takes its place
+            if (_pastor != null && _pastor.HitId == k.HitId) _crowd.Remove(_pastor);
             SetPhase(MassPhase.Void);
             PastorTurns?.Invoke();
             return;
