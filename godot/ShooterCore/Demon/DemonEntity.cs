@@ -3,8 +3,8 @@ using System.Numerics;
 
 namespace Drycastle.ShooterCore;
 
-/// <summary>What the demon is doing: the replicated state byte. Waiting is still at its anchor (nobody inside), Dwelling rests, Telegraphing is the wind-up of a fireball. Climbing to the first anchor after the turning shows as Crawling.</summary>
-public enum DemonState : byte { Transforming = 0, Waiting = 1, Dwelling = 2, Crawling = 3, Telegraphing = 4, Dead = 5 }
+/// <summary>What the demon is doing: the replicated state byte. Waiting is still at its anchor (nobody inside), Dwelling rests, Telegraphing is the wind-up of a fireball, Roaring is the aggressive roar, Crouching the crouch before a leap, Leaping the arc across the nave, Breathing the fire from its mouth (windup, then the stream). Climbing to the first anchor after the turning shows as Crawling.</summary>
+public enum DemonState : byte { Transforming = 0, Waiting = 1, Dwelling = 2, Crawling = 3, Telegraphing = 4, Dead = 5, Roaring = 6, Crouching = 7, Leaping = 8, Breathing = 9 }
 
 /// <summary>Demon world entity rules: the wire type, the id it is hit under, and how its surface normal travels.</summary>
 public static class DemonRules
@@ -20,7 +20,7 @@ public static class DemonRules
 
     public static bool IsHitId(ushort id) => id == HitId;
 
-    public static DemonState StateOf(byte state) => state <= (byte)DemonState.Dead ? (DemonState)state : DemonState.Dwelling;
+    public static DemonState StateOf(byte state) => state <= (byte)DemonState.Breathing ? (DemonState)state : DemonState.Dwelling;
 
     public static void Register(WorldEntityRegistry registry)
     {
@@ -112,7 +112,7 @@ public readonly record struct DemonImpactMsg(ushort Id, Vector3 At, bool HitPlay
 /// <summary>Wire format of the demon events (<see cref="EventKind.DemonFireball"/>, <see cref="EventKind.DemonImpact"/>). Little-endian.</summary>
 public static class DemonCodec
 {
-    public const int FireballBytes = 26, ImpactBytes = 15;
+    public const int FireballBytes = 26, ImpactBytes = 15, FlameBytes = 2;
 
     static void Put(Span<byte> b, Vector3 v)
     {
@@ -134,6 +134,16 @@ public static class DemonCodec
 
     public static DemonFireballMsg? DecodeFireball(ReadOnlySpan<byte> d) =>
         d.Length == FireballBytes ? new DemonFireballMsg(BinaryPrimitives.ReadUInt16LittleEndian(d), Get(d[2..]), Get(d[14..])) : null;
+
+    /// <summary>The flame event: the player the demon breathes fire at (u16).</summary>
+    public static byte[] EncodeFlame(ushort target)
+    {
+        var b = new byte[FlameBytes];
+        BinaryPrimitives.WriteUInt16LittleEndian(b, target);
+        return b;
+    }
+
+    public static ushort? DecodeFlame(ReadOnlySpan<byte> d) => d.Length == FlameBytes ? BinaryPrimitives.ReadUInt16LittleEndian(d) : null;
 
     public static byte[] EncodeImpact(DemonImpactMsg m)
     {

@@ -10,7 +10,10 @@ namespace Drycastle.Shooter;
 /// in the last <see cref="DemonFightDef.TransformDropS"/>. From then on <see cref="DemonPose"/> carries the crawl, oriented by the surface normal (<see cref="Place"/>
 /// turns the body smoothly), with a gait driven by the distance it travels. The head follows the nearest player on its own, clamped, with sudden twitches and now and
 /// then a slow over-rotation and a tilt; waiting, it roars (the pack's roar clip over the crawl), rears and tilts its head. A fireball is a wind-up of the right arm with a
-/// glowing orb in the hand, then a fling (<see cref="Fling"/>). Dead, it lets go of the surface, falls, lies and burns out. The views obey <see cref="ChurchInterior"/>.
+/// glowing orb in the hand, then a fling (<see cref="Fling"/>). The server's roar (<see cref="DemonState.Roaring"/>) stands it up on the surface for the pack's roar
+/// clip, with shock rings and a flare. A leap (<see cref="DemonState.Crouching"/>, <see cref="DemonState.Leaping"/>) crouches, stretches out in flight and squashes on landing.
+/// Fire from the mouth (<see cref="DemonState.Breathing"/>) rears, then a particle stream and a light from the head bone follow <see cref="FlameAt"/>.
+/// Dead, it lets go of the surface, falls, lies and burns out. The views obey <see cref="ChurchInterior"/>.
 /// </summary>
 public sealed partial class DemonView : Node3D
 {
@@ -26,15 +29,27 @@ public sealed partial class DemonView : Node3D
     DemonPose? _pose;
     Skeleton3D? _skel;
     Node3D? _orb;
-    OmniLight3D? _orbLight, _fireLight, _eyeLight;
-    CpuParticles3D? _flames;
+    OmniLight3D? _orbLight, _fireLight, _eyeLight, _flameLight;
+    CpuParticles3D? _flames, _stream;
+    Node3D? _mouth;
+    LoopVoice? _flameVoice;
     readonly List<StandardMaterial3D> _priestMats = new(), _demonMats = new();
 
     DemonState _state = (DemonState)255;
     double _t, _stateT;
     bool _swapped;
-    float _crawl, _crawlTo;
+    float _crawl, _crawlTo, _crawlSpeed = 1f;
     float _limp;
+
+    // roar, leap, flame
+    /// <summary>Where the flame goes (the target's chest), set every frame by the client while it breathes; null falls back to <see cref="LookAtWorld"/>.</summary>
+    public Vector3? FlameAt;
+    /// <summary>The roar began at this point: the client shakes the camera.</summary>
+    public Action<Vector3>? RoarCue;
+    float _crouch, _stretch, _land, _fireK;
+    double _nextRing;
+    Vector3 _flameDir = Vector3.Forward;
+    bool _hasFlameDir;
 
     // movement
     Vector3 _lastPos;
@@ -99,14 +114,20 @@ public sealed partial class DemonView : Node3D
                 var hand = new BoneAttachment3D { BoneName = "Hand_R", Name = "HandR" };
                 _skel.AddChild(hand);
                 hand.AddChild(_orb);
+                var head = new BoneAttachment3D { BoneName = "Head", Name = "HeadMark" };
+                _skel.AddChild(head);
+                _mouth = new Node3D { Name = "Mouth" };
+                head.AddChild(_mouth);
             }
         }
         if (ShotFx.Enabled)
         {
             _fireLight = new OmniLight3D { LightColor = new Color(1f, 0.55f, 0.15f), LightEnergy = 0, OmniRange = 12f, ShadowEnabled = false, Position = new Vector3(0, 1f, 0) };
             _eyeLight = new OmniLight3D { LightColor = new Color(1f, 0.15f, 0.05f), LightEnergy = 0, OmniRange = 6f, ShadowEnabled = false, Position = new Vector3(0, 0.6f, 0) };
-            AddChild(_fireLight); AddChild(_eyeLight);
+            _flameLight = new OmniLight3D { LightColor = new Color(1f, 0.5f, 0.12f), LightEnergy = 0, OmniRange = 11f, ShadowEnabled = false };
+            AddChild(_fireLight); AddChild(_eyeLight); AddChild(_flameLight);
         }
+        _stream = DemonFx.Stream(this, _data.Flame.RangeM > 0 ? _data.Flame.RangeM : 10f);
         _flames = DemonFx.Flames(this, 70, 1.2f, new Vector3(0, 0.9f, 0));
         _nextTwitch = 1; _nextEmote = 3;
     }
@@ -132,7 +153,12 @@ public sealed partial class DemonView : Node3D
         if (anim.HasAnimation(idle)) anim.Play(idle);
     }
 
-    public override void _ExitTree() => ChurchInterior.Changed -= OnInterior;
+    public override void _ExitTree()
+    {
+        ChurchInterior.Changed -= OnInterior;
+        _flameVoice?.Release();
+        _flameVoice = null;
+    }
 
     void OnInterior(bool visible) => Visible = visible;
 
@@ -143,19 +169,34 @@ public sealed partial class DemonView : Node3D
     {
         if (state == _state) return;
         var first = _state == (DemonState)255;
+        var prev = _state;
         _state = state;
         _stateT = 0;
+        if (prev == DemonState.Leaping) _land = 1; // it lands: a squash
+        if (state == DemonState.Roaring && !first) BeginRoar();
+        else if (prev == DemonState.Roaring && state != DemonState.Dead && _demonAnim != null && _demonAnim.HasAnimation(Idle)) _demonAnim.Play(Idle, 0.3);
+        if (state == DemonState.Breathing) _hasFlameDir = false;
+        _crawlSpeed = state == DemonState.Roaring || prev == DemonState.Roaring ? 3f : 1f / Math.Max(0.1f, _data.Fight.TransformDropS);
         switch (state)
         {
             case DemonState.Transforming: _swapped = false; BeginBurn(); break;
             case DemonState.Dead: BeginDeath(); break;
             default:
                 if (!_swapped) Swap(false);
-                _crawlTo = 1;
-                if (first) _crawl = 1;
-                if (_flames != null && !_detached) ParticleFx.Run(_flames, false);
+                _crawlTo = state == DemonState.Roaring ? 0 : 1; // the roar stands it up on the surface
+                if (first) _crawl = _crawlTo;
+                if (_flames != null && !_detached) ParticleFx.Run(_flames, state == DemonState.Roaring);
                 break;
         }
+    }
+
+    /// <summary>The aggressive roar: the pack's clip, the sound, a flare and a camera shake; the rings follow in <see cref="_Process"/>.</summary>
+    void BeginRoar()
+    {
+        _nextRing = 0.25;
+        if (_demonAnim != null && _demonAnim.HasAnimation(Roar)) { _demonAnim.Play(Roar, 0.2); _demonAnim.Queue(Idle); }
+        if (Sfx.Enabled) Sfx.Play3D("demon.roar", GlobalPosition + _up * 1.4f);
+        RoarCue?.Invoke(GlobalPosition);
     }
 
     /// <summary>A hit that counted: the body jerks and flashes.</summary>
@@ -178,7 +219,7 @@ public sealed partial class DemonView : Node3D
         else
         {
             if (_rot.Dot(q) < 0) q = -q;
-            _rot = _rot.Slerp(q, 1f - MathF.Exp(-9f * (float)dt)).Normalized();
+            _rot = _rot.Slerp(q, 1f - MathF.Exp(-(_state == DemonState.Leaping ? 20f : 9f) * (float)dt)).Normalized();
         }
         _up = new Basis(_rot) * Vector3.Up;
         GlobalTransform = new Transform3D(new Basis(_rot), pos);
@@ -304,10 +345,17 @@ public sealed partial class DemonView : Node3D
         else if (_state == DemonState.Dead) UpdateDead(delta);
         else
         {
-            if (_eyeLight != null) _eyeLight.LightEnergy = DemonFx.Flicker(_t, 9, 0.5f, 1.4f);
-            if (_fireLight != null) _fireLight.LightEnergy = Mathf.MoveToward(_fireLight.LightEnergy, 0, dt * 8f);
+            var roaring = _state == DemonState.Roaring;
+            if (_eyeLight != null) _eyeLight.LightEnergy = roaring ? DemonFx.Flicker(_t, 9, 3f, 7f) : DemonFx.Flicker(_t, 9, 0.5f, 1.4f);
+            if (_fireLight != null) _fireLight.LightEnergy = roaring ? DemonFx.Flicker(_t, 3, 1.5f, 4f) : Mathf.MoveToward(_fireLight.LightEnergy, 0, dt * 8f);
+            if (roaring && _stateT >= _nextRing && _mouth != null && IsInsideTree())
+            {
+                _nextRing += 0.8;
+                DemonFx.RoarRing(GetParent<Node3D>(), _mouth.GlobalPosition, _up);
+            }
         }
-        _crawl = Mathf.MoveToward(_crawl, _crawlTo, dt / Math.Max(0.1f, _data.Fight.TransformDropS));
+        UpdateFlame(dt);
+        _crawl = Mathf.MoveToward(_crawl, _crawlTo, dt * _crawlSpeed);
         if (_pose == null) return;
         _pose.Influence = _crawl * _crawl * (3 - 2 * _crawl);
 
@@ -315,6 +363,18 @@ public sealed partial class DemonView : Node3D
         var move = Mathf.Clamp(_speed / SpeedAtFullGait, 0f, 1f);
         _pose.Gait = _gait; _pose.Move = move;
         _pose.Limp = _limp;
+
+        // the leap: crouch on the anchor, stretch in the air, squash on landing
+        var crouchTo = _state == DemonState.Crouching ? 1f : 0f;
+        _crouch = Mathf.MoveToward(_crouch, crouchTo, dt * (crouchTo > _crouch ? 1f / Math.Max(0.15f, _data.Leap.CrouchS * 0.7f) : 8f));
+        _land = Mathf.MoveToward(_land, 0f, dt * 2.2f);
+        _stretch = Mathf.MoveToward(_stretch, _state == DemonState.Leaping ? 1f : 0f, dt * (_state == DemonState.Leaping ? 8f : 3f));
+        _pose.Crouch = Math.Max(_crouch, 0.9f * _land);
+        _pose.Stretch = _stretch;
+
+        // the flame: it rears back through the windup
+        var windup = Math.Max(0.2f, _data.Flame.WindupS);
+        _fireK = Mathf.MoveToward(_fireK, _state == DemonState.Breathing ? 1f : 0f, dt * (_state == DemonState.Breathing ? 1f / windup : 4f));
 
         // the throw: the right arm winds up for the telegraph and flings when the ball leaves
         var tele = _data.Fireball.TelegraphS;
@@ -341,16 +401,45 @@ public sealed partial class DemonView : Node3D
         Head(dt);
     }
 
+    /// <summary>The stream of fire from the head bone: once the windup is over it runs along the line to <see cref="FlameAt"/>, with a light and a roaring loop.</summary>
+    void UpdateFlame(float dt)
+    {
+        var on = _state == DemonState.Breathing && _stateT >= _data.Flame.WindupS && _mouth != null && IsInsideTree();
+        if (_flameLight != null) _flameLight.LightEnergy = Mathf.MoveToward(_flameLight.LightEnergy, on ? DemonFx.Flicker(_t, 6, 3f, 7f) : 0f, dt * (on ? 40f : 14f));
+        if (!on)
+        {
+            if (_stream != null && _stream.Emitting) ParticleFx.Run(_stream, false);
+            if (_flameVoice != null) { _flameVoice.Release(); _flameVoice = null; }
+            return;
+        }
+        var origin = _mouth!.GlobalPosition;
+        var target = FlameAt ?? LookAtWorld ?? origin - GlobalTransform.Basis.Z;
+        var want = target - origin;
+        want = want.LengthSquared() > 1e-4f ? want.Normalized() : -GlobalTransform.Basis.Z;
+        if (!_hasFlameDir) { _flameDir = want; _hasFlameDir = true; }
+        else _flameDir = _flameDir.Slerp(want, 1f - MathF.Exp(-5f * dt)).Normalized();
+        if (_stream != null)
+        {
+            var up = MathF.Abs(_flameDir.Y) > 0.97f ? Vector3.Forward : Vector3.Up;
+            _stream.GlobalTransform = new Transform3D(Basis.LookingAt(_flameDir, up), origin + _flameDir * 0.25f);
+            ParticleFx.Run(_stream, true);
+        }
+        if (_flameLight != null) _flameLight.GlobalPosition = origin + _flameDir * 2.5f;
+        if (Sfx.Enabled)
+        {
+            _flameVoice ??= Sfx.Loop("demon.flame", origin);
+            _flameVoice?.Update(origin + _flameDir * 2f);
+        }
+    }
+
     void Emotes(float dt, float hurt)
     {
         var waiting = _state is DemonState.Waiting or DemonState.Dwelling && _crawl > 0.9f;
         var rear = 0f; var tilt = 0f;
         if (waiting && _t >= _nextEmote && _emote == 0)
         {
-            _emote = 1 + _rng.Next(3);
-            _emoteStart = _t; _emoteLen = _emote == 1 ? 2.2 : _emote == 2 ? 1.6 : 2.5;
-            if (_emote == 1 && _demonAnim != null && _demonAnim.HasAnimation(Roar)) { _demonAnim.Play(Roar, 0.25); _demonAnim.Queue(Idle); _emoteLen = Math.Min(_demonAnim.GetAnimation(Roar).Length, 3.5); }
-            else if (_emote == 1) _emote = 2;
+            _emote = 2 + _rng.Next(2); // the roar is the server's now (Roaring)
+            _emoteStart = _t; _emoteLen = _emote == 2 ? 1.6 : 2.5;
         }
         if (_emote != 0)
         {
@@ -359,13 +448,13 @@ public sealed partial class DemonView : Node3D
             else
             {
                 var env = MathF.Sin(u * MathF.PI);
-                if (_emote == 1) rear = 0.6f * Mathf.Clamp(env * 2.5f, 0f, 1f);
-                else if (_emote == 2) rear = 0.9f * env;
+                if (_emote == 2) rear = 0.9f * env;
                 else tilt = 0.55f * env;
             }
         }
         // rearing for the throw too: it sits back on its legs
         rear = Math.Max(rear, 0.35f * _wind);
+        rear = Math.Max(rear, 0.7f * _fireK);
         if (_pose == null) return;
         _pose.Rear = rear;
         _pose.Breath = 0.03f * MathF.Sin((float)_t * 2.1f) + 0.35f * hurt;

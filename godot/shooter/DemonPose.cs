@@ -36,6 +36,10 @@ public sealed partial class DemonPose : SkeletonModifier3D
     public float Fling;
     /// <summary>0..1: dead, the limbs slack and spread, the body down.</summary>
     public float Limp;
+    /// <summary>0..1: it crouches low, limbs folded under the body (before a leap, and the landing).</summary>
+    public float Crouch;
+    /// <summary>0..1: stretched out in flight, hands reaching ahead, legs trailing, the spine straight (the leap).</summary>
+    public float Stretch;
     /// <summary>The chest's breathing and flinching, radians added to the spine.</summary>
     public float Breath;
     /// <summary>The head's look, radians from straight ahead (+Z): yaw to the left (+X), pitch up (+Y). Not clamped here.</summary>
@@ -96,7 +100,7 @@ public sealed partial class DemonPose : SkeletonModifier3D
         if (!_init) Init(s);
         if (!_ok) return;
 
-        var body = BodyShare * _armLen * (1 - 0.75f * Limp);
+        var body = BodyShare * _armLen * (1 - 0.75f * Limp) * (1 - 0.45f * Crouch);
         var step = Move * MathF.Sin(Gait * Mathf.Tau * 2f); // two sways per cycle
         // hips: pitched forward 90 degrees about the left-right axis (the spine now runs along +Z), centred over the surface point, a little sway and bob
         var hips = s.GetBoneGlobalPose(_hips);
@@ -107,7 +111,7 @@ public sealed partial class DemonPose : SkeletonModifier3D
         for (var i = 0; i < _spine.Length; i++)
         {
             var share = (i + 1f) / _spine.Length;
-            var extra = -0.55f * Rear * (i < 3 ? 1 : 0.4f) + Breath * share - 0.5f * Limp * share * share;
+            var extra = -0.55f * Rear * (i < 3 ? 1 : 0.4f) + Breath * share - 0.5f * Limp * share * share - 0.25f * Crouch * share + 0.75f * Stretch * share;
             var g = s.GetBoneGlobalPose(_spine[i]);
             g.Basis = new Basis(Vector3.Right, _spineBend[i] + extra) * g.Basis;
             s.SetBoneGlobalPose(_spine[i], g);
@@ -151,6 +155,14 @@ public sealed partial class DemonPose : SkeletonModifier3D
             var fling = new Vector3(a.X + 0.1f, a.Y - 0.05f, a.Z + 1.05f * _armLen);
             t = t.Lerp(wind, Wind);
             t = t.Lerp(fling, Fling);
+        }
+        // crouching: the hands and feet gather under the body, the knees and elbows fold up
+        if (Crouch > 0) t = t.Lerp(new Vector3(a.X + l.Side * (l.Arm ? 0.12f : 0.2f), ground, a.Z + (l.Arm ? 0.1f : -0.05f)), Crouch);
+        // in flight: the hands reach ahead, the legs trail behind, all in line with the body
+        if (Stretch > 0)
+        {
+            var reachLen = (l.L1 + l.L2) * 0.95f;
+            t = t.Lerp(new Vector3(a.X + l.Side * 0.14f, a.Y + (l.Arm ? 0.04f : 0f), a.Z + (l.Arm ? reachLen : -reachLen)), Stretch);
         }
         // dead: the limbs spread out and lie
         if (Limp > 0) t = t.Lerp(new Vector3(a.X + l.Side * 0.75f * _armLen, 0.05f, a.Z + (l.Arm ? 0.3f : -0.4f)), Limp);

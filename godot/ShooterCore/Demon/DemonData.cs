@@ -75,6 +75,61 @@ public sealed class FireballDef
     public bool Ignites { get; set; }
 }
 
+/// <summary>
+/// The aggressive roar: it stops and roars for <see cref="DurationS"/> (0 turns roars off). It roars when it wakes (<see cref="OnWake"/>: the start of the fight, and after a wipe),
+/// every <see cref="IntervalS"/> seconds while it fights, and when its hits left fall to each of <see cref="HealthShares"/> (the fight's phases).
+/// </summary>
+public sealed class DemonRoarDef
+{
+    public float DurationS { get; set; }
+    /// <summary>[min, max] seconds between roars while it fights.</summary>
+    public float[] IntervalS { get; set; } = Array.Empty<float>();
+    /// <summary>Share of the hits left (1 full) at which it roars once, e.g. [0.66, 0.33].</summary>
+    public float[] HealthShares { get; set; } = Array.Empty<float>();
+    public bool OnWake { get; set; }
+    /// <summary>Clients shake the camera of anyone within this far.</summary>
+    public float ShakeRadiusM { get; set; }
+}
+
+/// <summary>
+/// The leap across the nave to an anchor of the opposite wall (0 <see cref="Chance"/> turns it off): a crouch of <see cref="CrouchS"/> on the anchor, then a scripted arc
+/// at <see cref="SpeedMps"/> (it rises <see cref="ArcHeightM"/> above the straight line), then <see cref="LandRecoverS"/> on the new anchor.
+/// </summary>
+public sealed class DemonLeapDef
+{
+    /// <summary>Chance, each time it would crawl on, that it leaps instead (when an anchor qualifies and the cooldown is over).</summary>
+    public float Chance { get; set; }
+    public float MinRangeM { get; set; }
+    public float MaxRangeM { get; set; }
+    public float CrouchS { get; set; }
+    public float SpeedMps { get; set; }
+    public float ArcHeightM { get; set; }
+    public float LandRecoverS { get; set; }
+    public float CooldownS { get; set; }
+    /// <summary>A landing anchor's normal must point against its own: <c>dot &lt;= -MinOppositeDot</c>.</summary>
+    public float MinOppositeDot { get; set; } = 0.7f;
+}
+
+/// <summary>
+/// The flame from its mouth (0 <see cref="DurationS"/> turns it off): at a target within <see cref="RangeM"/> it rears for <see cref="WindupS"/>, then breathes for
+/// <see cref="DurationS"/>. The stream is a cone round an axis that follows the target at <see cref="TrackDegPerS"/>; every <see cref="TickS"/> each living player in it
+/// takes <see cref="DamagePerTick"/> and is set ablaze with the file's <see cref="DemonFile.Burn"/>.
+/// </summary>
+public sealed class DemonFlameDef
+{
+    public float RangeM { get; set; }
+    public float ConeHalfAngleDeg { get; set; }
+    public float WindupS { get; set; }
+    public float DurationS { get; set; }
+    public float CooldownS { get; set; }
+    public float TrackDegPerS { get; set; }
+    public float TickS { get; set; }
+    public float DamagePerTick { get; set; }
+    /// <summary>The mouth: this far off the surface along its normal, and ahead along its facing.</summary>
+    public float HeadUpM { get; set; }
+    public float HeadForwardM { get; set; }
+}
+
 /// <summary>The fight around the brain: the turning, the climb to the walls, the doors and the corpse. Seconds and metres.</summary>
 public sealed class DemonFightDef
 {
@@ -106,6 +161,9 @@ public sealed class DemonFile : IVersioned
     public DemonCrawlDef Crawl { get; set; } = new();
     public DemonFightDef Fight { get; set; } = new();
     public FireballDef Fireball { get; set; } = new();
+    public DemonRoarDef Roar { get; set; } = new();
+    public DemonLeapDef Leap { get; set; } = new();
+    public DemonFlameDef Flame { get; set; } = new();
     public BurnDef Burn { get; set; } = new();
 
     public static DemonFile Load(string path) => Validate(DataFile.Load<DemonFile>(path));
@@ -163,6 +221,31 @@ public sealed class DemonFile : IVersioned
         Pos(s.RadiusM, "fireball.splash.radius_m"); NonNeg(s.FullDamageRadiusM, "fireball.splash.full_damage_radius_m");
         NonNeg(s.EdgeDamage, "fireball.splash.edge_damage"); NonNeg(s.KnockbackSpeed, "fireball.splash.knockback_speed");
         if (s.FullDamageRadiusM > s.RadiusM) throw new DataFileException($"{F}: \"fireball.splash.full_damage_radius_m\" must not exceed \"radius_m\"");
+
+        var r = f.Roar;
+        if (r.DurationS > 0)
+        {
+            if (r.IntervalS is not { Length: 2 } ri || !(ri[0] > 0) || ri[1] < ri[0] || !float.IsFinite(ri[1]))
+                throw new DataFileException($"{F}: \"roar.interval_s\" must be [min, max] with 0 < min <= max");
+            foreach (var share in r.HealthShares) if (!(share > 0 && share < 1)) throw new DataFileException($"{F}: every \"roar.health_shares\" entry must be between 0 and 1");
+            NonNeg(r.ShakeRadiusM, "roar.shake_radius_m");
+        }
+        var lp = f.Leap;
+        if (lp.Chance > 0)
+        {
+            if (lp.Chance > 1) throw new DataFileException($"{F}: \"leap.chance\" must be between 0 and 1");
+            Pos(lp.MinRangeM, "leap.min_range_m"); Pos(lp.MaxRangeM, "leap.max_range_m"); Pos(lp.CrouchS, "leap.crouch_s"); Pos(lp.SpeedMps, "leap.speed_mps");
+            NonNeg(lp.ArcHeightM, "leap.arc_height_m"); NonNeg(lp.LandRecoverS, "leap.land_recover_s"); NonNeg(lp.CooldownS, "leap.cooldown_s");
+            if (lp.MinRangeM >= lp.MaxRangeM) throw new DataFileException($"{F}: \"leap.min_range_m\" must be below \"leap.max_range_m\"");
+            if (!(lp.MinOppositeDot > 0 && lp.MinOppositeDot <= 1)) throw new DataFileException($"{F}: \"leap.min_opposite_dot\" must be above 0 and at most 1");
+        }
+        var fl = f.Flame;
+        if (fl.DurationS > 0)
+        {
+            Pos(fl.RangeM, "flame.range_m"); Pos(fl.WindupS, "flame.windup_s"); Pos(fl.TrackDegPerS, "flame.track_deg_per_s"); Pos(fl.TickS, "flame.tick_s");
+            Pos(fl.DamagePerTick, "flame.damage_per_tick"); NonNeg(fl.CooldownS, "flame.cooldown_s"); NonNeg(fl.HeadUpM, "flame.head_up_m"); NonNeg(fl.HeadForwardM, "flame.head_forward_m");
+            if (!(fl.ConeHalfAngleDeg > 0 && fl.ConeHalfAngleDeg < 90)) throw new DataFileException($"{F}: \"flame.cone_half_angle_deg\" must be between 0 and 90");
+        }
 
         Pos(f.Burn.Dps, "burn.dps"); Pos(f.Burn.DurationS, "burn.duration_s"); Pos(f.Burn.TickIntervalS, "burn.tick_interval_s");
         if (f.Burn.TickIntervalS > f.Burn.DurationS) throw new DataFileException($"{F}: \"burn.tick_interval_s\" must not exceed \"burn.duration_s\"");

@@ -8,7 +8,13 @@ namespace Drycastle.ShooterCore.Tests;
 public class DemonTests
 {
     static string DataDir => Path.Combine(AppContext.BaseDirectory, "data");
-    static DemonFile Def => DemonFile.Load(Path.Combine(DataDir, "holy_mass_demon.json"));
+    static DemonFile Full => DemonFile.Load(Path.Combine(DataDir, "holy_mass_demon.json"));
+
+    /// <summary>The shipped numbers with the roar, the leap and the flame off: the crawl and the fireball tests read the plain demon.</summary>
+    static DemonFile Def
+    {
+        get { var d = Full; d.Roar.DurationS = 0; d.Leap.Chance = 0; d.Flame.DurationS = 0; return d; }
+    }
 
     /// <summary>A hand-written room, 20 x 30 x 10 m about the origin, in the file's map axes (x east, y north, z up): three anchors on the west wall, two on the ceiling, three on the east wall. In the game's axes (x, z, -y) the ceiling is y = 10.</summary>
     public const string ChurchJson = """
@@ -419,5 +425,88 @@ public class DemonTests
         Assert.Equal(i, DemonCodec.DecodeImpact(DemonCodec.EncodeImpact(i)));
         Assert.Null(DemonCodec.DecodeFireball(new byte[5]));
         Assert.Null(DemonCodec.DecodeImpact(new byte[5]));
+    }
+
+    // ---- roar, leap, flame ----
+
+    static DemonBrain With(Action<DemonFile> tweak, int seed = 1, int start = 5)
+    {
+        var d = Def; d.Roar.DurationS = 0; d.Roar.IntervalS = new[] { 22f, 38f }; d.Roar.HealthShares = new[] { 0.66f, 0.33f };
+        d.Leap = Full.Leap; d.Flame = Full.Flame; d.Roar = Full.Roar;
+        d.Leap.Chance = 0; d.Flame.DurationS = 0; d.Roar.DurationS = 0;
+        tweak(d);
+        return new DemonBrain(d, Graph, new Random(seed), null, start);
+    }
+
+    [Fact]
+    public void It_roars_when_it_wakes_and_when_its_hits_fall_to_a_phase()
+    {
+        var b = With(d => d.Roar.DurationS = Full.Roar.DurationS);
+        var players = new[] { P(1, 0, 0) };
+        var ev = Run(b, players, 0.2f);
+        Assert.Single(ev.OfType<DemonRoared>()); // the wake
+        Assert.Equal(DemonPhase.Roaring, b.Phase);
+        Run(b, players, Full.Roar.DurationS + 0.2f);
+        Assert.NotEqual(DemonPhase.Roaring, b.Phase);
+
+        var hits = new List<DemonEvent>();
+        while (b.HitsNeeded - b.HitsTaken > b.HitsNeeded * 0.6f) b.RegisterHit(1, DemonHitKind.Bullet, hits); // under 66 % left
+        var again = Run(b, players, 6f, x => x.Phase == DemonPhase.Roaring);
+        Assert.Equal(DemonPhase.Roaring, b.Phase);
+        Assert.Single(again.OfType<DemonRoared>());
+        Run(b, players, Full.Roar.DurationS + 0.5f);
+        Assert.DoesNotContain(Run(b, players, 3f), e => e is DemonRoared); // that phase has been roared for
+    }
+
+    [Fact]
+    public void It_leaps_to_an_anchor_across_on_the_opposite_wall_along_a_scripted_arc()
+    {
+        var b = With(d => d.Leap.Chance = 1, start: 5); // east wall, x = 10
+        var g = Graph;
+        var players = new[] { P(1, 0, 0) };
+        var wound = false; var flew = false;
+        var prev = b.Pose.Position;
+        var land = -1;
+        for (var i = 0; i < 30 * 40 && land < 0; i++)
+        {
+            b.Step(1f / 30, players, new List<DemonEvent>());
+            var pose = b.Pose;
+            Assert.True(float.IsFinite(pose.Position.X + pose.Position.Y + pose.Position.Z) && MathF.Abs(pose.Normal.Length() - 1) < 1e-3f && MathF.Abs(pose.Forward.Length() - 1) < 1e-3f);
+            if (b.Phase == DemonPhase.LeapWind) { wound = true; Assert.Equal(prev, pose.Position); }
+            if (b.Phase == DemonPhase.Leaping)
+            {
+                flew = true;
+                Assert.True(g[b.LeapTarget].Normal.X > 0.9f, "lands on the west wall");
+                Assert.True(Vector3.Distance(prev, pose.Position) <= Full.Leap.SpeedMps / 30 * 1.6f + 0.2f, "scripted speed");
+            }
+            else if (flew) land = i;
+            prev = pose.Position;
+        }
+        Assert.True(wound && flew && land >= 0);
+        Assert.True(g[b.Anchor].Normal.X > 0.9f);
+        Assert.True(Vector3.Distance(b.Pose.Position, g[b.Anchor].Pos) < 1e-3f);
+        Assert.Equal(g[b.Anchor].Normal, b.Pose.Normal);
+    }
+
+    [Fact]
+    public void It_breathes_fire_on_a_near_target_and_the_cone_burns_only_who_stands_in_it()
+    {
+        var b = With(d => d.Flame.DurationS = Full.Flame.DurationS);
+        var f = Full.Flame;
+        var players = new[] { P(1, 4, 0), P(2, 10, 9) }; // 6 m off the east wall, and one far along it
+        var ev = new List<DemonEvent>();
+        var started = -1; var ended = -1;
+        for (var i = 0; i < 30 * 12; i++)
+        {
+            b.Step(1f / 30, players, ev);
+            if (started < 0 && b.Phase == DemonPhase.Breathing) started = i;
+            if (started >= 0 && ended < 0 && b.Phase != DemonPhase.Breathing) ended = i;
+        }
+        Assert.True(started >= 0 && ended > started);
+        Assert.Equal((ushort)1, ev.OfType<DemonFlameStarted>().First().Target);
+        Assert.InRange((ended - started) / 30f, f.WindupS + f.DurationS - 0.2f, f.WindupS + f.DurationS + 0.2f);
+        var hits = ev.OfType<DemonFlameHit>().Select(h => h.Player).ToList();
+        Assert.True(hits.Count >= 4 && hits.All(p => p == 1), "only the target stands in the cone");
+        Assert.Contains(ev, e => e is DemonFlameHit);
     }
 }

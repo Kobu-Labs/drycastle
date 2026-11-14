@@ -355,6 +355,7 @@ public partial class Shooter : Node3D
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Water.Empty : Drycastle.ShooterCore.Water.Parse(_map.WaterJson);
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
         if (ChurchProps.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } churchProps) AddChild(churchProps); // pews, altar: Synty models, boxes on the server too
+        if (!_map.CollisionOnly && ChurchDecor.Create(Path.GetFullPath(dir)) is { } churchDecor) AddChild(churchDecor); // the cross and the interior lights (client only)
         if (ChurchDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } churchDoors) AddChild(churchDoors); // closed doors in the doorway, solid on the server too (ADR 0019)
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {

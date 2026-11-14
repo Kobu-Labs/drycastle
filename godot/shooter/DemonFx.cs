@@ -62,6 +62,46 @@ public static class DemonFx
         return node;
     }
 
+    /// <summary>
+    /// The demon's flame stream: world-space particles shot along the node's -Z (the view turns it at the target each frame), reaching about <paramref name="rangeM"/>,
+    /// fatter as they go. Hidden until <see cref="ParticleFx.Run"/>. Null headless.
+    /// </summary>
+    public static CpuParticles3D? Stream(Node3D parent, float rangeM)
+    {
+        if (!ShotFx.Enabled) return null;
+        const float life = 0.6f;
+        var rc = RocketFx.C;
+        var p = new CpuParticles3D
+        {
+            Name = "FlameStream", Mesh = rc.Fire, ColorRamp = rc.FireRamp, ScaleAmountCurve = rc.Grow, LocalCoords = false, OneShot = false, Emitting = false, Visible = false,
+            Direction = Vector3.Forward, Spread = 5, Amount = 110, Lifetime = life, InitialVelocityMin = rangeM / life * 0.85f, InitialVelocityMax = rangeM / life * 1.05f,
+            Gravity = new Vector3(0, 1.5f, 0), ScaleAmountMin = 0.45f, ScaleAmountMax = 0.8f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            EmissionShape = CpuParticles3D.EmissionShapeEnum.Sphere, EmissionSphereRadius = 0.12f,
+        };
+        parent.AddChild(p);
+        return p;
+    }
+
+    /// <summary>One shock ring of a roar: a glowing ring at <paramref name="at"/> that swells and fades in about 0.8 s, then frees itself.</summary>
+    public static void RoarRing(Node3D world, Vector3 at, Vector3 up)
+    {
+        if (!ShotFx.Enabled || !world.IsInsideTree()) return;
+        var mat = new StandardMaterial3D
+        {
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, Transparency = BaseMaterial3D.TransparencyEnum.Alpha, BlendMode = BaseMaterial3D.BlendModeEnum.Add,
+            AlbedoColor = new Color(1f, 0.45f, 0.12f, 0.7f), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+        };
+        var ring = new MeshInstance3D { Mesh = new TorusMesh { InnerRadius = 0.92f, OuterRadius = 1f, Rings = 24, RingSegments = 6 }, MaterialOverride = mat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        world.AddChild(ring);
+        var forward = MathF.Abs(up.Dot(Vector3.Forward)) > 0.95f ? Vector3.Right : Vector3.Forward;
+        ring.GlobalTransform = new Transform3D(Basis.LookingAt(forward, up), at); // the ring lies in the plane across its up: it blasts out along the surface
+        ring.Scale = Vector3.One * 0.4f;
+        var tw = ring.CreateTween().SetParallel();
+        tw.TweenProperty(ring, "scale", Vector3.One * 7f, 0.8);
+        tw.TweenProperty(mat, "albedo_color:a", 0f, 0.8);
+        tw.Chain().TweenCallback(Callable.From(ring.QueueFree));
+    }
+
     /// <summary>The flicker of a light (a fire's): a base energy with quick random swings, never dark.</summary>
     public static float Flicker(double t, float seed, float low, float high)
     {
