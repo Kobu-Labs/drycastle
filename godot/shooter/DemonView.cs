@@ -245,7 +245,7 @@ public sealed partial class DemonView : Node3D
 
     AudioStreamPlayer3D? _music;
 
-    /// <summary>The fight's looped background, from the private pack, heard in and around the church; off while it turns and once it is dead.</summary>
+    /// <summary>The fight's looped background, from the private pack, heard evenly through the church; off while it turns and once it is dead.</summary>
     void SetMusic(bool on)
     {
         if (!on) { _music?.Stop(); return; }
@@ -255,8 +255,14 @@ public sealed partial class DemonView : Node3D
             var path = System.IO.Path.Combine(GamePaths.PrivateAssets(), "audio/holy_mass/demon_music.ogg");
             if (!System.IO.File.Exists(path) || AudioStreamOggVorbis.LoadFromFile(path) is not { } stream) return;
             stream.Loop = true;
-            _music = new AudioStreamPlayer3D { Stream = stream, Bus = "Music", UnitSize = 30f, MaxDistance = 70f, VolumeDb = -2f };
+            // the same level everywhere in the church, no panning: no falloff, cut off a little beyond the nave's length; it stays where the fight began
+            _music = new AudioStreamPlayer3D
+            {
+                Stream = stream, Bus = "Music", VolumeDb = -2f, TopLevel = true, PanningStrength = 0f,
+                AttenuationModel = AudioStreamPlayer3D.AttenuationModelEnum.Disabled, MaxDistance = 30f,
+            };
             AddChild(_music);
+            _music.GlobalPosition = GlobalPosition;
         }
         if (!_music.Playing) _music.Play();
     }
