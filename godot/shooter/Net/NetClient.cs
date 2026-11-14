@@ -548,7 +548,8 @@ public partial class NetClient : Node
         if (_me == null) return;
         _viewFix *= Mathf.Exp(-CorrectionFade * (float)delta);
         if (_viewFix.LengthSquared() < 1e-6f) _viewFix = Vector3.Zero; // under a millimetre: done
-        _me.ViewOffset = _viewFix;
+        _me.ViewOffset = _viewFix + _heldSwing; // in the Bigfoot's hand the eye swings with the hand (#264)
+        _me.ViewRoll = _heldRoll;
     }
 
     public override void _PhysicsProcess(double delta)

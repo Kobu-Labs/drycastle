@@ -69,6 +69,8 @@ public partial class Player : CharacterBody3D
     /// The state is exact at once; only the eye is drawn at the old place and glides to the new one. Never sent, never part of the state.
     /// </summary>
     public Vector3 ViewOffset { get; set; }
+    /// <summary>Cosmetic roll of the first-person camera, radians: the swing in the Bigfoot's hand (#264). Never sent, never part of the aim.</summary>
+    public float ViewRoll { get; set; }
     /// <summary>
     /// Cosmetic drop of the first-person eye, metres (positive: lower): the camera part of the landing dip (#259). A position, not a pitch, so the
     /// crosshair stays on the aim the server resolves. Never sent, never part of the state; zero in the chase and seat cameras.
@@ -126,7 +128,7 @@ public partial class Player : CharacterBody3D
     {
         if (!_camera.IsInsideTree()) return;
         if (!_chase) _camera.Position = _eyeLocal + ViewOffset + Vector3.Down * ViewDip; // the eye glides over a reconcile (ViewOffset) and dips on a landing (ViewDip); the physics sets the eye's place per tick
-        if (!_chase) _camera.Rotation = new Vector3(RecoilState.ClampPitch(_pitch + AimKick.X + ViewSway.X), _yaw + AimKick.Y + ViewSway.Y, 0);
+        if (!_chase) _camera.Rotation = new Vector3(RecoilState.ClampPitch(_pitch + AimKick.X + ViewSway.X), _yaw + AimKick.Y + ViewSway.Y, ViewRoll);
         var target = ZoomFov > 0 ? ZoomFov : (GameSettings.Current.Fov + FovBoost) * (IronSightZoom ? IronSightFovScale : 1f);
         if (Mathf.IsEqualApprox(_fovNow, target)) return;
         _fovNow = Mathf.Lerp(_fovNow, target, 1f - Mathf.Exp(-18f * (float)delta));

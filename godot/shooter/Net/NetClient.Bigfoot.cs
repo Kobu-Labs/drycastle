@@ -84,6 +84,9 @@ public partial class NetClient
     readonly Dictionary<ushort, double> _thrownCars = new();
     /// <summary>The Bigfoot holds this client's player: no prediction, the body is where the server puts it.</summary>
     bool _heldByBigfoot;
+    /// <summary>What the flailing hand adds to the held player's own eye: an offset (metres, world) and a roll (radians). Zero when not held.</summary>
+    Vector3 _heldSwing;
+    float _heldRoll;
 
     /// <summary>True while the Bigfoot's throw has the vehicle (the driver's client does not predict it).</summary>
     bool CarThrown(ushort car) => _thrownCars.TryGetValue(car, out var until) && Now < until;
@@ -189,6 +192,7 @@ public partial class NetClient
     void RenderBigfoot()
     {
         var held = false;
+        BigfootView? holder = null;
         if (_lastTick != 0)
         {
             var rt = RenderTickNow();
@@ -213,6 +217,7 @@ public partial class NetClient
                 }
                 if (now >= v.HitUntil && v.Shown != act) ShowBigfootAct(v, act, now);
                 MoveBigfoot(v, act, BigfootRules.IsEnraged(raw), now);
+                if (_myId != 0 && e.State.Owner == _myId && act == BigfootAct.Hold) holder = v;
             }
             foreach (var (id, node) in _trunks)
             {
@@ -225,6 +230,19 @@ public partial class NetClient
             }
         }
         _heldByBigfoot = held;
+        // the server holds the body at a fixed point in front of the giant; the flailing is drawn here, so the eye rides the same swing as the figure
+        var swing = Vector3.Zero; var tilt = 0f;
+        if (holder != null && _me != null)
+        {
+            var local = holder.Node.ToLocal(_me.GlobalPosition);
+            var t = (float)(Now - holder.Since);
+            var shaken = holder.Pivot.Transform.Basis * local + new Vector3(0, 0.45f * MathF.Sin(t * 22f), 0.3f * MathF.Sin(t * 11f + 1.3f)); // the hand also pumps up and down and jerks back and forth
+            swing = holder.Node.GlobalBasis * (shaken - local);
+            if (!GameSettings.Current.ReduceMotion) tilt = holder.Pivot.Rotation.Z * 1.6f + 0.1f * MathF.Sin(t * 17f);
+        }
+        var ease = 1f - MathF.Exp(-14f * (float)GetProcessDeltaTime()); // in and out without a jump
+        _heldSwing = _heldSwing.Lerp(swing, ease);
+        _heldRoll = Mathf.Lerp(_heldRoll, tilt, ease);
         // its music plays while a living one is near the player (the file is private: without it there is none)
         var near = false;
         if (_me != null)
