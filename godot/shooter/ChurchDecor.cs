@@ -306,6 +306,7 @@ public partial class ChurchDecor : Node3D
     public void SetDemon(bool active, bool snap = false)
     {
         _demon = active;
+        ChurchPaintings.Current?.SetDemon(active, snap); // the paintings turn with it
         if (!snap) return;
         _angle = active ? MathF.PI : 0;
         _burn = active ? 1 : 0;

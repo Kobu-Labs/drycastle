@@ -83,6 +83,35 @@ ARCADES = {"left": ((-2.4, 0.9), (1.7, 3.4)), "right": ((-6.5, -3.2), (-2.4, 0.9
 AISLE_WIN_V = tuple(-3.0 + 3.0 * k for k in range(5))  # the five windows of each aisle's outer wall
 AISLE_ALTAR_U = {"left": -4.175, "right": 6.42}  # a side altar at the rear wall of each aisle, and its kneeler before it
 
+
+class Painting(NamedTuple):
+    """A framed picture hung on a free wall: centre (``u``, ``v``, ``z`` on the wall face), canvas ``w`` x ``h`` metres, and the
+    way it faces into the room as (du, dv). Frame and canvas are the game's (``ChurchPaintings``): they change with the demon."""
+
+    u: float
+    v: float
+    z: float
+    w: float
+    h: float
+    face: tuple[int, int]
+
+
+PORTRAIT, LANDSCAPE, SQUARE = (0.9, 1.4), (1.4, 0.8), (1.0, 1.0)
+_L, _R = AISLES[0].in_u, AISLES[1].in_u  # inner faces of the aisles' outer walls (the gaps between the windows are at v -1.5, 1.5, ...)
+PAINTINGS = (
+    # aisles' outer walls, between the windows, at eye height
+    Painting(_L, -1.5, 1.75, *PORTRAIT, (1, 0)), Painting(_L, 1.5, 1.75, *LANDSCAPE, (1, 0)),
+    Painting(_L, 4.5, 1.75, *SQUARE, (1, 0)), Painting(_L, 7.5, 1.75, *PORTRAIT, (1, 0)),
+    Painting(_R, -1.5, 1.75, *LANDSCAPE, (-1, 0)), Painting(_R, 1.5, 1.75, *PORTRAIT, (-1, 0)),
+    Painting(_R, 4.5, 1.75, *PORTRAIT, (-1, 0)), Painting(_R, 7.5, 1.75, *SQUARE, (-1, 0)),
+    # the side altars: on the backdrop's front face at the aisles' rear walls
+    Painting(AISLE_ALTAR_U["left"], AISLES[0].iv[0] + 0.4, 2.2, *PORTRAIT, (0, 1)),
+    Painting(AISLE_ALTAR_U["right"], AISLES[1].iv[0] + 0.4, 2.2, *PORTRAIT, (0, 1)),
+    # the solid nave wall between the arcade and the first pilaster by the stair (the stair's steps stay under it), and the right wall's front bay
+    Painting(IU0, 4.2, 2.3, *PORTRAIT, (1, 0)),
+    Painting(IU1, 11.4, 1.8, *LANDSCAPE, (-1, 0)),
+)
+
 # standing spots (u, v, the way in from the aisle as (u, v) points): the free floor by the stairs, and a few in the side aisles
 # (a kneeler before each aisle altar first). The aisles are entered across the nave where no pews stand: the left at v 2.8
 # (between the last pew and the stair), the right at v -5.7 (between the first pew and the rear wall).
@@ -359,19 +388,11 @@ def build_shell(S, detail: bool, yellow, plinth) -> None:
         _arc(v - 0.15, v + 0.15, -0.14, 0.14, S, rib)
         for x0, x1, cap in ((IU0, IU0 + 0.2, IU0 + 0.28), (IU1 - 0.2, IU1, IU1 - 0.28)):
             S.box(min(x0, cap), max(x1, cap), v - 0.38, v + 0.38, Z_SPRING - 0.4, Z_SPRING, rib)
-    # paintings on the aisles' outer walls between the windows
-    for a in AISLES:
-        for v in (-1.5, 1.5, 4.5, 7.5):
-            face = "right" if a.left else "left"
-            S.plate(face, a.in_u, v, _rect(1.1, 1.1, 2.4), 0.05, gold)
-            S.plate(face, a.in_u, v, _rect(0.9, 1.2, 2.3), 0.07, canvas)
-    # chancel: sacristy door, high altar; side altar paintings on the aisle rear walls
+    # chancel: sacristy door, high altar (the paintings of the walls are props, see PAINTINGS)
     S.plate("right", CU0, -9.9, _rect(1.1, F, F + 2.1), 0.05, wood)
     S.plate("front", CV0 + 0.4, CU, _arch(1.4, F + 1.1, 3.0, 0.5), 0.05, gold)
     S.plate("front", CV0 + 0.4, CU, _arch(1.0, F + 1.3, 2.8, 0.4), 0.08, canvas)
     S.box(CU - 0.8, CU + 0.8, CV0, CV0 + 0.4, 3.6, 4.3, gold)
-    for a in AISLES:
-        S.plate("front", a.iv[0] + 0.4, AISLE_ALTAR_U[a.name], _arch(0.7, F + 1.2, 2.6, 0.3), 0.05, gold)
     # organ pipes and gilding, carpet
     for i in range(-9, 10):
         x = CU + 0.19 * i
@@ -427,6 +448,11 @@ def church_info(b: dict, dz: float = 0.0) -> dict:
         {"kind": "altar", "pos": pt(CU, -11.9, F), "yaw": out},
         {"kind": "lectern", "pos": pt(CU + 1.4, -8.3, F), "yaw": out},
         {"kind": "holy_water", "pos": pt(CU + 2.3, 12.9, F), "yaw": into},
+    ]
+    # paintings: the canvas centre on the wall face, facing into the room; w and h are the canvas in metres
+    props += [
+        {"kind": "painting", "pos": pt(p.u, p.v, p.z), "yaw": bearing(*p.face), "w": p.w, "h": p.h}
+        for p in PAINTINGS
     ]
 
     # demon anchors: rings across the nave (upper wall, vault, upper wall), the pilaster rings with a second wall height,

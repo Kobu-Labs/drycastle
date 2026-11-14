@@ -9,6 +9,9 @@ public sealed record ChurchSeat(int Id, Vector3 Pos, float Yaw, IReadOnlyList<Ve
 /// <summary>A place with a facing: where the pastor, a monk or the sacristy door is, or where blessed players are put.</summary>
 public sealed record ChurchSpot(Vector3 Pos, float Yaw);
 
+/// <summary>A framed picture on a wall (a <c>painting</c> prop): the middle of the canvas on the wall face, the way it faces (Godot yaw) and the canvas size in metres.</summary>
+public sealed record ChurchPainting(Vector3 Pos, float Yaw, float W, float H);
+
 /// <summary>
 /// The church the citizens walk to (church.json, exported by the map pipeline next to bunkers.json). Godot-free; every point is in Godot axes
 /// (x east, y up, z = -north) and every yaw is a Godot yaw (0 faces -Z, positive turns left). In the file points are local map metres like the
@@ -29,6 +32,8 @@ public sealed class Church
     public ChurchSpot? Pastor { get; init; }
     public IReadOnlyList<ChurchSpot> Monks { get; init; } = Array.Empty<ChurchSpot>();
     public ChurchSpot? SacristyDoor { get; init; }
+    /// <summary>The pictures on the walls (the <c>props</c> of kind <c>painting</c>); empty when the file has none.</summary>
+    public IReadOnlyList<ChurchPainting> Paintings { get; init; } = Array.Empty<ChurchPainting>();
 
     readonly Dictionary<int, ChurchSeat> _byId = new();
 
@@ -52,7 +57,7 @@ public sealed class Church
     /// <summary>The floor under the seat, where a sitter's feet stand (the seat point is on the seat).</summary>
     public static Vector3 FeetOf(ChurchSeat seat, float seatHeight) => seat.Stand ? seat.Pos : seat.Pos - new Vector3(0, seatHeight, 0);
 
-    /// <summary>Parse church.json: <c>{"door": {"x","y","z","yaw"}, "aisle": [[x,y,z]...], "seats": [{"id","pos":[x,y,z],"yaw","path":[[x,y,z]...],"floor","stand"}], "exit"|"pastor"|"sacristy_door": {"pos","yaw"}, "monks": [{"pos","yaw"}]}</c> (everything but door and seats optional).</summary>
+    /// <summary>Parse church.json: <c>{"door": {"x","y","z","yaw"}, "aisle": [[x,y,z]...], "seats": [{"id","pos":[x,y,z],"yaw","path":[[x,y,z]...],"floor","stand"}], "exit"|"pastor"|"sacristy_door": {"pos","yaw"}, "monks": [{"pos","yaw"}], "props": [{"kind","pos","yaw"}, {"kind":"painting","pos","yaw","w","h"}]}</c> (everything but door and seats optional; props other than paintings are the game's furniture and not read here).</summary>
     public static Church Parse(string json, string name = "church.json")
     {
         JsonDocument doc;
@@ -86,6 +91,9 @@ public sealed class Church
                 SacristyDoor = Spot(root, "sacristy_door", name),
                 Monks = root.TryGetProperty("monks", out var mk) && mk.ValueKind == JsonValueKind.Array
                     ? mk.EnumerateArray().Select(m => SpotOf(m, name, "monks")).ToList() : new List<ChurchSpot>(),
+                Paintings = root.TryGetProperty("props", out var pr) && pr.ValueKind == JsonValueKind.Array
+                    ? pr.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.Object && e.TryGetProperty("kind", out var k) && k.GetString() == "painting")
+                        .Select(e => PaintingOf(e, name)).ToList() : new List<ChurchPainting>(),
             };
         }
     }
@@ -98,6 +106,14 @@ public sealed class Church
     {
         if (e.ValueKind != JsonValueKind.Object || !e.TryGetProperty("pos", out var pos)) throw new DataFileException($"{file}: {what} is {{\"pos\": [x, y, z], \"yaw\"}}");
         return new ChurchSpot(Point(pos, file, what), Bearing(e.TryGetProperty("yaw", out var y) ? y.GetSingle() : 0));
+    }
+
+    /// <summary><c>{"kind":"painting","pos":[x,y,z],"yaw":bearing,"w":metres,"h":metres}</c>.</summary>
+    static ChurchPainting PaintingOf(JsonElement e, string file)
+    {
+        if (!e.TryGetProperty("pos", out var pos)) throw new DataFileException($"{file}: a painting has no pos");
+        float Size(string key) => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number && v.GetSingle() > 0 ? v.GetSingle() : throw new DataFileException($"{file}: a painting needs {key} > 0 (metres)");
+        return new ChurchPainting(Point(pos, file, "painting pos"), Bearing(e.TryGetProperty("yaw", out var y) ? y.GetSingle() : 0), Size("w"), Size("h"));
     }
 
     public static Church Load(string path) => Parse(File.ReadAllText(path), Path.GetFileName(path));

@@ -45,6 +45,7 @@ public partial class ChurchProps : Node3D
         foreach (var p in props.EnumerateArray())
         {
             var kind = p.GetProperty("kind").GetString() ?? "";
+            if (kind == "painting") continue; // ChurchPaintings draws them
             if (!Kinds.TryGetValue(kind, out var k)) throw new DataFileException($"church.json: unknown prop kind '{kind}'");
             var pos = p.GetProperty("pos");
             var pivot = new Node3D
