@@ -119,6 +119,14 @@ Settled design (2026-11-13). Numbers live in `data/holy_mass.json`.
 - hit-count damage model like Bigfoot, scaled by players inside
 - wipe: heals, doors reopen, waits
 - killed: hellish text "You feel cursed" for every player with at least one hit; doors open, the church closes only after every player leaves
+### Pounce
+- cut-scene attack (protocol v40, `holy_mass_demon.json` `pounce`; `pin_s` 0 turns it off): at a living player in the church, in sight, on the ground (not seated at the Mass), within `range_m` (16); `chance` at each dwell end, `cooldown_s` 30 after a pounce, first no sooner than `first_after_s` 12 of fighting; never the same victim twice in a row while another qualifies; one at a time
+- wind (`wind_s` 0.9): demon crouches facing the victim, victim marked (event 223 `DemonPounce`, stage 1; demon state 10); victim's camera turns to the demon and the mouse look is locked, they can still move
+- flight (state 11): leap arc (leap speed) that homes on the victim's feet
+- pin (`pin_s` 5, state 12): victim knocked flat on their back where they stand, head away from the demon's approach, body held by the server like a Mass seat (no movement, no weapon, no use), takes no damage from anything (`MatchSim.SetHeld`), is not a hit target; others can shoot the demon. Demon stands over them on the floor, head lowered, biting (jaw snaps ~2.5/s). Victim's camera drops to 0.25 m looking up at the demon's face (muzzle `face_distance_m` above their eyes), shake on landing, red pulse and shake on each bite, weapon and crosshair hidden; `bite.ogg` plays flat and loud for the victim, positional for the rest
+- release: health set to exactly `leave_hp` (10), above or below what it was; victim gets up with `immunity_s` of immunity to the demon's fire and flame; demon leaps off to a wall or the ceiling (forced leap)
+- aborts (stage 0): victim leaves, dies or leaves the church before the landing (no pin, cooldown still applies); victim leaves during the pin, or the demon dies (victim let go, health unchanged). `NetServer.PounceSweep` lets go of anyone nothing holds every tick; the event ending does the same
+- reduce motion: no shake or jolt, softer flash
 ## Reward
 Both are a status, not an Item: no slot, no drop. They survive a round change and end when the player dies.
 - underwent the Mass - divine blessing

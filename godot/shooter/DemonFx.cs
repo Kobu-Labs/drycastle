@@ -102,6 +102,30 @@ public static class DemonFx
         tw.Chain().TweenCallback(Callable.From(ring.QueueFree));
     }
 
+    /// <summary>A one-shot spray of blood under <paramref name="parent"/> (hidden until <see cref="BloodBurst"/>): dark red drops thrown along the node's -Z that fall back. Null headless.</summary>
+    public static CpuParticles3D? Blood(Node3D parent)
+    {
+        if (!ShotFx.Enabled) return null;
+        var mat = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(0.55f, 0.02f, 0.02f) };
+        var p = new CpuParticles3D
+        {
+            Name = "Blood", Mesh = new SphereMesh { Radius = 0.016f, Height = 0.032f, RadialSegments = 6, Rings = 3, Material = mat }, LocalCoords = false, OneShot = true, Emitting = false, Visible = false,
+            Explosiveness = 1f, Amount = 28, Lifetime = 0.7, Direction = Vector3.Forward, Spread = 38, InitialVelocityMin = 0.8f, InitialVelocityMax = 2.4f,
+            Gravity = new Vector3(0, -6f, 0), ScaleAmountMin = 0.6f, ScaleAmountMax = 1.6f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
+        parent.AddChild(p);
+        return p;
+    }
+
+    /// <summary>One spray from <paramref name="at"/> along <paramref name="dir"/> (unit).</summary>
+    public static void BloodBurst(CpuParticles3D p, Vector3 at, Vector3 dir)
+    {
+        dir = dir.Normalized();
+        var up = MathF.Abs(dir.Y) > 0.97f ? Vector3.Forward : Vector3.Up;
+        p.GlobalTransform = new Transform3D(Basis.LookingAt(dir, up), at);
+        ParticleFx.Fire(p);
+    }
+
     /// <summary>The flicker of a light (a fire's): a base energy with quick random swings, never dark.</summary>
     public static float Flicker(double t, float seed, float low, float high)
     {

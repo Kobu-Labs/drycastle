@@ -40,6 +40,8 @@ public sealed partial class DemonPose : SkeletonModifier3D
     public float Crouch;
     /// <summary>0..1: stretched out in flight, hands reaching ahead, legs trailing, the spine straight (the leap).</summary>
     public float Stretch;
+    /// <summary>0..1: standing over its prey (the pounce's pin): the forelimbs planted either side of the victim's shoulders, the hind limbs back and wide, the body low, the neck craned down.</summary>
+    public float Prey;
     /// <summary>The chest's breathing and flinching, radians added to the spine.</summary>
     public float Breath;
     /// <summary>The head's look, radians from straight ahead (+Z): yaw to the left (+X), pitch up (+Y). Not clamped here.</summary>
@@ -100,7 +102,7 @@ public sealed partial class DemonPose : SkeletonModifier3D
         if (!_init) Init(s);
         if (!_ok) return;
 
-        var body = BodyShare * _armLen * (1 - 0.75f * Limp) * (1 - 0.45f * Crouch);
+        var body = BodyShare * _armLen * (1 - 0.75f * Limp) * (1 - 0.45f * Crouch) * (1 - 0.18f * Prey);
         var step = Move * MathF.Sin(Gait * Mathf.Tau * 2f); // two sways per cycle
         // hips: pitched forward 90 degrees about the left-right axis (the spine now runs along +Z), centred over the surface point, a little sway and bob
         var hips = s.GetBoneGlobalPose(_hips);
@@ -112,6 +114,8 @@ public sealed partial class DemonPose : SkeletonModifier3D
         {
             var share = (i + 1f) / _spine.Length;
             var extra = -0.55f * Rear * (i < 3 ? 1 : 0.4f) + Breath * share - 0.5f * Limp * share * share - 0.25f * Crouch * share + 0.75f * Stretch * share;
+            // over its prey: the chest runs level, then the neck (the fourth bone) is craned down at the face under it
+            if (Prey > 0) extra += Prey * (0.1f * share + (i == 3 ? 0.95f : i == 4 ? 0.25f : 0f));
             var g = s.GetBoneGlobalPose(_spine[i]);
             g.Basis = new Basis(Vector3.Right, _spineBend[i] + extra) * g.Basis;
             s.SetBoneGlobalPose(_spine[i], g);
@@ -158,6 +162,8 @@ public sealed partial class DemonPose : SkeletonModifier3D
         }
         // crouching: the hands and feet gather under the body, the knees and elbows fold up
         if (Crouch > 0) t = t.Lerp(new Vector3(a.X + l.Side * (l.Arm ? 0.12f : 0.2f), ground, a.Z + (l.Arm ? 0.1f : -0.05f)), Crouch);
+        // over its prey: the hands planted wide of the shoulders, a little ahead, the feet back and apart
+        if (Prey > 0) t = t.Lerp(new Vector3(a.X + l.Side * (l.Arm ? 0.07f : 0.2f), ground, a.Z + (l.Arm ? 0.08f : -0.5f)), Prey);
         // in flight: the hands reach ahead, the legs trail behind, all in line with the body
         if (Stretch > 0)
         {

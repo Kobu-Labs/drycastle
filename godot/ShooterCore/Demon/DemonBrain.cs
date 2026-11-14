@@ -25,11 +25,17 @@ public enum DemonPhase : byte
     Leaping,
     /// <summary>Breathing fire at its target (the windup first, then the stream).</summary>
     Breathing,
+    /// <summary>Crouched and facing its victim before the pounce; the victim is marked.</summary>
+    PounceWind,
+    /// <summary>In the air: a homing arc to the victim's feet.</summary>
+    Pouncing,
+    /// <summary>Standing over the pinned victim, biting.</summary>
+    Pinning,
     Dead,
 }
 
-/// <summary>A player in the church as the brain sees them: feet, alive, and the velocity the fireball leads with.</summary>
-public readonly record struct DemonPlayer(ushort Id, Vector3 Feet, bool Alive, Vector3 Velocity = default);
+/// <summary>A player in the church as the brain sees them: feet, alive, the velocity the fireball leads with, whether they stand on the ground and whether they sit at the Mass (the pounce takes neither a jumper nor a sitter).</summary>
+public readonly record struct DemonPlayer(ushort Id, Vector3 Feet, bool Alive, Vector3 Velocity = default, bool Grounded = true, bool Seated = false);
 
 /// <summary>Where the demon is and how it is turned: <see cref="Normal"/> is its up (the surface under it), <see cref="Forward"/> the way it faces along the surface. Godot axes.</summary>
 public readonly record struct DemonPose(Vector3 Position, Vector3 Normal, Vector3 Forward);
@@ -46,6 +52,11 @@ public sealed record DemonRoared : DemonEvent;
 public sealed record DemonFlameStarted(ushort Target) : DemonEvent;
 /// <summary>A flame tick reached this player (in the cone, in sight): the host hurts and ignites them.</summary>
 public sealed record DemonFlameHit(ushort Player) : DemonEvent;
+/// <summary>
+/// A pounce changed stage for <see cref="Victim"/> (<see cref="PounceStage"/>): Wind, the victim is marked; Pinned, they land flat at <see cref="Feet"/> (the floor) lying with their head towards
+/// (sin <see cref="Yaw"/>, cos <see cref="Yaw"/>) in x and z; Released, the pin is over and the host sets their health; Aborted, it ended without a release (they left, died or the demon died).
+/// </summary>
+public sealed record DemonPounced(ushort Victim, PounceStage Stage, Vector3 Feet = default, float Yaw = 0) : DemonEvent;
 /// <summary>Every player inside died: it has healed to full and waits.</summary>
 public sealed record DemonWiped : DemonEvent;
 /// <summary>It is dead. <see cref="Credited"/> are the players who hit it at least once, in id order: they get the devil's curse (<see cref="CurseRules.Grant"/>).</summary>
@@ -82,14 +93,20 @@ public sealed class DemonBrain
     int _roarFired;
     int _leapTo;
     ushort _flameTarget;
-    Vector3 _leapF0, _flameDir, _leapDir;
+    Vector3 _leapF0, _flameDir, _leapDir, _leapA, _leapNA;
+    // pounce
+    float _pounceCd, _fightT, _pounceT, _pounceU, _pounceDur, _pinT, _settle;
+    ushort? _victim, _lastVictim;
+    Vector3 _landPos, _pinFeet, _pinDir, _pinRoot;
+    readonly Func<Vector3, float> _floorY;
     ushort? _target;
     Vector3 _pos, _normal, _forward;
 
     /// <param name="sight">Is there a clear line between two points (a raycast of the church)? Null: always (an empty room).</param>
-    public DemonBrain(DemonFile def, AnchorGraph graph, Random rng, Func<Vector3, Vector3, bool>? sight = null, int? startAnchor = null)
+    /// <param name="floorY">The floor's height under a point, for where a pinned victim lies (a raycast of the church); null: the point's own height.</param>
+    public DemonBrain(DemonFile def, AnchorGraph graph, Random rng, Func<Vector3, Vector3, bool>? sight = null, int? startAnchor = null, Func<Vector3, float>? floorY = null)
     {
-        _def = def; _graph = graph; _rng = rng; _sight = sight ?? ((_, _) => true);
+        _def = def; _graph = graph; _rng = rng; _sight = sight ?? ((_, _) => true); _floorY = floorY ?? (v => v.Y);
         Reset(startAnchor);
     }
 
@@ -111,6 +128,15 @@ public sealed class DemonBrain
     public bool Flaming => Phase == DemonPhase.Breathing && _flameWind <= 0;
     /// <summary>The anchor it is leaping to (valid while <see cref="DemonPhase.LeapWind"/> and <see cref="DemonPhase.Leaping"/>).</summary>
     public int LeapTarget => _leapTo;
+    /// <summary>The player it is pouncing on (from the wind until the release or an abort), or null.</summary>
+    public ushort? PounceVictim => _victim;
+    /// <summary>Where the pinned victim lies (the floor, the middle of their body) and the direction their head is towards (unit, horizontal); valid while <see cref="DemonPhase.Pinning"/>.</summary>
+    public Vector3 PinFeet => _pinFeet;
+    public Vector3 PinDirection => _pinDir;
+    /// <summary>The yaw a pinned victim's body is set to: their head is towards (sin yaw, cos yaw) in x and z.</summary>
+    public float PinYaw => MathF.Atan2(_pinDir.X, _pinDir.Z);
+    /// <summary>Half the length of a lying player: their head is this far from the middle of the body.</summary>
+    public const float LyingHalfM = 0.85f;
 
     /// <summary>A fresh demon at <paramref name="startAnchor"/> (default the graph's first), full health, waiting: the start of an event or a round.</summary>
     public void Reset(int? startAnchor = null)
@@ -124,6 +150,7 @@ public sealed class DemonBrain
         _target = null; _pathIdx = 0; _segDist = 0; _dwell = 0; _cooldown = 0; _tele = 0; _rearm = 0; _retarget = 0;
         _asleep = true; _engaged = false;
         _roarPending = false; _roarFired = 0; _roarT = 0; _leapCd = 0; _flameCd = 0; _flameWind = 0; _flameT = 0; _sinceLeap = 0; _sinceCeiling = 0;
+        _pounceCd = 0; _fightT = 0; _victim = null; _lastVictim = null;
         _nextRoar = RollRoar();
         HitsTaken = 0; HitsNeeded = _def.HitsNeeded(1);
         Phase = DemonPhase.Waiting;
@@ -148,6 +175,7 @@ public sealed class DemonBrain
                 if (left <= shares[i] && (_roarFired & 1 << i) == 0) { _roarFired |= 1 << i; _roarPending = true; }
         }
         if (HitsTaken < HitsNeeded) return DemonHitResult.Hit;
+        AbortPounce(events);
         Phase = DemonPhase.Dead;
         events.Add(new DemonDied(_credited.ToArray()));
         return DemonHitResult.Killed;
@@ -171,8 +199,10 @@ public sealed class DemonBrain
         _cooldown = MathF.Max(0, _cooldown - dt);
         _leapCd = MathF.Max(0, _leapCd - dt);
         _flameCd = MathF.Max(0, _flameCd - dt);
+        _pounceCd = MathF.Max(0, _pounceCd - dt);
         if (!_asleep)
         {
+            _fightT += dt;
             _nextRoar -= dt;
             _sinceLeap += dt;
             _sinceCeiling = _normal.Y < CeilingY ? 0 : _sinceCeiling + dt;
@@ -195,6 +225,9 @@ public sealed class DemonBrain
             case DemonPhase.LeapWind: StepLeapWind(dt, players); break;
             case DemonPhase.Leaping: StepLeap(dt, players); break;
             case DemonPhase.Breathing: StepFlame(dt, players, events); break;
+            case DemonPhase.PounceWind: StepPounceWind(dt, players, events); break;
+            case DemonPhase.Pouncing: StepPouncing(dt, players, events); break;
+            case DemonPhase.Pinning: StepPinning(dt, players, events); break;
             case DemonPhase.Dwelling: StepDwelling(dt, players, events); break;
             case DemonPhase.Telegraphing: StepTelegraph(dt, players, events); break;
             case DemonPhase.Crawling: StepCrawl(dt, players); break;
@@ -209,8 +242,9 @@ public sealed class DemonBrain
         _credited.Clear();
         _target = null; _cooldown = 0; _tele = 0;
         _roarPending = false; _roarFired = 0; _flameCd = 0; _leapCd = 0; _flameWind = 0; _flameT = 0; _sinceLeap = 0; _sinceCeiling = 0;
+        AbortPounce(events); _pounceCd = 0; _fightT = 0; _lastVictim = null;
         _asleep = true; _engaged = false; _rearm = _def.Crawl.RearmDelayS;
-        if (Phase is not (DemonPhase.Crawling or DemonPhase.Leaping)) Phase = DemonPhase.Waiting; // a crawl or leap is finished first: it waits where it gets to
+        if (Phase is not (DemonPhase.Crawling or DemonPhase.Leaping or DemonPhase.Pouncing)) Phase = DemonPhase.Waiting; // a crawl or leap is finished first: it waits where it gets to
         events.Add(new DemonWiped());
     }
 
@@ -269,7 +303,7 @@ public sealed class DemonBrain
         }
         _dwell -= dt;
         if (_dwell > 0) return;
-        if (t is { } tgt && (TryLeap(tgt, false) || BeginCrawl(tgt))) return;
+        if (t is { } tgt && (TryPounce(players, events) || TryLeap(tgt, false) || BeginCrawl(tgt))) return;
         _dwell = RollDwell();
     }
 
@@ -396,8 +430,24 @@ public sealed class DemonBrain
     {
         var l = _def.Leap;
         if (l.Chance <= 0 || _leapCd > 0 || (!force && _rng.NextDouble() >= l.Chance)) return false;
+        var best = PickLeapAnchor(target.Feet + new Vector3(0, Up, 0), true);
+        if (best < 0)
+        {
+            if (force) _sinceLeap = MathF.Max(0, l.DueS - 1f);
+            return false;
+        }
+        BeginLeap(best, l.CrouchS);
+        return true;
+    }
+
+    /// <summary>
+    /// The anchor on another surface that scores best for a leap from here, seen from the target's <paramref name="eye"/>; -1 when none. <paramref name="strict"/> keeps to the leap's range and
+    /// wants a clear arc; without it (the leap away from a pounce, which starts wherever the victim lay) any anchor on another surface will do, the best seen first.
+    /// </summary>
+    int PickLeapAnchor(Vector3 eye, bool strict)
+    {
+        var l = _def.Leap;
         var c = _def.Crawl;
-        var eye = target.Feet + new Vector3(0, Up, 0);
         var off = _def.MuzzleM;
         var from = _pos + _normal * off;
         var best = -1; var bestScore = float.NegativeInfinity;
@@ -405,10 +455,13 @@ public sealed class DemonBrain
         {
             if (a.Id == _anchor || Vector3.Dot(a.Normal, _normal) > l.MaxNormalDot) continue;
             var dist = Vector3.Distance(a.Pos, _pos);
-            if (dist < l.MinRangeM || dist > l.MaxRangeM) continue;
+            if (strict && (dist < l.MinRangeM || dist > l.MaxRangeM)) continue;
             var land = a.Pos + a.Normal * off;
-            var mid = ArcPoint(from, land, 0.5f, _def.Leap.ArcHeightM, ArcDir(_normal, a.Normal));
-            if (!_sight(from, mid) || !_sight(mid, land)) continue;
+            if (strict)
+            {
+                var mid = ArcPoint(from, land, 0.5f, _def.Leap.ArcHeightM, ArcDir(_normal, a.Normal));
+                if (!_sight(from, mid) || !_sight(mid, land)) continue;
+            }
             var score = -MathF.Abs(Vector3.Distance(a.Pos, eye) - c.PreferredRangeM) + (float)_rng.NextDouble() * c.Jitter;
             if (_sight(land, eye)) score += c.LosBonus;
             if (OnCeiling(a.Normal)) score += CeilingScore(c);
@@ -416,17 +469,19 @@ public sealed class DemonBrain
             if (_recent.Contains(a.Id)) score -= c.RevisitPenalty;
             if (score > bestScore) { bestScore = score; best = a.Id; }
         }
-        if (best < 0)
-        {
-            if (force) _sinceLeap = MathF.Max(0, l.DueS - 1f);
-            return false;
-        }
-        _leapTo = best;
-        _leapWind = l.CrouchS;
-        _leapDur = MathF.Max(0.35f, Vector3.Distance(_graph[best].Pos, _pos) / l.SpeedMps);
+        return best;
+    }
+
+    /// <summary>The leap's speed: the data's, or that of a plain leap when leaps are off.</summary>
+    float LeapSpeed => _def.Leap.SpeedMps > 0 ? _def.Leap.SpeedMps : 12f;
+
+    void BeginLeap(int anchor, float crouchS)
+    {
+        _leapTo = anchor;
+        _leapWind = crouchS;
+        _leapDur = MathF.Max(0.35f, Vector3.Distance(_graph[anchor].Pos, _pos) / LeapSpeed);
         _leapU = 0; _sinceLeap = 0;
         Phase = DemonPhase.LeapWind;
-        return true;
     }
 
     /// <summary>What a goal on the ceiling is worth: the base, and more the longer it has been down on the walls.</summary>
@@ -439,14 +494,15 @@ public sealed class DemonBrain
         _leapWind -= dt;
         if (_leapWind > 0) return;
         _leapF0 = _forward; _leapU = 0;
-        _leapDir = ArcDir(_graph[_anchor].Normal, _graph[_leapTo].Normal);
+        _leapA = _pos; _leapNA = _normal; // where it leaps from: an anchor, or (away from a pounce) the floor it stood on
+        _leapDir = ArcDir(_leapNA, _graph[_leapTo].Normal);
         Phase = DemonPhase.Leaping;
     }
 
     void StepLeap(float dt, IReadOnlyList<DemonPlayer> players)
     {
         _leapU += dt / _leapDur;
-        var a = _graph[_anchor]; var b = _graph[_leapTo];
+        var b = _graph[_leapTo];
         if (_leapU >= 1)
         {
             Arrive(_leapTo);
@@ -457,17 +513,132 @@ public sealed class DemonBrain
             if (_target is { } id && Find(players, id) is { } t) Face(t.Feet);
             return;
         }
-        var u = _leapU;
-        _pos = ArcPoint(a.Pos, b.Pos, u, _def.Leap.ArcHeightM, _leapDir);
-        // its up turns from the surface it left to the one it lands on (across the nave through the room's up); its head leads across
+        ArcPose(_leapA, _leapNA, b.Pos, b.Normal, _leapU, _def.Leap.ArcHeightM);
+    }
+
+    /// <summary>The pose at <paramref name="u"/> (0..1) of a leap from a surface point to another: its up turns from the surface it left to the one it lands on (across the nave through the room's up); its head leads across.</summary>
+    void ArcPose(Vector3 aPos, Vector3 aNormal, Vector3 bPos, Vector3 bNormal, float u, float height)
+    {
+        _pos = ArcPoint(aPos, bPos, u, height, _leapDir);
         var s = MathF.Sin(MathF.PI * u);
-        var n = Vector3.Dot(a.Normal, b.Normal) < -0.5f ? Vector3.Lerp(a.Normal, b.Normal, u) * (1 - s) + Vector3.UnitY * s : Vector3.Lerp(a.Normal, b.Normal, u);
+        var opposite = Vector3.Dot(aNormal, bNormal) < -0.5f;
+        var n = opposite ? Vector3.Lerp(aNormal, bNormal, u) * (1 - s) + Vector3.UnitY * s : Vector3.Lerp(aNormal, bNormal, u);
         _normal = n.LengthSquared() > 1e-6f ? Vector3.Normalize(n) : Vector3.UnitY;
-        var across = b.Pos - a.Pos;
-        if (Vector3.Dot(a.Normal, b.Normal) < -0.5f) across.Y = 0;
+        var across = bPos - aPos;
+        if (opposite) across.Y = 0;
         across = across.LengthSquared() > 1e-6f ? Vector3.Normalize(across) : _leapF0;
         var g = Vector3.Lerp(_leapF0, across, s);
         _forward = ProjectOnto(g.LengthSquared() > 1e-6f ? Vector3.Normalize(g) : _leapF0, _normal, _forward);
+    }
+
+    // ---- pounce ----
+
+    static bool Valid(DemonPlayer? p) => p is { Alive: true };
+
+    /// <summary>
+    /// A living, grounded, unseated player in range and in sight, once the cooldown and the first-after time are over, with <see cref="DemonPounceDef.Chance"/>; never the last victim while another
+    /// qualifies. Starts the crouch and marks the victim. False when it does not pounce (no random number is drawn unless someone qualifies).
+    /// </summary>
+    bool TryPounce(IReadOnlyList<DemonPlayer> players, List<DemonEvent> events)
+    {
+        var pd = _def.Pounce;
+        if (pd.PinS <= 0 || _victim != null || _pounceCd > 0 || _fightT < pd.FirstAfterS) return false;
+        var from = Muzzle;
+        var cands = new List<DemonPlayer>();
+        foreach (var p in players)
+            if (p.Alive && p.Grounded && !p.Seated && Vector3.Distance(p.Feet, _pos) <= pd.RangeM && _sight(from, p.Feet + new Vector3(0, Up, 0))) cands.Add(p);
+        if (cands.Count == 0 || _rng.NextDouble() >= pd.Chance) return false;
+        if (cands.Count > 1) cands.RemoveAll(p => p.Id == _lastVictim);
+        var v = cands[_rng.Next(cands.Count)];
+        _victim = v.Id; _target = v.Id; _pounceT = pd.WindS; Phase = DemonPhase.PounceWind;
+        Face(v.Feet);
+        events.Add(new DemonPounced(v.Id, PounceStage.Wind));
+        return true;
+    }
+
+    /// <summary>The pounce ended without a release: the victim (if any) is let go as aborted, and the cooldown starts. No-op without one.</summary>
+    void AbortPounce(List<DemonEvent> events)
+    {
+        if (_victim is not { } v) return;
+        events.Add(new DemonPounced(v, PounceStage.Aborted));
+        _lastVictim = v; _victim = null;
+        _pounceCd = _def.Pounce.CooldownS;
+    }
+
+    void StepPounceWind(float dt, IReadOnlyList<DemonPlayer> players, List<DemonEvent> events)
+    {
+        if (_victim is not { } id || Find(players, id) is not { Alive: true } v)
+        {
+            AbortPounce(events);
+            Phase = _asleep ? DemonPhase.Waiting : DemonPhase.Dwelling; _dwell = RollDwell() * 0.5f;
+            return;
+        }
+        Face(v.Feet);
+        _pounceT -= dt;
+        if (_pounceT > 0) return;
+        _leapA = _pos; _leapNA = _normal; _leapF0 = _forward; _landPos = v.Feet; _pounceU = 0;
+        _pounceDur = MathF.Max(0.35f, Vector3.Distance(_pos, v.Feet) / LeapSpeed);
+        _leapDir = ArcDir(_normal, Vector3.UnitY);
+        Phase = DemonPhase.Pouncing;
+    }
+
+    void StepPouncing(float dt, IReadOnlyList<DemonPlayer> players, List<DemonEvent> events)
+    {
+        DemonPlayer? v = _victim is { } id ? Find(players, id) : null;
+        if (_victim != null && !Valid(v)) AbortPounce(events); // it finishes the leap, but nobody is pinned
+        if (Valid(v)) _landPos = v!.Value.Feet; // homing: the arc always ends on where the victim is now
+        _pounceU += dt / _pounceDur;
+        if (_pounceU < 1)
+        {
+            ArcPose(_leapA, _leapNA, _landPos, Vector3.UnitY, _pounceU, _def.Leap.ArcHeightM);
+            return;
+        }
+        if (_victim == null || !Valid(v)) { _pos = _landPos; _normal = Vector3.UnitY; BeginPounceOff(players); return; }
+        // it lands: the victim goes down flat on the floor where they are, head away from where the demon came from
+        var feet = new Vector3(_landPos.X, _floorY(_landPos), _landPos.Z);
+        var d = new Vector3(feet.X - _leapA.X, 0, feet.Z - _leapA.Z);
+        if (d.LengthSquared() < 1e-4f) d = new Vector3(_forward.X, 0, _forward.Z);
+        d = d.LengthSquared() < 1e-4f ? -Vector3.UnitZ : Vector3.Normalize(d);
+        _pinFeet = feet; _pinDir = d;
+        _pinRoot = feet + d * (LyingHalfM - _def.Pounce.HeadForwardM * _def.Scale);
+        _pos = feet; _normal = Vector3.UnitY; _forward = d; _landPos = feet;
+        _settle = 0; _pinT = _def.Pounce.PinS;
+        Phase = DemonPhase.Pinning;
+        events.Add(new DemonPounced(_victim.Value, PounceStage.Pinned, feet, PinYaw));
+    }
+
+    void StepPinning(float dt, IReadOnlyList<DemonPlayer> players, List<DemonEvent> events)
+    {
+        if (_victim is not { } id || Find(players, id) is not { Alive: true })
+        {
+            AbortPounce(events);
+            BeginPounceOff(players);
+            return;
+        }
+        _settle = MathF.Min(1f, _settle + dt / 0.3f);
+        var k = _settle * _settle * (3 - 2 * _settle);
+        _pos = Vector3.Lerp(_landPos, _pinRoot, k);
+        _pinT -= dt;
+        if (_pinT > 0) return;
+        events.Add(new DemonPounced(id, PounceStage.Released));
+        _lastVictim = id; _victim = null;
+        _pounceCd = _def.Pounce.CooldownS;
+        BeginPounceOff(players);
+    }
+
+    /// <summary>The pounce is over: it leaps to an anchor on a wall or the ceiling (forced, from wherever it stands) and the fight goes on.</summary>
+    void BeginPounceOff(IReadOnlyList<DemonPlayer> players)
+    {
+        UpdateTarget(0, players);
+        var eye = _target is { } id && Find(players, id) is { } t ? t.Feet + new Vector3(0, Up, 0) : _pos + new Vector3(0, Up, 0);
+        var best = PickLeapAnchor(eye, true);
+        if (best < 0) best = PickLeapAnchor(eye, false);
+        if (best < 0)
+        {
+            foreach (var a in _graph.Anchors)
+                if (best < 0 || Vector3.DistanceSquared(a.Pos, _pos) < Vector3.DistanceSquared(_graph[best].Pos, _pos)) best = a.Id;
+        }
+        BeginLeap(best, MathF.Max(0.2f, _def.Leap.CrouchS * 0.5f));
     }
 
     /// <summary>The unit vector in the plane of <paramref name="normal"/> that <paramref name="v"/> projects to, or <paramref name="fallback"/> projected the same way.</summary>
@@ -594,5 +765,21 @@ public sealed class DemonBrain
         var dir = b.Pos - a.Pos;
         dir -= _normal * Vector3.Dot(dir, _normal);
         if (dir.LengthSquared() > 1e-6f) _forward = Vector3.Normalize(dir);
+    }
+}
+
+/// <summary>The host's safety net for the pounce: which held players are no longer held by anything.</summary>
+public static class PounceRules
+{
+    /// <summary>
+    /// The players in <paramref name="held"/> that must be let go: there is no brain (no fight, the event ended, the demon was removed), or it is not pinning them now, or <paramref name="here"/>
+    /// says they are gone or dead. Checked every tick by the host, whatever else happened, so no path leaves a player held.
+    /// </summary>
+    public static List<ushort> Stuck(IEnumerable<ushort> held, DemonBrain? brain, Func<ushort, bool> here)
+    {
+        var stuck = new List<ushort>();
+        foreach (var id in held)
+            if (brain is not { Phase: DemonPhase.Pinning } || brain.PounceVictim != id || !here(id)) stuck.Add(id);
+        return stuck;
     }
 }

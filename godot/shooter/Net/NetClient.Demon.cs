@@ -48,6 +48,7 @@ public partial class NetClient
         }
         var view = DemonView.Make(DemonData, HolyMassData.Mass);
         view.RoarCue = at => ShakeFor(at, Math.Max(1f, DemonData.Roar.ShakeRadiusM) / 5f);
+        view.Bitten = OnPounceBite;
         Owned.AddChild(view);
         ChurchDecor.Current?.SetDemon(true, snap: DemonRules.StateOf(e.State.State) != DemonState.Transforming); // a joiner finds the cross turned and the lights out
         _demons[e.Id] = new DemonNode { View = view, Hp = e.State.Hp };
@@ -56,6 +57,7 @@ public partial class NetClient
     void OnDemonDespawned(ushort id)
     {
         if (_demons.Remove(id, out var d)) d.View.QueueFree();
+        if (_demons.Count == 0) PounceReset();
         if (_demons.Count == 0) ChurchDecor.Current?.SetDemon(false);
         if (_demons.Count == 0) foreach (var b in _balls.Values) RocketFx.Retire(Owned, b.Node);
         if (_demons.Count == 0) _balls.Clear();
@@ -85,6 +87,9 @@ public partial class NetClient
             case EventKind.DemonFlame when DemonCodec.DecodeFlame(payload) is { } target:
                 foreach (var d in _demons.Values) d.FlameTarget = target;
                 break;
+            case EventKind.DemonPounce when DemonCodec.DecodePounce(payload) is { } pm:
+                OnPounce(pm);
+                break;
             case EventKind.DemonCursed:
                 UiShell.Instance?.Toast(Strings.T("mass.cursed"), ToastKind.Error, null, 5.0);
                 break;
@@ -110,6 +115,9 @@ public partial class NetClient
                     var f = DemonRules.Facing(s.Yaw, s.Pitch);
                     view.Place(new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z), new Vector3(n.X, n.Y, n.Z), new Vector3(f.X, f.Y, f.Z), dt);
                 }
+                view.PinMuzzleAt = PounceFacePoint();
+                view.PinMine = _pStage != null && _pVictim == _myId; // marked at the wind: the world state can come before the pin event
+                view.Calm = GameSettings.Current.ReduceMotion;
                 view.Show(DemonRules.StateOf(e.State.State));
                 if (e.State.Hp < d.Hp) view.Hurt();
                 d.Hp = e.State.Hp;

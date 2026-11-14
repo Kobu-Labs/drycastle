@@ -234,6 +234,7 @@ public partial class NetClient : Node
         RenderAnimals();
         RenderCitizens();
         RenderDemon();
+        UpdatePounce(delta);
         RenderCars();
         RenderAircraft(delta);
         RenderRockets();
@@ -475,7 +476,7 @@ public partial class NetClient : Node
             if (!inCar) { _reconcile = null; _viewFix = Vector3.Zero; _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); _me.EndChase(_carYaw); ClearSeats(); }
             return;
         }
-        if (_massSeated) { _pending.Clear(); _reconcile = null; _me.SetState(new MoveState { Position = sp, OnFloor = true, FallPeakY = sp.Y }); return; } // seated at the Mass: the server holds the body, take its place as is
+        if (_massSeated || _pinned) { _pending.Clear(); _reconcile = null; _me.SetState(new MoveState { Position = sp, OnFloor = true, FallPeakY = sp.Y }); return; } // seated at the Mass or pinned by the demon: the server holds the body, take its place as is
         if (_driving || _controlling || _gunship != null) { _pending.Clear(); return; }
         if (rec.State == EntityState.Protected) _sawProtected = true;
         if (rec.State == EntityState.Alive && _fireStart > 0 && !_earlyCounted && Now - _fireStart < 0.6 && _fireStart - _spawnAt < _spawnProtection - 1.0) { _earlyEnds++; _earlyCounted = true; }
@@ -606,7 +607,7 @@ public partial class NetClient : Node
         if (_gunship == null) _me.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? _wantSlot : 0), GunnerAim);
         // C-03: a dead body does not move on the server (its input is zero and it is skipped), so it is not predicted either; else each snapshot snapped it back
-        if (!_driving && !_controlling && _gunship == null && !_massSeated) { if (!Dead) _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
+        if (!_driving && !_controlling && _gunship == null && !_massSeated && !_pinned) { if (!Dead) _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         PredictFlight(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
         PredictDrive(ni, dt);  // and so does the driver of an amphibious transport
         _pending.Add(new Pending { Input = ni, After = _me.State });
@@ -636,6 +637,7 @@ public partial class NetClient : Node
                 var dead = r.State == EntityState.Dead;
                 r.ShownYaw = s.Yaw; r.ShownPitch = s.Pitch;
                 TumbleRemote(r, at, s.Yaw, dead && TargetDummies.IsDummyId(id), dt);
+                PounceLieRemote(id, r, at); // the one the demon has pinned lies on its back
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
                 r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && CorpseOf(id)); // riders are drawn in their seat (the server puts the body there), seated rather than standing
                 r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
@@ -681,7 +683,7 @@ public partial class NetClient : Node
         var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
         _viewmodel.Show(id);
         var seated = (_driving || _myState == EntityState.InVehicle) && !InArmedSeat; // an armed seat's rider holds their weapon (ADR 0011)
-        _viewmodel.Visible = !Dead && !seated && !_massSeated && !_controlling && _gunship == null && _me is not { ZoomFov: > 0 };
+        _viewmodel.Visible = !Dead && !seated && !_massSeated && !_pinned && !_pRising && !_controlling && _gunship == null && _me is not { ZoomFov: > 0 };
     }
 
     /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
@@ -825,7 +827,7 @@ public partial class NetClient : Node
         }
         var slot = Ammo?.Slot ?? _wantSlot;
         var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
-        var on = zoom > 0 && !Dead && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
+        var on = zoom > 0 && !Dead && !_pinned && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
         _me.ZoomFov = on ? zoom : 0f;
         // iron sights: any non-scoped, non-melee weapon while zoom is held
         var kind = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Kind : WeaponKind.Melee;

@@ -491,6 +491,7 @@ public partial class NetServer : Node
         SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
         SendIntelOnJoin(c); // the events on the intel screen
         SendMassOnJoin(c); // the Holy Mass, when one runs
+        SendPounceOnJoin(c); // and the demon's pounce, when one is on
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
         SendWornOnJoin(c); // what the others wear (#266), to draw on their characters
@@ -696,6 +697,7 @@ public partial class NetServer : Node
             c.StreakHeld = streakDown;
             if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
             if (c.Car == null && _sitters.TryGetValue(c.Id, out var sitter)) { SitterInput(c, sitter, i, useEdge); continue; } // seated in the church: no walking, no weapon
+            if (c.Car == null && _pins.TryGetValue(c.Id, out var pinYaw)) { c.Body.Yaw = pinYaw; c.Body.Pitch = 0; continue; } // pinned by the demon: held on the floor, no walking, no weapon, no use
             if (streakEdge && !controlled) StreakActivate(c);
             if (c.Car == null && _streaks.ControlOf(c.Id) is { FreezesBody: true }) continue; // controlling a streak entity that holds the body (the missile, a gunship): the body stands still
             if (c.Car != null)
@@ -786,7 +788,7 @@ public partial class NetServer : Node
     {
         var list = _targetLists.Count > 0 ? _targetLists.Pop() : new List<HitTarget>(_byId.Count + 4);
         foreach (var o in _byId.Values)
-            if (_match.Get(o.Id)?.Life == PlayerLife.Alive) list.Add(HitTargetOf(o));
+            if (_match.Get(o.Id)?.Life == PlayerLife.Alive && !_pins.ContainsKey(o.Id)) list.Add(HitTargetOf(o)); // a pinned player is under the demon and untouchable: not a target, so no shot stops on them
         var dummies = _match.Targets.All; // living target dummies: an index loop, no enumerator object
         for (var i = 0; i < dummies.Count; i++)
         {

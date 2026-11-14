@@ -31,7 +31,7 @@ public partial class NetServer
         foreach (var o in _byId.Values)
         {
             SyncLife(o);
-            var valid = o.Car == null && _match.Get(o.Id)?.Life == PlayerLife.Alive;
+            var valid = o.Car == null && _match.Get(o.Id)?.Life == PlayerLife.Alive && !_pins.ContainsKey(o.Id);
             o.Poses.Record(_tick, valid, new HitTarget(o.Id, N(o.Body.GlobalPosition), BodyStanceOf(o), o.Body.Yaw));
         }
     }
