@@ -74,6 +74,8 @@ public sealed class MatchPlayer
     public double RespawnAt, ProtectedUntil;
     /// <summary>Invulnerable until this time after a blessing saved the player; unlike spawn protection, firing does not end it.</summary>
     public double InvulnerableUntil;
+    /// <summary>Held down by the demon's pounce: nothing hurts, kills or heals them while it lasts (<see cref="MatchSim.SetHeld"/>).</summary>
+    public bool Held;
 }
 
 /// <summary>
@@ -178,8 +180,26 @@ public sealed class MatchSim
     /// <summary>Sandbox (#156): full health for a living player. False when the player is not alive.</summary>
     public bool Heal(ushort id)
     {
-        if (!_players.TryGetValue(id, out var p) || p.Life != PlayerLife.Alive) return false;
+        if (!_players.TryGetValue(id, out var p) || p.Life != PlayerLife.Alive || p.Held) return false;
         p.Health = MoveConsts.MaxHealth;
+        return true;
+    }
+
+    /// <summary>The demon's pounce holds a player (or lets go): while held nothing damages them, not even the world (a fall, the void), and a heal does nothing. False when the player is not here.</summary>
+    public bool SetHeld(ushort id, bool held)
+    {
+        if (!_players.TryGetValue(id, out var p)) return false;
+        p.Held = held;
+        return true;
+    }
+
+    public bool IsHeld(ushort id) => _players.TryGetValue(id, out var p) && p.Held;
+
+    /// <summary>Sets a living player's health to exactly <paramref name="health"/> (the pounce leaves them at a few): above or below what it was. False when they are not alive.</summary>
+    public bool SetHealth(ushort id, float health)
+    {
+        if (!_players.TryGetValue(id, out var p) || p.Life != PlayerLife.Alive) return false;
+        p.Health = Math.Clamp(health, 1f, MoveConsts.MaxHealth);
         return true;
     }
 
@@ -243,6 +263,7 @@ public sealed class MatchSim
         if (TargetDummies.IsDummyId(victim)) return ApplyTargetDamage(victim, attacker, weapon, amount, cause);
         if (Phase != MatchPhase.Running || amount <= 0) return DamageResult.Ignored;
         if (!_players.TryGetValue(victim, out var v) || v.Life != PlayerLife.Alive) return DamageResult.Ignored;
+        if (v.Held) return DamageResult.Ignored; // pinned by the demon: nothing touches them
         if (v.Sandbox && !v.Vulnerable) return DamageResult.Ignored; // godmode (#156): nothing hurts a sandbox player, unless they switched damage on
         if (!_cfg.FriendlyFire && AreFriends(victim, attacker)) return DamageResult.Ignored; // teammates cannot hurt each other (self damage is not friendly fire)
         if (!ignoreProtection && IsProtected(victim)) return DamageResult.Ignored;
@@ -381,7 +402,7 @@ public sealed class MatchSim
         p.Position = SpawnChooser.Choose(_spawns, others, _cfg.MinSpawnDistance, _rng);
         p.Life = PlayerLife.Alive;
         p.Health = MoveConsts.MaxHealth;
-        p.InvulnerableUntil = 0;
+        p.InvulnerableUntil = 0; p.Held = false;
         p.ProtectedUntil = _now() + _cfg.SpawnProtection;
         Emit(new PlayerSpawned(p.Id, p.Position, _cfg.SpawnProtection));
     }

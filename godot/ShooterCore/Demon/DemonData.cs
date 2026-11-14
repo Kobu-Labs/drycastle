@@ -143,6 +143,38 @@ public sealed class DemonFlameDef
     public float HeadForwardM { get; set; }
 }
 
+/// <summary>
+/// The pounce (0 <see cref="PinS"/> turns it off): a cut-scene attack. At a living player inside the church, in sight, on the ground and within <see cref="RangeM"/> the demon crouches
+/// (<see cref="WindS"/>, the victim is marked), leaps at them along a homing arc, knocks them flat and pins them for <see cref="PinS"/> seconds, biting at their face; then their health is
+/// set to <see cref="LeaveHp"/> whatever it was, they stand with <see cref="ImmunityS"/> of immunity to the demon's attacks, and it leaps away. <see cref="Chance"/> is rolled at the end of
+/// each dwell once <see cref="CooldownS"/> has passed and <see cref="FirstAfterS"/> fighting seconds are over. The rest is the client's look: where the camera lies, the bite.
+/// </summary>
+public sealed class DemonPounceDef
+{
+    public float RangeM { get; set; }
+    public float CooldownS { get; set; }
+    /// <summary>The first pounce comes no sooner than this many fighting seconds after it woke.</summary>
+    public float FirstAfterS { get; set; }
+    /// <summary>Chance, at the end of a dwell, that it pounces (when a victim qualifies and the cooldown is over).</summary>
+    public float Chance { get; set; }
+    public float WindS { get; set; }
+    /// <summary>How long the victim is pinned; 0 turns the attack off.</summary>
+    public float PinS { get; set; }
+    public int LeaveHp { get; set; }
+    /// <summary>After the release the victim is immune to the demon's fire and flame this long.</summary>
+    public float ImmunityS { get; set; }
+    /// <summary>How far ahead of its root (the middle of its body, at scale 1) its head hangs over the victim: where the server first puts the demon; the clients then place the head exactly.</summary>
+    public float HeadForwardM { get; set; }
+    /// <summary>The client's look (seconds, metres). The camera lies <see cref="CameraHeightM"/> off the floor, the demon's muzzle <see cref="FaceDistanceM"/> above it.</summary>
+    public float LockS { get; set; } = 0.25f;
+    public float DropS { get; set; } = 0.3f;
+    public float RiseS { get; set; } = 0.6f;
+    public float CameraHeightM { get; set; } = 0.25f;
+    public float FaceDistanceM { get; set; } = 0.62f;
+    public float BitesPerS { get; set; } = 2.5f;
+    public float LungeM { get; set; } = 0.06f;
+}
+
 /// <summary>The fight around the brain: the turning, the climb to the walls, the doors and the corpse. Seconds and metres.</summary>
 public sealed class DemonFightDef
 {
@@ -180,6 +212,8 @@ public sealed class DemonFile : IVersioned
     public DemonRoarDef Roar { get; set; } = new();
     public DemonLeapDef Leap { get; set; } = new();
     public DemonFlameDef Flame { get; set; } = new();
+    /// <summary>Optional: without the section (or with <see cref="DemonPounceDef.PinS"/> 0) there is no pounce.</summary>
+    public DemonPounceDef Pounce { get; set; } = new();
     public BurnDef Burn { get; set; } = new();
 
     public static DemonFile Load(string path) => Validate(DataFile.Load<DemonFile>(path));
@@ -274,6 +308,17 @@ public sealed class DemonFile : IVersioned
             Pos(fl.RangeM, "flame.range_m"); Pos(fl.WindupS, "flame.windup_s"); Pos(fl.TrackDegPerS, "flame.track_deg_per_s"); Pos(fl.TickS, "flame.tick_s");
             Pos(fl.DamagePerTick, "flame.damage_per_tick"); NonNeg(fl.CooldownS, "flame.cooldown_s"); NonNeg(fl.HeadUpM, "flame.head_up_m"); NonNeg(fl.HeadForwardM, "flame.head_forward_m");
             if (!(fl.ConeHalfAngleDeg > 0 && fl.ConeHalfAngleDeg < 90)) throw new DataFileException($"{F}: \"flame.cone_half_angle_deg\" must be between 0 and 90");
+        }
+
+        var pn = f.Pounce;
+        if (pn.PinS > 0)
+        {
+            Pos(pn.RangeM, "pounce.range_m"); Pos(pn.WindS, "pounce.wind_s"); NonNeg(pn.CooldownS, "pounce.cooldown_s"); NonNeg(pn.FirstAfterS, "pounce.first_after_s");
+            NonNeg(pn.ImmunityS, "pounce.immunity_s"); NonNeg(pn.HeadForwardM, "pounce.head_forward_m");
+            if (!(pn.Chance > 0 && pn.Chance <= 1)) throw new DataFileException($"{F}: \"pounce.chance\" must be above 0 and at most 1");
+            if (pn.LeaveHp < 1 || pn.LeaveHp > MoveConsts.MaxHealth) throw new DataFileException($"{F}: \"pounce.leave_hp\" must be between 1 and {MoveConsts.MaxHealth}");
+            Pos(pn.LockS, "pounce.lock_s"); Pos(pn.DropS, "pounce.drop_s"); Pos(pn.RiseS, "pounce.rise_s"); Pos(pn.CameraHeightM, "pounce.camera_height_m");
+            Pos(pn.FaceDistanceM, "pounce.face_distance_m"); Pos(pn.BitesPerS, "pounce.bites_per_s"); NonNeg(pn.LungeM, "pounce.lunge_m");
         }
 
         Pos(f.Burn.Dps, "burn.dps"); Pos(f.Burn.DurationS, "burn.duration_s"); Pos(f.Burn.TickIntervalS, "burn.tick_interval_s");

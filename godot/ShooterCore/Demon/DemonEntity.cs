@@ -3,8 +3,8 @@ using System.Numerics;
 
 namespace Drycastle.ShooterCore;
 
-/// <summary>What the demon is doing: the replicated state byte. Waiting is still at its anchor (nobody inside), Dwelling rests, Telegraphing is the wind-up of a fireball, Roaring is the aggressive roar, Crouching the crouch before a leap, Leaping the arc across the nave, Breathing the fire from its mouth (windup, then the stream). Climbing to the first anchor after the turning shows as Crawling.</summary>
-public enum DemonState : byte { Transforming = 0, Waiting = 1, Dwelling = 2, Crawling = 3, Telegraphing = 4, Dead = 5, Roaring = 6, Crouching = 7, Leaping = 8, Breathing = 9 }
+/// <summary>What the demon is doing: the replicated state byte. Waiting is still at its anchor (nobody inside), Dwelling rests, Telegraphing is the wind-up of a fireball, Roaring is the aggressive roar, Crouching the crouch before a leap, Leaping the arc across the nave, Breathing the fire from its mouth (windup, then the stream), PounceWind the crouch before the pounce, Pouncing the homing leap at its victim, Pinning it stands over the pinned victim and bites. Climbing to the first anchor after the turning shows as Crawling.</summary>
+public enum DemonState : byte { Transforming = 0, Waiting = 1, Dwelling = 2, Crawling = 3, Telegraphing = 4, Dead = 5, Roaring = 6, Crouching = 7, Leaping = 8, Breathing = 9, PounceWind = 10, Pouncing = 11, Pinning = 12 }
 
 /// <summary>Demon world entity rules: the wire type, the id it is hit under, and how its surface normal travels.</summary>
 public static class DemonRules
@@ -20,7 +20,7 @@ public static class DemonRules
 
     public static bool IsHitId(ushort id) => id == HitId;
 
-    public static DemonState StateOf(byte state) => state <= (byte)DemonState.Breathing ? (DemonState)state : DemonState.Dwelling;
+    public static DemonState StateOf(byte state) => state <= (byte)DemonState.Pinning ? (DemonState)state : DemonState.Dwelling;
 
     public static void Register(WorldEntityRegistry registry)
     {
@@ -106,6 +106,12 @@ public sealed class DemonEntity : IWorldEntity
 /// <summary>A fireball leaves the demon: where, and the velocity the arc starts with (gravity is the data's).</summary>
 public readonly record struct DemonFireballMsg(ushort Id, Vector3 Origin, Vector3 Velocity);
 
+/// <summary>Where a pounce is: Aborted (0) it ended without a release, Wind (1) the demon crouches and the victim is marked, Pinned (2) the victim is held down, Released (3) the victim is let go.</summary>
+public enum PounceStage : byte { Aborted = 0, Wind = 1, Pinned = 2, Released = 3 }
+
+/// <summary>A pounce changed stage for <see cref="Victim"/> (<see cref="EventKind.DemonPounce"/>).</summary>
+public readonly record struct DemonPounceMsg(ushort Victim, PounceStage Stage, float Yaw = 0);
+
 /// <summary>A fireball ended at <see cref="At"/>: on a player, on a wall, or burnt out in the air.</summary>
 public readonly record struct DemonImpactMsg(ushort Id, Vector3 At, bool HitPlayer, bool Fizzled);
 
@@ -144,6 +150,21 @@ public static class DemonCodec
     }
 
     public static ushort? DecodeFlame(ReadOnlySpan<byte> d) => d.Length == FlameBytes ? BinaryPrimitives.ReadUInt16LittleEndian(d) : null;
+
+    public const int PounceBytes = 7;
+
+    /// <summary>The pounce event: u16 victim, u8 <see cref="PounceStage"/>, f32 the yaw the pinned victim lies at (their head is towards (sin yaw, cos yaw) in x and z; 0 unless pinned).</summary>
+    public static byte[] EncodePounce(DemonPounceMsg m)
+    {
+        var b = new byte[PounceBytes];
+        BinaryPrimitives.WriteUInt16LittleEndian(b, m.Victim);
+        b[2] = (byte)m.Stage;
+        BinaryPrimitives.WriteSingleLittleEndian(b.AsSpan(3), m.Yaw);
+        return b;
+    }
+
+    public static DemonPounceMsg? DecodePounce(ReadOnlySpan<byte> d) =>
+        d.Length == PounceBytes && d[2] <= (byte)PounceStage.Released ? new DemonPounceMsg(BinaryPrimitives.ReadUInt16LittleEndian(d), (PounceStage)d[2], BinaryPrimitives.ReadSingleLittleEndian(d[3..])) : null;
 
     public static byte[] EncodeImpact(DemonImpactMsg m)
     {

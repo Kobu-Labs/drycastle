@@ -97,6 +97,7 @@ public partial class Hud : CanvasLayer
         _root = new Control { Theme = ShooterTheme.Build(), MouseFilter = Control.MouseFilterEnum.Ignore };
         AddChild(_root);
         BuildProtection();
+        BuildPounce();
         _scope = new ScopeOverlay { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
         _scope.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _root.AddChild(_scope);
@@ -751,6 +752,7 @@ public partial class Hud : CanvasLayer
 
     void UpdateCrosshair()
     {
+        if (_pounceHide) return; // lying under the demon: no crosshair
         var scoped = Scoped?.Invoke() ?? false;
         if (_scope.Visible != scoped) { _scope.Visible = scoped; _scope.QueueRedraw(); _crossRoot.Visible = Settings.ShowCrosshair && !scoped; }
         if (scoped) return;

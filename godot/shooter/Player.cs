@@ -75,6 +75,13 @@ public partial class Player : CharacterBody3D
     /// </summary>
     public float ViewDip { get; set; }
     float _lookYaw, _lookPitch;
+    /// <summary>The mouse does not turn the view (the demon's pounce locks the camera on it).</summary>
+    public bool LookLocked { get; set; }
+    /// <summary>
+    /// A cut-scene camera: called every frame with the transform the first-person eye would have, it returns the transform to use instead (or null: the normal eye). Not part of the state;
+    /// the demon's pounce lays the victim's camera on the floor with it.
+    /// </summary>
+    public Func<Transform3D, Transform3D?>? CutCamera { get; set; }
 
     /// <summary>
     /// How far the mouse turned the view since the last call, radians in the camera's own sense (x yaw, positive turns left; y pitch, positive looks up),
@@ -127,6 +134,7 @@ public partial class Player : CharacterBody3D
         if (!_camera.IsInsideTree()) return;
         if (!_chase) _camera.Position = _eyeLocal + ViewOffset + Vector3.Down * ViewDip; // the eye glides over a reconcile (ViewOffset) and dips on a landing (ViewDip); the physics sets the eye's place per tick
         if (!_chase) _camera.Rotation = new Vector3(RecoilState.ClampPitch(_pitch + AimKick.X + ViewSway.X), _yaw + AimKick.Y + ViewSway.Y, 0);
+        if (!_chase && CutCamera?.Invoke(_camera.GlobalTransform) is { } cut) _camera.GlobalTransform = cut;
         var target = ZoomFov > 0 ? ZoomFov : (GameSettings.Current.Fov + FovBoost) * (IronSightZoom ? IronSightFovScale : 1f);
         if (Mathf.IsEqualApprox(_fovNow, target)) return;
         _fovNow = Mathf.Lerp(_fovNow, target, 1f - Mathf.Exp(-18f * (float)delta));
@@ -345,6 +353,7 @@ public partial class Player : CharacterBody3D
     public override void _UnhandledInput(InputEvent e)
     {
         if (!CaptureMouse) return;
+        if (e is InputEventMouseMotion && LookLocked) return;
         if (e is InputEventMouseMotion m && Input.MouseMode == Input.MouseModeEnum.Captured)
         {
             var gs = GameSettings.Current;

@@ -20,6 +20,12 @@ namespace Drycastle.Shooter;
 /// <see cref="Deal"/> hands those hits to <see cref="DemonHit"/>. Fireballs are replicated as events (<see cref="EventKind.DemonFireball"/> and
 /// <see cref="EventKind.DemonImpact"/>), the arc is flown by the clients; the damage and the burn are the victim's own (no kill credit).
 /// </para>
+/// <para>
+/// The pounce (<see cref="DemonBrain"/>, DemonPounced events): the victim is marked at the wind (event 223), and on the landing the server holds their body like a seat
+/// (<see cref="_pins"/>: no movement, no weapon, nothing touches them, <see cref="MatchSim.SetHeld"/>) until the pin is over; then their health is set to the data's
+/// <c>leave_hp</c>, they get a second of immunity to the demon's fire (<see cref="_pounceImmune"/>) and it leaps away. Every other end (they leave, the demon dies, the event is cleared)
+/// lets them go unchanged, and <see cref="PounceSweep"/> lets go of anyone nothing holds, every tick.
+/// </para>
 /// </summary>
 public partial class NetServer
 {
@@ -41,6 +47,10 @@ public partial class NetServer
     readonly List<DemonEvent> _dEvents = new();
     readonly List<DemonPlayer> _dPlayers = new();
     readonly List<Fireball> _balls = new();
+    /// <summary>Players held down by the pounce, and the yaw they lie at (their head towards (sin yaw, cos yaw)).</summary>
+    readonly Dictionary<ushort, float> _pins = new();
+    /// <summary>Until when (server seconds) a released victim is immune to the demon's fire and flame.</summary>
+    readonly Dictionary<ushort, double> _pounceImmune = new();
 
     /// <summary>A demon is in the church (any stage): the Mass is void and nothing else can start it.</summary>
     public bool DemonActive => _dStage != DemonStage.None;
@@ -83,6 +93,8 @@ public partial class NetServer
         _dStage = DemonStage.None;
         foreach (var b in _balls) BroadcastEvent(EventKind.DemonImpact, DemonCodec.EncodeImpact(new DemonImpactMsg((ushort)b.Id, b.Pos, false, true)));
         _balls.Clear();
+        if (_brain?.PounceVictim is { } marked) PounceLetGo(marked, false); // the mark and the hold go with the event
+        foreach (var id in _pins.Keys.ToList()) PounceLetGo(id, false);
         if (_dEnt != null) { _match.Entities.Despawn(_dEntId, WorldDespawnReason.Removed); _dEnt = null; }
         _brain = null; _anchors = null;
         if (was != DemonStage.Delay) ChurchDoors.Open(); // nobody stays locked in; MassTick shuts them once the church is empty
@@ -92,6 +104,7 @@ public partial class NetServer
     /// <summary>Once a tick, after the Mass.</summary>
     void DemonTick(float dt)
     {
+        PounceSweep();
         if (_dStage == DemonStage.None) return;
         if (_mass is not { Running: true }) { DemonClear(); return; }
         _dTime -= dt;
@@ -114,7 +127,7 @@ public partial class NetServer
                 if (_dTime <= 0)
                 {
                     _dStage = DemonStage.Fighting;
-                    _brain = new DemonBrain(Demon, _anchors!, new Random(), DemonSight, _dStartAnchor);
+                    _brain = new DemonBrain(Demon, _anchors!, new Random(), DemonSight, _dStartAnchor, DemonFloorY);
                     GD.Print("server: demon: the fight begins");
                 }
                 break;
@@ -182,7 +195,7 @@ public partial class NetServer
         _dPlayers.Clear();
         foreach (var id in inside)
             if (_byId.TryGetValue(id, out var c))
-                _dPlayers.Add(new DemonPlayer(id, N(c.Body.GlobalPosition), true, N(c.Body.Velocity)));
+                _dPlayers.Add(new DemonPlayer(id, N(c.Body.GlobalPosition), true, N(c.Body.Velocity), c.Car == null && c.Body.State.OnFloor, _sitters.ContainsKey(id)));
         _dInside = _dPlayers.Count;
 
         _dEvents.Clear();
@@ -199,6 +212,9 @@ public partial class NetServer
             DemonPhase.LeapWind => DemonState.Crouching,
             DemonPhase.Leaping => DemonState.Leaping,
             DemonPhase.Breathing => DemonState.Breathing,
+            DemonPhase.PounceWind => DemonState.PounceWind,
+            DemonPhase.Pouncing => DemonState.Pouncing,
+            DemonPhase.Pinning => DemonState.Pinning,
             _ => DemonState.Dead,
         };
         DemonHandle(_dEvents);
@@ -221,6 +237,9 @@ public partial class NetServer
                 case DemonFlameHit h:
                     FlameBurn(h.Player);
                     break;
+                case DemonPounced p:
+                    DemonPounceStage(p);
+                    break;
                 case DemonWiped:
                     GD.Print("server: demon: everyone inside is dead; it heals and waits");
                     break;
@@ -228,6 +247,89 @@ public partial class NetServer
                     DemonKilled(d.Credited);
                     break;
             }
+    }
+
+    // ---- the pounce ----
+
+    /// <summary>The floor's height under a point (a ray down from just above it), for where a pinned victim lies; the point's own height when there is no floor within 6 m.</summary>
+    float DemonFloorY(NVec3 p)
+    {
+        var from = new Vector3(p.X, p.Y + 0.4f, p.Z);
+        var d = WallDistance(from, Vector3.Down, 6f);
+        return float.IsInfinity(d) ? p.Y : from.Y - d;
+    }
+
+    void DemonPounceStage(DemonPounced p)
+    {
+        switch (p.Stage)
+        {
+            case PounceStage.Wind:
+                BroadcastEvent(EventKind.DemonPounce, DemonCodec.EncodePounce(new DemonPounceMsg(p.Victim, PounceStage.Wind)));
+                GD.Print($"server: demon: pounces on #{p.Victim}");
+                break;
+            case PounceStage.Pinned:
+                PounceHold(p);
+                break;
+            case PounceStage.Released:
+                PounceLetGo(p.Victim, true);
+                break;
+            default:
+                PounceLetGo(p.Victim, false);
+                break;
+        }
+    }
+
+    /// <summary>The landing: the victim goes down flat on the floor where they were, the body is held, nothing touches them.</summary>
+    void PounceHold(DemonPounced p)
+    {
+        if (!_byId.TryGetValue(p.Victim, out var c)) { PounceLetGo(p.Victim, false); return; }
+        c.Body.Teleport(new Vector3(p.Feet.X, p.Feet.Y + 0.02f, p.Feet.Z));
+        c.Body.Yaw = p.Yaw; c.Body.Pitch = 0;
+        c.Inputs.Clear();
+        _match.SetPosition(c.Id, p.Feet);
+        _match.SetHeld(c.Id, true);
+        _burns.Extinguish(c.Id);
+        _pins[c.Id] = p.Yaw;
+        BroadcastEvent(EventKind.DemonPounce, DemonCodec.EncodePounce(new DemonPounceMsg(c.Id, PounceStage.Pinned, p.Yaw)));
+        GD.Print($"server: demon: #{c.Id} is pinned");
+    }
+
+    /// <summary>
+    /// The pin is over. <paramref name="release"/> is the demon's release (its time is up): the health is set to <c>pounce.leave_hp</c>, whatever it was, and the victim is immune to the demon's
+    /// fire for a moment. Otherwise (they left, the demon died, the event ended) the health is untouched. Either way the hold and the mark are gone and everyone is told.
+    /// </summary>
+    void PounceLetGo(ushort id, bool release)
+    {
+        _pins.Remove(id);
+        _match.SetHeld(id, false);
+        if (release && _byId.TryGetValue(id, out var c))
+        {
+            var hp = Demon.Pounce.LeaveHp;
+            if (_match.SetHealth(id, hp)) c.Body.Health = hp; // the snapshot carries it: the HUD shows it
+            _pounceImmune[id] = _elapsed + Demon.Pounce.ImmunityS;
+        }
+        BroadcastEvent(EventKind.DemonPounce, DemonCodec.EncodePounce(new DemonPounceMsg(id, release ? PounceStage.Released : PounceStage.Aborted)));
+        GD.Print($"server: demon: #{id} is let go ({(release ? "released at " + Demon.Pounce.LeaveHp + " hp" : "aborted")})");
+    }
+
+    /// <summary>Every tick, whatever happened: lets go of anyone held that the brain is not pinning (no fight, the demon gone or dead, another victim) or who is gone or dead. No path leaves a player held.</summary>
+    void PounceSweep()
+    {
+        if (_pounceImmune.Count > 0)
+            foreach (var id in _pounceImmune.Where(kv => kv.Value <= _elapsed).Select(kv => kv.Key).ToList()) _pounceImmune.Remove(id);
+        if (_pins.Count == 0) return;
+        var brain = _dStage == DemonStage.Fighting ? _brain : null;
+        foreach (var id in PounceRules.Stuck(_pins.Keys, brain, i => _byId.ContainsKey(i) && _match.Get(i)?.Life == PlayerLife.Alive)) PounceLetGo(id, false);
+    }
+
+    bool PounceImmune(ushort id) => _pounceImmune.TryGetValue(id, out var until) && _elapsed < until;
+
+    /// <summary>Join: the pounce as it is, for a client that arrives during one (the victim's mark or the pin).</summary>
+    void SendPounceOnJoin(Client c)
+    {
+        if (_brain is not { PounceVictim: { } v } || _dStage != DemonStage.Fighting) return;
+        var pinned = _pins.TryGetValue(v, out var yaw);
+        Send(c, new EventMsg((byte)EventKind.DemonPounce, DemonCodec.EncodePounce(new DemonPounceMsg(v, pinned ? PounceStage.Pinned : PounceStage.Wind, pinned ? yaw : 0))));
     }
 
     /// <summary>The demon is dead: the curse to everyone who hit it and still lives, the doors open (the church closes once everyone has left), the corpse lies a while.</summary>
@@ -291,6 +393,7 @@ public partial class NetServer
         foreach (var v in FireballBlast.Detonate(step.Impact, direct, players, Demon.Fireball, MapShelters, _burns, Demon.Burn))
         {
             if (!_byId.TryGetValue(v.Id, out var victim)) continue;
+            if (PounceImmune(v.Id)) { _burns.Extinguish(v.Id); continue; } // just let go of the pounce: the fire does not touch them yet
             var res = Deal(v.Id, SpecialWeapons.Burn, v.Id, MathF.Max(1f, MathF.Round(v.Damage)), false, false);
             if (res == DamageResult.Ignored) { _burns.Extinguish(v.Id); continue; } // spawn protected: no burn either
             if (res != DamageResult.Killed && v.Knockback != NVec3.Zero) victim.Body.AddImpulse(new Vector3(v.Knockback.X, v.Knockback.Y, v.Knockback.Z));
@@ -300,7 +403,7 @@ public partial class NetServer
     /// <summary>A tick of the demon's flame reaches a player: its own damage and the fireball's burn (no kill credit), like a fireball's blast.</summary>
     void FlameBurn(ushort id)
     {
-        if (!_byId.ContainsKey(id)) return;
+        if (!_byId.ContainsKey(id) || PounceImmune(id)) return;
         _burns.Ignite(id, BurnSet.NoSource, Demon.Burn);
         var res = Deal(id, SpecialWeapons.Burn, id, MathF.Max(1f, MathF.Round(Demon.Flame.DamagePerTick)), false, false);
         if (res == DamageResult.Ignored) _burns.Extinguish(id); // spawn protected: no burn either

@@ -75,6 +75,49 @@ public sealed partial class DemonAudio : Node3D
     /// <summary>One of the roar's screams. False when the pack has none (the caller plays its stand-in).</summary>
     public bool Scream() => Play(Screams[GD.RandRange(0, Screams.Length - 1)], 10f);
 
+    AudioStreamPlayer3D? _bite3;
+    AudioStreamPlayer? _bite2;
+
+    /// <summary>
+    /// The pounce's bite (5.6 s, faded out at its end), from the landing: for the victim it is not positional and loud, for everyone else it plays at the demon (<see cref="MoveBite"/>
+    /// follows it). False when the pack has no such file (nothing plays).
+    /// </summary>
+    public bool Bite(Vector3 at, bool victim)
+    {
+        StopBite();
+        if (!Sfx.Enabled || Load("bite.ogg") is not { } stream) return false;
+        if (victim)
+        {
+            _bite2 = new AudioStreamPlayer { Stream = stream, Bus = "SFX", VolumeDb = 8f };
+            AddChild(_bite2);
+            _bite2.Finished += () => { _bite2?.QueueFree(); _bite2 = null; };
+            _bite2.Play();
+        }
+        else
+        {
+            _bite3 = new AudioStreamPlayer3D { Stream = stream, Bus = "SFX", UnitSize = 30f, MaxDistance = 120f, MaxDb = 12f, VolumeDb = 10f };
+            AddChild(_bite3);
+            _bite3.GlobalPosition = at;
+            _bite3.Finished += () => { _bite3?.QueueFree(); _bite3 = null; };
+            _bite3.Play();
+        }
+        return true;
+    }
+
+    /// <summary>Keeps a positional bite at the demon.</summary>
+    public void MoveBite(Vector3 at)
+    {
+        if (_bite3 != null && GodotObject.IsInstanceValid(_bite3)) _bite3.GlobalPosition = at;
+    }
+
+    /// <summary>Cuts the bite short (the demon died).</summary>
+    public void StopBite()
+    {
+        if (_bite3 != null && GodotObject.IsInstanceValid(_bite3)) _bite3.QueueFree();
+        if (_bite2 != null && GodotObject.IsInstanceValid(_bite2)) _bite2.QueueFree();
+        _bite3 = null; _bite2 = null;
+    }
+
     bool Play(string file, float db)
     {
         if (!Sfx.Enabled || Load(file) is not { } stream) return false;

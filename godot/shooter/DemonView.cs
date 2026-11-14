@@ -12,6 +12,9 @@ namespace Drycastle.Shooter;
 /// then a slow over-rotation and a tilt; waiting, it roars (the pack's roar clip over the crawl), rears and tilts its head. A fireball is a wind-up of the right arm with a
 /// glowing orb in the hand, then a fling (<see cref="Fling"/>). The server's roar (<see cref="DemonState.Roaring"/>) stands it up on the surface for the pack's roar
 /// clip, with shock rings and a flare. A leap (<see cref="DemonState.Crouching"/>, <see cref="DemonState.Leaping"/>) crouches, stretches out in flight and squashes on landing.
+/// The pounce (<see cref="DemonState.PounceWind"/>, <see cref="DemonState.Pouncing"/>, <see cref="DemonState.Pinning"/>): it crouches, flies like a leap, then stands over its prey with its head
+/// lowered (<see cref="DemonPose.Prey"/>) and bites: the jaw snaps open and shut at <see cref="DemonPounceDef.BitesPerS"/>, the head lunges, blood sprays (<see cref="Bitten"/> tells the
+/// client). Its head is put exactly where <see cref="PinMuzzleAt"/> says (the root shifts to take the muzzle there), so the victim's camera sees it face to face.
 /// Fire from the mouth (<see cref="DemonState.Breathing"/>) rears, then a particle stream and a light from the head bone follow <see cref="FlameAt"/>.
 /// Dead, it lets go of the surface, falls, lies and burns out. The views obey <see cref="ChurchInterior"/>.
 /// </summary>
@@ -32,7 +35,8 @@ public sealed partial class DemonView : Node3D
     Node3D? _orb;
     OmniLight3D? _orbLight, _fireLight, _eyeLight, _flameLight;
     CpuParticles3D? _flames, _stream;
-    Node3D? _mouth;
+    Node3D? _mouth, _muzzle;
+    CpuParticles3D? _blood;
     LoopVoice? _flameVoice;
     readonly List<StandardMaterial3D> _priestMats = new(), _demonMats = new();
 
@@ -51,6 +55,19 @@ public sealed partial class DemonView : Node3D
     double _nextRing;
     Vector3 _flameDir = Vector3.Forward;
     bool _hasFlameDir;
+
+    // the pounce
+    /// <summary>Where the muzzle must be while it pins (the point above the victim's face), set every frame by the client; null: the server's place stands.</summary>
+    public Vector3? PinMuzzleAt;
+    /// <summary>The pinned victim is the local player: the bite plays flat and loud, and nothing here shakes or lunges under reduce motion.</summary>
+    public bool PinMine, Calm;
+    /// <summary>A bite just snapped shut; the client flashes the victim's screen and shakes their camera.</summary>
+    public Action? Bitten;
+    /// <summary>Where the muzzle (the front of the mouth) is, world space, as the pose last put it.</summary>
+    public Vector3 MuzzleWorld => _muzzle != null && _muzzle.IsInsideTree() ? _muzzle.GlobalPosition : GlobalPosition;
+    float _prey, _lunge;
+    double _nextBite, _biteSnapAt = -1;
+    Vector3 _pinShift;
 
     // movement
     Vector3 _lastPos;
@@ -124,6 +141,8 @@ public sealed partial class DemonView : Node3D
                 _jaws = DemonMouth.Install(_demon, _skel);
                 _mouth = new Node3D { Name = "Mouth" };
                 head.AddChild(_mouth);
+                _muzzle = new Node3D { Name = "Muzzle", Position = _skel.GetBoneGlobalRest(_skel.FindBone("Head")).AffineInverse() * new Vector3(0, 1.553f, 0.19f) }; // the lips, in the head bone's space (the mouth's line, DemonMouth)
+                head.AddChild(_muzzle);
             }
         }
         if (ShotFx.Enabled)
@@ -135,6 +154,7 @@ public sealed partial class DemonView : Node3D
         }
         _stream = DemonFx.Stream(this, _data.Flame.RangeM > 0 ? _data.Flame.RangeM : 10f, Sz);
         _flames = DemonFx.Flames(this, 70, 1.2f * Sz, new Vector3(0, 0.9f * Sz, 0));
+        _blood = DemonFx.Blood(this);
         _nextTwitch = 1; _nextEmote = 3;
     }
 
@@ -178,7 +198,9 @@ public sealed partial class DemonView : Node3D
         var prev = _state;
         _state = state;
         _stateT = 0;
-        if (prev == DemonState.Leaping) _land = 1; // it lands: a squash
+        if (prev == DemonState.Leaping || prev == DemonState.Pouncing && state != DemonState.Pinning) _land = 1; // it lands: a squash
+        if (state == DemonState.Pinning) BeginPin();
+        else if (prev == DemonState.Pinning) _biteSnapAt = -1;
         if (state == DemonState.Roaring && !first) BeginRoar();
         else if (prev == DemonState.Roaring && state != DemonState.Dead && _demonAnim != null && _demonAnim.HasAnimation(Idle)) _demonAnim.Play(Idle, 0.3);
         if (state == DemonState.Breathing) _hasFlameDir = false;
@@ -206,6 +228,34 @@ public sealed partial class DemonView : Node3D
         RoarCue?.Invoke(GlobalPosition);
     }
 
+    /// <summary>The landing on its prey: the bite's sound starts (flat and loud for the victim, at the demon for everyone else) and the first bite is a moment off.</summary>
+    void BeginPin()
+    {
+        _nextBite = _t + 0.45; _biteSnapAt = -1; _pinShift = Vector3.Zero;
+        Audio.Bite(GlobalPosition, PinMine);
+    }
+
+    /// <summary>The jaw's target while it bites: it opens wide fast, holds a breath, snaps nearly shut (the bite), and waits for the next; about <see cref="DemonPounceDef.BitesPerS"/> a second, never twice alike.</summary>
+    float BiteTarget()
+    {
+        var pd = _data.Pounce;
+        if (_biteSnapAt < 0)
+        {
+            if (_t < _nextBite) return 0.1f; // shut, waiting
+            _biteSnapAt = _t + 0.16 + _rng.NextDouble() * 0.1; // the mouth is open this long
+            return 1f;
+        }
+        if (_t < _biteSnapAt) return 1f;
+        // the snap
+        _biteSnapAt = -1;
+        _nextBite = _t + Math.Max(0.05, (1.0 / Math.Max(0.5f, pd.BitesPerS)) * (0.65 + _rng.NextDouble() * 0.7) - 0.21);
+        _lunge = 1f;
+        var at = MuzzleWorld;
+        if (_blood != null) DemonFx.BloodBurst(_blood, at, Vector3.Down + new Vector3(((float)_rng.NextDouble() - 0.5f) * 0.4f, 0, ((float)_rng.NextDouble() - 0.5f) * 0.4f));
+        Bitten?.Invoke();
+        return 0.1f;
+    }
+
     /// <summary>A hit that counted: the body jerks and flashes.</summary>
     public void Hurt() => _hurtAt = _t;
 
@@ -229,7 +279,7 @@ public sealed partial class DemonView : Node3D
             _rot = _rot.Slerp(q, 1f - MathF.Exp(-(_state == DemonState.Leaping ? 20f : 9f) * (float)dt)).Normalized();
         }
         _up = new Basis(_rot) * Vector3.Up;
-        GlobalTransform = new Transform3D(new Basis(_rot), pos);
+        GlobalTransform = new Transform3D(new Basis(_rot), pos + _pinShift);
         if (_hasLast && dt > 1e-4)
         {
             var moved = pos.DistanceTo(_lastPos);
@@ -300,6 +350,7 @@ public sealed partial class DemonView : Node3D
 
     void BeginDeath()
     {
+        _audio?.StopBite();
         if (!_swapped) Swap(false);
         _detached = true; _deadAt = _t; _landed = false;
         _crawlTo = 1; _crawl = 1;
@@ -377,10 +428,16 @@ public sealed partial class DemonView : Node3D
 
         // the leap: crouch on the anchor, stretch in the air, squash on landing
         var crouchTo = _state == DemonState.Crouching ? 1f : 0f;
-        _crouch = Mathf.MoveToward(_crouch, crouchTo, dt * (crouchTo > _crouch ? 1f / Math.Max(0.15f, _data.Leap.CrouchS * 0.7f) : 8f));
+        var windS = _data.Pounce.WindS > 0 ? _data.Pounce.WindS : _data.Leap.CrouchS;
+        if (_state == DemonState.PounceWind) crouchTo = 1f;
+        _crouch = Mathf.MoveToward(_crouch, crouchTo, dt * (crouchTo > _crouch ? 1f / Math.Max(0.15f, (_state == DemonState.PounceWind ? windS : _data.Leap.CrouchS) * 0.7f) : 8f));
         _land = Mathf.MoveToward(_land, 0f, dt * 2.2f);
-        _stretch = Mathf.MoveToward(_stretch, _state == DemonState.Leaping ? 1f : 0f, dt * (_state == DemonState.Leaping ? 8f : 3f));
-        _pose.Crouch = Math.Max(_crouch, 0.9f * _land);
+        var flying = _state is DemonState.Leaping or DemonState.Pouncing;
+        _stretch = Mathf.MoveToward(_stretch, flying ? 1f : 0f, dt * (flying ? 8f : 3f));
+        _prey = Mathf.MoveToward(_prey, _state == DemonState.Pinning ? 1f : 0f, dt / (_state == DemonState.Pinning ? 0.35f : 0.25f));
+        _pose.Prey = _prey * _prey * (3 - 2 * _prey);
+        _pose.Crouch = Math.Max(_crouch, 0.9f * _land) * (1f - _pose.Prey);
+        PlaceOverPrey(dt);
         _pose.Stretch = _stretch;
 
         // the flame: it rears back through the windup
@@ -468,14 +525,35 @@ public sealed partial class DemonView : Node3D
         rear = Math.Max(rear, 0.7f * _fireK);
         // the mouth: wide for the roar and the fire, slack when dead, a snarl when hurt
         if (_jaws != null)
-            _jaws.Target = _state == DemonState.Roaring ? 1f : _state == DemonState.Dead ? 0.55f : Math.Max(0.95f * _fireK, 0.5f * hurt);
+            _jaws.Target = _state == DemonState.Pinning ? BiteTarget() : _state == DemonState.Pouncing ? 0.8f : _state == DemonState.Roaring ? 1f : _state == DemonState.Dead ? 0.55f : Math.Max(0.95f * _fireK, 0.5f * hurt);
         if (_pose == null) return;
         _pose.Rear = rear;
         _pose.Breath = 0.03f * MathF.Sin((float)_t * 2.1f) + 0.35f * hurt;
-        _roll = Mathf.Lerp(_roll, tilt + (_overRoll), 1f - MathF.Exp(-6f * dt));
+        _roll = Mathf.Lerp(_roll, (tilt + _overRoll) * (1f - _prey), 1f - MathF.Exp(-6f * dt));
     }
 
     float _overRoll;
+
+    /// <summary>How far the head looks down while it bites: nearly straight down at the face under it.</summary>
+    const float PreyPitch = -1.38f;
+
+    /// <summary>
+    /// While it pins, the root is shifted so the muzzle is exactly at <see cref="PinMuzzleAt"/> (less a lunge on each bite): a correction of what the pose put there a frame ago, taken in steps.
+    /// Anywhere else the shift fades out.
+    /// </summary>
+    void PlaceOverPrey(float dt)
+    {
+        _lunge = Mathf.MoveToward(_lunge, 0f, dt * 7f);
+        if (_state == DemonState.Pinning && PinMuzzleAt is { } at && _muzzle != null && IsInsideTree())
+        {
+            var want = at + Vector3.Down * (Calm ? 0f : _lunge * _data.Pounce.LungeM);
+            var err = want - MuzzleWorld;
+            if (err.Length() > 4f) err = err.Normalized() * 4f;
+            _pinShift += err * Mathf.Min(1f, 0.6f * (dt * 60f) * _prey);
+        }
+        else _pinShift = _pinShift.Lerp(Vector3.Zero, 1f - MathF.Exp(-10f * dt));
+        if (_state == DemonState.Pinning || _audio != null) _audio?.MoveBite(GlobalPosition);
+    }
 
     /// <summary>The head: tracks the nearest player within a clamp, twitches, and now and then turns too far, slowly.</summary>
     void Head(float dt)
@@ -509,10 +587,11 @@ public sealed partial class DemonView : Node3D
             _twitchEnd = _t + 0.12 + _rng.NextDouble() * 0.3;
             _nextTwitch = _twitchEnd + 1.5 + _rng.NextDouble() * 4;
         }
-        var twitching = _t < _twitchEnd;
+        var twitching = _t < _twitchEnd && _prey < 0.05f;
         var limit = Mathf.Lerp(1.3f, 2.4f, over);
         var yawT = Mathf.Clamp(wantYaw, -limit, limit) + _overSign * over * 0.5f + (twitching ? _twitchYaw : 0);
-        var pitchT = Mathf.Clamp(wantPitch, -0.75f, 0.55f) + (twitching ? _twitchPitch : 0);
+        var pitchT = Mathf.Lerp(Mathf.Clamp(wantPitch, -0.75f, 0.55f) + (twitching ? _twitchPitch : 0), PreyPitch, _prey);
+        if (_prey > 0) yawT = Mathf.Lerp(yawT, 0f, _prey);
         if (_state == DemonState.Dead) { yawT = 0.4f; pitchT = -0.7f; }
         var rate = twitching ? 40f : 4f; // radians per second: a twitch is a snap, tracking is a slow turn
         _yaw = Mathf.MoveToward(_yaw, yawT, rate * dt);

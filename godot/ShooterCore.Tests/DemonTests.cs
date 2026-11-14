@@ -13,7 +13,7 @@ public class DemonTests
     /// <summary>The shipped numbers with the roar, the leap and the flame off: the crawl and the fireball tests read the plain demon.</summary>
     static DemonFile Def
     {
-        get { var d = Full; d.Roar.DurationS = 0; d.Leap.Chance = 0; d.Flame.DurationS = 0; return d; }
+        get { var d = Full; d.Roar.DurationS = 0; d.Leap.Chance = 0; d.Flame.DurationS = 0; d.Pounce.PinS = 0; return d; }
     }
 
     /// <summary>A hand-written room, 20 x 30 x 10 m about the origin, in the file's map axes (x east, y north, z up): three anchors on the west wall, two on the ceiling, three on the east wall. In the game's axes (x, z, -y) the ceiling is y = 10.</summary>
@@ -539,7 +539,8 @@ public class DemonTests
     static (List<(float t, int from, int to)> leaps, List<float> ceiling) Fight(int seed, float seconds = 300)
     {
         var g = AnchorGraph.FromJson(NaveJson());
-        var b = new DemonBrain(Full, g, new Random(seed), (a, c) => InNave(a) && InNave(c), 7);
+        var d = Full; d.Pounce.PinS = 0; // the leaps in question are the ones it picks, not the pounce's leap away
+        var b = new DemonBrain(d, g, new Random(seed), (a, c) => InNave(a) && InNave(c), 7);
         var players = new[]
         {
             new DemonPlayer(1, new Vector3(0.985f, FloorZ, -3f), true), new DemonPlayer(2, new Vector3(2.2f, FloorZ, 2f), true),
