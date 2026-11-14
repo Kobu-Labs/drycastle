@@ -82,7 +82,7 @@ public sealed class BigfootFile : IVersioned
 
         var v = f.VehicleThrow;
         Positive(v.ContactM, "vehicle_throw.contact_m"); Positive(v.WindupSeconds, "vehicle_throw.windup_seconds"); Positive(v.CooldownSeconds, "vehicle_throw.cooldown_seconds");
-        Positive(v.MinDistanceM, "vehicle_throw.min_distance_m");
+        Positive(v.MinDistanceM, "vehicle_throw.min_distance_m"); Positive(v.HoldHeightM, "vehicle_throw.hold_height_m");
         if (v.MaxDistanceM < v.MinDistanceM) throw new DataFileException($"{F}: vehicle_throw.max_distance_m is not below min_distance_m");
         Positive(v.FlightSeconds, "vehicle_throw.flight_seconds"); NotNegative(v.SpinRadPerS, "vehicle_throw.spin_rad_per_s");
         if (v.PlacementTries < 1) throw new DataFileException($"{F}: vehicle_throw.placement_tries is at least 1");
@@ -197,7 +197,9 @@ public sealed class BigfootVehicleThrow
 {
     /// <summary>A vehicle whose centre is nearer than this (horizontally) is in contact.</summary>
     public float ContactM { get; set; } = 4.5f;
-    public float WindupSeconds { get; set; } = 0.9f;
+    public float WindupSeconds { get; set; } = 1.6f;
+    /// <summary>The vehicle is lifted this high above the Bigfoot's feet (over its head) before it is thrown.</summary>
+    public float HoldHeightM { get; set; } = 4.2f;
     /// <summary>The wait between two throws, whichever vehicles.</summary>
     public float CooldownSeconds { get; set; } = 4;
     public float MinDistanceM { get; set; } = 25;

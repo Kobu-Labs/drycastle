@@ -83,11 +83,13 @@
     "knockback_lift_mps": 4.5
   },
 
-  // Phase two: a ground vehicle it is in contact with is thrown on a scripted arc to a random place; nothing aboard takes damage,
-  // the driver's input is ignored while it flies.
+  // Phase two: a ground vehicle it is in contact with is taken in both hands, lifted hold_height_m over its feet (above its head) during
+  // the wind-up, and thrown from there on a scripted arc to a random place; nothing aboard takes damage, the driver's input is ignored
+  // from the lift to the landing.
   "vehicle_throw": {
     "contact_m": 4.5,
-    "windup_seconds": 0.9,
+    "windup_seconds": 1.6,
+    "hold_height_m": 4.2,
     "cooldown_seconds": 4,
     "min_distance_m": 25,
     "max_distance_m": 60,

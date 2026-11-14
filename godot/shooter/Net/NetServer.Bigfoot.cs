@@ -341,9 +341,19 @@ public partial class NetServer
             c.Body.AddImpulse(new Vector3(velocity.X, velocity.Y, velocity.Z));
         }
 
+        public void LiftVehicle(ushort vehicle, NVec3 hold, float seconds)
+        {
+            var car = _s._cars.FirstOrDefault(v => v.Id == vehicle);
+            if (car == null || car.Destroyed || car.Flies || car.Thrown != null) return;
+            car.Thrown = new VehicleThrow(N(car.GlobalPosition), car.State.Yaw, hold, seconds);
+            car.Wake();
+            car.HitCooldown.Clear();
+        }
+
         public void ThrowVehicle(ushort vehicle, NVec3 landing, float seconds, float spinRadPerS)
         {
             var car = _s._cars.FirstOrDefault(v => v.Id == vehicle);
+            if (car is { Destroyed: false, Thrown: { Released: false } lifted }) { lifted.Release(landing, seconds, spinRadPerS); return; } // from over its head
             if (car == null || car.Destroyed || car.Flies || car.Thrown != null) return;
             car.Thrown = new VehicleThrow(N(car.GlobalPosition), car.State.Yaw, landing, seconds, spinRadPerS);
             car.Wake();

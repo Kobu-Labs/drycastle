@@ -47,6 +47,8 @@ public class BigfootTests
         public void Knock(ushort player, Vector3 velocity) => Knocks.Add((player, velocity));
         public void Hold(ushort player, Vector3 at) => Holds.Add((player, at));
         public void Launch(ushort player, Vector3 velocity, float graceSeconds) => Launches.Add((player, velocity, graceSeconds));
+        public readonly List<(ushort Car, Vector3 Hold, float Seconds)> VehicleLifts = new();
+        public void LiftVehicle(ushort vehicle, Vector3 hold, float seconds) { VehicleLifts.Add((vehicle, hold, seconds)); VehicleList.RemoveAll(v => v.Id == vehicle); } // the server lists no vehicle in its hands
         public void ThrowVehicle(ushort vehicle, Vector3 landing, float seconds, float spinRadPerS) => VehicleThrows.Add((vehicle, landing, seconds));
         public void Fx(BigfootFxKind kind, Vector3 at, ushort id = 0, byte extra = 0) => Fxs.Add((kind, at, id));
 
@@ -476,17 +478,44 @@ public class BigfootTests
     }
 
     [Fact]
-    public void AVehicleThatDrovePastDuringTheWindupIsNotThrown()
+    public void TheVehicleIsLiftedOverItsHeadForTheWindupAndThrownFromThere()
     {
-        var w = new FakeWorld().Player(1, 0, -50);
+        var w = new FakeWorld().Player(1, 0, -12);
         w.VehicleList.Add(new BigfootVehicle(0x4001, new Vector3(2, 0, 1)));
         var b = Make(w);
         HitUntil(b, Shipped.Hits.SecondPhaseAt);
-        b.Tick(Dt); // the windup begins
-        w.VehicleList.Clear();
-        w.VehicleList.Add(new BigfootVehicle(0x4001, new Vector3(80, 0, 1)));
-        Run(b, 3);
+        Run(b, Shipped.VehicleThrow.WindupSeconds * 0.5f);
+        var lift = Assert.Single(w.VehicleLifts); // taken at the start of the wind-up: it cannot drive away
+        Assert.Equal(0x4001, lift.Car);
+        Assert.Equal(b.Position.Y + Shipped.VehicleThrow.HoldHeightM, lift.Hold.Y, 3);
+        Assert.True(lift.Hold.Y > Shipped.HeightM);
         Assert.Empty(w.VehicleThrows);
+        Assert.Equal(BigfootAct.VehicleWindup, b.Act);
+        Run(b, Shipped.VehicleThrow.WindupSeconds);
+        Assert.Single(w.VehicleThrows);
+    }
+
+    [Fact]
+    public void ALiftedVehicleRisesHoldsAndFliesFromOverhead()
+    {
+        var t = new VehicleThrow(new Vector3(2, 0, 1), 0.5f, new Vector3(0, 4.2f, 0), 1f);
+        Assert.Equal(new Vector3(2, 0, 1), t.Position);
+        t.Step(0.5f);
+        Assert.InRange(t.Position.Y, 1.5f, 2.7f);
+        t.Step(1f);
+        Assert.Equal(new Vector3(0, 4.2f, 0), t.Position); // held
+        Assert.False(t.Done);
+        t.Release(new Vector3(30, 0, 0), 2f, 1f);
+        t.Step(1f);
+        Assert.True(t.Position.Y > 4.2f && t.Position.X is > 10 and < 20);
+        t.Step(1f);
+        Assert.True(t.Done);
+        Assert.Equal(new Vector3(30, 0, 0), t.Position);
+        // one nobody throws comes down where it stood
+        var dropped = new VehicleThrow(new Vector3(2, 0, 1), 0f, new Vector3(0, 4.2f, 0), 1f);
+        for (var i = 0; i < 60 && !dropped.Done; i++) dropped.Step(0.1f);
+        Assert.True(dropped.Done);
+        Assert.Equal(new Vector3(2, 0, 1), dropped.Position);
     }
 
     [Fact]

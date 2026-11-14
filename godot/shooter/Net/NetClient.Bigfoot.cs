@@ -34,6 +34,42 @@ public partial class NetClient
         public bool Toggle;
         /// <summary>Client time (s) the shown act began, and until which a hit reaction holds the act's clip back.</summary>
         public double Since, HitUntil;
+        /// <summary>The skeleton and its two arm bones (-1 without them), with each arm's pose at rest and raised straight up: the vehicle lift poses them by hand.</summary>
+        public Skeleton3D? Skel;
+        public int ArmL = -1, ArmR = -1;
+        public Quaternion ArmLRest, ArmRRest, ArmLUp, ArmRUp;
+        public bool ArmsRaised;
+    }
+
+    /// <summary>Finds the arm bones of the giant and works out the pose that points each straight up, from the skeleton's rest (no clip is read).</summary>
+    static void IndexArms(BigfootView v)
+    {
+        if (v.Node.FindChildren("*", "Skeleton3D", true, false).FirstOrDefault() is not Skeleton3D sk) return;
+        v.Skel = sk;
+        var up = sk.GlobalBasis.Orthonormalized().Inverse() * Vector3.Up; // "up" in the skeleton's own space
+        (int Bone, Quaternion Hang, Quaternion Raised) Arm(string side)
+        {
+            var arm = sk.FindBone("Arm." + side); if (arm < 0) arm = sk.FindBone("Arm_" + side);
+            if (arm < 0) return (-1, Quaternion.Identity, Quaternion.Identity);
+            var kids = sk.GetBoneChildren(arm);
+            var rest = sk.GetBoneGlobalRest(arm);
+            var dir = kids.Length > 0 ? sk.GetBoneGlobalRest(kids[0]).Origin - rest.Origin : rest.Basis.Y;
+            if (dir.LengthSquared() < 1e-8f) return (-1, Quaternion.Identity, Quaternion.Identity);
+            var raised = new Basis(new Quaternion(dir.Normalized(), up.Normalized())) * rest.Basis.Orthonormalized();
+            var parent = sk.GetBoneParent(arm);
+            var parentBasis = parent >= 0 ? sk.GetBoneGlobalRest(parent).Basis.Orthonormalized() : Basis.Identity;
+            return (arm, sk.GetBoneRest(arm).Basis.Orthonormalized().GetRotationQuaternion(), (parentBasis.Inverse() * raised).GetRotationQuaternion());
+        }
+        (v.ArmL, v.ArmLRest, v.ArmLUp) = Arm("L");
+        (v.ArmR, v.ArmRRest, v.ArmRUp) = Arm("R");
+    }
+
+    /// <summary>Both arms between hanging (0) and straight up over the head (1). The clip must be paused, or it poses them again the next frame.</summary>
+    static void RaiseArms(BigfootView v, float k)
+    {
+        if (v.Skel == null) return;
+        if (v.ArmL >= 0) v.Skel.SetBonePoseRotation(v.ArmL, v.ArmLRest.Slerp(v.ArmLUp, k));
+        if (v.ArmR >= 0) v.Skel.SetBonePoseRotation(v.ArmR, v.ArmRRest.Slerp(v.ArmRUp, k));
     }
 
     readonly Dictionary<ushort, BigfootView> _bigfoots = new();
@@ -69,6 +105,7 @@ public partial class NetClient
         v.Anim = anim;
         IndexClips(v.Clips, anim);
         Owned.AddChild(v.Node);
+        IndexArms(v);
         _bigfoots[e.Id] = v;
     }
 
@@ -191,6 +228,14 @@ public partial class NetClient
         v.Shown = act; v.Since = now;
         if (v.Anim == null) return;
         string plain; float seconds = 0; var blend = 0.2;
+        if (v.ArmsRaised) { v.ArmsRaised = false; v.Anim.Play(); } // the clips pose the arms again
+        if (act == BigfootAct.VehicleWindup && v.Skel != null && v.ArmL >= 0 && v.ArmR >= 0)
+        {
+            // the lift is posed by hand (MoveBigfoot): it stands in its idle pose, held still, and the arms go up with the vehicle
+            if (v.Clips.TryGetValue(BigfootRules.ClipIdle, out var idle)) { v.Anim.SpeedScale = 1; v.Anim.Play(idle, 0.1); v.Anim.Seek(0, true); v.Anim.Pause(); }
+            v.ArmsRaised = true;
+            return;
+        }
         switch (act)
         {
             case BigfootAct.Walk: plain = BigfootRules.ClipWalk; break;
@@ -226,7 +271,16 @@ public partial class NetClient
                 rise = 1f + 0.14f * MathF.Min(1f, t / BigfootData.Stomp.WindupSeconds); pitch = -0.1f * MathF.Min(1f, t / BigfootData.Stomp.WindupSeconds);
                 break;
             case BigfootAct.Stomp: rise = 0.88f + 0.12f * MathF.Min(1f, t / 0.5f); pitch = 0.12f; break; // comes down hard
-            case BigfootAct.VehicleWindup: pitch = 0.3f * MathF.Min(1f, t / BigfootData.VehicleThrow.WindupSeconds); break; // reaches down
+            case BigfootAct.VehicleWindup:
+            {
+                // bends down to the vehicle, takes it in both hands, straightens with it and holds it over its head, leaning back for the throw
+                var k = Math.Clamp(t / BigfootData.VehicleThrow.WindupSeconds, 0f, 1f);
+                var up = Math.Clamp((k - 0.2f) / 0.5f, 0f, 1f); up = up * up * (3 - 2 * up);
+                pitch = k < 0.2f ? 0.35f * (k / 0.2f) : 0.35f + (-0.12f - 0.35f) * up;
+                rise = 1f + 0.06f * up;
+                if (v.ArmsRaised) RaiseArms(v, 0.35f + 0.65f * up); // reaching forward already as it bends
+                break;
+            }
             case BigfootAct.GrabReach: pitch = 0.35f * MathF.Min(1f, t / BigfootData.Grab.ReachSeconds); break;
             case BigfootAct.Hold: pitch = -0.12f; roll = MathF.Sin(t * 11f) * 0.16f; rise = 1f + 0.03f * MathF.Sin(t * 22f); break; // flails with the player in its hand
             case BigfootAct.Launch: pitch = 0.3f; break;

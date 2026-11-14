@@ -72,6 +72,9 @@ public interface IBigfootWorld
     /// <summary>The player is let go and flies with <paramref name="velocity"/>; their fall damage is the launch's own for <paramref name="graceSeconds"/>.</summary>
     void Launch(ushort player, Vector3 velocity, float graceSeconds);
 
+    /// <summary>The server lifts the vehicle from where it stands to <paramref name="hold"/> in <paramref name="seconds"/> and keeps it there, nobody steering, until <see cref="ThrowVehicle"/>.</summary>
+    void LiftVehicle(ushort vehicle, Vector3 hold, float seconds);
+
     /// <summary>The server throws the vehicle on a scripted arc to <paramref name="landing"/>, in <paramref name="seconds"/>, turning at <paramref name="spinRadPerS"/>.</summary>
     void ThrowVehicle(ushort vehicle, Vector3 landing, float seconds, float spinRadPerS);
 
@@ -107,6 +110,7 @@ public sealed class Bigfoot : IWorldEntity
     float _fight;                     // seconds awake with a target: the phases also begin by this clock
     float _trunkCd, _stompCd, _vehicleCd, _grabCd;
     ushort _vehicleToThrow;
+    Vector3 _vehicleFrom;             // where the vehicle it lifts stood
     ushort _held;
     float _holdLeft;
     readonly List<Wave> _waves = new();
@@ -323,7 +327,10 @@ public sealed class Bigfoot : IWorldEntity
 
         if (Phase >= 1 && _vehicleCd <= 0 && FindVehicleInContact() is { } car)
         {
-            _vehicleToThrow = car.Id; Act = BigfootAct.VehicleWindup; _actLeft = _d.VehicleThrow.WindupSeconds; FaceYaw(car.Feet, dt, snap: true);
+            // it takes the vehicle in both hands and lifts it over its head for the wind-up; the throw starts from up there
+            _vehicleToThrow = car.Id; _vehicleFrom = car.Feet; Act = BigfootAct.VehicleWindup; _actLeft = _d.VehicleThrow.WindupSeconds; FaceYaw(car.Feet, dt, snap: true);
+            _w.LiftVehicle(car.Id, Position + new Vector3(0, _d.VehicleThrow.HoldHeightM, 0), _d.VehicleThrow.WindupSeconds * 0.75f);
+            _w.Fx(BigfootFxKind.VehicleThrow, car.Feet, car.Id, (byte)Math.Clamp((int)MathF.Round((_d.VehicleThrow.WindupSeconds + _d.VehicleThrow.FlightSeconds) * 10), 1, 255));
             return;
         }
         if (Phase >= 2 && _grabCd <= 0 && NearestOnFoot(players, _d.Grab.RangeM) is { } grab)
@@ -503,12 +510,11 @@ public sealed class Bigfoot : IWorldEntity
 
     void ThrowTheVehicle()
     {
-        Act = BigfootAct.Idle;
+        Act = BigfootAct.Launch; _actLeft = 0.5f; // the swing of the throw
         _vehicleCd = _d.VehicleThrow.CooldownSeconds * CooldownMul;
-        BigfootVehicle? car = null;
-        foreach (var v in _w.Vehicles) if (v.Id == _vehicleToThrow) car = v;
+        if (_vehicleToThrow == 0) return;
+        var c = new BigfootVehicle(_vehicleToThrow, _vehicleFrom); // it is overhead now, lifted from here
         _vehicleToThrow = 0;
-        if (car is not { } c || Flat(c.Feet, Position) > _d.VehicleThrow.ContactM + 2f) return; // it drove away, or was thrown, or is gone
         // a random heading and distance; the first one with ground under it is where it lands, else the last one with ground, else it goes straight up and down
         Vector3? landing = null;
         for (var i = 0; i < _d.VehicleThrow.PlacementTries; i++)

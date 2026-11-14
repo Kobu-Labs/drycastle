@@ -34,33 +34,79 @@ public sealed class VehicleThrow
 {
     public VehicleThrow(Vector3 from, float yaw, Vector3 landing, float seconds, float spinRadPerS)
     {
-        From = from; Yaw0 = yaw; Landing = landing; Seconds = MathF.Max(seconds, 0.1f); SpinRadPerS = spinRadPerS;
-        Velocity = Ballistics.LaunchVelocity(from, landing, Seconds);
+        From = from; Yaw0 = yaw; Released = true;
+        Aim(landing, seconds, spinRadPerS);
     }
 
-    public Vector3 From { get; }
-    public Vector3 Landing { get; }
-    public Vector3 Velocity { get; }
-    public float Yaw0 { get; }
-    public float Seconds { get; }
-    public float SpinRadPerS { get; }
-    public float Elapsed { get; private set; }
-    public bool Done => Elapsed >= Seconds;
+    /// <summary>
+    /// The throw that begins with a lift: the Bigfoot raises the vehicle from where it stood to <paramref name="hold"/> (above its head) in
+    /// <paramref name="liftSeconds"/> and holds it there until <see cref="Release"/> starts the arc. One never released is put down where it stood.
+    /// </summary>
+    public VehicleThrow(Vector3 ground, float yaw, Vector3 hold, float liftSeconds)
+    {
+        Ground = ground; From = hold; Yaw0 = yaw; LiftSeconds = MathF.Max(liftSeconds, 0.05f);
+        Landing = ground; Seconds = 0.1f;
+    }
 
-    /// <summary>Advances the flight by <paramref name="dt"/> and returns where the vehicle is now (the landing once it is over).</summary>
+    void Aim(Vector3 landing, float seconds, float spinRadPerS)
+    {
+        Landing = landing; Seconds = MathF.Max(seconds, 0.1f); SpinRadPerS = spinRadPerS;
+        Velocity = Ballistics.LaunchVelocity(From, landing, Seconds);
+    }
+
+    /// <summary>The lift is over (or cut short): the arc to <paramref name="landing"/> starts from where the vehicle is held now.</summary>
+    public void Release(Vector3 landing, float seconds, float spinRadPerS)
+    {
+        if (Released) return;
+        From = Position; Released = true; Elapsed = 0;
+        Aim(landing, seconds, spinRadPerS);
+    }
+
+    /// <summary>Where it stood before a lift (the hold point's ground).</summary>
+    public Vector3 Ground { get; }
+    public Vector3 From { get; private set; }
+    public Vector3 Landing { get; private set; }
+    public Vector3 Velocity { get; private set; }
+    public float Yaw0 { get; }
+    public float Seconds { get; private set; }
+    public float SpinRadPerS { get; private set; }
+    public float LiftSeconds { get; }
+    /// <summary>False while it is lifted and held; the arc runs once it is true.</summary>
+    public bool Released { get; private set; }
+    public float Elapsed { get; private set; }
+    float _lifted;
+    public bool Done => Released && Elapsed >= Seconds;
+
+    /// <summary>Advances the lift or the flight by <paramref name="dt"/> and returns where the vehicle is now (the landing once it is over).</summary>
     public Vector3 Step(float dt)
     {
-        Elapsed = MathF.Min(Seconds, Elapsed + MathF.Max(0, dt));
+        dt = MathF.Max(0, dt);
+        if (!Released)
+        {
+            _lifted += dt;
+            if (_lifted > LiftSeconds + 1.5f) Release(Ground, 0.8f, 0); // nobody threw it (the Bigfoot died with it overhead): it comes down where it stood
+            return Position;
+        }
+        Elapsed = MathF.Min(Seconds, Elapsed + dt);
         return Position;
     }
 
-    public Vector3 Position => Done ? Landing : Ballistics.PositionAt(From, Velocity, Elapsed);
+    public Vector3 Position
+    {
+        get
+        {
+            if (Released) return Done ? Landing : Ballistics.PositionAt(From, Velocity, Elapsed);
+            var k = Math.Clamp(_lifted / LiftSeconds, 0f, 1f);
+            k = k * k * (3 - 2 * k); // eased: it leaves the ground slowly and settles overhead
+            return Vector3.Lerp(Ground, From, k);
+        }
+    }
 
-    /// <summary>The heading now: it spins once started and stops at the landing with the turn it has made.</summary>
-    public float Yaw => Yaw0 + SpinRadPerS * Elapsed;
+    /// <summary>The heading now: it spins once thrown and stops at the landing with the turn it has made.</summary>
+    public float Yaw => Released ? Yaw0 + SpinRadPerS * Elapsed : Yaw0;
 
     /// <summary>The vertical speed now (m/s), what a client's driven-vehicle state carries as it flies.</summary>
-    public float VerticalSpeed => Done ? 0 : Ballistics.VelocityAt(Velocity, Elapsed).Y;
+    public float VerticalSpeed => !Released || Done ? 0 : Ballistics.VelocityAt(Velocity, Elapsed).Y;
 }
 
 /// <summary>A log the Bigfoot hurls (world entity type <see cref="BigfootRules.TrunkTypeId"/>): an arc, no homing, hurting the first player it meets.</summary>
