@@ -289,11 +289,11 @@ public partial class SettingsScreen : MenuScreen
     public override void Back()
     {
         if (_capturing != null) { EndCapture(); return; }
-        if (!Dirty) { Shell.Pop(); return; }
+        if (!Dirty) { Shell.Pop(this); return; }
         Shell.Push(new DialogScreen(Strings.T("settings.unsaved.title"), Strings.T("settings.unsaved.body"), new[]
         {
-            new DialogScreen.Choice(Strings.T("settings.apply"), () => { Apply(); Shell.Pop(); }, "MenuPrimary"),
-            new DialogScreen.Choice(Strings.T("settings.discard"), () => { Revert(); Shell.Pop(); }, "MenuDanger"),
+            new DialogScreen.Choice(Strings.T("settings.apply"), () => { Apply(); Shell.Pop(this); }, "MenuPrimary"),
+            new DialogScreen.Choice(Strings.T("settings.discard"), () => { Revert(); Shell.Pop(this); }, "MenuDanger"),
         }, focus: 0));
     }
 
