@@ -102,6 +102,28 @@ public class MoabTests
         Assert.False(h.Moab.Pending);
     }
 
+    [Theory]
+    [InlineData(KillstreakEndReason.Expired, MoabPhase.Detonated)]
+    [InlineData(KillstreakEndReason.Finished, MoabPhase.Cancelled)]
+    [InlineData(KillstreakEndReason.OwnerDied, MoabPhase.Cancelled)]
+    [InlineData(KillstreakEndReason.OwnerLeft, MoabPhase.Cancelled)]
+    [InlineData(KillstreakEndReason.RoundReset, MoabPhase.Cancelled)]
+    [InlineData(KillstreakEndReason.Replaced, MoabPhase.Cancelled)]
+    [InlineData(KillstreakEndReason.Destroyed, MoabPhase.Cancelled)]
+    public void OnlyRunningOutTheCountdownDetonates(KillstreakEndReason reason, MoabPhase phase) => Assert.Equal(phase, MoabStreak.PhaseAfter(reason));
+
+    [Fact]
+    public void ASandboxReuseCancelsTheRunningMoabAndArmsTheNewOneInTheSameBreath()
+    {
+        var h = new Harness();
+        Assert.True(h.Service.SandboxActivate(Owner, MoabStreak.StreakId, 0, Here));
+        Assert.True(h.Service.SandboxActivate(Owner, MoabStreak.StreakId, 1, Here)); // Replaced -> Cancelled, then Armed again (the client banner shows the new countdown)
+        Assert.Equal(new[] { MoabPhase.Armed, MoabPhase.Cancelled, MoabPhase.Armed }, h.Phases);
+        Assert.True(h.Moab.Pending);
+        h.Service.Tick(6);
+        Assert.Equal(MoabPhase.Detonated, h.Phases[^1]);
+    }
+
     [Fact]
     public void LeavingDuringCountdownCancels()
     {

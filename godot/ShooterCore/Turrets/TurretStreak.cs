@@ -43,16 +43,13 @@ public sealed class TurretStreak : IKillstreak
 
         // the activating key press is still held on the first routed input, and Fire or Use may be held too: each button
         // counts as pressed until it has been released once
-        var prevFire = true; var prevUse = true; var prevKey = true;
+        var fireEdge = new Edge(startHeld: true); var useEdge = new Edge(startHeld: true); var keyEdge = new Edge(startHeld: true);
         if (!use.TakeControl(entityId, input =>
             {
                 var buttons = (MoveButtons)input.Buttons;
-                var fire = buttons.HasFlag(MoveButtons.Fire) && !prevFire;
-                var interact = buttons.HasFlag(MoveButtons.Use) && !prevUse;
-                var cancel = buttons.HasFlag(MoveButtons.Killstreak) && !prevKey;
-                prevFire = buttons.HasFlag(MoveButtons.Fire);
-                prevUse = buttons.HasFlag(MoveButtons.Use);
-                prevKey = buttons.HasFlag(MoveButtons.Killstreak);
+                var fire = fireEdge.Pressed(buttons.HasFlag(MoveButtons.Fire));
+                var interact = useEdge.Pressed(buttons.HasFlag(MoveButtons.Use));
+                var cancel = keyEdge.Pressed(buttons.HasFlag(MoveButtons.Killstreak));
 
                 if (cancel) { use.End(KillstreakEndReason.Finished); return; }
                 if (_world.Pose(use.Owner) is not { } at) return;

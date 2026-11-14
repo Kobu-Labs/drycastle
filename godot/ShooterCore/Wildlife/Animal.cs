@@ -55,14 +55,30 @@ public sealed class Animal : IWorldEntity
     readonly IAnimalWorld _world;
     readonly Random _rng;
 
-    float _timer;          // idle and eat: seconds left; walk: the time budget to arrive
+    /// <summary>Who may follow whom. Idle is the hub: an animal stands, then eats or walks, and goes back to standing; a threat (or a hit that did not kill) sends any living state to Flee; Flee only ends by calming down into Idle.</summary>
+    public static readonly StateMachineSpec<AnimalState> Spec = StateMachineSpec<AnimalState>.Define(
+            "Animal.Behaviour", "What an animal is doing: stand, eat, wander, run from a threat or a shot, lie dead until the corpse is removed.", AnimalState.Idle)
+        .Allow(AnimalState.Idle, AnimalState.Eat, AnimalState.Walk, AnimalState.Flee, AnimalState.Dead)
+        .Allow(AnimalState.Eat, AnimalState.Idle, AnimalState.Flee, AnimalState.Dead)
+        .Allow(AnimalState.Walk, AnimalState.Idle, AnimalState.Flee, AnimalState.Dead)
+        .Allow(AnimalState.Flee, AnimalState.Idle, AnimalState.Dead)
+        .Note(AnimalState.Idle, "Stands for a random while (clock: idle seconds), then Choose: eat, or walk to a spot near home.")
+        .Note(AnimalState.Eat, "Grazes (clock: eat seconds), then stands.")
+        .Note(AnimalState.Walk, "Walks to a wander target (clock: the time budget to arrive, then it gives up and stands).")
+        .Note(AnimalState.Flee, "Runs from the threat or the shooter; no clock of its own (calm and alarm timers run beside). Calms down into Idle.")
+        .Note(AnimalState.Dead, "Lies for corpse_seconds (the clock's elapsed time), then the entity ends. Never left.")
+        .Build();
+
+    // The machine's clock is the behaviour timer: idle and eat count the stand/graze seconds down, walk its time budget to arrive, dead how long it has lain
+    // (Elapsed). Flee has none. Entering a state and starting its clock is one call, so no state can inherit another's leftover.
+    readonly StateMachine<AnimalState> _fsm = new(Spec);
+
     float _calm;           // seconds without a threat while fleeing
     float _alarm;          // seconds left of running from _alarmFrom (a shot that hurt it)
     Vector3 _alarmFrom;
     Vector3 _fleeFrom;
     float _bias;           // radians added to the flight heading to go round what blocked the way
     Vector3 _target;       // the wander target
-    float _deadFor;
     bool _hitToggle;
 
     public Animal(AnimalsFile file, int species, Vector3 home, float yaw, IAnimalWorld world, int seed)
@@ -76,7 +92,7 @@ public sealed class Animal : IWorldEntity
         Position = _world.GroundY(home.X, home.Z) is { } y ? new Vector3(home.X, y, home.Z) : home;
         Yaw = yaw;
         Hp = Def.Hp;
-        _timer = Between(file.IdleMinSeconds, file.IdleMaxSeconds);
+        _fsm.Restart(Between(file.IdleMinSeconds, file.IdleMaxSeconds));
     }
 
     public int Species { get; }
@@ -87,7 +103,7 @@ public sealed class Animal : IWorldEntity
     /// <summary>Godot convention: 0 faces -Z.</summary>
     public float Yaw { get; private set; }
     public float Hp { get; private set; }
-    public AnimalState State { get; private set; } = AnimalState.Idle;
+    public AnimalState State => _fsm.Current;
     public bool Alive => State != AnimalState.Dead;
     /// <summary>The player whose hit killed it (0 until then, and for a death with no shooter).</summary>
     public ushort Killer { get; private set; }
@@ -111,7 +127,7 @@ public sealed class Animal : IWorldEntity
         Hp = MathF.Max(0, Hp - amount);
         if (Hp <= 0)
         {
-            State = AnimalState.Dead;
+            _fsm.Enter(AnimalState.Dead);
             Killer = attacker;
             Died?.Invoke(this, attacker);
             return;
@@ -122,7 +138,7 @@ public sealed class Animal : IWorldEntity
         _alarm = _file.AlarmSeconds;
         _fleeFrom = _alarmFrom;
         _calm = 0;
-        Enter(AnimalState.Flee);
+        StartFleeing(startOver: true);
     }
 
     public void Tick(float dt)
@@ -130,8 +146,8 @@ public sealed class Animal : IWorldEntity
         if (Ended != null || dt <= 0) return;
         if (!Alive)
         {
-            _deadFor += dt;
-            if (_deadFor >= _file.CorpseSeconds) Ended = WorldDespawnReason.Expired;
+            _fsm.Tick(dt);
+            if (_fsm.Elapsed >= _file.CorpseSeconds) Ended = WorldDespawnReason.Expired;
             return;
         }
 
@@ -145,12 +161,12 @@ public sealed class Animal : IWorldEntity
         {
             _fleeFrom = t;
             _calm = 0;
-            if (State != AnimalState.Flee) Enter(AnimalState.Flee);
+            StartFleeing(startOver: false);
         }
 
         switch (State)
         {
-            case AnimalState.Flee: Flee(dt, threat is not null); break;
+            case AnimalState.Flee: RunAway(dt, threat is not null); break;
             case AnimalState.Walk: Walk(dt); break;
             default: Rest(dt); break;
         }
@@ -169,21 +185,27 @@ public sealed class Animal : IWorldEntity
 
     float Between(float a, float b) => a + (float)_rng.NextDouble() * (b - a);
 
-    void Enter(AnimalState s)
+    /// <summary>Goes to <paramref name="s"/> with its clock (<paramref name="seconds"/>) and a straight heading (<c>_bias</c> only matters while fleeing).</summary>
+    void Go(AnimalState s, float seconds = float.PositiveInfinity)
     {
-        State = s;
         _bias = 0;
+        _fsm.Enter(s, seconds);
+    }
+
+    /// <summary>Starts running. A hit while already fleeing starts the heading over (<paramref name="startOver"/>); a threat seen while already fleeing changes nothing.</summary>
+    void StartFleeing(bool startOver)
+    {
+        if (startOver) _bias = 0;
+        if (State != AnimalState.Flee) Go(AnimalState.Flee);
     }
 
     /// <summary>Idle and eat: wait out the timer, then decide what to do next.</summary>
     void Rest(float dt)
     {
-        _timer -= dt;
-        if (_timer > 0) return;
+        if (!_fsm.Tick(dt)) return;
         if (State == AnimalState.Eat)
         {
-            Enter(AnimalState.Idle);
-            _timer = Between(_file.IdleMinSeconds, _file.IdleMaxSeconds);
+            StandStill();
             return;
         }
         Choose();
@@ -195,8 +217,7 @@ public sealed class Animal : IWorldEntity
         var strayed = HorizontalDistance(Position, Home) > Def.WanderRadius;
         if (!strayed && _rng.NextDouble() < _file.EatChance)
         {
-            Enter(AnimalState.Eat);
-            _timer = Between(_file.EatMinSeconds, _file.EatMaxSeconds);
+            Go(AnimalState.Eat, Between(_file.EatMinSeconds, _file.EatMaxSeconds));
             return;
         }
         for (var attempt = 0; attempt < 4; attempt++)
@@ -207,21 +228,19 @@ public sealed class Animal : IWorldEntity
             var z = Home.Z + MathF.Sin(angle) * reach;
             if (_world.GroundY(x, z) is not { } y) continue;
             _target = new Vector3(x, y, z);
-            Enter(AnimalState.Walk);
-            _timer = HorizontalDistance(Position, _target) / Def.WalkSpeed * 2 + 3; // twice the straight walk and a margin; then it gives up
+            Go(AnimalState.Walk, HorizontalDistance(Position, _target) / Def.WalkSpeed * 2 + 3); // twice the straight walk and a margin; then it gives up
             return;
         }
-        _timer = Between(_file.IdleMinSeconds, _file.IdleMaxSeconds);
+        StandStill(); // no spot has ground: stands on, with a fresh idle clock
     }
 
     void Walk(float dt)
     {
-        _timer -= dt;
-        if (_timer <= 0 || HorizontalDistance(Position, _target) < 0.6f) { StandStill(); return; }
+        if (_fsm.Tick(dt) || HorizontalDistance(Position, _target) < 0.6f) { StandStill(); return; }
         if (!Step(TurretMath.YawTo(Position, _target), Def.WalkSpeed, dt)) StandStill();
     }
 
-    void Flee(float dt, bool threatened)
+    void RunAway(float dt, bool threatened)
     {
         if (!threatened)
         {
@@ -233,10 +252,12 @@ public sealed class Animal : IWorldEntity
             _bias = _bias >= 0 ? -1.3f : 1.3f; // blocked: try round the other way
     }
 
+    /// <summary>Back to standing with a fresh idle clock (also when already standing: the clock restarts).</summary>
     void StandStill()
     {
-        Enter(AnimalState.Idle);
-        _timer = Between(_file.IdleMinSeconds, _file.IdleMaxSeconds);
+        var seconds = Between(_file.IdleMinSeconds, _file.IdleMaxSeconds);
+        if (!_fsm.Is(AnimalState.Idle)) Go(AnimalState.Idle, seconds);
+        else _fsm.Restart(seconds);
     }
 
     /// <summary>

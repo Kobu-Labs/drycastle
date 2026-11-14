@@ -29,7 +29,17 @@ public sealed class MoabStreak : IKillstreak
     /// <summary>The stats/streak key of the MOAB's kills (the server maps its special weapon byte to it).</summary>
     public const string OwnedWeapon = "moab";
 
+    /// <summary>One MOAB's life, one phase per reliable event. Armed on activation; it ends exactly once, in Detonated (its countdown ran out) or Cancelled (anything else that ends the use).</summary>
+    public static readonly StateMachineSpec<MoabPhase> Spec = StateMachineSpec<MoabPhase>.Define(
+            "Moab.Phase", "A MOAB from call-in to blast: counting down, then detonated or cancelled.", MoabPhase.Armed)
+        .Allow(MoabPhase.Armed, MoabPhase.Detonated, MoabPhase.Cancelled)
+        .Note(MoabPhase.Armed, "Called in: the countdown (the streak's duration) runs; only one is pending per match.")
+        .Note(MoabPhase.Detonated, "The countdown ran out (the use ended as Expired): everyone but the owner dies, vehicles blow up.")
+        .Note(MoabPhase.Cancelled, "The use ended any other way: owner died or left, round reset, or a sandbox owner used it again (Replaced; the new one's Armed follows at once). No blast.")
+        .Build();
+
     readonly Action<MoabPhase, KillstreakUse> _notify;
+    readonly StateMachine<MoabPhase> _phase = new(Spec);
     KillstreakUse? _pending;
 
     /// <param name="notify">Called for each phase. Detonated is where the server applies the blast.</param>
@@ -45,6 +55,7 @@ public sealed class MoabStreak : IKillstreak
     {
         if (Pending) { use.Log("refused: a MOAB is already pending"); return false; }
         _pending = use;
+        _phase.Reset(MoabPhase.Armed); // the next MOAB starts a new life of the machine
         use.OnEnded(reason => OnEnded(use, reason));
         _notify(MoabPhase.Armed, use);
         return true;
@@ -53,9 +64,12 @@ public sealed class MoabStreak : IKillstreak
     void OnEnded(KillstreakUse use, KillstreakEndReason reason)
     {
         if (ReferenceEquals(_pending, use)) _pending = null;
-        if (reason == KillstreakEndReason.Expired) _notify(MoabPhase.Detonated, use);
-        else _notify(MoabPhase.Cancelled, use);
+        _phase.Enter(PhaseAfter(reason));
+        _notify(_phase.Current, use);
     }
+
+    /// <summary>The phase a use that ended for <paramref name="reason"/> goes to: only running out the countdown detonates.</summary>
+    public static MoabPhase PhaseAfter(KillstreakEndReason reason) => reason == KillstreakEndReason.Expired ? MoabPhase.Detonated : MoabPhase.Cancelled;
 
     /// <summary>
     /// Who a detonation kills: every live player but the owner. Spawn protection does not save them; the server passes
