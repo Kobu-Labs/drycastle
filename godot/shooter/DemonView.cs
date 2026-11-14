@@ -239,6 +239,19 @@ public sealed partial class DemonView : Node3D
         if (_demon != null) _demon.Visible = false;
         _crawl = 0; _crawlTo = 0;
         if (_flames != null) ParticleFx.Run(_flames, true);
+        PlayTransformSound();
+    }
+
+    /// <summary>The turning's sound, from the private pack (not ours to publish); skipped when the file is not there.</summary>
+    void PlayTransformSound()
+    {
+        if (!Sfx.Enabled) return;
+        var path = System.IO.Path.Combine(GamePaths.PrivateAssets(), "audio/holy_mass/transform.ogg");
+        if (!System.IO.File.Exists(path) || AudioStreamOggVorbis.LoadFromFile(path) is not { } stream) return;
+        var p = new AudioStreamPlayer3D { Stream = stream, Bus = "SFX", UnitSize = 14f, MaxDistance = 90f, VolumeDb = 4f };
+        AddChild(p);
+        p.Finished += p.QueueFree;
+        p.Play();
     }
 
     /// <summary>The priest is gone and the demon stands in his place, roaring.</summary>
