@@ -20,3 +20,7 @@ Pets as Loot, and the fence hop.
 ## Accept
 - Tests: Carried transitions; release outside the Pen ends back inside; carried pet killed by a hit; hop lands on the other side of the section; pipeline test for `fences.json`.
 - `make map` output for the village otherwise unchanged (MAP=out/village/map).
+
+## Pipeline half: done (`a63594d`)
+- `fences.json` in the map (`files.fences`), version 1: `{"version":1,"axes":..,"fences":[{"parcel":"P-0412","group":"G-0003"|null,"a":[x,y],"b":[x,y],"za":z,"zb":z,"height_m":1.2,"type":"picket"|null}]}`. Local metres as `parcels.json`; gate gaps are simply absent. Format: `docs/pipeline.md` "Fence sections".
+- Game side still to do: MapLoader + server read it. The village map must be rebuilt in the main tree (`make map-update MAP=out/village/map`) before the file exists there: the game must work without it (no hop, gate route).
