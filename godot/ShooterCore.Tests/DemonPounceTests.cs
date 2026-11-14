@@ -317,6 +317,55 @@ public class DemonPounceTests
     }
 
     [Fact]
+    public void A_wipe_during_the_pin_lets_go_and_it_waits_where_it_stands_on_the_floor()
+    {
+        // pinned behaviour of today, not a wish: nothing sends it back to a wall, so it stands over the body until the rearm delay is over and a player comes in
+        var (b, _) = Pinned();
+        var ev = Run(b, new[] { P(1, 2, 0, alive: false) }, 0.2f);
+        AssertReleased(b, ev, 1);
+        Assert.Contains(ev, e => e is DemonWiped);
+        Assert.DoesNotContain(Stages(ev), s => s.Stage == PounceStage.Released);
+        Assert.Equal(DemonPhase.Waiting, b.Phase);
+        Assert.True(b.Pose.Position.Y < 1f);
+        Assert.Equal(Vector3.UnitY, b.Pose.Normal);
+    }
+
+    [Fact]
+    public void A_wipe_during_the_flight_lets_it_land_then_it_leaps_to_a_wall_and_waits_there()
+    {
+        var b = Brain();
+        Run(b, new[] { P(1, 2, 0) }, 10, x => x.Phase == DemonPhase.Pouncing);
+        var ev = Run(b, new[] { P(1, 2, 0, alive: false) }, 0.1f);
+        AssertReleased(b, ev, 1);
+        Assert.Contains(ev, e => e is DemonWiped);
+        Assert.Equal(DemonPhase.Pouncing, b.Phase); // the flight is finished first
+        ev = Run(b, new[] { P(1, 2, 0, alive: false) }, 10, x => x.Phase == DemonPhase.Waiting);
+        Assert.Equal(DemonPhase.Waiting, b.Phase);
+        Assert.DoesNotContain(Stages(ev), s => s.Stage is PounceStage.Pinned or PounceStage.Wind);
+        Assert.True(b.Pose.Position.Y > 1f); // on a wall or the ceiling
+    }
+
+    [Fact]
+    public void A_release_and_an_abort_both_start_the_cooldown_from_the_moment_they_end()
+    {
+        var d = Def; d.Pounce.CooldownS = 30;
+        // aborted: the victim leaves during the wind, somebody else stays
+        var a = Brain(d);
+        Run(a, new[] { P(1, 2, 0), P(2, 2, 3) }, 10, x => x.Phase == DemonPhase.PounceWind);
+        var both = new[] { P(1, 2, 0), P(2, 2, 3) }.Where(p => p.Id != a.PounceVictim).ToArray();
+        var early = Run(a, both, 25);
+        Assert.Contains(Stages(early), s => s.Stage == PounceStage.Aborted);
+        Assert.DoesNotContain(Stages(early), s => s.Stage == PounceStage.Wind);
+        Assert.Contains(Stages(Run(a, both, 40)), s => s.Stage == PounceStage.Wind);
+        // released: the same cooldown after the pin
+        var (r, _) = Pinned(d);
+        var rel = Run(r, new[] { P(1, 2, 0) }, 20, x => x.PounceVictim == null);
+        Assert.Contains(Stages(rel), s => s.Stage == PounceStage.Released);
+        var quiet = Run(r, new[] { P(1, 2, 0) }, 25);
+        Assert.DoesNotContain(Stages(quiet), s => s.Stage == PounceStage.Wind);
+    }
+
+    [Fact]
     public void The_hosts_sweep_lets_go_of_anyone_nothing_holds_whatever_ended_the_event()
     {
         var (b, _) = Pinned();
