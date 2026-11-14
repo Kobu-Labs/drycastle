@@ -176,7 +176,7 @@ public sealed partial class DemonView : Node3D
         if (state == DemonState.Roaring && !first) BeginRoar();
         else if (prev == DemonState.Roaring && state != DemonState.Dead && _demonAnim != null && _demonAnim.HasAnimation(Idle)) _demonAnim.Play(Idle, 0.3);
         if (state == DemonState.Breathing) _hasFlameDir = false;
-        SetMusic(state != DemonState.Transforming && state != DemonState.Dead);
+        Audio.SetBackground(state != DemonState.Dead);
         _crawlSpeed = state == DemonState.Roaring || prev == DemonState.Roaring ? 3f : 1f / Math.Max(0.1f, _data.Fight.TransformDropS);
         switch (state)
         {
@@ -196,7 +196,7 @@ public sealed partial class DemonView : Node3D
     {
         _nextRing = 0.25;
         if (_demonAnim != null && _demonAnim.HasAnimation(Roar)) { _demonAnim.Play(Roar, 0.2); _demonAnim.Queue(Idle); }
-        if (Sfx.Enabled) Sfx.Play3D("demon.roar", GlobalPosition + _up * 1.4f);
+        if (!Audio.Scream() && Sfx.Enabled) Sfx.Play3D("demon.roar", GlobalPosition + _up * 1.4f);
         RoarCue?.Invoke(GlobalPosition);
     }
 
@@ -240,44 +240,11 @@ public sealed partial class DemonView : Node3D
         if (_demon != null) _demon.Visible = false;
         _crawl = 0; _crawlTo = 0;
         if (_flames != null) ParticleFx.Run(_flames, true);
-        PlayTransformSound();
+        Audio.Transform();
     }
 
-    AudioStreamPlayer3D? _music;
-
-    /// <summary>The fight's looped background, from the private pack, heard evenly through the church; off while it turns and once it is dead.</summary>
-    void SetMusic(bool on)
-    {
-        if (!on) { _music?.Stop(); return; }
-        if (_music == null)
-        {
-            if (!Sfx.Enabled) return;
-            var path = System.IO.Path.Combine(GamePaths.PrivateAssets(), "audio/holy_mass/demon_music.ogg");
-            if (!System.IO.File.Exists(path) || AudioStreamOggVorbis.LoadFromFile(path) is not { } stream) return;
-            stream.Loop = true;
-            // the same level everywhere in the church, no panning: no falloff, cut off a little beyond the nave's length; it stays where the fight began
-            _music = new AudioStreamPlayer3D
-            {
-                Stream = stream, Bus = "Music", VolumeDb = -2f, TopLevel = true, PanningStrength = 0f,
-                AttenuationModel = AudioStreamPlayer3D.AttenuationModelEnum.Disabled, MaxDistance = 30f,
-            };
-            AddChild(_music);
-            _music.GlobalPosition = GlobalPosition;
-        }
-        if (!_music.Playing) _music.Play();
-    }
-
-    /// <summary>The turning's sound, from the private pack (not ours to publish); skipped when the file is not there.</summary>
-    void PlayTransformSound()
-    {
-        if (!Sfx.Enabled) return;
-        var path = System.IO.Path.Combine(GamePaths.PrivateAssets(), "audio/holy_mass/transform.ogg");
-        if (!System.IO.File.Exists(path) || AudioStreamOggVorbis.LoadFromFile(path) is not { } stream) return;
-        var p = new AudioStreamPlayer3D { Stream = stream, Bus = "SFX", UnitSize = 14f, MaxDistance = 90f, VolumeDb = 4f };
-        AddChild(p);
-        p.Finished += p.QueueFree;
-        p.Play();
-    }
+    DemonAudio? _audio;
+    DemonAudio Audio => _audio ??= DemonAudio.Attach(this);
 
     /// <summary>The priest is gone and the demon stands in his place, roaring.</summary>
     void Swap(bool burst)
