@@ -17,7 +17,7 @@ public sealed class MapRoad
 
 /// <summary>
 /// The map data both the minimap and the tactical map draw: the square ground extent that covers every parcel and road, the
-/// parcel colours rasterised into a mipmapped terrain texture, and the roads as polylines. One instance per loaded map
+/// parcel colours rasterised into a mipmapped terrain texture (with the map's top-down render over it when the map folder has one), and the roads as polylines. One instance per loaded map
 /// (<see cref="For"/>), so the two views share the roads and the textures: a texture is built once per side and kept, and a
 /// second join on the same map does not rasterise again (#170, T2-19). Positions are ground (x, z) in metres, the game's
 /// axes (north is -z); texel (u, v) is ground (x, z) relative to <see cref="Origin"/>.
@@ -153,20 +153,85 @@ public sealed class MapBase
             foreach (var v in region.Ring) box = box.Expand(v);
             Fill(px, side, metresPerTexel, Rgba(region.Colour), new List<NVector2[]> { region.Ring.Select(v => new NVector2(v.X, v.Y)).ToArray() }, box);
         }
-        BlankOutsideParcels(px, side, metresPerTexel, terrain);
+        var inside = ParcelMask(side, metresPerTexel);
+        for (var i = 0; i < px.Length; i += 4)
+            if (inside[i + 3] == 0) Buffer.BlockCopy(terrain, 0, px, i, 4);
+        PaintTopDown(px, inside, side, metresPerTexel);
         using var img = Image.CreateFromData(side, side, false, Image.Format.Rgba8, px);
         img.GenerateMipmaps();
         return ImageTexture.CreateFromImage(img);
     }
 
-    /// <summary>The ground outside every parcel is not part of the game: it takes the plain terrain colour, so the terrain mesh and the region paints that reach past the village polygon do not show.</summary>
-    void BlankOutsideParcels(byte[] px, int side, float metresPerTexel, byte[] blank)
+    /// <summary>RGBA mask of <paramref name="side"/> texels: alpha 255 inside a parcel. The ground outside every parcel is not part of the game: it takes the plain terrain colour, so the terrain mesh and the region paints that reach past the village polygon do not show.</summary>
+    byte[] ParcelMask(int side, float metresPerTexel)
     {
         var inside = new byte[side * side * 4];
         foreach (var parcel in _map.Parcels.Values)
             Fill(inside, side, metresPerTexel, new byte[] { 255, 255, 255, 255 }, parcel.Rings.Select(r => r.Select(v => new NVector2(v.X, v.Y)).ToArray()).ToList(), parcel.Bounds);
-        for (var i = 0; i < px.Length; i += 4)
-            if (inside[i + 3] == 0) Buffer.BlockCopy(blank, 0, px, i, 4);
+        return inside;
+    }
+
+    /// <summary>
+    /// The map's top-down render (<c>tactical-map.png</c> + sidecar in the map folder, <see cref="TopDownImage"/>) over every texel
+    /// inside a parcel: buildings, roofs and props as the world looks from above, which the terrain colours do not have. Resampled
+    /// to this texture's scale, alpha-blended (the picture is transparent outside the terrain). Nothing happens when the map has
+    /// no picture or it cannot be read: the terrain colours stay.
+    /// </summary>
+    void PaintTopDown(byte[] px, byte[] inside, int side, float metresPerTexel)
+    {
+        var src = TopDownSource();
+        if (src is not { } s) return;
+        var (picture, ext) = s;
+        var (x, y, w, h) = ext.Placement(Origin.X, Origin.Y, SideMetres, side);
+        var rw = Math.Max(1, (int)Math.Round(w));
+        var rh = Math.Max(1, (int)Math.Round(h));
+        if ((long)rw * rh > 64L * 1024 * 1024) return; // not a picture the sheet should hold
+        using var scaled = (Image)picture.Duplicate();
+        scaled.Resize(rw, rh, rw < picture.GetWidth() ? Image.Interpolation.Lanczos : Image.Interpolation.Bilinear);
+        var data = scaled.GetData();
+        var ox = (int)Math.Round(x);
+        var oy = (int)Math.Round(y);
+        for (var v = Math.Max(0, oy); v < Math.Min(side, oy + rh); v++)
+            for (var u = Math.Max(0, ox); u < Math.Min(side, ox + rw); u++)
+            {
+                var o = (v * side + u) * 4;
+                if (inside[o + 3] == 0) continue;
+                var q = ((v - oy) * rw + (u - ox)) * 4;
+                int a = data[q + 3];
+                if (a == 0) continue;
+                for (var c = 0; c < 3; c++) px[o + c] = (byte)((data[q + c] * a + px[o + c] * (255 - a) + 127) / 255);
+            }
+    }
+
+    Image? _topDown;
+    TopDownImage? _topDownExtent;
+    bool _topDownLoaded;
+
+    /// <summary>The top-down picture (RGBA8) and its extent, read once from the map folder; null when the map has none (older maps) or it is unreadable.</summary>
+    (Image Picture, TopDownImage Extent)? TopDownSource()
+    {
+        if (!_topDownLoaded)
+        {
+            _topDownLoaded = true;
+            try
+            {
+                var png = Path.Combine(_map.MapDir, TopDownImage.PngName);
+                var json = Path.Combine(_map.MapDir, TopDownImage.JsonName);
+                if (File.Exists(png) && File.Exists(json) && TopDownImage.Parse(File.ReadAllText(json)) is { } ext)
+                {
+                    var img = Image.LoadFromFile(png);
+                    if (img != null && img.GetWidth() == ext.WidthPx && img.GetHeight() == ext.HeightPx)
+                    {
+                        if (img.GetFormat() != Image.Format.Rgba8) img.Convert(Image.Format.Rgba8);
+                        _topDown = img;
+                        _topDownExtent = ext;
+                    }
+                    else GD.PushWarning($"tactical map: {png} does not match {json}; using the terrain colours");
+                }
+            }
+            catch (Exception e) { GD.PushWarning($"tactical map: top-down picture unreadable ({e.Message}); using the terrain colours"); }
+        }
+        return _topDown != null && _topDownExtent is { } t ? (_topDown, t) : null;
     }
 
     /// <summary>Rasterises the terrain meshes' triangles with their interpolated vertex colours (top-down, so each texel is the ground colour at that point). False when there is no coloured terrain.</summary>

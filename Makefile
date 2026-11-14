@@ -177,11 +177,13 @@ viewer-shot:
 	godot --path godot/viewer --resolution 1600x900 -- --view player --seed $(SEED) --screenshot $(abspath out/screens)/player.png $(MAP_ARG)
 
 # The whole map from above (orthographic, north up) as one PNG + .json with its extent: the tactical map's real colours.
-# CI attaches it to the release (release.yml, job tactical-map). TOPDOWN_MPP = metres per pixel. Output: out/tactical-map.png
+# TOPDOWN_MPP = metres per pixel, TOPDOWN_OUT = the PNG. The game reads tactical-map.png(+.json) from the map folder (MapBase),
+# so `make map-package` renders it into $(SHOOTER_PKG_MAP) at 2 m/px; CI also attaches a 1 m/px one to the release (job tactical-map).
 TOPDOWN_MPP ?= 1
+TOPDOWN_OUT ?= out/tactical-map.png
 tactical-map:
 	dotnet build godot/viewer/viewer.csproj
-	godot --path godot/viewer --rendering-method gl_compatibility --resolution 256x256 -- $(MAP_ARG) --topdown $(abspath out/tactical-map.png) --topdown-mpp $(TOPDOWN_MPP)
+	godot --path godot/viewer --rendering-method gl_compatibility --resolution 256x256 -- $(MAP_ARG) --topdown $(abspath $(TOPDOWN_OUT)) --topdown-mpp $(TOPDOWN_MPP)
 
 # 64-client netcode spike (see godot/netspike/README in the main README). Needs a map folder:
 # MAP=/path/to/out/village/map or DRYCASTLE_MAP. Results go to out/netspike/<timestamp>/.
@@ -365,8 +367,10 @@ shooter-export-server: shooter-export-check
 	cp -r $(SHOOTER_PKG_MAP)/. out/shooter/linux-server/map/
 
 # Map archive for the launcher: out/village/map.zip + out/village/map.json (name, size, sha256). Publish with scripts/publish-map.sh.
+# It carries the top-down render (tactical-map.png + .json) the tactical map draws; set TACTICAL_MAP_SKIP=1 to leave it out (the game then shows the terrain colours).
 map-package:
 	@test -f $(SHOOTER_PKG_MAP)/manifest.json || { echo "map not built: run 'make map'"; exit 1; }
+	@[ -n "$(TACTICAL_MAP_SKIP)" ] || $(MAKE) tactical-map MAP=$(SHOOTER_PKG_MAP) TOPDOWN_MPP=2 TOPDOWN_OUT=$(SHOOTER_PKG_MAP)/tactical-map.png
 	rm -f out/village/map.zip
 	cd $(SHOOTER_PKG_MAP) && zip -qr $(abspath out/village/map.zip) .
 	python3 scripts/map_json.py out/village/map.zip out/village/map.json
