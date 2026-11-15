@@ -42,6 +42,16 @@ public partial class NetClient
         return false;
     }
 
+    /// <summary>
+    /// The input carries the view as the head's look (<see cref="MoveButtons.HeadLook"/>): seated in a first-person view, a passenger's own eyes or the
+    /// driver's cockpit view. In the chase view the yaw is the camera's orbit, and a gun's rider aims instead, so the bit stays clear there.
+    /// </summary>
+    bool HeadLookWanted()
+    {
+        if (!_driving || Dead || _me == null || _gunship != null || _controlling || !Mode.ViewIsBody || MySeat() is not { } s) return false;
+        return s.Index > 0 || _cockpitView && CockpitOf(s.Car) != null;
+    }
+
     /// <summary>The local player is not in a vehicle any more: the schematic goes with them.</summary>
     void ClearSeats() => _seats = null;
 
@@ -94,6 +104,7 @@ public partial class NetClient
             var aim = SeatAimRules.Aim(seats[seat].Aim, rot.Y, rot.X, rot.Z, _me.Yaw, _me.Pitch);
             _me.Yaw = aim.ViewYaw; _me.Pitch = aim.ViewPitch;
         }
+        else _me.Pitch = RiderPose.ClampPitch(_me.Pitch); // a head only looks so far up and down: the view stops where the figure's neck does
         HideSelfInCar();
     }
 

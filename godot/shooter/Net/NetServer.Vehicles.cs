@@ -170,7 +170,7 @@ public partial class NetServer
         var seat = best.Seat.NearestFreeSeat(best.Def, N(best.GlobalPosition), best.State.Yaw, N(p), float.MaxValue); // any free seat of a vehicle in reach: the nearest one
         var wasEmpty = !best.Seat.Occupied;
         if (seat < 0 || !best.Seat.TryEnter(c.Id, seat)) return false;
-        c.Car = best; c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.Body.InVehicle = true; c.FlakSent = null;
+        c.Car = best; c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.Body.InVehicle = true; c.FlakSent = null; c.HeadOff = c.HeadPitch = 0;
         if (wasEmpty) best.Lights = Headlights.OnEnterAt(Clock.HourAt(_elapsed)); // night: on as the first rider gets in
         c.Body.Teleport(SeatPos(best, seat));
         _carEnters++;
@@ -224,12 +224,20 @@ public partial class NetServer
     {
         var from = c.CarSeat;
         if (car.Seat.SeatOf(c.Id) != from || !car.Seat.TrySwitch(c.Id, seat)) return false;
-        c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.FlakSent = null;
+        c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.FlakSent = null; c.HeadOff = c.HeadPitch = 0;
         c.Body.Teleport(SeatPos(car, seat));
         _match.SetPosition(c.Id, N(c.Body.GlobalPosition));
         _seatSwitches++;
         GD.Print($"server: {c.Name} moved in {car.Def.Id} {car.Id} from seat {from} to seat {seat} ({car.Def.Seats[seat].Role})");
         return true;
+    }
+
+    /// <summary>The occupants of the car's seats, in seat order (the seats record's source).</summary>
+    static ushort[] SeatOccupants(ServerCar car)
+    {
+        var o = new ushort[car.Seat.Count];
+        for (var s = 0; s < o.Length; s++) o[s] = car.Seat.Occupant(s);
+        return o;
     }
 
     /// <summary>Tells the riders who sits where when that has changed since the last send (an entry, an exit, a switch, a seat freed by a death or a drop).</summary>
@@ -381,6 +389,7 @@ public partial class NetServer
                 var at = SeatPos(car, o.CarSeat);
                 o.Body.Teleport(at);
                 _match.SetPosition(o.Id, N(at));
+                if (!RiderPose.FollowsAim(car.Def.Seats[o.CarSeat])) ApplyHeadLook(o, car); // the figure keeps facing along the hull as it turns (a gunner's follows the aim)
             }
             if (driver != null && car.Def.RunOver && !car.Afloat && (!car.Flies || car.Flight.Agl <= car.Def.Flight!.RunOverAgl)) RunOverCheck(car, driver); // road kill: on land only; a helicopter only skimming the ground
             var atOrigin = here.DistanceTo(car.OriginPos) < 0.5f; // ServerCar.AtOrigin, from the position read above
