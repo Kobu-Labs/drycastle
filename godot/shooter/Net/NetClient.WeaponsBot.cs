@@ -24,7 +24,7 @@ public partial class NetClient
         try
         {
             _wbScript ??= (BlastBot != "" ? (WeaponsBot == "a" ? BlastAlice() : BlastBob()) : BazookaBot != "" ? (WeaponsBot == "a" ? BazAlice() : BazBob()) : WeaponsBot == "a" ? AliceScript() : BobScript()).GetEnumerator();
-            if (!_done && !_wbScript.MoveNext()) _wbScript = null;
+            if (!LinkEnded && !_wbScript.MoveNext()) _wbScript = null;
         }
         catch (WbAbort e) { WeaponsFail(e.Message); }
         if (WeaponsBot == "a") { _wantSlot = _wbSlot; _me!.Pitch = _wbPitch; }
@@ -37,8 +37,8 @@ public partial class NetClient
 
     void WeaponsResult(bool ok, string why)
     {
-        if (_done) return;
-        _done = true;
+        if (LinkEnded) return;
+        _link.Enter(LinkPhase.Left);
         if (!ok) GD.PrintErr($"client {PlayerName}: weapons smoke failure: {why}");
         var which = BlastBot != "" ? "BLAST" : BazookaBot != "" ? "BAZOOKA" : "WEAPONS";
         GD.Print(ok ? $"SHOOTER_{which}_CLIENT_OK" : $"SHOOTER_{which}_CLIENT_FAIL");
@@ -104,7 +104,7 @@ public partial class NetClient
     IEnumerable<int> Place(NVec3 alice, NVec3 bob, float aimHeight)
     {
         Teleport(_myId, alice); Teleport(_wbBob, bob);
-        foreach (var x in WaitFor(() => _gotSelf && !Dead && NearXZ(_me!.State.Position, alice) && NearXZ(BobPos, bob) && _me.State.OnFloor && BobPos.Y < 0.05f, 4, "teleport and landing")) yield return x;
+        foreach (var x in WaitFor(() => OwnSpawned && !Dead && NearXZ(_me!.State.Position, alice) && NearXZ(BobPos, bob) && _me.State.OnFloor && BobPos.Y < 0.05f, 4, "teleport and landing")) yield return x;
         foreach (var x in Wait(0.3)) yield return x;
         _wbYaw = AimYaw(alice, bob);
         _wbPitch = AimPitch(alice, bob, aimHeight);

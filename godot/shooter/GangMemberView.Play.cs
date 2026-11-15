@@ -86,7 +86,7 @@ public sealed partial class GangMemberView
                 return new Want("blow" + _blowSerial, _blow.Clip, 1f, _plan.FromS);
             case GangMemberState.Chase or GangMemberState.Board: return new Want("run", ClipOf(c.Run));
             case GangMemberState.Flee: return new Want("sprint", ClipOf(c.Sprint));
-            case GangMemberState.Haul: return new Want("walk", ClipOf(c.Walk)); // a loaded Thief strolls back: no sprint
+            case GangMemberState.Haul: return new Want("walk", ClipOf(c.Walk), Math.Clamp(_data.Loot.HaulSpeedMps / _cfg.Of(_kind).WalkSpeed, 0.6f, 1.6f)); // a loaded Thief strolls back: no sprint
             case GangMemberState.Steal:
             {
                 var down = ClipOf(c.Steal);

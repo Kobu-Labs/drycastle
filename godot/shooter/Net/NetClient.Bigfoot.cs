@@ -197,6 +197,8 @@ public partial class NetClient
 
     void RenderBigfoot()
     {
+        if (_thrownCars.Count > 0)
+            foreach (var (car, until) in _thrownCars) if (Now >= until) _thrownCars.Remove(car); // expired: CarThrown already says false, the entry just leaked
         var held = false;
         BigfootView? holder = null;
         if (_lastTick != 0)

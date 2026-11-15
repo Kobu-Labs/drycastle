@@ -133,21 +133,20 @@ public class GangViewTests
     // ---- the van ----
 
     [Fact]
-    public void TheVansBoxIsTheModelsAndItsDoorIsWhereTheModelsDoorIs()
+    public void TheVansBoxIsTheModelsAndTheCrewStepsOutAtTheCabDoor()
     {
         var v = Shipped.Van;
-        // the model is 2.417 x 1.860 x 4.753 m (raid_van.json of the pack): the numbers are the model's
-        Assert.Equal(2.417f / 2, v.HalfWidthM, 0.01f);
-        Assert.Equal(4.753f / 2, v.HalfLengthM, 0.01f);
-        Assert.Equal(1.860f, v.HeightM, 0.01f);
-        // the crew steps out in front of the doorway: its middle is 0.068 ahead of the centre (the door's z, +Z is forward)
-        Assert.Equal(0.068f, v.DoorAlongM, 0.05f);
+        // the model (military/SM_Veh_Van_01.glb) is about 2.36 x 2.10 x 4.63 m: the numbers are the model's
+        Assert.Equal(2.36f / 2, v.HalfWidthM, 0.03f);
+        Assert.Equal(4.63f / 2, v.HalfLengthM, 0.03f);
+        Assert.Equal(2.10f, v.HeightM, 0.03f);
+        // the crew steps out at the cab's door, in line with the front seats (the seats are ahead of the middle: -z in the view, +Z in the model)
+        Assert.Equal(-v.View.Seats[0].Z, v.DoorAlongM, 0.2f);
         // the hit capsules (prone body 1.8 m grown by hit_scale, offset ahead and behind) end where the model does
         Assert.Equal(v.HalfLengthM, v.HitOffsetM + 1.8f / 2 * v.HitScale, 0.05f);
-        Assert.Equal("vehicles/raid_van", v.View.Model);
-        Assert.Equal("door", v.View.DoorNode);
-        Assert.Equal(new[] { -0.722f, 0.763f, 0.068f }, v.View.DoorClosed);
-        Assert.Equal(new[] { -0.842f, 0.763f, -0.932f }, v.View.DoorOpen);
+        Assert.Equal("military/SM_Veh_Van_01", v.View.Model);
+        Assert.Equal("", v.View.DoorNode);
+        Assert.Equal(2, v.View.Seats.Count); // the driver and the seat next to it
         // (the door point's side, either side, is RaidVanTests: ADoorPointIsBesideTheSideOfTheVanOnTheSideOfItsDoor; the client mirrors the model for a left door)
     }
 

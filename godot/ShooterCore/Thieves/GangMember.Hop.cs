@@ -98,6 +98,7 @@ public sealed partial class GangMember
     /// <summary>The piece it carries is gone (the pet was killed in its hands): its hands are empty and, hauling or loading, it looks for something else.</summary>
     public void LoseCarried()
     {
+        if (CarriedOrigin is { } piece) Work?.Lost(piece);
         Carried = 0; CarriedId = 0;
         if (State is GangMemberState.Haul or GangMemberState.Load) EnterSeek();
     }

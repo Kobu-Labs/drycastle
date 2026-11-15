@@ -13,8 +13,7 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class NetServer
 {
-    ChurchShell? _mapChurch;
-    bool _mapChurchTried;
+    LazyInit<ChurchShell> _mapChurch;
     ChurchDoors? _churchDoors;
     /// <summary>The decider of the doors (open/closed, the close-when-empty latch, the demon fight's grace clock).</summary>
     readonly ChurchDoorPolicy _doorPolicy = new();
@@ -24,13 +23,12 @@ public partial class NetServer
     {
         get
         {
-            if (_mapChurchTried) return _mapChurch;
-            _mapChurchTried = true;
+            if (!_mapChurch.Begin()) return _mapChurch.Value;
             if (ArenaMode || string.IsNullOrEmpty(MapDir)) return null;
             var path = Path.Combine(MapDir, "church.json");
             if (!File.Exists(path)) return null;
-            _mapChurch = ChurchShell.FromJsonOrNull(File.ReadAllText(path), m => GD.PrintErr($"server: {m}; the church has no doors and gives no shelter"));
-            return _mapChurch;
+            if (ChurchShell.FromJsonOrNull(File.ReadAllText(path), m => GD.PrintErr($"server: {m}; the church has no doors and gives no shelter")) is { } church) _mapChurch.Ready(church);
+            return _mapChurch.Value;
         }
     }
 

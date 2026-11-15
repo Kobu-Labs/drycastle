@@ -50,6 +50,9 @@ public static class CarePackageRules
         Vector3.Distance(player, crate) <= ReachMetres + slack;
 }
 
+/// <summary>Where a crate is in its life: on the parachute, on the ground and openable, or ended (opened, or timed out unopened).</summary>
+public enum CarePackageState : byte { Falling, Landed, Opened, Expired }
+
 /// <summary>Why a crate could not be opened.</summary>
 public enum OpenResult : byte { Ok, Gone, NotLanded, OutOfReach }
 
@@ -59,7 +62,18 @@ public enum OpenResult : byte { Ok, Gone, NotLanded, OutOfReach }
 /// </summary>
 public sealed class CarePackage : IWorldEntity
 {
+    public static readonly StateMachineSpec<CarePackageState> Spec = StateMachineSpec<CarePackageState>
+        .Define("CarePackage.Life", "A care package crate: falls on its parachute, lands and can be opened, then ends opened or expired (the world manager despawns it once it has ended).", CarePackageState.Falling)
+        .Allow(CarePackageState.Falling, CarePackageState.Landed, CarePackageState.Expired)
+        .Allow(CarePackageState.Landed, CarePackageState.Opened, CarePackageState.Expired)
+        .Note(CarePackageState.Falling, "Descending at the fall speed; not openable. The lifetime already runs (counted from the drop).")
+        .Note(CarePackageState.Landed, "On the ground (altitude at the landing point's Y): openable by anyone in reach.")
+        .Note(CarePackageState.Opened, "Opened by a player: ended, the reward is granted, the book despawns it at once. Cannot be reached from Expired.")
+        .Note(CarePackageState.Expired, "The lifetime ran out unopened: ended. An ended crate cannot be opened even before it is despawned.")
+        .Build();
+
     readonly Vector3 _landing;
+    readonly StateMachine<CarePackageState> _fsm = new(Spec);
     float _altitude;
     Lifetime _life;
 
@@ -72,7 +86,13 @@ public sealed class CarePackage : IWorldEntity
 
     public byte TypeId => CarePackageRules.TypeId;
     public ushort Owner { get; }
-    public WorldDespawnReason? Ended { get; private set; }
+    public CarePackageState State => _fsm.Current;
+    public WorldDespawnReason? Ended => _fsm.Current switch
+    {
+        CarePackageState.Opened => WorldDespawnReason.Opened,
+        CarePackageState.Expired => WorldDespawnReason.Expired,
+        _ => null,
+    };
     /// <summary>The landing point (its Y is the ground).</summary>
     public Vector3 Landing => _landing;
     public bool Landed => _altitude <= _landing.Y;
@@ -82,15 +102,27 @@ public sealed class CarePackage : IWorldEntity
     {
         var expired = _life.Tick(dt, CarePackageRules.LifetimeSeconds);
         if (!Landed) _altitude = MathF.Max(_landing.Y, _altitude - CarePackageRules.FallSpeedMetresPerSecond * dt);
-        if (Ended == null && expired) Ended = WorldDespawnReason.Expired;
+        SyncLanded();
+        if (Ended == null && expired) _fsm.Enter(CarePackageState.Expired);
+    }
+
+    /// <summary>Falling becomes Landed the moment the altitude reaches the ground.</summary>
+    void SyncLanded()
+    {
+        if (_fsm.Is(CarePackageState.Falling) && Landed) _fsm.Enter(CarePackageState.Landed);
     }
 
     public void OnDamage(float amount, ushort attacker) { }
 
     public WorldState Serialize() => WorldState.Make(Position, 0, 0, Owner, Landed ? CarePackageRules.StateLanded : CarePackageRules.StateFalling, 0);
 
-    /// <summary>Marks the crate as opened; the book then despawns it with <see cref="WorldDespawnReason.Opened"/>.</summary>
-    internal void MarkOpened() => Ended = WorldDespawnReason.Opened;
+    /// <summary>Marks the crate as opened; the book then despawns it with <see cref="WorldDespawnReason.Opened"/>. An ended crate (expired, or already opened) stays as it ended.</summary>
+    internal void MarkOpened()
+    {
+        if (Ended != null) return;
+        SyncLanded();
+        _fsm.Enter(CarePackageState.Opened);
+    }
 }
 
 /// <summary>
@@ -130,6 +162,7 @@ public sealed class CarePackageBook
     {
         streakId = null;
         if (!_crates.TryGetValue(crateId, out var crate)) return OpenResult.Gone;
+        if (crate.Ended != null) return OpenResult.Gone; // expired in Tick but not despawned yet: too late (it must not turn Expired into Opened)
         if (!crate.Landed) return OpenResult.NotLanded;
         if (!CarePackageRules.InReach(player, crate.Position, slack)) return OpenResult.OutOfReach;
         streakId = _rewards.Pick(rng);

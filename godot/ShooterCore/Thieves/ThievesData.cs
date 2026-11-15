@@ -102,6 +102,8 @@ public sealed class GangConfig
     public GangKindConfig GangBoss { get; set; } = new() { Hits = 80, WalkSpeed = 1.4f, RunSpeed = 4.5f, HitScale = 1.15f, Melee = new() { Damage = 10 } };
     public GangHitWeights Hits { get; set; } = new();
     public GangAggro Aggro { get; set; } = new();
+    /// <summary>A Thief that takes a hit which does not kill it while it carries Loot (hauling, loading, climbing down, hopping out) drops the Loot where it stands and looks for work again, so it joins the fight; the Loot lies there for a player to send back or a Thief to take up.</summary>
+    public bool HitDropsLoot { get; set; } = true;
     /// <summary>How long a killed member lies before it is removed.</summary>
     public float CorpseSeconds { get; set; } = 10;
     /// <summary>XP a player gets for killing a member (any kind, any weapon; there is no kill feed, streak or assist).</summary>
@@ -318,15 +320,32 @@ public sealed class VanView
     /// <summary>What the model's paint is multiplied by when it is the wreck (a dark charred tint; html), and how much each damage stage dims it.</summary>
     public string WreckTint { get; set; } = "#3a3532";
     public float StageDim { get; set; } = 0.07f;
+    /// <summary>Where the crew sits inside (a right-door van: x east of the middle, z ahead is negative, yaw degrees the way the seat faces, 0 forward, 90 to the left). The first seats are filled first (the cab, then the door's bench).</summary>
+    public List<VanSeat> Seats { get; set; } = new();
+    /// <summary>The floor the seats stand on (metres above the ground), and how high the hips of a sitting member are above it.</summary>
+    public float SeatFloorM { get; set; } = 0.45f;
+    public float SeatPelvisM { get; set; } = 0.42f;
+    /// <summary>The crew is drawn sitting only when the camera is within this of the van (metres).</summary>
+    public float SeatDrawM { get; set; } = 70;
 
     public void Validate(string file)
     {
+        if (!(SeatFloorM >= 0) || !(SeatPelvisM > 0) || !(SeatDrawM >= 0)) throw new DataFileException($"{file}: van.view seat_floor_m is not negative, seat_pelvis_m positive, seat_draw_m not negative");
+        if (Seats.Count > RaidVanRules.MaxInside) throw new DataFileException($"{file}: van.view.seats lists at most {RaidVanRules.MaxInside} seats (the wire's crew count)");
         if (Model != "" && Atlas == "") throw new DataFileException($"{file}: van.view.atlas names the model's atlas");
         if (DoorClosed.Length != 3 || DoorOpen.Length != 3) throw new DataFileException($"{file}: van.view.door_closed and door_open are three numbers");
         if (!(HonkHearM > 0)) throw new DataFileException($"{file}: van.view.honk_hear_m must be positive");
         if (!float.IsFinite(HonkDb) || !(HonkFadeDb >= 0)) throw new DataFileException($"{file}: van.view.honk_db is a number and honk_fade_db is not negative");
         if (!(StageDim >= 0 && StageDim < 0.3f)) throw new DataFileException($"{file}: van.view.stage_dim is between 0 and 0.3");
     }
+}
+
+/// <summary>One seat in a van: <see cref="X"/> across (a right-door van), <see cref="Z"/> along (negative ahead of the middle), <see cref="YawDeg"/> the way it faces.</summary>
+public sealed class VanSeat
+{
+    public float X { get; set; }
+    public float Z { get; set; }
+    public float YawDeg { get; set; }
 }
 
 /// <summary>What the event pays. The win's XP is the level data's event-win award (levels.json), the same for every event, so it is not a number here.</summary>

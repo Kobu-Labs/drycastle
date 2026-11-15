@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
+using ShapeState = Drycastle.ShooterCore.EditorShapeState;
 
 /// <summary>
 /// The polygon machinery the two shape tools share: ground PATCHES in the Ground tool (edits.json `ground_patches`,
@@ -21,8 +22,6 @@ public enum ShapeKind { Patch, Zone }
 
 public partial class EditorMode
 {
-    public enum ShapeState { Idle, Drawing, Level, Selected, Dragging }
-
     /// <summary>One drawn polygon: its ID and corners in absolute metres.</summary>
     public record ShapeInfo(string Id, List<(double x, double y)> Points)
     {
@@ -65,11 +64,10 @@ public partial class EditorMode
     const float CornerPickPx = EditorTheme.Space * 2.5f;
 
     readonly List<(double x, double y)> _draft = new();
-    bool _level, _arming;
     string? _drawType, _drawKind;
     double _newWaterY;
     string? _restorePatch, _restoreZone;
-    int _activeCorner, _hoverCorner = -1, _dragCorner = -1;
+    int _activeCorner, _hoverCorner = -1, _dragCorner = -1; // _dragCorner is the payload of the Dragging state
     (double x, double y) _dragPt;
     bool _cornerMoved;
     (double x, double y)? _cursor;
@@ -80,8 +78,12 @@ public partial class EditorMode
     // one sphere for every corner handle (the handles differ only by transform and material)
     readonly SphereMesh _handleMesh = new() { Radius = 1f, Height = 2f, RadialSegments = 12, Rings = 6 };
 
-    public string? SelectedPatchId { get; private set; }
-    public string? SelectedZoneId { get; private set; }
+    // Editor.Shape (docs/state-machines.md): the stored state. Drawing is entered by N or the first corner, Level by closing a water patch, Dragging by grabbing a
+    // corner; Idle and Selected follow the selection, so every selection change goes through the setters below.
+    readonly Drycastle.ShooterCore.StateMachine<ShapeState> _shape = new(Drycastle.ShooterCore.EditorMachines.ShapeSpec);
+    string? _selectedPatchId, _selectedZoneId;
+    public string? SelectedPatchId { get => _selectedPatchId; private set { _selectedPatchId = value; ShapeRest(); } }
+    public string? SelectedZoneId { get => _selectedZoneId; private set { _selectedZoneId = value; ShapeRest(); } }
     public IReadOnlyList<(double x, double y)> ShapeDraft => _draft;
     public bool ShapeDragging => _dragCorner >= 0;
     public int ActiveCorner => _activeCorner;
@@ -92,11 +94,27 @@ public partial class EditorMode
     public ShapeKind CurrentKind => Tool == EditorTool.Zones ? ShapeKind.Zone : ShapeKind.Patch;
     public string? SelectedShapeId => CurrentKind == ShapeKind.Zone ? SelectedZoneId : SelectedPatchId;
 
-    public ShapeState ShapeMode =>
-        _dragCorner >= 0 ? ShapeState.Dragging
-        : _level ? ShapeState.Level
-        : _draft.Count > 0 || _arming ? ShapeState.Drawing
-        : SelectedShapeId != null ? ShapeState.Selected : ShapeState.Idle;
+    public ShapeState ShapeMode => _shape.Current;
+    bool InLevel => _shape.Is(ShapeState.Level);
+
+    /// <summary>Idle or Selected, whichever the selection says (no gesture under way); a gesture keeps its state.</summary>
+    void ShapeRest()
+    {
+        if (_shape.IsAny(ShapeState.Idle, ShapeState.Selected)) _shape.Enter(SelectedShapeId != null ? ShapeState.Selected : ShapeState.Idle);
+    }
+
+    /// <summary>The Drawing or Level gesture ends (created, cancelled, last corner taken back): back to Idle or Selected. A corner drag is not touched.</summary>
+    void ShapeLeaveDraft()
+    {
+        if (_shape.IsAny(ShapeState.Drawing, ShapeState.Level)) _shape.Enter(SelectedShapeId != null ? ShapeState.Selected : ShapeState.Idle);
+    }
+
+    /// <summary>The one place a corner drag ends (release, Esc, selection changed, shape gone, tool left): payload cleared, Dragging left.</summary>
+    void EndCornerGesture()
+    {
+        _dragCorner = -1;
+        if (_shape.Is(ShapeState.Dragging)) _shape.Enter(SelectedShapeId != null ? ShapeState.Selected : ShapeState.Idle);
+    }
 
     /// <summary>A shape drawn but not yet saved (the unsaved marker in the HUD).</summary>
     public bool ShapeDraftPending => _draft.Count > 0;
@@ -237,7 +255,7 @@ public partial class EditorMode
         if (CannotDraw(k) is { } why) { Say(why, true); return; }
         SelectShape(k, null);
         if (k == ShapeKind.Patch) _drawType = SelectedGroundType; else _drawKind = SelectedZoneKind;
-        _arming = true;
+        _shape.Enter(ShapeState.Drawing); // waiting for the first corner
         Say(k == ShapeKind.Patch
             ? $"new patch of {_drawType}: click corners on the ground, Enter closes the shape, Esc cancels"
             : $"new {ZoneLabel(_drawKind!)} zone: click corners on the ground, Enter creates it, Esc cancels");
@@ -254,12 +272,12 @@ public partial class EditorMode
     /// <summary>Add a corner (absolute S-JTSK metres). Refused when the new edge would cross or touch the outline so far.</summary>
     public bool AddShapePoint(double x, double y)
     {
-        if (_level) { Say("the shape is closed: set the water level and press Enter, or Esc to go back to the corners", true); return false; }
+        if (_shape.Is(ShapeState.Level)) { Say("the shape is closed: set the water level and press Enter, or Esc to go back to the corners", true); return false; }
         var p = (Math.Round(x, 3), Math.Round(y, 3));
         if (!ObjectEdits.ChainAccepts(_draft, p)) { Say("not placed: the new edge would cross or touch the outline", true); return false; }
         if (_draft.Count == 0) SelectShape(CurrentKind, null);
         _draft.Add(p);
-        _arming = false;
+        _shape.Enter(ShapeState.Drawing);
         ShapeChanged();
         return true;
     }
@@ -267,9 +285,10 @@ public partial class EditorMode
     /// <summary>Backspace: take the last corner back.</summary>
     public bool RemoveLastShapePoint()
     {
-        if (_level) { _level = false; ShapeChanged(); return true; }
+        if (_shape.Is(ShapeState.Level)) { _shape.Enter(ShapeState.Drawing); ShapeChanged(); return true; }
         if (_draft.Count == 0) return false;
         _draft.RemoveAt(_draft.Count - 1);
+        if (_draft.Count == 0) ShapeLeaveDraft();
         ShapeChanged();
         return true;
     }
@@ -280,11 +299,11 @@ public partial class EditorMode
     /// </summary>
     public bool CloseShape()
     {
-        if (_level) return CommitShape();
+        if (_shape.Is(ShapeState.Level)) return CommitShape();
         if (ShapeDraftProblem() is { } why) { Say("cannot close the shape: " + why, true); return false; }
         if (CurrentKind == ShapeKind.Patch && PatchTypeIsWater(_drawType))
         {
-            _level = true;
+            _shape.Enter(ShapeState.Level);
             _newWaterY = DefaultWaterLevel(_draft);
             Say("shape closed: set the water level (m), Enter creates the patch, Esc goes back to the corners");
             ShapeChanged();
@@ -299,7 +318,7 @@ public partial class EditorMode
         var k = CurrentKind;
         if (ShapeDraftProblem() is { } why) { Say("cannot create the " + NounOf(k) + ": " + why, true); return false; }
         var ring = _draft.ToList();
-        var type = _drawType; var kind = _drawKind; var level = _level ? _newWaterY : (double?)null;
+        var type = _drawType; var kind = _drawKind; var level = _shape.Is(ShapeState.Level) ? _newWaterY : (double?)null;
         if (k == ShapeKind.Patch && type == null) { Say("no ground type to draw: pick one in the list", true); return false; }
         if (k == ShapeKind.Zone && kind == null) { Say("no zone kind to draw: pick one in the list", true); return false; }
         string? id = null;
@@ -315,7 +334,8 @@ public partial class EditorMode
             return (true, $"created {id}");
         });
         if (!ok) return false;
-        _draft.Clear(); _level = false; _arming = false;
+        _draft.Clear();
+        ShapeLeaveDraft();
         SelectShape(k, id);
         return true;
     }
@@ -323,8 +343,9 @@ public partial class EditorMode
     /// <summary>Drop the shape being drawn (Esc). Nothing was saved, so nothing is undone.</summary>
     public void CancelShapeDraft(bool say = true)
     {
-        var had = _draft.Count > 0 || _level || _arming;
-        _draft.Clear(); _level = false; _arming = false;
+        var had = _draft.Count > 0 || _shape.IsAny(ShapeState.Drawing, ShapeState.Level);
+        _draft.Clear();
+        ShapeLeaveDraft();
         if (had && say) Say("drawing cancelled, nothing was saved");
         ShapeChanged();
     }
@@ -334,7 +355,8 @@ public partial class EditorMode
     {
         CancelShapeCornerDrag();
         if (_draft.Count > 0) Say($"unfinished shape discarded ({_draft.Count} corner{(_draft.Count == 1 ? "" : "s")}, never saved)");
-        _draft.Clear(); _level = false; _arming = false;
+        _draft.Clear();
+        ShapeLeaveDraft();
         ShapeChanged();
     }
 
@@ -345,6 +367,7 @@ public partial class EditorMode
         var noun = NounOf(k);
         if (id != null && ShapeById(k, id) == null) { Say($"{noun} {id} does not exist", true); return false; }
         if (id == SelectedOf(k)) return true;
+        EndCornerGesture(); // a corner drag belongs to the shape that was selected
         if (k == ShapeKind.Patch) SelectedPatchId = id; else SelectedZoneId = id;
         _activeCorner = 0;
         if (id != null) FollowShape(k, id);
@@ -438,6 +461,7 @@ public partial class EditorMode
     {
         if (SelectedShape(CurrentKind) is not { } r || corner < 0 || corner >= r.Points.Count) return false;
         _dragCorner = corner; _activeCorner = corner; _dragPt = r.Points[corner]; _cornerMoved = false;
+        _shape.Enter(ShapeState.Dragging);
         ShapeChanged();
         return true;
     }
@@ -454,17 +478,18 @@ public partial class EditorMode
     /// <summary>Release: one save with the final corner (nothing when it did not move; refused when the shape would cross itself).</summary>
     public bool EndCornerDrag()
     {
-        if (_dragCorner < 0 || SelectedShapeId is not { } id) return false;
+        if (_dragCorner < 0) return false;
+        var id = SelectedShapeId;
         var c = _dragCorner; var pt = _dragPt; var moved = _cornerMoved;
-        _dragCorner = -1;
+        EndCornerGesture(); // always, even when the shape is gone: a drag left behind would block N and every other gesture
         ShapeChanged();
-        return moved && MoveShapeCorner(CurrentKind, id, c, pt.x, pt.y);
+        return id != null && moved && MoveShapeCorner(CurrentKind, id, c, pt.x, pt.y);
     }
 
     public void CancelShapeCornerDrag()
     {
         if (_dragCorner < 0) return;
-        _dragCorner = -1;
+        EndCornerGesture();
         ShapeChanged();
     }
 
@@ -520,18 +545,18 @@ public partial class EditorMode
         if (!ShapeTool || _cheat.Visible) return false;
         var mode = ShapeMode;
         if (k.CtrlPressed)
-            return k.Keycode == Key.Z && !k.ShiftPressed && (_draft.Count > 0 || _level) && RemoveLastShapePoint();
+            return k.Keycode == Key.Z && !k.ShiftPressed && (_draft.Count > 0 || InLevel) && RemoveLastShapePoint();
         if (k.AltPressed) return false;
         switch (k.Keycode)
         {
             case Key.N when !k.ShiftPressed: StartShape(); return true;
             case Key.Enter or Key.KpEnter:
-                if (_level || _draft.Count > 0) { CloseShape(); return true; }
+                if (InLevel || _draft.Count > 0) { CloseShape(); return true; }
                 return false;
             case Key.Backspace: return RemoveLastShapePoint();
             case Key.Delete when k.ShiftPressed && CurrentKind == ShapeKind.Zone && mode is ShapeState.Idle or ShapeState.Selected: RequestDeleteMarkedZones(); return true;
             case Key.Delete when mode == ShapeState.Selected && (CurrentKind == ShapeKind.Zone || _groundFocusPatch): RequestDeleteShape(); return true;
-            case Key.C when !_level && (_draft.Count > 0 || _arming):
+            case Key.C when _shape.Is(ShapeState.Drawing):
                 // corner at the cursor, or at the screen centre when the cursor is over the panel (keyboard-only drawing)
                 var mouse = GetViewport().GetMousePosition();
                 var at = OverUi(mouse) ? GetViewport().GetVisibleRect().Size / 2 : mouse;
@@ -558,7 +583,7 @@ public partial class EditorMode
         switch (ShapeMode)
         {
             case ShapeState.Dragging: CancelShapeCornerDrag(); Say("move cancelled"); return true;
-            case ShapeState.Level: _level = false; Say("back to the corners: click to add more, Enter closes again"); ShapeChanged(); return true;
+            case ShapeState.Level: _shape.Enter(ShapeState.Drawing); Say("back to the corners: click to add more, Enter closes again"); ShapeChanged(); return true;
             case ShapeState.Drawing: CancelShapeDraft(); return true;
             case ShapeState.Selected when CurrentKind == ShapeKind.Zone || _groundFocusPatch: SelectShape(CurrentKind, null); _groundFocusPatch = false; return true;
         }
@@ -571,8 +596,8 @@ public partial class EditorMode
         if (Modal || !ShapesReady()) return;
         GetViewport().GuiReleaseFocus();
         var k = CurrentKind;
-        if (_level) { Say("the shape is closed: set the water level, Enter creates it, Esc goes back to the corners", true); return; }
-        var drafting = _draft.Count > 0 || _arming;
+        if (InLevel) { Say("the shape is closed: set the water level, Enter creates it, Esc goes back to the corners", true); return; }
+        var drafting = _shape.Is(ShapeState.Drawing);
         if (!drafting && SelectedShape(k) is { } sr)
         {
             var c = PickCorner(screen, sr.Points);
@@ -654,27 +679,27 @@ public partial class EditorMode
     {
         var sel = SelectedShape(CurrentKind);
         var dragRing = DragRing();
-        var sig = string.Join(";", _draft) + "|" + _level + "|" + (_cursor?.ToString() ?? "-") + "|" + (sel == null ? "-" : sel.Id + ShapeTag(sel) + string.Join(",", sel.Points))
+        var sig = string.Join(";", _draft) + "|" + InLevel + "|" + (_cursor?.ToString() ?? "-") + "|" + (sel == null ? "-" : sel.Id + ShapeTag(sel) + string.Join(",", sel.Points))
             + "|" + (dragRing == null ? "-" : _dragPt.ToString()) + "|" + _hoverCorner + "|" + _activeCorner;
         var show = new List<(double x, double y)>();
         var hot = -1;
-        if (_draft.Count > 0 || _arming)
+        if (_shape.IsAny(ShapeState.Drawing, ShapeState.Level))
         {
             show = _draft.ToList();
             if (sig != _shSignature)
             {
-                var chain = RingSegs(_draft, _level);
+                var chain = RingSegs(_draft, InLevel);
                 var ghost = new List<(Vector2, Vector2)>(); var bad = new List<(Vector2, Vector2)>();
-                if (!_level && _cursor is { } cur && _draft.Count > 0)
+                if (!InLevel && _cursor is { } cur && _draft.Count > 0)
                 {
                     var ok = ObjectEdits.ChainAccepts(_draft, cur);
                     var a = FromAbsolute(_draft[^1].x, _draft[^1].y); var b = FromAbsolute(cur.x, cur.y);
                     if (a.DistanceSquaredTo(b) > 1e-8f) (ok ? ghost : bad).Add((a, b));
                     if (_draft.Count >= 2 && ok) { var f = FromAbsolute(_draft[0].x, _draft[0].y); if (b.DistanceSquaredTo(f) > 1e-8f) ghost.Add((b, f)); }
                 }
-                SetOutline(OutlineShapeDraft, _level && RingBad(_draft) ? new() : chain, EditorTheme.Accent, 0.31f, 0.45f);
+                SetOutline(OutlineShapeDraft, InLevel && RingBad(_draft) ? new() : chain, EditorTheme.Accent, 0.31f, 0.45f);
                 SetOutline(OutlineShapeGhost, ghost, new Color(EditorTheme.Accent, 0.5f), 0.30f, 0.35f);
-                SetOutline(OutlineShapeBad, bad.Concat(_level && RingBad(_draft) ? chain : new()).ToList(), EditorTheme.Danger, 0.33f, 0.45f);
+                SetOutline(OutlineShapeBad, bad.Concat(InLevel && RingBad(_draft) ? chain : new()).ToList(), EditorTheme.Danger, 0.33f, 0.45f);
                 SetOutline(OutlineShapeSel, new(), Colors.White, 0, 0);
                 SetOutline(OutlineShapeDrag, new(), Colors.White, 0, 0);
             }

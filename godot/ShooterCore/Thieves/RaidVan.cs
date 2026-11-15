@@ -12,6 +12,8 @@ public interface IRaidCrew
     int StillToSpawn { get; }
     /// <summary>Members alive and not yet back aboard.</summary>
     int Afoot { get; }
+    /// <summary>Members sitting in the van right now: still to get out, or back aboard. The wire carries it (the client seats that many).</summary>
+    int Inside { get; }
 }
 
 /// <summary>Rules of the Raid van entity that need no world: the wire type, the hit ids, the state layout, the hit volume.</summary>
@@ -35,11 +37,13 @@ public static class RaidVanRules
     public static int SlotOf(ushort hitId) => (hitId - FirstHitId) / IdsPerVan;
     public static ushort HitIdOf(int slot, int part) => (ushort)(FirstHitId + slot * IdsPerVan + part);
 
-    // The hp byte: bits 0-4 Loot loaded, bits 5-7 the damage stage (0 whole, 7 nearly gone). The owner field: bits 0-9 the door open in thousandths, bits 10-14 the song that plays at the van
-    // (the server picks it at the van's birth, the client plays song number modulo the songs it has), bit 15 the door is on the left.
+    // The hp byte: bits 0-4 Loot loaded, bits 5-7 the damage stage (0 whole, 7 nearly gone). The owner field: bits 0-5 the door open in 63rds, bits 6-10 the song that plays at the van
+    // (the server picks it at the van's birth, the client plays song number modulo the songs it has), bits 11-14 the crew sitting inside (0-15), bit 15 the door is on the left.
     const int LoadMask = 31, StageShift = 5, StageMask = 7;
-    public const int DoorMax = 1000;
-    const int LeftBit = 0x8000, SongShift = 10, SongMask = 31;
+    public const int DoorMax = 63;
+    const int LeftBit = 0x8000, SongShift = 6, SongMask = 31, InsideShift = 11, InsideMask = 15;
+    /// <summary>The most crew the wire says are inside (4 bits).</summary>
+    public const int MaxInside = InsideMask;
     /// <summary>The songs a van's number can name (5 bits).</summary>
     public const int SongCount = SongMask + 1;
 
@@ -47,9 +51,11 @@ public static class RaidVanRules
     public static int LoadOf(byte hp) => hp & LoadMask;
     public static int StageOf(byte hp) => (hp >> StageShift) & StageMask;
 
-    public static ushort PackOwner(float doorOpen, bool left, int song = 0) => (ushort)((int)MathF.Round(Math.Clamp(doorOpen, 0f, 1f) * DoorMax) | ((song & SongMask) << SongShift) | (left ? LeftBit : 0));
+    public static ushort PackOwner(float doorOpen, bool left, int song = 0, int inside = 0) =>
+        (ushort)((int)MathF.Round(Math.Clamp(doorOpen, 0f, 1f) * DoorMax) | ((song & SongMask) << SongShift) | (Math.Clamp(inside, 0, InsideMask) << InsideShift) | (left ? LeftBit : 0));
     public static int SongOf(ushort owner) => (owner >> SongShift) & SongMask;
-    public static float DoorOf(ushort owner) => Math.Min(owner & 0x3FF, DoorMax) / (float)DoorMax;
+    public static int InsideOf(ushort owner) => (owner >> InsideShift) & InsideMask;
+    public static float DoorOf(ushort owner) => Math.Min(owner & 0x3F, DoorMax) / (float)DoorMax;
     public static bool LeftOf(ushort owner) => (owner & LeftBit) != 0;
 
     /// <summary>A state byte as a state; a value this build does not know is read as Parked (a standing van).</summary>
@@ -286,7 +292,7 @@ public sealed class RaidVan : IWorldEntity
     public WorldState Serialize()
     {
         var stage = Math.Min(7, (int)MathF.Floor(8f * Math.Min(1f, _taken / _d.Hits)));
-        return WorldState.Make(Position, Yaw, _pitch, RaidVanRules.PackOwner(DoorOpen, DoorSide < 0, Song), (byte)State, RaidVanRules.PackHp(Load, stage));
+        return WorldState.Make(Position, Yaw, _pitch, RaidVanRules.PackOwner(DoorOpen, DoorSide < 0, Song, State == RaidVanState.Destroyed ? 0 : Crew?.Inside ?? 0), (byte)State, RaidVanRules.PackHp(Load, stage));
     }
 
     public void Tick(float dt)

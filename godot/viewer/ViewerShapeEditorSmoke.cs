@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
+using ShapeState = Drycastle.ShooterCore.EditorShapeState;
 
 /// <summary>
 /// `--shape-editor-smoke --shape-editor-smoke-plan plan.json` (run by shape_editor_smoke.py, `make viewer-shape-editor-smoke`):
@@ -89,17 +90,17 @@ public partial class Viewer
         ed.RefreshNow();
 
         // ---- ground tool: idle, list, empty selection ----
-        Check(ed.Tool == EditorTool.Ground && ed.ShapeMode == EditorMode.ShapeState.Idle, "Ground tool opens with no gesture under way");
+        Check(ed.Tool == EditorTool.Ground && ed.ShapeMode == ShapeState.Idle, "Ground tool opens with no gesture under way");
         Check(ed.ShapeRowCount == 1 && !ed.ShapeEmptyShown && !ed.ShapeRowSelected("GP-0001"), "panel lists the seeded GP-0001");
         Check(ed.ShapeHint.Contains("draws a patch") && ed.ShapePanelState == "No patch selected", $"idle hint and state: '{ed.ShapeHint}'");
         await Key_(Key.N);
-        Check(ed.ShapeMode == EditorMode.ShapeState.Idle && ed.StatusMessage.Contains("pick a ground type"), $"N without a selected type is refused with the way out: '{ed.StatusMessage}'");
+        Check(ed.ShapeMode == ShapeState.Idle && ed.StatusMessage.Contains("pick a ground type"), $"N without a selected type is refused with the way out: '{ed.StatusMessage}'");
         Check(ed.SelectGroundType("paint_336699"), "a type is selected in the list");
 
         // ---- drawing: refusals before any save ----
         var q = new[] { Pt("q0"), Pt("q1"), Pt("q2"), Pt("q3") };
         await Key_(Key.N);
-        Check(ed.ShapeMode == EditorMode.ShapeState.Drawing && ed.ShapeHint.Contains("new patch"), "N starts drawing (hint says so)");
+        Check(ed.ShapeMode == ShapeState.Drawing && ed.ShapeHint.Contains("new patch"), "N starts drawing (hint says so)");
         Check(ed.AddShapePoint(q[0][0], q[0][1]) && ed.AddShapePoint(q[1][0], q[1][1]), "two corners placed");
         ed.RefreshNow();
         Check(ed.ShapePanelValidation.Contains("at least 3") && ed.ShapeDraftProblem() != null, $"inline validation before commit: '{ed.ShapePanelValidation}'");
@@ -111,14 +112,14 @@ public partial class Viewer
         Check(ed.AddShapePoint(bow[0], bow[1]) && ed.AddShapePoint(bow[0] + 10, bow[1] + 10) && ed.AddShapePoint(bow[0] + 10, bow[1]), "bow tie: 3 corners placed");
         Check(!ed.AddShapePoint(bow[0], bow[1] + 10) && ed.ShapeDraft.Count == 3, $"self-crossing corner refused: '{ed.StatusMessage}'");
         ed.ShapeEscape(); // Esc cancels drawing
-        Check(ed.ShapeMode == EditorMode.ShapeState.Idle && ed.ShapeDraft.Count == 0 && ed.StatusMessage.Contains("nothing was saved"), "Esc cancels drawing, nothing saved");
+        Check(ed.ShapeMode == ShapeState.Idle && ed.ShapeDraft.Count == 0 && ed.StatusMessage.Contains("nothing was saved"), "Esc cancels drawing, nothing saved");
         // collinear: closes to a shape with no area
         await Key_(Key.N);
         foreach (var dx in new[] { 0.0, 5.0, 10.0 }) ed.AddShapePoint(bow[0] + dx, bow[1]);
         await Refused("close a flat (no area) shape", () => ed.CloseShape(), "seed");
         Check(ed.ShapeDraftProblem()!.Contains("crosses or touches itself, or has no area"), $"validation names the problem: '{ed.ShapeDraftProblem()}'");
         ed.ShapeEscape();
-        Check(ed.ShapeMode == EditorMode.ShapeState.Idle, "Esc cancelled the flat shape");
+        Check(ed.ShapeMode == ShapeState.Idle, "Esc cancelled the flat shape");
 
         // ---- draw the quad and create it with Enter (a land type: no extra step) ----
         await Key_(Key.N);
@@ -131,7 +132,7 @@ public partial class Viewer
         Check(ed.SegmentCount(EditorMode.OutlineShapeDraft) == 3 && ed.ShapeHandleCount == 4, $"live preview: {ed.SegmentCount(EditorMode.OutlineShapeDraft)} edges, {ed.ShapeHandleCount} corner handles");
         Check(Disk() == Expect("seed"), "nothing saved while drawing");
         var saves0 = ed.SaveCount;
-        await Gesture("create GP-0002 (Enter)", () => ed.ShapeMode == EditorMode.ShapeState.Selected, "p_created", true, () => Key_(Key.Enter));
+        await Gesture("create GP-0002 (Enter)", () => ed.ShapeMode == ShapeState.Selected, "p_created", true, () => Key_(Key.Enter));
         Check(ed.SelectedPatchId == "GP-0002" && ed.SelectedGroundType == "paint_336699" && ed.ShapeDraft.Count == 0, "new patch is selected (and its type), draft cleared");
         Check(ed.SaveCount == saves0 + 1, "creating saved exactly once");
         Check(_map.DynamicPatches.ContainsKey("GP-0002"), "GP-0002 reached the map through the watcher (patch-run)");
@@ -146,7 +147,7 @@ public partial class Viewer
 
         // ---- corner drag: preview, refused crossing, valid move ----
         var inv = Pt("invalid_to"); var mv = Pt("move_to");
-        Check(ed.StartCornerDrag(2) && ed.ShapeMode == EditorMode.ShapeState.Dragging && ed.ShapeHint.Contains("moving a corner"), "drag starts on corner 3");
+        Check(ed.StartCornerDrag(2) && ed.ShapeMode == ShapeState.Dragging && ed.ShapeHint.Contains("moving a corner"), "drag starts on corner 3");
         ed.DragCornerToAbs(inv[0], inv[1]);
         ed.ShapeWorldNow();
         Check(ed.SegmentCount(EditorMode.OutlineShapeBad) > 0 && ed.SegmentCount(EditorMode.OutlineShapeDrag) == 0, "crossing drag previews in the refused colour");
@@ -157,7 +158,7 @@ public partial class Viewer
         ed.ShapeWorldNow();
         Check(ed.SegmentCount(EditorMode.OutlineShapeDrag) == 4 && ed.SegmentCount(EditorMode.OutlineShapeBad) == 0, "valid drag previews live");
         await Key_(Key.Escape);
-        Check(ed.ShapeMode == EditorMode.ShapeState.Selected && Disk() == Expect("p_retyped"), "Esc cancels the drag, nothing saved");
+        Check(ed.ShapeMode == ShapeState.Selected && Disk() == Expect("p_retyped"), "Esc cancels the drag, nothing saved");
         ed.StartCornerDrag(1);
         ed.DragCornerToAbs(mv[0], mv[1]);
         await Gesture("drag corner 2", () => ed.EndCornerDrag(), "p_moved", true);
@@ -168,15 +169,15 @@ public partial class Viewer
         await Key_(Key.N);
         foreach (var p in wq) ed.AddShapePoint(p[0], p[1]);
         await Key_(Key.Enter);
-        Check(ed.ShapeMode == EditorMode.ShapeState.Level && ed.PatchWaterRowShown && ed.ShapeCreateButtonShown, "Enter on a water patch asks for the water level: nothing is created yet");
+        Check(ed.ShapeMode == ShapeState.Level && ed.PatchWaterRowShown && ed.ShapeCreateButtonShown, "Enter on a water patch asks for the water level: nothing is created yet");
         Check(Disk() == Expect("p_moved"), "nothing saved while the water level is asked for");
         ed.OutlineSegmentsNow();
         Check(ed.SegmentCount(EditorMode.OutlineShapeDraft) == 4, "closing edge is part of the preview");
         await Key_(Key.Escape);
-        Check(ed.ShapeMode == EditorMode.ShapeState.Drawing && ed.ShapeDraft.Count == 4, "Esc in the water level step goes back to the corners");
+        Check(ed.ShapeMode == ShapeState.Drawing && ed.ShapeDraft.Count == 4, "Esc in the water level step goes back to the corners");
         await Key_(Key.Enter);
         ed.SetDrawWaterLevel(1.5);
-        await Gesture("create the water patch GP-0003 (Enter)", () => ed.ShapeMode == EditorMode.ShapeState.Selected, "p_water", true, () => Key_(Key.Enter));
+        await Gesture("create the water patch GP-0003 (Enter)", () => ed.ShapeMode == ShapeState.Selected, "p_water", true, () => Key_(Key.Enter));
         Check(ed.SelectedPatchId == "GP-0003" && ed.Patch("GP-0003")!.WaterY == 1.5, "the water patch carries its water level");
         Check(!ed.SetPatchWater("GP-0002", 2.0), "a land patch has no water level");
         Check(!ed.SetGroundCarried("pond", "water", false) && ed.UndoDepth == 4, $"unticking water on a type a patch uses is refused: '{ed.StatusMessage}'");
@@ -202,7 +203,7 @@ public partial class Viewer
         Check(!deerRow.Contains("drawn") && !deerRow.Contains("rule"), $"a kind row has one number, no drawn/rule wording: '{deerRow}'");
         Check(ed.ShapeHint.Contains("zones:"), $"zones idle hint: '{ed.ShapeHint}'");
         await Key_(Key.N);
-        Check(ed.ShapeMode == EditorMode.ShapeState.Idle && ed.StatusMessage.Contains("pick a zone kind"), $"N without a kind is refused with the way out: '{ed.StatusMessage}'");
+        Check(ed.ShapeMode == ShapeState.Idle && ed.StatusMessage.Contains("pick a zone kind"), $"N without a kind is refused with the way out: '{ed.StatusMessage}'");
         ed.PressZoneKindRow("bigfoot"); ed.RefreshNow();
         Check(ed.SelectedZoneKind == "bigfoot", "clicking a kind row selects it");
         var zq = new[] { Pt("z0"), Pt("z1"), Pt("z2"), Pt("z3") };
@@ -279,7 +280,7 @@ public partial class Viewer
         await Key_(Key.Escape);
         Check(!ed.PaletteVisible, "Esc closes the palette");
         ed.OpenPalette(); ed.PaletteSetFilter("Ground: draw a patch");
-        Check(ed.PaletteRun(0) && ed.ShapeMode == EditorMode.ShapeState.Drawing, "palette runs 'Ground: draw a patch'");
+        Check(ed.PaletteRun(0) && ed.ShapeMode == ShapeState.Drawing, "palette runs 'Ground: draw a patch'");
         ed.ShapeEscape();
 
         // ---- a zone that comes from a rule is edited like any other: one save, one undo step ----

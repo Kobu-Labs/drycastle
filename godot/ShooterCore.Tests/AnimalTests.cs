@@ -475,6 +475,23 @@ public class AnimalTests
     }
 
     [Fact]
+    public void TheAlarmFromAShotFreezesWhileItIsThrownAndDownAndRunsOutAfterGettingUp()
+    {
+        var a = Make(new FakeWorld(), Small("\"knockdown_seconds\":2,\"alarm_seconds\":3,\"calm_seconds\":0.5,"));
+        a.Throw(new Vector3(0, 5, -10), new Vector3(0, 0, 5)); // alarms it: 3 s of running from the car
+        Run(a, 1.2f);
+        Assert.Equal(AnimalState.Down, a.State);
+        Run(a, 0.5f);                                           // lying: the alarm does not tick
+        Assert.Equal(AnimalState.Down, a.State);
+        Run(a, 1.5f);
+        Assert.Equal(AnimalState.Flee, a.State);                // up and running (the knockdown is over)
+        Run(a, 2f);
+        Assert.Equal(AnimalState.Flee, a.State);                // the alarm still had its full 3 s
+        Run(a, 2.5f);
+        Assert.NotEqual(AnimalState.Flee, a.State);             // ran out (+ calm_seconds): calmed down
+    }
+
+    [Fact]
     public void RunningOverOneHerdMemberDoesNotCutShortTheTumbleOfAnother()
     {
         var w = new FakeWorld();

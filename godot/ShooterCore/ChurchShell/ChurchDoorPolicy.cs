@@ -24,6 +24,11 @@ public enum DoorReason
 }
 
 /// <summary>
+/// The church doors' state: <see cref="ChurchDoorPolicy.IsOpen"/> x <see cref="ChurchDoorPolicy.CloseWhenEmpty"/>, as one value.
+/// </summary>
+public enum DoorState : byte { Shut, Open, OpenUntilEmpty, ShutUntilEmpty }
+
+/// <summary>
 /// The single owner of "should the church doors be open" (ADR 0019). Before, five code paths (the Mass phase reaction, the demon's clear, its kill, its
 /// per-tick door keeper, the admin command) each set the doors and two of them kept a loose <c>_closeWhenEmpty</c> flag. Here every decision is one
 /// <see cref="Apply"/> of a named <see cref="DoorReason"/> (or the fight's own <see cref="TickFight"/>), the deferred close is the explicit
@@ -36,26 +41,39 @@ public enum DoorReason
 /// </summary>
 public sealed class ChurchDoorPolicy
 {
-    float _graceT;
+    public static readonly StateMachineSpec<DoorState> Spec = StateMachineSpec<DoorState>
+        .Define("Church.Door", "Should the church doors be open: shut or open, each with or without the deferred close-when-empty armed. The demon fight's door-grace clock runs beside (not a state).", DoorState.Shut)
+        .Allow(DoorState.Shut, DoorState.Open, DoorState.OpenUntilEmpty, DoorState.ShutUntilEmpty)
+        .Allow(DoorState.Open, DoorState.Shut, DoorState.OpenUntilEmpty)
+        .Allow(DoorState.OpenUntilEmpty, DoorState.Open, DoorState.Shut, DoorState.ShutUntilEmpty)
+        .Allow(DoorState.ShutUntilEmpty, DoorState.Shut, DoorState.Open, DoorState.OpenUntilEmpty)
+        .Note(DoorState.Shut, "Closed, nothing pending (the start state; the Mass void slams it, the deferred close lands here).")
+        .Note(DoorState.Open, "Open, nothing pending: the Mass gathers, an admin opened, or a cleared / failed demon fight let everyone out.")
+        .Note(DoorState.OpenUntilEmpty, "Open and the deferred close is armed (CloseWhenEmpty): the Mass is over or the demon died; the doors shut once the church is empty. The fight's door keeper may shut and reopen them meanwhile.")
+        .Note(DoorState.ShutUntilEmpty, "Shut with the deferred close armed: odd but kept. MassOver arms the close even while the doors are already shut (a void Mass, an admin's close); the church-empty check then fires it, a no-op for the doors, and clears the latch.")
+        .Build();
+
+    readonly StateMachine<DoorState> _fsm = new(Spec);
+    float _graceT; // the fight's door-grace clock: count-up, restarted by FightBegins and by every tick that does not count it (see TickFight)
 
     /// <summary>Whether the doors should be open now. Closed by default.</summary>
-    public bool IsOpen { get; private set; }
+    public bool IsOpen => _fsm.Current is DoorState.Open or DoorState.OpenUntilEmpty;
 
     /// <summary>The doors shut as soon as <see cref="ChurchEmptied"/> says the church is empty (after an event, so nobody is locked out of leaving).</summary>
-    public bool CloseWhenEmpty { get; private set; }
+    public bool CloseWhenEmpty => _fsm.Current is DoorState.OpenUntilEmpty or DoorState.ShutUntilEmpty;
 
     /// <summary>Applies a decision. True when <see cref="IsOpen"/> changed (the caller then moves the doors).</summary>
     public bool Apply(DoorReason reason)
     {
         switch (reason)
         {
-            case DoorReason.MassGathering: CloseWhenEmpty = false; return Set(true);
-            case DoorReason.MassVoid: return Set(false);
-            case DoorReason.MassOver: CloseWhenEmpty = true; return false;
-            case DoorReason.DemonStarting: CloseWhenEmpty = false; return false;
-            case DoorReason.DemonKilled: { var changed = Set(true); CloseWhenEmpty = true; return changed; }
-            case DoorReason.DemonCleared or DoorReason.DemonFailed: return Set(true);
-            case DoorReason.ChurchEmpty: CloseWhenEmpty = false; return Set(false);
+            case DoorReason.MassGathering: return Put(true, false);
+            case DoorReason.MassVoid: return Put(false, CloseWhenEmpty);
+            case DoorReason.MassOver: Put(IsOpen, true); return false;
+            case DoorReason.DemonStarting: Put(IsOpen, false); return false;
+            case DoorReason.DemonKilled: return Put(true, true);
+            case DoorReason.DemonCleared or DoorReason.DemonFailed: return Put(true, CloseWhenEmpty);
+            case DoorReason.ChurchEmpty: return Put(false, false);
             default: return false;
         }
     }
@@ -89,10 +107,15 @@ public sealed class ChurchDoorPolicy
         return !IsOpen && Set(true);
     }
 
-    bool Set(bool open)
+    bool Set(bool open) => Put(open, CloseWhenEmpty);
+
+    /// <summary>Goes to the state of (<paramref name="open"/>, <paramref name="pending"/>). True when <see cref="IsOpen"/> changed.</summary>
+    bool Put(bool open, bool pending)
     {
-        if (open == IsOpen) return false;
-        IsOpen = open;
-        return true;
+        var wasOpen = IsOpen;
+        _fsm.Enter(open
+            ? (pending ? DoorState.OpenUntilEmpty : DoorState.Open)
+            : (pending ? DoorState.ShutUntilEmpty : DoorState.Shut));
+        return wasOpen != open;
     }
 }

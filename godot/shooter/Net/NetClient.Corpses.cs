@@ -36,9 +36,8 @@ public partial class NetClient
     CorpseChooser _chooser = null!;
     /// <summary>The corpse within reach, from the last render (null when none, or when the player cannot take one).</summary>
     ushort? _near;
-    double _useHeld;
     InteractKey _useKey; // the interact key's press and release, one reading per tick
-    bool _holdSent;
+    InteractHold _corpseHold; // the hold for the primary position: counts only while the corpse owns the key and offers a weapon to replace it
 
     /// <summary>True while the corpse chooser is up; the hotbar keys and wheel belong to it then.</summary>
     bool ChooserOpen => _chooser.IsOpen;
@@ -158,17 +157,12 @@ public partial class NetClient
     {
         var use = Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("interact");
         if (ChooserOpen && (Dead || _driving || _near != _chooser.Corpse)) _chooser.Close();
-        var (pressed, released) = _useKey.Step(use);
-        if (pressed) { _useHeld = 0; _holdSent = false; }
-        if (use) _useHeld += dt;
+        var (_, released) = _useKey.Step(use);
         var near = KeyOwner == InteractOwner.Corpse ? _near : null; // a care package in reach owns the key (ticket #143), and so does a ground item nearer than the corpse (#267)
-        if (use && !_holdSent && !ChooserOpen && near is { } id && _useHeld >= CorpseHoldSeconds && CorpseWeapon(id) is { } w
-            && CorpseRules.CanReplace(w, CorpseRules.PrimaryPos))
-        {
-            SendPickUp(id, CorpseRules.PrimaryPos);
-            _holdSent = true;
-        }
-        if (released && !_holdSent && !ChooserOpen && near is { } tap)
+        var holdWeapon = !ChooserOpen && near is { } hid && CorpseWeapon(hid) is { } hw && CorpseRules.CanReplace(hw, CorpseRules.PrimaryPos);
+        var wasSent = _corpseHold.Sent;
+        if (_corpseHold.Tick(use, holdWeapon, dt, CorpseHoldSeconds)) SendPickUp(near!.Value, CorpseRules.PrimaryPos);
+        if (released && !wasSent && !ChooserOpen && near is { } tap)
         {
             if (IsItemOnlyCorpse(tap)) OpenChooser(tap, null);
             else if (CorpseWeapon(tap) is { } tw) OpenChooser(tap, tw);

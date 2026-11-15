@@ -251,6 +251,15 @@ public partial class LauncherApp : Control
             Fail(S.T(have != null ? "offline_installed" : "offline_fresh"), null);
             return;
         }
+        catch (Exception e)
+        {
+            // anything else the feed throws must still leave Checking, or the launcher spins forever
+            if (!_flow.IsCurrent(ticket)) return;
+            GD.PrintErr("update check: " + e);
+            _latest = null;
+            Fail(S.T(have != null ? "offline_installed" : "offline_fresh"), null);
+            return;
+        }
         if (!_flow.IsCurrent(ticket)) return;
         _latest = latest;
         if (_latest is null) { Fail(S.T("no_release", _settings.Channel), null); return; }

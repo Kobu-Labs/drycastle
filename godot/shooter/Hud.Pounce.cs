@@ -33,6 +33,6 @@ public partial class Hud
     {
         if (_pounceHide == hide) return;
         _pounceHide = hide;
-        _crossRoot.Visible = !hide && Settings.ShowCrosshair;
+        ApplyCrosshairVisibility();
     }
 }

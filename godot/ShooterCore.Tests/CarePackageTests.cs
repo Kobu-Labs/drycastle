@@ -435,6 +435,53 @@ public class CarePackageTests
         Assert.Contains(CarePackageRules.StreakId, service.Held(Owner));
     }
 
+    // ---- the life machine ----
+
+    [Fact]
+    public void A_crate_goes_falling_landed_then_opened_or_expired()
+    {
+        var landing = new Vector3(1, 2, 3);
+        var crate = new CarePackage(Owner, landing);
+        Assert.Equal(CarePackageState.Falling, crate.State);
+        Assert.Null(crate.Ended);
+        crate.Tick(1f);
+        Assert.Equal(CarePackageState.Falling, crate.State);
+        crate.Tick(10f);
+        Assert.Equal(CarePackageState.Landed, crate.State);
+        Assert.True(crate.Landed);
+        Assert.Null(crate.Ended);
+        crate.Tick(CarePackageRules.LifetimeSeconds);
+        Assert.Equal(CarePackageState.Expired, crate.State);
+        Assert.Equal(WorldDespawnReason.Expired, crate.Ended);
+        crate.Tick(1f);
+        Assert.Equal(WorldDespawnReason.Expired, crate.Ended);
+
+        var manager = World(out _);
+        var (book, id) = LandedCrate(manager);
+        var reasons = new List<WorldDespawnReason>();
+        manager.Despawned += d => reasons.Add(d.Reason);
+        Assert.Equal(OpenResult.Ok, book.TryOpen(id, Ground, new Random(1), out _));
+        Assert.Equal(WorldDespawnReason.Opened, reasons.Single());
+    }
+
+    [Fact]
+    public void A_crate_that_expired_but_is_not_despawned_yet_cannot_be_opened()
+    {
+        var manager = World(out _);
+        var (book, id) = LandedCrate(manager);
+        var crates = (Dictionary<ushort, CarePackage>)typeof(CarePackageBook)
+            .GetField("_crates", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(book)!;
+        var crate = crates[id];
+        crate.Tick(CarePackageRules.LifetimeSeconds); // expired inside Tick, the manager has not despawned it yet
+        Assert.Equal(WorldDespawnReason.Expired, crate.Ended);
+
+        var result = book.TryOpen(id, Ground, new Random(1), out var streak);
+        Assert.Equal(OpenResult.Gone, result);
+        Assert.Null(streak);
+        Assert.Equal(WorldDespawnReason.Expired, crate.Ended); // not overwritten with Opened
+        Assert.Equal(1, book.Count);
+    }
+
     // ---- wire payloads ----
 
     [Fact]

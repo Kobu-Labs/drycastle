@@ -5,6 +5,7 @@ using System.Text;
 using Godot;
 using Drycastle.MapLoader;
 using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
+using ShapeState = Drycastle.ShooterCore.EditorShapeState;
 
 /// <summary>
 /// The Zones tool (GLOSSARY "Zone", "Zone kind", ADR 0022): what an area means in play, drawn over the ground without changing it.
@@ -195,7 +196,7 @@ public partial class EditorMode
         var zones = ZoneList();
         if (_restoreZoneKind != null) { if (ZoneKindOf(_restoreZoneKind) != null) SelectedZoneKind = _restoreZoneKind; _restoreZoneKind = null; }
         if (_restoreZone != null) { if (zones.Any(z => z.Id == _restoreZone)) SelectedZoneId = _restoreZone; _restoreZone = null; }
-        if (SelectedZoneId != null && zones.All(z => z.Id != SelectedZoneId)) { SelectedZoneId = null; _dragCorner = -1; }
+        if (SelectedZoneId != null && zones.All(z => z.Id != SelectedZoneId)) { SelectedZoneId = null; EndCornerGesture(); }
         if (SelectedZoneKind != null && ZoneKindOf(SelectedZoneKind) == null) SelectedZoneKind = null;
         if (_zMarked.RemoveWhere(id => !_zoneById.ContainsKey(id)) > 0) _zMarkVer++;
         var sel = SelectedZoneId == null ? null : Zone(SelectedZoneId);

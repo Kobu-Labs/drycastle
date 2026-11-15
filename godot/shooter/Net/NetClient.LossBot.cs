@@ -99,14 +99,14 @@ public partial class NetClient
 
     void LossFail(string why)
     {
-        if (_done) return;
+        if (LinkEnded) return;
         GD.PrintErr($"client {PlayerName}: loss test failure: {why}");
         LossReport(false, why);
     }
 
     void LossReport(bool ok, string why)
     {
-        _done = true;
+        _link.Enter(LinkPhase.Left);
         _lLog?.Flush(); _lLog?.Dispose();
         var players = _dec.States.Values.Where(r => r.Type == EntityType.Player).OrderBy(r => r.Id)
             .Select(r => new { id = (int)r.Id, x = r.X, y = r.Y, z = r.Z, health = (int)r.Health, state = (int)r.State }).ToList();

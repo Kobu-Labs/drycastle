@@ -31,6 +31,9 @@ public interface IThiefWork
     /// <summary>A piece lies where <paramref name="at"/> is (its carrier was killed, or gave up).</summary>
     void Drop(LootOrigin piece, Vector3 at);
 
+    /// <summary>The piece a Thief carried is gone for good with nothing to send back (a pet killed in its hands). Default: nothing.</summary>
+    void Lost(LootOrigin piece) { }
+
     /// <summary>Every tick a Thief carries a piece: where it stands and faces (a kind whose thing travels with it, a pet, moves it there).</summary>
     void Carrying(LootOrigin piece, Vector3 at, float yaw);
 
@@ -139,6 +142,8 @@ public sealed class RaidWork : IThiefWork
     public bool Load(LootOrigin piece) => DoorOpen && _raid.LoadIn(piece);
 
     public void Drop(LootOrigin piece, Vector3 at) => _book.Drop(piece, at);
+
+    public void Lost(LootOrigin piece) => _book.Lost(piece);
 
     public void Carrying(LootOrigin piece, Vector3 at, float yaw) => _book.Carrying(piece, at, yaw);
 

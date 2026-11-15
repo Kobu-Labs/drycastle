@@ -49,7 +49,7 @@ public partial class NetClient
     void PredictOnAmmo(AmmoMsg a)
     {
         if (!PredictionOn || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count) return;
-        if (a.Slot != _pSlot) _pSlot = a.Slot;
+        if (a.Slot != _pSlot) { _pSlot = a.Slot; ClearPredictedReload(); } // a reload belongs to the weapon it started on
         while (_predShots.Count > 0 && Now - _predShots.Peek() > 0.6) _predShots.Dequeue();
         var inFlight = _predShots.Count(t => Now - t < 0.25); // shots sent but not yet counted by this message
         _pMag = Math.Max(0, a.Slots[a.Slot - 1].Mag - inFlight);
@@ -133,6 +133,13 @@ public partial class NetClient
     }
 
     bool _pHeld;
+
+    /// <summary>Forgets the predicted reload and magazine (weapon switch, death, spawn): the next ammo message re-syncs the magazine, and no reload keeps counting for a weapon that is gone.</summary>
+    void ClearPredictedReload()
+    {
+        _pReloadUntil = 0; _pMagAfter = 0; _pMag = -1;
+        _predShots.Clear();
+    }
 
     void StartPredictedReload(WeaponDef w, int reserve)
     {

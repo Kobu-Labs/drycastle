@@ -154,7 +154,7 @@ public sealed partial class GangMember : IWorldEntity
         .Note(GangMemberState.Falling, "Falls from the top to the base's height under gravity (no clock: the height), off the navigation mesh. Ends in Down; shot dead here it keeps falling and lies.")
         .Note(GangMemberState.Down, "Lies knocked down (clock: the shock's down seconds); a lying hit volume, normal hits count. Ends in GetUp.")
         .Note(GangMemberState.GetUp, "Gets up (clock: the shock's get-up seconds), then goes for the same target again (ClimbUp), or looks for another when it is gone (Seek). All four are Working states: the Thief does not fight.")
-        .Note(GangMemberState.Haul, "Carries the Loot to the van's door, faster than it approached (clock: haul_give_up_seconds, then it drops the Loot where it stands). A Working state; the client attaches the prop from the hp byte.")
+        .Note(GangMemberState.Haul, "Carries the Loot to the van's door, faster than it approached (clock: haul_give_up_seconds, then it drops the Loot where it stands). A hit that does not kill it drops the Loot where it stands too (gang.hit_drops_loot; Load, ClimbDown and HopOut as well) and it seeks again, with free hands, so it joins the fight. A Working state; the client attaches the prop from the hp byte.")
         .Note(GangMemberState.Load, "Tosses the Loot into the van at the door (clock: load_seconds): counted in the van, the Thief seeks again. A van that cannot take it any more gets it dropped at the Thief's feet.")
         .Note(GangMemberState.Dead, "Lies for corpse_seconds (the clock's elapsed time), then the entity ends. Reached from any state; never left.")
         .Build();
@@ -258,7 +258,7 @@ public sealed partial class GangMember : IWorldEntity
     {
         if (Ended != null || !Alive || !(weight > 0)) return false;
         _taken += weight;
-        if (_taken < _k.Hits) return false;
+        if (_taken < _k.Hits) { DropOnHit(); return false; }
         Die(attacker);
         return true;
     }

@@ -314,10 +314,12 @@ public partial class EditorMode
     {
         if (ShapeTool && (tool != Tool)) CancelShapeGesture();
         if (Tool == EditorTool.Sketch && tool != EditorTool.Sketch) CancelSketchGesture();
+        if (Dragging && tool != Tool) CancelDrag(); // an object drag must not outlive its tool (the release would still save it)
         if (tool is EditorTool.Ground or EditorTool.Zones or EditorTool.Sketch) { DisarmPlacement(false); if (GateArmed) CancelGate(); }
         if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { StopConnecting(false); StopPlanning(false); SelectCable(null); }
         if (tool == EditorTool.Poles && GateArmed) CancelGate();
         Tool = tool;
+        ShapeRest(); // Selected or Idle depends on which kind of shape the tool selects
         _panel.Visible = tool != EditorTool.None;
         foreach (var (t, p) in _pages) p.Visible = t == tool;
         foreach (var (t, b) in _railButtons) b.SetPressedNoSignal(t == tool);
@@ -357,7 +359,7 @@ public partial class EditorMode
         {
             var cfg = new ConfigFile();
             if (cfg.Load(CfgPath) != Error.Ok) return;
-            if (Enum.TryParse<EditorTool>((string)cfg.GetValue("ui", "tool", "None"), true, out var t)) Tool = t;
+            if (Enum.TryParse<EditorTool>((string)cfg.GetValue("ui", "tool", "None"), true, out var t)) { Tool = t; ShapeRest(); }
             SetSpeed((float)(double)cfg.GetValue("ui", "speed", (double)Speed));
             SetOrthoOpacity((float)(double)cfg.GetValue("ui", "ortho_opacity", (double)_orthoOpacity), save: false);
             _orthoRestore = (bool)cfg.GetValue("ui", "ortho_on", false); // applied when the editor first opens, the map is not up yet

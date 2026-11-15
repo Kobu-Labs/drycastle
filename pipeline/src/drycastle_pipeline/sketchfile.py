@@ -117,9 +117,13 @@ def write(path: Path, doc: dict) -> int:
     doc["version"] = max(doc["version"], on_disk) + 1
     text = json.dumps(doc, sort_keys=True, separators=(",", ":")) + "\n"
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text)
-    os.replace(tmp, path)
+    # temp name unique per process (the viewer writes ``<file>.<pid>.tmp``): two writers never share a temp file
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
     return doc["version"]
 
 

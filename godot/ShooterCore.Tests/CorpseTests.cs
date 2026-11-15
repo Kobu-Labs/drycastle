@@ -249,6 +249,31 @@ public class CorpseThrowTests
         Assert.Equal(Vector3.Zero, c.Velocity);
     }
 
+    static float? Nothing(Vector3 from, Vector3 dir, float len) => null;
+
+    [Fact]
+    public void FlightEndsAtTheCapWhateverHappensAndARelaunchRestartsTheCount()
+    {
+        var cap = CorpseRules.MaxFlightSeconds;
+        var b = new ThrownBody(Vector3.Zero);
+        b.Fly(1f, Nothing);                                  // grounded: nothing happens
+        Assert.False(b.Airborne);
+        b.Launch(new Vector3(1, 30, 0));
+        b.Fly(cap - 0.5f, Nothing);
+        Assert.True(b.Airborne);
+        b.Launch(new Vector3(1, 30, 0));                     // relaunched in flight: the count starts over
+        b.Fly(cap - 0.5f, Nothing);
+        Assert.True(b.Airborne);
+        b.Fly(0.6f, Nothing);
+        Assert.False(b.Airborne);
+        Assert.Equal(Vector3.Zero, b.Velocity);
+
+        b.Launch(new Vector3(1, 30, 0));
+        b.Reset(new Vector3(2, 0, 2));                       // a dummy standing up again
+        Assert.False(b.Airborne);
+        Assert.Equal(new Vector3(2, 0, 2), b.Position);
+    }
+
     [Fact]
     public void NoPushLeavesTheBodyWhereItFell()
     {

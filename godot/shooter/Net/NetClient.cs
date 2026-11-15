@@ -95,7 +95,12 @@ public partial class NetClient : Node
     ENetPacketPeer? _peer;
     Player? _me;
     ushort _myId;
-    bool _welcomed, _gotSelf;
+    /// <summary>The link to the server (Client.Link): connecting, welcomed, spawned (own snapshot applied), failed, left. Replaces the old welcomed/gotSelf/done flags.</summary>
+    readonly StateMachine<LinkPhase> _link = new(ConnectionPhases.Link);
+    /// <summary>A welcome was received at some point (it stays true after a failure or a leave: the perf and telemetry output still flush, and Fail tells the menu whether the match was joined).</summary>
+    bool _welcomed;
+    bool OwnSpawned => _link.Is(LinkPhase.Spawned);
+    bool LinkEnded => _link.Current.IsEnded();
     ushort _seq;
     readonly List<Pending> _pending = new();
     readonly SnapshotDecoder _dec = new();
@@ -107,11 +112,10 @@ public partial class NetClient : Node
     double _lastArrival;
     /// <summary>The render clock of the remote entities (A-06): a filtered estimate of the server's tick, which never runs backwards.</summary>
     readonly RenderClock _clock = new();
-    double _elapsed, _connectElapsed;
+    double _elapsed;
     int _recon, _snaps;
     float _maxErr;
     NVec3 _meMin = new(float.MaxValue), _meMax = new(float.MinValue);
-    bool _done;
     // match smoke
     double _spawnAt, _fireStart, _spawnProtection = 99;
     EntityState _myState;
@@ -160,7 +164,7 @@ public partial class NetClient : Node
     /// <summary>Leaves the server and removes everything this client put into the world (back to the main menu).</summary>
     public void Teardown()
     {
-        _done = true;
+        _link.Enter(LinkPhase.Left);
         TelemetryClose();
         SfxTeardown();
         RozhlasSetReset(); // the mic is shut
@@ -195,10 +199,11 @@ public partial class NetClient : Node
     void Fail(string why)
     {
         GD.PrintErr($"client: {why}");
-        if (OnFailed != null) { var joined = _welcomed; _done = true; OnFailed(why, joined); return; }
-        if (Bot) { GD.Print("SHOOTER_NET_CLIENT_FAIL"); GetTree().Quit(2); }
-        else GetTree().Quit(2);
-        _done = true;
+        var joined = _welcomed;
+        _link.Enter(LinkPhase.Failed);
+        if (OnFailed != null) { OnFailed(why, joined); return; }
+        if (Bot) GD.Print("SHOOTER_NET_CLIENT_FAIL");
+        GetTree().Quit(2);
     }
 
     void Tx(ENetPacketPeer peer, int chan, byte[] data, int flags)
@@ -228,13 +233,13 @@ public partial class NetClient : Node
         TelemetryFrame(delta);
         PerfClientFrame(delta);
         if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
-        if (_done) return;
+        if (LinkEnded) return;
         UpdateMapCursor();
         Poll();
-        if (!_welcomed)
+        if (_link.Is(LinkPhase.Connecting))
         {
-            _connectElapsed += delta;
-            if (_connectElapsed > 10) Fail("connect timeout");
+            _link.Tick((float)delta);
+            if (_link.Elapsed > ConnectionPhases.ConnectTimeoutSeconds) Fail("connect timeout");
             return;
         }
         PumpAutosave(); // loadout saves whose debounce ran out go out here, whichever screen is open (#145)
@@ -280,7 +285,7 @@ public partial class NetClient : Node
                     _conn.Flush();
                     break;
                 case ENetConnection.EventType.Disconnect:
-                    if (!_done) Fail(_rejectReason ?? "server disconnected");
+                    if (!LinkEnded) Fail(_rejectReason ?? "server disconnected");
                     return;
                 case ENetConnection.EventType.Receive:
                     while (peer.GetAvailablePacketCount() > 0) OnPacket(peer.GetPacket());
@@ -303,7 +308,7 @@ public partial class NetClient : Node
         switch (m)
         {
             case WelcomeMsg w:
-                _myId = w.PlayerId; _welcomed = true;
+                _myId = w.PlayerId; _welcomed = true; _link.Enter(LinkPhase.Welcomed);
                 RozhlasSetReset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
                 DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
                 _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders };
@@ -383,16 +388,16 @@ public partial class NetClient : Node
                 {
                     ApplySpawnLoadout(); // the hotbar and perk the server applied at this spawn
                     _wantSlot = StartSlot();
-                    Dead = false; _gotSelf = false; _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
+                    Dead = false; if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
                     _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
-                    _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId); _breathCues.Reset(); _zero.Reset();
+                    _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId); _breathCues.Reset(); _zero.Reset(); ClearPredictedReload(); _pNextFire = 0;
                 }
                 break;
             case EventKind.Death:
                 var d = Match.LatestDeath!;
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 SfxDeath(d);
-                if (d.Victim == _myId) { Dead = true; _deaths++; _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay); _hud?.SetProtection(0); OnStreakDeath(); }
+                if (d.Victim == _myId) { Dead = true; _deaths++; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay); _hud?.SetProtection(0); OnStreakDeath(); }
                 break;
         }
     }
@@ -482,9 +487,9 @@ public partial class NetClient : Node
     void OnSelf(EntityRecord rec, ushort ack)
     {
         var sp = rec.Position;
-        if (!_gotSelf)
+        if (!OwnSpawned)
         {
-            _gotSelf = true;
+            _link.Enter(LinkPhase.Spawned);
             _me!.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y });
             _viewFix = Vector3.Zero;
             return;
@@ -586,12 +591,12 @@ public partial class NetClient : Node
 
     public override void _PhysicsProcess(double delta)
     {
-        if (_done || !_welcomed || _me == null || _peer == null) return;
+        if (LinkEnded || !_welcomed || _me == null || _peer == null) return;
         _elapsed += delta;
         BotChatTick();
         if (Bot && LossBot != "") { if (_elapsed >= BotSeconds) LossFail("timeout: round never reached its end"); }
         else if (Bot && _elapsed >= BotSeconds) { if (CarBot != "") CarResult(false, "timeout"); else if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
-        if (!_gotSelf) return; // wait for our spawn position
+        if (!OwnSpawned) return; // wait for our spawn position
         ReplayReconcile(); // C-02: a snapshot's reconcile replays here, with the physics step (see OnSelf)
         ReplayDriveReconcile(); // and so does a predicted vehicle's (ADR 0010, ADR 0014)
         var dt = (float)delta;
@@ -817,8 +822,8 @@ public partial class NetClient : Node
 
     void MatchResult(bool ok, string why)
     {
-        if (_done) return;
-        _done = true;
+        if (LinkEnded) return;
+        _link.Enter(LinkPhase.Left);
         if (!ok) GD.PrintErr($"client {PlayerName}: match smoke failure: {why}");
         GD.Print(ok ? "SHOOTER_MATCH_CLIENT_OK" : "SHOOTER_MATCH_CLIENT_FAIL");
         GetTree().Quit(ok ? 0 : 2);
@@ -826,7 +831,7 @@ public partial class NetClient : Node
 
     void FinishBot()
     {
-        _done = true;
+        _link.Enter(LinkPhase.Left);
         BotFeedReport();
         var own = new Vector2(_meMax.X - _meMin.X, _meMax.Z - _meMin.Z).Length();
         var seen = _remotes.Count;

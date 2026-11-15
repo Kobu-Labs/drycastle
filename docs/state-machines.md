@@ -208,6 +208,51 @@ stateDiagram-v2
 - **Holding**: The breath key is down, scoped, meter above 0 and not latched by a forced exhale: no sway, the meter drains.
 - **Exhaled**: The meter ran out: sway x2.5 for breath_recover_seconds, the breath cannot be held; the key must be released before the next hold.
 
+## CarePackage.Life
+
+A care package crate: falls on its parachute, lands and can be opened, then ends opened or expired (the world manager despawns it once it has ended).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Falling
+    Falling --> Landed
+    Falling --> Expired
+    Landed --> Opened
+    Landed --> Expired
+    Opened --> [*]
+    Expired --> [*]
+```
+
+- **Falling**: Descending at the fall speed; not openable. The lifetime already runs (counted from the drop).
+- **Landed**: On the ground (altitude at the landing point's Y): openable by anyone in reach.
+- **Opened**: Opened by a player: ended, the reward is granted, the book despawns it at once. Cannot be reached from Expired.
+- **Expired**: The lifetime ran out unopened: ended. An ended crate cannot be opened even before it is despawned.
+
+## Church.Door
+
+Should the church doors be open: shut or open, each with or without the deferred close-when-empty armed. The demon fight's door-grace clock runs beside (not a state).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Shut
+    Shut --> Open
+    Shut --> OpenUntilEmpty
+    Shut --> ShutUntilEmpty
+    Open --> Shut
+    Open --> OpenUntilEmpty
+    OpenUntilEmpty --> Open
+    OpenUntilEmpty --> Shut
+    OpenUntilEmpty --> ShutUntilEmpty
+    ShutUntilEmpty --> Shut
+    ShutUntilEmpty --> Open
+    ShutUntilEmpty --> OpenUntilEmpty
+```
+
+- **Shut**: Closed, nothing pending (the start state; the Mass void slams it, the deferred close lands here).
+- **Open**: Open, nothing pending: the Mass gathers, an admin opened, or a cleared / failed demon fight let everyone out.
+- **OpenUntilEmpty**: Open and the deferred close is armed (CloseWhenEmpty): the Mass is over or the demon died; the doors shut once the church is empty. The fight's door keeper may shut and reopen them meanwhile.
+- **ShutUntilEmpty**: Shut with the deferred close armed: odd but kept. MassOver arms the close even while the doors are already shut (a void Mass, an admin's close); the church-empty check then fires it, a no-op for the doors, and clears the latch.
+
 ## Citizen.State
 
 What a citizen of the Holy Mass is doing; the replicated state byte.
@@ -249,6 +294,44 @@ stateDiagram-v2
 - **Standing**: The pastor or a monk at their spot, or a citizen on its feet after the Mass.
 - **Clapping**: The Mass is done and the body cheers (the pastor flexes).
 - **Fleeing**: Sprinting home because the demon came; ends in removal at the spawn point (the entity ends, no state follows).
+
+## Client.Link
+
+The client's connection to the server: connecting, welcomed, spawned (own snapshot applied), and the two ends.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Connecting
+    Connecting --> Welcomed
+    Connecting --> Failed
+    Connecting --> Left
+    Welcomed --> Spawned
+    Welcomed --> Failed
+    Welcomed --> Left
+    Spawned --> Welcomed
+    Spawned --> Failed
+    Spawned --> Left
+    Failed --> Left
+    Left --> [*]
+```
+
+- **Connecting**: Elapsed is the time spent connecting (the client fails after 10 s).
+- **Spawned**: Goes back to Welcomed at each respawn, until the new spawn position arrives.
+- **Failed**: Frames and bot scripts stop; the menu was told.
+
+## Corpse.Flight
+
+A thrown body (corpse or target dummy): at rest on the ground, or airborne after a launch until it lands or the flight cap runs out.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Grounded
+    Grounded --> Airborne
+    Airborne --> Grounded
+```
+
+- **Grounded**: At rest. A launch (a push that is not zero) throws it; a dummy standing up again (Reset) comes back here.
+- **Airborne**: Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens. A new launch while airborne restarts the count.
 
 ## Demon.Phase
 
@@ -356,6 +439,53 @@ stateDiagram-v2
 
 - **Asleep**: Resting phases show as Waiting; the health is back to full and the pounce, flame and leap clocks are cleared.
 - **Awake**: Fighting: the hits needed grow with the players inside and never shrink; the fight clock, the roar clock and the leap clock run.
+
+## Editor.Shape
+
+The shape tools of the map editor (ground patches, zones): draw a polygon, ask for the water level, select a shape, drag one of its corners.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Selected
+    Idle --> Drawing
+    Selected --> Idle
+    Selected --> Drawing
+    Selected --> Dragging
+    Drawing --> Level
+    Drawing --> Idle
+    Drawing --> Selected
+    Level --> Drawing
+    Level --> Idle
+    Level --> Selected
+    Dragging --> Idle
+    Dragging --> Selected
+```
+
+- **Idle**: No shape selected, nothing being drawn.
+- **Drawing**: Corners placed (or N pressed and waiting for the first one); nothing saved. Esc cancels.
+- **Level**: A patch of a water type is closed and asks for its water level; still nothing saved. Esc goes back to the corners.
+- **Selected**: A saved shape is selected: its corners can be dragged or nudged, Del deletes it.
+- **Dragging**: A corner follows the cursor; the file changes on release, Esc cancels.
+
+## Editor.Sketch
+
+The sketch tool of the map editor: corners of a line being drawn, a selected mark, or neither.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Drawing
+    Idle --> Selected
+    Drawing --> Idle
+    Drawing --> Selected
+    Selected --> Idle
+    Selected --> Drawing
+```
+
+- **Idle**: A click marks a point or starts a line.
+- **Drawing**: Corners of an unfinished line are placed; nothing is part of the sketch yet. Enter finishes, Esc cancels.
+- **Selected**: One mark of the sketch is selected: Del deletes it, [ ] steps to the next.
 
 ## Event.Run
 
@@ -497,7 +627,7 @@ From any state: Dead
 - **Seek**: A Thief looks for a target: the nearest free one of a kind chosen by weight near the van's door, one Thief per target (clock: it asks again after seek_retry_seconds when nothing is free or the van takes no more). A Thief with free hands still joins a fight.
 - **Approach**: Walks a route to the target's work spot (clock: approach_give_up_seconds; a target that is gone, a lost route or the clock ends it and the target is avoided for a while). Arrived: Steal, or ClimbUp when the target needs a climb.
 - **Steal**: Stands at the target, a still target (clock: the kind's steal_seconds, or pickup_seconds for Loot that lies). When the clock runs out the Thief has it and it is gone from its place; a target that goes meanwhile ends it. Landed inside a fence (HopIn) it first walks straight to the pet and the clock starts within grab_m of it. A Working state.
-- **Haul**: Carries the Loot to the van's door, faster than it approached (clock: haul_give_up_seconds, then it drops the Loot where it stands). A Working state; the client attaches the prop from the hp byte.
+- **Haul**: Carries the Loot to the van's door, faster than it approached (clock: haul_give_up_seconds, then it drops the Loot where it stands). A hit that does not kill it drops the Loot where it stands too (gang.hit_drops_loot; Load, ClimbDown and HopOut as well) and it seeks again, with free hands, so it joins the fight. A Working state; the client attaches the prop from the hp byte.
 - **Load**: Tosses the Loot into the van at the door (clock: load_seconds): counted in the van, the Thief seeks again. A van that cannot take it any more gets it dropped at the Thief's feet.
 - **ClimbUp**: Climbs straight up from the climb's base to its top at climb_speed, off the navigation mesh (no clock: the distance). A Working state; shot dead here it falls to the ground.
 - **WorkAloft**: Works at the top of the climb (clock: the kind's steal_seconds), then has the thing. A Working state; shot dead here it falls to the ground.
@@ -575,6 +705,23 @@ stateDiagram-v2
 - **Opening**: Wanted open, alpha ramping up (the fade is 150 ms, none with reduce motion).
 - **Open**: Wanted open at full alpha. Reduce motion jumps Closed -> Open and Open -> Closed.
 - **Closing**: Not wanted, alpha ramping down; Show during it turns back to Opening from the current alpha.
+
+## Interact.Hold
+
+One hold of the interact key at a crate or a rozhlas set: idle, charging toward the send, sent once and waiting for the key to be released.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Charging
+    Charging --> Sent
+    Charging --> Idle
+    Sent --> Idle
+```
+
+- **Idle**: Key up, or held with nothing in reach (Held is 0).
+- **Charging**: Key held at something in reach and the open request is not sent yet: Held counts up.
+- **Sent**: The open request is sent: nothing more until the key is released. Leaving reach zeroes Held but stays Sent; a despawn (Reset) ends it too.
 
 ## Killstreak.Hold
 
@@ -659,6 +806,53 @@ stateDiagram-v2
 - **Saving**: One save for the slot is on the wire. An edit meanwhile only marks the draft newer; it goes after the answer.
 - **Retrying**: The send failed (timeout, no connection): resent with backoff. An edit meanwhile keeps the backoff clock and rides the next try.
 - **Rejected**: The server refused the draft: shown with its reason, kept, never resent until the next edit or undo.
+
+## Loot.Piece
+
+Where one piece of Loot is: at its place, claimed by a Thief, carried, lying on the ground (claimed or not) or loaded in a van.
+
+```mermaid
+stateDiagram-v2
+    [*] --> AtPlace
+    AtPlace --> Claimed
+    AtPlace --> Lying
+    Claimed --> AtPlace
+    Claimed --> Carried
+    Carried --> Lying
+    Carried --> Loaded
+    Carried --> AtPlace
+    Lying --> LyingClaimed
+    Lying --> AtPlace
+    LyingClaimed --> Lying
+    LyingClaimed --> Carried
+    LyingClaimed --> AtPlace
+    Loaded --> AtPlace
+```
+
+- **AtPlace**: In the world where it belongs (a wheel on its car, a dish on its wall, a pet in its garden) and free to be chosen; also where a piece that is gone for good (a pet killed in a Thief's hands) ends. Not tracked: no machine exists for it. A kind that grows back (a pole after its cooldown) offers a new piece under the old id while the old one is still away: its claim starts the new life here and the old one's is forgotten.
+- **Claimed**: One Thief goes for it or works at it (the registry's claim): no other chooses it. Ends when the Thief takes it, gives up, is called off or dies, or the thing goes (a car driven off).
+- **Carried**: In a Thief's hands (hp byte of the member), gone from its place: hauled to the van's door. Ends in the van, on the ground (killed, hit, gave up), or back at its place (a kind that does not lie, a van that cannot take it). A Thief that flees with it runs off with it: it stays Carried until the round resets.
+- **Lying**: On the ground as a world entity (capped): a Thief may take it up, a player sends it back. Also entered by a piece put down with no carrier (tools, tests): AtPlace goes straight to Lying.
+- **LyingClaimed**: A Thief goes to take up the Loot that lies. The Loot may be sent back or capped away meanwhile: the claim then lapses with it.
+- **Loaded**: Counted in a van (Raid.Loaded). Comes back to its place when the van is destroyed; stays with a van that drives off.
+
+## Loot.ReturnHold
+
+One hold of the use key on lying Loot to send it back: idle, counting in reach, or spent (done, or interrupted by a hit) until the key is released.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Holding
+    Idle --> Spent
+    Holding --> Idle
+    Holding --> Spent
+    Spent --> Idle
+```
+
+- **Idle**: Key up, or held with no Loot in reach (Held and Target are 0).
+- **Holding**: Key held within reach of Loot: Held counts up on Target; other Loot or leaving reach starts it over. Completes once Held reaches the return seconds.
+- **Spent**: Completed (the return fires once) or interrupted by a hit (also with the key up: the press of that same input counts for nothing): nothing more until the key is released.
 
 ## Mass.Pastor
 
@@ -804,6 +998,22 @@ stateDiagram-v2
 - **Detonated**: The countdown ran out (the use ended as Expired): everyone but the owner dies, vehicles blow up.
 - **Cancelled**: The use ended any other way: owner died or left, round reset, or a sandbox owner used it again (Replaced; the new one's Armed follows at once). No blast.
 
+## Net.RenderClock
+
+The render clock of remote entities: unsynced until the first snapshot, then tracking the estimated server present, holding the drawn tick while a late snapshot has moved the estimate behind it.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unsynced
+    Unsynced --> Tracking
+    Tracking --> Holding
+    Holding --> Tracking
+```
+
+- **Unsynced**: No snapshot yet: RenderTick returns the raw target and the drawn tick is not recorded.
+- **Tracking**: The drawn tick follows the estimate (it never moves backwards).
+- **Holding**: The estimate moved behind the drawn tick: the drawn tick stays put until the estimate passes it again. One episode counts once in HoldEvents.
+
 ## Pounce.View
 
 The client's view of the demon's pounce: a victim is marked (Wind), pinned flat, then let go; the local victim's camera rises back afterwards.
@@ -922,6 +1132,26 @@ stateDiagram-v2
 - **Live**: Start() ran: input is accepted and pulled at a steady 50 blocks/s into ffmpeg; the degraded output goes out 2 s after its input.
 - **Draining**: Stop() ran: no new input; what was written still plays out, then the echo tail, then ffmpeg ends. A Start() here cuts the tail short.
 - **Failed**: ffmpeg missing, died, or stopped producing audio: logged once, the feed is silent until the next phase. Never unprocessed audio.
+
+## Session.Phase
+
+A connection on the server: connected, said hello (profile loading) or refused, then joined.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Connected
+    Connected --> Rejected
+    Connected --> Loading
+    Connected --> Joined
+    Loading --> Joined
+    Rejected --> [*]
+    Joined --> [*]
+```
+
+- **Connected**: Only a hello is read; a connection with none after the hello deadline is dropped.
+- **Rejected**: Terminal: nothing more is read from the peer.
+- **Loading**: Joined when the profile arrives, or as a guest when the load fails or times out.
+- **Joined**: Inputs, events and the snapshots flow. A bot is created here; a guest (no profile store or token) skips Loading.
 
 ## Target.Dummy
 

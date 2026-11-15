@@ -24,7 +24,10 @@ public partial class NetServer : Node
         public bool BotWasAlive;
         public ushort Id;
         public string Name = "";
-        public bool Joined;
+        /// <summary>Where this connection is: connected (hello awaited), rejected, loading its profile, joined. <see cref="Joined"/> and <see cref="Loading"/> follow it.</summary>
+        public readonly StateMachine<SessionPhase> Session = new(ConnectionPhases.Session);
+        public SessionPhase Phase => Session.Current;
+        public bool Joined => Session.Is(SessionPhase.Joined);
         /// <summary>The client asked for sandbox mode in its hello (#156).</summary>
         public bool SandboxRequested;
         /// <summary>Sandbox mode granted (the server allows it and the client asked). See <see cref="SandboxRules"/>.</summary>
@@ -76,7 +79,9 @@ public partial class NetServer : Node
         public int CarSeat;
         /// <summary>The flak status last sent to this client as the gunner (magazine, reserve, reloading), so only a change is sent; null until the first.</summary>
         public (int Mag, int Reserve, bool Reloading)? FlakSent;
-        public bool UseHeld, LightsHeld, Handbrake, StreakHeld;
+        public bool LightsHeld, Handbrake;
+        /// <summary>Held-key edges of Use and Killstreak. Fed every input (also while dead), so a key held across a respawn is not a fresh press.</summary>
+        public Edge UseKey, StreakKey;
         /// <summary>The interact key's hold at the rozhlas dictation table (NetServer.RozhlasSet.cs).</summary>
         public InteractHold SetHold;
         /// <summary>The use key's hold on lying Loot (NetServer.Thieves.Loot.cs) and the health it was last seen at (a drop is a hit taken).</summary>
@@ -429,7 +434,7 @@ public partial class NetServer : Node
         if (d[0] < Wire.TInput) // message type tells the channel apart (Godot does not expose it per packet)
         {
             var m = Wire.DecodeReliable(d);
-            if (m is HelloMsg h && c.Id == 0) OnHello(c, h);
+            if (m is HelloMsg h && c.Phase == SessionPhase.Connected) OnHello(c, h);
             else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || ArenaMode)) OnDebug(c, e.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpse } pu) OnPickUpCorpse(c, pu.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpseItem } pi) OnPickUpCorpseItem(c, pi.Payload);
@@ -499,7 +504,7 @@ public partial class NetServer : Node
         c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = MapLadders };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
-        c.Joined = true;
+        c.Session.Enter(SessionPhase.Joined);
         foreach (var car in _cars) { car.AddCollisionExceptionWith(c.Body); car.Probe?.Ignore(c.Body); car.DriveWorld?.Ignore(c.Body); }
         _byId[c.Id] = c;
         _playerRidsDirty = true;
@@ -579,7 +584,7 @@ public partial class NetServer : Node
 
     void DropSilentPeers()
     {
-        foreach (var c in _clients.Values.Where(c => c.Id == 0 && _elapsed - c.ConnectedAt > HelloDeadlineSeconds).ToList())
+        foreach (var c in _clients.Values.Where(c => c.Phase is SessionPhase.Connected or SessionPhase.Rejected && _elapsed - c.ConnectedAt > HelloDeadlineSeconds).ToList())
         {
             GD.Print("server: dropping a connection that sent no hello");
             Drop(c.Peer!);
@@ -746,14 +751,12 @@ public partial class NetServer : Node
             var controlled = _streaks.RouteInput(c.Id, i);
             if (controlled) i.Buttons &= (ushort)(ushort.MaxValue ^ (ushort)(MoveButtons.Fire | MoveButtons.Use));
             var useDown = (i.Buttons & (ushort)MoveButtons.Use) != 0;
-            var useEdge = useDown && !c.UseHeld;
+            var useEdge = c.UseKey.Pressed(useDown);
             RozhlasSetUse(c, useDown);
             LootUse(c, useDown);
-            c.UseHeld = useDown;
             var lightsEdge = Headlights.Edge((i.Buttons & (ushort)MoveButtons.Headlights) != 0, ref c.LightsHeld);
             var streakDown = (i.Buttons & (ushort)MoveButtons.Killstreak) != 0;
-            var streakEdge = streakDown && !c.StreakHeld;
-            c.StreakHeld = streakDown;
+            var streakEdge = c.StreakKey.Pressed(streakDown);
             if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
             if (c.Car == null && _tick <= c.HeldUntilTick) continue; // in the Bigfoot's hand: the input is acked, the body is where the Bigfoot puts it (issue #264)
             if (c.Car == null && _sitters.TryGetValue(c.Id, out var sitter)) { SitterInput(c, sitter, i, useEdge); continue; } // seated in the church: no walking, no weapon

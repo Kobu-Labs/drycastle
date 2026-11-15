@@ -36,8 +36,7 @@ public partial class Hud
         if (_bino.Visible != b.Up)
         {
             _bino.Visible = _binoRange.Visible = _binoHint.Visible = b.Up;
-            if (b.Up) _crossRoot.Visible = false;
-            else _crossRoot.Visible = Settings.ShowCrosshair && !_scope.Visible && !_crossCovered;
+            ApplyCrosshairVisibility();
         }
         if (!b.Up) return false;
         var range = b.RangeM ?? -1;

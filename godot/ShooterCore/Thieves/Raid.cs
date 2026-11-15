@@ -17,7 +17,7 @@ public sealed class Raid : IRaidCrew
     readonly LootBook? _loot;
     readonly List<LootOrigin> _loaded = new();
     Countdown _stagger;
-    bool _over;
+    Edge _over;   // the end of the Raid, announced once (Over never goes back)
 
     /// <param name="loot">The event's Loot: with it the Thieves of the gang steal and load the van (<see cref="RaidWork"/>); without, they stand about.</param>
     public Raid(RaidVan van, ThiefGang gang, VanConfig cfg, GangConfig gangCfg, GangRaidCounts crew, RaidPlan plan, Func<Vector3, Vector3>? snap, Func<Vector3, Vector3> edgeFor, LootBook? loot = null)
@@ -47,6 +47,7 @@ public sealed class Raid : IRaidCrew
     {
         if (!Van.LoadLoot()) return false;
         _loaded.Add(piece);
+        _loot?.Loaded(piece);
         return true;
     }
 
@@ -59,6 +60,8 @@ public sealed class Raid : IRaidCrew
 
     public int StillToSpawn => _queue.Count;
     public int Afoot => Gang.Afoot;
+    /// <summary>The crew sitting in the van: not out yet, or back aboard.</summary>
+    public int Inside => _queue.Count + Boarded;
 
     /// <summary>Over: its van was destroyed or is gone (drove off, or the event removed it). What is stolen stays stolen until the round resets.</summary>
     public bool Over => Van.State == RaidVanState.Destroyed || Van.Ended != null;
@@ -124,7 +127,7 @@ public sealed class Raid : IRaidCrew
                 _stagger.Start(_cfg.CrewStaggerSeconds);
             }
         }
-        if (!_over && Over) { _over = true; Ended?.Invoke(this); }
+        if (_over.Pressed(Over)) Ended?.Invoke(this);
     }
 
     void SpawnNext()

@@ -93,8 +93,10 @@ public sealed class Animal : IWorldEntity
     // (Elapsed). Flee has none. Entering a state and starting its clock is one call, so no state can inherit another's leftover.
     readonly StateMachine<AnimalState> _fsm = new(Spec);
 
-    float _calm;           // seconds without a threat while fleeing
-    float _alarm;          // seconds left of running from _alarmFrom (a shot that hurt it)
+    Lifetime _calm;        // seconds without a threat while fleeing (count-up; Age >= CalmSeconds ends the flight)
+    // Seconds left of running from _alarmFrom (a shot that hurt it). Only ticks in the free-roaming part of Tick: it FREEZES while the animal is
+    // Carried / Thrown / Down / Dead (those branches return before it), so a stunned animal still runs from the shot once it gets up.
+    Countdown _alarm;
     Vector3 _alarmFrom;
     Vector3 _fleeFrom;
     float _bias;           // radians added to the flight heading to go round what blocked the way
@@ -177,9 +179,9 @@ public sealed class Animal : IWorldEntity
         if (!Def.Flees || State is AnimalState.Carried or AnimalState.Thrown or AnimalState.Down) return; // a pet shrugs it off: the hit reaction plays, no alarm, no flight
         // Run from where the shot came from; when the shooter is gone, from behind (the animal bolts the way it faces).
         _alarmFrom = _world.PositionOf(attacker) ?? Position - Forward * 5;
-        _alarm = _file.AlarmSeconds;
+        _alarm.Start(_file.AlarmSeconds);
         _fleeFrom = _alarmFrom;
-        _calm = 0;
+        _calm.Reset();
         StartFleeing(startOver: true);
     }
 
@@ -199,15 +201,15 @@ public sealed class Animal : IWorldEntity
         if (_open != null && _world is IPennedWorld pen && pen.Inside(Position.X, Position.Z)) _open = null; // back inside: its own world again
 
         var threat = Def.Flees ? _world.NearestThreat(Position, Def.FleeRadius) : null;
-        if (_alarm > 0)
+        if (_alarm.Running)
         {
-            _alarm -= dt;
+            _alarm.Tick(dt);
             threat ??= _alarmFrom;
         }
         if (threat is { } t)
         {
             _fleeFrom = t;
-            _calm = 0;
+            _calm.Reset();
             StartFleeing(startOver: false);
         }
 
@@ -266,8 +268,8 @@ public sealed class Animal : IWorldEntity
     {
         if (!Def.Flees) { StandStill(); return; }
         _fleeFrom = _alarmFrom;
-        _alarm = _file.AlarmSeconds;
-        _calm = 0;
+        _alarm.Start(_file.AlarmSeconds);
+        _calm.Reset();
         Go(AnimalState.Flee);
     }
 
@@ -338,8 +340,8 @@ public sealed class Animal : IWorldEntity
         if (Ended != null || !Alive || !Def.Flees || State is AnimalState.Flee or AnimalState.Thrown or AnimalState.Down or AnimalState.Carried) return; // one in the air, knocked down or held is not startled out of it (it runs when it gets up)
         _alarmFrom = from;
         _fleeFrom = from;
-        _alarm = _file.AlarmSeconds;
-        _calm = 0;
+        _alarm.Start(_file.AlarmSeconds);
+        _calm.Reset();
         Go(AnimalState.Flee);
     }
 
@@ -412,8 +414,7 @@ public sealed class Animal : IWorldEntity
     {
         if (!threatened)
         {
-            _calm += dt;
-            if (_calm >= _file.CalmSeconds) { StandStill(); return; }
+            if (_calm.Tick(dt, _file.CalmSeconds)) { StandStill(); return; }
         }
         var away = Position * 2 - _fleeFrom; // the point as far on the other side of the animal as the threat is on this one
         if (!Step(TurretMath.YawTo(Position, away) + _bias, Def.RunSpeed, dt))

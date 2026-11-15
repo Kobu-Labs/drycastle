@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Drycastle.MapLoader;
+using ShapeState = Drycastle.ShooterCore.EditorShapeState;
 
 /// <summary>
 /// Editor mode shell: a free-fly camera, parcel hover and selection, outlines (selection, hovered parcel,
@@ -389,12 +390,16 @@ public partial class EditorMode : Node
     /// the group data. The touched `parcels.&lt;ID&gt;` / `groups.&lt;ID&gt;` entries (before and after) go on the undo
     /// stack under <paramref name="description"/> (default: the operation's message). Returns whether it was saved.
     /// </summary>
+    const string EditsLockedMessage = "not saved: edits.json is being written by another program (the MCP server?), try again in a moment";
+
     bool Mutate(Func<SortedDictionary<string, object?>, (bool ok, string message)> op, string? description = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             SyncCatalogs();
+            using var wlock = EditsLock.TryAcquire(EditsPath); // same flock as the MCP server's writes, held from the load to the save
+            if (wlock == null) { Say(EditsLockedMessage, true); return false; }
             var root = EditsFile.Load(EditsPath);
             var before = ObjectEdits.CloneObj(root);
             var (ok, msg) = op(root);

@@ -137,6 +137,8 @@ public partial class NetClient
                 if (_thiefAudio != null) _thiefAudio.StopVanSong(v.View); // the music dies with the van
                 if (ShotFx.Enabled) ExplodeVan(v.View.GlobalPosition);
             }
+            var near = GetViewport().GetCamera3D() is { } cam && cam.GlobalPosition.DistanceTo(v.View.GlobalPosition) <= ThievesData.Van.View.SeatDrawM;
+            v.View.SetCrew(ThievesData, RaidVanRules.InsideOf(e.State.Owner), near, id);
             v.Shown = state;
             PlaceVanSolid(v, e.State, RaidVanRules.IsSolid(state));
         }

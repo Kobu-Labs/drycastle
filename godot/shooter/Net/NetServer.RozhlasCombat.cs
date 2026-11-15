@@ -37,7 +37,7 @@ public partial class NetServer
         catch (DataFileException e) { GD.PrintErr($"server: {e.Message}; no combat sounds on the rozhlas"); return; }
         _combatBank = new RozhlasSampleBank(table, ModelLib.AssetPath, p => FfmpegPcm.Decode(p), m => GD.Print($"server: {m}"));
         _combatBank.Preload(RozhlasCombat.PreloadIds(table));
-        _combat = new RozhlasCombat(_combatBank.Get, s => _liveFeed?.Mix(s), () => CombatClock.Elapsed.TotalSeconds);
+        _combat = new RozhlasCombat(_combatBank.Get, s => _liveFeed.Value?.Mix(s), () => CombatClock.Elapsed.TotalSeconds);
         UradWorkerKilled += OnUradWorkerKilledForFeed;
     }
 
@@ -80,7 +80,7 @@ public partial class NetServer
     /// <summary>The announcer is dead (or the admin says so): the mic gets a thump and the feedback squeals over the megaphones.</summary>
     void RozhlasHijackCut()
     {
-        if (_liveFeed is not { } feed) return;
+        if (_liveFeed.Value is not { } feed) return;
         feed.Mix(RozhlasSynth.Thump);
         feed.Mix(RozhlasSynth.Squeal);
     }
@@ -89,7 +89,7 @@ public partial class NetServer
     void RozhlasCombatPhase(RozhlasPhase from, RozhlasPhase to)
     {
         if (to == RozhlasPhase.Hijacked) RozhlasHijackCut();
-        if (from == RozhlasPhase.Hijacked && to == RozhlasPhase.Idle) _liveFeed?.Mix(RozhlasSynth.Click, 1f); // a normal end has no click
+        if (from == RozhlasPhase.Hijacked && to == RozhlasPhase.Idle) _liveFeed.Value?.Mix(RozhlasSynth.Click, 1f); // a normal end has no click
     }
 
     /// <summary>Every tick: a running combat test is fed.</summary>
@@ -125,7 +125,7 @@ public partial class NetServer
 
     void CombatTestTick()
     {
-        if (_combatTest is not { } t || _liveFeed is not { } feed || _combat is not { } combat) return;
+        if (_combatTest is not { } t || _liveFeed.Value is not { } feed || _combat is not { } combat) return;
         if (feed.State != RozhlasFeedState.Live) { _combatTest = null; return; } // it failed (logged by the feed)
         var el = t.Clock.Elapsed.TotalSeconds;
         while (t.Next < CombatTest.Cues.Length && el >= CombatTest.Cues[t.Next].At)

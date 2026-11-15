@@ -18,6 +18,10 @@
       "hits": 20, "walk_speed": 1.4, "run_speed": 4.5, "hit_scale": 1.15,
       "melee": { "damage": 10, "reach_m": 2, "windup_seconds": 0.45, "interval_seconds": 1.0 }
     },
+    // A Thief that takes a hit which does NOT kill it while it carries Loot (hauling it, tossing it into the van, climbing down with it, hopping out of a garden with it) drops it where it stands (a climber is
+    // put at the base, a hopper outside the fence), goes back to looking for work and, with free hands, joins the fight against the shooter. The Loot lies there: a player can send it back, a Thief can take it
+    // up again. A hit that kills it drops the Loot as ever. false: a carrier keeps hauling when shot.
+    "hit_drops_loot": true,
     // What a hit counts besides a bullet (1). Run over by a vehicle: dead.
     "hits": { "headshot_weight": 2, "explosive_weight": 12, "vehicle_weapon_weight": 3 },
     // A player who hit any member of a Raid (bullet, headshot, explosive, vehicle weapon or ramming) is fought by the whole Raid for forget_seconds after their LAST hit (each hit starts it again), or until they die or are
@@ -136,15 +140,15 @@
     "speed_mps": 13, "park_speed_mps": 1.5, "accel_mps2": 4, "decel_mps2": 4, "turn_deg_per_s": 110,
     "hits": 300,
     "hit": { "headshot_weight": 1, "explosive_weight": 25, "vehicle_weapon_weight": 6 },
-    // The hit volume: two prone capsules grown by hit_scale (radius 0.56 x 2.2 = the model's half width), hit_offset_m ahead of and behind the centre (the capsule ends then reach the model's 2.38 m).
-    "hit_scale": 2.2, "hit_offset_m": 0.4,
-    // The box: what rams, what shoves vehicles aside, what a parked van is solid with. The model's (vehicles/raid_van.glb, 2.417 x 4.753 x 1.860 m): the data follows the model, not the other way round.
-    "half_width_m": 1.21, "half_length_m": 2.38, "height_m": 1.86,
+    // The hit volume: two prone capsules grown by hit_scale (radius 0.56 x 2.1 = the model's half width), hit_offset_m ahead of and behind the centre (the capsule ends then reach the model's 2.38 m).
+    "hit_scale": 2.1, "hit_offset_m": 0.43,
+    // The box: what rams, what shoves vehicles aside, what a parked van is solid with. The model's (military/SM_Veh_Van_01.glb, 2.36 x 4.63 x 2.10 m): the data follows the model, not the other way round.
+    "half_width_m": 1.18, "half_length_m": 2.32, "height_m": 2.10,
     // Loot it takes before it leaves, the longest stay after it stopped, how long it waits for the crew it called back.
     "capacity": 8, "stay_seconds": 240, "board_wait_seconds": 25,
     "door_seconds": 1.5, "crew_stagger_seconds": 0.8, "wreck_seconds": 25,
-    // The side door: how far outside the van's side the crew steps out, and how far ahead of the centre (0.07: the middle of the model's doorway).
-    "door_out_m": 1.1, "door_along_m": 0.07,
+    // The side door: how far outside the van's side the crew steps out, and how far ahead of the centre (1.05: the cab's door, where the front seats are; the model has no side door, only a rear hatch that stays shut).
+    "door_out_m": 1.1, "door_along_m": 1.05,
     "honk_min_seconds": 9, "honk_max_seconds": 22, "honk_near_m": 25, "honk_near_gap_seconds": 6,
     // Roads at least min_road_width_m wide. Stop = the candidate (every stop_step_m, stop_inset_m inside the map) with most targets within stop_radius_m, not within used_apart_m of an earlier stop.
     "min_road_width_m": 3, "stop_radius_m": 80, "stop_step_m": 20, "stop_inset_m": 30, "used_apart_m": 120,
@@ -152,13 +156,18 @@
     "u_turn_penalty_m": 150, "exit_straight_m": 150,
     // Ramming: its mass over a car's for the run-over damage of vehicles.json, and the damage when there is no such table.
     "ram_mass_scale": 3, "ram_fallback_damage": 100,
-    // Client only. With the private Military pack: model (glb/vehicles/raid_van.glb, +Z forward, origin at the middle on the ground, the right-hand sliding door a node "door") in its atlas; the door node slides from
+    // Client only. With the private Military pack: model (glb/military/SM_Veh_Van_01.glb, +Z forward, origin at the middle on the ground, its glass meshes (named Glass) are drawn see-through, its wheels (SM_Veh_Van_Wheel_*) turn; door_node "" = no door to slide) in its atlas; the door node slides from
     // door_closed to door_open (the model's own coordinates) by the door fraction; a left door is the mirrored model; model_lift_m lifts it (its wheels reach 0.10 m under the origin). The wreck: paint x wreck_tint, each
     // damage stage dims the paint by stage_dim. Without the pack a box van of boxes and cylinders in the colours; honk_hear_m is how far from the camera a honk is heard, honk_db its loudness on top of the sound's own (+6), honk_fade_db how much quieter it is at that distance.
     "view": {
-      "model": "vehicles/raid_van", "atlas": "glb/atlas/military_land_vehicle_01_burnt.png", "door_node": "door",
+      "model": "military/SM_Veh_Van_01", "atlas": "glb/military/tex/Land_Vehicles_03.png", "door_node": "",
       "door_closed": [-0.722, 0.763, 0.068], "door_open": [-0.842, 0.763, -0.932], "model_lift_m": 0.0, "wreck_tint": "#3a3532", "stage_dim": 0.07,
-      "body_color": "#b9b3a2", "cab_color": "#8c3f33", "door_color": "#9b9585", "wreck_color": "#2b2724", "honk_hear_m": 360, "honk_db": 6, "honk_fade_db": 12
+      "body_color": "#b9b3a2", "cab_color": "#8c3f33", "door_color": "#9b9585", "wreck_color": "#2b2724", "honk_hear_m": 360, "honk_db": 6, "honk_fade_db": 12,
+      // The crew sits inside the cab (drawn while it is not out yet and once it is back aboard; at most 2: the driver, then the seat next to it): seats are x across (the data is for a door on the right = x > 0, the passenger side;
+      // a left door mirrors it), z along (negative = ahead of the middle), yaw_deg the way it faces (0 ahead, 90 to the left). seat_floor_m: the floor above the ground, seat_pelvis_m: the hips above it (the head must stay
+      // under the roof, 2.10 m). seat_draw_m: only drawn within this of the camera. The model's steering wheel is on its x = +0.41 side, which is the view's x = -0.41. Nothing here was seen in the game: nudge freely.
+      "seat_floor_m": 0.5, "seat_pelvis_m": 0.42, "seat_draw_m": 70,
+      "seats": [ { "x": -0.41, "z": -1.05, "yaw_deg": 0 }, { "x": 0.41, "z": -1.05, "yaw_deg": 0 } ]
     }
   },
   // Ticket 09. Voice lines (server): a living member not in a windup or swing with a human within voice_near_m rolls voice_chance every voice_roll_s; a member that spoke waits

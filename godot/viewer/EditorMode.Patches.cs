@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
+using ShapeState = Drycastle.ShooterCore.EditorShapeState;
 
 /// <summary>
 /// The ground patches half of the Ground tool (GLOSSARY "Ground patch", ADR 0022): a hand-drawn polygon of exactly one ground type,
@@ -117,7 +118,7 @@ public partial class EditorMode
     {
         var patches = PatchList();
         if (_restorePatch != null) { if (patches.Any(p => p.Id == _restorePatch)) SelectedPatchId = _restorePatch; _restorePatch = null; _groundFocusPatch = SelectedPatchId != null; }
-        if (SelectedPatchId != null && patches.All(p => p.Id != SelectedPatchId)) { SelectedPatchId = null; _dragCorner = -1; _groundFocusPatch = false; }
+        if (SelectedPatchId != null && patches.All(p => p.Id != SelectedPatchId)) { SelectedPatchId = null; EndCornerGesture(); _groundFocusPatch = false; }
         var sel = SelectedPatchId == null ? null : Patch(SelectedPatchId);
         var mode = ShapeMode;
         var typeText = SelectedGroundType ?? "the selected type";

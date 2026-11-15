@@ -70,3 +70,7 @@ One class in its own file, one registration line, one json sub-section, one clie
 - A kneeling capsule is bent forward and lowered; with Synty bodies the `steal` clip is empty (ticket 08 names one).
 - Lying Loot does not expire and has no hit marker or outline; a tire lying next to the car it came from is just a prop on the ground.
 - The send-back hold uses the use key (E) like entering a car: with Loot in reach the car-enter press is swallowed, so a tire lying within 1.8 m of a car blocks entering it until it is sent back or moved away.
+
+### Later
+- **Hit drops Loot** (`gang.hit_drops_loot`, default on): a hit that does not kill a Thief hauling, loading, climbing down or hopping out with Loot makes it drop the Loot where it stands (a climber is put at the base) and seek again; free hands then join the fight. The van's count only ever holds Loot that was tossed in.
+- **Loot.Piece** (`LootPieces`, `LootBook.Pieces`): one lifecycle per piece (AtPlace, Claimed, Carried, Lying, LyingClaimed, Loaded), moved by the book; `Loot.ReturnHold` is the use-key hold's machine. A Thief that flees keeps what it carries (it stays Carried until the round resets).

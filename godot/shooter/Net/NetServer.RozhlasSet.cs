@@ -78,14 +78,14 @@ public partial class NetServer
     /// </summary>
     void RozhlasSetUse(Client c, bool useDown)
     {
-        var here = _rozhlasSet is { } set && RozhlasSet.CanTakeHere(_rozhlasBroadcast is { Hijacked: true }, set.IsHeld, set.Table, N(c.Body.GlobalPosition), c.Car != null);
+        var here = _rozhlasSet is { } set && RozhlasSet.CanTakeHere(_rozhlasBroadcast.Value is { Hijacked: true }, set.IsHeld, set.Table, N(c.Body.GlobalPosition), c.Car != null);
         if (c.SetHold.Tick(useDown, here, 1.0 / Wire.TickRate, RozhlasSet.TakeHoldSeconds)) TakeRozhlasSet(c.Id);
     }
 
     /// <summary>Every tick: the rules that end a hold by themselves (hijack over, a vehicle seat, walked away from the table).</summary>
     void RozhlasSetTick()
     {
-        if (_rozhlasSet is not { IsHeld: true } set || _rozhlasBroadcast is not { } r) return;
+        if (_rozhlasSet is not { IsHeld: true } set || _rozhlasBroadcast.Value is not { } r) return;
         if (!_byId.TryGetValue(set.Holder, out var h)) { set.Clear(); return; }
         set.Check(r.Hijacked, N(h.Body.GlobalPosition), h.Car != null);
     }
@@ -99,7 +99,7 @@ public partial class NetServer
     /// <summary>Join during a hijack: who holds the set (nobody, maybe) and where the table is.</summary>
     void SendRozhlasSetOnJoin(Client c)
     {
-        if (_rozhlasSet is { } set && (set.IsHeld || _rozhlasBroadcast is { Hijacked: true })) Send(c, new EventMsg((byte)EventKind.RozhlasSet, RozhlasSetCodec.Encode(set.Holder, set.Table)));
+        if (_rozhlasSet is { } set && (set.IsHeld || _rozhlasBroadcast.Value is { Hijacked: true })) Send(c, new EventMsg((byte)EventKind.RozhlasSet, RozhlasSetCodec.Encode(set.Holder, set.Table)));
     }
 
     /// <summary>
@@ -108,9 +108,9 @@ public partial class NetServer
     /// </summary>
     void OnRozhlasMic(Client c, byte[] d)
     {
-        if (_rozhlasSet is not { } set || !set.IsHolder(c.Id) || _rozhlasBroadcast is not { Hijacked: true }) return;
+        if (_rozhlasSet is not { } set || !set.IsHolder(c.Id) || _rozhlasBroadcast.Value is not { Hijacked: true }) return;
         if (!RozhlasMicWire.TryDecode(d, out var seq, out var opus)) return;
-        var feed = _liveFeed;
+        var feed = _liveFeed.Value;
         if (feed == null) return;
         _micIn.Receive(seq, opus, pcm => feed.Write(pcm));
     }

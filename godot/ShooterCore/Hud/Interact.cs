@@ -53,30 +53,61 @@ public struct InteractKey
     }
 }
 
+/// <summary>Where one hold of the interact key is: nothing held, counting up toward the send, or sent and waiting for the release.</summary>
+public enum InteractHoldState : byte { Idle, Charging, Sent }
+
 /// <summary>
 /// Hold the interact key at something in reach (a landed crate, the rozhlas set) for <c>holdSeconds</c> to use it (it fires once per hold). Releasing resets; leaving reach
 /// resets the time but a sent hold stays sent until the key is released (so the crate that is opening does not open twice). The exact logic of the old inline code.
 /// </summary>
 public struct InteractHold
 {
+    public static readonly StateMachineSpec<InteractHoldState> Spec = StateMachineSpec<InteractHoldState>
+        .Define("Interact.Hold", "One hold of the interact key at a crate or a rozhlas set: idle, charging toward the send, sent once and waiting for the key to be released.", InteractHoldState.Idle)
+        .Allow(InteractHoldState.Idle, InteractHoldState.Charging)
+        .Allow(InteractHoldState.Charging, InteractHoldState.Sent, InteractHoldState.Idle)
+        .Allow(InteractHoldState.Sent, InteractHoldState.Idle)
+        .Note(InteractHoldState.Idle, "Key up, or held with nothing in reach (Held is 0).")
+        .Note(InteractHoldState.Charging, "Key held at something in reach and the open request is not sent yet: Held counts up.")
+        .Note(InteractHoldState.Sent, "The open request is sent: nothing more until the key is released. Leaving reach zeroes Held but stays Sent; a despawn (Reset) ends it too.")
+        .Build();
+
+    InteractHoldState _state;
+
     /// <summary>Seconds held at a crate in reach; 0 when not holding. Stays at its value after the send until release or leaving reach.</summary>
     public double Held;
+
+    /// <summary>The state of the hold (a struct cannot own a <see cref="StateMachine{TState}"/> and stay a plain value, so it checks its own edges).</summary>
+    public readonly InteractHoldState State => _state;
+
     /// <summary>The open request for this hold has been sent; nothing more until the key is released.</summary>
-    public bool Sent;
+    public readonly bool Sent => _state == InteractHoldState.Sent;
 
     /// <summary>Despawn of the crate in reach: the hold starts over.</summary>
-    public void Reset() { Held = 0; Sent = false; }
+    public void Reset() { Held = 0; Go(InteractHoldState.Idle); }
 
     /// <summary>One input tick. True on the tick the hold completes (send once).</summary>
     public bool Tick(bool use, bool inReach, double dt, double holdSeconds)
     {
-        if (!use) { Held = 0; Sent = false; }
-        else if (!inReach) Held = 0;
-        else if (!Sent)
+        if (!use) { Held = 0; Go(InteractHoldState.Idle); }
+        else if (!inReach)
         {
+            Held = 0;
+            if (_state == InteractHoldState.Charging) Go(InteractHoldState.Idle); // a sent hold stays sent
+        }
+        else if (_state != InteractHoldState.Sent)
+        {
+            Go(InteractHoldState.Charging);
             Held += dt;
-            if (Held >= holdSeconds) { Sent = true; return true; }
+            if (Held >= holdSeconds) { Go(InteractHoldState.Sent); return true; }
         }
         return false;
+    }
+
+    void Go(InteractHoldState next)
+    {
+        if (_state == next) return;
+        if (!Spec.Allows(_state, next)) StateMachineDiagnostics.Illegal(Spec.Name, _state.ToString(), next.ToString());
+        _state = next;
     }
 }

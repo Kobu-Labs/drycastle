@@ -65,6 +65,7 @@ public sealed partial class CitizenView : Node3D
     double _seqAt, _gestureAt;
     readonly Random _rng = new();
     CitizenState _state = CitizenState.Walking;
+    Tween? _sitTween, _faceTween; // one per animated property: a new Show() kills the old one so two never fight over the same value
 
     CitizenView(CitizensConfig cfg, MassConfig mass, CitizenRole role) { _cfg = cfg; _mass = mass; _role = role; }
 
@@ -139,11 +140,17 @@ public sealed partial class CitizenView : Node3D
         _state = state;
         if (_model == null || _anim == null) return;
         var blend = first ? 0 : 0.25;
+        if (_shocked && state != CitizenState.Dead) { _shocked = false; Face(false); } // any change of state ends the shock (Dead keeps its own pose)
         if (_sit != null)
         {
             var to = state == CitizenState.Seated ? 1f : 0f;
             if (first) _sit.Influence = to;
-            else CreateTween().TweenProperty(_sit, "influence", to, state == CitizenState.Seated ? 0.7 : state == CitizenState.Fleeing ? 0.25 : was == CitizenState.Seated ? 0.6 : 0.2); // standing up after the Mass takes a moment
+            else
+            {
+                _sitTween?.Kill();
+                _sitTween = CreateTween();
+                _sitTween.TweenProperty(_sit, "influence", to, state == CitizenState.Seated ? 0.7 : state == CitizenState.Fleeing ? 0.25 : was == CitizenState.Seated ? 0.6 : 0.2); // standing up after the Mass takes a moment
+            }
         }
         switch (state)
         {
@@ -240,7 +247,9 @@ public sealed partial class CitizenView : Node3D
             var want = Mathf.Atan2(-d.X, -d.Z);
             target = Mathf.Pi + Mathf.Wrap(want - GlobalRotation.Y, -Mathf.Pi, Mathf.Pi);
         }
-        CreateTween().TweenProperty(_model, "rotation:y", target, 0.45);
+        _faceTween?.Kill();
+        _faceTween = CreateTween();
+        _faceTween.TweenProperty(_model, "rotation:y", target, 0.45);
     }
 
     double NextGesture() => _mass.GestureMinSeconds + _rng.NextDouble() * (_mass.GestureMaxSeconds - _mass.GestureMinSeconds);

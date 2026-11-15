@@ -16,8 +16,7 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class NetServer
 {
-    Urad? _urad;
-    bool _uradTried;
+    LazyInit<Urad> _urad;
     WorkerCrowd? _workers;
     CitizenHitRouter? _citizenHits;
 
@@ -40,13 +39,12 @@ public partial class NetServer
 
     Urad? EnsureUrad()
     {
-        if (_urad != null || _uradTried) return _urad;
-        _uradTried = true;
+        if (!_urad.Begin()) return _urad.Value;
         if (ArenaMode || string.IsNullOrEmpty(MapDir)) { GD.Print("server: no map folder; no Urad volume, no workers, no door"); return null; }
         var path = Path.Combine(MapDir, "urad.json");
         if (!File.Exists(path)) { GD.Print($"server: no {path}; no Urad volume, no workers, no door"); return null; }
-        _urad = Urad.FromJsonOrNull(File.ReadAllText(path), m => GD.PrintErr($"server: {m}; no Urad volume, no workers, no door"));
-        return _urad;
+        if (Urad.FromJsonOrNull(File.ReadAllText(path), m => GD.PrintErr($"server: {m}; no Urad volume, no workers, no door")) is { } urad) _urad.Ready(urad);
+        return _urad.Value;
     }
 
     /// <summary>The router the match asks about citizen hit ids: the Mass crowd and the workers are each added when they exist.</summary>

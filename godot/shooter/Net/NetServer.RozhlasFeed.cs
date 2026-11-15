@@ -11,38 +11,37 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class NetServer
 {
-    RozhlasFeed? _liveFeed;
-    bool _liveFeedTried;
+    LazyInit<RozhlasFeed> _liveFeed;
 
     /// <summary>The live feed (null when rozhlas_voice.json cannot be read, logged once). Start it when the mic goes live, Stop it when the mic is dead.</summary>
     public RozhlasFeed? RozhlasLiveFeed => EnsureLiveFeed();
 
     RozhlasFeed? EnsureLiveFeed()
     {
-        if (_liveFeed != null || _liveFeedTried) return _liveFeed;
-        _liveFeedTried = true;
+        if (!_liveFeed.Begin()) return _liveFeed.Value;
         var json = Godot.FileAccess.Open("res://data/rozhlas_voice.json", Godot.FileAccess.ModeFlags.Read)?.GetAsText();
         if (json == null) { GD.PrintErr($"server: rozhlas_voice.json: cannot open ({Godot.FileAccess.GetOpenError()}); no live rozhlas feed"); return null; }
         RozhlasVoice voice;
         try { voice = RozhlasVoice.Parse(json); }
         catch (DataFileException e) { GD.PrintErr($"server: {e.Message}; no live rozhlas feed"); return null; }
-        _liveFeed = new RozhlasFeed(voice, BroadcastRozhlasFeed, m => GD.Print($"server: {m}"));
-        TreeExiting += () => _liveFeed?.Dispose(); // ffmpeg must not outlive the server
+        var feed = new RozhlasFeed(voice, BroadcastRozhlasFeed, m => GD.Print($"server: {m}"));
+        _liveFeed.Ready(feed);
+        TreeExiting += () => feed.Dispose(); // ffmpeg must not outlive the server
         RozhlasPhaseChanged += OnRozhlasPhaseForFeed;
-        return _liveFeed;
+        return feed;
     }
 
     /// <summary>The feed runs exactly while the mic is live: it starts with a detour broadcast (OnAir), runs through a hijack, and drains when the loudspeaker goes Idle.</summary>
     void OnRozhlasPhaseForFeed(RozhlasPhase from, RozhlasPhase to)
     {
-        if (_liveFeed is not { } feed) return;
+        if (_liveFeed.Value is not { } feed) return;
         RozhlasCombatPhase(from, to); // hijack thump/feedback, the end click: while the feed still takes input (NetServer.RozhlasCombat.cs)
         if (from == RozhlasPhase.Idle) feed.Start(); // already Live under a running feedtest: the phase takes it over
         else if (to == RozhlasPhase.Idle) feed.Stop();
         if (_feedTest is { } t) t.OwnsFeed = false;
     }
 
-    bool MicLive => _rozhlasBroadcast is { MicLive: true };
+    bool MicLive => _rozhlasBroadcast.Value is { MicLive: true };
 
     /// <summary>One feed frame to every joined player (unreliable on its own channel; bots have no connection).</summary>
     void BroadcastRozhlasFeed(byte[] packet)
@@ -54,9 +53,9 @@ public partial class NetServer
     /// <summary>Every frame: the frames that are due go out, and a running /rozhlas feedtest is fed.</summary>
     void RozhlasFeedPump()
     {
-        if (_liveFeed == null) return;
+        if (_liveFeed.Value == null) return;
         FeedTestTick();
-        _liveFeed.Pump();
+        _liveFeed.Value.Pump();
     }
 
     // ---- /rozhlas feedtest: a few seconds of synthetic voice, then a "gunshot", through the whole pipeline -----------------------------------------------------------------------------------
@@ -79,7 +78,7 @@ public partial class NetServer
 
     void FeedTestTick()
     {
-        if (_feedTest is not { } t || _liveFeed is not { } feed) return;
+        if (_feedTest is not { } t || _liveFeed.Value is not { } feed) return;
         if (feed.State != RozhlasFeedState.Live) { _feedTest = null; return; } // it failed (logged by the feed)
         var el = t.Clock.Elapsed.TotalSeconds;
         var want = (int)(Math.Min(el, FeedTestVoiceS) * RozhlasVoice.FeedRate);

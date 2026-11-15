@@ -227,4 +227,51 @@ public class ChurchDoorPolicyTests
         Assert.True(p.Apply(DoorReason.DemonFailed));
         Assert.True(p.IsOpen);
     }
+
+    [Fact]
+    public void Mass_over_while_already_shut_arms_the_close_then_the_empty_check_fires_it_without_moving_the_doors()
+    {
+        var p = new ChurchDoorPolicy();
+        Assert.False(p.Apply(DoorReason.MassOver));
+        Assert.False(p.IsOpen);
+        Assert.True(p.CloseWhenEmpty);                     // ShutUntilEmpty
+        Assert.False(p.TickDeferredClose(() => 1));
+        Assert.False(p.TickDeferredClose(() => 0));        // fires (latch cleared) but the doors were shut: no change
+        Assert.False(p.CloseWhenEmpty);
+        Assert.False(p.TickDeferredClose(() => 0));
+    }
+
+    [Fact]
+    public void An_admin_toggle_keeps_the_pending_close()
+    {
+        var p = new ChurchDoorPolicy();
+        p.Apply(DoorReason.MassOver);                      // ShutUntilEmpty
+        Assert.True(p.SetByAdmin(true));
+        Assert.True(p.CloseWhenEmpty);
+        Assert.True(p.SetByAdmin(false));
+        Assert.True(p.CloseWhenEmpty);
+    }
+
+    [Fact]
+    public void Every_reason_from_every_state_is_a_declared_transition()
+    {
+        // Strict: an undeclared edge throws. Reach each of the four states by a path, then apply every reason.
+        var reach = new (DoorState State, DoorReason[] Path)[]
+        {
+            (DoorState.Shut, []),
+            (DoorState.Open, [DoorReason.MassGathering]),
+            (DoorState.OpenUntilEmpty, [DoorReason.MassGathering, DoorReason.MassOver]),
+            (DoorState.ShutUntilEmpty, [DoorReason.MassOver]),
+        };
+        foreach (var (state, path) in reach)
+            foreach (var reason in Enum.GetValues<DoorReason>())
+            {
+                var p = new ChurchDoorPolicy();
+                foreach (var r in path) p.Apply(r);
+                Assert.Equal(state is DoorState.Open or DoorState.OpenUntilEmpty, p.IsOpen);
+                p.Apply(reason);
+                p.SetByAdmin(true); p.SetByAdmin(false);
+                p.TickFight(1f, 0, Grace); p.TickFight(1f, 1, Grace);
+            }
+    }
 }

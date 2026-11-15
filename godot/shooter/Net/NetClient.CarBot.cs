@@ -21,7 +21,7 @@ public partial class NetClient
         try
         {
             _cbScript ??= (CarBot == "a" ? CarAlice() : CarBob()).GetEnumerator();
-            if (!_done && !_cbScript.MoveNext()) _cbScript = null;
+            if (!LinkEnded && !_cbScript.MoveNext()) _cbScript = null;
         }
         catch (WbAbort e) { CarResult(false, e.Message); }
         var mi = new MoveInput { MoveY = _cbMoveY, Yaw = 0, Buttons = Dead ? MoveButtons.None : _cbButtons | _cbPulse, SpeedScale = 1 };
@@ -31,8 +31,8 @@ public partial class NetClient
 
     void CarResult(bool ok, string why)
     {
-        if (_done) return;
-        _done = true;
+        if (LinkEnded) return;
+        _link.Enter(LinkPhase.Left);
         if (!ok) GD.PrintErr($"client {PlayerName}: car smoke failure: {why}");
         GD.Print(ok ? "SHOOTER_CAR_CLIENT_OK" : "SHOOTER_CAR_CLIENT_FAIL");
         GetTree().Quit(ok ? 0 : 2);
@@ -66,7 +66,7 @@ public partial class NetClient
         // stand next to the car, bob 40 m ahead in its path (car 0 faces -Z)
         var alicePos = car0 + new NVec3(2.2f, 0, 0); var bobPos = car0 + new NVec3(0, 0, -40);
         Teleport(_myId, alicePos); Teleport(_wbBob, bobPos);
-        foreach (var x in WaitFor(() => _gotSelf && NearXZ(_me!.State.Position, alicePos) && NearXZ(BobPos, bobPos) && _me.State.OnFloor && BobPos.Y < 0.05f, 4, "teleport and landing")) yield return x;
+        foreach (var x in WaitFor(() => OwnSpawned && NearXZ(_me!.State.Position, alicePos) && NearXZ(BobPos, bobPos) && _me.State.OnFloor && BobPos.Y < 0.05f, 4, "teleport and landing")) yield return x;
         foreach (var x in Wait(0.4)) yield return x;
 
         // enter (E)
@@ -133,7 +133,7 @@ public partial class NetClient
         try
         {
             _clScript ??= CarLoopScript().GetEnumerator();
-            if (!_done && !_clScript.MoveNext()) _clScript = null;
+            if (!LinkEnded && !_clScript.MoveNext()) _clScript = null;
         }
         catch (WbAbort e) { GD.PrintErr($"client {PlayerName}: car loop: {e.Message}"); FinishBot(); }
         var mi = new MoveInput { MoveX = _clMoveX, MoveY = _clMoveY, Yaw = 0, Buttons = Dead ? MoveButtons.None : _clPulse, SpeedScale = 1 };
@@ -143,13 +143,13 @@ public partial class NetClient
 
     IEnumerable<int> CarLoopScript()
     {
-        foreach (var x in WaitFor(() => _gotSelf && _me != null && !Dead && _cars.Values.Any(v => v.Driver == 0 && !v.Destroyed && DriveDef(v) != null), 60, "a free car with a drive block")) yield return x;
+        foreach (var x in WaitFor(() => OwnSpawned && _me != null && !Dead && _cars.Values.Any(v => v.Driver == 0 && !v.Destroyed && DriveDef(v) != null), 60, "a free car with a drive block")) yield return x;
         var me = _me!.State.Position;
         var car = _cars.Values.Where(v => v.Driver == 0 && !v.Destroyed && DriveDef(v) != null).OrderBy(v => XZ(v.Pos - me)).First();
         var id = car.Id;
         var side = car.Pos + new NVec3(2.2f, 0, 0);
         Teleport(_myId, side);
-        foreach (var x in WaitFor(() => _gotSelf && NearXZ(_me!.State.Position, side) && _me.State.OnFloor, 6, "teleport beside the car")) yield return x;
+        foreach (var x in WaitFor(() => OwnSpawned && NearXZ(_me!.State.Position, side) && _me.State.OnFloor, 6, "teleport beside the car")) yield return x;
         foreach (var x in Wait(0.4)) yield return x;
         _clPulse = MoveButtons.Use;
         foreach (var x in WaitFor(() => _driving && _cars.TryGetValue(id, out var cv) && cv.Driver == _myId, 3, "entering the car")) yield return x;

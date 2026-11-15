@@ -109,4 +109,29 @@ public class InteractTests
         Assert.False(h.Tick(false, true, 1.0 / 30, 2.0)); // released: ready for the next hold
         Assert.False(h.Sent);
     }
+
+    [Fact]
+    public void Hold_states_follow_idle_charging_sent_and_never_take_an_undeclared_edge()
+    {
+        var h = new InteractHold();
+        Assert.Equal(InteractHoldState.Idle, h.State);
+        h.Tick(true, false, 0.1, 2.0);                    // held, nothing in reach
+        Assert.Equal(InteractHoldState.Idle, h.State);
+        h.Tick(true, true, 0.1, 2.0);
+        Assert.Equal(InteractHoldState.Charging, h.State);
+        h.Tick(true, false, 0.1, 2.0);                    // leaving reach drops an unsent hold
+        Assert.Equal(InteractHoldState.Idle, h.State);
+        Assert.True(h.Tick(true, true, 5.0, 2.0));
+        Assert.Equal(InteractHoldState.Sent, h.State);
+        h.Tick(true, false, 0.1, 2.0);                    // a sent hold stays sent
+        Assert.Equal(InteractHoldState.Sent, h.State);
+        h.Tick(true, true, 0.1, 2.0);
+        Assert.Equal(InteractHoldState.Sent, h.State);
+        h.Tick(false, true, 0.1, 2.0);
+        Assert.Equal(InteractHoldState.Idle, h.State);
+        h.Tick(true, true, 0.1, 2.0);
+        h.Reset();
+        Assert.Equal(InteractHoldState.Idle, h.State);
+        Assert.Equal(0, h.Held);
+    }
 }

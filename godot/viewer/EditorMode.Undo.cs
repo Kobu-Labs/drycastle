@@ -127,7 +127,7 @@ public partial class EditorMode
             from.RemoveAt(from.Count - 1);
             to.Add(rec);
             if (to.Count > UndoCap) to.RemoveAt(0);
-            _skDraft.Clear();
+            SkDraftEnd();
             ApplySketch(undo ? rec.SketchBefore : rec.SketchAfter);
             Say($"{word}: {rec.Description}");
             return true;
@@ -136,6 +136,8 @@ public partial class EditorMode
         try
         {
             SyncCatalogs();
+            using var wlock = EditsLock.TryAcquire(EditsPath);
+            if (wlock == null) { Say($"cannot {word}: edits.json is being written by another program (the MCP server?), try again in a moment", true); return false; }
             var root = EditsFile.Load(EditsPath);
             foreach (var c in rec.Changes)
             {

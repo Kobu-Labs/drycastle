@@ -54,6 +54,7 @@ public partial class NetServer
             Join(c);
             return;
         }
+        c.Session.Enter(SessionPhase.Loading);
         c.Loading = new ProfileLoad { Work = LoadProfileAsync(Progression, token, StarterLoadout, saveDefaults: !UnlockAll), StartedMs = Time.GetTicksMsec() };
     }
 
@@ -62,8 +63,7 @@ public partial class NetServer
     {
         foreach (var c in _clients.Values.ToList())
         {
-            var ld = c.Loading;
-            if (c.Joined || ld == null) continue;
+            if (c.Phase != SessionPhase.Loading || c.Loading is not { } ld) continue;
             PlayerProfile? profile = null;
             if (ld.Work.IsCompletedSuccessfully) profile = ld.Work.Result;
             else if (ld.Work.IsFaulted)
@@ -138,6 +138,7 @@ public partial class NetServer
 
     void Reject(Client c, string reason)
     {
+        c.Session.Enter(SessionPhase.Rejected);
         GD.Print($"server: rejecting {(c.Name == "" ? "a client" : c.Name)}: {reason}");
         Send(c, new ErrorMsg(reason));
         _host.Flush();

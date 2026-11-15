@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Godot;
+using SketchState = Drycastle.ShooterCore.EditorSketchState;
 
 /// <summary>
 /// The Sketch tool: temporary marks on the ground that a prompt can name ("plant trees inside L1", "a lamp at A").
@@ -21,7 +22,6 @@ using Godot;
 public partial class EditorMode
 {
     public enum SketchKind { Point, Line }
-    public enum SketchState { Idle, Drawing, Selected }
 
     public sealed record SketchPoint(string Id, double X, double Y, string Sketch = DefaultSketch);
 
@@ -68,7 +68,26 @@ public partial class EditorMode
     SketchDoc _sketch = SketchDoc.Empty;
     SketchKind _skMode = SketchKind.Line;
     readonly List<(double x, double y)> _skDraft = new();
-    string? _skSelected, _skHover;
+    string? _skHover;
+    // Editor.Sketch (docs/state-machines.md): Drawing is entered with the first corner of a line and left when the draft ends; Idle and Selected follow the
+    // selection (every change goes through the _skSelected setter) while no line is being drawn. Draft changes go through SkDraftAdd/SkDraftEnd only.
+    readonly Drycastle.ShooterCore.StateMachine<SketchState> _skFsm = new(Drycastle.ShooterCore.EditorMachines.SketchSpec);
+    string? _skSel;
+    string? _skSelected { get => _skSel; set { _skSel = value; SkRest(); } }
+
+    void SkRest()
+    {
+        if (_skFsm.IsAny(SketchState.Idle, SketchState.Selected)) _skFsm.Enter(_skSel != null ? SketchState.Selected : SketchState.Idle);
+    }
+
+    void SkDraftAdd((double x, double y) p) { _skDraft.Add(p); _skFsm.Enter(SketchState.Drawing); }
+
+    /// <summary>The draft is gone (finished, cancelled, taken back to nothing, a mark deleted or the sketch replaced): Drawing ends.</summary>
+    void SkDraftEnd()
+    {
+        _skDraft.Clear();
+        if (_skFsm.Is(SketchState.Drawing)) _skFsm.Enter(_skSel != null ? SketchState.Selected : SketchState.Idle);
+    }
     (double x, double y)? _skCursor;
     string _sketchJson = "";
     int _skVersion;
@@ -89,7 +108,7 @@ public partial class EditorMode
     public SketchKind SketchMode => _skMode;
     public string? SelectedSketchId => _skSelected;
     public IReadOnlyList<(double x, double y)> SketchDraft => _skDraft;
-    public SketchState SketchPhase => _skDraft.Count > 0 ? SketchState.Drawing : _skSelected != null ? SketchState.Selected : SketchState.Idle;
+    public SketchState SketchPhase => _skFsm.Current;
 
     // ---- data ----
 
@@ -193,14 +212,16 @@ public partial class EditorMode
         {
             var stamp = File.Exists(path) ? File.GetLastWriteTimeUtc(path).Ticks : -1;
             if (stamp == _skFileStamp) return;
+            var wasMissing = _skFileStamp < 0; // a file that comes back after being gone is adopted whatever its version (the MCP server may restart numbering)
             _skFileStamp = stamp;
             if (stamp < 0) return;
             using var doc = JsonDocument.Parse(File.ReadAllText(path));
             var next = ParseSketch(doc.RootElement, out var version);
-            if (version <= _skFileVersion) return;
+            // Same version counts too: the viewer and the MCP server may both have written v+1 from v, and the file now holds the other one. Content decides below.
+            if (version < _skFileVersion && !wasMissing) return;
             _skFileVersion = version;
             if (BuildSketchJson(next) == BuildSketchJson(_sketch)) return;
-            if (_skDraft.Count > 0) { _skDraft.Clear(); SketchChanged(); }
+            if (_skDraft.Count > 0) { SkDraftEnd(); SketchChanged(); }
             PushUndo(new UndoRecord("sketch changed by the MCP server", new List<EntryChange>(), _sketch, next));
             ApplySketch(next, write: false);
             Say($"sketch updated from sketch.json: {SketchSummary()} (Ctrl+Z undoes it)");
@@ -223,7 +244,7 @@ public partial class EditorMode
             catch { /* unreadable: overwritten */ }
             _skFileVersion = version + 1;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            var tmp = path + ".tmp";
+            var tmp = $"{path}.{System.Environment.ProcessId}.tmp"; // unique per process: the MCP server writes its own temp name, never this one
             File.WriteAllText(tmp, BuildSketchJson(doc, _skFileVersion) + "\n");
             File.Move(tmp, path, true);
             _skFileStamp = File.GetLastWriteTimeUtc(path).Ticks;
@@ -320,7 +341,7 @@ public partial class EditorMode
         var p = (Math.Round(x, 3), Math.Round(y, 3));
         if (_skDraft.Count > 0 && _skDraft[^1] == p) { Say("not placed: the same spot as the corner before it", true); return false; }
         if (_skDraft.Count == 0) _skSelected = null;
-        _skDraft.Add(p);
+        SkDraftAdd(p);
         SketchChanged();
         return true;
     }
@@ -344,7 +365,7 @@ public partial class EditorMode
         if (_skDraft.Count == 1)
         {
             var (x, y) = _skDraft[0];
-            _skDraft.Clear();
+            SkDraftEnd();
             var pid = AddSketchPoint(x, y);
             if (pid != null) Say($"one corner only: marked as point {pid}");
             return pid;
@@ -353,7 +374,7 @@ public partial class EditorMode
         if (closed && pts[0] == pts[^1]) pts.RemoveAt(pts.Count - 1);
         var id = $"L{_sketch.NextLine + 1}";
         var line = new SketchLine(id, closed, pts, _skActive);
-        _skDraft.Clear();
+        SkDraftEnd();
         _skSelected = null;
         CommitSketch(WithActive() with { Lines = _sketch.Lines.Append(line).ToList(), NextLine = _sketch.NextLine + 1 }, $"sketch {(closed ? "closed line" : "line")} {id}",
             closed ? $"closed line {id} drawn in {_skActive}: {pts.Count} corners, {line.AreaM2:F0} m2" : $"line {id} drawn in {_skActive}: {pts.Count} corners, {line.LengthM:F1} m");
@@ -365,6 +386,7 @@ public partial class EditorMode
     {
         if (_skDraft.Count == 0) return false;
         _skDraft.RemoveAt(_skDraft.Count - 1);
+        if (_skDraft.Count == 0) SkDraftEnd();
         SketchChanged();
         return true;
     }
@@ -373,7 +395,7 @@ public partial class EditorMode
     public void CancelSketchDraft()
     {
         if (_skDraft.Count == 0) return;
-        _skDraft.Clear();
+        SkDraftEnd();
         Say("line cancelled; the marks already made stay");
         SketchChanged();
     }
@@ -383,7 +405,7 @@ public partial class EditorMode
     {
         if (_skDraft.Count == 0) return;
         Say($"unfinished sketch line discarded ({Plural(_skDraft.Count, "corner")})");
-        _skDraft.Clear();
+        SkDraftEnd();
         SketchChanged();
     }
 
@@ -431,7 +453,7 @@ public partial class EditorMode
 
     public void ClearSketch()
     {
-        _skDraft.Clear();
+        SkDraftEnd();
         var name = _skActive;
         if (_sketch.CountIn(name) == 0) { SketchChanged(); return; }
         CommitSketch(_sketch with { Points = _sketch.Points.Where(p => p.Sketch != name).ToList(), Lines = _sketch.Lines.Where(l => l.Sketch != name).ToList() },
@@ -500,7 +522,7 @@ public partial class EditorMode
     public void DeleteSketch(string name)
     {
         if (!_sketch.Names.Contains(name)) return;
-        _skDraft.Clear();
+        SkDraftEnd();
         var next = _sketch with
         {
             Names = _sketch.Names.Where(n => n != name).ToList(),

@@ -112,7 +112,7 @@ public sealed partial class CorpseChooser : CanvasLayer
             _rows.AddChild(new Label { Text = Strings.F("corpse.option", pos + 1, text), MouseFilter = Control.MouseFilterEnum.Ignore });
         }
         _title.Text = title;
-        _wait.End();
+        EndPending(); // also lifts the dim a take left on the cells
         FillCells(items);
         IsOpen = true;
         Visible = true;

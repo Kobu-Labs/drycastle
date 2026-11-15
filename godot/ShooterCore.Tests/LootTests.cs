@@ -7,10 +7,10 @@ namespace Drycastle.ShooterCore.Tests;
 /// <summary>Loot and tires of the Thieves event (docs/events/thieves/04): the target registry, the Thief's stealing states, lying Loot and its return, the van's count, the tire target and the wheel bits, the generic climb (with a fake target). State machines run Strict.</summary>
 public class LootTests
 {
-    const float Dt = 1f / 30f;
+    internal const float Dt = 1f / 30f;
     const byte Bullet = 0;
 
-    static ThievesFile Cfg(Action<ThievesFile>? tune = null)
+    internal static ThievesFile Cfg(Action<ThievesFile>? tune = null)
     {
         var f = ThievesFile.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "thieves.json")));
         f.Gang.Raid = new GangRaidCounts { GangBosses = 0, Enforcers = 0, Thieves = 1 };
@@ -18,7 +18,7 @@ public class LootTests
         return f;
     }
 
-    sealed class FakeWorld : IGangWorld
+    internal sealed class FakeWorld : IGangWorld
     {
         public readonly List<GangPlayer> List = new();
         public IReadOnlyList<GangPlayer> Players => List;
@@ -26,7 +26,7 @@ public class LootTests
     }
 
     /// <summary>Cars as the server's adapter lists them: the wheel bits are kept here, as the lifecycle keeps them there.</summary>
-    sealed class FakeCars : ITireCars
+    internal sealed class FakeCars : ITireCars
     {
         public readonly Dictionary<int, TireCar> Cars_ = new();
         public FakeCars Add(int id, float x, float z, bool atRest = true) { Cars_[id] = new TireCar(id, new Vector3(x, 0, z), 0, atRest, 0); return this; }
@@ -43,7 +43,7 @@ public class LootTests
     }
 
     /// <summary>A target kind with a climb: one dish at the top of a wall, its base on the ground below.</summary>
-    sealed class FakeClimbSource : IStealSource
+    internal sealed class FakeClimbSource : IStealSource
     {
         public readonly Vector3 Base, Top;
         public bool Gone;
@@ -60,7 +60,7 @@ public class LootTests
     }
 
     /// <summary>A kind that does not lie when dropped and hears where its carrier is (a pet, as ticket 05 will have it).</summary>
-    sealed class FakePetSource : IStealSource
+    internal sealed class FakePetSource : IStealSource
     {
         public bool Gone;
         public int Returned;
@@ -77,7 +77,7 @@ public class LootTests
         public void Carried(int id, Vector3 carrierAt, float carrierYaw) => Carry.Add((carrierAt, carrierYaw));
     }
 
-    sealed class Rig
+    internal sealed class Rig
     {
         public readonly ThievesFile Cfg;
         public readonly FakeWorld World = new();
@@ -169,7 +169,7 @@ public class LootTests
         // the van's song travels beside the door and the side
         var owner = RaidVanRules.PackOwner(0.5f, true, 21);
         Assert.Equal(21, RaidVanRules.SongOf(owner));
-        Assert.Equal(0.5f, RaidVanRules.DoorOf(owner), 0.001f);
+        Assert.Equal(0.5f, RaidVanRules.DoorOf(owner), 0.01f);
         Assert.True(RaidVanRules.LeftOf(owner));
         Assert.Equal(0, RaidVanRules.SongOf(RaidVanRules.PackOwner(1f, false)));
     }
@@ -420,8 +420,9 @@ public class LootTests
         rig.RunUntil(() => raid.Gang.Members.Count(m => m.Kind == GangMemberKind.Thief) == 2);
         var a = raid.Gang.Members[0]; var b = raid.Gang.Members[1];
         // put a tire down at the van's side (as a killed carrier would): it is a free target of its kind
-        var origin = new LootOrigin(LootKind.Tire, TireSource.IdOf(0x4001, 1));
-        rig.Cars.SetWheel(0x4001, 1, true);
+        var wheel = Enumerable.Range(0, 4).First(w => rig.Book.Pieces.Of(new LootOrigin(LootKind.Tire, TireSource.IdOf(0x4001, w))) == LootPieceState.AtPlace); // not one a Thief already claimed
+        var origin = new LootOrigin(LootKind.Tire, TireSource.IdOf(0x4001, wheel));
+        rig.Cars.SetWheel(0x4001, wheel, true);
         rig.Book.Drop(origin, new Vector3(58, 0, 10)); // nearer the Thieves than the car's own wheels
         rig.RunUntil(() => raid.Van.Load >= 1);
         Assert.Equal(0, rig.Book.LyingCount); // taken up

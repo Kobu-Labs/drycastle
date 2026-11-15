@@ -26,6 +26,9 @@ public sealed class LootBook
     public LootRegistry Registry { get; }
     public LootConfig Config => _cfg;
 
+    /// <summary>Where every piece away from its place is in its life (<see cref="LootPieceState"/>).</summary>
+    public LootPieces Pieces { get; } = new();
+
     /// <summary>Loot lies on the ground now, oldest first.</summary>
     public IEnumerable<LyingLoot> Lying => _order.Select(id => _lying[id]);
     public int LyingCount => _lying.Count;
@@ -93,16 +96,35 @@ public sealed class LootBook
             var d = Flat(t.WorkSpot, from);
             if (d < bestD) { bestD = d; best = t; }
         }
-        if (best is not { } pick || !Registry.Claim(pick)) return null;
+        if (best is not { } pick || !Claim(pick)) return null;
         return pick;
     }
 
     static bool IsTireOnCar(StealTarget t) => t.Kind == LootKind.Tire && !t.Lying;
 
-    public void Release(in StealTarget t) => Registry.Release(t);
+    /// <summary>The claim on the target ends (the Thief gave up, was called off or died). A claim that is not there is ignored.</summary>
+    public void Release(in StealTarget t)
+    {
+        if (!Registry.IsClaimed(t)) return;
+        Registry.Release(t);
+        if (OriginOf(t) is not { } piece) return; // Loot that no longer lies: its claim lapsed with it
+        var now = Pieces.Of(piece);
+        if (now == LootPieceState.Claimed) Pieces.Enter(piece, LootPieceState.AtPlace);
+        else if (now == LootPieceState.LyingClaimed) Pieces.Enter(piece, LootPieceState.Lying);
+    }
 
     /// <summary>Claims one target for a Thief (false when it is claimed already).</summary>
-    public bool Claim(in StealTarget t) => Registry.Claim(t);
+    public bool Claim(in StealTarget t)
+    {
+        if (!Registry.Claim(t)) return false;
+        if (OriginOf(t) is not { } piece) return true;
+        if (!t.Lying && Pieces.Of(piece) != LootPieceState.AtPlace) Pieces.Forget(piece); // its source offers it free: a kind that grows back (a pole) has a new piece under the old id, the old one's life is over
+        Pieces.Enter(piece, t.Lying ? LootPieceState.LyingClaimed : LootPieceState.Claimed);
+        return true;
+    }
+
+    /// <summary>The piece a target is: its kind and id, or for Loot that lies the origin of the entity (null when it no longer lies).</summary>
+    LootOrigin? OriginOf(in StealTarget t) => !t.Lying ? new LootOrigin(t.Kind, t.Id) : _lying.TryGetValue((ushort)t.Id, out var l) ? l.Origin : null;
 
     /// <summary>Appends the wheels still on a car (at rest) that no Thief has claimed.</summary>
     public void FreeTires(int carId, List<StealTarget> into)
@@ -137,18 +159,28 @@ public sealed class LootBook
     /// </summary>
     public LootOrigin? Take(in StealTarget t)
     {
-        Registry.Release(t);
         if (t.Lying)
         {
+            Registry.Release(t);
             if (!_lying.TryGetValue((ushort)t.Id, out var l)) return null;
             Forget((ushort)t.Id);
             _entities.Despawn((ushort)t.Id, WorldDespawnReason.Opened);
+            Pieces.Enter(l.Origin, LootPieceState.Carried);
             return l.Origin;
         }
-        if (!Registry.TryFind(t, out _)) return null;
+        if (!Registry.TryFind(t, out _)) { Release(t); return null; }
+        Registry.Release(t);
         Registry.Source(t.Kind)!.Take(t.Id);
-        return new LootOrigin(t.Kind, t.Id);
+        var piece = new LootOrigin(t.Kind, t.Id);
+        Pieces.Enter(piece, LootPieceState.Carried);
+        return piece;
     }
+
+    /// <summary>The Raid's van took the piece a Thief tossed in (<see cref="Raid.LoadIn"/>).</summary>
+    public void Loaded(LootOrigin piece) => Pieces.Enter(piece, LootPieceState.Loaded);
+
+    /// <summary>The piece a Thief carried is gone for good with nothing to send back (a pet killed in its hands): it is no longer away from anything.</summary>
+    public void Lost(LootOrigin piece) => Pieces.Enter(piece, LootPieceState.AtPlace);
 
     // ---- lying and returning ----
 
@@ -165,6 +197,7 @@ public sealed class LootBook
         if (_entities.Spawn(lying) is not { } id) { Return(origin); return null; }
         _lying[id] = lying;
         _order.Add(id);
+        Pieces.Enter(origin, LootPieceState.Lying);
         return id;
     }
 
@@ -172,6 +205,7 @@ public sealed class LootBook
     public void Return(LootOrigin origin)
     {
         Registry.Source(origin.Kind)?.Return(origin.Id);
+        Pieces.Enter(origin, LootPieceState.AtPlace);
         Returned?.Invoke(origin);
     }
 
@@ -207,13 +241,16 @@ public sealed class LootBook
     {
         foreach (var id in _order.ToList()) { Forget(id); _entities.Despawn(id, WorldDespawnReason.Removed); }
         Registry.Reset();
+        Pieces.Clear();
     }
 
     void Forget(ushort id) { _lying.Remove(id); _order.Remove(id); }
 
     void OnDespawned(WorldDespawned d)
     {
-        if (_lying.ContainsKey(d.Id)) Forget(d.Id); // the world cleared it (a round reset): nothing to return, the sources reset themselves
+        if (!_lying.TryGetValue(d.Id, out var l)) return;
+        Forget(d.Id); // the world cleared it (a round reset): nothing to return, the sources reset themselves
+        Pieces.Forget(l.Origin);
     }
 
     static float Flat(Vector3 a, Vector3 b)
@@ -223,6 +260,9 @@ public sealed class LootBook
     }
 }
 
+/// <summary>Where one hold of the use key on lying Loot is (<see cref="LootReturnHold"/>): nothing counted, counting toward the return, or spent (done or interrupted) and waiting for the key to be released.</summary>
+public enum LootHoldState : byte { Idle, Holding, Spent }
+
 /// <summary>
 /// A player's hold of the use key on lying Loot, to send it back (<see cref="LootConfig.ReturnSeconds"/>): counts while the key is held within reach of the same Loot; leaving its reach, switching to other
 /// Loot or releasing the key starts it over; <see cref="Interrupt"/> (a hit taken) ends the hold and it needs a new press. Completes once per hold. The server counts it from the inputs; the client
@@ -230,26 +270,48 @@ public sealed class LootBook
 /// </summary>
 public struct LootReturnHold
 {
+    public static readonly StateMachineSpec<LootHoldState> Spec = StateMachineSpec<LootHoldState>
+        .Define("Loot.ReturnHold", "One hold of the use key on lying Loot to send it back: idle, counting in reach, or spent (done, or interrupted by a hit) until the key is released.", LootHoldState.Idle)
+        .Allow(LootHoldState.Idle, LootHoldState.Holding, LootHoldState.Spent)
+        .Allow(LootHoldState.Holding, LootHoldState.Idle, LootHoldState.Spent)
+        .Allow(LootHoldState.Spent, LootHoldState.Idle)
+        .Note(LootHoldState.Idle, "Key up, or held with no Loot in reach (Held and Target are 0).")
+        .Note(LootHoldState.Holding, "Key held within reach of Loot: Held counts up on Target; other Loot or leaving reach starts it over. Completes once Held reaches the return seconds.")
+        .Note(LootHoldState.Spent, "Completed (the return fires once) or interrupted by a hit (also with the key up: the press of that same input counts for nothing): nothing more until the key is released.")
+        .Build();
+
+    LootHoldState _state;
+
     public double Held { get; private set; }
     /// <summary>The Loot (entity id) the hold counts on, or 0.</summary>
     public ushort Target { get; private set; }
-    bool _spent;   // completed or interrupted: nothing more until the key is released
+    /// <summary>The state of the hold (a struct cannot own a <see cref="StateMachine{TState}"/> and stay a plain value, so it checks its own edges).</summary>
+    public readonly LootHoldState State => _state;
 
     /// <summary>One input. <paramref name="inReach"/> is the Loot within reach now, or null. True on the tick the hold completes (act once).</summary>
     public bool Tick(bool use, ushort? inReach, double dt, double seconds)
     {
-        if (!use) { Held = 0; Target = 0; _spent = false; return false; }
-        if (_spent) return false;
-        if (inReach is not { } id) { Held = 0; Target = 0; return false; }
+        if (!use) { Held = 0; Target = 0; Go(LootHoldState.Idle); return false; }
+        if (_state == LootHoldState.Spent) return false;
+        if (inReach is not { } id) { Held = 0; Target = 0; Go(LootHoldState.Idle); return false; }
+        Go(LootHoldState.Holding);
         if (id != Target) { Target = id; Held = 0; }
         Held += dt;
         if (Held < seconds) return false;
-        _spent = true; Held = 0; Target = 0;
+        Held = 0; Target = 0;
+        Go(LootHoldState.Spent);
         return true;
     }
 
     /// <summary>A hit was taken: the hold is over and the key has to be pressed again.</summary>
-    public void Interrupt() { Held = 0; Target = 0; _spent = true; }
+    public void Interrupt() { Held = 0; Target = 0; Go(LootHoldState.Spent); }
 
-    public void Reset() { Held = 0; Target = 0; _spent = false; }
+    public void Reset() { Held = 0; Target = 0; Go(LootHoldState.Idle); }
+
+    void Go(LootHoldState next)
+    {
+        if (_state == next) return;
+        if (!Spec.Allows(_state, next)) StateMachineDiagnostics.Illegal(Spec.Name, _state.ToString(), next.ToString());
+        _state = next;
+    }
 }

@@ -15,8 +15,7 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class NetServer
 {
-    RozhlasBroadcast? _rozhlasBroadcast;
-    bool _rozhlasTried;
+    LazyInit<RozhlasBroadcast> _rozhlasBroadcast;
 
     /// <summary>The loudspeaker's machine and schedule (null when rozhlas.json cannot be read, which is logged once). Call <see cref="RozhlasBroadcast.AnnouncerKilled"/> when the announcer dies.</summary>
     public RozhlasBroadcast? RozhlasBroadcast => EnsureRozhlas();
@@ -26,8 +25,7 @@ public partial class NetServer
 
     RozhlasBroadcast? EnsureRozhlas()
     {
-        if (_rozhlasBroadcast != null || _rozhlasTried) return _rozhlasBroadcast;
-        _rozhlasTried = true;
+        if (!_rozhlasBroadcast.Begin()) return _rozhlasBroadcast.Value;
         var json = Godot.FileAccess.Open("res://data/rozhlas.json", Godot.FileAccess.ModeFlags.Read)?.GetAsText();
         if (json == null) { GD.PrintErr($"server: rozhlas.json: cannot open ({Godot.FileAccess.GetOpenError()}); no rozhlas schedule"); return null; }
         RozhlasBroadcast r;
@@ -35,7 +33,7 @@ public partial class NetServer
         catch (DataFileException e) { GD.PrintErr($"server: {e.Message}; no rozhlas schedule"); return null; }
         // The loudspeaker exists from here on, and everything below is wired or the server says why not: each part reads its own data file, logs a bad one once and leaves
         // only itself out (no live feed, no workers, no combat sounds), so one broken file never takes the phase messages to the clients with it.
-        _rozhlasBroadcast = r;
+        _rozhlasBroadcast.Ready(r);
         EnsureLiveFeed(); // subscribes to the phase: the feed starts and stops with the mic
         EnsureRozhlasWorkers(r); // the Urad workers sit down for a detour and are gone after it
         EnsureRozhlasSet(); // the set holder (NetServer.RozhlasSet.cs)
@@ -48,7 +46,7 @@ public partial class NetServer
             BroadcastEvent(EventKind.RozhlasState, RozhlasCodec.Encode(m));
             RozhlasPhaseChanged?.Invoke(from, to);
         };
-        return _rozhlasBroadcast;
+        return r;
     }
 
     /// <summary>Once a tick: the hijack clock, the end of a broadcast, and the start of a scheduled one (the server's own wall clock).</summary>
@@ -62,7 +60,7 @@ public partial class NetServer
     /// <summary>Join: the phase as it is, when a detour broadcast is on (Idle is what a client starts with).</summary>
     void SendRozhlasOnJoin(Client c)
     {
-        if (_rozhlasBroadcast is { DetourOpen: true } r) Send(c, new EventMsg((byte)EventKind.RozhlasState, RozhlasCodec.Encode(r.Message)));
+        if (_rozhlasBroadcast.Value is { DetourOpen: true } r) Send(c, new EventMsg((byte)EventKind.RozhlasState, RozhlasCodec.Encode(r.Message)));
         SendRozhlasSetOnJoin(c); // and who is on the mic
     }
 

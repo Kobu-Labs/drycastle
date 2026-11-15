@@ -232,8 +232,26 @@ public sealed partial class GangMember
     /// <summary>Puts what it carries down where it stands and looks for something else.</summary>
     void DropHere()
     {
-        if (CarriedOrigin is { } piece) Work!.Drop(piece, Position);
+        PutDownCarried(Position);
+        EnterSeek();
+    }
+
+    /// <summary>What it carries lies at <paramref name="at"/> (a kind that does not lie goes back at once); its hands are empty.</summary>
+    void PutDownCarried(Vector3 at)
+    {
+        if (CarriedOrigin is { } piece) Work?.Drop(piece, at);
         Carried = 0; CarriedId = 0;
+    }
+
+    /// <summary>
+    /// A hit that did not kill it (<see cref="GangConfig.HitDropsLoot"/>): a Thief hauling, loading, climbing down or hopping out with Loot drops it where it stands (on the ground, at the base of a climb, outside
+    /// the fence of a garden) and looks for work again. Free hands: the Raid's aggro (the hit started it) then sends it at the player. Nothing for a member that boards or flees, or that carries nothing.
+    /// </summary>
+    void DropOnHit()
+    {
+        if (!_d.HitDropsLoot || Work == null || CarriedOrigin == null || State is not (GangMemberState.Haul or GangMemberState.Load or GangMemberState.ClimbDown or GangMemberState.HopOut)) return;
+        LeaveAloft(); // down at the base / out over the fence at once (no time to do it by the book)
+        PutDownCarried(Position);
         EnterSeek();
     }
 

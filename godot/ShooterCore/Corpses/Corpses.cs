@@ -330,19 +330,30 @@ public static class CorpseCodec
     }
 }
 
+/// <summary>Where a <see cref="ThrownBody"/> is: at rest, or in flight.</summary>
+public enum BodyFlightState : byte { Grounded, Airborne }
+
 /// <summary>
 /// A body in flight (the ragdoll): thrown with a velocity, falls under gravity, stops against walls and lands. Used by corpses and by
 /// target dummies. <see cref="Fly"/> is stepped by the server with a world ray cast; nothing here knows the physics engine.
 /// </summary>
 public sealed class ThrownBody
 {
-    float _flight;
+    public static readonly StateMachineSpec<BodyFlightState> Spec = StateMachineSpec<BodyFlightState>
+        .Define("Corpse.Flight", "A thrown body (corpse or target dummy): at rest on the ground, or airborne after a launch until it lands or the flight cap runs out.", BodyFlightState.Grounded)
+        .Allow(BodyFlightState.Grounded, BodyFlightState.Airborne)
+        .Allow(BodyFlightState.Airborne, BodyFlightState.Grounded)
+        .Note(BodyFlightState.Grounded, "At rest. A launch (a push that is not zero) throws it; a dummy standing up again (Reset) comes back here.")
+        .Note(BodyFlightState.Airborne, "Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens. A new launch while airborne restarts the count.")
+        .Build();
+
+    readonly StateMachine<BodyFlightState> _fsm = new(Spec);
 
     public ThrownBody(Vector3 position) => Position = position;
 
     public Vector3 Position { get; private set; }
     public Vector3 Velocity { get; private set; }
-    public bool Airborne { get; private set; }
+    public bool Airborne => _fsm.Is(BodyFlightState.Airborne);
 
     /// <summary>Throws the body with <paramref name="velocity"/> (m/s), capped at <see cref="CorpseRules.MaxThrowSpeed"/>. A zero push does nothing.</summary>
     public void Launch(Vector3 velocity)
@@ -350,8 +361,8 @@ public sealed class ThrownBody
         var v = velocity.Length() > CorpseRules.MaxThrowSpeed ? Vector3.Normalize(velocity) * CorpseRules.MaxThrowSpeed : velocity;
         if (v.LengthSquared() < 1e-4f) return;
         Velocity = v;
-        Airborne = true;
-        _flight = 0;
+        _fsm.Enter(BodyFlightState.Airborne);
+        _fsm.Restart(); // a re-launch in flight starts the flight time over too
         Position += Vector3.UnitY * 0.05f; // clear of the floor it stands on
     }
 
@@ -360,7 +371,7 @@ public sealed class ThrownBody
     {
         Position = position;
         Velocity = Vector3.Zero;
-        Airborne = false;
+        _fsm.Enter(BodyFlightState.Grounded);
     }
 
     /// <summary>
@@ -372,7 +383,7 @@ public sealed class ThrownBody
     public void Fly(float dt, Func<Vector3, Vector3, float, float?> cast)
     {
         if (!Airborne) return;
-        _flight += dt;
+        _fsm.Tick(dt); // Elapsed is the flight time: the same float running sum as before
         var v = Velocity;
         v.Y -= CorpseRules.Gravity * dt;
         var p = Position;
@@ -401,13 +412,13 @@ public sealed class ThrownBody
         }
         Position = p;
         Velocity = v;
-        if (_flight >= CorpseRules.MaxFlightSeconds) Land(p);
+        if (_fsm.Elapsed >= CorpseRules.MaxFlightSeconds) Land(p);
     }
 
     void Land(Vector3 at)
     {
         Position = at;
         Velocity = Vector3.Zero;
-        Airborne = false;
+        _fsm.Enter(BodyFlightState.Grounded);
     }
 }

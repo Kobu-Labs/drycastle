@@ -30,11 +30,17 @@ public partial class NetClient
                 _hud.SetUavSeconds(p.SecondsLeft);
                 break;
             case EventKind.StreakEnded when KillstreakEvents.DecodeEnded(payload) is { } e && e.StreakId == UavStreak.StreakId:
-                _uavEndsAt = 0;
-                _hud.Minimap.ClearEnemyPings();
-                _hud.SetUavSeconds(0);
+                UavEnded();
                 break;
         }
+    }
+
+    /// <summary>The owner's UAV is over (StreakEnded, or the owner died): no countdown, no pings.</summary>
+    void UavEnded()
+    {
+        _uavEndsAt = 0;
+        _hud?.Minimap.ClearEnemyPings();
+        _hud?.SetUavSeconds(0);
     }
 
     /// <summary>Per frame: counts the HUD's UAV countdown down between pulses (the label changes once a second at most).</summary>

@@ -23,6 +23,7 @@ public class RaidVanTests
     {
         public int StillToSpawn { get; set; }
         public int Afoot { get; set; }
+        public int Inside { get; set; }
     }
 
     static ThievesFile Cfg(Action<ThievesFile>? tune = null)
@@ -35,6 +36,25 @@ public class RaidVanTests
     /// <summary>A 120 m road east along z = 0: the van starts at x = -20 and stops at x = 100.</summary>
     static RoadPath InRoad() => new(new[] { new Vector2(-20, 0), new Vector2(100, 0) });
     static RoadPath OutRoad() => new(new[] { new Vector2(100, 0), new Vector2(400, 0) });
+
+    [Fact]
+    public void Serialize_carries_the_crew_inside_and_none_in_a_wreck()
+    {
+        var van = Van();
+        van.Crew = new FakeCrew { Inside = 8 };
+        Assert.Equal(8, RaidVanRules.InsideOf(van.Serialize().Owner));
+        Assert.Equal(0, RaidVanRules.InsideOf(Van().Serialize().Owner)); // no crew set: nobody sits inside
+    }
+
+    [Fact]
+    public void Shipped_van_seats_only_the_driver_and_the_seat_next_to_it()
+    {
+        var seats = Shipped.Van.View.Seats;
+        Assert.Equal(2, seats.Count);
+        Assert.Equal(seats[0].Z, seats[1].Z, 0.01f); // side by side in the cab
+        Assert.True(seats[0].X * seats[1].X < 0);    // one each side of the middle
+        Assert.True(seats.Count <= RaidVanRules.MaxInside);
+    }
 
     static RaidVan Van(VanConfig? cfg = null, FakeWorld? world = null, RoadPath? route = null, int slot = 0) =>
         new(cfg ?? Shipped.Van, world, route ?? InRoad(), new Vector3(-20, 0, 0), -MathF.PI / 2, slot, 1, 5) { Exit = OutRoad() };
@@ -101,7 +121,10 @@ public class RaidVanTests
             var hp = RaidVanRules.PackHp(load, stage);
             Assert.Equal((load, stage), (RaidVanRules.LoadOf(hp), RaidVanRules.StageOf(hp)));
         }
-        Assert.Equal(0.5f, RaidVanRules.DoorOf(RaidVanRules.PackOwner(0.5f, false)), 0.001f);
+        Assert.Equal(0.5f, RaidVanRules.DoorOf(RaidVanRules.PackOwner(0.5f, false)), 0.01f);
+        var packed = RaidVanRules.PackOwner(1f, true, 31, 9);
+        Assert.Equal((1f, true, 31, 9), (RaidVanRules.DoorOf(packed), RaidVanRules.LeftOf(packed), RaidVanRules.SongOf(packed), RaidVanRules.InsideOf(packed)));
+        Assert.Equal(RaidVanRules.MaxInside, RaidVanRules.InsideOf(RaidVanRules.PackOwner(0f, false, 0, 99)));
         Assert.True(RaidVanRules.LeftOf(RaidVanRules.PackOwner(1f, true)));
         Assert.False(RaidVanRules.LeftOf(RaidVanRules.PackOwner(1f, false)));
         Assert.Equal(RaidVanState.Parked, RaidVanRules.StateOf(200)); // a state this build does not know stands

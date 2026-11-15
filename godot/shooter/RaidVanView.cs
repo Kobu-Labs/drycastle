@@ -12,16 +12,18 @@ namespace Drycastle.Shooter;
 /// </summary>
 public sealed partial class RaidVanView : Node3D
 {
-    const float WheelRadius = 0.42f, WheelWidth = 0.3f, DoorLengthM = 1.15f, DoorSlideM = 1.3f, DoorLiftOutM = 0.09f;
+    const float ModelWheelRadius = 0.33f, WheelRadius = 0.42f, WheelWidth = 0.3f, DoorLengthM = 1.15f, DoorSlideM = 1.3f, DoorLiftOutM = 0.09f;
 
     readonly VanConfig _cfg;
     readonly List<(MeshInstance3D Mesh, StandardMaterial3D Own, bool Body, Color Base)> _parts = new();
     readonly List<Node3D> _wheels = new();
+    readonly List<Node3D> _modelWheels = new();   // the pack's wheels: they turn about their own axle
     readonly Node3D _pivot = new() { Name = "Pivot" };   // canted when wrecked
     MeshInstance3D? _door;
     StandardMaterial3D _wreck = null!;
     Node3D? _holder, _modelDoor;      // the pack's van (turned to face -Z, mirrored for a left door) and its sliding door node
     StandardMaterial3D? _modelPaint;  // its paint: the atlas, tinted by damage and by the wreck
+    readonly List<GangMemberView> _crew = new();
     int _side = 1, _stage;
     bool _wrecked;
     float _doorOpen;
@@ -53,11 +55,16 @@ public sealed partial class RaidVanView : Node3D
         _pivot.AddChild(_holder);
         _modelDoor = v.DoorNode == "" ? null : model.FindChild(v.DoorNode, true, false) as Node3D;
         var atlas = model.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>().Select(m => m.MaterialOverride).OfType<StandardMaterial3D>().FirstOrDefault();
-        if (atlas?.Duplicate() is StandardMaterial3D own)
+        foreach (var body in model.FindChildren("*", "CollisionObject3D", true, false).OfType<CollisionObject3D>()) body.Free(); // the pack's own collider: the van's solid box is the server's, and a second one would catch the player
+        var glass = new StandardMaterial3D { AlbedoColor = new Color(0.30f, 0.38f, 0.42f, 0.28f), Transparency = BaseMaterial3D.TransparencyEnum.Alpha, Roughness = 0.08f, Metallic = 0.3f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
+        var own = atlas?.Duplicate() as StandardMaterial3D;
+        if (own != null) _modelPaint = own; // this van's own copy: its tint does not touch the others
+        foreach (var m in model.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>())
         {
-            _modelPaint = own; // this van's own copy: its tint does not touch the others
-            foreach (var m in model.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>()) m.MaterialOverride = own;
+            if (m.Name.ToString().Contains("Glass", StringComparison.OrdinalIgnoreCase)) m.MaterialOverride = glass; // see-through: the crew in the cab shows
+            else if (own != null) m.MaterialOverride = own;
         }
+        foreach (var w in model.FindChildren("SM_Veh_Van_Wheel_*", "Node3D", true, false).OfType<Node3D>()) _modelWheels.Add(w);
         PlaceModel();
         return true;
     }
@@ -139,6 +146,37 @@ public sealed partial class RaidVanView : Node3D
             if (isBody) own.AlbedoColor = new Color(baseColour.R * k, baseColour.G * k, baseColour.B * k);
     }
 
+    /// <summary>
+    /// Seats <paramref name="count"/> of the crew in the van (the seats of van.view.seats in order; the data is for a right-door van, a left door mirrors it); more or fewer than before adds or removes the last ones.
+    /// Nobody is drawn when <paramref name="draw"/> is false (the camera is far away) or the van is a wreck.
+    /// </summary>
+    public void SetCrew(ThievesFile data, int count, bool draw, int seed)
+    {
+        var v = _cfg.View;
+        var want = draw && !_wrecked ? Math.Min(count, v.Seats.Count) : 0;
+        if (want == _crew.Count && _crewSide == _side) return;
+        if (_crewSide != _side) { Clear(); _crewSide = _side; }
+        while (_crew.Count > want) { _crew[^1].QueueFree(); _crew.RemoveAt(_crew.Count - 1); }
+        while (_crew.Count < want)
+        {
+            var seat = v.Seats[_crew.Count];
+            var member = GangMemberView.Make(data, GangMemberKind.Thief, (ushort)(seed * 7 + _crew.Count * 3));
+            member.Position = new Vector3(seat.X * _side, v.SeatFloorM, seat.Z);
+            member.RotationDegrees = new Vector3(0, seat.YawDeg * _side, 0);
+            _pivot.AddChild(member);
+            member.Sit(v.SeatPelvisM);
+            _crew.Add(member);
+        }
+    }
+
+    int _crewSide = 1;
+
+    void Clear()
+    {
+        foreach (var m in _crew) m.QueueFree();
+        _crew.Clear();
+    }
+
     void PlaceDoor()
     {
         if (_door == null) return; // the pack's van moves its own door (PlaceModel)
@@ -155,5 +193,7 @@ public sealed partial class RaidVanView : Node3D
     {
         var a = metres / WheelRadius;
         foreach (var w in _wheels) w.RotateX(-a);
+        var m = metres / ModelWheelRadius;
+        foreach (var w in _modelWheels) w.RotateX(m); // the model faces +Z and is turned about Y to face -Z: its X axis is the view's -X
     }
 }

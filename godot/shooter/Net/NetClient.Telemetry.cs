@@ -26,7 +26,7 @@ public partial class NetClient
     /// <summary>Every frame: frame-time stats, and once a second the line is written.</summary>
     void TelemetryFrame(double delta)
     {
-        if (Bot || _done || !_welcomed) return;
+        if (Bot || LinkEnded || !_welcomed) return;
         if (_tlFile == null && !TelemetryOpen()) return;
         _tlFrames++;
         var ms = delta * 1000;

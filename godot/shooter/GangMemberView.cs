@@ -110,6 +110,17 @@ public sealed partial class GangMemberView : Node3D
         _pivot.AddChild(nose);
     }
 
+    /// <summary>
+    /// Sits the body down (a crew member in the van): the pack has no sitting clip, so the pelvis drops to <paramref name="pelvisM"/> above the feet and the legs bend (<see cref="SitPose"/>) over the idle clip.
+    /// A capsule is squashed to about two thirds of its height.
+    /// </summary>
+    public void Sit(float pelvisM)
+    {
+        if (_skeleton != null) _skeleton.AddChild(new SitPose { Name = "Sit", PelvisM = pelvisM });
+        else _pivot.Scale = new Vector3(_pivot.Scale.X, _pivot.Scale.Y * 0.65f, _pivot.Scale.Z);
+        Show(GangMemberState.Idle, false);
+    }
+
     /// <summary>Shows what the member is doing. <paramref name="moving"/> says whether it is going somewhere (stands, guards and walks share two clips). A body first seen dead lies at once.</summary>
     public void Show(GangMemberState state, bool moving)
     {

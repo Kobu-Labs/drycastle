@@ -28,6 +28,7 @@ public partial class NetClient
     {
         if (streakId != AttackHelicopterStreak.StreakId) return;
         _heliActive = false;
+        _heliKills = 0;
         _gunDirty = true;
     }
 

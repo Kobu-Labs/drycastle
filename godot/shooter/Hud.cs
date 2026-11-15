@@ -75,8 +75,17 @@ public partial class Hud : CanvasLayer
     // scoreboard
     Control _board = null!;
     Label _boardTitle = null!, _boardFoot = null!;
-    readonly PanelContainer[] _row = new PanelContainer[BoardRows];
-    readonly Label[][] _cells = new Label[BoardRows][];
+    /// <summary>One scoreboard table: optional team heading, column header, pre-built rows, empty line.</summary>
+    sealed class BoardCol
+    {
+        public VBoxContainer Root = null!;
+        public Label Head = null!, Empty = null!;
+        public readonly PanelContainer[] Row = new PanelContainer[BoardRows];
+        public readonly Label[][] Cells = new Label[BoardRows][];
+    }
+    /// <summary>Left table (everyone in free-for-all, own team in team deathmatch), right table (other team), and players without a team below.</summary>
+    readonly BoardCol[] _cols = { new(), new(), new() };
+    const float BoardWidth = 800, BoardWidthTeams = 2 * 640 + 2 * ShooterTheme.Space;
     IReadOnlyList<ScoreRow> _rows = Array.Empty<ScoreRow>();
     IReadOnlyList<ushort> _winners = Array.Empty<ushort>();
     bool _boardShown, _boardDirty = true;
@@ -141,7 +150,7 @@ public partial class Hud : CanvasLayer
         _rozhlasHintStale = true; // the talk key may have been rebound
         _seatsDef = null; // the seat hint names the (maybe rebound) keys: rebuilt on the next frame
         foreach (var tri in _indTri) tri.Color = ShooterTheme.Danger; // read at build time otherwise; the palette may have switched
-        if (_crossRoot != null) _crossRoot.Visible = Settings.ShowCrosshair && !_crossCovered;
+        ApplyCrosshairVisibility();
     }
 
     bool _crossCovered;
@@ -150,7 +159,14 @@ public partial class Hud : CanvasLayer
     {
         if (_crossCovered == on) return;
         _crossCovered = on;
-        if (_crossRoot != null) _crossRoot.Visible = Settings.ShowCrosshair && !on && !(_scope?.Visible ?? false);
+        ApplyCrosshairVisibility();
+    }
+
+    /// <summary>The one writer of the crosshair's Visible: the setting, the cover, the scope, the binoculars and the pounce all go through <see cref="CrosshairRules"/>.</summary>
+    void ApplyCrosshairVisibility()
+    {
+        if (_crossRoot == null) return;
+        _crossRoot.Visible = CrosshairRules.Visible(Settings.ShowCrosshair, _crossCovered, _scope?.Visible ?? false, _bino?.Visible ?? false, _pounceHide);
     }
 
     public override void _ExitTree() => GameSettings.Changed -= OnSettingsChanged;
@@ -184,7 +200,7 @@ public partial class Hud : CanvasLayer
     {
         var vp = GetViewport().GetVisibleRect().Size;
         if (vp == _lastSize && Mathf.IsEqualApprox(_root.Scale.X, UiFactor())) return;
-        _lastSize = vp;
+        _lastSize = vp; _boardDirty = true; // the board's width is capped to the screen
         var s = UiFactor();
         _root.Scale = new Vector2(s, s);
         _root.Position = Vector2.Zero;
@@ -348,14 +364,26 @@ public partial class Hud : CanvasLayer
         var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         _board.AddChild(v);
         _boardTitle = L("", "HudBig", HorizontalAlignment.Center); _boardTitle.ClipText = true; v.AddChild(_boardTitle);
-        v.AddChild(BoardRow(null, out var header, true));
-        _ = header;
+        var tables = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        tables.AddThemeConstantOverride("separation", 2 * ShooterTheme.Space);
+        v.AddChild(tables);
+        tables.AddChild(BoardTable(_cols[0])); tables.AddChild(BoardTable(_cols[1]));
+        v.AddChild(BoardTable(_cols[2]));
+        _boardFoot = L("", "HudSmall", HorizontalAlignment.Center); v.AddChild(_boardFoot);
+    }
+
+    VBoxContainer BoardTable(BoardCol col)
+    {
+        var v = col.Root = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        col.Head = L("", "HudHead", HorizontalAlignment.Center); col.Head.ClipText = true; v.AddChild(col.Head);
+        v.AddChild(BoardRow(null, out _, true));
         for (var i = 0; i < BoardRows; i++)
         {
-            _row[i] = BoardRow(i, out _cells[i], false);
-            v.AddChild(_row[i]);
+            col.Row[i] = BoardRow(i, out col.Cells[i], false);
+            v.AddChild(col.Row[i]);
         }
-        _boardFoot = L("", "HudSmall", HorizontalAlignment.Center); v.AddChild(_boardFoot);
+        col.Empty = L(Strings.T("score.empty"), "HudDim", HorizontalAlignment.Center); v.AddChild(col.Empty);
+        return v;
     }
 
     PanelContainer BoardRow(int? index, out Label[] cells, bool header)
@@ -756,7 +784,7 @@ public partial class Hud : CanvasLayer
             return;
         }
         var scoped = Scoped?.Invoke() ?? false;
-        if (_scope.Visible != scoped) { _scope.Visible = scoped; _scope.QueueRedraw(); _crossRoot.Visible = Settings.ShowCrosshair && !scoped && !_crossCovered; }
+        if (_scope.Visible != scoped) { _scope.Visible = scoped; _scope.QueueRedraw(); ApplyCrosshairVisibility(); }
         UpdateScope(scoped);
         if (scoped) return;
         var alpha = 1f - Math.Clamp(Aim?.Invoke() ?? 0f, 0f, 1f);
@@ -793,8 +821,35 @@ public partial class Hud : CanvasLayer
         }
         else Set(_boardTitle, Strings.T("score.title"));
         Set(_boardFoot, Strings.T(ending ? "score.hint.next" : "score.hint.hold"));
-        var sorted = TeamMode ? HudLogic.SortTeams(_rows, _team!.ScoreA, _team.ScoreB) : HudLogic.Sort(_rows);
-        // keep the local row visible even when the room exceeds the pre-built rows
+        // two tables side by side in team deathmatch: own team left, so the sides never swap with the lead
+        var w = Math.Min(TeamMode ? BoardWidthTeams : BoardWidth, _root.Size.X - 2 * ShooterTheme.Margin);
+        _board.OffsetLeft = -w / 2; _board.OffsetRight = w / 2;
+        if (!TeamMode)
+        {
+            FillTable(_cols[0], HudLogic.Sort(_rows), Teams.None);
+            _cols[1].Root.Visible = _cols[2].Root.Visible = false;
+            return;
+        }
+        var split = HudLogic.SplitTeams(_rows, MyTeam);
+        FillTable(_cols[0], split.Left, split.LeftTeam);
+        FillTable(_cols[1], split.Right, Teams.Other(split.LeftTeam));
+        _cols[2].Root.Visible = split.NoTeam.Count > 0;
+        if (split.NoTeam.Count > 0) FillTable(_cols[2], split.NoTeam, Teams.None);
+    }
+
+    /// <summary>Fills one table with already sorted rows; <paramref name="team"/> names its heading (free-for-all has none).</summary>
+    void FillTable(BoardCol col, List<ScoreRow> sorted, byte team)
+    {
+        col.Root.Visible = true;
+        col.Head.Visible = TeamMode;
+        if (TeamMode)
+        {
+            var key = HudLogic.RelationOf(MyTeam, team) switch { HudLogic.Relation.Friend => "score.team.mine", HudLogic.Relation.Enemy => "score.team.enemy", _ => "score.team.other" };
+            Set(col.Head, team == Teams.None ? Strings.T("score.team.none") : Strings.F(key, Teams.Tag(team), team == Teams.A ? _team!.ScoreA : _team!.ScoreB));
+            Tint(col.Head, RelationColor(team));
+        }
+        col.Empty.Visible = sorted.Count == 0;
+        // keep the local row visible even when the table exceeds the pre-built rows
         if (sorted.Count > BoardRows)
         {
             var me = sorted.FindIndex(r => r.Id == MyId);
@@ -802,15 +857,15 @@ public partial class Hud : CanvasLayer
         }
         for (var i = 0; i < BoardRows; i++)
         {
-            if (i >= sorted.Count) { _row[i].Visible = false; continue; }
+            if (i >= sorted.Count) { col.Row[i].Visible = false; continue; }
             var r = sorted[i];
             var mine = r.Id == MyId;
-            _row[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
-            var c = _cells[i];
-            Set(c[0], Tagged(mine ? Strings.F("score.you", r.Name) : r.Name, r.Team));
+            col.Row[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
+            var c = col.Cells[i];
+            Set(c[0], mine ? Strings.F("score.you", r.Name) : r.Name); // the team is the table's heading
             Tint(c[0], RelationColor(r.Team));
             Set(c[1], r.Kills.ToString()); Set(c[2], r.Deaths.ToString()); Set(c[3], Strings.F("score.ping", r.Ping));
-            _row[i].Visible = true;
+            col.Row[i].Visible = true;
         }
     }
 }

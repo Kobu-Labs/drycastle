@@ -73,4 +73,28 @@ public class RenderClockTests
         // first sample sets the offset outright: at its arrival the drawn tick is the tick minus the delay
         Assert.Equal(100 - Delay, clock.RenderTick(2.0, Delay), 6);
     }
+
+    [Fact]
+    public void UnsyncedReturnsTheRawTargetAndRecordsNothingThenTrackingAndHoldingEpisodes()
+    {
+        var clock = new RenderClock();
+        Assert.Equal(RenderClockState.Unsynced, clock.State);
+        Assert.Equal(5.0 * Wire.TickRate - Delay, clock.RenderTick(5.0, Delay), 9); // offset 0, raw target
+        Assert.Equal(RenderClockState.Unsynced, clock.State);
+        Assert.Equal(0, clock.HoldEvents);
+
+        clock.OnSnapshot(100, 2.0);
+        Assert.Equal(RenderClockState.Tracking, clock.State);
+        var a = clock.RenderTick(2.0, Delay);
+        var b = clock.RenderTick(2.1, Delay);
+        Assert.True(b > a);
+        clock.OnSnapshot(100, 2.1 + 1.0);  // a very late arrival: the estimate steps back
+        Assert.Equal(b, clock.RenderTick(2.1, Delay), 9);
+        Assert.Equal(RenderClockState.Holding, clock.State);
+        Assert.Equal(b, clock.RenderTick(2.1, Delay), 9);
+        Assert.Equal(1, clock.HoldEvents);  // one episode, however long
+        Assert.True(clock.MaxHold > 0);
+        Assert.True(clock.RenderTick(10.0, Delay) > b);
+        Assert.Equal(RenderClockState.Tracking, clock.State);
+    }
 }
