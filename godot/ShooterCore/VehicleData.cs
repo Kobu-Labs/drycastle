@@ -7,7 +7,6 @@ public class VehiclesFile : IVersioned
     public float RunOverMinSpeed { get; set; } = 8;
     public float RunOverDamagePerSpeed { get; set; } = 10;
     public float RunOverMaxDamage { get; set; } = 100;
-    public float AbandonReturnTime { get; set; } = 30;
     /// <summary>Remaining-HP fractions at which smoke stage 1, 2 and 3 start (descending); at 0 HP the vehicle explodes.</summary>
     public List<float> DamageStages { get; set; } = new() { 0.66f, 0.33f, 0.12f };
     /// <summary>Seconds a destroyed vehicle stays gone before it returns to its origin with full HP.</summary>
