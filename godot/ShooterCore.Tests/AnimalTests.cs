@@ -452,6 +452,79 @@ public class AnimalTests
     }
 
     [Fact]
+    public void RunOverItIsThrownLiesAndGetsUpRunning()
+    {
+        var a = Make(new FakeWorld(), Small("\"knockdown_seconds\":2,"));
+        Assert.True(a.Throw(new Vector3(0, 5, -10), new Vector3(0, 0, 5)));
+        a.OnDamage(a.Def.Hp * Shipped.RunOverHpFraction, 7);
+        Assert.Equal(AnimalState.Thrown, a.State); // the hit does not send it running: it is in the air
+        Assert.Equal(50, a.Hp);
+        a.Tick(Dt);
+        Assert.True(a.Position.Y > 0);
+        Run(a, 1f);
+        Assert.Equal(AnimalState.Down, a.State);
+        Assert.Equal(0, a.Position.Y);
+        Assert.True(a.Position.Z < -3, $"thrown ahead of the car, z {a.Position.Z}");
+        var landed = a.Position;
+        Run(a, 1f);
+        Assert.Equal(landed, a.Position); // lies still
+        Run(a, 1.5f);
+        Assert.Equal(AnimalState.Flee, a.State);
+        Run(a, 1f);
+        Assert.True(a.Position.Z < landed.Z - 3, "runs on, away from where the car was");
+    }
+
+    [Fact]
+    public void RunningOverOneHerdMemberDoesNotCutShortTheTumbleOfAnother()
+    {
+        var w = new FakeWorld();
+        var a = Make(w); var b = Make(w, seed: 2);
+        var herd = new Herd(Vector3.Zero, 5, 20, 10, 20, 1);
+        herd.Add(a); herd.Add(b);
+        a.Throw(new Vector3(0, 5, -10), Vector3.Zero);
+        b.Throw(new Vector3(0, 5, -10), Vector3.Zero); // alarms the herd: a is in the air
+        Assert.Equal(AnimalState.Thrown, a.State);
+        Run(a, 1.2f);
+        Assert.Equal(AnimalState.Down, a.State);
+        b.Throw(new Vector3(0, 5, -10), Vector3.Zero);
+        Assert.Equal(AnimalState.Down, a.State); // lying: not startled up either
+    }
+
+    [Fact]
+    public void TheSecondRunOverKillsAndTheBodyKeepsTheArc()
+    {
+        var a = Make(new FakeWorld());
+        var half = a.Def.Hp * Shipped.RunOverHpFraction;
+        a.Throw(new Vector3(0, 5, -10), Vector3.Zero); a.OnDamage(half, 7);
+        Run(a, 1.2f);
+        Assert.Equal(AnimalState.Down, a.State);
+        ushort killer = 0;
+        a.Died += (_, by) => killer = by;
+        a.Throw(new Vector3(0, 5, -10), Vector3.Zero); a.OnDamage(half, 7); // run over again while it lies
+        Assert.Equal(AnimalState.Dead, a.State);
+        Assert.Equal(7, killer);
+        var at = a.Position;
+        a.Tick(Dt);
+        Assert.True(a.Position.Y > 0 && a.Position.Z < at.Z, "the body flies on");
+        Run(a, 2f);
+        Assert.Equal(0, a.Position.Y);
+        var lies = a.Position;
+        Run(a, 1f);
+        Assert.Equal(lies, a.Position);
+        Assert.False(a.Throw(new Vector3(0, 5, -10), Vector3.Zero)); // a dead one is not thrown again
+    }
+
+    [Fact]
+    public void ThrownOverNoGroundItDropsWhereTheGroundEnds()
+    {
+        var a = Make(new FakeWorld { Blocked = (_, z) => z < -2 });
+        a.Throw(new Vector3(0, 5, -10), Vector3.Zero); a.OnDamage(1, 7);
+        Run(a, 2f);
+        Assert.Equal(AnimalState.Down, a.State);
+        Assert.True(a.Position.Z >= -2 && a.Position.Y == 0, $"landed at {a.Position}");
+    }
+
+    [Fact]
     public void ItWandersButStaysNearHome()
     {
         var a = Make(new FakeWorld(), Small("\"idle_min_seconds\":0.5,\"idle_max_seconds\":1,\"eat_chance\":0.2,"));

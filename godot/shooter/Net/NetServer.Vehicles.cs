@@ -577,6 +577,7 @@ public partial class NetServer
         if (dmg <= 0) return;
         RunOverTargets(car, driver, dmg); // target dummies (#148)
         RunOverGang(car, driver); // the Gang members of the Thieves event
+        RunOverWildlife(car, driver); // wild animals: thrown, half their hit points
         var fwd = car.Forward;
         foreach (var t in _byId.Values)
         {

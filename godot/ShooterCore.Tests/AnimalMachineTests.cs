@@ -61,7 +61,7 @@ public class AnimalMachineTests
             seen.Add(a.State);
         }
         // every state this species can be in: Sit and Bark are for the species that opt in (see PetBehaviourTests), Carried for a Thief to cause (PetLootTests)
-        Assert.Equal(Enum.GetValues<AnimalState>().Where(s => s is not (AnimalState.Sit or AnimalState.Bark or AnimalState.Carried)).Order(), seen.Order()); // Carried is the Thieves event's (PetLootTests)
+        Assert.Equal(Enum.GetValues<AnimalState>().Where(s => s is not (AnimalState.Sit or AnimalState.Bark or AnimalState.Carried or AnimalState.Thrown or AnimalState.Down)).Order(), seen.Order()); // Carried is the Thieves event's (PetLootTests); Thrown and Down a vehicle's (AnimalTests)
     }
 
     [Fact]
@@ -81,8 +81,8 @@ public class AnimalMachineTests
     }
 
     [Theory]
-    [InlineData(1, 14334401504893215805UL)]
-    [InlineData(2, 16049455395048474342UL)]
-    [InlineData(3, 16193455955425877710UL)]
+    [InlineData(1, 13103103472840032317UL)]
+    [InlineData(2, 14513175270788586214UL)]
+    [InlineData(3, 12173215806328178894UL)]
     public void TheTrajectoryOfASeededAnimalIsUnchanged(int seed, ulong golden) => Assert.Equal(golden, Trace(seed));
 }

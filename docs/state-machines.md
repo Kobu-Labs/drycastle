@@ -18,28 +18,40 @@ stateDiagram-v2
     Idle --> Bark
     Idle --> Flee
     Idle --> Carried
+    Idle --> Thrown
     Idle --> Dead
     Eat --> Idle
     Eat --> Flee
     Eat --> Carried
+    Eat --> Thrown
     Eat --> Dead
     Sit --> Idle
     Sit --> Flee
     Sit --> Carried
+    Sit --> Thrown
     Sit --> Dead
     Bark --> Idle
     Bark --> Flee
     Bark --> Carried
+    Bark --> Thrown
     Bark --> Dead
     Walk --> Idle
     Walk --> Flee
     Walk --> Carried
+    Walk --> Thrown
     Walk --> Dead
     Flee --> Idle
     Flee --> Carried
+    Flee --> Thrown
     Flee --> Dead
     Carried --> Idle
     Carried --> Dead
+    Thrown --> Down
+    Thrown --> Dead
+    Down --> Flee
+    Down --> Idle
+    Down --> Thrown
+    Down --> Dead
     Dead --> [*]
 ```
 
@@ -47,10 +59,12 @@ stateDiagram-v2
 - **Eat**: Grazes (clock: eat seconds), then stands.
 - **Walk**: Walks to a wander target (clock: the time budget to arrive, then it gives up and stands).
 - **Flee**: Runs from the threat or the shooter; no clock of its own (calm and alarm timers run beside). Calms down into Idle.
-- **Dead**: Lies for corpse_seconds (the clock's elapsed time), then the entity ends; a one-hit species' entity ends at once. Never left.
+- **Dead**: A body a vehicle threw flies on first. Lies for corpse_seconds (the clock's elapsed time), then the entity ends; a one-hit species' entity ends at once. Never left.
 - **Sit**: Sits for a random while (clock: sit seconds; the client plays sit-down, holds, stands up after), then stands. Species with a sit rule only.
 - **Bark**: Barks once (clock: the bark clip's length), then stands. Species with a bark rule only.
 - **Carried**: A Thief of the Thieves event holds it (no clock: it is moved by the Thief, MoveCarried, and does nothing itself). Let go (Release) it stands; one put down outside its Pen walks home over open ground until it is inside again. Still a hit target: any hit that deals damage kills it.
+- **Thrown**: A vehicle ran it over and it survived (Throw): it flies on the arc the vehicle gave it; no clock. Landing puts it Down. Still a hit target; another vehicle only changes the arc.
+- **Down**: Lies knocked down where it landed (clock: knockdown_seconds), then gets up: Flee from where the vehicle was (a species that does not flee stands). Run over again it is Thrown again.
 
 ## App.Phase
 

@@ -98,6 +98,10 @@ public sealed class AnimalsFile : IVersioned
     public float CorpseSeconds { get; set; } = 30;
     /// <summary>Seconds a shot (and living) animal keeps running from where the shot came from, whoever is near.</summary>
     public float AlarmSeconds { get; set; } = 8;
+    /// <summary>The part of its full hit points a wild animal loses each time a vehicle runs it over (0.5: the second time kills a healthy one).</summary>
+    public float RunOverHpFraction { get; set; } = 0.5f;
+    /// <summary>Seconds an animal a vehicle threw lies where it landed before it gets up.</summary>
+    public float KnockdownSeconds { get; set; } = 2.5f;
     /// <summary>Seconds without a threat in range before a fleeing animal calms down and stops.</summary>
     public float CalmSeconds { get; set; } = 2;
     /// <summary>The largest height change of the ground in one step; a bigger one blocks the animal (a wall, a ditch, water the world refuses).</summary>
@@ -129,6 +133,7 @@ public sealed class AnimalsFile : IVersioned
         const string F = "animals.json";
         if (f.Animals.Count > MaxSpecies) throw new DataFileException($"{F}: at most {MaxSpecies} species");
         if (!(f.CorpseSeconds > 0) || !(f.AlarmSeconds >= 0) || !(f.CalmSeconds >= 0)) throw new DataFileException($"{F}: corpse_seconds must be positive, alarm_seconds and calm_seconds not negative");
+        if (!(f.RunOverHpFraction > 0) || f.RunOverHpFraction > 1 || !(f.KnockdownSeconds >= 0)) throw new DataFileException($"{F}: run_over_hp_fraction must be above 0 and at most 1, knockdown_seconds not negative");
         if (!(f.MaxStepM > 0) || !(f.WanderMinM >= 0)) throw new DataFileException($"{F}: max_step_m must be positive, wander_min_m not negative");
         if (!(f.IdleMinSeconds > 0) || f.IdleMaxSeconds < f.IdleMinSeconds) throw new DataFileException($"{F}: idle_min_seconds must be positive and not above idle_max_seconds");
         if (!(f.EatMinSeconds > 0) || f.EatMaxSeconds < f.EatMinSeconds) throw new DataFileException($"{F}: eat_min_seconds must be positive and not above eat_max_seconds");

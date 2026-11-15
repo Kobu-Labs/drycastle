@@ -8,7 +8,7 @@ namespace Drycastle.Shooter;
 /// Wildlife on the server (GLOSSARY "Wildlife"): wild animals (wire type 50, like pets) that stand in the zones of their species' kind
 /// (ADR 0022), run by a <see cref="WildlifeKeeper"/>. Each round, at its start, the keeper puts the species of <c>wildlife.json</c> at random
 /// candidate points of the map (zone_points.json); no map, no points or an arena mode means no wildlife. A wild animal flees from living players and
-/// moving vehicles, is a hit target under ids of its own (<see cref="WildlifeRules.FirstHitId"/> up) and, like a pet, scores nothing and is not in the kill feed.
+/// moving vehicles, is thrown by a vehicle that runs it over (<see cref="RunOverWildlife"/>), is a hit target under ids of its own (<see cref="WildlifeRules.FirstHitId"/> up) and, like a pet, scores nothing and is not in the kill feed.
 /// </summary>
 public partial class NetServer
 {
@@ -78,6 +78,29 @@ public partial class NetServer
     void WildlifeTick(float dt)
     {
         if (_wildlife != null && _wildlife.Count > 0 && _wildlifeGround != null) _wildlife.Update(dt, _wildlifeGround);
+    }
+
+    readonly List<(ushort HitId, Animal Animal)> _wildRunOver = new();
+
+    /// <summary>
+    /// A vehicle fast enough to hurt (<see cref="RunOverCheck"/>) whose footprint sweeps over a wild animal throws it ahead like a body it ran over and takes
+    /// <c>run_over_hp_fraction</c> of its full hit points: the first time it lands, lies and gets up running, the second kills it (the body keeps the arc).
+    /// The vehicle is not stopped, as by a player. A one-hit species just dies. The driver gets the hit marker; nothing is scored.
+    /// </summary>
+    void RunOverWildlife(ServerCar car, Client driver)
+    {
+        if (_wildlife == null || _wildlife.Count == 0 || _match.Phase != MatchPhase.Running) return;
+        _wildRunOver.Clear();
+        _wildlife.Living(_wildRunOver);
+        foreach (var (hitId, a) in _wildRunOver)
+        {
+            var box = a.HitBox;
+            if (!CarFootprint.Hits(N(car.PrevPos), N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, a.Position, (box[0] + box[2]) / 4)) continue;
+            if (car.HitCooldown.TryGetValue(hitId, out var until) && _elapsed < until) continue;
+            car.HitCooldown[hitId] = _elapsed + RunOverCooldown;
+            a.Throw(CorpseRules.ThrowFromCar(N(car.Forward), car.State.Speed), N(car.GlobalPosition));
+            Deal(driver.Id, SpecialWeapons.Vehicle, hitId, a.Def.Hp * AnimalData.RunOverHpFraction, false, false, KillCause.Roadkill);
+        }
     }
 
     /// <summary>The living wild animals as hit targets, only while damage can apply to them.</summary>

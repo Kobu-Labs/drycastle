@@ -31,9 +31,17 @@ public partial class NetClient
         public bool HitLeft;
         /// <summary>Time (seconds, client clock) until which a hit reaction plays; the state's clip waits for it.</summary>
         public double HitUntil;
+        /// <summary>The ragdoll of a body a vehicle threw: it rolls about its own length (radians) while it flies and settles on a side where it lands.</summary>
+        public float Roll;
+        public bool Tumbling;
+        public Vector3 LastFeet;
+        public bool SeenFeet;
     }
 
     readonly Dictionary<ushort, AnimalView> _animals = new();
+
+    /// <summary>A thrown animal's roll in flight and its settling onto a side (rad/s), and the speed (m/s) above which a dead body is taken to be flying.</summary>
+    const float AnimalRollRate = 9f, AnimalSettleRate = 9f, AnimalFlyingSpeed = 1.5f;
 
     /// <summary>How long a hit reaction may hold back the clip of the state (a gallop must not wait for a long clip).</summary>
     const double AnimalHitReactMaxSeconds = 0.6;
@@ -104,27 +112,66 @@ public partial class NetClient
         if (_animals.Count == 0 || _lastTick == 0) return;
         var rt = RenderTickNow();
         var now = Time.GetTicksMsec() / 1000.0;
+        var dt = (float)GetProcessDeltaTime();
         foreach (var (id, v) in _animals)
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
-            if (e.Buf.At(rt) is { } s)
-            {
-                v.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
-                v.Node.Rotation = new Vector3(0, s.Yaw, 0);
-            }
             var raw = e.State.State;
             var state = AnimalRules.StateOf(raw);
+            if (e.Buf.At(rt) is { } s) PlaceAnimal(v, state, new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z), s.Yaw, dt);
             var toggle = AnimalRules.HitToggled(raw);
             if (toggle != v.Toggle)
             {
                 v.Toggle = toggle;
                 if (state != AnimalState.Dead) PlayAnimalHit(v, now);
             }
+            if (v.Tumbling) { ShowAnimalTumble(v, state); continue; } // thrown by a vehicle: no clip of the state, the body is turned whole
             if (state == AnimalState.Dead) { if (v.Shown != (byte)state) ShowAnimalState(v, state); continue; }
             if (now < v.HitUntil) continue;
             if (v.Shown != (byte)state) ShowAnimalState(v, state); // also after a reaction: Shown is 254 until its clip is over
             v.HitUntil = 0;
         }
+    }
+
+    /// <summary>
+    /// Puts the animal at its feet. One a vehicle threw is a ragdoll (the scripted tumble of the thrown player bodies, for a four-legged one): while it
+    /// flies (state Thrown, or a dead body still moving) it rolls about its own length, turning about its middle; landed (Down, or dead) it settles on the
+    /// nearer side and lies on the ground. When it gets up it is upright again.
+    /// </summary>
+    void PlaceAnimal(AnimalView v, AnimalState state, Vector3 feet, float yaw, float dt)
+    {
+        var speed = v.SeenFeet && dt > 0 ? (feet - v.LastFeet).Length() / dt : 0f;
+        v.LastFeet = feet; v.SeenFeet = true;
+        var flying = state == AnimalState.Thrown || state == AnimalState.Dead && speed > AnimalFlyingSpeed;
+        if (flying) v.Tumbling = true;
+        else if (state is not (AnimalState.Down or AnimalState.Dead)) { v.Tumbling = false; v.Roll = 0; }
+        if (!v.Tumbling)
+        {
+            v.Node.GlobalPosition = feet;
+            v.Node.Rotation = new Vector3(0, yaw, 0);
+            return;
+        }
+        if (flying) v.Roll += AnimalRollRate * dt;
+        else v.Roll = Mathf.MoveToward(v.Roll, Mathf.Round((v.Roll - Mathf.Pi / 2) / Mathf.Pi) * Mathf.Pi + Mathf.Pi / 2, AnimalSettleRate * dt); // on a side, whichever is nearer
+        float halfWidth = v.HitBox.Count == 3 ? v.HitBox[0] / 2 : 0.2f, halfHeight = v.HitBox.Count == 3 ? v.HitBox[1] / 2 : 0.4f;
+        var upright = new Basis(Vector3.Up, yaw);
+        var basis = new Basis(upright * Vector3.Forward, v.Roll) * upright;
+        var middle = halfWidth + (halfHeight - halfWidth) * Mathf.Abs(Mathf.Cos(v.Roll)); // the middle's height: half the body upright, half its width on a side
+        v.Node.GlobalTransform = new Transform3D(basis, feet + Vector3.Up * middle - basis * (Vector3.Up * halfHeight));
+    }
+
+    /// <summary>The clip of a thrown animal: its legs run in the air; landed, the pose it has is held (a dead one in a standing pose: the tumble, not the death clip, lays it down).</summary>
+    static void ShowAnimalTumble(AnimalView v, AnimalState state)
+    {
+        var shown = (byte)(state == AnimalState.Thrown ? 200 : 201); // 200 in the air, 201 lying: never a state's own number, so its clip is due when the tumble is over
+        if (v.Shown == shown) return;
+        var was = v.Shown;
+        v.Shown = shown;
+        v.HitUntil = 0;
+        if (v.Anim == null || v.Clips.Length == 0) return;
+        if (shown == 200) { if (v.Clips[(int)AnimalClip.Run] is { } run) v.Anim.Play(run, 0.05); return; }
+        if (was != 200 && v.Clips[(int)AnimalClip.Idle] is { } idle) { v.Anim.Play(idle, 0.05); v.Anim.Seek(0, true); } // killed by the hit: the death clip had begun
+        v.Anim.Pause();
     }
 
     void PlayAnimalHit(AnimalView v, double now)

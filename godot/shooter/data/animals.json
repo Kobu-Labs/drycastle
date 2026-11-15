@@ -3,6 +3,9 @@
   // Rules every animal follows. Times in seconds, lengths in metres.
   "corpse_seconds": 30,
   "alarm_seconds": 8,
+  // A vehicle that runs a wild animal over takes this part of its full hp and throws it; one that lives lies knockdown_seconds, then gets up and runs.
+  "run_over_hp_fraction": 0.5,
+  "knockdown_seconds": 2.5,
   "calm_seconds": 2,
   "max_step_m": 0.8,
   "wander_min_m": 3,
