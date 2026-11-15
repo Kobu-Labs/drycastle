@@ -306,6 +306,28 @@ public partial class Viewer
             Check(ed.MoveShapeCorner(ShapeKind.Zone, rule.Id, 0, to.Item1, to.Item2) && ed.SaveCount == s0 + 5 && ed.UndoDepth == u0 + 1, $"moving a corner is one save, one undo step: '{ed.StatusMessage}'");
             Check(ed.SelectedZoneId == "Z-0001" && ed.Zone("Z-0001")!.Points.Count == c.Count && ed.ZoneCount(kind) == n0, "the moved copy replaces it: same count, selected");
             Check(ed.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings it back exactly");
+
+            // ---- a selected kind is shown alone; marked zones are deleted together: one confirm, one save, one undo step ----
+            ed.SelectShape(ShapeKind.Zone, null); ed.SelectZoneKind(kind); ed.RefreshNow(); ed.ZoneOverlayNow();
+            Check(ed.ZoneFillAlpha(kind) > 0.5f && ed.ZoneFillAlpha(other) == 0f, $"only the selected kind is drawn: {kind} {ed.ZoneFillAlpha(kind)}, {other} {ed.ZoneFillAlpha(other)}");
+            ed.SetZoneOverlay(false, false); ed.ZoneOverlayNow();
+            Check(ed.ZonesDrawn && !ed.ZoneOverlayShown, "the selected kind stays shown with the overlay off");
+            ed.SetZoneOverlay(true, false);
+            var two = ed.Zones().Where(z => z.Kind == kind).Take(2).Select(z => z.Id).ToList();
+            Check(!ed.ZoneMarkDeleteEnabled && ed.MarkedZoneCount == 0, "nothing marked: the mass delete is disabled");
+            ed.TickShapeRow(two[0], true); if (two.Count > 1) ed.ToggleZoneMark(two[1]); ed.RefreshNow(); ed.ZoneOverlayNow();
+            Check(ed.MarkedZoneCount == two.Count && two.All(ed.ShapeRowMarked) && ed.ZoneMarkDeleteEnabled && ed.ZoneMarkDeleteText.Contains($"{two.Count} marked"), $"a row tick and a map mark both count: '{ed.ZoneMarkDeleteText}'");
+            Check(ed.SegmentCount(EditorMode.OutlineZoneMarked) > 0, "marked zones are outlined on the map");
+            s0 = ed.SaveCount; u0 = ed.UndoDepth;
+            await Key_(Key.Delete, shift: true);
+            Check(ed.ConfirmVisible && ed.ConfirmText.Contains($"{two.Count} marked") && ed.SaveCount == s0, $"Shift+Del asks first and names what goes: '{ed.ConfirmText.Replace('\n', '|')}'");
+            ed.ConfirmAccept(); ed.RefreshNow();
+            Check(ed.SaveCount == s0 + 1 && ed.UndoDepth == u0 + 1 && ed.ZoneCount(kind) == n0 - two.Count && ed.MarkedZoneCount == 0, "the marked zones go in one save, one undo step; the marks are gone");
+            Check(ed.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings them all back exactly");
+            ed.MarkListedZones(); ed.RefreshNow();
+            Check(ed.MarkedZoneCount == n0, $"Mark all marks every zone of the selected kind ({ed.MarkedZoneCount}/{n0})");
+            ed.ClearZoneMarks(); ed.RefreshNow();
+            Check(ed.MarkedZoneCount == 0 && !ed.ZoneMarkDeleteEnabled, "Unmark all clears the marks; nothing was deleted");
         }
 
         Check(_watcher!.FailedCount == 0, "no failed run during the whole smoke");

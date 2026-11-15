@@ -16,15 +16,26 @@ using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 /// kind's rule zone, all in one save = one undo step. The polygon gestures are the shared machinery of EditorMode.Shapes.cs. The page
 /// lists the kinds (swatch = tint, label, how many zones), the zone form (change kind, delete) and the zones.
 ///
-/// The overlay (M toggles it, remembered in editor_ui.cfg) draws every zone translucent in its kind's tint with a thin edge; the
-/// selected kind is brightened and the others dimmed. Hovering names the zones at the cursor, clicking selects one. Zones have no
-/// paint and no hot reload; the build turns them into candidate points. Nothing is saved by the overlay.
+/// The overlay (M toggles it, remembered in editor_ui.cfg) draws every zone translucent in its kind's tint with a thin edge. A
+/// selected kind is shown alone (also with the overlay off): the other kinds are not drawn and not pointed at, and its zones get
+/// moving bands of its tint and white, so they read on ground of the same colour (the bands stand still with reduce motion), and
+/// are drawn a second time, faint and without a depth test, so they still show where buildings, trees and hills cover them.
+/// Hovering names the zones at the cursor, clicking selects one. Zones have no paint and no hot reload; the build turns them into
+/// candidate points. Nothing is saved by the overlay.
+///
+/// Mass delete: zones are marked (the tick of a list row, Ctrl+click on the map, X for the selected one, "Mark all") and
+/// outlined in the danger colour; "Delete N marked zones" (Shift+Del) asks, then removes them all in one save = one undo step
+/// (<see cref="DeleteZones"/>). Marks are not saved and live until deleted, unmarked or the editor closes.
 /// </summary>
 public partial class EditorMode
 {
     // The fill is striped: a full band of the kind's colour, then a faint one (StripeTexture), so a zone reads at a glance on any ground.
-    const float ZoneFill = 0.55f, ZoneFillSelected = 0.85f, ZoneFillDim = 0.18f;
+    const float ZoneFill = 0.55f, ZoneFillSelected = 0.85f;
+    const float ZoneFillGhost = 0.3f, ZoneEdgeGhost = 0.5f; // the selected kind where an obstacle covers it
     const float StripeTileM = 24f; // one texture tile on the ground: bands 4 m wide, 8.5 m apart (period)
+    const float ZoneMarchTilesPerS = 0.125f; // the bands of the selected kind move 3 m/s
+    const float ZoneMarchWhite = 0.7f;       // alpha of the white band between two bands of the tint
+    public const string OutlineZoneMarked = "outline_zone_marked";
 
     /// <summary>Rows of the zone list at most (a map has thousands of zones; picking a kind narrows the list).</summary>
     const int ZoneListCap = 300;
@@ -53,6 +64,10 @@ public partial class EditorMode
     readonly Dictionary<string, GroundMapType> _zoTypes = new();   // key: the kind
 
     public bool ZoneOverlayShown => _zoOn;
+    /// <summary>Zones are drawn and pointed at: the overlay is on, or a kind is selected (it is then shown alone, also with the overlay off).</summary>
+    public bool ZonesDrawn => _zoOn || SelectedZoneKind != null;
+    /// <summary>A zone that can be hovered and clicked: any when no kind is selected, else only the selected kind's (the others are not drawn).</summary>
+    bool ZonePickable(ZoneInfo z) => SelectedZoneKind == null || z.Kind == SelectedZoneKind;
     public bool ZoneOverlayBuilt => _zoArrayMesh != null && _zoStep >= _zoOrder.Count && _zoOrder.Count > 0;
 
     // ---- the catalog ----
@@ -112,6 +127,7 @@ public partial class EditorMode
         switch (k.Keycode)
         {
             case Key.M: ToggleZoneOverlay(); return true;
+            case Key.X when SelectedZoneId != null && ShapeMode == ShapeState.Selected: ToggleZoneMark(SelectedZoneId); return true;
             case Key.Tab when GetViewport().GuiGetFocusOwner() == null: FocusZoneList(); return true;
         }
         return false;
@@ -132,21 +148,21 @@ public partial class EditorMode
 
     public string ZonesHintText() => ShapeHintText()
         ?? (SelectedZoneKind == null
-            ? "zones: Tab or click a kind in the list, click a zone to select it, M shows or hides the overlay, N draws a zone of the selected kind, Ctrl+P commands, Esc leaves the tool"
-            : $"{ZoneLabel(SelectedZoneKind)}: N draws a zone of it, click a zone to select it, M shows or hides the overlay, Ctrl+Z undoes, Esc deselects");
+            ? "zones: Tab or click a kind to show its zones alone, click a zone to select it, Ctrl+click marks it for deletion, M overlay, N draws a zone of the selected kind, Ctrl+P commands, Esc leaves the tool"
+            : $"{ZoneLabel(SelectedZoneKind)} shown alone: click a zone to select it, Ctrl+click marks it for deletion{(_zMarked.Count > 0 ? $", Shift+Del deletes the {_zMarked.Count} marked" : "")}, N draws one, Esc shows all kinds");
 
     // ---- the page ----
 
     void BuildZonesPage(VBoxContainer page)
     {
         page.AddChild(new Label { Text = "Zones", ThemeTypeVariation = "Header" });
-        page.AddChild(Note("A zone marks what an area means in play (Bigfoot, deer, player spawn, ...). It never changes how the ground looks, and zones overlap freely. Pick a kind to see its zones; click any zone to select it, then drag its corners, change its kind or delete it. N draws a new one."));
+        page.AddChild(Note("A zone marks what an area means in play (Bigfoot, deer, player spawn, ...). It never changes how the ground looks, and zones overlap freely. Pick a kind to show its zones alone, with moving bands; click any zone to select it, then drag its corners, change its kind or delete it. N draws a new one."));
         _zError = Note("", "Danger");
         page.AddChild(_zError);
         _zOverlayCheck = new CheckBox
         {
             Text = "Show zones on the map  (M)", FocusMode = Control.FocusModeEnum.All, ButtonPressed = _zoOn,
-            TooltipText = "Draw every zone on the terrain in its kind's tint (M). The selected kind is brightened, the others dimmed. Hover names the zones, click selects one.",
+            TooltipText = "Draw every zone on the terrain in its kind's tint (M). A selected kind is shown alone, also when this is off. Hover names the zones, click selects one.",
         };
         _zOverlayCheck.Toggled += on => { if (!_zSync) SetZoneOverlay(on); };
         page.AddChild(_zOverlayCheck);
@@ -168,8 +184,9 @@ public partial class EditorMode
         _zKindRow = FieldRow("Kind", _zKindOpt, "The zone kind of the selected zone");
         BuildShapeActions(page, ShapeKind.Zone, _zKindRow);
         BuildShapeDelete(page, ShapeKind.Zone);
+        BuildZoneMarks(page);
         BuildShapeList(page, ShapeKind.Zone, "All zones", "No zones to list. Pick a kind, press N, click corners on the ground, Enter creates the zone.");
-        page.AddChild(Note("Zones overlap freely and add up. Esc steps back: cancel drawing, deselect the zone, deselect the kind, leave the tool."));
+        page.AddChild(Note("Zones overlap freely and add up. Esc steps back: cancel drawing, deselect the zone, deselect the kind (all kinds show again), leave the tool."));
     }
 
     void RefreshZonesPanel()
@@ -180,6 +197,7 @@ public partial class EditorMode
         if (_restoreZone != null) { if (zones.Any(z => z.Id == _restoreZone)) SelectedZoneId = _restoreZone; _restoreZone = null; }
         if (SelectedZoneId != null && zones.All(z => z.Id != SelectedZoneId)) { SelectedZoneId = null; _dragCorner = -1; }
         if (SelectedZoneKind != null && ZoneKindOf(SelectedZoneKind) == null) SelectedZoneKind = null;
+        if (_zMarked.RemoveWhere(id => !_zoneById.ContainsKey(id)) > 0) _zMarkVer++;
         var sel = SelectedZoneId == null ? null : Zone(SelectedZoneId);
         var kinds = Map.ZoneKinds;
 
@@ -206,7 +224,7 @@ public partial class EditorMode
                 {
                     Text = $"{k.Label}   {n}", Icon = Swatch(k.Tint), Alignment = HorizontalAlignment.Left, ClipText = true,
                     ToggleMode = true, FocusMode = Control.FocusModeEnum.All,
-                    TooltipText = $"{k.Label} ({k.Group}): {n} zone{(n == 1 ? "" : "s")}. Select it to list only its zones, highlight them on the map and draw a new one of it (N).",
+                    TooltipText = $"{k.Label} ({k.Group}): {n} zone{(n == 1 ? "" : "s")}. Select it to show its zones alone on the map (moving bands, the other kinds hidden), list only them and draw a new one of it (N).",
                 };
                 b.SetPressedNoSignal(name == SelectedZoneKind);
                 b.Pressed += () => { SelectZoneKind(name == SelectedZoneKind ? null : name); b.ReleaseFocus(); };
@@ -243,7 +261,9 @@ public partial class EditorMode
             return ($"{z.Label}   {ZoneLabel(z.Kind)}   {z.Points.Count} corners", tint, $"Select {z.Label} ({ZoneLabel(z.Kind)}, {z.Points.Count} corners, {z.AreaM2:F0} m2)");
         }, string.Concat(kinds.Select(k => k.Name + k.Label + k.Tint)),
             filter: SelectedZoneKind == null ? null : z => ((ZoneInfo)z).Kind == SelectedZoneKind,
-            head: SelectedZoneKind == null ? null : $"{ZoneLabel(SelectedZoneKind)} zones", cap: ZoneListCap);
+            head: SelectedZoneKind == null ? null : $"{ZoneLabel(SelectedZoneKind)} zones", cap: ZoneListCap,
+            marks: _zMarked, onMark: (id, on) => MarkZones(new[] { id }, on, false));
+        RefreshZoneMarks();
 
         if (sel != null && _zScrolledFor != sel.Id)
         {
@@ -415,9 +435,10 @@ public partial class EditorMode
     {
         _zoOn = on;
         if (_zOverlayCheck != null) _zOverlayCheck.SetPressedNoSignal(on);
-        if (_zoMesh != null) _zoMesh.Visible = on && Tool == EditorTool.Zones;
+        if (_zoMesh != null) _zoMesh.Visible = on && SelectedZoneKind == null && Tool == EditorTool.Zones;
         _panelDirty = true;
-        Say(on ? "zone overlay on: every zone in its kind's tint (M hides it)" : "zone overlay hidden (M shows it)");
+        Say(on ? "zone overlay on: every zone in its kind's tint (M hides it)"
+            : SelectedZoneKind != null ? $"zone overlay hidden; {ZoneLabel(SelectedZoneKind)} stays shown while it is selected (M shows all again)" : "zone overlay hidden (M shows it)");
         if (save) SaveUiConfig();
     }
 
@@ -454,12 +475,16 @@ public partial class EditorMode
     /// <summary>Per frame while the tool is open: index, build one kind of the mesh, and keep tints and selection in the materials.</summary>
     void UpdateZoneOverlay()
     {
-        var show = Tool == EditorTool.Zones && _zoOn && Map.OriginEpsg5514 != null;
-        if (_zoMesh != null) _zoMesh.Visible = show;
+        var show = Tool == EditorTool.Zones && ZonesDrawn && Map.OriginEpsg5514 != null;
+        var sel = SelectedZoneKind;
+        if (_zoMesh != null) _zoMesh.Visible = show && sel == null;
+        if (_zoSelMesh != null) _zoSelMesh.Visible = show && sel != null;
+        UpdateZoneMarkOutline();
         if (Tool != EditorTool.Zones) return;
         EnsureZoneIndex();
         if (_zOverlayNote != null) _zOverlayNote.Text = ZoneOverlayNote();
         if (!show || _zoOrder.Count == 0) return;
+        if (sel != null) { UpdateSelectedKindMesh(sel); return; } // shown alone, in its own mesh; the mesh of all kinds waits
         if (_zoMesh == null)
         {
             _zoMesh = new MeshInstance3D { Name = "ZoneOverlay", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
@@ -471,6 +496,7 @@ public partial class EditorMode
             if (_zoStep == 0 && _zoArrayMesh.GetSurfaceCount() > 0) _zoArrayMesh = new ArrayMesh();
             var kind = _zoOrder[_zoStep];
             BuildAreaSurfaces(_zoArrayMesh, _zoTypes[kind], ZoneTint(kind), ZoneFill, 6, _zoBudget, StripeTexture());
+            _zoMatSig = ""; // new materials: colour them again
             _zoStep++;
             _zoMesh.Mesh = _zoArrayMesh;
         }
@@ -480,7 +506,9 @@ public partial class EditorMode
     string ZoneOverlayNote()
     {
         if (Map.ZoneKinds.Count == 0) return "No zone kinds in this map's parcels.json. Build it again (make map), then reopen the editor.";
-        if (!_zoOn) return "The zone overlay is off.";
+        if (!_zoOn && SelectedZoneKind == null) return "The zone overlay is off. Pick a kind to show its zones alone.";
+        if (SelectedZoneKind is { } k)
+            return $"Showing only {ZoneLabel(k)} ({ZoneCount(k)}); Esc shows all kinds{(_zoOn ? "" : " (the overlay is off: M)")}." + (_zoSelBudget.Truncated ? " Too many to draw: the smallest triangles are left out." : "");
         if (_zoStep < _zoOrder.Count) return $"Drawing zones {_zoStep + 1}/{_zoOrder.Count}...";
         var n = ZoneList().Count;
         return $"{n} zone{(n == 1 ? "" : "s")} on the map" + (_zoBudget.Truncated ? ". Too many to draw: the smallest triangles are left out." : ".");
@@ -501,17 +529,248 @@ public partial class EditorMode
         return _stripes = ImageTexture.CreateFromImage(img);
     }
 
+    static readonly Dictionary<Color, ImageTexture> _marchTextures = new();
+
+    /// <summary>The tile of a selected kind: the same bands as <see cref="StripeTexture"/>, the tint alternating with white, so the zones read on ground of their own colour. One per tint.</summary>
+    static ImageTexture MarchTexture(Color tint)
+    {
+        if (_marchTextures.TryGetValue(tint, out var tex)) return tex;
+        const int n = 64, period = 32;
+        var img = Image.CreateEmpty(n, n, true, Image.Format.Rgba8);
+        var full = new Color(tint, 1f); var white = new Color(1, 1, 1, ZoneMarchWhite);
+        for (var y = 0; y < n; y++)
+            for (var x = 0; x < n; x++)
+                img.SetPixel(x, y, (x + y) % period < period / 2 ? full : white);
+        img.GenerateMipmaps();
+        return _marchTextures[tint] = ImageTexture.CreateFromImage(img);
+    }
+
+    string _zoMatSig = "";
+
+    /// <summary>The mesh of all kinds (no kind selected): every kind in its tint.</summary>
     void ApplyZoneMaterials()
     {
-        var sel = SelectedZoneKind;
+        var sig = _zoStep + "#" + string.Join("|", Map.ZoneKinds.Select(k => k.Name + k.Tint));
+        if (sig == _zoMatSig) return;
+        _zoMatSig = sig;
         foreach (var (kind, t) in _zoTypes)
         {
             var colour = ZoneTint(kind);
-            var isSel = sel != null && kind == sel;
-            var dim = sel != null && !isSel;
-            if (t.Fill != null) t.Fill.AlbedoColor = new Color(colour, isSel ? ZoneFillSelected : dim ? ZoneFillDim : ZoneFill);
-            if (t.Edge != null) t.Edge.AlbedoColor = isSel ? new Color(colour.Lightened(0.55f), 0.95f) : new Color(colour, dim ? GroundMapEdgeDim : 0.8f);
+            if (t.Fill != null) t.Fill.AlbedoColor = new Color(colour, ZoneFill);
+            if (t.Edge != null) t.Edge.AlbedoColor = new Color(colour, 0.8f);
         }
+    }
+
+    // The selected kind has a mesh of its own, with its own triangle budget: the mesh of all kinds shares one budget in catalog
+    // order, so on a big map the later kinds (the wildlife ones cover the same forest and fields many times) are cut short there.
+    MeshInstance3D? _zoSelMesh;
+    string _zoSelSig = "";
+    StandardMaterial3D? _zoSelFill;
+    readonly TriangleBudget _zoSelBudget = new() { Max = 700000 }; // one kind over every field and forest of the village map is about 250 000
+
+    /// <summary>
+    /// A kind is selected: only it is drawn, in bands of its tint and white that move (one material offset per frame; still with
+    /// reduce motion), and a second, faint pass without a depth test shows it where buildings, trees and hills cover it.
+    /// Built when the kind, its tint or the zones change.
+    /// </summary>
+    void UpdateSelectedKindMesh(string kind)
+    {
+        var colour = ZoneTint(kind);
+        var sig = kind + "#" + colour.ToHtml() + "#" + _zoSig;
+        if (sig != _zoSelSig)
+        {
+            _zoSelSig = sig;
+            _zoSelFill = null;
+            _zoSelBudget.Count = 0; _zoSelBudget.Truncated = false;
+            if (_zoSelMesh == null)
+            {
+                _zoSelMesh = new MeshInstance3D { Name = "ZoneOverlaySelected", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+                OutlineRoot.AddChild(_zoSelMesh);
+            }
+            var mesh = new ArrayMesh();
+            if (_zoTypes.GetValueOrDefault(kind) is { } all)
+            {
+                var t = new GroundMapType { Name = kind }; // a copy: the materials of the mesh of all kinds stay its own
+                t.Outers.AddRange(all.Outers); t.Holes.AddRange(all.Holes);
+                BuildAreaSurfaces(mesh, t, colour, ZoneFillSelected, 6, _zoSelBudget, MarchTexture(colour));
+                if (t.Fill != null) { t.Fill.AlbedoColor = new Color(1, 1, 1, ZoneFillSelected); t.Fill.NextPass = GhostFill(colour); }
+                if (t.Edge != null) { t.Edge.AlbedoColor = new Color(colour.Lightened(0.55f), 0.95f); t.Edge.NextPass = GhostEdge(colour); }
+                _zoSelFill = t.Fill;
+            }
+            _zoSelMesh.Mesh = mesh;
+            _zoSelMesh.Visible = true;
+        }
+        if (_zoSelFill != null && !WaterSurfaces.ReduceMotion())
+        {
+            _zoSelFill.Uv1Offset = new Vector3((float)(Time.GetTicksMsec() / 1000.0 * ZoneMarchTilesPerS % 0.5), 0, 0); // 0.5 tile = one period: seamless
+            if (_zoGhostFill != null) _zoGhostFill.Uv1Offset = _zoSelFill.Uv1Offset;
+        }
+    }
+
+    StandardMaterial3D? _zoGhostFill, _zoGhostEdge;
+
+    /// <summary>The second pass of the selected kind's fill: the same bands, faint and without a depth test, so the part behind an obstacle still shows.</summary>
+    StandardMaterial3D GhostFill(Color tint)
+    {
+        if (_zoGhostFill == null)
+        {
+            _zoGhostFill = GroundMapMaterial(5);
+            _zoGhostFill.NoDepthTest = true;
+            _zoGhostFill.Uv1Triplanar = true;
+            _zoGhostFill.Uv1WorldTriplanar = true;
+            _zoGhostFill.Uv1Scale = Vector3.One / StripeTileM;
+        }
+        _zoGhostFill.AlbedoTexture = MarchTexture(tint);
+        _zoGhostFill.AlbedoColor = new Color(1, 1, 1, ZoneFillGhost);
+        return _zoGhostFill;
+    }
+
+    StandardMaterial3D GhostEdge(Color tint)
+    {
+        _zoGhostEdge ??= GroundMapMaterial(5);
+        _zoGhostEdge.NoDepthTest = true;
+        _zoGhostEdge.AlbedoColor = new Color(tint.Lightened(0.55f), ZoneEdgeGhost);
+        return _zoGhostEdge;
+    }
+
+    // ---- marking zones and deleting the marked ones ----
+
+    readonly HashSet<string> _zMarked = new();
+    int _zMarkVer;
+    object? _zMarkOutlineFor;
+    Label _zMarkHead = null!;
+    Button _zMarkAll = null!, _zMarkNone = null!, _zMarkDelete = null!;
+
+    public int MarkedZoneCount => _zMarked.Count;
+    public bool ZoneMarked(string id) => _zMarked.Contains(id);
+
+    /// <summary>The zones "Mark all" marks: those of the selected kind, or every zone when none is (not capped as the list is).</summary>
+    List<ZoneInfo> ListedZones() => SelectedZoneKind is { } k ? ZoneList().Where(z => z.Kind == k).ToList() : ZoneList();
+
+    void BuildZoneMarks(VBoxContainer page)
+    {
+        page.AddChild(new HSeparator());
+        _zMarkHead = new Label { ThemeTypeVariation = "Header" };
+        page.AddChild(_zMarkHead);
+        page.AddChild(Note("Delete many zones at once: tick them in the list below, Ctrl+click them on the map, or press X for the selected one. Marked zones are outlined in red on the map."));
+        var row = new HBoxContainer();
+        _zMarkAll = FocusBtn("", MarkListedZones);
+        _zMarkAll.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        _zMarkAll.ClipText = true;
+        _zMarkNone = FocusBtn("Unmark all", ClearZoneMarks);
+        _zMarkNone.TooltipText = "Take every mark back. Nothing is deleted.";
+        row.AddChild(_zMarkAll); row.AddChild(_zMarkNone);
+        page.AddChild(row);
+        _zMarkDelete = FocusBtn("", () => RequestDeleteMarkedZones(), "DangerButton");
+        page.AddChild(_zMarkDelete);
+    }
+
+    void RefreshZoneMarks()
+    {
+        var n = _zMarked.Count;
+        var listed = ListedZones();
+        var unmarked = listed.Count(z => !_zMarked.Contains(z.Id));
+        _zMarkHead.Text = $"Marked for deletion ({n})";
+        _zMarkAll.Text = SelectedZoneKind is { } k ? $"Mark all {ZoneLabel(k)} ({listed.Count})" : $"Mark all zones ({listed.Count})";
+        _zMarkAll.Disabled = unmarked == 0;
+        _zMarkAll.TooltipText = listed.Count == 0 ? "There are no zones to mark." : unmarked == 0 ? "All of them are marked already."
+            : SelectedZoneKind != null ? "Mark every zone of the selected kind for deletion. Nothing is deleted yet." : "Mark every zone of the map for deletion. Nothing is deleted yet. Pick a kind first to mark only its zones.";
+        _zMarkNone.Disabled = n == 0;
+        _zMarkDelete.Text = n == 0 ? "Delete marked zones  (Shift+Del)" : $"Delete {n} marked zone{(n == 1 ? "" : "s")}  (Shift+Del)";
+        _zMarkDelete.Disabled = n == 0;
+        _zMarkDelete.TooltipText = n == 0 ? "No zone is marked. Tick zones in the list or Ctrl+click them on the map first." : "Delete every marked zone in one step (asks first; one Ctrl+Z brings them all back)";
+    }
+
+    /// <summary>Mark or unmark zones for the mass delete. Nothing is saved.</summary>
+    public void MarkZones(IEnumerable<string> ids, bool on, bool say = true)
+    {
+        ZoneList();
+        var n = 0;
+        foreach (var id in ids) if (on ? _zoneById.ContainsKey(id) && _zMarked.Add(id) : _zMarked.Remove(id)) n++;
+        if (n == 0) return;
+        _zMarkVer++; _panelDirty = true;
+        if (say) Say($"{n} zone{(n == 1 ? "" : "s")} {(on ? "marked for deletion" : "unmarked")}: {_zMarked.Count} marked{(_zMarked.Count > 0 ? " (Shift+Del deletes them)" : "")}");
+    }
+
+    public bool ToggleZoneMark(string id)
+    {
+        if (Zone(id) is not { } z) { Say($"zone {id} does not exist", true); return false; }
+        var on = !_zMarked.Contains(id);
+        MarkZones(new[] { id }, on, false);
+        Say($"{z.Label} {(on ? "marked for deletion" : "unmarked")}: {_zMarked.Count} marked{(_zMarked.Count > 0 ? " (Shift+Del deletes them)" : "")}");
+        return true;
+    }
+
+    public void MarkListedZones() => MarkZones(ListedZones().Select(z => z.Id).ToList(), true);
+
+    public void ClearZoneMarks() => MarkZones(_zMarked.ToList(), false);
+
+    /// <summary>Shift+Del, the button: ask first, naming how many zones of which kinds go; accepting deletes them (one undo brings all back).</summary>
+    public bool RequestDeleteMarkedZones()
+    {
+        ZoneList();
+        var zones = _zMarked.Select(id => _zoneById.GetValueOrDefault(id)).Where(z => z != null).Select(z => z!).ToList();
+        if (zones.Count == 0) { Say("no zone is marked: tick zones in the list or Ctrl+click them on the map", true); return false; }
+        var ids = zones.Select(z => z.Id).ToList();
+        var kinds = string.Join(", ", zones.GroupBy(z => z.Kind).OrderBy(g => KindOrder(g.Key)).Select(g => $"{g.Count()} {ZoneLabel(g.Key)}"));
+        var names = string.Join(", ", zones.OrderBy(z => z.Label, StringComparer.Ordinal).Take(8).Select(z => z.Label)) + (zones.Count > 8 ? $" and {zones.Count - 8} more" : "");
+        var s = zones.Count == 1 ? "" : "s";
+        ShowConfirm($"Delete {zones.Count} marked zone{s}?", $"{kinds} ({zones.Sum(z => z.AreaM2):F0} m2 in all): {names}. They are removed; the ground is not changed. One undo (Ctrl+Z) brings them all back.",
+            $"Delete {zones.Count} zone{s}", () => DeleteZones(ids));
+        return true;
+    }
+
+    /// <summary>
+    /// Delete several zones as one save and one undo step: a drawn one leaves edits.json `zones`, one that comes from a rule gets a
+    /// cut (as <see cref="EditRuleZone"/>). A rule zone whose outline cannot be cut is kept and named. The deleted ones lose their mark.
+    /// </summary>
+    public bool DeleteZones(IReadOnlyCollection<string> ids)
+    {
+        ZoneList();
+        var zones = ids.Distinct().Select(id => _zoneById.GetValueOrDefault(id)).Where(z => z != null).Select(z => z!).ToList();
+        var kept = zones.Where(z => z.FromRule && ObjectEdits.RingProblemCode(z.Points) != ObjectEdits.RingOk).ToList();
+        var todo = zones.Except(kept).ToList();
+        if (todo.Count == 0) { Say(kept.Count > 0 ? $"nothing deleted: the outline of {kept[0].Label}{(kept.Count > 1 ? $" and {kept.Count - 1} more" : "")} cannot be cut" : "nothing to delete: those zones no longer exist", true); return false; }
+        var ok = Mutate(root =>
+        {
+            var drawn = ShapesOf(root, ShapeKind.Zone);
+            var n = 0;
+            foreach (var z in todo)
+            {
+                if (!z.FromRule) { if (drawn != null && drawn.Remove(z.Id)) n++; continue; }
+                if (root.GetValueOrDefault("zone_cuts") is not Obj cuts) root["zone_cuts"] = cuts = EditsFile.NewObject();
+                var cut = EditsFile.NewObject();
+                cut["kind"] = z.Kind;
+                cut["polygon"] = PolygonValue(z.Points);
+                cuts[NextId(root, "zone_cuts", "ZC-")] = cut;
+                n++;
+            }
+            if (drawn is { Count: 0 }) root.Remove(KeyOf(ShapeKind.Zone));
+            if (n == 0) return (false, "nothing deleted: those zones no longer exist");
+            return (true, $"deleted {n} zone{(n == 1 ? "" : "s")} (Ctrl+Z undoes)" + (kept.Count > 0 ? $"; {kept.Count} kept, their outline cannot be cut" : ""));
+        });
+        if (!ok) return false;
+        MarkZones(todo.Select(z => z.Id).ToList(), false, false);
+        if (SelectedZoneId != null && todo.Any(z => z.Id == SelectedZoneId)) SelectShape(ShapeKind.Zone, null);
+        return true;
+    }
+
+    /// <summary>The outline of every marked zone in the danger colour, above the overlay; rebuilt when the marks or the file change.</summary>
+    void UpdateZoneMarkOutline()
+    {
+        if (Tool != EditorTool.Zones || _zMarked.Count == 0 || Map.OriginEpsg5514 == null)
+        {
+            if (_zMarkOutlineFor != null) { _zMarkOutlineFor = null; SetOutline(OutlineZoneMarked, new(), EditorTheme.Danger, 0, 0); }
+            return;
+        }
+        var key = (Disk(), _zMarkVer);
+        if (_zMarkOutlineFor is ValueTuple<Obj, int> was && ReferenceEquals(was.Item1, key.Item1) && was.Item2 == key.Item2) return;
+        _zMarkOutlineFor = key;
+        ZoneList();
+        var segs = new List<(Vector2, Vector2)>();
+        foreach (var id in _zMarked) if (_zoneById.GetValueOrDefault(id) is { } z) segs.AddRange(RingSegs(z.Points, true));
+        SetOutline(OutlineZoneMarked, segs, EditorTheme.Danger, GroundMapLift + 0.3f, 0.9f);
+        if (_outlines[OutlineZoneMarked].MaterialOverride is StandardMaterial3D m) { m.NoDepthTest = true; m.RenderPriority = 9; } // seen through obstacles, over the zone fill
     }
 
     // ---- pointing ----
@@ -520,19 +779,19 @@ public partial class EditorMode
     string? ZoneHoverText(Vector3 point)
     {
         var (x, y) = RawAbs(point);
-        var hits = ZoneList().Where(z => z.Contains(x, y)).OrderByDescending(z => ShapeNumber(z.Id)).ThenBy(z => KindOrder(z.Kind)).ToList();
-        if (hits.Count == 0) return "no zone here";
-        var lines = hits.Take(5).Select(z => $"{z.Label}  {ZoneLabel(z.Kind)} zone").ToList();
+        var hits = ZoneList().Where(z => ZonePickable(z) && z.Contains(x, y)).OrderByDescending(z => ShapeNumber(z.Id)).ThenBy(z => KindOrder(z.Kind)).ToList();
+        if (hits.Count == 0) return SelectedZoneKind is { } k ? $"no {ZoneLabel(k)} zone here" : "no zone here";
+        var lines = hits.Take(5).Select(z => $"{z.Label}  {ZoneLabel(z.Kind)} zone{(_zMarked.Contains(z.Id) ? "  (marked for deletion)" : "")}").ToList();
         if (hits.Count > 5) lines.Add($"+{hits.Count - 5} more");
-        return string.Join("\n", lines) + "\nclick to select";
+        return string.Join("\n", lines) + "\nclick to select, Ctrl+click to mark for deletion";
     }
 
     int KindOrder(string kind) { var i = Map.ZoneKinds.ToList().FindIndex(k => k.Name == kind); return i < 0 ? int.MaxValue : i; }
 
-    /// <summary>The zone to select at a point: where zones overlap the selected kind's win, then a drawn one over the others, the higher ID, the kind earlier in the catalog.</summary>
+    /// <summary>The zone to select at a point (of the selected kind only, when one is: the others are not drawn): where zones overlap a drawn one wins over the others, then the higher ID, the kind earlier in the catalog.</summary>
     string? ZoneAtPoint(double x, double y)
     {
-        var hits = ZoneList().Where(z => z.Contains(x, y)).ToList();
+        var hits = ZoneList().Where(z => ZonePickable(z) && z.Contains(x, y)).ToList();
         if (hits.Count == 0) return null;
         return hits.OrderBy(z => z.Kind == SelectedZoneKind ? 1 : 0).ThenBy(z => ShapeNumber(z.Id)).ThenByDescending(z => KindOrder(z.Kind)).ThenBy(z => z.Id, StringComparer.Ordinal).Last().Id;
     }
@@ -546,9 +805,15 @@ public partial class EditorMode
     public string ZoneKindShown => _zKindOpt.Selected >= 0 && _zKindOpt.Selected < Map.ZoneKinds.Count ? Map.ZoneKinds[_zKindOpt.Selected].Name : "";
     public int ZoneCount(string kind) => ZoneList().Count(z => z.Kind == kind);
     public int ZoneCutCount => CutList(Disk()).Count;
+    public string ZoneMarkDeleteText => _zMarkDelete.Text;
+    public bool ZoneMarkDeleteEnabled => !_zMarkDelete.Disabled;
+    /// <summary>Alpha of a kind's fill in the overlay (0: not drawn, a kind other than the selected one); -1 when it has no surface.</summary>
+    public float ZoneFillAlpha(string kind) => SelectedZoneKind is { } sel
+        ? (kind == sel && _zoSelMesh is { Visible: true } && _zoSelFill != null ? _zoSelFill.AlbedoColor.A : 0f)
+        : _zoTypes.GetValueOrDefault(kind)?.Fill is { } m && _zoMesh is { Visible: true } ? m.AlbedoColor.A : -1f;
     /// <summary>Run the zone overlay now, until every kind is built (smoke tests; normally one kind per frame).</summary>
     public void ZoneOverlayNow()
     {
-        for (var i = 0; i < 128 && (_zoStep < Math.Max(_zoOrder.Count, 1) || _zoArrayMesh == null); i++) { UpdateZoneOverlay(); if (_zoOrder.Count == 0) break; }
+        for (var i = 0; i < 128 && (_zoStep < Math.Max(_zoOrder.Count, 1) || _zoArrayMesh == null); i++) { UpdateZoneOverlay(); if (_zoOrder.Count == 0 || SelectedZoneKind != null) break; }
     }
 }

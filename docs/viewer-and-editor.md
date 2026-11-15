@@ -437,12 +437,19 @@ meadow` for a kind that also applies by rule wherever those ground types lie, wi
 (this selects its kind), drag corners, `[` `]` plus arrows, change its kind in the form, `Del` (asks first).
 
 **Zone overlay** (`M`, or the checkbox; remembered in `editor_ui.cfg`; same key and name as the ground map, only while the tool is open):
-every zone is drawn translucent on the terrain in its kind's tint with a thin edge; the selected kind is brightened and the others dimmed;
+every zone is drawn translucent on the terrain in its kind's tint with a thin edge. **A selected kind is shown alone**, also with the
+overlay off: the other kinds are not drawn, hovered or clicked, and its zones get moving bands of tint and white (still with reduce
+motion) so they read on ground of their own colour; `Esc` deselects the kind and shows all again;
 **rule zones** (the baked ground areas of a kind's `where_ground` types) are drawn lighter and the hover text says "rule zone". Hover names
 the zones and rule kinds under the cursor, a click selects the topmost drawn zone (where zones overlap the selected kind's wins, then the
 higher ID); a click on a rule zone selects its kind and says it is by rule. Built one kind per frame with a progress line. Zones have no
 paint and no hot reload; nothing is saved by the overlay. A map built before `zone_kinds` shows a red note to build it again and the Draw
 action says why it is disabled.
+
+**Mass delete**: mark zones with the tick of a list row, `Ctrl`+click on the map, `X` for the selected zone, or **Mark all** (the
+selected kind's zones, or every zone); marked zones are outlined in red and counted in the HUD. **Delete N marked zones** (`Shift+Del`)
+asks first, naming counts per kind, then removes them in one save = one undo step (drawn zones leave `zones`, rule zones get a
+`zone_cuts` entry each). Marks are not saved.
 
 Esc steps back: the drawing, the zone, the kind, the tool. Notes, states and the keyboard walkthrough: `docs/patches-zones-ui-notes.md`.
 `make viewer-shape-editor-smoke` drives the patch and zone gestures headless and compares every saved `edits.json` with the Python writer's

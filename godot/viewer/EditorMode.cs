@@ -639,7 +639,7 @@ public partial class EditorMode : Node
         if (_panelDirty) RefreshPanel();
         _unsavedLabel.Text = PendingCount == 0 ? "" : $"* {PendingCount} unsaved (Enter applies)";
         var c = FlyCam.GlobalPosition;
-        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedShapeId != null && ShapeTool ? $"  |  {(Tool == EditorTool.Zones ? "zone" : "patch")} {SelectedShape(CurrentKind)?.Label}" : "") + (PendingCount > 0 || ShapeDraftPending ? $"  |  * {(PendingCount > 0 ? $"{PendingCount} UNSAVED" : "UNSAVED")}" : "");
+        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedShapeId != null && ShapeTool ? $"  |  {(Tool == EditorTool.Zones ? "zone" : "patch")} {SelectedShape(CurrentKind)?.Label}" : "") + (Tool == EditorTool.Zones && MarkedZoneCount > 0 ? $"  |  {MarkedZoneCount} marked for deletion" : "") + (PendingCount > 0 || ShapeDraftPending ? $"  |  * {(PendingCount > 0 ? $"{PendingCount} UNSAVED" : "UNSAVED")}" : "");
         if (Time.GetTicksMsec() / 1000.0 > _statusUntil && _statusLabel.Text != "")
             _statusLabel.Text = "";
     }
@@ -699,7 +699,7 @@ public partial class EditorMode : Node
         {
             var calm = _hoverPoint != null && !_looking && !OverUi(mouse) && !Modal && ShapeMode is ShapeState.Idle or ShapeState.Selected;
             var text = !calm ? null
-                : Tool == EditorTool.Zones ? (_zoOn ? ZoneHoverText(_hoverPoint!.Value) : null)
+                : Tool == EditorTool.Zones ? (ZonesDrawn ? ZoneHoverText(_hoverPoint!.Value) : null)
                 : _gmOn ? GroundHoverText(_hoverPoint!.Value) : null;
             _hoverLabel.Visible = text != null;
             if (text != null) { _hoverLabel.Text = text; _hoverLabel.Position = mouse + new Vector2(16, 20); }

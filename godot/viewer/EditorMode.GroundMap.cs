@@ -21,7 +21,7 @@ public partial class EditorMode
     const int GroundMapMaxTriangles = 260000;
     const float GroundMapFill = 0.40f, GroundMapFillSelected = 0.62f, GroundMapFillDim = 0.16f, GroundMapEdgeDim = 0.45f;
 
-    sealed class TriangleBudget { public int Count; public bool Truncated; }
+    sealed class TriangleBudget { public int Count; public bool Truncated; public int Max = GroundMapMaxTriangles; }
 
     sealed class GroundMapType
     {
@@ -248,13 +248,13 @@ public partial class EditorMode
             var longest = Mathf.Max(ab, Mathf.Max(bc, ca));
             if (longest > GroundMapMaxEdge && depth < 14)
             {
-                if (budget.Count >= GroundMapMaxTriangles) { budget.Truncated = true; return; }
+                if (budget.Count >= budget.Max) { budget.Truncated = true; return; }
                 if (ab >= bc && ab >= ca) { var m = (a + b) / 2; Triangle(a, m, c, depth + 1); Triangle(m, b, c, depth + 1); }
                 else if (bc >= ca) { var m = (b + c) / 2; Triangle(a, b, m, depth + 1); Triangle(a, m, c, depth + 1); }
                 else { var m = (c + a) / 2; Triangle(a, b, m, depth + 1); Triangle(m, b, c, depth + 1); }
                 return;
             }
-            if (budget.Count >= GroundMapMaxTriangles) { budget.Truncated = true; return; }
+            if (budget.Count >= budget.Max) { budget.Truncated = true; return; }
             fill.Add(Up(a)); fill.Add(Up(b)); fill.Add(Up(c));
             budget.Count++;
         }

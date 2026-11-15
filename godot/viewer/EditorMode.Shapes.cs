@@ -529,6 +529,7 @@ public partial class EditorMode
                 if (_level || _draft.Count > 0) { CloseShape(); return true; }
                 return false;
             case Key.Backspace: return RemoveLastShapePoint();
+            case Key.Delete when k.ShiftPressed && CurrentKind == ShapeKind.Zone && mode is ShapeState.Idle or ShapeState.Selected: RequestDeleteMarkedZones(); return true;
             case Key.Delete when mode == ShapeState.Selected && (CurrentKind == ShapeKind.Zone || _groundFocusPatch): RequestDeleteShape(); return true;
             case Key.C when !_level && (_draft.Count > 0 || _arming):
                 // corner at the cursor, or at the screen centre when the cursor is over the panel (keyboard-only drawing)
@@ -581,9 +582,15 @@ public partial class EditorMode
         if (!RayToGround(FlyCam.ProjectRayOrigin(screen), FlyCam.ProjectRayNormal(screen), out var g)) { Say("click on the ground", true); return; }
         if (drafting) { var (x, y) = SnapAbs(g, free); AddShapePoint(x, y); return; }
         var (rx, ry) = RawAbs(g);
-        if (ShapeAt(k, rx, ry) is { } hit) { SelectShape(k, hit); return; }
+        if (ShapeAt(k, rx, ry) is { } hit)
+        {
+            if (k == ShapeKind.Zone && free) ToggleZoneMark(hit); else SelectShape(k, hit); // Ctrl+click: mark for the mass delete
+            return;
+        }
+        if (k == ShapeKind.Zone && free) { Say("no zone there to mark"); return; }
         if (SelectedOf(k) != null) SelectShape(k, null);
-        if (k == ShapeKind.Patch) GroundPick(g); else Say("no zone there");
+        if (k == ShapeKind.Patch) GroundPick(g);
+        else Say(SelectedZoneKind is { } zk ? $"no {ZoneLabel(zk)} zone there (Esc shows all kinds)" : "no zone there");
     }
 
     void ShapeChanged() { _panelDirty = true; _shSignature = ""; }
@@ -730,7 +737,7 @@ public partial class EditorMode
                 ? $"new {noun}: LMB or C places the first corner, Ctrl free position, Esc cancels"
                 : $"drawing {_draft.Count}: LMB or C adds, Enter {(CurrentKind == ShapeKind.Patch && PatchTypeIsWater(_drawType) ? "closes" : "creates")}, Backspace undoes a corner, Esc cancels",
             ShapeState.Selected when CurrentKind == ShapeKind.Zone || _groundFocusPatch =>
-                $"{SelectedShape(CurrentKind)?.Label}: drag a corner, [ ] and arrows move one, Del deletes, N new {noun}, Ctrl+Z undoes, Esc deselects",
+                $"{SelectedShape(CurrentKind)?.Label}: drag a corner, [ ] and arrows move one, Del deletes, {(CurrentKind == ShapeKind.Zone ? "X marks for deletion, " : "")}N new {noun}, Ctrl+Z undoes, Esc deselects",
             _ => null,
         };
     }
@@ -766,6 +773,7 @@ public partial class EditorMode
         public SpinBox Level = null!;
         public VBoxContainer List = null!;
         public readonly Dictionary<string, Button> Rows = new();
+        public readonly Dictionary<string, CheckBox> Marks = new(); // the tick of each row, when the list marks (zones: mass delete)
         public string ListSig = "";
         public bool Sync;
     }
@@ -881,9 +889,12 @@ public partial class EditorMode
         u.Delete.TooltipText = $"Delete the {noun} (asks first; Ctrl+Z undoes)";
     }
 
-    /// <summary>Refresh a list of shapes; rows are rebuilt only when what they show changes. <paramref name="row"/> gives a row's text, swatch colour and tooltip.</summary>
+    /// <summary>
+    /// Refresh a list of shapes; rows are rebuilt only when what they show changes. <paramref name="row"/> gives a row's text, swatch colour and tooltip.
+    /// With <paramref name="marks"/> every row has a tick in front (marked for deletion); ticking calls <paramref name="onMark"/> and does not rebuild the rows (the tick keeps the focus).
+    /// </summary>
     void RefreshShapeList(ShapeKind k, string noun, Func<ShapeInfo, (string Text, string Colour, string Tip)> row, string extraSig = "",
-        Func<ShapeInfo, bool>? filter = null, string? head = null, int cap = int.MaxValue)
+        Func<ShapeInfo, bool>? filter = null, string? head = null, int cap = int.MaxValue, IReadOnlySet<string>? marks = null, Action<string, bool>? onMark = null)
     {
         var u = _su[k];
         var all = ShapeList(k);
@@ -894,24 +905,34 @@ public partial class EditorMode
         u.ListNote.Visible = shapes.Count < all.Count;
         u.ListNote.Text = $"Showing the first {shapes.Count} of {all.Count}. Pick a kind in the list above to see only its {noun}s.";
         var sig = string.Join("|", shapes.Select(s => s.Id + row(s).Text + row(s).Colour + s.Points.Count)) + "#" + SelectedOf(k) + extraSig + "#" + all.Count;
-        if (sig == u.ListSig) return;
-        u.ListSig = sig;
-        foreach (var b in u.Rows.Values) { u.List.RemoveChild(b); b.QueueFree(); }
-        u.Rows.Clear();
-        foreach (var s in shapes)
+        if (sig != u.ListSig)
         {
-            var id = s.Id;
-            var (text, colour, tip) = row(s);
-            var b = new Button
+            u.ListSig = sig;
+            foreach (var c in u.List.GetChildren()) { u.List.RemoveChild(c); c.QueueFree(); }
+            u.Rows.Clear(); u.Marks.Clear();
+            foreach (var s in shapes)
             {
-                Text = text, Icon = Swatch(colour), Alignment = HorizontalAlignment.Left, ClipText = true,
-                ToggleMode = true, FocusMode = Control.FocusModeEnum.All, TooltipText = tip,
-            };
-            b.SetPressedNoSignal(id == SelectedOf(k));
-            b.Pressed += () => { SelectShape(k, id == SelectedOf(k) ? null : id); b.ReleaseFocus(); };
-            u.List.AddChild(b);
-            u.Rows[id] = b;
+                var id = s.Id;
+                var (text, colour, tip) = row(s);
+                var b = new Button
+                {
+                    Text = text, Icon = Swatch(colour), Alignment = HorizontalAlignment.Left, ClipText = true,
+                    ToggleMode = true, FocusMode = Control.FocusModeEnum.All, TooltipText = tip,
+                };
+                b.SetPressedNoSignal(id == SelectedOf(k));
+                b.Pressed += () => { SelectShape(k, id == SelectedOf(k) ? null : id); b.ReleaseFocus(); };
+                u.Rows[id] = b;
+                if (marks == null) { u.List.AddChild(b); continue; }
+                var line = new HBoxContainer();
+                var tick = new CheckBox { FocusMode = Control.FocusModeEnum.All, TooltipText = $"Mark {s.Label} for deletion (Space). \"Delete marked {noun}s\" above removes every marked one in one step." };
+                tick.Toggled += on => onMark?.Invoke(id, on);
+                b.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+                line.AddChild(tick); line.AddChild(b);
+                u.List.AddChild(line);
+                u.Marks[id] = tick;
+            }
         }
+        if (marks != null) foreach (var (id, tick) in u.Marks) if (tick.ButtonPressed != marks.Contains(id)) tick.SetPressedNoSignal(marks.Contains(id));
     }
 
     // test hooks
@@ -923,5 +944,7 @@ public partial class EditorMode
     public bool ShapeCreateButtonShown => _su[CurrentKind].Create.Visible || _su[CurrentKind].Finish.Visible;
     public bool ShapeRowSelected(string id) => _su[CurrentKind].Rows.TryGetValue(id, out var b) && b.ButtonPressed;
     public string ShapeHint => CurrentKind == ShapeKind.Zone ? ZonesHintText() : GroundHintText();
+    public bool ShapeRowMarked(string id) => _su[CurrentKind].Marks.TryGetValue(id, out var t) && t.ButtonPressed;
+    public void TickShapeRow(string id, bool on) { if (_su[CurrentKind].Marks.TryGetValue(id, out var t)) t.ButtonPressed = on; }
     public void PressShapeRow(string id) { if (_su[CurrentKind].Rows.TryGetValue(id, out var b)) b.EmitSignal(BaseButton.SignalName.Pressed); }
 }
