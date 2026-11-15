@@ -268,7 +268,7 @@ A value from the day clock that drives street lamp light, headlight and window g
 _Avoid_: darkness, night mode
 
 **Aircraft**:
-A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper and the AC-130 gunship. Nobody boards or flies it; its owner only works its guns. It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship) and can be shot down by flak: its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
+A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper, the AC-130 gunship and the UAV. Nobody boards or flies it; its owner only works its guns (the UAV has none). It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship, 200 for the UAV) and can be shot down by flak and any other anti-aircraft (ADR 0005): its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
 _Avoid_: plane (for helicopters), drone, helicopter (alone)
 
 **Utility helicopter**:
@@ -296,7 +296,7 @@ The killstreak that places a 500 hp gun on the ground for 15 seconds. It turns t
 _Avoid_: turret (alone, ambiguous with the vehicle gun), gun emplacement
 
 **UAV**:
-The 4-kill killstreak: for 60 seconds the owner receives enemy pings on the minimap, one every second. Enemies with Ghost are not shown.
+The 4-kill killstreak: for 60 seconds the owner receives enemy pings on the minimap, one every second. Enemies with Ghost are not shown. A small drone aircraft circles the map for the same time, visible to everyone, so enemies know a UAV is up. Anti-aircraft that shoots it down ends the streak and the pings.
 _Avoid_: drone, radar
 
 **Gunfire blip**:

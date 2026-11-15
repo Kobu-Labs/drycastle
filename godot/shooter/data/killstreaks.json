@@ -27,7 +27,8 @@
   ],
   "aircraft": [
     { "id": "helicopter", "name": "Helicopter", "radius_m": 220, "altitude_m": 45, "speed_mps": 38, "max_bank_deg": 25, "lifetime_s": 60, "hp": 600 },
-    { "id": "gunship", "name": "Gunship", "radius_m": 420, "altitude_m": 120, "speed_mps": 70, "max_bank_deg": 30, "lifetime_s": 60, "hp": 1500 }
+    { "id": "gunship", "name": "Gunship", "radius_m": 420, "altitude_m": 120, "speed_mps": 70, "max_bank_deg": 30, "lifetime_s": 60, "hp": 1500 },
+    { "id": "uav", "name": "UAV", "radius_m": 300, "altitude_m": 150, "speed_mps": 30, "max_bank_deg": 20, "lifetime_s": 65, "hp": 200 }
   ],
   "gunship": {
     "pitch_min_deg": -70, "pitch_max_deg": -5, "zoom_levels": [1, 2.5, 5],

@@ -10,4 +10,6 @@ Decided for the anti-aircraft work after Shooter v2. **Reverses** the v2 rule th
 
 **Wire.** Protocol 19: entity type 4 (a turret's aim record, one per flak vehicle: the world yaw and pitch, the gunner's id in the health and weapon bytes, a fixed position so it is never re-sent), event kind 160 (the gunner's ammo), the despawn reason on the client for the blast. The gunner's tracers and bursts reuse the gunship's coalesced FX events.
 
+**Any anti-aircraft (#303).** Hit points and the Destroyed end are not flak-only: any anti-aircraft weapon that damages an aircraft (`Aircraft.OnDamage`, `NetServer.DamageAircraft`) shoots it down, and flak is just the first. The UAV (an aircraft kind with no guns) is shot down the same way and its streak ends.
+
 **Consequences.** Killstreak aircraft are no longer safe: a team with a flak truck can end an enemy's helicopter or AC-130, which changes what a streak is worth (a balance question, see the balance pass #211). A counter for the aircraft (flares) and a hand-held lock-on launcher are not part of this decision.

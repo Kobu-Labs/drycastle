@@ -3,31 +3,31 @@ using System.Numerics;
 namespace Drycastle.ShooterCore;
 
 /// <summary>
-/// Wire state of an aircraft, carried in <see cref="WorldState.State"/>: bit 7 is the kind index (into
-/// killstreaks.json "aircraft"), bits 0-6 the bank angle, quantised over +-<see cref="MaxBankDeg"/>.
+/// Wire state of an aircraft, carried in <see cref="WorldState.State"/>: bits 6-7 are the kind index (into
+/// killstreaks.json "aircraft"), bits 0-5 the bank angle, quantised over +-<see cref="MaxBankDeg"/>.
 /// </summary>
 public static class AircraftState
 {
     /// <summary>Largest bank the wire can carry, degrees.</summary>
     public const float MaxBankDeg = 60f;
-    const float Steps = 63.5f;
+    const float Steps = 31.5f;
 
     public static byte Pack(int kind, float bankRad)
     {
         var deg = Math.Clamp(bankRad * 180f / MathF.PI, -MaxBankDeg, MaxBankDeg);
         var q = (int)MathF.Round(deg / MaxBankDeg * Steps + Steps);
-        return (byte)(((kind & 1) << 7) | Math.Clamp(q, 0, 127));
+        return (byte)(((kind & 3) << 6) | Math.Clamp(q, 0, 63));
     }
 
     public static (int Kind, float BankRad) Unpack(byte s)
     {
-        var deg = ((s & 0x7F) - Steps) / Steps * MaxBankDeg;
-        return (s >> 7, deg * MathF.PI / 180f);
+        var deg = ((s & 0x3F) - Steps) / Steps * MaxBankDeg;
+        return (s >> 6, deg * MathF.PI / 180f);
     }
 }
 
 /// <summary>
-/// An aircraft flying a circle over the map (killstreak helicopters and gunships). It is a world entity: its position, yaw
+/// An aircraft flying a circle over the map (killstreak helicopters, gunships and the UAV). It is a world entity: its position, yaw
 /// and bank are replicated, and its kind is in the state byte. It has hit points (<see cref="AircraftKindDef.Hp"/>): the flak truck
 /// shoots it down (ADR 0005), and at 0 it ends as <see cref="WorldDespawnReason.Destroyed"/>. The hp travels as a percentage of the
 /// kind's. The circle centre and phase are chosen by the streak that spawns it.

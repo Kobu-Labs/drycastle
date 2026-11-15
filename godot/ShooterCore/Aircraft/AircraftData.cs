@@ -81,8 +81,8 @@ public sealed class GunshipDef
 /// <summary>Validation and resolution of the aircraft and gunship sections of killstreaks.json.</summary>
 public static class AircraftData
 {
-    /// <summary>Two kinds at most: the wire state carries the kind in one bit (<see cref="AircraftState"/>).</summary>
-    public const int MaxKinds = 2;
+    /// <summary>Four kinds at most: the wire state carries the kind in two bits (<see cref="AircraftState"/>).</summary>
+    public const int MaxKinds = 4;
     const string F = "killstreaks.json";
 
     internal sealed class AircraftRaw
@@ -166,7 +166,7 @@ public static class AircraftData
                 Hp = Need(r.Hp, where, "hp", 1),
             });
         }
-        if (kinds.Count > MaxKinds) throw new DataFileException($"{F}: at most {MaxKinds} aircraft kinds (the wire carries the kind in one bit)");
+        if (kinds.Count > MaxKinds) throw new DataFileException($"{F}: at most {MaxKinds} aircraft kinds (the wire carries the kind in two bits)");
 
         return kinds;
     }

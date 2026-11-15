@@ -3,9 +3,9 @@ using Godot;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The aircraft models (ticket #125). No free CC0 aircraft model was hand-checked for this ticket, so both kinds are built
-/// from primitives: a helicopter (kind 0 in the table) and a gunship (kind 1). Rotors are child nodes that spin; the
-/// rotor sound is generated (<see cref="RotorSound"/>), so nothing is loaded from the asset library.
+/// The aircraft models (ticket #125). No free CC0 aircraft model was hand-checked for this ticket, so the helicopter and the gunship are
+/// built from primitives. Rotors are child nodes that spin; the rotor sound is generated (<see cref="RotorSound"/>). The UAV (#303) is the
+/// paid Synty military pack's drone (assets-private, via <see cref="SyntyLib"/>), scaled down, with a primitive drone when the file is missing.
 /// Forward is -Z, as every model in the shooter.
 /// </summary>
 public sealed partial class AircraftModel : Node3D
@@ -14,8 +14,38 @@ public sealed partial class AircraftModel : Node3D
     readonly List<(Node3D Rotor, Vector3 Axis, float Speed)> _spins = new();
     public static readonly Color Olive = new(0.29f, 0.33f, 0.20f), Dark = new(0.12f, 0.12f, 0.13f), Glass = new(0.18f, 0.26f, 0.32f), Grey = new(0.42f, 0.44f, 0.46f);
 
-    /// <summary>Builds the model for a kind by its id in killstreaks.json ("helicopter" or "gunship"); other ids get the helicopter.</summary>
-    public static AircraftModel Build(string kindId) => kindId == "gunship" ? BuildGunship() : BuildHelicopter();
+    /// <summary>Builds the model for a kind by its id in killstreaks.json ("helicopter", "gunship" or "uav"); other ids get the helicopter.</summary>
+    public static AircraftModel Build(string kindId) => kindId switch
+    {
+        "gunship" => BuildGunship(),
+        "uav" => BuildUav(),
+        _ => BuildHelicopter(),
+    };
+
+    const string DroneModel = "military/SM_Veh_Drone_01";
+    const string DroneAtlas = "glb/atlas/military_01_A.png";
+    /// <summary>The Synty drone is 19 m across, a full-size airframe; the UAV circles high up, so about a third of it reads as a drone.</summary>
+    const float DroneScale = 0.35f;
+
+    static AircraftModel BuildUav()
+    {
+        var m = new AircraftModel { Name = "Uav" };
+        if (SyntyLib.Instance(DroneModel, DroneAtlas) is { } drone)
+        {
+            // the Synty model's nose is +Z; the shooter's forward is -Z
+            drone.Scale = Vector3.One * DroneScale;
+            drone.RotateY(MathF.PI);
+            m.AddChild(drone);
+            return m;
+        }
+        // primitive fallback (headless, or the private asset folder is absent)
+        var grey = Mat(Grey, 0.2f, 0.6f); var dark = Mat(Dark, 0.4f, 0.5f);
+        Box(m, new Vector3(0.7f, 0.6f, 3.8f), Vector3.Zero, grey, "Fuselage");
+        Box(m, new Vector3(6.8f, 0.08f, 1.1f), new Vector3(0, 0.1f, 0.2f), grey, "Wings");
+        Box(m, new Vector3(2.2f, 0.06f, 0.6f), new Vector3(0, 0.15f, 1.7f), grey, "Tailplane");
+        Box(m, new Vector3(0.5f, 0.45f, 0.6f), new Vector3(0, -0.4f, -1.2f), dark, "Camera");
+        return m;
+    }
 
     public void Spin(float dt)
     {

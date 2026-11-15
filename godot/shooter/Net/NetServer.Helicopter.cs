@@ -47,14 +47,17 @@ public partial class NetServer
     }
 
     /// <summary>Spawns the helicopter circling the middle of the spawn points, at a random phase and direction. Owned by nobody (no control).</summary>
-    ushort? SpawnHelicopterOverMap()
+    ushort? SpawnHelicopterOverMap() => SpawnAircraftOverMap("helicopter");
+
+    /// <summary>Spawns an aircraft of a kind circling the middle of the spawn points, at a random phase and direction. Owned by nobody (no control).</summary>
+    ushort? SpawnAircraftOverMap(string kindId)
     {
         var centre = NVec3.Zero;
         if (Spawns.Count > 0) centre = Spawns.Aggregate(NVec3.Zero, (a, p) => a + p) / (float)Spawns.Count;
         var ground = GroundBelow(centre) ?? centre.Y;
         var at = new NVec3(centre.X, ground, centre.Z);
         var phase = (float)(_helperRng.NextDouble() * Math.Tau);
-        return SpawnAircraft("helicopter", at, phase, _helperRng.Next(2) == 0, 0);
+        return SpawnAircraft(kindId, at, phase, _helperRng.Next(2) == 0, 0);
     }
 
     NVec3? HelicopterPosition(ushort entityId) => _match.Entities.StateOf(entityId)?.Position;
