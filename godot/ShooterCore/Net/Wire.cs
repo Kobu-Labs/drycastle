@@ -154,6 +154,8 @@ public enum EventKind : byte
     BigfootTrail = 231,
     /// <summary>Server to everyone: a Gang member says a line (u16 world entity id, u8 line number, <see cref="GangVoiceCodec"/>); the client plays the line modulo the recordings it has, at the member, to <c>audio.voice_range_m</c>. 237 is kept free for this ticket.</summary>
     ThiefVoice = 236,
+    /// <summary>Client to server: an admin's team change from the Teams screen (<see cref="TeamAssignCodec"/>, #312); the server checks the sender is an admin and the match is team deathmatch. The result travels in the scoreboard (team, pin and bot bits per row).</summary>
+    TeamAssign = 240,
     /// <summary>Server to everyone, and to a joiner when the doors are open: the church doors opened (1) or closed (0), one byte (<see cref="ChurchDoorCodec"/>, ADR 0019). Kinds 210-219 belong to the church.</summary>
     ChurchDoor = 210,
     /// <summary>Server to everyone, and to a joiner: the Holy Mass as it is now (<see cref="MassStateMsg"/>, <see cref="MassCodec"/>): phase, chant on or off, the pastor's kills, where the chant is, and once at the start the bells. Kinds 210-219 belong to the Holy Mass.</summary>
@@ -275,9 +277,10 @@ public static class Wire
     //   v52 bullet drop of the sniper rifles: the zero dial (event 24, client to server); the hit diagram of a hunted animal (event 25)
     //   v54 the Raid van's owner field: door in 63rds (bits 0-5), song bits 6-10, crew sitting inside bits 11-14, left door bit 15 (was door in thousandths, song bits 10-14)
     //   v53 the binoculars seen by the others (events 26 and 27); event 25 names the hit shape it was tested against (pose, frame) and the head
+    //   v57 Teams screen (#312): event 240 TeamAssign (client to server); the scoreboard's team byte also carries a pinned bit and a bot bit
     //   v55 world interest (ADR 0025): world record flag FDormant 64 (the entity left this client's interest, no fields); animals, flocks and poop outside 800 m are not sent
     //   v56 wild animal size and weight (ticket #309): the animal state byte's bits 5-7 are the size step; event 25 ends in the animal's weight (u16, tenths of a kg)
-    public const byte ProtocolVersion = 56;
+    public const byte ProtocolVersion = 57;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

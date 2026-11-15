@@ -115,11 +115,12 @@ public partial class MainMenu : MenuScreen
 public partial class PauseScreen : MenuScreen
 {
     readonly Action _resume, _disconnect;
-    readonly Action? _loadouts;
+    readonly Action? _loadouts, _teams;
     readonly Func<bool>? _unlockAll;
     Button _first = null!;
     /// <param name="unlockAll">True while the server runs in dev mode (<c>--unlock-all</c>): the corner indicator shows.</param>
-    public PauseScreen(Action resume, Action disconnect, Action? loadouts = null, Func<bool>? unlockAll = null) : base("HudScrim") { _resume = resume; _disconnect = disconnect; _loadouts = loadouts; _unlockAll = unlockAll; }
+    /// <param name="teams">Opens the Teams screen (#312); null hides the entry (not an admin in team deathmatch).</param>
+    public PauseScreen(Action resume, Action disconnect, Action? loadouts = null, Func<bool>? unlockAll = null, Action? teams = null) : base("HudScrim") { _resume = resume; _disconnect = disconnect; _loadouts = loadouts; _unlockAll = unlockAll; _teams = teams; }
 
     public override void _Ready()
     {
@@ -136,6 +137,7 @@ public partial class PauseScreen : MenuScreen
         _first = Ui.Btn(Strings.T("pause.resume"), Back, "MenuPrimary");
         v.AddChild(_first);
         if (_loadouts != null) v.AddChild(Ui.Btn(Strings.T("pause.loadouts"), _loadouts));
+        if (_teams != null) v.AddChild(Ui.Btn(Strings.T("pause.teams"), _teams));
         v.AddChild(Ui.Btn(Strings.T("menu.settings"), () => Shell.Push(new SettingsScreen(true))));
         v.AddChild(Ui.Btn(Strings.T("pause.disconnect"), () => Shell.Push(new DialogScreen(Strings.T("disconnect.title"), Strings.T("disconnect.body"),
             new[] { new DialogScreen.Choice(Strings.T("pause.disconnect"), _disconnect, "MenuDanger") }))));

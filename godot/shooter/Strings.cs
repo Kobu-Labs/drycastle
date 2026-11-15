@@ -208,6 +208,7 @@ public static class Strings
         foreach (var (k, v) in Table) tr.AddMessage(k, v);
         foreach (var (k, v) in Hud2Strings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in SandboxStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in TeamsStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in ChatStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in TacticalMapStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in IntelStrings.Table) tr.AddMessage(k, v);
