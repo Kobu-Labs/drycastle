@@ -54,7 +54,7 @@ public class WildlifeTests
     }
 
     [Theory]
-    [InlineData("""{"version":1,"max_animals":101,"species":[]}""", "max_animals")]
+    [InlineData("""{"version":1,"max_animals":201,"species":[]}""", "max_animals")]
     [InlineData("""{"version":1,"max_animals":5,"species":[{"id":"","count":1}]}""", "no id")]
     [InlineData("""{"version":1,"max_animals":5,"species":[{"id":"bear","count":1},{"id":"bear","count":1}]}""", "twice")]
     [InlineData("""{"version":1,"max_animals":5,"species":[{"id":"bear","count":0}]}""", "count")]

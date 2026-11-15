@@ -62,7 +62,7 @@ public sealed class FlockSpecies
 public sealed class WildlifeFile : IVersioned
 {
     /// <summary>Hard ceiling of <see cref="MaxAnimals"/>: wildlife, pets and every other world entity share the entity cap (<see cref="WorldEntityManager.MaxEntities"/>).</summary>
-    public const int MaxAnimalsLimit = 100;
+    public const int MaxAnimalsLimit = 200;
 
     public int Version { get; set; }
     /// <summary>Most wild animals in the whole map at once.</summary>
