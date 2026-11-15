@@ -19,7 +19,7 @@ public enum WorldRelevance : byte
 }
 
 /// <summary>
-/// Distance interest of the world channel (ADR 0024): the world entity types that opt in (<see cref="WorldEntityDef.Interest"/>) go to a client only
+/// Distance interest of the world channel (ADR 0025): the world entity types that opt in (<see cref="WorldEntityDef.Interest"/>) go to a client only
 /// while they are within <see cref="EnterM"/> of its player; they are shown again from a keyframe and hidden by a dormant record when they leave
 /// <see cref="LeaveM"/> (the gap is the hysteresis, so an entity at the edge does not flap). Distance is horizontal.
 /// </summary>

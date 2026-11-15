@@ -140,7 +140,7 @@ public sealed class WorldSnapshotEncoder
     byte[] _rec = new byte[2048];
     readonly List<int> _ends = new();
     readonly HashSet<ushort> _present = new();
-    // distance interest (ADR 0024): what this client has of each filtered entity. Entries are reused in place; no entry is Unseen.
+    // distance interest (ADR 0025): what this client has of each filtered entity. Entries are reused in place; no entry is Unseen.
     struct Rel { public WorldRelevance Phase; public uint First, Seen; }
     readonly Dictionary<ushort, Rel> _rel = new();
     readonly List<ushort> _prune = new();
@@ -252,7 +252,7 @@ public sealed class WorldSnapshotEncoder
 
     enum Emit : byte { Skip, Delta, Key, Dormant }
 
-    /// <summary>Moves a filtered entity's relevance (ADR 0024) to <paramref name="to"/>, beginning at <paramref name="tick"/>. An undeclared move is reported like any state machine's.</summary>
+    /// <summary>Moves a filtered entity's relevance (ADR 0025) to <paramref name="to"/>, beginning at <paramref name="tick"/>. An undeclared move is reported like any state machine's.</summary>
     static void Move(ref Rel r, WorldRelevance to, uint tick)
     {
         if (r.Phase == to) return;
@@ -369,7 +369,7 @@ public sealed class WorldSnapshotEncoder
 /// inputs. An entity's state is kept from its first keyframe, so one that beats its spawn event is picked up at the spawn.
 /// Each entity keeps an <see cref="Interpolator"/>, which takes a sample for every committed tick that changed it.
 /// An entity of a type with <see cref="WorldEntityDef.Interest"/> is <see cref="Entity.Dormant"/> from its spawn until a keyframe shows it, and again after
-/// the server's dormant record (ADR 0024): it keeps existing, a consumer must not show or animate it, and it comes back with a fresh <see cref="Interpolator"/>.
+/// the server's dormant record (ADR 0025): it keeps existing, a consumer must not show or animate it, and it comes back with a fresh <see cref="Interpolator"/>.
 /// </summary>
 public sealed class WorldReplica
 {

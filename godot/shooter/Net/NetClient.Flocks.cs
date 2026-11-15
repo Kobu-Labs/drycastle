@@ -45,7 +45,7 @@ public partial class NetClient
         WorldEntities.DormancyChanged += OnFlockDormancy;
     }
 
-    /// <summary>A flock outside the interest range (ADR 0024) is hidden and its boids are not flown; one that comes back starts a new swarm at its centre (the old one would fly across the map to catch up).</summary>
+    /// <summary>A flock outside the interest range (ADR 0025) is hidden and its boids are not flown; one that comes back starts a new swarm at its centre (the old one would fly across the map to catch up).</summary>
     void OnFlockDormancy(WorldReplica.Entity e)
     {
         if (e.Type != FlockRules.TypeId || !_flocks.TryGetValue(e.Id, out var v)) return;

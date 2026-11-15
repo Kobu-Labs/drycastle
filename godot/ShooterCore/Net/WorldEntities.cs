@@ -6,7 +6,7 @@ namespace Drycastle.ShooterCore;
 /// A world entity type (turret, missile, aircraft, corpse, care package, ...) registered under its wire id.
 /// All types share one state codec (<see cref="WorldState"/>); <see cref="HasHp"/> only decides whether the
 /// optional hp byte is sent for that type. <see cref="Interest"/> opts the type into distance filtering of its state
-/// (<see cref="WorldInterest"/>, ADR 0024); every other type is sent to every client at every range.
+/// (<see cref="WorldInterest"/>, ADR 0025); every other type is sent to every client at every range.
 /// </summary>
 public sealed record WorldEntityDef(byte Id, string Name, bool HasHp, bool Interest = false);
 

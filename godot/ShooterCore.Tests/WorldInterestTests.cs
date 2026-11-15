@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Drycastle.ShooterCore.Tests;
 
-/// <summary>Distance interest on the world channel (ADR 0024): the encoder's per-client relevance and the replica's dormant entities, end to end.</summary>
+/// <summary>Distance interest on the world channel (ADR 0025): the encoder's per-client relevance and the replica's dormant entities, end to end.</summary>
 public class WorldInterestTests
 {
     const byte Animal = 20, Plain = 21;

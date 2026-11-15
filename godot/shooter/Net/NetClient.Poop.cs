@@ -31,7 +31,7 @@ public partial class NetClient
         WorldEntities.DormancyChanged += OnPoopDormancy;
     }
 
-    /// <summary>Poop outside the interest range (ADR 0024) is hidden; one that comes back is shown where the keyframe puts it.</summary>
+    /// <summary>Poop outside the interest range (ADR 0025) is hidden; one that comes back is shown where the keyframe puts it.</summary>
     void OnPoopDormancy(WorldReplica.Entity e)
     {
         if (e.Type != PoopRules.TypeId || !_poops.TryGetValue(e.Id, out var node)) return;

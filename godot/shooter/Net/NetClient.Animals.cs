@@ -58,7 +58,7 @@ public partial class NetClient
         WorldEntities.DormancyChanged += OnAnimalDormancy;
     }
 
-    /// <summary>An animal outside the interest range (ADR 0024) is hidden and its animation stops; one that comes back starts its clip afresh (its pose is from a keyframe, not from the last time we saw it).</summary>
+    /// <summary>An animal outside the interest range (ADR 0025) is hidden and its animation stops; one that comes back starts its clip afresh (its pose is from a keyframe, not from the last time we saw it).</summary>
     void OnAnimalDormancy(WorldReplica.Entity e)
     {
         if (e.Type == AnimalRules.TypeId && _animals.TryGetValue(e.Id, out var v)) SetAnimalDormant(v, e);
