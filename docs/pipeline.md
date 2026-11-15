@@ -134,9 +134,11 @@ attribute (the flat surface of the body of water, metres on the terrain datum) a
   before the rule types, never into a parcel. The terrain, detail, trees and everything else follow from the type.
 * **Water.** A patch of a water type is no ground area. It makes a body of water exactly as a `water_y` shape does: the
   drawn outline is only a hint, the water lies wherever the terrain below the outline is under `water_y`
-  (`water.wet_area`), and the body goes to `water.json` (swimming, drowning, the shooter's water surface; the body's `id`
-  is the patch id, `GP-0023`, with `.1`, `.2` when the water has several pieces) with its bed at the lowest terrain inside.
-  It is also baked into the chunk files as the flat node `patch_<ID>` (see "Ground patches (preview and water)").
+  (`water.wet_area`), and the body goes to `water.json` (swimming, the shooter's water surface; the body's `id`
+  is the patch id, `GP-0023`, with `.1`, `.2` when the water has several pieces) with its natural bed (see "Water bodies"
+  below; the optional `max_depth` of the patch, 0 to 20 m, scales it so the deepest point is that deep: `edits.json`, or `create_ground_patch`,
+  `set_patch_water` and `set_patch_type` of the MCP server). Its colour is also baked into the chunk files as the node `patch_<ID>`
+  (see "Ground patches (preview and water)").
 * **Colours.** A patch has no colour of its own: it is in the first colour of its type (`patches.type_colour`).
 
 ### Zones (ADR 0022)
@@ -429,8 +431,9 @@ full run and the chunk files hold no node for it. Two things come from the patch
   coverage are cut off; a patch wholly outside it is skipped with a warning (`export: warning:
   ...`), as is any patch when there is no terrain or when its type does not exist. Schema errors fail the run like every other edit.
   The preview has no collision and changes only colour.
-* **Water.** A patch of a water type is a flat mesh at `water_y` minus `WATER_VISUAL_DROP_M` (2 cm, so the shooter's water
-  surface at `water_y` always wins) over the terrain below that level; it is baked into the chunk files as the node
+* **Water.** A patch of a water type is painted on the bed: the type's colour draped on the carved terrain (a hair above it, like any
+  patch) over the terrain below `water_y`. There is no flat mesh at the surface: the shooter draws the water itself from the depth grid in
+  `water.json`, and a second flat mesh just under it would only show through the shallows. It is baked into the chunk files as the node
   `patch_<ID>` in each chunk it touches (a patch over a chunk border is several nodes with the same name, one per chunk
   file) and the manifest lists `patches` in `generated`. Only water patches are baked as nodes.
 
@@ -627,16 +630,38 @@ only when both are in the open or both are in the same room), and the ladders go
 shared movement step). The client darkens the rooms and hangs a lamp in each (`shooter/BunkerLights.cs`). The placeable
 `prim:bunker` is the closed form (a placed object collides as one box) and has no room.
 
-**Water bodies (`water.json`).** Written when the terrain exists, listed in `manifest.json` under
-`files.water`. One body per parcel of kind `water`: `{"id", "polygon", "surface_y", "bed_y"}`, with
-the polygon in the same geo-interface form as `parcels.json` (local metres, x east, y north) and the
-heights in metres on the terrain's datum (as `terrain.json`). The surface is the median terrain
-height along the parcel outline (the shoreline); the bed is the lowest terrain height on a 2 m grid
-inside. A water parcel with no terrain under its outline gets no body (a warning is printed). The
-shooter reads it as `ShooterCore.Water` (`Water.Parse`, format version 1): depth, surface and
-breath queries in Godot ground axes (x east, z = -north). The surface and bed are flat per body, so
-depth is one value per body (an approximation). The file is absent for a map without terrain.
-`"water"` is listed under `generated`; water surface meshes are not generated.
+**Water bodies (`water.json`, version 2).** Written when the terrain exists, listed in `manifest.json` under
+`files.water`. One body per parcel or ground area (`parcels.json` `ground`) of a water kind (a type that carries the `water`
+attribute), and one per ground patch with a `water_y` (`edits.json`; a patch is split in pieces where the terrain under its level is
+not one piece). Each body is
+`{"id", "polygon", "surface_y", "bed_y", "max_depth_m", "depth", "flow"}`: the polygon in the geo-interface form of
+`parcels.json` (local metres, x east, y north), the heights in metres on the terrain's datum (as `terrain.json`).
+The surface is the median terrain height along the parcel outline (the shoreline), or the patch's `water_y`.
+`bed_y` is the lowest bed (`surface_y - max_depth_m`), kept for readers of version 1. `depth` is the bed as a grid:
+`{"origin", "cell_m": 2.0, "cols", "rows", "cm"}`, the south-west corner in local metres, and `cm` the depths in
+centimetres as base64 of little-endian uint16, rows from the south, 0 outside the outline. `flow` is reserved (an empty
+list until flow is added). A water parcel or ground area with no terrain under its outline gets no body (a warning is printed).
+
+*The natural bed (`bed.py`).* Each body's depth comes from its outline alone (seeded, so the same map gives the same
+bed): depth grows from the bank over a shelf (banks shelve), a river (`water.river_ids` in `rules.yaml`, or any body at least
+`river_min_length_m` (150 m) long and `river_min_aspect` (6) times as long as wide, since a water ground area's ID `A-NNNN` moves with the
+inputs and cannot name the Morava) gets pools and riffles from a seeded value-noise pattern along its main axis (mid-channel 2.5 m, pools to
+3.5 m, riffles 0.8 m, bars every 60 to 120 m), and the outside of a bend (the outline curls round the water) is deeper
+and steeper. Ponds and lakes (every other body) get a shallow bowl (1.5 m). A patch's `max_depth` (edits.json, or the
+`set_patch_water` MCP tool) scales its bed so the deepest point is that deep. Every parameter is the `water` section of
+`rules.yaml`.
+
+*The carve (`bed.carve_terrain`, stage `export`).* The terrain grid under each body is then lowered to surface minus
+depth (the grid's bilinear depth), so the terrain mesh and `terrain_collision` both carry the bed. Outside the outline a
+bank standing above the surface is cut down to it over `water.carve_blend_m` (4 m, never raised). The chunks that hold a
+body use the full 4 m collision grid, not the decimated one. The water is planned on the terrain before the carve (the
+shoreline and wet areas read the ground as it was), and the water patches use the same wet areas as `water.json`.
+`patch-run` carves the same way, so a hot-reloaded patch drapes on the bed the export carves.
+
+The shooter reads it as `ShooterCore.Water` (`Water.Parse`, versions 1 and 2): depth (`Water.Depth`, `DepthAt`, the
+sample's `WaterDepth`) is bilinear over the grid in Godot ground axes (x east, z = -north, so the grid's y is `-z`), and
+a version 1 body keeps its flat bed. The file is absent for a map without terrain. `"water"` is listed under `generated`;
+water surface meshes are not generated.
 
 **Water craft placement (#132).** The amphibious transport spawns on land within 40 m of water when it can (`NetServer.Vehicles`,
 using `Water.ShoreDistance`); it is the only vehicle that floats, and nothing is placed on the water itself.

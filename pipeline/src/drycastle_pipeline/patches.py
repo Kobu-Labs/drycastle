@@ -19,14 +19,14 @@ one.
 * **Overlaps: the higher ID wins.** The visible area of a patch is its polygon minus the polygons
   of all patches with a higher ID, cut in 2D before draping. There is never more than one patch
   on a point, so nothing z-fights and the order needs no per-ID lift.
-* **Water.** A patch of a water type has a ``water_y``: it is a body of water. Its mesh is flat at that height instead
-  of draped, and covers the terrain below that level reached from the drawn outline (:func:`water.wet_area`:
-  the outline is only a hint, the shore is where the ground rises above the level; overlaps with other
-  patches are not resolved for water), and the export
-  also writes it to ``water.json`` (see :func:`water.build_water`). The flat mesh sits
-  ``WATER_VISUAL_DROP_M`` under the surface, so the shooter's own water surface, drawn at
-  ``water_y``, always wins and nothing z-fights. A water patch is the only kind baked into the chunk files as
-  ``patch_<ID>`` nodes; the other patches are baked as ground.
+* **Water.** A patch of a water type has a ``water_y``: it is a body of water. Its colour is painted on the bed (draped
+  on the carved terrain, like any patch) over the terrain below that level reached from the drawn outline
+  (:func:`water.wet_area`: the outline is only a hint, the shore is where the ground rises above the level; overlaps
+  with other patches are not resolved for water), and the export also writes it to ``water.json`` (see
+  :func:`water.plan_water`; the terrain under it is carved to its bed). There is no flat mesh at the surface: the
+  shooter draws the water itself from the depth grid in ``water.json``, and a second flat mesh just under it would
+  only show through the shallows. A water patch is the only kind baked into the chunk files as ``patch_<ID>`` nodes;
+  the other patches are baked as ground.
 * Entries that fail the drape (no terrain, polygon outside the terrain coverage) are warned about
   and skipped; a schema error fails the file as for every other edit kind (see ``edits.py``).
 """
@@ -50,7 +50,6 @@ from drycastle_pipeline.water import wet_area
 _MIN_AREA_M2 = 1e-6
 _RANK_STEP_M = 0.003  # roads.py lifts each higher road class by this much
 _ROAD_MARGIN_M = 1.0
-WATER_VISUAL_DROP_M = 0.02
 
 
 FALLBACK_COLOUR = "#808080"  # a type that carries no colours
@@ -63,6 +62,7 @@ class Patch:
     colour: list[int]  # the first terrain colour of the type
     polygon: Polygon  # local metres (x east, y north), clipped to the terrain coverage
     water_y: float | None = None  # flat water surface height (terrain datum), None: ground
+    max_depth: float | None = None  # the body's deepest point in metres (its bed's scale), None: the class default
 
 
 @dataclass
@@ -117,7 +117,9 @@ def plan_patches(
             plan.warnings.append(f"ground_patches.{pid}: outside the terrain coverage; patch skipped")
             continue
         poly = pieces[0] if len(pieces) == 1 else MultiPolygon(pieces)
-        plan.patches[pid] = Patch(pid, entry["type"], hex_to_rgb(type_colour(types[entry["type"]])), poly, entry.get("water_y"))
+        plan.patches[pid] = Patch(
+            pid, entry["type"], hex_to_rgb(type_colour(types[entry["type"]])), poly, entry.get("water_y"), entry.get("max_depth")
+        )
     return plan
 
 
@@ -271,20 +273,6 @@ def drape(
     return Mesh(tris, np.tile(np.array(colour, np.uint8), (len(tris), 1)))
 
 
-def flat_mesh(geom: BaseGeometry, colour: list[int], z: float) -> Mesh:
-    """Flat-coloured triangles covering ``geom`` at height ``z``, counter-clockwise from above."""
-    tris = []
-    for poly in _polygons(geom):
-        for tri in triangulate(poly):
-            a, b, c = (np.array([x, y, z], float) for x, y in tri)
-            if np.cross(b - a, c - a)[2] < 0:
-                b, c = c, b
-            tris.append([a, b, c])
-    if not tris:
-        return Mesh.empty()
-    return Mesh(np.array(tris), np.tile(np.array(colour, np.uint8), (len(tris), 1)))
-
-
 def patch_meshes(
     plan: PatchPlan,
     terrain: Terrain,
@@ -292,8 +280,13 @@ def patch_meshes(
     roads_cfg: dict,
     pcfg: dict,
     only: set[str] | None = None,
+    wet: dict[str, BaseGeometry] | None = None,
 ) -> dict[str, Mesh]:
-    """``{patch ID: mesh}`` for the planned patches (``only``: just these), empty ones omitted."""
+    """``{patch ID: mesh}`` for the planned patches (``only``: just these), empty ones omitted.
+
+    ``wet`` are the water areas already worked out for the water bodies (``WaterPlan.wet``, from the terrain before
+    it was carved, so the paint matches water.json); a water patch not in it works its own out.
+    """
     out: dict[str, Mesh] = {}
     for pid in sorted(plan.patches if only is None else only & set(plan.patches)):
         geom = visible_area(plan, pid)
@@ -302,8 +295,13 @@ def patch_meshes(
         water_y = plan.patches[pid].water_y
         if water_y is not None:
             # the drawn outline is only a hint: the water lies wherever the terrain is below its level
-            wet = wet_area(plan.patches[pid].polygon, terrain, water_y)
-            mesh = flat_mesh(wet, plan.patches[pid].colour, water_y - WATER_VISUAL_DROP_M)
+            if wet is not None and pid in wet:
+                area = wet[pid]
+            else:
+                area = wet_area(plan.patches[pid].polygon, terrain, water_y)
+            # painted on the carved bed, like any patch: the shooter draws the surface itself, and a flat mesh just
+            # under it would show through the shallows as a second, hard-edged surface
+            mesh = drape(area, plan.patches[pid].colour, terrain, [], float(pcfg["lift_m"]), float(pcfg["road_lift_m"]))
             if mesh.face_count:
                 out[pid] = mesh
             continue

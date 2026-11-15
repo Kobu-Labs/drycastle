@@ -399,7 +399,10 @@ def test_export_bakes_the_water_patches_as_nodes_and_writes_patches_json_for_the
     assert "patches" not in plain["generated"] and "patches" not in plain["files"]
     assert not (other / "patches.json").exists()
     base = {k: v for k, v in plain["chunks"][0]["triangles"].items()}
-    assert {k: v for k, v in chunk["triangles"].items() if not k.startswith("patch_")} == base
+    got = {k: v for k, v in chunk["triangles"].items() if not k.startswith("patch_")}
+    # the ground of a water body is collided with at the full grid (the carved bed is what is waded over), not decimated
+    assert got.pop("terrain_collision") >= base.pop("terrain_collision")
+    assert got == base
 
 
 def test_a_water_patch_is_a_water_body(ws) -> None:
@@ -531,23 +534,27 @@ def _wet_setup(level_offset):
     return terrain, plan
 
 
-def test_water_mesh_is_flat_under_the_level_and_follows_the_shore() -> None:
+def test_water_mesh_lies_on_the_bed_and_follows_the_shore() -> None:
     terrain, plan = _wet_setup(1.0)
     level = plan.patches["GP-0001"].water_y
     mesh = patch_meshes(plan, terrain, None, ROADS, RCFG)["GP-0001"]
-    assert np.allclose(mesh.tris[:, :, 2], level - 0.02)
     assert (np.cross(mesh.tris[:, 1] - mesh.tris[:, 0], mesh.tris[:, 2] - mesh.tris[:, 0])[:, 2] > 0).all()
     xy = mesh.tris[:, :, :2].reshape(-1, 2)
     assert (terrain.surface(xy[:, 0], xy[:, 1]) <= level + 0.4).all()  # nowhere on ground well above the level
+    # painted on the ground (a hair above it), not hanging at the surface where the water shader would take it for the bed
+    ground = terrain.surface(xy[:, 0], xy[:, 1])
+    assert np.allclose(mesh.tris[:, :, 2].ravel(), ground + RCFG["lift_m"], atol=0.02)
+    assert (mesh.tris[:, :, 2] < level - 0.1).any()
 
 
 def test_water_patch_becomes_water_bodies_and_dry_levels_are_skipped() -> None:
-    from drycastle_pipeline.water import build_water
+    from drycastle_pipeline.water import plan_water, water_rules
 
+    rules = water_rules()
     terrain, plan = _wet_setup(1.0)
-    docw, skipped = build_water([], terrain, plan.patches)
-    assert skipped == [] and docw["bodies"]
-    assert all(b["bed_y"] < b["surface_y"] for b in docw["bodies"])
+    water = plan_water([], terrain, plan.patches, rules)
+    assert water.skipped == [] and water.bodies
+    assert all(b.bed_y < b.surface_y for b in water.bodies)
     terrain, plan = _wet_setup(-50.0)
-    docw, skipped = build_water([], terrain, plan.patches)
-    assert docw["bodies"] == [] and skipped == ["GP-0001"]
+    water = plan_water([], terrain, plan.patches, rules)
+    assert water.bodies == [] and water.skipped == ["GP-0001"]

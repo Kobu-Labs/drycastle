@@ -55,6 +55,7 @@ from drycastle_pipeline.edits import (
     CUSTOM_FENCE_KEYS,
     DEFAULT_EDITS,
     FENCE_TYPES,
+    MAX_DEPTH_LIMIT_M,
     POLE_ASSET_PREFIX,
     WIRE_ASSET_PREFIXES,
     Edits,
@@ -1780,7 +1781,7 @@ class ParcelEditTools:
         c = poly.centroid
         return {
             "id": sid,
-            **{k: entry[k] for k in ("type", "kind", "water_y") if k in entry},
+            **{k: entry[k] for k in ("type", "kind", "water_y", "max_depth") if k in entry},
             "area_m2": round(poly.area, 1),
             "points": len(entry["polygon"]),
             "bbox": [_r3(v) for v in poly.bounds],
@@ -2027,17 +2028,23 @@ class ParcelEditTools:
         parcel: str | None = None,
         points: list | None = None,
         water_y: float | None = None,
+        max_depth: float | None = None,
     ) -> dict:
         """Create a ground patch (see the registered tool description)."""
         name = self._ground_type(type)
         water = self._is_water_type(name)
         level = None if water_y is None else _check_num("water_y", water_y)
+        depth = self._depth(max_depth)
+        if depth is not None and not water:
+            raise ToolError(f"max_depth only goes with a water type; {name} does not carry the water attribute")
         if water and level is None:
             raise ToolError(f"{name} is a water type: give water_y (metres, terrain datum)")
         if not water and level is not None:
             raise ToolError(f"water_y only goes with a water type; {name} does not carry the water attribute")
         pts = self._points_of(polygon, parcel, points, "ground patch")
         extra = {} if level is None else {"water_y": level}
+        if depth is not None:
+            extra["max_depth"] = depth
 
         def change(edits: Edits) -> dict:
             pid = _next_id("GP", list(edits.ground_patches))
@@ -2054,14 +2061,17 @@ class ParcelEditTools:
             "warnings": out["warnings"],
         }
 
-    def set_patch_type(self, id: str, type: str, water_y: float | None = None) -> dict:
+    def set_patch_type(self, id: str, type: str, water_y: float | None = None, max_depth: float | None = None) -> dict:
         """Give a ground patch another ground type (and a water level when the type is water)."""
         pid = self._patch_id(id)
         name = self._ground_type(type)
         water = self._is_water_type(name)
         level = None if water_y is None else _check_num("water_y", water_y)
+        depth = self._depth(max_depth)
         if not water and level is not None:
             raise ToolError(f"water_y only goes with a water type; {name} does not carry the water attribute")
+        if not water and depth is not None:
+            raise ToolError(f"max_depth only goes with a water type; {name} does not carry the water attribute")
 
         def change(edits: Edits) -> object:
             entry = self._patch_entry(edits, pid)
@@ -2071,8 +2081,12 @@ class ParcelEditTools:
             entry["type"] = name
             if not water:
                 entry.pop("water_y", None)
-            elif level is not None:
-                entry["water_y"] = level
+                entry.pop("max_depth", None)
+            else:
+                if level is not None:
+                    entry["water_y"] = level
+                if depth is not None:
+                    entry["max_depth"] = depth
             return old
 
         old = self._write(change)
@@ -2083,10 +2097,25 @@ class ParcelEditTools:
             "warnings": [],
         }
 
-    def set_patch_water(self, id: str, water_y: float) -> dict:
-        """Change the flat water surface height of a ground patch of a water type."""
+    @staticmethod
+    def _depth(max_depth: float | None) -> float | None:
+        """A body's ``max_depth`` (metres, 0 to ``MAX_DEPTH_LIMIT_M``), or None when not given."""
+        if max_depth is None:
+            return None
+        depth = _check_num("max_depth", max_depth)
+        if not (0 < depth <= MAX_DEPTH_LIMIT_M):
+            raise ToolError(f"max_depth must be in metres, between 0 and {MAX_DEPTH_LIMIT_M:g}, got {max_depth!r}")
+        return depth
+
+    def set_patch_water(self, id: str, water_y: float, max_depth: float | None = None) -> dict:
+        """Change the flat water surface height of a ground patch of a water type, and optionally its deepest point.
+
+        ``max_depth`` (metres, optional) is the body's deepest point; left out it keeps the current one (the class
+        default when there is none).
+        """
         pid = self._patch_id(id)
         level = _check_num("water_y", water_y)
+        depth = self._depth(max_depth)
 
         def change(edits: Edits) -> object:
             entry = self._patch_entry(edits, pid)
@@ -2094,10 +2123,16 @@ class ParcelEditTools:
                 raise ToolError(f"{pid} is of type {entry['type']}, not a water type; set_patch_type it to a water type first. Nothing was changed.")
             old = entry["water_y"]
             entry["water_y"] = level
+            if depth is not None:
+                entry["max_depth"] = depth
             return old
 
         old = self._write(change)
-        return {"summary": f"{pid} water_y {old} -> {level}", "id": pid, "water_y": level, "warnings": []}
+        out = {"summary": f"{pid} water_y {old} -> {level}", "id": pid, "water_y": level, "warnings": []}
+        if depth is not None:
+            out["max_depth"] = depth
+            out["summary"] += f", max_depth {depth}"
+        return out
 
     def _move_corner(
         self,
@@ -2522,7 +2557,8 @@ def build_server(settings: Settings) -> Any:
         "Needs 3+ points; edges may not cross or touch each other. Invalid shapes are refused "
         "and nothing is written. Where patches overlap the higher ID wins (reported in "
         "`warnings`). A water type (carries the water attribute) needs `water_y`, the flat surface of the body of "
-        "water in metres on the terrain datum (see set_patch_water); other types refuse it. "
+        "water in metres on the terrain datum (see set_patch_water), and may give `max_depth` (metres, 0 to 20), the "
+        "body's deepest point (its natural bed is scaled to it); other types refuse both. "
         "Returns the id, area, bbox and the final absolute polygon."))
     def create_ground_patch(
         type: str,
@@ -2530,21 +2566,24 @@ def build_server(settings: Settings) -> Any:
         parcel: str | None = None,
         points: list[list[float]] | None = None,
         water_y: float | None = None,
+        max_depth: float | None = None,
     ) -> dict:
-        return tools.create_ground_patch(type, polygon, parcel, points, water_y)
+        return tools.create_ground_patch(type, polygon, parcel, points, water_y, max_depth)
 
     @server.tool(description=(
         "Give a ground patch another ground type (see list_ground_types). A water type needs `water_y` unless the "
-        "patch has one; a type that is not water drops it. Shows after the next full run (make map)."))
-    def set_patch_type(id: str, type: str, water_y: float | None = None) -> dict:
-        return tools.set_patch_type(id, type, water_y)
+        "patch has one, and may give `max_depth` (the body's deepest point, metres, 0 to 20); a type that is not water "
+        "drops both. Shows after the next full run (make map)."))
+    def set_patch_type(id: str, type: str, water_y: float | None = None, max_depth: float | None = None) -> dict:
+        return tools.set_patch_type(id, type, water_y, max_depth)
 
     @server.tool(description=(
         "Change the flat water surface height of a ground patch of a water type (`water_y`, metres on the terrain's "
         "datum, e.g. 185.6): the body of water stays level over the terrain and is also written to water.json "
-        "(swimming, the shooter's water surface). Raise or lower the level by calling this again."))
-    def set_patch_water(id: str, water_y: float) -> dict:
-        return tools.set_patch_water(id, water_y)
+        "(swimming, the shooter's water surface). `max_depth` (metres, optional, 0 to 20) sets the body's deepest "
+        "point: its natural bed is scaled to it. Raise or lower the level by calling this again."))
+    def set_patch_water(id: str, water_y: float, max_depth: float | None = None) -> dict:
+        return tools.set_patch_water(id, water_y, max_depth)
 
     @server.tool(description=(
         "Move one corner of a ground patch's polygon (`index`, 0-based as in the file) to an absolute "

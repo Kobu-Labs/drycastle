@@ -264,13 +264,13 @@ public static class ObjectEdits
 
     /// <summary>
     /// Mirror of edits.py `_check_ground_patch`: a `type` that exists (rules.yaml or ground_types, not deleted), a `water_y` that is there exactly
-    /// when the type carries water, and a simple ring of at least 3 [x, y] points (closing point optional).
+    /// when the type carries water, an optional `max_depth` (0 to 20 m, only with `water_y`), and a simple ring of at least 3 [x, y] points (closing point optional).
     /// </summary>
     static List<string> CheckPatch(object? entry, string path, Obj? types)
     {
         var errs = new List<string>();
         if (entry is not Obj r) { errs.Add($"{path}: must be an object"); return errs; }
-        foreach (var k in r.Keys) if (k is not ("type" or "polygon" or "water_y")) errs.Add($"{path}.{k}: unknown key");
+        foreach (var k in r.Keys) if (k is not ("type" or "polygon" or "water_y" or "max_depth")) errs.Add($"{path}.{k}: unknown key");
         if (!r.TryGetValue("type", out var tv)) errs.Add($"{path}.type: required");
         else if (tv is not string type || type == "") errs.Add($"{path}.type: must be a ground type name");
         else
@@ -281,6 +281,11 @@ public static class ObjectEdits
             else if (water is false && r.ContainsKey("water_y")) errs.Add($"{path}.water_y: refused: {type} is not water");
         }
         if (r.TryGetValue("water_y", out var wy) && !(Number(wy) is double w && double.IsFinite(w))) errs.Add($"{path}.water_y: must be a number (metres, terrain datum)");
+        if (r.TryGetValue("max_depth", out var md))
+        {
+            if (!r.ContainsKey("water_y")) errs.Add($"{path}.max_depth: only a body of water (with water_y) has a depth");
+            else if (!(Number(md) is double d && double.IsFinite(d) && d > 0 && d <= 20)) errs.Add($"{path}.max_depth: must be a number of metres in (0, 20]");
+        }
         errs.AddRange(CheckPolygon(r, path));
         return errs;
     }

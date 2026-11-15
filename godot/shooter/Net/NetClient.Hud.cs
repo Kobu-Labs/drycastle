@@ -107,7 +107,6 @@ public partial class NetClient
         UavTick();
         if (_me != null) RozhlasFeedPlayer.Current?.SetListener(_me.GlobalPosition);
         if (_me != null) Rozhlas.Current?.SetListener(_me.GlobalPosition); // the loudspeaker is heard where the player is, not where a vehicle's orbiting camera is
-        if (_me != null) _hud?.SetBreath(Breath.AirLeft(_me.State), _me.HeadUnder);
         if (_me != null && _hud != null)
         {
             var g = _me.GlobalPosition;

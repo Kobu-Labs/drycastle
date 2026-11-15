@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.ShooterCore;
+using WaterSurfaces = Drycastle.MapLoader.WaterSurfaces;
 
 namespace Drycastle.Shooter;
 
@@ -252,7 +253,7 @@ public partial class Shooter : Node3D
             steps.Add(() => CarFx.Warm(model));
         }
         steps.Add(GlassFx.Load);
-        foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, UnderwaterView.ShaderPath, DayNightCycle.SkyShaderPath })
+        foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, DayNightCycle.SkyShaderPath })
         {
             var path = sh;
             steps.Add(() => GD.Load<Shader>(path));
@@ -370,6 +371,7 @@ public partial class Shooter : Node3D
         _map.CollisionOnly = cfg.Str("role", "client") == "server"; // the server never draws the map
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Water.Empty : Drycastle.ShooterCore.Water.Parse(_map.WaterJson);
+        WaterSurfaces.ReduceMotion = () => GameSettings.Current.ReduceMotion;
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
         IntelScreen.OpenEntrance(_map); // the hangar's small door, so the intel room can be entered (client and server alike)
         if (ChurchProps.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } churchProps) AddChild(churchProps); // pews, altar: Synty models, boxes on the server too
@@ -566,7 +568,6 @@ public partial class Shooter : Node3D
     void AddLightAndSky()
     {
         AddChild(new DayNightCycle { LocalClock = _data.Environment.ToClock(), MinAmbient = _data.Environment.MinAmbient });
-        AddChild(new UnderwaterView { Water = _water });
     }
 
     /// <summary>Client view: light, sky and the first-person player at a random spawn point.</summary>

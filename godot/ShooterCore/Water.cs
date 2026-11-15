@@ -1,27 +1,78 @@
+using System.Buffers.Binary;
 using System.Numerics;
 using System.Text.Json;
 
 namespace Drycastle.ShooterCore;
 
-/// <summary>Water constants from the "swimming and submerging" ticket (starting values, to be playtested).</summary>
+/// <summary>Water constants (starting values, to be playtested). Swimming is at the surface only (ADR 0023).</summary>
 public static class WaterConsts
 {
     /// <summary>Column depth above which the player swims (below it: wading).</summary>
     public const float SwimDepth = 1.1f;
-    /// <summary>Wading (shallow water, feet in water) walks at this share of normal speed.</summary>
-    public const float WadeSpeedScale = 0.6f;
+    /// <summary>Swim speed (m/s). Sprint is off in deep water; the speed is the only swim penalty.</summary>
     public const float SwimSpeed = 3f;
-    public const float SwimSprintSpeed = 4.5f;
-    /// <summary>Vertical swim speed: jump rises, crouch dives (m/s).</summary>
-    public const float SwimVerticalSpeed = 2f;
-    /// <summary>How fast the vertical swim speed eases toward its target (m/s per s).</summary>
-    public const float SwimVerticalAccel = 20f;
+    /// <summary>Depth at the ankles: wading is full speed up to here (the ease starts above it).</summary>
+    public const float AnkleDepth = 0.2f;
+    /// <summary>Depth at which the wading speed scale reaches <see cref="WadeSpeedFloor"/>; it blends into the swim speed by <see cref="SwimDepth"/>.</summary>
+    public const float WadeDepth = 0.9f;
+    /// <summary>Wading speed share of the land speed at <see cref="WadeDepth"/>.</summary>
+    public const float WadeSpeedFloor = 0.6f;
+    /// <summary>Eyes this far above the surface while swimming (m). The feet hang <c>MoveConsts.EyeHeight - this</c> under it.</summary>
+    public const float SwimEyesAboveSurface = 0.4f;
+    /// <summary>Eases the feet to their swim height: vertical speed per metre off the height (1/s).</summary>
+    public const float SwimSettleRate = 8f;
+    /// <summary>Cap on the vertical speed that eases the feet to the swim height (m/s).</summary>
+    public const float SwimSettleMaxSpeed = 4f;
+    /// <summary>Jump within this distance (m) of the shoreline of a deep body hops out onto the bank.</summary>
+    public const float ShoreHopDistance = 1.5f;
+    /// <summary>Upward speed of the hop out of the water (m/s): peaks about 1.5 m above the float height.</summary>
+    public const float SwimHopSpeed = 7.9f;
 }
 
 /// <summary>
-/// One water body: a water parcel of the base map. Rings are in Godot ground axes (x east, y = -north), outer ring
-/// first then holes. The surface is flat at <see cref="SurfaceY"/>; the bed is flat at <see cref="BedY"/> (the lowest
-/// terrain sampled inside the body), so depth is the same everywhere in the body (an approximation).
+/// The depth of a water body on a grid (water.json version 2): cell centres at Origin + (i + 0.5) * CellM in local
+/// metres (x east, y north), row 0 the southern row, 0 outside the outline. Depth is bilinear between cell centres.
+/// </summary>
+public sealed class DepthGrid
+{
+    public float OriginX { get; }
+    public float OriginY { get; }
+    public float CellM { get; }
+    public int Cols { get; }
+    public int Rows { get; }
+    /// <summary>Row-major depths (m), <see cref="Rows"/> times <see cref="Cols"/> of them.</summary>
+    public float[] Depths { get; }
+    /// <summary>The deepest cell of the grid (m).</summary>
+    public float MaxDepth { get; }
+
+    public DepthGrid(float originX, float originY, float cellM, int cols, int rows, float[] depths)
+    {
+        if (cellM <= 0 || cols <= 0 || rows <= 0 || depths.Length != cols * rows)
+            throw new ArgumentException("depth grid needs a positive cell size and rows * cols depths");
+        OriginX = originX; OriginY = originY; CellM = cellM; Cols = cols; Rows = rows; Depths = depths;
+        MaxDepth = depths.Max();
+    }
+
+    /// <summary>Depth (m) at local metres (x east, y north), bilinear between cell centres; 0 beyond the grid.</summary>
+    public float DepthAt(float x, float y)
+    {
+        var gx = (x - OriginX) / CellM - 0.5f;
+        var gy = (y - OriginY) / CellM - 0.5f;
+        var i0 = (int)MathF.Floor(gx);
+        var j0 = (int)MathF.Floor(gy);
+        var fx = gx - i0;
+        var fy = gy - j0;
+        return At(j0, i0) * (1 - fx) * (1 - fy) + At(j0, i0 + 1) * fx * (1 - fy)
+             + At(j0 + 1, i0) * (1 - fx) * fy + At(j0 + 1, i0 + 1) * fx * fy;
+    }
+
+    float At(int j, int i) => (uint)i < (uint)Cols && (uint)j < (uint)Rows ? Depths[j * Cols + i] : 0f;
+}
+
+/// <summary>
+/// One water body: a water parcel or region of the base map. Rings are in Godot ground axes (x east, y = -north), outer
+/// ring first then holes. The surface is flat at <see cref="SurfaceY"/>. The bed is <see cref="Grid"/> (version 2: the depth
+/// varies over the body) or, without one (version 1), flat at <see cref="BedY"/>. <see cref="BedY"/> is always the lowest bed.
 /// </summary>
 public sealed class WaterBody
 {
@@ -29,12 +80,21 @@ public sealed class WaterBody
     public required Vector2[][] Rings { get; init; }
     public required float SurfaceY { get; init; }
     public required float BedY { get; init; }
+    /// <summary>The depth grid of version 2 water.json; null for a flat bed (version 1).</summary>
+    public DepthGrid? Grid { get; init; }
     public float MinX { get; init; }
     public float MinZ { get; init; }
     public float MaxX { get; init; }
     public float MaxZ { get; init; }
 
+    /// <summary>The deepest point of the body (surface minus the lowest bed).</summary>
     public float Depth => Math.Max(0f, SurfaceY - BedY);
+
+    /// <summary>
+    /// Water depth at ground point (x, z): the grid's depth there (bilinear) when the body has a grid, else the flat
+    /// <see cref="Depth"/>. The grid is in local axes (y = -z).
+    /// </summary>
+    public float DepthAt(float x, float z) => Grid is null ? Depth : Grid.DepthAt(x, -z);
 
     /// <summary>Area of the outer ring, m² (the shoelace formula; holes are not taken off).</summary>
     public float Area
@@ -136,8 +196,8 @@ public sealed class Water
     /// <summary>Surface height of the water at (x, z), or NaN when the point is not over water.</summary>
     public float SurfaceY(float x, float z) => BodyAt(x, z)?.SurfaceY ?? float.NaN;
 
-    /// <summary>Water depth (surface minus bed) at (x, z); 0 when the point is not over water.</summary>
-    public float Depth(float x, float z) => BodyAt(x, z)?.Depth ?? 0f;
+    /// <summary>Water depth at (x, z) (the bed's depth there); 0 when the point is not over water.</summary>
+    public float Depth(float x, float z) => BodyAt(x, z)?.DepthAt(x, z) ?? 0f;
 
     /// <summary>
     /// Water depth for feet at <paramref name="feet"/>: the column depth, but only when the feet are below the
@@ -146,13 +206,13 @@ public sealed class Water
     public float DepthAt(Vector3 feet)
     {
         var b = BodyAt(feet.X, feet.Z);
-        return b is not null && feet.Y < b.SurfaceY ? b.Depth : 0f;
+        return b is not null && feet.Y < b.SurfaceY ? b.DepthAt(feet.X, feet.Z) : 0f;
     }
 
     /// <summary>
     /// Fill the water fields of a movement state for the feet at <c>s.Position</c> (call before the step).
-    /// <see cref="MoveState.WaterDepth"/> is the depth at the feet; <see cref="MoveState.HeadUnder"/> is set when the
-    /// eyes are below the surface.
+    /// <see cref="MoveState.WaterDepth"/> is the depth at the feet; <see cref="MoveState.ShoreDistance"/> is the distance
+    /// to the body's shoreline, filled only in deep water (it decides whether a jump hops out).
     /// </summary>
     public void Sample(ref MoveState s)
     {
@@ -162,17 +222,20 @@ public sealed class Water
         {
             s.WaterDepth = 0f;
             s.WaterSurfaceY = float.NaN;
-            s.HeadUnder = false;
+            s.ShoreDistance = float.MaxValue;
             return;
         }
-        s.WaterDepth = b.Depth;
+        s.WaterDepth = b.DepthAt(feet.X, feet.Z);
         s.WaterSurfaceY = b.SurfaceY;
-        s.HeadUnder = feet.Y + MovementStep.EyeHeight(s.Stance) < b.SurfaceY;
+        s.ShoreDistance = b.Depth >= WaterConsts.SwimDepth ? b.ShoreDistance(feet.X, feet.Z) : float.MaxValue;
     }
 
     /// <summary>
-    /// Parse water.json: <c>{"version": 1, "bodies": [{"id", "polygon": {"coordinates": rings}, "surface_y", "bed_y"}]}</c>.
-    /// Polygon rings are local map metres (x east, y north) and are converted to Godot ground axes here.
+    /// Parse water.json. Version 1: <c>{"version": 1, "bodies": [{"id", "polygon": {"coordinates": rings}, "surface_y", "bed_y"}]}</c>,
+    /// a flat bed per body. Version 2 adds per body <c>"depth": {"origin", "cell_m", "cols", "rows", "cm"}</c> (see
+    /// <see cref="DepthGrid"/>): the bed varies over the body, and <c>bed_y</c> is its lowest point. A version 2 body
+    /// without a depth grid keeps the flat bed. Polygon rings are local map metres (x east, y north) and are converted to
+    /// Godot ground axes here.
     /// </summary>
     public static Water Parse(string json, string name = "water.json")
     {
@@ -182,8 +245,10 @@ public sealed class Water
         using (doc)
         {
             var root = doc.RootElement;
-            if (!root.TryGetProperty("version", out var v) || v.ValueKind != JsonValueKind.Number || v.GetInt32() != 1)
-                throw new DataFileException($"{name}: unsupported or missing version (expected 1)");
+            if (!root.TryGetProperty("version", out var v) || v.ValueKind != JsonValueKind.Number
+                || v.GetInt32() is not (1 or 2))
+                throw new DataFileException($"{name}: unsupported or missing version (expected 1 or 2)");
+            var version = v.GetInt32();
             if (!root.TryGetProperty("bodies", out var bodies) || bodies.ValueKind != JsonValueKind.Array)
                 throw new DataFileException($"{name}: missing bodies array");
             var list = new List<WaterBody>();
@@ -195,12 +260,16 @@ public sealed class Water
                     .ToArray();
                 if (rings.Length == 0 || rings[0].Length < 3) throw new DataFileException($"{name}: body {id} has no outer ring");
                 var all = rings.SelectMany(r => r).ToArray();
+                DepthGrid? grid = null;
+                if (version == 2 && b.TryGetProperty("depth", out var depth))
+                    grid = ReadDepth(depth, id, name);
                 list.Add(new WaterBody
                 {
                     Id = id,
                     Rings = rings,
                     SurfaceY = b.GetProperty("surface_y").GetSingle(),
                     BedY = b.GetProperty("bed_y").GetSingle(),
+                    Grid = grid,
                     MinX = all.Min(p => p.X), MaxX = all.Max(p => p.X),
                     MinZ = all.Min(p => p.Y), MaxZ = all.Max(p => p.Y),
                 });
@@ -208,34 +277,24 @@ public sealed class Water
             return new Water(list);
         }
     }
-}
 
-/// <summary>Breath (air) and drowning. Air is tracked as seconds spent since the head last surfaced.</summary>
-public static class Breath
-{
-    /// <summary>Seconds of air with the head under water.</summary>
-    public const float Capacity = 20f;
-    /// <summary>Surfacing takes air back this many times faster than it is spent (a full refill takes Capacity / this, 4 s).</summary>
-    public const float RefillRate = 5f;
-    /// <summary>Drowning damage per second once the air is gone.</summary>
-    public const float DrowningDamagePerSecond = 12f;
-
-    /// <summary>Seconds of air left (Capacity while dry).</summary>
-    public static float AirLeft(in MoveState s) => Math.Max(0f, Capacity - s.AirSpent);
-
-    /// <summary>
-    /// Advance the air by one tick using <see cref="MoveState.HeadUnder"/> (set by <see cref="Water.Sample"/> this tick).
-    /// Returns the drowning damage for the tick (0 while air is left).
-    /// </summary>
-    public static float Tick(ref MoveState s, float dt)
+    /// <summary>A body's depth grid: the origin, cell size, size, and little-endian uint16 centimetres in base64.</summary>
+    static DepthGrid ReadDepth(JsonElement d, string id, string name)
     {
-        if (!s.HeadUnder)
-        {
-            s.AirSpent = Math.Max(0f, s.AirSpent - RefillRate * dt);
-            return 0f;
-        }
-        var hadAir = s.AirSpent < Capacity;
-        s.AirSpent = Math.Min(Capacity, s.AirSpent + dt);
-        return hadAir ? 0f : DrowningDamagePerSecond * dt;
+        var origin = d.GetProperty("origin").EnumerateArray().Select(e => e.GetSingle()).ToArray();
+        var cell = d.GetProperty("cell_m").GetSingle();
+        var cols = d.GetProperty("cols").GetInt32();
+        var rows = d.GetProperty("rows").GetInt32();
+        if (origin.Length != 2 || cell <= 0 || cols <= 0 || rows <= 0)
+            throw new DataFileException($"{name}: body {id} has a bad depth grid");
+        byte[] bytes;
+        try { bytes = Convert.FromBase64String(d.GetProperty("cm").GetString() ?? ""); }
+        catch (FormatException e) { throw new DataFileException($"{name}: body {id} depth is not base64", e); }
+        if (bytes.Length != cols * rows * 2)
+            throw new DataFileException($"{name}: body {id} depth has {bytes.Length} bytes, expected {cols * rows * 2}");
+        var depths = new float[cols * rows];
+        for (var k = 0; k < depths.Length; k++)
+            depths[k] = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(2 * k)) / 100f;
+        return new DepthGrid(origin[0], origin[1], cell, cols, rows, depths);
     }
 }

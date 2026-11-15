@@ -15,12 +15,13 @@ import shapely
 from shapely.geometry import Polygon
 
 from drycastle_pipeline.building_detail import GLASS as PANE_GLASS
+from drycastle_pipeline.bed import carve_terrain
 from drycastle_pipeline.building_detail import build_detail, load_details
 from drycastle_pipeline.buildings import hex_to_rgb
 from drycastle_pipeline.bunker import bunker_rooms
 from drycastle_pipeline.detail import load_patches, patches_by_chunk
 from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits
-from drycastle_pipeline.ground import ground_types, ground_units, type_colours
+from drycastle_pipeline.ground import ground_types, ground_units, type_colours, water_kinds
 from drycastle_pipeline.landmarks import build_landmark
 from drycastle_pipeline.meshes import Mesh, building_mesh, collision_mesh
 from drycastle_pipeline.patches import node_name, patch_meshes, plan_patches
@@ -29,6 +30,7 @@ from drycastle_pipeline.roads import road_mesh
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.terrain import Terrain, cut_holes, load_terrain
 from drycastle_pipeline.textures import TexturedMesh, tex_node_name
+from drycastle_pipeline.water import WaterPlan, plan_water, water_rules
 
 Chunk = tuple[int, int]
 GREY = (128, 128, 128)
@@ -84,6 +86,7 @@ class MapScene:
     bunkers: list[dict] = field(default_factory=list)  # rooms of the enterable bunkers, see bunker.bunker_rooms
     church: dict | None = None  # the inside of the church, see church_interior.church_info
     urad: dict | None = None  # the inside of the municipal office, see office_interior.urad_info
+    water: WaterPlan | None = None  # the water bodies (water.json) and the terrain they are carved into, with a terrain
 
     def chunks(self) -> list[Chunk]:
         return sorted(set(self.parcels) | set(self.nodes) | set(self.parcel_props))
@@ -131,10 +134,18 @@ def build_scene(
     scene = MapScene()
     details = load_details()
     k = exaggeration
+    types = ground_types(rules_path, edits_path)
+    pplan = None
     if (work_dir / "terrain.json").is_file():
-        scene.terrain, elev = load_terrain(work_dir)
+        base, elev = load_terrain(work_dir)
         scene.building_elevation = {b: e * k for b, e in elev.items()}
-        scene.terrain = scene.terrain.scaled(k) if k != 1 else scene.terrain
+        # the water and the patches are worked out on the terrain as it is, then the terrain is carved to the beds
+        pplan = plan_patches(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), base, types)
+        wrules = water_rules(rules_path)
+        scene.water = plan_water(ground_units(parcels_doc), base, pplan.patches, wrules, water_kinds(types))
+        scene.terrain = base.scaled(k) if k != 1 else base
+        beds = [b.scaled(k) for b in scene.water.bodies] if k != 1 else scene.water.bodies
+        carve_terrain(scene.terrain, beds, float(wrules["carve_blend_m"]))
 
     for p in sorted(parcels_doc["parcels"], key=lambda p: p["id"]):
         ids = sorted(bid for bid in p["buildings"] if bid in buildings)
@@ -208,7 +219,6 @@ def build_scene(
                 scene.nodes.setdefault(key, {})[name] = mesh
 
     tcfg = load_section("terrain", rules_path)
-    types = ground_types(rules_path, edits_path)
     colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(types)})
     dec = int(tcfg["collision_decimate"])
     grey = np.array(GREY, np.uint8)
@@ -222,6 +232,14 @@ def build_scene(
         for x in (c.centroid.x - 8, c.centroid.x + 8)
         for y in (c.centroid.y - 8, c.centroid.y + 8)
     }
+    # ... and so is the ground of a water body: the carved bed is what the player wades and swims over
+    for b in scene.water.bodies:
+        minx, miny, maxx, maxy = b.geom.bounds
+        exact |= {
+            (cx, cy)
+            for cx in range(math.floor(minx / chunk_m), math.floor(maxx / chunk_m) + 1)
+            for cy in range(math.floor(miny / chunk_m), math.floor(maxy / chunk_m) + 1)
+        }
     for key in t.chunks():
         put("terrain", {key: cut_holes(t.chunk_mesh(*key, colours), cuts)})
         put(
@@ -237,13 +255,13 @@ def build_scene(
     if scene.graph:
         put("roads", _by_chunk(road_mesh(scene.graph, t, load_section("roads", rules_path)), chunk_m))
 
-    pplan = plan_patches(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), t, types)
     scene.warnings += pplan.warnings
     scene.patches = pplan.patches
     water = {pid for pid, p in pplan.patches.items() if p.water_y is not None}
     if water:
         meshes = patch_meshes(
-            pplan, t, scene.graph, load_section("roads", rules_path), load_section("ground_patches", rules_path), only=water
+            pplan, t, scene.graph, load_section("roads", rules_path), load_section("ground_patches", rules_path), only=water,
+            wet=scene.water.wet,
         )
         for pid, mesh in meshes.items():
             put(node_name(pid), _by_chunk(mesh, chunk_m))

@@ -3,7 +3,8 @@
 Status: all tickets of "Map: Shooter v2" (#104) are closed, most of them "resolved in part". This page is the entry point:
 what the game now has, where the numbers live, the wire protocol, and what is still open. Server operation (flags,
 database, firewall) is in `docs/shooter-server.md`. Terms are defined in `GLOSSARY.md`; the decisions are in
-`docs/adr/0003` (persistence and identity) and `docs/adr/0004` (water bodies in the map artifact).
+`docs/adr/0003` (persistence and identity), `docs/adr/0004` (water bodies in the map artifact, partly superseded) and
+`docs/adr/0023` (surface-only swimming and the per-body depth grid).
 
 Nothing in this document was checked by running the game. The unit tests in `godot/ShooterCore.Tests` cover the shared
 simulation, the data files and the wire codecs; the Godot scenes, shaders and HUD layouts are compiled but unseen.
@@ -106,7 +107,7 @@ Data: `godot/shooter/data/perks.json`. One perk per loadout. The modifier is rea
 | Swift Swap | 5 | weapon swap speed x1.5 | yes |
 | Tank Hunter | 8 | damage dealt to vehicles x1.25 | yes |
 | Hot Streak | 12 | every killstreak threshold lowered by 1 kill (never below 1) | yes |
-| Steady Lung | 15 | breath hold time x1.5 | yes, but not in water (#138) |
+| Steady Lung | 15 | breath hold time x1.5 | yes |
 | Ghost | 20 | UAV visibility x0 (enemy UAV pings do not show you) | yes |
 
 Perk numbers are the first set from the brief (#115), not tuned by play. Two of them scale with the streak they are
@@ -286,8 +287,9 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 - Utility helicopter (ADR 0006): the flown vehicle (`utility_helicopter`, medium `air`), see "Utility helicopter" below.
 - Amphibious transport (ADR 0010, 0011, 0012): an open three-seat vehicle with its own driving model on land and water, an armed seat and a
   ring gun, and riders the hull does not cover (`amphibious`, medium `amphibious`), see "Amphibious transport" below.
-- Water bodies (#138, #142): the pipeline writes `water.json` into the map artifact; the server and clients swim, submerge
-  and hold breath (HUD "AIR"). Surfaces, underwater tint and splashes are client-side and not yet compiled by Godot.
+- Water bodies (#138, #142): the pipeline writes `water.json` into the map artifact; the server and clients float and swim at
+  the surface in deep water (ADR 0023: no diving, no breath, no drowning), wade in shallow water and splash on entry.
+  Surfaces and splashes are client-side and not yet compiled by Godot.
 - Zone points: `zone_points.json` holds baked candidate points inside the zones of each kind the server needs (Bigfoot, the wild species). The server asks `NetServer.PickEventSpawn("bigfoot")` for a random one, or gets
   `null` when none exists (`docs/pipeline.md`, "Zones"). No client use.
 - Day/night (#135): one server clock, `environment.json` (start time 08:00, day length 24 minutes by default). The sun,
@@ -581,8 +583,10 @@ Not built:
 - HUD XP bar; minimap size, opacity and zoom as settings (#119, #143). Enemy minimap dots are fed by UAV pings (#121) and gunfire blips: an enemy's gun shot within `gunfire_blip_radius` (match.json, 150 m) shows a fading diamond for `gunfire_blip_seconds` (1.5 s), one per shooter per `gunfire_blip_interval` (0.25 s). No wire event of its own: every client already receives each Shot and PelletFan with the shooter and origin (rules in `GunfireBlipRules`, tracker `GunfireBlips`). Knife, streak weapons and vehicle guns do not blip; Ghost does not hide it; no protocol bump.
 - Scope zoom levels above 1 (#113). Sniper sway reduction (#139): `sway_amount` is read but never applied.
 - Concealment wired into the tick, name tags and kill cam; suit visible in first person; tufts do not follow limbs (#140, #141).
-- Water: water surface mesh, underwater fog and muffling, bubbles, light shafts, remote swim animation, splash on entry
-  for predicted shots (#138, #142). Holes in water bodies are not cut out of the surface (an island in a lake is covered).
+- Water: water surface mesh, bubbles, light shafts, remote swim animation, splash on entry for predicted shots (#138, #142).
+  The surface is one-sided and flat (waves are per pixel); it takes depth from the `water.json` depth grid, so a
+  version 1 map (no grid) has no fade at the bank. The full-screen underwater view and
+  the SFX muffling were removed with diving (ADR 0023).
 - Turret: the knife can hit a turret through a wall; the owner leaving leaves the turret firing (kills still credit the
   departed id) (#123).
 - Aircraft: no way out of a turret or gunship except the streak's own end (#125, #126); the owner's body stays shootable
@@ -590,14 +594,12 @@ Not built:
 - MOAB: no killcam (none exists in the repo), no MOAB sound (#129).
 - Corpse pickup and the care package crate both use E; holding E on a corpse under a falling crate can take the corpse
   first (#124).
-- Steady Lung does not apply in water (#138).
 - Care package (#151): the reward streaks are not shown in the loadout tracker (only the toast names them). The corpse
   pickup hold still uses its own prompt, not `RadialProgress`. The ring, the toast icon and the crate despawn on open were
   not checked in the running game (the brief forbade it).
 
 Not verified (compiled, not run; the brief for these tickets forbade running the game):
-- Shaders: `water_surface.gdshader` and `underwater.gdshader` (shore fade uses `hint_depth_texture`, which needs the Forward+
-  or Mobile renderer; the project uses the default renderer), `sky_daynight.gdshader`, `camo_suit.gdshader`,
+- Shaders: `water_surface.gdshader` (compiles on Forward+; its look is not checked in the game), `sky_daynight.gdshader`, `camo_suit.gdshader`,
   `camo_tuft.gdshader`, `gunship_thermal.gdshader`. The first real compile is the first check.
 - Layout, scenes and HUD positions: streak panel, minimap texture size, XP strip, breath bar, care package prompt, gunship
   overlay, the aircraft overlays. Visual fit of the jeep and quad models.

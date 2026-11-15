@@ -409,7 +409,7 @@ public partial class NetServer
     DemonHitKind? DemonKindOf(byte weapon)
     {
         if (weapon < Weapons.Weapons.Count) return Weapons.Weapons[weapon].Splash != null ? DemonHitKind.Explosive : DemonHitKind.Bullet;
-        return weapon is SpecialWeapons.Burn or SpecialWeapons.Fall or SpecialWeapons.Drown or SpecialWeapons.Void or SpecialWeapons.Debug ? null : DemonHitKind.Vehicle;
+        return weapon is SpecialWeapons.Burn or SpecialWeapons.Fall or SpecialWeapons.Void or SpecialWeapons.Debug ? null : DemonHitKind.Vehicle;
     }
 
     /// <summary>A hit on the demon (from <see cref="Deal"/>): counted by the brain, the shooter gets the hit marker. Ignored while it cannot be hurt.</summary>

@@ -22,15 +22,11 @@ public partial class Player : CharacterBody3D
 
     public float Health { get; set; } = MoveConsts.MaxHealth;
     public float LastFallDamage { get; private set; }
-    /// <summary>Drowning damage of the last tick (air used up with the head under); applied when authoritative.</summary>
-    public float LastDrowningDamage { get; private set; }
     /// <summary>The map's water (set by the owner before the first tick); <see cref="Water.Empty"/> on a dry map.</summary>
     public Water Water { get; set; } = Water.Empty;
 
     /// <summary>The map's ladders (bunkers.json, set by the owner before the first tick); none on a map without bunkers.</summary>
     public Ladders Ladders { get; set; } = Ladders.Empty;
-    /// <summary>True while the eyes are under the water surface (no firing, breath is running).</summary>
-    public bool HeadUnder => _state.HeadUnder;
     bool _inVehicle;
     /// <summary>Seated in a vehicle: no prone here. Entering clears the prone latch (the body is not simulated while driving).</summary>
     public bool InVehicle
@@ -425,7 +421,7 @@ public partial class Player : CharacterBody3D
         if (Input.IsActionPressed("interact")) b |= MoveButtons.Use;
         if (Input.IsActionPressed("headlights")) b |= MoveButtons.Headlights;
         if (Input.IsActionPressed("killstreak")) b |= MoveButtons.Killstreak;
-        if (_state.HeadUnder || _state.OnLadder) b &= ~MoveButtons.Fire; // no firing with the head under water, nor with both hands on a ladder
+        if (_state.OnLadder) b &= ~MoveButtons.Fire; // no firing with both hands on a ladder
         var captured = Input.MouseMode == Input.MouseModeEnum.Captured;
         var moves = captured || MoveWithFreeMouse;
         return new MoveInput
@@ -478,7 +474,6 @@ public partial class Player : CharacterBody3D
     {
         _state.HeadBlocked = _state.Stance != Stance.Stand && HeadBlockedCheck(_state.Stance);
         Water.Sample(ref _state);
-        LastDrowningDamage = Breath.Tick(ref _state, dt);
         _state.FloorTooSteep = IsOnFloor() && GetFloorNormal().Y < Mathf.Cos(Mathf.DegToRad(MoveConsts.ProneMaxSlopeDegrees));
         _state.ProneBlocked = _inVehicle;
         if (Ladders.Count > 0 && Ladders.Climb(ref _state, input, dt))
@@ -502,7 +497,6 @@ public partial class Player : CharacterBody3D
             Health -= LastFallDamage;
             GD.Print($"player: fall damage {LastFallDamage:F1}, health {Health:F1}");
         }
-        if (Authoritative && LastDrowningDamage > 0) Health -= LastDrowningDamage;
         if (Authoritative && (Health <= 0 || GlobalPosition.Y < KillY)) Respawn();
     }
 

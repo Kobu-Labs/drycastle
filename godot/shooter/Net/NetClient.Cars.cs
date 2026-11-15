@@ -25,6 +25,10 @@ public partial class NetClient
         /// <summary>A driven vehicle's moving nodes and water effects (the amphibious transport; null for every other type, or a model without them).</summary>
         public DriveNodes? Drive;
         public readonly Interpolator Buf = new();
+        /// <summary>The vehicle's visible parts (<see cref="CarFx.VisualName"/>): a boat's wave bob and tilt move this, not the root.</summary>
+        public Node3D? Visual;
+        /// <summary>Next time (s) a wake ring is due while the vehicle moves on the water.</summary>
+        public double RippleDue;
         public ushort Driver;
         public int Kind;
         public NVec3 Pos;
@@ -194,6 +198,7 @@ public partial class NetClient
             if (flies && _pilot != null && _pilot.CarId == v.Id) CarryRiders(p0, rot0, p, rot); // the pilot's helicopter is drawn ahead of the snapshots: its riders go with it
             v.Node.GlobalPosition = p;
             v.Node.Rotation = rot;
+            WaterCraft(v, p);
             if (v.Destroyed) continue;
             var flakMine = v.Flak != null && RenderFlak(v, s, rt, dt);
             // the gun stands on the body: on a driven vehicle that is the slope plus the body's own lean over its wheels

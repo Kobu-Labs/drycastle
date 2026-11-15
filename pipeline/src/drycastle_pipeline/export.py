@@ -31,7 +31,7 @@ from drycastle_pipeline.primitives import PRIMITIVES, build_primitive
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.scene import build_scene
 from drycastle_pipeline.textures import TexturedMesh, tex_node_name
-from drycastle_pipeline.water import build_water
+from drycastle_pipeline.water import water_doc, water_rules
 from drycastle_pipeline.zones import FILE_NAME as ZONE_POINTS_FILE
 from drycastle_pipeline.zones import (
     ZonesError,
@@ -432,18 +432,16 @@ def run_export(
     parcels_file["zone_kinds"] = kind_rows(zrules)
     _dump(out_dir / "parcels.json", parcels_file)
     water_file = out_dir / "water.json"
-    if scene.terrain is not None:
-        water_doc, water_skipped = build_water(
-            ground_units(parcels_doc), scene.terrain, scene.patches, water_kinds(effective)
-        )
-        for pid in water_skipped:
+    if scene.water is not None:
+        for pid in scene.water.skipped:
             print(f"export: warning: water parcel/patch {pid} has no terrain under it (or none below its surface); no water body", file=sys.stderr)
-        _dump(water_file, water_doc)
+        water = water_doc(scene.water.bodies, water_rules(rules_path))
+        _dump(water_file, water)
         files["water"] = "water.json"
         # candidate points of the zone kinds, drawn clear of the buildings and of the water just built
         drawn = drawn_zones(load_edits(edits_path).zones, parcels_doc["origin_epsg5514"]) if parcels_doc.get("origin_epsg5514") else {}
         points_doc, points_warnings = build_zone_points(
-            parcels_doc, drawn, list(buildings.values()), scene.terrain, water_doc, zrules
+            parcels_doc, drawn, list(buildings.values()), scene.terrain, water, zrules
         )
         for warning in points_warnings:
             print(f"export: warning: zone points: {warning}", file=sys.stderr)

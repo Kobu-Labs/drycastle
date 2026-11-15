@@ -20,13 +20,15 @@ import sys
 import time
 from pathlib import Path
 
+from drycastle_pipeline.bed import carve_terrain
 from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
-from drycastle_pipeline.ground import ground_types
+from drycastle_pipeline.ground import ground_types, ground_units, water_kinds
 from drycastle_pipeline.parcel_run import _EMPTY_GLB
 from drycastle_pipeline.patches import node_name, overlapping, patch_meshes, plan_patches
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.terrain import load_terrain
+from drycastle_pipeline.water import plan_water, water_rules
 
 PATCH_RUN_FORMAT_VERSION = 1
 
@@ -48,7 +50,7 @@ def run_patch_run(
     glb_path: Path | None = None,
 ) -> dict:
     t0 = time.perf_counter()
-    terrain, _ = load_terrain(work_dir, mmap=True)
+    terrain, _ = load_terrain(work_dir)  # carved below, so not memory-mapped
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     graph_path = work_dir / "roads.json"
     graph = json.loads(graph_path.read_text()) if graph_path.is_file() else None
@@ -56,6 +58,10 @@ def run_patch_run(
     plan = plan_patches(edits, parcels_doc.get("origin_epsg5514"), terrain, ground_types(rules_path, edits_path))
     for warning in plan.warnings:
         print(f"patch-run: warning: {warning}", file=sys.stderr)
+    # the terrain the export draws on: carved to the water beds, after the water is worked out on the uncarved ground
+    wrules = water_rules(rules_path)
+    water = plan_water(ground_units(parcels_doc), terrain, plan.patches, wrules, water_kinds(ground_types(rules_path, edits_path)))
+    carve_terrain(terrain, water.bodies, float(wrules["carve_blend_m"]))
     named = set(patches) if patches else set(plan.patches)
     for pid in sorted(named - set(plan.patches) - set(edits.ground_patches)):
         print(f"patch-run: warning: {pid} is not in the edits; its nodes are removed", file=sys.stderr)
@@ -63,7 +69,7 @@ def run_patch_run(
     t1 = time.perf_counter()
     meshes = patch_meshes(
         plan, terrain, graph, load_section("roads", rules_path), load_section("ground_patches", rules_path),
-        only=targets,
+        only=targets, wet=water.wet,
     )
     glb = {}
     if glb_path is not None:

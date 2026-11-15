@@ -23,15 +23,18 @@ public class WaterTests
     }
     """;
 
+    /// <summary>The feet of a floating body on the 10 m lake: the surface less 1.25 m (eyes 0.4 m above it).</summary>
+    const float FloatFeetY = 8.75f;
+
     static Water Lake() => Water.Parse(Json);
 
     static MoveInput In(MoveButtons b = MoveButtons.None, float mx = 0, float my = 0) =>
         new() { Buttons = b, MoveX = mx, MoveY = my, SpeedScale = 1 };
 
     /// <summary>Feet at (x, feetY, z) in Godot axes, state sampled from the water like the client does each tick.</summary>
-    static MoveState At(Water w, float x, float feetY, float z, bool crouching = false)
+    static MoveState At(Water w, float x, float feetY, float z)
     {
-        var s = new MoveState { Position = new Vector3(x, feetY, z), OnFloor = false, Stance = crouching ? Stance.Crouch : Stance.Stand, FallPeakY = feetY };
+        var s = new MoveState { Position = new Vector3(x, feetY, z), OnFloor = false, FallPeakY = feetY };
         w.Sample(ref s);
         return s;
     }
@@ -57,7 +60,7 @@ public class WaterTests
     [Fact]
     public void ParseRejectsWrongVersionAndMissingBodies()
     {
-        Assert.Throws<DataFileException>(() => Water.Parse("""{"version": 2, "bodies": []}"""));
+        Assert.Throws<DataFileException>(() => Water.Parse("""{"version": 3, "bodies": []}"""));
         Assert.Throws<DataFileException>(() => Water.Parse("""{"version": 1}"""));
         Assert.Throws<DataFileException>(() => Water.Parse("not json"));
     }
@@ -80,7 +83,6 @@ public class WaterTests
         var s = new MoveState { Position = new Vector3(0, 0, 0) };
         Water.Empty.Sample(ref s);
         Assert.Equal(0f, s.WaterDepth);
-        Assert.False(s.HeadUnder);
     }
 
     [Fact]
@@ -93,147 +95,164 @@ public class WaterTests
     }
 
     [Fact]
-    public void SampleFlagsWadingSwimmingAndHeadUnder()
+    public void SampleFlagsWadingAndSwimmingAndTheShoreDistance()
     {
         var w = Lake();
-        // shallow pond: depth 0.8 m is wading, not swimming
+        // shallow pond: depth 0.8 m is wading, not swimming, and the shore distance is not needed
         var pond = At(w, 105, 9.5f, -5);
         Assert.Equal(0.8f, pond.WaterDepth, 3);
         Assert.False(MovementStep.IsSwimming(pond));
+        Assert.Equal(float.MaxValue, pond.ShoreDistance);
 
-        // deep lake, feet at 9 m: swimming, head (9 + 1.65) is 10.65 above the 10 m surface, so not under
-        var floating = At(w, 20, 9f, -20);
+        // deep lake, feet at 9 m: swimming; the lake's shore is 1 m away from x = 1
+        var floating = At(w, 1, 9f, -20);
         Assert.True(MovementStep.IsSwimming(floating));
-        Assert.False(floating.HeadUnder);
+        Assert.Equal(1f, floating.ShoreDistance, 3);
 
-        // feet at 8.2 m: head at 9.85 is under the 10 m surface
-        var under = At(w, 20, 8.2f, -20);
-        Assert.True(under.HeadUnder);
-
-        // crouching lowers the eyes to 1.05 m: feet at 8.9 m put the head under only when crouched (9.95 < 10)
-        Assert.False(At(w, 20, 8.9f, -20).HeadUnder);
-        Assert.True(At(w, 20, 8.9f, -20, crouching: true).HeadUnder);
+        // in the middle of the lake the shore is 20 m away
+        Assert.Equal(20f, At(w, 20, 9f, -20).ShoreDistance, 3);
     }
 
     [Fact]
-    public void WadingWalksSlowerThanDryLand()
+    public void WadingSpeedFollowsTheDepthCurve()
     {
         var w = Lake();
         var dry = new MoveState { OnFloor = true, Position = new Vector3(60, 0, -20) };
         var wading = new MoveState { OnFloor = true, Position = new Vector3(105, 9.5f, -5) };
-        // 15 ticks: the speed is capped within 5 ticks and the walker stays inside the 10 m pond
+        // 15 ticks: the speed is capped within 5 ticks and the walker stays inside the 10 m pond (depth 0.8 m)
         for (var k = 0; k < 15; k++) { Tick(ref dry, w, In(MoveButtons.None, 0, 1)); Tick(ref wading, w, In(MoveButtons.None, 0, 1)); }
         var dryH = new Vector2(dry.Velocity.X, dry.Velocity.Z).Length();
         var wetH = new Vector2(wading.Velocity.X, wading.Velocity.Z).Length();
-        Assert.Equal(WaterConsts.WadeSpeedScale * dryH, wetH, 2);
+        Assert.Equal(Wading.Speed(MoveConsts.WalkSpeed, 0.8f), wetH, 2);
+        Assert.True(wetH < dryH && wetH > WaterConsts.SwimSpeed);
     }
 
     [Fact]
-    public void SwimSpeedIsCappedAtSwimAndSprintSwim()
+    public void SwimSpeedIsTheSwimSpeedWithOrWithoutSprint()
     {
         var w = Lake();
         var swim = At(w, 20, 9f, -20);
         for (var k = 0; k < 60; k++) Tick(ref swim, w, In(MoveButtons.None, 0, 1));
         Assert.Equal(WaterConsts.SwimSpeed, new Vector2(swim.Velocity.X, swim.Velocity.Z).Length(), 2);
 
+        // sprint is off in deep water: the same speed
         var sprint = At(w, 20, 9f, -20);
         for (var k = 0; k < 60; k++) Tick(ref sprint, w, In(MoveButtons.Sprint, 0, 1));
-        Assert.Equal(WaterConsts.SwimSprintSpeed, new Vector2(sprint.Velocity.X, sprint.Velocity.Z).Length(), 2);
+        Assert.Equal(WaterConsts.SwimSpeed, new Vector2(sprint.Velocity.X, sprint.Velocity.Z).Length(), 2);
+        Assert.False(sprint.WasSprinting);
     }
 
     [Fact]
-    public void SwimmingHasNoGravity()
+    public void SwimmingFloatsWithEyesFourTenthsAboveTheSurface()
     {
         var w = Lake();
         var s = At(w, 20, 9f, -20);
         for (var k = 0; k < 60; k++) Tick(ref s, w, In());
+        Assert.Equal(FloatFeetY, s.Position.Y, 3);
         Assert.Equal(0f, s.Velocity.Y, 3);
-        Assert.Equal(9f, s.Position.Y, 2);
+        Assert.Equal(WaterConsts.SwimEyesAboveSurface, s.Position.Y + MovementStep.EyeHeight(s.Stance) - 10f, 3);
     }
 
     [Fact]
-    public void JumpRisesAndCrouchDivesWhileSwimming()
+    public void NoVerticalInputWhileSwimming()
     {
         var w = Lake();
-        var up = At(w, 20, 9f, -20);
-        // a third of a second: the feet are still under the 10 m surface, so the swim (not gravity) drives the rise
-        for (var k = 0; k < 10; k++) Tick(ref up, w, In(MoveButtons.Jump));
-        Assert.True(up.Position.Y > 9.3f);
-        Assert.True(up.Velocity.Y > 0f);
-
-        var down = At(w, 20, 9.5f, -20);
-        for (var k = 0; k < 30; k++) Tick(ref down, w, In(MoveButtons.Crouch));
-        Assert.True(down.Position.Y < 9.0f);
-        Assert.Equal(Stance.Crouch, down.Stance);
-        Assert.True(down.Velocity.Y < 0f);
+        // holding jump or crouch changes nothing: the body floats at the same height, with no vertical speed
+        foreach (var held in new[] { MoveButtons.Jump, MoveButtons.Crouch, MoveButtons.Jump | MoveButtons.Crouch })
+        {
+            var s = At(w, 20, FloatFeetY, -20);
+            for (var k = 0; k < 60; k++) Tick(ref s, w, In(held, 0, 1));
+            Assert.Equal(FloatFeetY, s.Position.Y, 3);
+            Assert.Equal(0f, s.Velocity.Y, 3);
+            Assert.Equal(Stance.Stand, s.Stance);
+        }
     }
 
     [Fact]
-    public void CrouchInDeepWaterDivesAtSwimSpeedNotCrouchWalk()
+    public void CrouchInDeepWaterStandsUpAndSwimsAtSwimSpeed()
     {
         var w = Lake();
         var s = At(w, 20, 9f, -20);
         for (var k = 0; k < 60; k++) Tick(ref s, w, In(MoveButtons.Crouch, 0, 1));
+        Assert.Equal(Stance.Stand, s.Stance);
         Assert.Equal(WaterConsts.SwimSpeed, new Vector2(s.Velocity.X, s.Velocity.Z).Length(), 2);
     }
 
     [Fact]
-    public void LandingInWaterDeepEnoughDoesNoFallDamage()
+    public void JumpNearTheBankHopsOutOfTheWater()
+    {
+        var w = Lake();
+        var s = At(w, 1, FloatFeetY, -20); // 1 m from the west shore
+        Tick(ref s, w, In(MoveButtons.Jump));
+        Assert.True(s.Hopping);
+        Assert.True(s.Velocity.Y > 0f);
+
+        var peak = s.Position.Y;
+        for (var k = 0; k < 60; k++)
+        {
+            Tick(ref s, w, In());
+            peak = MathF.Max(peak, s.Position.Y);
+        }
+        Assert.True(peak > 10.1f, $"the hop clears the 10 m surface, peak {peak}");
+        Assert.False(s.Hopping);
+    }
+
+    [Fact]
+    public void JumpFarFromTheBankDoesNothingInDeepWater()
+    {
+        var w = Lake();
+        var s = At(w, 20, FloatFeetY, -20); // 20 m from every shore
+        Tick(ref s, w, In(MoveButtons.Jump));
+        Assert.False(s.Hopping);
+        Assert.Equal(0f, s.Velocity.Y, 3);
+        Assert.Equal(FloatFeetY, s.Position.Y, 3);
+    }
+
+    [Fact]
+    public void HoldingJumpFromBeforeDoesNotHop()
+    {
+        var w = Lake();
+        var s = At(w, 1, FloatFeetY, -20);
+        s.JumpKeyDown = true; // the key was already down: no press edge
+        Tick(ref s, w, In(MoveButtons.Jump));
+        Assert.False(s.Hopping);
+    }
+
+    [Fact]
+    public void LandingInDeepWaterDoesNoFallDamageAndShallowLandingStillHurts()
     {
         var s = new MoveState { Position = new Vector3(20, 14, -20), OnFloor = false, FallPeakY = 14 };
         // the bed is 8 m and the surface 10 m: landing on the bed in 2 m of water
-        var dmg = MovementStep.PostMove(ref s, new Vector3(20, 8, -20), Vector3.Zero, true, landingWaterDepth: 2f);
-        Assert.Equal(0f, dmg);
+        var deep = MovementStep.PostMove(ref s, new Vector3(20, 8, -20), Vector3.Zero, true, landingWaterDepth: 2f);
+        Assert.Equal(0f, deep);
 
         var dry = new MoveState { Position = new Vector3(60, 14, -20), OnFloor = false, FallPeakY = 14 };
-        Assert.True(MovementStep.PostMove(ref dry, new Vector3(60, 8, -20), Vector3.Zero, true) > 0f);
+        var dryDamage = MovementStep.PostMove(ref dry, new Vector3(60, 8, -20), Vector3.Zero, true);
+        Assert.True(dryDamage > 0f);
+
+        var shallow = new MoveState { Position = new Vector3(105, 14, -5), OnFloor = false, FallPeakY = 14 };
+        var shallowDamage = MovementStep.PostMove(ref shallow, new Vector3(105, 9.2f, -5), Vector3.Zero, true, landingWaterDepth: 0.5f);
+        Assert.InRange(shallowDamage, 0.01f, dryDamage - 0.01f);
     }
 
     [Fact]
-    public void BreathLastsTwentySecondsThenDrowns()
+    public void FloatingResetsTheFallSoAHopOutCarriesNoOldFall()
     {
         var w = Lake();
-        var s = At(w, 20, 8.2f, -20); // head under
-        var damage = 0f;
-        for (var k = 0; k < 19 * 30; k++) damage += Breath.Tick(ref s, Dt); // 19 s: air still left
-        Assert.Equal(0f, damage);
-        Assert.Equal(1f, Breath.AirLeft(s), 1);
-
-        for (var k = 0; k < 30; k++) damage += Breath.Tick(ref s, Dt);      // to 20 s and past it
-        Assert.Equal(0f, Breath.AirLeft(s), 2);
-
-        var drown = 0f;
-        for (var k = 0; k < 30; k++) drown += Breath.Tick(ref s, Dt);       // one second without air
-        Assert.Equal(Breath.DrowningDamagePerSecond, drown, 2);
+        var s = At(w, 1, FloatFeetY, -20);
+        s.FallPeakY = 14f; // an old fall from the air, before the water
+        MovementStep.PostMove(ref s, new Vector3(1, FloatFeetY, -20), Vector3.Zero, false, w.DepthAt(new Vector3(1, FloatFeetY, -20)));
+        Assert.Equal(FloatFeetY, s.FallPeakY, 3);
     }
 
     [Fact]
-    public void SurfacingRefillsBreathQuickly()
+    public void ProneAndSprintAreOffInDeepWater()
     {
-        var s = new MoveState { HeadUnder = true };
-        for (var k = 0; k < 15 * 30; k++) Breath.Tick(ref s, Dt); // 15 s under: 5 s of air left
-        Assert.Equal(5f, Breath.AirLeft(s), 1);
-        s.HeadUnder = false;
-        for (var k = 0; k < 30; k++) Breath.Tick(ref s, Dt);      // 1 s above: refills 5 s
-        Assert.Equal(10f, Breath.AirLeft(s), 1);
-        for (var k = 0; k < 3 * 30; k++) Breath.Tick(ref s, Dt);
-        Assert.Equal(Breath.Capacity, Breath.AirLeft(s), 3);      // full after about 4 s above water in total
-    }
-
-    [Fact]
-    public void BreathHudTextAndLowState()
-    {
-        Assert.Equal("12.3 s", HudLogic.BreathText(12.34f));
-        Assert.Equal("0.0 s", HudLogic.BreathText(-0.2f));
-        Assert.True(HudLogic.BreathLow(5f));
-        Assert.False(HudLogic.BreathLow(5.1f));
-    }
-
-    [Fact]
-    public void DryPlayerHasNoDrowningDamage()
-    {
-        var s = new MoveState();
-        for (var k = 0; k < 600; k++) Assert.Equal(0f, Breath.Tick(ref s, Dt));
-        Assert.Equal(0f, s.AirSpent);
+        var w = Lake();
+        var s = At(w, 20, FloatFeetY, -20);
+        s.ProneLatched = true;
+        Tick(ref s, w, In(MoveButtons.Sprint | MoveButtons.Prone, 0, 1));
+        Assert.False(s.ProneLatched);
+        Assert.False(s.WasSprinting);
     }
 }

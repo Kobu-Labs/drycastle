@@ -101,6 +101,17 @@ viewing and headless servers are unaffected):
   count and that a broken file changes nothing. (`ViewerPatchesSmoke.cs`, `patches_smoke.py`; not run when it was last changed.)
   `parcel-run`/`export` take `--work DIR` and `export` takes `--out DIR` for such experiments.
 
+### Water
+
+The viewer and the editor draw the map's water (`water.json`) with the same surfaces as the shooter: a flat mesh per body,
+low-poly look: a colour that deepens smoothly with the depth and a hard foam strip at the bank (from the body's depth grid in `water.json`,
+as a texture, not from the depth buffer), real waves on a 2.5 m triangle grid, shaded flat, lit by the scene's sun
+(`MapLoader/Water/`: `WaterSurfaces`, `WaterPalettes`, and the shader `water_surface.gdshader`, embedded in the MapLoader assembly so both Godot projects
+use one file). It is read once at load: after changing a water patch (`water_y`, `max_depth`) or anything that moves
+the bed, re-export and restart the viewer. The terrain carve is not hot reloaded, and neither is the surface. A water
+patch's colour is painted on the carved bed (there is no flat mesh at the surface any more), so with no water drawn
+(old viewer, headless) it shows as a sunken patch.
+
 ### Ground clutter (near-only)
 
 Maps with `files.clutter` in `manifest.json` (and `files.clutter_meshes`) draw small ground clutter: tufts, flowers, pebbles, rocks, leaves, sticks, ferns.

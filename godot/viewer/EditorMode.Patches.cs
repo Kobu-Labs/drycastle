@@ -58,7 +58,7 @@ public partial class EditorMode
             if (ShapesOf(root, ShapeKind.Patch)?.GetValueOrDefault(id) is not Obj e) return (false, $"patch {id} no longer exists");
             e["type"] = type;
             if (water) { if (!e.ContainsKey("water_y")) e["water_y"] = N3(level); }
-            else e.Remove("water_y");
+            else { e.Remove("water_y"); e.Remove("max_depth"); }
             return (true, $"{id} is now {type}" + (water && p.WaterY == null ? $", water level {level:0.0} m to start from" : ""));
         });
     }
