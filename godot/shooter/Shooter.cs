@@ -30,7 +30,7 @@ namespace Drycastle.Shooter;
 ///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
 ///   --match-bot alice|bob     client: scripted match smoke role (alice kills bob with the debug command, bob fires after each spawn)
 ///   --blast-smoke             server: flat arena with three cars, judges vehicle damage stages, the blast and the chain reaction; --blast-bot a|b client roles (ticket #103)
-///   --car-smoke               server: flat test arena with three cars, judges the vehicle scenario; --car-bot a|b client roles; --car-kind car|motorcycle|bicycle picks the vehicle type of the smoke (default car); --vehicle-set abandon_return_time=3 overrides vehicles.json
+///   --car-smoke               server: flat test arena with three cars, judges the vehicle scenario; --car-bot a|b client roles; --car-kind car|motorcycle|bicycle picks the vehicle type of the smoke (default car); --vehicle-set destroyed_return_time=3 overrides vehicles.json
 ///   --weapons-smoke           server: flat test arena with a wall (far from the map), honours debug commands, judges the weapons scenario
 ///   --bazooka-smoke           server: same flat arena, judges the bazooka scenario
 ///   --bazooka-bot a|b         client: scripted bazooka smoke role (a shoots, b is the target)
@@ -504,7 +504,6 @@ public partial class Shooter : Node3D
             if (p.Length != 2 || !float.TryParse(p[1], System.Globalization.CultureInfo.InvariantCulture, out var x)) throw new InvalidOperationException($"bad --vehicle-set entry {kv}");
             switch (p[0])
             {
-                case "abandon_return_time": v.AbandonReturnTime = x; break;
                 case "destroyed_return_time": v.DestroyedReturnTime = x; break;
                 case "run_over_min_speed": v.RunOverMinSpeed = x; break;
                 default: throw new InvalidOperationException($"unknown vehicle key {p[0]}");

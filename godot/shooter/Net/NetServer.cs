@@ -293,7 +293,7 @@ public partial class NetServer : Node
         FlushStatuses(); // statuses and burning that changed this tick
         FlushScoreboard(); // once a tick at most, and about once a second (the ping), however many kills the tick had (A-04)
         PerfLap(ServerPerf.Ph.Detonate);
-        if (CarSmoke && _carReturns >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.0;
+        if (CarSmoke && _carExits >= 1 && _finishAt == 0) _finishAt = _elapsed + 5.0; // after the bot's check that the empty car stays put
         CaptureLagPoses(); // the poses this tick ends with, the state the snapshots carry (ADR 0013)
         CaptureVehiclePoses(); // and the vehicles' (B-02)
         PerfLap(ServerPerf.Ph.LagCapture);

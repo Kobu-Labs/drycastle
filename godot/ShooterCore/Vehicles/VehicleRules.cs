@@ -252,24 +252,6 @@ public sealed class VehicleGun
     }
 }
 
-/// <summary>Counts seconds a vehicle has stood empty and away from its origin; fires once when it reaches the return time. A count-up beside the vehicle's life (<see cref="VehicleLifecycle"/>), reset by any return.</summary>
-public sealed class AbandonTimer
-{
-    public float Empty { get; private set; }
-
-    /// <summary>Advance by <paramref name="dt"/>. True on the tick the vehicle should return to its origin.</summary>
-    public bool Update(bool occupied, bool atOrigin, float dt, float returnTime)
-    {
-        if (occupied || atOrigin) { Empty = 0; return false; }
-        Empty += dt;
-        if (Empty < returnTime) return false;
-        Empty = 0;
-        return true;
-    }
-
-    public void Reset() => Empty = 0;
-}
-
 public static class VehicleColours
 {
     /// <summary>Paint palette (sRGB): tints the Kenney body material. Kept bright so the palette texture's shading still reads.</summary>
