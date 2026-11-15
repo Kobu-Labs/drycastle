@@ -189,7 +189,8 @@ public partial class Shooter : Node3D
     {
         _shell = new UiShell
         {
-            PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks)),
+            PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks),
+                _client is { CanManageTeams: true } tc ? () => _shell.Push(new TeamsScreen(tc)) : null),
             WantsFreeMouse = () => _client is { WantsFreeMouse: true }, // MouseOwners: the respawn screen, the chat box, the Equipment screen, the tactical map (click to set the waypoint) and the corpse chooser's item list release the mouse (buttons to click, keys to type, cells to drag or click)
             BackHandler = () => (_client?.CloseChat() ?? false) || (_client?.CloseEquipment() ?? false) || (_client?.CloseTacticalMap() ?? false), // Esc closes the chat box, then the Equipment screen, then the tactical map, before it opens Pause
         };

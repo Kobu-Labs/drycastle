@@ -457,6 +457,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) OnSandboxTeleportTo(c, st.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SeatSwitch } sw && c.Joined) OnSeatSwitch(c, sw.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.TeamAssign } ta && c.Joined) OnTeamAssign(c, ta.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) OnChatSend(c, cs.Payload);
             else if (c.Joined) OnProfileMessage(c, m);
         }
@@ -546,7 +547,7 @@ public partial class NetServer : Node
         SendWornOnJoin(c); // what the others wear (#266), to draw on their characters
         SendBinocularsOnJoin(c); // and who holds the binoculars up
         SendStatusOnJoin(c); // who is blessed, cursed or burning
-        _match.AddPlayer(c.Id, c.Name, c.Sandbox); // spawns the player (event) and broadcasts the scoreboard
+        _match.AddPlayer(c.Id, c.Name, c.Sandbox, c.IsBot); // spawns the player (event) and broadcasts the scoreboard
         SandboxAnnounce(c); // sandbox name tags both ways, and the held streak (#156)
         _host.Flush();
         GD.Print($"server: {c.Name} joined as #{c.Id} ({_byId.Count} players)");
@@ -721,6 +722,7 @@ public partial class NetServer : Node
                 if (Scores(k.Killer) && Scores(k.Victim)) AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause, fromStreak), _elapsed)); // the death of a bot (#214) or of a sandbox player grants no XP
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon, k.Cause)));
                 break;
+            case PlayerTeamChanged tc: OnTeamChanged(tc); break;
             case TargetKilled tk: OnTargetKilled(tk); break;
             case PlayerDied d: OnStatusDeath(d.Victim); RozhlasSetDeath(d.Victim); RozhlasCombatDeath(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
         }
@@ -742,7 +744,7 @@ public partial class NetServer : Node
 
     MatchStateMsg BuildMatchState()
     {
-        var rows = _match.Ranking().Select(p => new ScoreRow(p.Id, p.Sandbox ? p.Name + " [SANDBOX]" : p.Name, p.Kills, p.Deaths, Ping(p.Id), p.Team)).ToList();
+        var rows = _match.Ranking().Select(p => new ScoreRow(p.Id, p.Sandbox ? p.Name + " [SANDBOX]" : p.Name, p.Kills, p.Deaths, Ping(p.Id), p.Team, p.TeamPinned, p.Bot)).ToList();
         return new MatchStateMsg(_match.Phase, _match.TimeRemaining, _match.Winners, rows, _match.Mode, _match.TeamScore(Teams.A), _match.TeamScore(Teams.B));
     }
 

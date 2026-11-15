@@ -388,7 +388,7 @@ How a round is scored and won, set by `mode` in `match.json` at server start, or
 _Avoid_: game mode, playlist
 
 **Team**:
-One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team.
+One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team. An admin can regroup from the Pause menu's Teams screen (#312): drag a player to the other table (or Left/Right on the keyboard), or use the quick actions (bots to a team, swap, shuffle, balance, unpin all). The player respawns on the new side, leaves any vehicle, loses their turrets and streak progress, keeps their kills and deaths, and the earned team score stays with the old team (swap carries it over with the people). A moved player is **pinned**: the round-start balance skips pinned players (and moves bots before humans); a mode change drops all pins.
 _Avoid_: squad, clan, faction
 
 **Friend / enemy colours**:
