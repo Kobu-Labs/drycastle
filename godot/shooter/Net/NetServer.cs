@@ -77,6 +77,8 @@ public partial class NetServer : Node
         public ServerCar? Car;
         /// <summary>Seat of <see cref="Car"/> this player sits in (0 = driver).</summary>
         public int CarSeat;
+        /// <summary>A passive rider's look against the hull (<see cref="RiderPose"/>): the turn and the pitch they last sent with the head-look bit, 0 and 0 with it clear. Held yaw is the hull's now plus the turn, so the figure keeps its look as the vehicle turns.</summary>
+        public float HeadOff, HeadPitch;
         /// <summary>The flak status last sent to this client as the gunner (magazine, reserve, reloading), so only a change is sent; null until the first.</summary>
         public (int Mag, int Reserve, bool Reloading)? FlakSent;
         public bool LightsHeld, Handbrake;
@@ -790,6 +792,7 @@ public partial class NetServer : Node
                     c.Body.Yaw = Quant.Yaw(i.Yaw); c.Body.Pitch = Quant.Pitch(i.Pitch); // a gunner's body faces where they aim, for everyone who sees them at the gun
                 }
                 else if (!controlled && RiderRules.Weapons(c.Car.Def, c.CarSeat, i) is { } seated) SeatWeapons(c, c.Car, i, seated); // an armed seat: the rider's own weapons (ADR 0011)
+                if (!RiderPose.FollowsAim(c.Car.Def.Seats[c.CarSeat])) SeatLook(c, c.Car, i); // every other seat: the body is the vehicle's and the head looks where the rider's first-person view does (ADR 0026)
                 if (lightsEdge) c.Car.Lights = Headlights.Toggle(c.Car.Lights);
                 if (useEdge) ExitCar(c);
                 continue;
@@ -841,6 +844,25 @@ public partial class NetServer : Node
         }
         if (c.W.Changed) SendAmmo(c);
         c.Slot = (byte)(c.W.Slot - 1);
+    }
+
+    /// <summary>
+    /// The look of a rider on a passive seat (ADR 0026): with the head-look bit set (their first-person view) the input's view is the head's, held to the neck's pitch
+    /// and, for a helicopter's pilot, to the pitch alone (their yaw is the heading they steer to); with it clear the head faces ahead. The body keeps the vehicle's yaw
+    /// either way and stands upright on the seat, as the hull tilts.
+    /// </summary>
+    void SeatLook(Client c, ServerCar car, NetInput i)
+    {
+        var (off, pitch) = RiderPose.Passive(c.CarSeat == 0 && car.Flies, (i.Buttons & (ushort)MoveButtons.HeadLook) != 0, AttitudeOf(car).Yaw, Quant.Yaw(i.Yaw), Quant.Pitch(i.Pitch));
+        c.HeadOff = off; c.HeadPitch = pitch;
+        ApplyHeadLook(c, car);
+    }
+
+    /// <summary>A passive rider's body yaw and pitch for the snapshot: the hull's yaw now, turned by their look (<see cref="Client.HeadOff"/>), at their look's pitch.</summary>
+    void ApplyHeadLook(Client c, ServerCar car)
+    {
+        c.Body.Yaw = AttitudeOf(car).Yaw + c.HeadOff;
+        c.Body.Pitch = c.HeadPitch;
     }
 
     void SendAmmo(Client c)
@@ -1201,6 +1223,7 @@ public partial class NetServer : Node
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot,
                     c.Car != null ? RiderRules.HitStance(c.Car.Def, c.CarSeat, c.Body.State.Stance) : BodyStanceOf(c)));
+        foreach (var car in _cars) if (car.Seat.Count > 1) ents.Add(SeatsRecord.Make(car.Id, SeatOccupants(car))); // who sits in seats 1..3, for every client (ADR 0026)
         foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed, car.Lights, car.Life.WheelsOff));
         foreach (var car in _cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model
         foreach (var car in _cars) if (car.Flies) ents.Add(FlightRecord.Make(car.Id, car.Flight)); // a helicopter's velocity, tilt and rotor (ADR 0006)

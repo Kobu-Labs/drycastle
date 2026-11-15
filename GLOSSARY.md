@@ -136,6 +136,14 @@ _Avoid_: open seat, unprotected seat
 The amphibious transport's machine gun, on a ring mount over the rear compartment and worked from the gunner seat by a gunner who stands inside the ring. The gunner's view aims it all the way round; over the two riders in front it cannot be depressed. Its rounds are the jeep's roof gun's, and its kills are ordinary kills.
 _Avoid_: turret (alone), pintle gun, rear gun
 
+**Fixed seat**:
+Where a rider sits, in every vehicle: the seat's offset in the vehicle's frame (`vehicles.json` `seats`; a vehicle with none has one driver seat at its origin). Its rider is drawn on it, turning and tilting with the hull as it is drawn this frame, and never as a free figure beside the vehicle. The server tells every client who sits in each seat (the driver in the vehicle's record, seats 1..3 in its seats record), so a rider is placed by id.
+_Avoid_: rider offset, seat anchor
+
+**Head look**:
+What a seated rider's view does to their figure for everyone: with the view in first person (a passenger's own eyes, the driver's cockpit view), the head turns up to 70 degrees either side and tips, and a look further round twists the upper body over the hips, so the look reaches straight behind. The body stays on the seat. In the chase view the head faces ahead; a helicopter's pilot only looks up and down (their yaw is the heading). A gunner or an armed seat's rider turns the whole figure to the aim instead (ADR 0026).
+_Avoid_: neck turn, look-around
+
 **Seat switch**:
 Moving to another seat of the vehicle you sit in, without getting out: while seated, the number keys (the weapon slot keys) take that seat (key 2 is the second seat of the vehicle's `seats` list), and a small top-down schematic in the bottom right shows each seat with its number (free: outlined; yours: filled, double ring; taken: struck through). A vehicle with no `seats` list has the one driver seat. A free seat is taken at once; a taken one is refused. Leaving the driver seat leaves the vehicle without input, so it coasts to a stop (a utility helicopter in the air holds a hover, then sets itself down); a gunner's turret keeps its aim. One player can drive, go to the turret and drive again.
 _Avoid_: seat change, swap seat

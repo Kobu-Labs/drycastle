@@ -78,10 +78,12 @@ public sealed partial class CharacterView : Node3D
                 if (_anim.HasAnimation(n)) _anim.GetAnimation(n).LoopMode = Animation.LoopModeEnum.Linear;
         _skeleton = m.FindChildren("*", "Skeleton3D", true, false).FirstOrDefault() as Skeleton3D;
         _mesh = m.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>().FirstOrDefault();
-        _hand = null; _grip = null; _arms = null; _aim = null; _aimed = false;
+        _hand = null; _grip = null; _arms = null; _aim = null; _aimed = false; _look = null;
         if (_skeleton != null && _mesh?.Skin != null)
         {
             PrepareMesh(_mesh, path);
+            _look = LookPose.Create(_skeleton);
+            if (_look != null) _skeleton.AddChild(_look); // before the arms: a rider's look moves the body, the weapon's hands follow
             BuildHandSlot(_skeleton, _mesh.Skin);
             BuildEyes(_skeleton, _mesh);
             RebuildWorn(); // what is worn goes on the new body
@@ -153,6 +155,14 @@ public sealed partial class CharacterView : Node3D
     {
         if (_arms != null) _arms.Pitch = Mathf.Clamp(pitch, -1.1f, 1.1f);
     }
+
+    LookPose? _look;
+
+    /// <summary>
+    /// Where a rider on a fixed seat looks (ADR 0026): the upper body's twist, the head's turn and its pitch, radians against the hips. All zero (everyone
+    /// on foot) leaves the clip as it is.
+    /// </summary>
+    public void SetLook(float torsoYaw, float headYaw, float pitch) => _look?.Set(torsoYaw, headYaw, pitch);
 
     /// <summary>Swimming pose: the body leans forward (<see cref="UnderwaterFx.SwimLeanDegrees"/>) and moves at the slow walk; stands up again when not swimming.</summary>
     public void SetSwim(bool swimming)

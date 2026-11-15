@@ -33,6 +33,8 @@ public partial class NetClient
         public int Kind;
         public NVec3 Pos;
         public float Yaw, Kmh;
+        /// <summary>The yaw of the newest interpolated snapshot sample at the render tick, before the drawn pose replaces it: the hull's yaw the riders' snapshot views are taken against (<see cref="RiderPose.Figure"/>).</summary>
+        public float SnapYaw;
         public uint LastTick;
         public LoopVoice? Snd;
         /// <summary>Damage stage 0..3 from the record, whether the vehicle is destroyed, and whether its blast was already drawn (event or state, whichever came first).</summary>
@@ -152,24 +154,6 @@ public partial class NetClient
         return _beams;
     }
 
-    /// <summary>
-    /// The pilot's own helicopter is drawn from the prediction (the present) while the other riders are interpolated like everyone else (the past), so
-    /// without this a gunner trails behind the helicopter. Each rider seated on it keeps the offset it has from the interpolated helicopter, in the
-    /// helicopter's own frame, and wears it on the drawn one.
-    /// </summary>
-    void CarryRiders(Vector3 interpPos, Vector3 interpRot, Vector3 drawnPos, Vector3 drawnRot)
-    {
-        var from = Basis.FromEuler(interpRot).Inverse();
-        var to = Basis.FromEuler(drawnRot);
-        foreach (var r in _remotes.Values)
-        {
-            if (r.State != EntityState.InVehicle || !GodotObject.IsInstanceValid(r.Node)) continue;
-            var off = r.Node.GlobalPosition - interpPos;
-            if (off.LengthSquared() > 64f) continue; // not seated on this helicopter
-            r.Node.GlobalPosition = drawnPos + to * (from * off);
-        }
-    }
-
     void RenderCars()
     {
         if (_lastTick == 0) return;
@@ -190,12 +174,11 @@ public partial class NetClient
             if (v.Buf.At(rt) is not { } s) continue;
             var p = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
             var rot = new Vector3(0, s.Yaw, 0);
+            v.SnapYaw = s.Yaw;
             var flies = FlightDef(v) != null;
-            var p0 = p; var rot0 = rot;
             var drive = flies ? null : DriveDef(v);
             if (flies) PoseFlight(v, rt, dt, ref p, ref rot); // a helicopter pitches and rolls; the one this player flies is drawn from its prediction
             if (drive != null) PoseDrive(v, drive, rt, dt, ref p, ref rot); // an amphibious transport lies on the slope and bobs; the one this player drives is drawn from its prediction
-            if (flies && _pilot != null && _pilot.CarId == v.Id) CarryRiders(p0, rot0, p, rot); // the pilot's helicopter is drawn ahead of the snapshots: its riders go with it
             v.Node.GlobalPosition = p;
             v.Node.Rotation = rot;
             WaterCraft(v, p);
@@ -227,7 +210,7 @@ public partial class NetClient
             }
             else if (!flakMine && _driving && _me != null && _seats is { Mine: > 0 } st && st.CarId == v.Id) { RideSeat(v, st.Mine); kmh = DriveOf(v) is { } rs ? MathF.Abs(rs.Speed) * 3.6f : v.Kmh; } // another seat: first person from it, the speed shown as the driver's is
         }
-        SeatRiders(); // the riders of driven vehicles, on their seats as the vehicles are drawn this frame
+        SeatRiders(); // the riders of every vehicle, on their seats as the vehicles are drawn this frame (ADR 0026)
         if (!_driving) HideSelfInCar();
         if (!cockpit) EndCockpit();
         if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) _me?.EndChase(_me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
