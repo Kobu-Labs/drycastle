@@ -47,7 +47,7 @@
     // An empty clip name plays nothing: the windup and swing then lean the body, steal (kneeling at a target) bends and lowers it, climb_up, climb_down and climb_work (tickets 06 and 07) hold the pose.
     "view": {
       "models": ["peasant_male_01", "peasant_male_01", "peasant_female_01"],
-      "clips": { "idle": "idle_standing_masc", "walk": "walk_f_masc", "run": "sprint_up25f_femn", "windup": "", "swing": "", "steal": "", "climb_up": "", "climb_down": "", "climb_work": "", "death": ["death_back_sword", "death_left_sword"] },
+      "clips": { "idle": "idle_standing_masc", "walk": "walk_f_masc", "run": "sprint_up25f_femn", "windup": "", "swing": "", "steal": "", "climb_up": "", "climb_down": "", "climb_work": "", "knockdown_begin": "", "knockdown_loop": "", "knockdown_end": "", "stun_loop": "", "death": ["death_back_sword", "death_left_sword"] },
       "thief_color": "#7d6b4f", "enforcer_color": "#8a3b32", "gang_boss_color": "#c9a227", "capsule_height_m": 1.8
     }
   },
@@ -114,7 +114,13 @@
     // Dishes (ticket 06).
     "dish": { "weight": 1, "steal_seconds": 8 },
 
-    // Connectors (ticket 07).
-    "connector": { "weight": 1, "steal_seconds": 6 }
+    // Connectors (ticket 07): one target per placed pole with wires. The Thief climbs to the top (the highest wire seat; 90 % of the height without one), works steal_seconds, climbs down with a
+    // connector. Nothing goes missing on the pole; it can be robbed again after pole_cooldown_s. Reaching the top rolls electrocute_chance: Shocked shock_seconds (beams and sound), Falling,
+    // Down down_seconds (lying), GetUp get_up_seconds, then the same pole again; no hits lost. The climb's base is a navigation point base_offset_m beside the column.
+    "connector": {
+      "weight": 1, "steal_seconds": 6, "pole_cooldown_s": 120,
+      "electrocute_chance": 0.05, "shock_seconds": 2.0, "down_seconds": 4.0, "get_up_seconds": 1.2,
+      "base_offset_m": 0.9, "top_fraction": 0.9
+    }
   }
 }

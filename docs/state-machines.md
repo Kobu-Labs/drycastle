@@ -405,8 +405,22 @@ stateDiagram-v2
     ClimbUp --> Flee
     ClimbUp --> Board
     WorkAloft --> ClimbDown
+    WorkAloft --> Shocked
     WorkAloft --> Flee
     WorkAloft --> Board
+    Shocked --> Falling
+    Shocked --> Flee
+    Shocked --> Board
+    Falling --> Down
+    Falling --> Flee
+    Falling --> Board
+    Down --> GetUp
+    Down --> Flee
+    Down --> Board
+    GetUp --> ClimbUp
+    GetUp --> Seek
+    GetUp --> Flee
+    GetUp --> Board
     ClimbDown --> Haul
     ClimbDown --> Seek
     ClimbDown --> Flee
@@ -442,6 +456,10 @@ From any state: Dead
 - **ClimbUp**: Climbs straight up from the climb's base to its top at climb_speed, off the navigation mesh (no clock: the distance). A Working state; shot dead here it falls to the ground.
 - **WorkAloft**: Works at the top of the climb (clock: the kind's steal_seconds), then has the thing. A Working state; shot dead here it falls to the ground.
 - **ClimbDown**: Climbs straight down to the base at climb_speed, then hauls what it has (or seeks again when it has nothing). A Working state; shot dead here it falls to the ground.
+- **Shocked**: Electrocuted at the top of a climb (the kind's hazard rolled when the Thief started to work aloft; clock: the shock's seconds): held in place, beams and sound on the clients. Costs no hits. Ends in Falling; shot dead here it falls and lies.
+- **Falling**: Falls from the top to the base's height under gravity (no clock: the height), off the navigation mesh. Ends in Down; shot dead here it keeps falling and lies.
+- **Down**: Lies knocked down (clock: the shock's down seconds); a lying hit volume, normal hits count. Ends in GetUp.
+- **GetUp**: Gets up (clock: the shock's get-up seconds), then goes for the same target again (ClimbUp), or looks for another when it is gone (Seek). All four are Working states: the Thief does not fight.
 
 ## HelicopterGunner.Phase
 

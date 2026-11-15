@@ -194,6 +194,9 @@ public partial class NetClient
                 if (d <= range) Sfx.Play3D(HonkSound, at, -12f * d / range); // the stand-in sound has no range of its own: it fades with the distance here
                 break;
             }
+            case ThievesFxKind.Shock:
+                OnThiefShocked(m.Id, at);
+                break;
         }
     }
 }

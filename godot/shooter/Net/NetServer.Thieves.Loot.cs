@@ -79,7 +79,7 @@ public partial class NetServer
         registry.Register(new TireSource(ThievesData.Loot.Tire, new ServerTires(this)));
         // pets (ticket 05):       registry.Register(new PetSource(...));
         // dishes (ticket 06):     registry.Register(new DishSource(...));
-        // connectors (ticket 07): registry.Register(new ConnectorSource(...));
+        RegisterConnectorLoot(registry); // connectors (ticket 07): NetServer.Thieves.Loot.Connector.cs
         // ---- end of the kinds ----
         _raids!.Loot = _loot;
         _loot.Returned += o => GD.Print($"server: Thieves: a {o.Kind} (id {o.Id}) is back at its place");

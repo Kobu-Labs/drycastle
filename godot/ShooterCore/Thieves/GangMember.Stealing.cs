@@ -28,13 +28,13 @@ public sealed partial class GangMember
     public LootOrigin? CarriedOrigin => LootKinds.OfCarried(Carried) is { } k ? new LootOrigin(k, CarriedId) : null;
 
     /// <summary>Stealing, climbing or hauling: a player crowding it is in the way (<see cref="ThiefGang.Update"/> reads it) and it does not join a fight.</summary>
-    public bool Working => State is GangMemberState.Steal or GangMemberState.ClimbUp or GangMemberState.WorkAloft or GangMemberState.ClimbDown or GangMemberState.Haul or GangMemberState.Load;
+    public bool Working => State is GangMemberState.Steal or GangMemberState.ClimbUp or GangMemberState.WorkAloft or GangMemberState.ClimbDown or GangMemberState.Shocked or GangMemberState.Falling or GangMemberState.Down or GangMemberState.GetUp or GangMemberState.Haul or GangMemberState.Load;
 
     /// <summary>On the way to a target or at one, or on the way to the van with it: the Loot it will bring counts against the van's capacity.</summary>
     public bool HasJob => Working || State == GangMemberState.Approach;
 
     /// <summary>Climbing or working aloft: off the ground.</summary>
-    bool Aloft => State is GangMemberState.ClimbUp or GangMemberState.WorkAloft or GangMemberState.ClimbDown;
+    bool Aloft => State is GangMemberState.ClimbUp or GangMemberState.WorkAloft or GangMemberState.ClimbDown or GangMemberState.Shocked or GangMemberState.Falling;
 
     /// <summary>Where it lies or stands on the ground: under it, for one killed aloft.</summary>
     public Vector3 RestPoint => State == GangMemberState.Dead ? new Vector3(Position.X, _groundY, Position.Z) : Position;
@@ -52,6 +52,7 @@ public sealed partial class GangMember
             case GangMemberState.ClimbUp: TickClimbUp(dt); break;
             case GangMemberState.WorkAloft: TickWorkAloft(dt); break;
             case GangMemberState.ClimbDown: TickClimbDown(dt); break;
+            case GangMemberState.Shocked: case GangMemberState.Falling: case GangMemberState.Down: case GangMemberState.GetUp: TickShock(dt); break;
             case GangMemberState.Haul: TickHaul(dt); break;
             case GangMemberState.Load: TickLoad(dt); break;
         }
@@ -138,7 +139,7 @@ public sealed partial class GangMember
         if (!StillThere(out var now)) { _fsm.Enter(GangMemberState.ClimbDown); return; } // came for nothing: down again
         Face(now.Position, dt);
         Position = MoveTo(Position, _top, Work!.Config.ClimbSpeed * dt);
-        if (Position == _top) _fsm.Enter(GangMemberState.WorkAloft, Work.Config.Of(now.Kind).StealSeconds);
+        if (Position == _top) { _fsm.Enter(GangMemberState.WorkAloft, Work.Config.Of(now.Kind).StealSeconds); RollHazard(now); }
     }
 
     void TickWorkAloft(float dt)
