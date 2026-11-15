@@ -275,8 +275,9 @@ public static class Wire
     //   v52 bullet drop of the sniper rifles: the zero dial (event 24, client to server); the hit diagram of a hunted animal (event 25)
     //   v54 the Raid van's owner field: door in 63rds (bits 0-5), song bits 6-10, crew sitting inside bits 11-14, left door bit 15 (was door in thousandths, song bits 10-14)
     //   v53 the binoculars seen by the others (events 26 and 27); event 25 names the hit shape it was tested against (pose, frame) and the head
+    //   v56 aircraft state byte: kind in bits 6-7 (was bit 7), bank in bits 0-5 (was 0-6); a third kind, the UAV
     //   v55 world interest (ADR 0025): world record flag FDormant 64 (the entity left this client's interest, no fields); animals, flocks and poop outside 800 m are not sent
-    public const byte ProtocolVersion = 55;
+    public const byte ProtocolVersion = 56;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

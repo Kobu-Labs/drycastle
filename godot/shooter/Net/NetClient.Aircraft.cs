@@ -59,7 +59,7 @@ public partial class NetClient
         var model = AircraftModel.Build(kindId);
         Owned.AddChild(model);
         var view = new AircraftView { Model = model, AltitudeM = kinds != null && index < kinds.Count ? kinds[index].AltitudeM : 0f };
-        if (ShotFx.Enabled)
+        if (ShotFx.Enabled && kindId != "uav") // the UAV is silent for now (an engine loop is optional in #303)
         {
             view.Sound = new RotorSound { Level = kindId == "gunship" ? 0.7f : 0.5f, BladeHz = kindId == "gunship" ? 24f : 36f };
             model.AddChild(view.Sound);

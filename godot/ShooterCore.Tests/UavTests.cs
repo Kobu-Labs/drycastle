@@ -19,10 +19,13 @@ public class UavTests
         public readonly List<UavContact> Contacts = new();
         public readonly KillstreakService Service;
         public readonly UavStreak Uav;
+        /// <summary>The entity id the aircraft launch returns (null: no room).</summary>
+        public ushort? Launched = 55;
+        public readonly List<ushort> Removed = new();
 
         public Harness()
         {
-            Uav = new UavStreak(() => Contacts, (o, k, p) => Sent.Add((o, k, p)));
+            Uav = new UavStreak(() => Contacts, (o, k, p) => Sent.Add((o, k, p)), () => Launched, Removed.Add);
             var impl = Shipped.Killstreaks.Streaks.Select(s => s.Id == UavStreak.StreakId ? (IKillstreak)Uav : new LoggingKillstreak(s.Id));
             Service = new KillstreakService(Shipped.Killstreaks, impl, (o, k, p) => Sent.Add((o, k, p)), _ => { });
             Service.Arm(Owner, new[] { UavStreak.StreakId }, 0);
@@ -125,6 +128,54 @@ public class UavTests
         // the streak is spent: nothing else is held, so a second activation does nothing
         Assert.False(h.Service.Activate(Owner, 101, Here));
         Assert.Single(h.Pulses(Owner).Where(p => p.SecondsLeft > 58.5f && p.SecondsLeft <= 60));
+    }
+
+    [Fact]
+    public void ShippedDataHasTheUavAircraftKind()
+    {
+        Assert.Contains(Shipped.Killstreaks.AircraftKinds, k => k.Id == UavStreak.AircraftKind);
+        Assert.True(Shipped.Killstreaks.AircraftKinds.Count <= AircraftData.MaxKinds);
+    }
+
+    [Fact]
+    public void EveryAircraftKindSurvivesTheWireState()
+    {
+        for (var kind = 0; kind < AircraftData.MaxKinds; kind++)
+            Assert.Equal(kind, AircraftState.Unpack(AircraftState.Pack(kind, 0.2f)).Kind);
+    }
+
+    [Fact]
+    public void ActivationLaunchesTheAircraftAndTheEndRemovesIt()
+    {
+        var h = new Harness();
+        h.Service.Activate(Owner, 100, Here);
+        Assert.Empty(h.Removed); // still flying
+        h.Advance(160.0); // duration runs out
+        Assert.Equal(new ushort[] { 55 }, h.Removed);
+    }
+
+    [Fact]
+    public void ShootingTheAircraftDownEndsTheStreakAndTheirPings()
+    {
+        var h = new Harness();
+        h.Service.Activate(Owner, 100, Here);
+        h.Advance(102.0);
+        var pulses = h.Pulses(Owner).Count;
+
+        Assert.Equal(1, h.Service.EndForEntity(55, KillstreakEndReason.Destroyed));
+        Assert.Equal(0, h.Service.ActiveCount(Owner, UavStreak.StreakId));
+        h.Advance(110.0);
+        Assert.Equal(pulses, h.Pulses(Owner).Count);
+    }
+
+    [Fact]
+    public void NoRoomForTheAircraftStillGivesThePings()
+    {
+        var h = new Harness { Launched = null };
+        Assert.True(h.Service.Activate(Owner, 100, Here));
+        Assert.Single(h.Pulses(Owner));
+        h.Advance(160.0);
+        Assert.Empty(h.Removed);
     }
 
     [Fact]
