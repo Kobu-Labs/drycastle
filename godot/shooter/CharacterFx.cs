@@ -220,25 +220,27 @@ public sealed partial class CharacterView : Node3D
     public void SetBinoculars(bool up) => _binoculars = up;
 
     /// <summary>
-    /// The pair a character holds: the model of the paid pack wearing its atlas, at about real size (it is authored 0.35 m wide), or two dark
-    /// barrels when the pack is not there.
+    /// The pair a character holds: the model of the paid pack wearing its atlas, drawn 0.8 x its authored size (0.35 m wide) so it is 28 cm
+    /// across, the width of the soldier's face under the helmet and readable from a few metres (real binoculars are about 17 cm), or two
+    /// light barrels when the pack is not there.
     /// </summary>
     static Node3D MakeBinoculars()
     {
         var root = new Node3D { Name = "Binoculars" };
         if (SyntyLib.Instance("props/binoculars_01", "glb/atlas/military_01_A.png") is { } model)
         {
-            // the pack's props face +Z, the hands hold things facing -Z; centred on its own height
-            model.Transform = new Transform3D(new Basis(Vector3.Up, Mathf.Pi).Scaled(Vector3.One * 0.5f), new Vector3(0, -0.03f, 0));
+            // the pack's props face +Z (eyepieces at -Z), the hands hold things facing -Z; centred on its own height (0.134 m authored)
+            const float s = 0.8f;
+            model.Transform = new Transform3D(new Basis(Vector3.Up, Mathf.Pi).Scaled(Vector3.One * s), new Vector3(0, -0.067f * s, 0));
             root.AddChild(model);
             return root;
         }
-        var dark = new StandardMaterial3D { AlbedoColor = new Color(0.12f, 0.13f, 0.14f), Roughness = 0.8f };
-        foreach (var x in new[] { -0.04f, 0.04f })
+        var light = new StandardMaterial3D { AlbedoColor = new Color(0.62f, 0.55f, 0.42f), Roughness = 0.8f };
+        foreach (var x in new[] { -0.085f, 0.085f })
             root.AddChild(new MeshInstance3D
             {
-                Mesh = new CylinderMesh { TopRadius = 0.028f, BottomRadius = 0.034f, Height = 0.15f, RadialSegments = 12 },
-                MaterialOverride = dark, Position = new Vector3(x, 0, 0), Rotation = new Vector3(Mathf.Pi / 2, 0, 0),
+                Mesh = new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.062f, Height = 0.26f, RadialSegments = 12 },
+                MaterialOverride = light, Position = new Vector3(x, 0, 0), Rotation = new Vector3(Mathf.Pi / 2, 0, 0),
             });
         return root;
     }
