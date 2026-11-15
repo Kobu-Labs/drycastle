@@ -46,6 +46,10 @@ BIGFOOT = "bigfoot"
 #: (a test checks it); the server spawns a species at the points of its kind.
 WILDLIFE = ("deer", "doe", "stag", "moose", "boar", "bear", "fox", "wolf", "rabbit", "raccoon", "skunk")
 
+#: The flying wildlife (godot/shooter/data/wildlife.json ``flocks``): zone kinds too, not species of animals.json. A flock
+#: starts at one of the points of its kind and then flies about.
+FLOCKS = ("crow",)
+
 RULE_KEYS = ("m2_per_point", "min_points", "max_points", "building_clearance_m", "water_clearance_m")
 MAX_ATTEMPTS_PER_POINT = 30  # rejected draws (a rounded point that falls just outside) before the pool is left short
 
@@ -66,7 +70,7 @@ WILDLIFE_TINT = "#6bc27a"
 KINDS: tuple[ZoneKind, ...] = (
     ZoneKind(BIGFOOT, "Bigfoot", "event", EVENT_TINT),
     ZoneKind(PLAYER_SPAWN, "Player spawn", "player", PLAYER_TINT),
-    *(ZoneKind(w, w.capitalize(), "wildlife", WILDLIFE_TINT) for w in WILDLIFE),
+    *(ZoneKind(w, w.capitalize(), "wildlife", WILDLIFE_TINT) for w in (*WILDLIFE, *FLOCKS)),
 )
 KIND_NAMES = tuple(k.name for k in KINDS)
 

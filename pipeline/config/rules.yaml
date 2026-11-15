@@ -640,6 +640,8 @@ zones:
   rabbit: {<<: *wildlife_rule, where_ground: [dike, forest, allotments, orchard, meadow, field]}
   raccoon: {<<: *wildlife_rule, where_ground: [forest, allotments, orchard]}
   skunk: {<<: *wildlife_rule, where_ground: [forest, allotments, orchard]}
+  # Flocks of birds (wildlife.json `flocks`): a flock starts at one of these points and flies about from there.
+  crow: {<<: *wildlife_rule, where_ground: [forest, meadow, field]}
 
 # --- Street lamps (props stage, data/village/work/lamps.json) ----------------------------------------
 # OSM street_lamp nodes are kept where they stand. Where a road has no lamp nearby, rule lamps are

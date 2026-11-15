@@ -18,6 +18,7 @@ from drycastle_pipeline.zones import (
     KIND_NAMES,
     KINDS,
     PLAYER_SPAWN,
+    FLOCKS,
     WILDLIFE,
     ZonesError,
     build_zone_points,
@@ -65,7 +66,7 @@ def inside(points: list, geom) -> bool:
 
 
 def test_the_catalog_is_bigfoot_player_spawn_and_every_species() -> None:
-    assert KIND_NAMES == ("bigfoot", "player_spawn", *WILDLIFE)
+    assert KIND_NAMES == ("bigfoot", "player_spawn", *WILDLIFE, *FLOCKS)
     assert {k.group for k in KINDS} == {"event", "player", "wildlife"}
     assert all(k.label and k.tint.startswith("#") for k in KINDS)
 
@@ -86,13 +87,14 @@ def test_the_shipped_rules_cover_the_catalog_with_rule_zones() -> None:
 
     section = rules(load_section("zones"))
     assert list(section) == list(KIND_NAMES)
-    assert len({json.dumps({k: v for k, v in r.items() if k != "where_ground"}, sort_keys=True) for k, r in section.items() if k in WILDLIFE}) == 1  # one shared density rule
+    assert len({json.dumps({k: v for k, v in r.items() if k != "where_ground"}, sort_keys=True) for k, r in section.items() if k in (*WILDLIFE, *FLOCKS)}) == 1  # one shared density rule
     types = rules_ground_types()
     check_ground_types(section, types)
     assert "where_ground" not in section["bigfoot"]  # drawn only
     assert set(section["player_spawn"]["where_ground"]) == {"allotments", "orchard", "meadow", "village", "field"}
     assert section["stag"]["where_ground"] == ["forest"]
     assert set(section["deer"]["where_ground"]) == {"forest", "meadow", "field"}
+    assert set(section["crow"]["where_ground"]) == {"forest", "meadow", "field"}
     assert all("water" not in r.get("where_ground", []) for r in section.values())
 
 
@@ -392,3 +394,14 @@ def test_the_export_refuses_a_rule_zone_of_an_unknown_ground_type(tmp_path) -> N
     rules_file.write_text("zones:\n  fox:\n    where_ground: [swamp]\n")
     with pytest.raises(ZonesError, match="swamp"):
         run_export(ws["work"], tmp_path / "o", ws["raw"], rules_file, ws["overrides"], edits_path=ws["edits"])
+
+
+def test_flock_kinds_are_the_flocks_of_the_wildlife_data() -> None:
+    """zones.FLOCKS must name the flock kinds of godot/shooter/data/wildlife.json (the server starts a flock at its points)."""
+    from drycastle_pipeline.config import REPO_ROOT
+
+    import re
+
+    text = (REPO_ROOT / "godot" / "shooter" / "data" / "wildlife.json").read_text()
+    data = json.loads(re.sub(r"(?m)^\s*//.*$", "", text))
+    assert sorted(f["id"] for f in data["flocks"]) == sorted(FLOCKS)
