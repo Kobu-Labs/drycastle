@@ -236,7 +236,7 @@ public partial class EditorMode
     };
 
     /// <summary>One fill surface and one edge surface for the areas of <paramref name="t"/> (its materials are stored on it). Polygons with holes are cut open along a thin slit (Clipper) so they triangulate.</summary>
-    void BuildAreaSurfaces(ArrayMesh mesh, GroundMapType t, Color colour, float fillAlpha, int priority, TriangleBudget budget)
+    void BuildAreaSurfaces(ArrayMesh mesh, GroundMapType t, Color colour, float fillAlpha, int priority, TriangleBudget budget, Texture2D? stripes = null)
     {
         var fill = new List<Vector3>();
         var edge = new List<Vector3>(); var edgeIdx = new List<int>();
@@ -312,6 +312,13 @@ public partial class EditorMode
             mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
             t.Fill = GroundMapMaterial(priority);
             t.Fill.AlbedoColor = new Color(colour, fillAlpha);
+            if (stripes != null) // projected on the ground from above, in world metres: the stripes run on across zones and meet at the borders
+            {
+                t.Fill.AlbedoTexture = stripes;
+                t.Fill.Uv1Triplanar = true;
+                t.Fill.Uv1WorldTriplanar = true;
+                t.Fill.Uv1Scale = Vector3.One / StripeTileM;
+            }
             mesh.SurfaceSetMaterial(mesh.GetSurfaceCount() - 1, t.Fill);
         }
         if (edge.Count > 0)

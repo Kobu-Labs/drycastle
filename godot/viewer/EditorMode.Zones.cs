@@ -22,7 +22,9 @@ using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 /// </summary>
 public partial class EditorMode
 {
-    const float ZoneFill = 0.26f, ZoneFillSelected = 0.62f, ZoneFillDim = 0.09f;
+    // The fill is striped: a full band of the kind's colour, then a faint one (StripeTexture), so a zone reads at a glance on any ground.
+    const float ZoneFill = 0.55f, ZoneFillSelected = 0.85f, ZoneFillDim = 0.18f;
+    const float StripeTileM = 24f; // one texture tile on the ground: bands 4 m wide, 8.5 m apart (period)
 
     /// <summary>Rows of the zone list at most (a map has thousands of zones; picking a kind narrows the list).</summary>
     const int ZoneListCap = 300;
@@ -468,7 +470,7 @@ public partial class EditorMode
             _zoArrayMesh ??= new ArrayMesh();
             if (_zoStep == 0 && _zoArrayMesh.GetSurfaceCount() > 0) _zoArrayMesh = new ArrayMesh();
             var kind = _zoOrder[_zoStep];
-            BuildAreaSurfaces(_zoArrayMesh, _zoTypes[kind], ZoneTint(kind), ZoneFill, 6, _zoBudget);
+            BuildAreaSurfaces(_zoArrayMesh, _zoTypes[kind], ZoneTint(kind), ZoneFill, 6, _zoBudget, StripeTexture());
             _zoStep++;
             _zoMesh.Mesh = _zoArrayMesh;
         }
@@ -482,6 +484,21 @@ public partial class EditorMode
         if (_zoStep < _zoOrder.Count) return $"Drawing zones {_zoStep + 1}/{_zoOrder.Count}...";
         var n = ZoneList().Count;
         return $"{n} zone{(n == 1 ? "" : "s")} on the map" + (_zoBudget.Truncated ? ". Too many to draw: the smallest triangles are left out." : ".");
+    }
+
+    static ImageTexture? _stripes;
+
+    /// <summary>The stripe tile: diagonal bands, alternating full and faint (alpha 1 and 0.15), seamless. Made once.</summary>
+    static ImageTexture StripeTexture()
+    {
+        if (_stripes != null) return _stripes;
+        const int n = 64, period = 32; // 2 periods per tile; the bands run at 45 degrees
+        var img = Image.CreateEmpty(n, n, true, Image.Format.Rgba8);
+        for (var y = 0; y < n; y++)
+            for (var x = 0; x < n; x++)
+                img.SetPixel(x, y, new Color(1, 1, 1, (x + y) % period < period / 2 ? 1f : 0.15f));
+        img.GenerateMipmaps();
+        return _stripes = ImageTexture.CreateFromImage(img);
     }
 
     void ApplyZoneMaterials()
