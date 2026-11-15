@@ -85,7 +85,7 @@ public partial class EditorMode : Node
         OutlineRoot = new Node3D { Name = "EditorOutlines", Visible = false };
         AddChild(OutlineRoot);
         BuildUi();
-        BuildRegionWorld();
+        BuildShapeWorld();
         BuildSketchWorld();
         LoadSketchState();
         GetTree().AutoAcceptQuit = false; // window close asks first when fence or tree edits are unapplied (_Notification)
@@ -150,7 +150,7 @@ public partial class EditorMode : Node
             Player.Camera.MakeCurrent();
             Input.MouseMode = Input.MouseModeEnum.Captured;
             CancelDrag();
-            CancelRegionGesture();
+            CancelShapeGesture();
             CancelSketchGesture();
             DisarmPlacement(false);
             StopConnecting(false);
@@ -216,7 +216,7 @@ public partial class EditorMode : Node
     /// </summary>
     public bool RayToGround(Vector3 origin, Vector3 dir, out Vector3 point)
     {
-        // hover, ghost, gate drag and the region tool cast the same mouse ray several times a frame
+        // hover, ghost, gate drag and the shape tools cast the same mouse ray several times a frame
         var frame = Engine.GetProcessFrames();
         if (frame == _rayFrame && _rayVersion == Map.GeometryVersion && origin == _rayOrigin && dir == _rayDir)
         {
@@ -394,6 +394,7 @@ public partial class EditorMode : Node
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
+            SyncCatalogs();
             var root = EditsFile.Load(EditsPath);
             var before = ObjectEdits.CloneObj(root);
             var (ok, msg) = op(root);
@@ -525,8 +526,8 @@ public partial class EditorMode : Node
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown } wd when !OverUi(wd.Position):
                 SetSpeed(Speed / 1.25f);
                 break;
-            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Tool == EditorTool.Region:
-                RegionLeftPress(mb.Position, mb.CtrlPressed);
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && ShapeTool && !OverUi(mb.Position):
+                ShapeLeftPress(mb.Position, mb.CtrlPressed);
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Tool == EditorTool.Sketch:
                 SketchLeftPress(mb.Position, mb.CtrlPressed);
@@ -551,9 +552,11 @@ public partial class EditorMode : Node
                 LeftPress(mb.Position, mb.ShiftPressed);
                 break;
             case InputEventKey { Pressed: true, Echo: false } k:
-                if (HandleRegionKey(k)) { GetViewport().SetInputAsHandled(); break; }
+                if (HandleModalKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Modal) break;
+                if (HandleShapeKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleGroundKey(k)) { GetViewport().SetInputAsHandled(); break; }
+                if (HandleZoneKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleSketchKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandlePolesKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleObjectKey(k)) { GetViewport().SetInputAsHandled(); break; }
@@ -565,7 +568,6 @@ public partial class EditorMode : Node
                     case Key.G: GroupSelected(); break;
                     case Key.T: ToggleTopDown(); break;
                     case Key.O: ToggleOrtho(); break;
-                    case Key.V: ToggleLayers(); break;
                     case Key.B: ToggleFloorPlan(); break;
                     case Key.Enter or Key.KpEnter:
                         if (GetViewport().GuiGetFocusOwner() is (LineEdit or TextEdit)) break;
@@ -581,6 +583,7 @@ public partial class EditorMode : Node
                         else if (SelectedCableId != null) SelectCable(null);
                         else if (SelectedObjectId != null) SelectObject(null);
                         else if (Tool == EditorTool.Ground && GroundEscape()) { }
+                        else if (Tool == EditorTool.Zones && ZoneEscape()) { }
                         else if (Selection.Count > 0) GuardUnsaved(() => Click(null, false));
                         else if (Tool != EditorTool.None) SelectTool(EditorTool.None);
                         break;
@@ -602,7 +605,7 @@ public partial class EditorMode : Node
         }
         if (Active && Dragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
             EndDrag();
-        if (Active && RegionDragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
+        if (Active && ShapeDragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
             EndCornerDrag();
         if (Active && GateDragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
             GateEnd();
@@ -618,8 +621,9 @@ public partial class EditorMode : Node
         UpdateGateDrag();
         UpdateObjectTools();
         UpdatePolesTool();
-        UpdateRegionTool();
-        UpdateLayers();
+        UpdateShapeTool();
+        UpdateGroundMap();
+        UpdateZoneOverlay();
         UpdateFloorPlan();
         UpdateSketchTool();
         PollSketchFile(delta);
@@ -635,7 +639,7 @@ public partial class EditorMode : Node
         if (_panelDirty) RefreshPanel();
         _unsavedLabel.Text = PendingCount == 0 ? "" : $"* {PendingCount} unsaved (Enter applies)";
         var c = FlyCam.GlobalPosition;
-        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedRegionId != null && Tool == EditorTool.Region ? $"  |  region {SelectedRegionId}" : "") + (PendingCount > 0 || RegionDraftPending ? $"  |  * {(PendingCount > 0 ? $"{PendingCount} UNSAVED" : "UNSAVED")}" : "");
+        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedShapeId != null && ShapeTool ? $"  |  {(Tool == EditorTool.Zones ? "zone" : "patch")} {SelectedShapeId}" : "") + (PendingCount > 0 || ShapeDraftPending ? $"  |  * {(PendingCount > 0 ? $"{PendingCount} UNSAVED" : "UNSAVED")}" : "");
         if (Time.GetTicksMsec() / 1000.0 > _statusUntil && _statusLabel.Text != "")
             _statusLabel.Text = "";
     }
@@ -676,7 +680,11 @@ public partial class EditorMode : Node
         var mouse = GetViewport().GetMousePosition();
         string? id = null;
         _hoverPoint = null;
-        if (!_looking && !OverUi(mouse) && Tool is not (EditorTool.Region or EditorTool.Sketch))
+        if (!_looking && !OverUi(mouse) && Tool is EditorTool.Zones)
+        {
+            if (RayToGround(FlyCam.ProjectRayOrigin(mouse), FlyCam.ProjectRayNormal(mouse), out var zp)) _hoverPoint = zp; // no parcel highlight: the zones are what is pointed at
+        }
+        else if (!_looking && !OverUi(mouse) && Tool is not EditorTool.Sketch)
         {
             var p = PickScreen(mouse, out var point);
             if (p != null || point != default) _hoverPoint = point;
@@ -686,6 +694,16 @@ public partial class EditorMode : Node
         {
             HoverId = id;
             MarkHoverOutline();
+        }
+        if (Tool is EditorTool.Ground or EditorTool.Zones)
+        {
+            var calm = _hoverPoint != null && !_looking && !OverUi(mouse) && !Modal && ShapeMode is ShapeState.Idle or ShapeState.Selected;
+            var text = !calm ? null
+                : Tool == EditorTool.Zones ? (_zoOn ? ZoneHoverText(_hoverPoint!.Value) : null)
+                : _gmOn ? GroundHoverText(_hoverPoint!.Value) : null;
+            _hoverLabel.Visible = text != null;
+            if (text != null) { _hoverLabel.Text = text; _hoverLabel.Position = mouse + new Vector2(16, 20); }
+            return;
         }
         if (id == null) { _hoverLabel.Visible = false; return; }
         var info = Map.Parcels[id];
@@ -861,7 +879,7 @@ public partial class EditorMode : Node
         RefreshObjectsPanel();
         RefreshPolesPanel();
         RefreshGroundPanel();
-        RefreshRegionsPanel();
+        RefreshZonesPanel();
         RefreshSketchPanel();
     }
 }

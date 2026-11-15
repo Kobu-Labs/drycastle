@@ -4,7 +4,7 @@ using System.Linq;
 using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 
 /// <summary>
-/// Session undo/redo of every save the editor made since it opened (objects, group operations, Apply of fence). Each save records the before and after content of what it touched: `groups.&lt;ID&gt;`, `regions.&lt;ID&gt;`, `cables.&lt;ID&gt;`
+/// Session undo/redo of every save the editor made since it opened (objects, group operations, Apply of fence). Each save records the before and after content of what it touched: `groups.&lt;ID&gt;`, `ground_patches.&lt;ID&gt;`, `zones.&lt;ID&gt;`, `cables.&lt;ID&gt;`
 /// and each object (by id, in the top-level `objects` list) as whole entries, a parcel at key level (`parcels.&lt;ID&gt;.fence`), with "absent" as a value.
 /// Undo reloads the file from disk, writes the before-values back (absent deletes), validates and saves; the watcher
 /// (or the instant objects path) applies the effect. Only the keys this operation touched are overwritten; everything
@@ -15,9 +15,9 @@ public partial class EditorMode
 {
     public const int UndoCap = 200;
 
-    /// <summary>One touched entry: kind is "parcels", "objects", "groups", "regions", "cables" or "ground_types"; Before/After null means absent.</summary>
+    /// <summary>One touched entry: kind is "parcels", "objects", "groups", "ground_patches", "zones", "cables" or "ground_types"; Before/After null means absent.</summary>
     /// <summary>
-    /// Key is null for the whole entry (objects by id, groups, regions, cables). For a parcel it names the part that changed:
+    /// Key is null for the whole entry (objects by id, groups, ground patches, zones, cables). For a parcel it names the part that changed:
     /// "fence", so undo leaves the parcel's other keys (and other writers' edits) alone.
     /// </summary>
     public sealed record EntryChange(string Kind, string Id, Obj? Before, Obj? After, string? Key = null);
@@ -40,7 +40,7 @@ public partial class EditorMode
         var ox = ObjectsById(before); var oy = ObjectsById(after);
         foreach (var oid in ox.Keys.Union(oy.Keys).OrderBy(k => k, StringComparer.Ordinal))
             Add(list, "objects", oid, null, ox.GetValueOrDefault(oid), oy.GetValueOrDefault(oid));
-        foreach (var kind in new[] { "parcels", "groups", "regions", "cables", "ground_types" })
+        foreach (var kind in new[] { "parcels", "groups", "ground_patches", "zones", "cables", "ground_types" })
         {
             var a = before.GetValueOrDefault(kind) as Obj ?? EditsFile.NewObject(); var b = after.GetValueOrDefault(kind) as Obj ?? EditsFile.NewObject();
             foreach (var id in a.Keys.Union(b.Keys).OrderBy(x => x, StringComparer.Ordinal))
@@ -91,7 +91,7 @@ public partial class EditorMode
     static void ApplyChange(Obj root, EntryChange c, Obj? target)
     {
         if (c.Kind == "objects") { ApplyObject(root, c.Id, target); return; }
-        if (root.GetValueOrDefault(c.Kind) is not Obj map) root[c.Kind] = map = EditsFile.NewObject(); // regions may be absent
+        if (root.GetValueOrDefault(c.Kind) is not Obj map) root[c.Kind] = map = EditsFile.NewObject(); // ground_patches and zones may be absent
         if (c.Key == null)
         {
             if (target == null) map.Remove(c.Id); else map[c.Id] = ObjectEdits.CloneObj(target);
@@ -135,6 +135,7 @@ public partial class EditorMode
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
+            SyncCatalogs();
             var root = EditsFile.Load(EditsPath);
             foreach (var c in rec.Changes)
             {

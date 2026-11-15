@@ -329,27 +329,38 @@ public partial class Viewer
             ed.LookFrom(target + off + right * dist * 0.3f, target + right * dist * 0.3f);
             ed.SetHover(_opts.GetValueOrDefault("hover"));
         }
-        // Region tool shots: --shot-region R-0001 (select it), --shot-draft "x,y;x,y;..." (absolute metres, drawing), --shot-closed (colour step)
+        // Patch and zone tool shots: --shot-patch GP-0001 / --shot-zone Z-0001 (select it), --shot-draft "x,y;x,y;..." (absolute metres, drawing; --shot-zones draws a zone, else a patch of --shot-type)
         if (_opts.GetValueOrDefault("shot-draft") is { } draft)
         {
-            ed.StartRegion();
+            var zones = _flags.Contains("shot-zones");
+            ed.SelectTool(zones ? EditorTool.Zones : EditorTool.Ground);
+            if (zones) { if (_opts.GetValueOrDefault("shot-kind") is { } sk) ed.SelectZoneKind(sk); }
+            else if (_opts.GetValueOrDefault("shot-type") is { } st) ed.SelectGroundType(st);
+            ed.StartShape();
             double cx = 0, cy = 0; var n = 0;
             foreach (var pt in draft.Split(';', StringSplitOptions.RemoveEmptyEntries))
             {
                 var xy = pt.Split(',').Select(v => double.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
-                ed.AddRegionPoint(xy[0], xy[1]); cx += xy[0]; cy += xy[1]; n++;
+                ed.AddShapePoint(xy[0], xy[1]); cx += xy[0]; cy += xy[1]; n++;
             }
-            if (_flags.Contains("shot-closed")) ed.CloseRegion();
             ed.LookAtAbs(cx / n, cy / n, 70);
         }
-        else if (_opts.GetValueOrDefault("shot-region") is { } sreg)
+        else if (_opts.GetValueOrDefault("shot-patch") is { } spatch)
         {
-            Check(ed.SelectRegion(sreg), $"shot region {sreg} selected");
-            var r = ed.Region(sreg)!;
+            ed.SelectTool(EditorTool.Ground);
+            Check(ed.SelectShape(ShapeKind.Patch, spatch), $"shot patch {spatch} selected");
+            var r = ed.Patch(spatch)!;
+            ed.LookAtAbs(r.Points.Average(p => p.x), r.Points.Average(p => p.y), 70);
+        }
+        else if (_opts.GetValueOrDefault("shot-zone") is { } szone)
+        {
+            ed.SelectTool(EditorTool.Zones);
+            Check(ed.SelectShape(ShapeKind.Zone, szone), $"shot zone {szone} selected");
+            var r = ed.Zone(szone)!;
             ed.LookAtAbs(r.Points.Average(p => p.x), r.Points.Average(p => p.y), 70);
         }
         ed.RefreshNow();
-        ed.RegionWorldNow();
+        ed.ShapeWorldNow();
         var frames = _opts.TryGetValue("frames", out var f) && int.TryParse(f, out var fi) ? fi : 60;
         for (var i = 0; i < frames; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);

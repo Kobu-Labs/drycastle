@@ -7,7 +7,7 @@ using Godot;
 
 /// <summary>
 /// `--topdown PNG`: renders the whole loaded map straight down (orthographic, north up) into one PNG plus a sidecar
-/// `PNG.json` with its ground extent, so the tactical map can use the world's real colours (terrain, roads, regions, ground
+/// `PNG.json` with its ground extent, so the tactical map can use the world's real colours (terrain, roads, hand-drawn ground patches, ground
 /// patches, buildings, trees). The picture is cut into square tiles that are rendered one by one and stitched, so the size is not
 /// limited by the GPU texture size. Options: `--topdown-mpp M` metres per pixel (default 1), `--topdown-tile PX` (default 2048).
 /// The light is neutral (no shadows, no sky): an up-facing surface shows its flat vertex colour. Outside the map it is transparent.

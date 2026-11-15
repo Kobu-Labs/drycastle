@@ -20,7 +20,11 @@ public static class ObjectEdits
     static readonly Regex AssetRx = new("^(pack:[^/\\s]+/\\S+|prim:[A-Za-z0-9_.-]+)$", RegexOptions.Compiled);
     static readonly Regex ParcelRx = new("^P-\\d{4,}$", RegexOptions.Compiled);
     static readonly Regex GroupRx = new("^G-\\d{4,}$", RegexOptions.Compiled);
-    static readonly Regex RegionRx = new("^R-\\d{4,}$", RegexOptions.Compiled);
+    static readonly Regex PatchRx = new("^GP-\\d{4,}$", RegexOptions.Compiled);
+    static readonly Regex ZoneRx = new("^Z-\\d{4,}$", RegexOptions.Compiled);
+
+    /// <summary>The zone kinds the map knows (parcels.json `zone_kinds`; set by the editor). Empty: unknown, a zone's kind is not checked against the catalog.</summary>
+    public static IReadOnlyCollection<string> ZoneKinds { get; set; } = Array.Empty<string>();
 
     public static Obj Parcels(Obj root) => (Obj)root["parcels"]!;
 
@@ -163,7 +167,7 @@ public static class ObjectEdits
     {
         var errs = new List<string>();
         if (!(root.GetValueOrDefault("version") is EditsFile.Num v && v.Text == "1")) errs.Add("version: must be 1");
-        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "objects" or "groups" or "regions" or "cables" or "ground_types")) errs.Add($"{k}: unknown key");
+        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "objects" or "groups" or "ground_patches" or "zones" or "cables" or "ground_types")) errs.Add($"{k}: unknown key");
         var seen = new Dictionary<string, string>(); // object id -> where it first appears, unique across the whole file
         if (root.TryGetValue("objects", out var top)) errs.AddRange(CheckObjects(top, "objects", seen));
         foreach (var (pid, entry) in Parcels(root))
@@ -193,15 +197,27 @@ public static class ObjectEdits
                 }
             if (g.TryGetValue("fence", out var gf)) errs.AddRange(gf is Obj gfo ? EditModel.CheckFence(gfo, $"{path}.fence") : new List<string> { $"{path}.fence: must be an object" });
         }
-        if (root.GetValueOrDefault("regions") is { } regions)
+        var editsTypes = root.GetValueOrDefault("ground_types") as Obj;
+        if (root.GetValueOrDefault("ground_patches") is { } patches)
         {
-            if (regions is not Obj ro) errs.Add("regions: must be an object");
+            if (patches is not Obj po) errs.Add("ground_patches: must be an object");
             else
-                foreach (var (rid, entry) in ro)
+                foreach (var (pid, entry) in po)
                 {
-                    var path = $"regions.{rid}";
-                    if (!RegionRx.IsMatch(rid)) errs.Add($"{path}: region IDs look like R-0001");
-                    errs.AddRange(CheckRegion(entry, path));
+                    var path = $"ground_patches.{pid}";
+                    if (!PatchRx.IsMatch(pid)) errs.Add($"{path}: ground patch IDs look like GP-0001");
+                    errs.AddRange(CheckPatch(entry, path, editsTypes));
+                }
+        }
+        if (root.GetValueOrDefault("zones") is { } zones)
+        {
+            if (zones is not Obj zo) errs.Add("zones: must be an object");
+            else
+                foreach (var (zid, entry) in zo)
+                {
+                    var path = $"zones.{zid}";
+                    if (!ZoneRx.IsMatch(zid)) errs.Add($"{path}: zone IDs look like Z-0001");
+                    errs.AddRange(CheckZone(entry, path));
                 }
         }
         if (root.GetValueOrDefault("cables") is { } cables)
@@ -246,28 +262,45 @@ public static class ObjectEdits
         return errs;
     }
 
-    /// <summary>Mirror of edits.py `_check_region`: colour, an optional water_y (a water region's surface height), and a simple ring of at least 3 [x, y] points (closing point optional).</summary>
-    static List<string> CheckRegion(object? entry, string path)
+    /// <summary>
+    /// Mirror of edits.py `_check_ground_patch`: a `type` that exists (rules.yaml or ground_types, not deleted), a `water_y` that is there exactly
+    /// when the type carries water, and a simple ring of at least 3 [x, y] points (closing point optional).
+    /// </summary>
+    static List<string> CheckPatch(object? entry, string path, Obj? types)
     {
         var errs = new List<string>();
         if (entry is not Obj r) { errs.Add($"{path}: must be an object"); return errs; }
-        foreach (var k in r.Keys) if (k is not ("colour" or "polygon" or "water_y" or "ground")) errs.Add($"{path}.{k}: unknown key");
-        if (r.TryGetValue("ground", out var gv))
+        foreach (var k in r.Keys) if (k is not ("type" or "polygon" or "water_y")) errs.Add($"{path}.{k}: unknown key");
+        if (!r.TryGetValue("type", out var tv)) errs.Add($"{path}.type: required");
+        else if (tv is not string type || type == "") errs.Add($"{path}.type: must be a ground type name");
+        else
         {
-            if (!(gv is List<object?> stack && stack.Count > 0)) errs.Add($"{path}.ground: must be a non-empty list of ground type names, lowest first");
-            else
-            {
-                for (var i = 0; i < stack.Count; i++)
-                {
-                    if (!(stack[i] is string gs && System.Text.RegularExpressions.Regex.IsMatch(gs, "^[a-z][a-z0-9_]*$"))) errs.Add($"{path}.ground.{i}: must be a ground type name (lower case letters, digits, _)");
-                    else if (stack.IndexOf(stack[i]) != i) errs.Add($"{path}.ground.{i}: {gs} is in the stack twice");
-                }
-                if (r.ContainsKey("water_y")) errs.Add($"{path}.ground: not together with water_y (a water region is its own body of water)");
-            }
+            var (exists, water) = GroundTypeEdits.PatchType(type, types);
+            if (!exists) errs.Add($"{path}.type: {type} is not a ground type (or it is deleted)");
+            else if (water is true && !r.ContainsKey("water_y")) errs.Add($"{path}.water_y: required: {type} is water, so the patch needs the height of its surface");
+            else if (water is false && r.ContainsKey("water_y")) errs.Add($"{path}.water_y: refused: {type} is not water");
         }
         if (r.TryGetValue("water_y", out var wy) && !(Number(wy) is double w && double.IsFinite(w))) errs.Add($"{path}.water_y: must be a number (metres, terrain datum)");
-        if (!r.TryGetValue("colour", out var c)) errs.Add($"{path}.colour: required");
-        else if (!(c is string cs && EditSchema.ColourRx.IsMatch(cs))) errs.Add($"{path}.colour: must be a colour like \"#rrggbb\"");
+        errs.AddRange(CheckPolygon(r, path));
+        return errs;
+    }
+
+    /// <summary>Mirror of edits.py `_check_zone`: a `kind` of the catalog and a simple ring of at least 3 [x, y] points.</summary>
+    static List<string> CheckZone(object? entry, string path)
+    {
+        var errs = new List<string>();
+        if (entry is not Obj r) { errs.Add($"{path}: must be an object"); return errs; }
+        foreach (var k in r.Keys) if (k is not ("kind" or "polygon")) errs.Add($"{path}.{k}: unknown key");
+        if (!r.TryGetValue("kind", out var kv)) errs.Add($"{path}.kind: required");
+        else if (kv is not string kind || kind == "") errs.Add($"{path}.kind: must be a zone kind name");
+        else if (ZoneKinds.Count > 0 && !ZoneKinds.Contains(kind)) errs.Add($"{path}.kind: unknown zone kind {kind} (the catalog has {string.Join(", ", ZoneKinds)})");
+        errs.AddRange(CheckPolygon(r, path));
+        return errs;
+    }
+
+    static List<string> CheckPolygon(Obj r, string path)
+    {
+        var errs = new List<string>();
         if (!r.TryGetValue("polygon", out var poly)) { errs.Add($"{path}.polygon: required"); return errs; }
         if (poly is not List<object?> pts) { errs.Add($"{path}.polygon: must be a list of [x, y] points"); return errs; }
         var ring = new List<(double x, double y)>();
@@ -288,7 +321,7 @@ public static class ObjectEdits
 
     public const int RingOk = 0, RingTooFew = 1, RingRepeated = 2, RingNotSimple = 3;
 
-    /// <summary>What is wrong with a region ring (RingOk when nothing): the same three rules as the validator. A repeated closing point is ignored.</summary>
+    /// <summary>What is wrong with a patch or zone ring (RingOk when nothing): the same three rules as the validator. A repeated closing point is ignored.</summary>
     public static int RingProblemCode(IReadOnlyList<(double x, double y)> points)
     {
         var ring = points.ToList();

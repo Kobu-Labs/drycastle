@@ -61,7 +61,7 @@ public partial class IconGlyph : Control
                 Line(5, 6, 5, 20); Line(12, 6, 12, 20); Line(19, 6, 19, 20);
                 Line(3, 10, 21, 10); Line(3, 16, 21, 16);
                 break;
-            case "region":
+            case "zone":
                 Poly(true, (4, 9), (11, 4), (20, 8), (18, 19), (7, 20));
                 foreach (var (cx, cy) in new[] { (4f, 9f), (20f, 8f), (7f, 20f) }) DrawCircle(P(cx, cy), 2.2f * u, col);
                 break;

@@ -5,9 +5,9 @@ using System.Text.RegularExpressions;
 using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 
 /// <summary>
-/// Ground types of the user (edits.json `ground_types`; GLOSSARY "Ground type", ADR 0015): the model without any UI. A
-/// type is a named bundle of attributes (`attributes` of its entry, from the fixed catalog below, mirror of pipeline
-/// `ground_attributes.py`); `osm` says which OSM land it takes. The type table is the rules.yaml entries as the last
+/// Ground types of the user (edits.json `ground_types`; GLOSSARY "Ground type", ADR 0022): the model without any UI. A
+/// type is terrain only: its `attributes` (colours, recipe, detail, water; the fixed catalog below, mirror of pipeline
+/// `ground_attributes.py`) say how the ground looks; `osm` says which OSM land it takes. What a place means in play is a zone, not a type. The type table is the rules.yaml entries as the last
 /// build wrote them (parcels.json `ground_types[].rules`) with the overrides and additions of the edits laid over them, by
 /// the same merge rule as pipeline `ground.merge_ground_types`: a key of the edits entry overrides that key (dicts merge
 /// key by key, lists and values replace), an attribute set to null is dropped (the type stops carrying it), a new name is a
@@ -20,50 +20,39 @@ public static class GroundTypeEdits
     public static readonly string[] Recipes = { "field", "forest", "village", "dike" };
     public static readonly string[] OsmClasses = { "landuse", "natural" };
     public static readonly string[] Keys = { "attributes", "osm", "deleted" };
-    /// <summary>The events an `event_spawn` attribute can name (pipeline ground_attributes.EVENTS).</summary>
-    public static readonly string[] Events = { "bigfoot" };
     public static readonly Regex NameRx = new("^[a-z][a-z0-9_]{0,23}$", RegexOptions.Compiled);
     public static readonly Regex OsmValueRx = new("^[A-Za-z0-9_:\\-]+$", RegexOptions.Compiled);
     public const string NewTypeColour = "#7aa860";
 
     // ---- the attribute catalog (mirror of pipeline ground_attributes.py) ----
 
-    /// <summary>How an attribute stacks: <see cref="Terrain"/> is decided by the topmost stacked type that carries any terrain attribute, <see cref="Any"/> and <see cref="Union"/> add up over every stacked type.</summary>
-    public const string Terrain = "terrain", Any = "any", Union = "union";
-
     public sealed record AttributeGroup(string Key, string Label, string Note);
 
-    public sealed record AttributeInfo(string Key, string Group, string Stacking, string Label, string Tip, string? Tint);
+    public sealed record AttributeInfo(string Key, string Group, string Label, string Tip);
 
     public static readonly AttributeGroup[] Groups =
     {
-        new("appearance", "Appearance", "Topmost wins: the topmost stacked type with appearance or water attributes decides the terrain colour and detail."),
-        new("spawning", "Spawning", "Adds up over every stacked type."),
-        new("water", "Water", "Topmost wins, with Appearance: the topmost stacked type with appearance or water attributes decides if the ground is water."),
-        new("events", "Events", "Adds up over every stacked type. Only marks where an event may spawn; the game does not use it yet."),
+        new("appearance", "Appearance", "How the ground looks: its colours and the detail (grass, clutter, patches) it gets."),
+        new("water", "Water", "A water type is a body of water: swimming and drowning, no detail. A patch of it carries its water level."),
     };
 
     public static readonly AttributeInfo[] Attributes =
     {
-        new("colours", "appearance", Terrain, "Terrain colours", "The shades of the terrain (one is picked per area).", null),
-        new("recipe", "appearance", Terrain, "Detail recipe", "What grass, clutter and patches the ground gets.", null),
-        new("detail", "appearance", Terrain, "Detail settings", "Settings laid over the recipe for this type only.", null),
-        new("spawns", "spawning", Any, "Players may spawn here", "Spawn points may be placed on this ground.", "#4aa3e8"),
-        new("water", "water", Terrain, "Water body", "A body of water (water.json): swimming and drowning, no detail.", null),
-        new("event_spawn", "events", Union, "Event spawn", "The events that may spawn on this ground.", "#c46be0"),
+        new("colours", "appearance", "Terrain colours", "The shades of the terrain (one is picked per area)."),
+        new("recipe", "appearance", "Detail recipe", "What grass, clutter and patches the ground gets."),
+        new("detail", "appearance", "Detail settings", "Settings laid over the recipe for this type only."),
+        new("water", "water", "Water body", "A body of water (water.json): swimming and drowning, no detail. A patch of this type needs a water level."),
     };
 
     public static AttributeInfo? Attribute(string key) => Attributes.FirstOrDefault(a => a.Key == key);
 
-    public static bool IsTerrainKey(string key) => Attribute(key)?.Stacking == Terrain;
-
-    public static bool IsLayerKey(string key) => Attribute(key) is { } a && a.Stacking != Terrain;
+    public static bool IsTerrainKey(string key) => Attribute(key) != null;
 
     /// <summary>The attributes object of a type entry (a new empty one when there is none; not stored in the entry).</summary>
     public static Obj AttributesOf(Obj? spec) => spec?.GetValueOrDefault("attributes") as Obj ?? EditsFile.NewObject();
 
     /// <summary>What a type of the rules entry names in the old flat shape (colours, recipe, ... at the top): the maps built before ADR 0015 wrote it that way.</summary>
-    static readonly string[] LegacyKeys = { "colours", "recipe", "detail", "water", "spawns" };
+    static readonly string[] LegacyKeys = { "colours", "recipe", "detail", "water" };
 
     /// <summary>A rules entry as an older build wrote it (the attributes at the top of the entry) in the shape of today: they move under `attributes`. An entry of today is returned as it is.</summary>
     public static Obj UpgradeRules(Obj raw)
@@ -128,17 +117,12 @@ public static class GroundTypeEdits
     }
 
     /// <summary>The effective type as plain values (the attributes it carries, OSM tags, rule).</summary>
-    public sealed record Spec(IReadOnlyList<string> Colours, string? Recipe, Obj Detail, bool Water, bool Spawns, IReadOnlyList<string> EventSpawn, IReadOnlyList<string> Carried,
+    public sealed record Spec(IReadOnlyList<string> Colours, string? Recipe, Obj Detail, bool Water, IReadOnlyList<string> Carried,
         IReadOnlyList<string> Landuse, IReadOnlyList<string> Natural, string? Rule)
     {
-        /// <summary>The first shade; a type with no colours shows the tint of the first layer attribute it carries (the overlay colour), else grey.</summary>
-        public string Colour => Colours.Count > 0 ? Colours[0] : Tint ?? "#808080";
-        public string? Tint => Carried.Select(k => Attribute(k)).FirstOrDefault(a => a is { Tint: not null })?.Tint;
+        /// <summary>The first shade; a type with no colours shows blue for water, else grey.</summary>
+        public string Colour => Colours.Count > 0 ? Colours[0] : Water ? "#3a6ea5" : "#808080";
         public bool Carries(string key) => Carried.Contains(key);
-        /// <summary>True when the type can decide the terrain of a point (it carries colours, recipe, detail or water).</summary>
-        public bool CarriesTerrain => Carried.Any(IsTerrainKey);
-        /// <summary>True when the type carries an attribute that adds up over a stack (spawning, events).</summary>
-        public bool CarriesLayer => Carried.Any(IsLayerKey);
         public bool HasOsm => Landuse.Count + Natural.Count > 0;
         public string Source => Rule != null ? $"rule: {Rule}" : HasOsm ? "OSM" : "drawn by hand only";
     }
@@ -152,7 +136,7 @@ public static class GroundTypeEdits
         var carried = Attributes.Where(a => attrs.GetValueOrDefault(a.Key) != null).Select(a => a.Key).ToList();
         return new Spec(Strings(attrs.GetValueOrDefault("colours")), attrs.GetValueOrDefault("recipe") as string,
             attrs.GetValueOrDefault("detail") as Obj ?? EditsFile.NewObject(),
-            attrs.GetValueOrDefault("water") is true, attrs.GetValueOrDefault("spawns") is true, Strings(attrs.GetValueOrDefault("event_spawn")), carried,
+            attrs.GetValueOrDefault("water") is true, carried,
             Strings(osm?.GetValueOrDefault("landuse")), Strings(osm?.GetValueOrDefault("natural")), o.GetValueOrDefault("rule") as string);
     }
 
@@ -182,22 +166,6 @@ public static class GroundTypeEdits
         foreach (var (name, e) in edits)
             if (seen.Add(name) && e is Obj entry) rows.Add(new Row(name, "custom", ToSpec(Merge(null, entry)), null, entry));
         return rows;
-    }
-
-    // ---- stacks ----
-
-    /// <summary>The index in a stack of types (lowest first) of the one that decides the terrain: the topmost that carries terrain attributes; -1 when none does.</summary>
-    public static int TerrainIndex(IReadOnlyList<Spec> stack)
-    {
-        for (var i = stack.Count - 1; i >= 0; i--) if (stack[i].CarriesTerrain) return i;
-        return -1;
-    }
-
-    /// <summary>The indexes of the types of a stack that add a layer: those carrying spawning or events, but not the one that decides the terrain (pipeline `drawn_ground`).</summary>
-    public static List<int> LayerIndexes(IReadOnlyList<Spec> stack)
-    {
-        var top = TerrainIndex(stack);
-        return Enumerable.Range(0, stack.Count).Where(i => i != top && stack[i].CarriesLayer).ToList();
     }
 
     // ---- comparing and pruning ----
@@ -293,7 +261,7 @@ public static class GroundTypeEdits
     // ---- validation (mirror of edits.py _check_ground_type) ----
 
     /// <summary>The attributes a type has once its entry is laid over the rules' (a null removes one): mirror of edits.py `_effective_attributes`.</summary>
-    static Obj EffectiveAttributes(string name, Obj entry)
+    public static Obj EffectiveAttributes(string name, Obj entry)
     {
         var o = ObjectEdits.CloneObj(AttributesOf(RulesTypes.GetValueOrDefault(name)));
         foreach (var (k, v) in AttributesOf(entry))
@@ -371,12 +339,8 @@ public static class GroundTypeEdits
                 case "recipe":
                     if (!(value is string rs && Recipes.Contains(rs))) errs.Add($"{kpath}: must be one of {string.Join(", ", Recipes)}");
                     break;
-                case "water" or "spawns":
+                case "water":
                     if (value is not true) errs.Add($"{kpath}: must be true (null removes it)");
-                    break;
-                case "event_spawn":
-                    if (!(value is List<object?> el && el.Count > 0 && el.All(x => x is string s && Events.Contains(s)))) errs.Add($"{kpath}: must be a non-empty list of events ({string.Join(", ", Events)})");
-                    else if (el.Distinct().Count() != el.Count) errs.Add($"{kpath}: lists an event twice");
                     break;
             }
         }
@@ -392,16 +356,18 @@ public static class GroundTypeEdits
         }
     }
 
-    /// <summary>The problem of a stack of ground types for a region (mirror of edits.py `_check_region`), or null.</summary>
-    public static string? StackProblem(IReadOnlyList<string> stack)
+    /// <summary>
+    /// Whether the type of a ground patch exists and carries water (null: unknown, the editor has not been told the rules' types): mirror of the
+    /// patch check in edits.py. The rules' types come from the map (<see cref="RulesTypes"/>), the user's from <paramref name="edits"/> (`ground_types`);
+    /// a deleted type does not exist.
+    /// </summary>
+    public static (bool Exists, bool? Water) PatchType(string name, Obj? edits)
     {
-        if (stack.Count == 0) return "a ground stack lists at least one type";
-        for (var i = 0; i < stack.Count; i++)
-        {
-            if (!Regex.IsMatch(stack[i], "^[a-z][a-z0-9_]*$")) return $"{stack[i]} is not a ground type name";
-            if (stack.ToList().IndexOf(stack[i]) != i) return $"{stack[i]} is in the stack twice";
-        }
-        return null;
+        var entry = edits?.GetValueOrDefault(name) as Obj;
+        if (entry?.GetValueOrDefault("deleted") is true) return (false, null);
+        var inRules = RulesTypes.ContainsKey(name);
+        if (!inRules && entry == null) return RulesTypes.Count == 0 ? (true, null) : (false, null);
+        return (true, EffectiveAttributes(name, entry ?? EditsFile.NewObject()).GetValueOrDefault("water") is true);
     }
 
     /// <summary>Why a new type cannot have this name, or null; <paramref name="taken"/> are the names in use (also deleted ones).</summary>

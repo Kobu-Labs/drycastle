@@ -10,10 +10,10 @@ using Drycastle.MapLoader;
 /// Map viewer root. Loads the map, adds light and sky, spawns the player.
 /// Options (after "--"): --map DIR, --seed N, --smoke, --screenshot PATH,
 /// --view overview|oblique|street|player, --frames N, --topdown PNG [--topdown-mpp M --topdown-tile PX] (whole map from above, Viewer.TopDown.cs), --assets DIR, --watch, --edits PATH,
-/// --state PATH, --edit-smoke --edit-smoke-plan FILE, --regions-smoke --regions-smoke-plan FILE,
+/// --state PATH, --edit-smoke --edit-smoke-plan FILE, --patches-smoke --patches-smoke-plan FILE,
 /// --editor (editor mode, implies --watch; F2 toggles walk/editor), --editor-smoke --editor-smoke-plan FILE,
-/// --panel-smoke --panel-smoke-plan FILE (Fence panel), --objects-smoke --objects-smoke-plan FILE (objects, gizmo, undo), --region-editor-smoke --region-editor-smoke-plan FILE (Region tool),
-/// --editor-shot PNG [--select P-0001,P-0002] [--shot-at P-0001] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-tool Select|Group|Fence|Objects|View]
+/// --panel-smoke --panel-smoke-plan FILE (Fence panel), --objects-smoke --objects-smoke-plan FILE (objects, gizmo, undo), --shape-editor-smoke --shape-editor-smoke-plan FILE (Ground patches and Zones tools),
+/// --editor-shot PNG [--select P-0001,P-0002] [--shot-at P-0001] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-tool Select|Group|Fence|Ground|Objects|Zones|View] [--shot-patch GP-0001 | --shot-zone Z-0001 | --shot-draft "x,y;..." [--shot-zones --shot-kind K | --shot-type T]]
 /// [--shot-object ID] [--shot-arm ASSET --shot-ghost x,y --shot-ghost-rot DEG] [--shot-filter TEXT] [--shot-open car,pot]
 /// (editor screenshot of the main window).
 /// Env: DRYCASTLE_MAP, DRYCASTLE_ASSETS, DRYCASTLE_UV (the uv executable).
@@ -72,8 +72,8 @@ public partial class Viewer : Node3D
         _player.Position = sp.Position + Vector3.Up * 1.0f;
         _player.LookYawPitch(rng.RandfRange(0, 360), 0);
 
-        var editorMode = _flags.Contains("editor") || _flags.Contains("editor-smoke") || _flags.Contains("panel-smoke") || _flags.Contains("objects-smoke") || _flags.Contains("region-editor-smoke") || _opts.ContainsKey("editor-shot");
-        if (editorMode || _flags.Contains("watch") || _flags.Contains("edit-smoke") || _flags.Contains("regions-smoke")) StartWatcher(repo);
+        var editorMode = _flags.Contains("editor") || _flags.Contains("editor-smoke") || _flags.Contains("panel-smoke") || _flags.Contains("objects-smoke") || _flags.Contains("shape-editor-smoke") || _opts.ContainsKey("editor-shot");
+        if (editorMode || _flags.Contains("watch") || _flags.Contains("edit-smoke") || _flags.Contains("patches-smoke")) StartWatcher(repo);
         if (editorMode)
         {
             _editor = new EditorMode { Name = "Editor", Map = _map, Player = _player, Watcher = _watcher, EditsPath = _watcher!.EditsPath };
@@ -97,10 +97,10 @@ public partial class Viewer : Node3D
         if (_flags.Contains("editor-smoke")) _ = RunEditorSmoke();
         else if (_flags.Contains("panel-smoke")) _ = RunPanelSmoke();
         else if (_flags.Contains("objects-smoke")) _ = RunObjectsSmoke();
-        else if (_flags.Contains("region-editor-smoke")) _ = RunRegionEditorSmoke();
+        else if (_flags.Contains("shape-editor-smoke")) _ = RunShapeEditorSmoke();
         else if (_opts.ContainsKey("editor-shot")) _ = RunEditorShot();
         else if (_flags.Contains("edit-smoke")) _ = RunEditSmoke();
-        else if (_flags.Contains("regions-smoke")) _ = RunRegionsSmoke();
+        else if (_flags.Contains("patches-smoke")) _ = RunPatchesSmoke();
         else if (_flags.Contains("smoke")) _ = RunSmoke(rng);
         else if (_opts.ContainsKey("topdown")) _ = RunTopDown();
         else if (_opts.ContainsKey("screenshot")) _ = RunScreenshot();

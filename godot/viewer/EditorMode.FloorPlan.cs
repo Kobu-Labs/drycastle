@@ -15,7 +15,7 @@ public partial class EditorMode
 {
     const string FloorWalls = "floorplan_walls", FloorGrid = "floorplan_grid", FloorGridMajor = "floorplan_grid_major";
     const float FloorCutM = 1.2f;        // above the ground at the middle of the building: through doors and most windows
-    const float FloorGridLift = 0.5f;    // above the region paint (0.3) and the attribute layers (0.45)
+    const float FloorGridLift = 0.5f;    // above the patch paint (0.3) and the aerial photo (0.25)
     const float FloorWallLift = 0.56f;
     const float FloorMarginM = 3f;
     const int FloorMajorEvery = 5;

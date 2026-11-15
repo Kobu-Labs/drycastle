@@ -6,7 +6,7 @@ using Godot;
 
 /// <summary>
 /// The aerial photo layer: the orthophoto the pipeline downloads (`make ortho`, data/village/ortho) draped on the terrain
-/// under everything the editor draws, to paint regions and place things by eye. A reference only: it is read from the
+/// under everything the editor draws, to draw patches and zones and place things by eye. A reference only: it is read from the
 /// gitignored data folder, never written to the map or exported, and its licence forbids redistributing or altering it.
 /// O toggles it, the View page has the switch and an opacity slider; both are remembered (editor_ui.cfg).
 /// </summary>
@@ -159,7 +159,6 @@ public partial class EditorMode
     {
         page.AddChild(new HSeparator());
         page.AddChild(new Label { Text = "Layers", ThemeTypeVariation = "Header" });
-        BuildLayersToggle(page);
         BuildFloorPlanToggle(page);
         _orthoCheck = new CheckBox
         {
