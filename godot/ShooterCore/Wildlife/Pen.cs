@@ -95,7 +95,7 @@ public sealed class Pen
 }
 
 /// <summary>An <see cref="IAnimalWorld"/> that fences a pet into a <see cref="Pen"/>: no ground outside it, so the animal's own steps refuse to leave. Nothing frightens a pet.</summary>
-public sealed class PennedWorld : IAnimalWorld
+public sealed class PennedWorld : IPennedWorld
 {
     readonly IAnimalWorld _inner;
     readonly Pen _pen;
@@ -103,6 +103,11 @@ public sealed class PennedWorld : IAnimalWorld
     public PennedWorld(IAnimalWorld inner, Pen pen) { _inner = inner; _pen = pen; }
 
     public float? GroundY(float x, float z) => _pen.Contains(x, z) ? _inner.GroundY(x, z) : null;
+
+    public bool Inside(float x, float z) => _pen.Contains(x, z);
+
+    /// <summary>The ground with no pen (what a pet carried out of it walks on).</summary>
+    public IAnimalWorld Open => _inner;
 
     public Vector3? NearestThreat(Vector3 from, float radius) => null;
 

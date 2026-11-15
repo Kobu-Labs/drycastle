@@ -26,7 +26,7 @@ public readonly record struct LootOrigin(LootKind Kind, int Id);
 /// to it, the point it works at (<see cref="Top"/>: straight up from the climb's base, which is <see cref="WorkSpot"/>). <see cref="Lying"/> is Loot that lies on the ground after its carrier
 /// was killed (a <see cref="LyingLoot"/>; <see cref="Id"/> is then its world entity id and <see cref="Kind"/> what it is).
 /// </summary>
-public readonly record struct StealTarget(LootKind Kind, int Id, Vector3 Position, Vector3 WorkSpot, Vector3? Top = null, bool Lying = false)
+public readonly record struct StealTarget(LootKind Kind, int Id, Vector3 Position, Vector3 WorkSpot, Vector3? Top = null, bool Lying = false, FenceHop? Hop = null)
 {
     /// <summary>The Thief climbs from <see cref="WorkSpot"/> up to <see cref="Top"/>, works there, and climbs down (the member machine's ClimbUp, WorkAloft, ClimbDown).</summary>
     public bool NeedsClimb => Top.HasValue && !Lying;

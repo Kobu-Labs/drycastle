@@ -13,6 +13,7 @@ public enum GangMemberState : byte
 {
     Idle = 0, Walk = 1, Guard = 2, Chase = 3, Windup = 4, Swing = 5, Flee = 6, Dead = 7, Board = 8,
     Seek = 9, Approach = 10, Steal = 11, Haul = 12, Load = 13, ClimbUp = 14, WorkAloft = 15, ClimbDown = 16,
+    HopIn = 17, HopOut = 18,
 }
 
 /// <summary>A living player as the Gang members see them: where their feet are and whether they stand on the ground (a rider in a vehicle cannot be struck).</summary>
@@ -70,7 +71,7 @@ public static class GangRules
     public static bool SpeakerOf(byte hp) => (hp & SpeakerBit) != 0;
 
     /// <summary>A state byte as a state; a value this build does not know stands.</summary>
-    public static GangMemberState StateOf(byte state) => state <= (byte)GangMemberState.ClimbDown ? (GangMemberState)state : GangMemberState.Idle;
+    public static GangMemberState StateOf(byte state) => state <= (byte)GangMemberState.HopOut ? (GangMemberState)state : GangMemberState.Idle;
 
     public static void Register(WorldEntityRegistry registry)
     {
@@ -114,6 +115,10 @@ public sealed partial class GangMember : IWorldEntity
         .Allow(GangMemberState.Seek, GangMemberState.Approach, GangMemberState.Chase, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.Approach, GangMemberState.Steal, GangMemberState.ClimbUp, GangMemberState.Seek, GangMemberState.Chase, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.Steal, GangMemberState.Haul, GangMemberState.Seek, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.Approach, GangMemberState.HopIn)
+        .Allow(GangMemberState.HopIn, GangMemberState.Steal, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.Steal, GangMemberState.HopOut)
+        .Allow(GangMemberState.HopOut, GangMemberState.Haul, GangMemberState.Seek, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.ClimbUp, GangMemberState.WorkAloft, GangMemberState.ClimbDown, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.WorkAloft, GangMemberState.ClimbDown, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.ClimbDown, GangMemberState.Haul, GangMemberState.Seek, GangMemberState.Flee, GangMemberState.Board)
@@ -131,7 +136,9 @@ public sealed partial class GangMember : IWorldEntity
         .Note(GangMemberState.Board, "Called back by the van: runs to its side door on a route (never fights) and ends there, counted as boarded. Flee when the van is destroyed or leaves without it.")
         .Note(GangMemberState.Seek, "A Thief looks for a target: the nearest free one of a kind chosen by weight near the van's door, one Thief per target (clock: it asks again after seek_retry_seconds when nothing is free or the van takes no more). A Thief with free hands still joins a fight.")
         .Note(GangMemberState.Approach, "Walks a route to the target's work spot (clock: approach_give_up_seconds; a target that is gone, a lost route or the clock ends it and the target is avoided for a while). Arrived: Steal, or ClimbUp when the target needs a climb.")
-        .Note(GangMemberState.Steal, "Stands at the target, a still target (clock: the kind's steal_seconds, or pickup_seconds for Loot that lies). When the clock runs out the Thief has it and it is gone from its place; a target that goes meanwhile ends it. A Working state: a player crowding it is aggro.")
+        .Note(GangMemberState.Steal, "Stands at the target, a still target (clock: the kind's steal_seconds, or pickup_seconds for Loot that lies). When the clock runs out the Thief has it and it is gone from its place; a target that goes meanwhile ends it. Landed inside a fence (HopIn) it first walks straight to the pet and the clock starts within grab_m of it. A Working state: a player crowding it is aggro.")
+        .Note(GangMemberState.HopIn, "Hops over the fence of the pet's garden: an arc from the point outside the fence to the point inside it, off the navigation mesh (clock: hop_seconds). A Working state; then Steal, where it walks to the pet.")
+        .Note(GangMemberState.HopOut, "Back out of the garden with the pet (or with nothing when the pet went): walks straight to where it landed (no clock), then the arc out over the fence (clock: hop_seconds), then Haul with the pet. A Working state.")
         .Note(GangMemberState.ClimbUp, "Climbs straight up from the climb's base to its top at climb_speed, off the navigation mesh (no clock: the distance). A Working state; shot dead here it falls to the ground.")
         .Note(GangMemberState.WorkAloft, "Works at the top of the climb (clock: the kind's steal_seconds), then has the thing. A Working state; shot dead here it falls to the ground.")
         .Note(GangMemberState.ClimbDown, "Climbs straight down to the base at climb_speed, then hauls what it has (or seeks again when it has nothing). A Working state; shot dead here it falls to the ground.")
@@ -242,7 +249,7 @@ public sealed partial class GangMember : IWorldEntity
 
     void Die(ushort killer)
     {
-        _groundY = Aloft ? _base.Y : Position.Y;
+        _groundY = Aloft ? _base.Y : HopGroundY();
         ReleaseJob();
         if (Work != null && CarriedOrigin is { } lost) Work.Drop(lost, new Vector3(Position.X, _groundY, Position.Z)); // the Loot lies where it fell
         Killer = killer;

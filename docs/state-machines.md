@@ -17,21 +17,29 @@ stateDiagram-v2
     Idle --> Sit
     Idle --> Bark
     Idle --> Flee
+    Idle --> Carried
     Idle --> Dead
     Eat --> Idle
     Eat --> Flee
+    Eat --> Carried
     Eat --> Dead
     Sit --> Idle
     Sit --> Flee
+    Sit --> Carried
     Sit --> Dead
     Bark --> Idle
     Bark --> Flee
+    Bark --> Carried
     Bark --> Dead
     Walk --> Idle
     Walk --> Flee
+    Walk --> Carried
     Walk --> Dead
     Flee --> Idle
+    Flee --> Carried
     Flee --> Dead
+    Carried --> Idle
+    Carried --> Dead
     Dead --> [*]
 ```
 
@@ -42,6 +50,7 @@ stateDiagram-v2
 - **Dead**: Lies for corpse_seconds (the clock's elapsed time), then the entity ends; a one-hit species' entity ends at once. Never left.
 - **Sit**: Sits for a random while (clock: sit seconds; the client plays sit-down, holds, stands up after), then stands. Species with a sit rule only.
 - **Bark**: Barks once (clock: the bark clip's length), then stands. Species with a bark rule only.
+- **Carried**: A Thief of the Thieves event holds it (no clock: it is moved by the Thief, MoveCarried, and does nothing itself). Let go (Release) it stands; one put down outside its Pen walks home over open ground until it is inside again. Still a hit target: any hit that deals damage kills it.
 
 ## App.Phase
 
@@ -400,6 +409,15 @@ stateDiagram-v2
     Steal --> Seek
     Steal --> Flee
     Steal --> Board
+    Approach --> HopIn
+    HopIn --> Steal
+    HopIn --> Flee
+    HopIn --> Board
+    Steal --> HopOut
+    HopOut --> Haul
+    HopOut --> Seek
+    HopOut --> Flee
+    HopOut --> Board
     ClimbUp --> WorkAloft
     ClimbUp --> ClimbDown
     ClimbUp --> Flee
@@ -436,12 +454,14 @@ From any state: Dead
 - **Board**: Called back by the van: runs to its side door on a route (never fights) and ends there, counted as boarded. Flee when the van is destroyed or leaves without it.
 - **Seek**: A Thief looks for a target: the nearest free one of a kind chosen by weight near the van's door, one Thief per target (clock: it asks again after seek_retry_seconds when nothing is free or the van takes no more). A Thief with free hands still joins a fight.
 - **Approach**: Walks a route to the target's work spot (clock: approach_give_up_seconds; a target that is gone, a lost route or the clock ends it and the target is avoided for a while). Arrived: Steal, or ClimbUp when the target needs a climb.
-- **Steal**: Stands at the target, a still target (clock: the kind's steal_seconds, or pickup_seconds for Loot that lies). When the clock runs out the Thief has it and it is gone from its place; a target that goes meanwhile ends it. A Working state: a player crowding it is aggro.
+- **Steal**: Stands at the target, a still target (clock: the kind's steal_seconds, or pickup_seconds for Loot that lies). When the clock runs out the Thief has it and it is gone from its place; a target that goes meanwhile ends it. Landed inside a fence (HopIn) it first walks straight to the pet and the clock starts within grab_m of it. A Working state: a player crowding it is aggro.
 - **Haul**: Carries the Loot to the van's door, faster than it approached (clock: haul_give_up_seconds, then it drops the Loot where it stands). A Working state; the client attaches the prop from the hp byte.
 - **Load**: Tosses the Loot into the van at the door (clock: load_seconds): counted in the van, the Thief seeks again. A van that cannot take it any more gets it dropped at the Thief's feet.
 - **ClimbUp**: Climbs straight up from the climb's base to its top at climb_speed, off the navigation mesh (no clock: the distance). A Working state; shot dead here it falls to the ground.
 - **WorkAloft**: Works at the top of the climb (clock: the kind's steal_seconds), then has the thing. A Working state; shot dead here it falls to the ground.
 - **ClimbDown**: Climbs straight down to the base at climb_speed, then hauls what it has (or seeks again when it has nothing). A Working state; shot dead here it falls to the ground.
+- **HopIn**: Hops over the fence of the pet's garden: an arc from the point outside the fence to the point inside it, off the navigation mesh (clock: hop_seconds). A Working state; then Steal, where it walks to the pet.
+- **HopOut**: Back out of the garden with the pet (or with nothing when the pet went): walks straight to where it landed (no clock), then the arc out over the fence (clock: hop_seconds), then Haul with the pet. A Working state.
 
 ## HelicopterGunner.Phase
 

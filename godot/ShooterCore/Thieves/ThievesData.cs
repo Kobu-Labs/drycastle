@@ -200,6 +200,8 @@ public sealed class GangClips
     public string ClimbUp { get; set; } = "";
     public string ClimbDown { get; set; } = "";
     public string ClimbWork { get; set; } = "";
+    /// <summary>The Thief hopping over a pet's fence (HopIn, ticket 05; a jump clip; empty: a held pose).</summary>
+    public string HopIn { get; set; } = "";
     public List<string> Death { get; set; } = new() { "death_back_sword", "death_left_sword" };
 }
 

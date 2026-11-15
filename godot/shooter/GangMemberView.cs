@@ -61,7 +61,7 @@ public sealed partial class GangMemberView : Node3D
         _pivot.AddChild(_model);
         _death = clips.Death.Count == 0 ? "" : clips.Death[(int)((_hash >> 24) % (uint)clips.Death.Count)];
         var lib = new AnimationLibrary();
-        foreach (var name in new[] { clips.Idle, clips.Walk, clips.Run, clips.Windup, clips.Swing, clips.Steal, clips.ClimbUp, clips.ClimbDown, clips.ClimbWork, _death }.Where(n => n != "").Distinct())
+        foreach (var name in new[] { clips.Idle, clips.Walk, clips.Run, clips.Windup, clips.Swing, clips.Steal, clips.ClimbUp, clips.ClimbDown, clips.ClimbWork, clips.HopIn, _death }.Where(n => n != "").Distinct())
             if (SyntyLib.Clip(name) is { } clip)
             {
                 if (name == clips.Run) clip.LoopMode = Animation.LoopModeEnum.Linear; // looped whatever the manifest says
@@ -141,9 +141,10 @@ public sealed partial class GangMemberView : Node3D
             GangMemberState.ClimbUp => c.ClimbUp,
             GangMemberState.ClimbDown => c.ClimbDown,
             GangMemberState.WorkAloft => c.ClimbWork,
+            GangMemberState.HopIn => c.HopIn,
             _ => moving ? c.Walk : c.Idle,
         };
-        if (want == "" && state is GangMemberState.ClimbUp or GangMemberState.ClimbDown or GangMemberState.WorkAloft) { _anim?.Pause(); _clip = ""; return; } // no climb clip yet: a held pose
+        if (want == "" && state is GangMemberState.ClimbUp or GangMemberState.ClimbDown or GangMemberState.WorkAloft or GangMemberState.HopIn) { _anim?.Pause(); _clip = ""; return; } // no climb clip yet: a held pose
         if (_anim == null || want == "" || want == _clip) return;
         _clip = want;
         if (!_anim.HasAnimation(want)) return;
