@@ -58,7 +58,9 @@ Rollback: re-run the workflow on an older commit of `release`, or restore a back
    commit `private-pack.json` (see `docs/launcher.md`, "The private asset pack"). The VPS firewall (host and provider) must allow **TCP 27080**.
    The password is in `assets-private/pack-password.txt`; send it to the players.
 4. Launcher changed: `git tag launcher-vX.Y.Z && git push origin launcher-vX.Y.Z`; players download the new launcher zip once.
-5. PR `main` -> `release`, merge: tests, builds, server deploy (restarts the server, which then reads the uploaded `assets-private/`), publish.
+5. **`make release-check`** (`scripts/check_release_assets.py`): compares the local map, the pack built now and the launcher code with what is published,
+   and exits 1 naming what to republish (steps 2-4). CI cannot check this (the map and the pack come from gitignored data). Run it last, right before the PR.
+6. PR `main` -> `release`, merge: tests, builds, server deploy (restarts the server, which then reads the uploaded `assets-private/`), publish.
 Order matters: pack and map before the release (its manifest names them), launcher tag before or with it.
 
 ## Cutting a release (manual path)
