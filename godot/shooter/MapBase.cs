@@ -16,7 +16,7 @@ public sealed class MapRoad
 }
 
 /// <summary>
-/// The map data both the minimap and the tactical map draw: the square ground extent that covers every parcel and road, the
+/// The map data both the minimap and the tactical map draw: the square ground extent that covers every parcel and road (or, for the tactical map's <see cref="World"/>, the whole terrain), the
 /// parcel colours rasterised into a mipmapped terrain texture (with the map's top-down render over it when the map folder has one), and the roads as polylines. One instance per loaded map
 /// (<see cref="For"/>), so the two views share the roads and the textures: a texture is built once per side and kept, and a
 /// second join on the same map does not rasterise again (#170, T2-19). Positions are ground (x, z) in metres, the game's
@@ -45,7 +45,29 @@ public sealed class MapBase
     public float SouthZ => Origin.Y + SideMetres;
     public IReadOnlyList<MapRoad> Roads => _roads;
 
-    MapBase(Drycastle.MapLoader.MapLoader map) => _map = map;
+    readonly bool _world;
+    MapBase? _worldTwin;
+
+    MapBase(Drycastle.MapLoader.MapLoader map, bool world = false) { _map = map; _world = world; }
+
+    /// <summary>
+    /// The base of the whole world for the full-screen tactical map: the same data over the square that covers the whole terrain
+    /// (the world is the map outline, a polygon, far bigger than the parcels' box that the minimap and the Intel screen show), with
+    /// the top-down picture over every pixel it has. This instance itself when it already is one, or when the map has no terrain.
+    /// </summary>
+    public MapBase World
+    {
+        get
+        {
+            if (_world) return this;
+            if (_worldTwin == null)
+            {
+                var w = new MapBase(_map, true);
+                _worldTwin = w.Parse() ? w : this;
+            }
+            return _worldTwin;
+        }
+    }
 
     /// <summary>The shared base of <paramref name="map"/>, or null when the map is missing or has no parcels or roads (the views then show markers only).</summary>
     public static MapBase? For(Drycastle.MapLoader.MapLoader? map)
@@ -66,6 +88,13 @@ public sealed class MapBase
         var any = false;
         foreach (var p in _map.Parcels.Values) { box = any ? box.Merge(p.Bounds) : p.Bounds; any = true; }
         if (!any) return false;
+        if (_world)
+            foreach (var mi in _map.TerrainVisuals)
+            {
+                if (!GodotObject.IsInstanceValid(mi) || mi.Mesh is not { } mesh) continue;
+                var a = (mi.IsInsideTree() ? mi.GlobalTransform : mi.Transform) * mesh.GetAabb();
+                box = box.Merge(new Rect2(a.Position.X, a.Position.Z, a.Size.X, a.Size.Z));
+            }
         SideMetres = Math.Max(box.Size.X, box.Size.Y) + 2 * PadMetres;
         Origin = box.GetCenter() - new Vector2(SideMetres / 2, SideMetres / 2);
         var extent = new Rect2(Origin, new Vector2(SideMetres, SideMetres));
@@ -155,8 +184,8 @@ public sealed class MapBase
         }
         var inside = ParcelMask(side, metresPerTexel);
         for (var i = 0; i < px.Length; i += 4)
-            if (inside[i + 3] == 0) Buffer.BlockCopy(terrain, 0, px, i, 4);
-        PaintTopDown(px, inside, side, metresPerTexel);
+            if (!_world && inside[i + 3] == 0) Buffer.BlockCopy(terrain, 0, px, i, 4); // the world sheet keeps the terrain's own colours past the parcels
+        PaintTopDown(px, _world ? null : inside, side, metresPerTexel);
         using var img = Image.CreateFromData(side, side, false, Image.Format.Rgba8, px);
         img.GenerateMipmaps();
         return ImageTexture.CreateFromImage(img);
@@ -173,11 +202,11 @@ public sealed class MapBase
 
     /// <summary>
     /// The map's top-down render (<c>tactical-map.png</c> + sidecar in the map folder, <see cref="TopDownImage"/>) over every texel
-    /// inside a parcel: buildings, roofs and props as the world looks from above, which the terrain colours do not have. Resampled
+    /// inside a parcel (every texel when <paramref name="inside"/> is null): buildings, roofs and props as the world looks from above, which the terrain colours do not have. Resampled
     /// to this texture's scale, alpha-blended (the picture is transparent outside the terrain). Nothing happens when the map has
     /// no picture or it cannot be read: the terrain colours stay.
     /// </summary>
-    void PaintTopDown(byte[] px, byte[] inside, int side, float metresPerTexel)
+    void PaintTopDown(byte[] px, byte[]? inside, int side, float metresPerTexel)
     {
         var src = TopDownSource();
         if (src is not { } s) return;
@@ -195,7 +224,7 @@ public sealed class MapBase
             for (var u = Math.Max(0, ox); u < Math.Min(side, ox + rw); u++)
             {
                 var o = (v * side + u) * 4;
-                if (inside[o + 3] == 0) continue;
+                if (inside != null && inside[o + 3] == 0) continue;
                 var q = ((v - oy) * rw + (u - ox)) * 4;
                 int a = data[q + 3];
                 if (a == 0) continue;

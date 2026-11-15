@@ -177,7 +177,7 @@ public sealed partial class IntelScreenView : PanelContainer
         Set(_desc, e.Description);
         Set(_whereValue, e.Where is null ? Strings.T("intel.where.none")
             : map is null ? Strings.T("intel.where.nomap")
-            : Strings.F("intel.where.grid", TacticalMapMath.ReferenceOf(e.Where.Value, map.Origin.X, map.SouthZ, map.SideMetres)));
+            : Strings.F("intel.where.grid", TacticalMapMath.ReferenceOf(e.Where.Value, map.World.Origin.X, map.World.SouthZ, map.World.SideMetres)));
         _map.Set(map, e.Where);
 
         Clear(_risks, _riskCaption);

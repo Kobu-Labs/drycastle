@@ -92,7 +92,7 @@ public partial class IntelScreen : Node3D
     }
 
     /// <summary>The grid reference of the base on the tactical map sheet ("F7"), or null when there is no map to say it on. The announcement names it.</summary>
-    public string? BaseReference => Base is { } b ? TacticalMapMath.ReferenceOf(_anchor.At, b.Origin.X, b.SouthZ, b.SideMetres) : null;
+    public string? BaseReference => Base?.World is { } b ? TacticalMapMath.ReferenceOf(_anchor.At, b.Origin.X, b.SouthZ, b.SideMetres) : null;
 
     /// <summary>The shared map base (the minimap's and the tactical map's), taken on first use: only a loaded map can make one, and it is remembered for the map's lifetime, so it is not asked for while loading.</summary>
     MapBase? Base => _mapBase ??= MapBase.For(_loader);

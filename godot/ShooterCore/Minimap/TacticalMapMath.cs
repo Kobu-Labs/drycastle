@@ -4,7 +4,7 @@ namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Godot-free geometry of the tactical map (the full-screen map sheet, opened with M). The sheet is north-up and fixed. Its
-/// square extent is the same one the minimap's terrain texture covers: <c>originX</c> is the ground x of the west edge and
+/// square extent covers the whole terrain (the world is a polygon, the square is its bounding box): <c>originX</c> is the ground x of the west edge and
 /// <c>southZ</c> the ground z of the south edge (north is -z). Map coordinates are metres from the south-west corner: easting
 /// grows east, northing grows north. Grid references work like a printed map sheet: columns A, B, C... from the west, rows
 /// 1, 2, 3... from the south, so "C7" is the third column and seventh row.
