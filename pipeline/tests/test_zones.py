@@ -28,8 +28,11 @@ from drycastle_pipeline.zones import (
     kind_areas,
     kind_rows,
     point_count,
+    rule_parts,
+    rule_spawn_units,
     rules,
     sample_points,
+    zone_cuts,
 )
 from tests.synthetic import make_terrain, make_workspace
 
@@ -217,6 +220,70 @@ def test_wildlife_species_are_baked_per_species() -> None:
     out, _ = build_zone_points(doc, {}, [], make_terrain(), {"bodies": []}, section)
     got = {e["kind"]: e["areas"] for e in out["zones"]}
     assert got == {"deer": ["A-0001"], "bear": ["A-0002"], "fox": ["A-0001", "A-0002"]}  # wolf: no area, no entry; catalog order
+
+
+# --- cuts: a rule zone that was moved, retyped or deleted ------------------------------------------
+
+
+def cuts_of(kind: str, geom) -> dict:
+    return zone_cuts({"ZC-0001": {"kind": kind, "polygon": [list(c) for c in geom.exterior.coords][:-1]}}, ORIGIN)
+
+
+def test_a_cut_takes_its_area_out_of_the_rule_zone_of_its_kind_only() -> None:
+    doc = {"ground": [ground("A-0001", "forest", box(0, 0, 10, 10)), ground("A-0002", "forest", box(20, 0, 30, 10))]}
+    cuts = cuts_of("deer", box(0, 0, 10, 10))
+    assert [aid for aid, _ in kind_areas("deer", doc, {}, ["forest"], cuts)] == ["A-0002"]
+    assert [aid for aid, _ in kind_areas("boar", doc, {}, ["forest"], cuts)] == ["A-0001", "A-0002"]  # another kind: untouched
+    assert [aid for aid, _ in kind_areas("deer", doc, {}, ["forest"], {})] == ["A-0001", "A-0002"]
+
+
+def test_a_cut_is_geometry_so_a_rebuilt_area_leaves_no_sliver() -> None:
+    cuts = cuts_of("deer", box(0, 0, 10, 10))  # cut when the area was 10 x 10
+    rebuilt = {"ground": [ground("A-0777", "forest", box(0.2, -0.3, 10.4, 10.3))]}  # new id, slightly different
+    assert kind_areas("deer", rebuilt, {}, ["forest"], cuts) == []
+    bigger = {"ground": [ground("A-0778", "forest", box(0, 0, 20, 10))]}  # a real change: the rest stays
+    (_, left), = kind_areas("deer", bigger, {}, ["forest"], cuts)
+    assert left.area == pytest.approx(9.5 * 10, abs=0.5)  # x from 10.5 (the cut is grown by 0.5 m)
+
+
+def test_a_cut_never_touches_a_drawn_zone() -> None:
+    """The detached copy of a moved rule zone is a drawn zone over the very polygon that was cut."""
+    doc = {"ground": [ground("A-0001", "forest", box(0, 0, 10, 10))]}
+    d = drawn(zone("Z-0001", "deer", box(0, 0, 10, 10)))
+    assert [aid for aid, _ in kind_areas("deer", doc, d, ["forest"], cuts_of("deer", box(0, 0, 10, 10)))] == ["Z-0001"]
+
+
+def test_rule_parts_are_the_outlines_of_an_area() -> None:
+    one = ground("A-0001", "forest", box(0, 0, 10, 10))
+    assert [i for i, _ in rule_parts(one)] == ["A-0001"]
+    two = ground("A-0002", "forest", box(0, 0, 10, 10).union(box(20, 0, 30, 10)))
+    assert [i for i, _ in rule_parts(two)] == ["A-0002.1", "A-0002.2"]
+    holed = ground("A-0003", "forest", box(0, 0, 10, 10).difference(box(4, 4, 6, 6)))
+    assert rule_parts(holed)[0][1].equals(box(0, 0, 10, 10))  # holes are not part of the outline
+
+
+def test_untouched_zone_points_are_the_same_with_cuts_of_other_kinds_and_places() -> None:
+    doc = {"ground": [ground("A-0001", "bigfoot_forest", box(20, 120, 60, 160))]}
+    section = rules({"bigfoot": {**RULE, "where_ground": ["bigfoot_forest"]}})
+    args = (doc, drawn(zone("Z-0001", "bigfoot", box(140, 120, 190, 160))), [], make_terrain(), {"bodies": []}, section)
+    base = build_zone_points(*args)
+    assert build_zone_points(*args, {}) == base
+    assert build_zone_points(*args, cuts_of("deer", box(20, 120, 60, 160))) == base  # another kind
+    assert build_zone_points(*args, cuts_of("bigfoot", box(300, 300, 310, 310))) == base  # elsewhere
+    cut, _ = build_zone_points(*args, cuts_of("bigfoot", box(20, 120, 60, 160)))
+    assert cut["zones"][0]["areas"] == ["Z-0001"]
+
+
+def test_player_spawn_rule_areas_lose_the_cut_and_a_moved_one_comes_back_through_its_drawn_zone() -> None:
+    doc = {"ground": [ground("A-0001", "village", box(0, 0, 100, 100)), ground("A-0002", "village", box(200, 0, 300, 100))]}
+    cuts = cuts_of(PLAYER_SPAWN, box(0, 0, 100, 100))
+    units = rule_spawn_units(doc, ["village"], cuts)
+    assert list(units) == ["A-0001"] and units["A-0001"]["polygon"] is None  # cut away completely
+    assert rule_spawn_units(doc, ["village"], {}) == {}
+    moved = drawn(zone("Z-0001", PLAYER_SPAWN, box(50, 0, 150, 100)))
+    (unit,) = drawn_spawn_units(doc, moved, ["village"], cuts)
+    assert unit["id"] == "A-0001" and Polygon(unit["polygon"]["coordinates"][0]).equals(box(50, 0, 100, 100))
+    assert drawn_spawn_units(doc, moved, ["village"]) == []  # without the cut the village is whole already
 
 
 # --- the points ---------------------------------------------------------------------------------

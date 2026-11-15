@@ -140,7 +140,7 @@ public partial class EditorMode
         yield return ("Walk: drop to the ground here  (F3)", WalkFromHere);
         yield return ("Help: controls  (F1)", ToggleCheatSheet);
         foreach (var r in Patches()) { var id = r.Id; yield return ($"{r.Id}  ground patch  {r.Type}  {r.Points.Count} corners", () => { SelectTool(EditorTool.Ground); SelectShape(ShapeKind.Patch, id); }); }
-        foreach (var z in Zones()) { var id = z.Id; yield return ($"{z.Id}  zone  {ZoneLabel(z.Kind)}  {z.Points.Count} corners", () => { SelectTool(EditorTool.Zones); SelectShape(ShapeKind.Zone, id); }); }
+        foreach (var z in Zones()) { var id = z.Id; yield return ($"{z.Label}  zone  {ZoneLabel(z.Kind)}  {z.Points.Count} corners", () => { SelectTool(EditorTool.Zones); SelectShape(ShapeKind.Zone, id); }); }
         foreach (var k in Map.ZoneKinds) { var n = k.Name; yield return ($"{k.Label}  zone kind", () => { SelectTool(EditorTool.Zones); SelectZoneKind(n); }); }
         foreach (var p in _sketch.Points) { var id = p.Id; yield return ($"{p.Id}  sketch point", () => { SelectTool(EditorTool.Sketch); SelectSketchItem(id); }); }
         foreach (var l in _sketch.Lines) { var id = l.Id; yield return ($"{l.Id}  sketch {(l.Closed ? "closed line" : "line")}  {l.Points.Count} corners", () => { SelectTool(EditorTool.Sketch); SelectSketchItem(id); }); }

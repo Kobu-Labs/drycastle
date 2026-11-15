@@ -26,6 +26,8 @@ public partial class EditorMode
     /// <summary>One drawn polygon: its ID and corners in absolute metres.</summary>
     public record ShapeInfo(string Id, List<(double x, double y)> Points)
     {
+        /// <summary>What the user reads for this shape (its ID; a zone that comes from a rule has the ground area's).</summary>
+        public virtual string Label => Id;
         public double AreaM2
         {
             get
@@ -40,8 +42,22 @@ public partial class EditorMode
     /// <summary>A ground patch: exactly one ground type, plus the height of the water surface when the type is water.</summary>
     public sealed record PatchInfo(string Id, string Type, List<(double x, double y)> Points, double? WaterY) : ShapeInfo(Id, Points);
 
-    /// <summary>A zone: exactly one zone kind of the catalog.</summary>
-    public sealed record ZoneInfo(string Id, string Kind, List<(double x, double y)> Points) : ShapeInfo(Id, Points);
+    /// <summary>
+    /// A zone: exactly one zone kind of the catalog. Drawn ones are `zones.Z-NNNN`; one that comes from a rule (a ground area of
+    /// the kind's where_ground types, minus the cut ones) has <see cref="AreaPart"/> (its ground area, `A-0012`, `A-0012.2` for the
+    /// second outline of a multi-part one) and an ID of area and kind, since one area is a zone of several kinds. Both behave the
+    /// same to the user (EditorMode.Zones.cs "detach" makes an edit of a rule-derived one an ordinary zone plus a cut).
+    /// Points are the outline in absolute metres; Holes are not selectable, they only keep clicks and the overlay honest.
+    /// </summary>
+    public sealed record ZoneInfo(string Id, string Kind, List<(double x, double y)> Points, string? AreaPart = null, List<List<(double x, double y)>>? Holes = null) : ShapeInfo(Id, Points)
+    {
+        public bool FromRule => AreaPart != null;
+        public override string Label => AreaPart ?? Id;
+        readonly (double MinX, double MinY, double MaxX, double MaxY) _box = Points.Count == 0 ? default : (Points.Min(p => p.x), Points.Min(p => p.y), Points.Max(p => p.x), Points.Max(p => p.y));
+
+        public bool Contains(double x, double y)
+            => x >= _box.MinX && x <= _box.MaxX && y >= _box.MinY && y <= _box.MaxY && PointInRing(Points, x, y) && (Holes == null || !Holes.Any(h => PointInRing(h, x, y)));
+    }
 
     public const string OutlineShapeDraft = "outline_shape_draft", OutlineShapeGhost = "outline_shape_ghost",
         OutlineShapeBad = "outline_shape_bad", OutlineShapeSel = "outline_shape_sel", OutlineShapeDrag = "outline_shape_drag";
@@ -120,29 +136,14 @@ public partial class EditorMode
                     list.Add(new PatchInfo(id, t, ring, r.ContainsKey("water_y") ? ObjectEdits.Number(r["water_y"]) : null));
         return list;
     }
-    Obj? _patchesFor, _zonesFor;
+    Obj? _patchesFor;
     List<PatchInfo>? _patchCache;
-    List<ZoneInfo>? _zoneCache;
-
-    List<ZoneInfo> ZoneList()
-    {
-        var disk = Disk();
-        if (ReferenceEquals(disk, _zonesFor) && _zoneCache != null) return _zoneCache;
-        var list = new List<ZoneInfo>();
-        _zonesFor = disk;
-        _zoneCache = list;
-        if (ShapesOf(disk, ShapeKind.Zone) is { } zo)
-            foreach (var (id, e) in zo)
-                if (e is Obj r && r.GetValueOrDefault("kind") is string kind && ParsePolygon(r.GetValueOrDefault("polygon")) is { } ring)
-                    list.Add(new ZoneInfo(id, kind, ring));
-        return list;
-    }
 
     /// <summary>Patches in the file as last read, sorted by ID.</summary>
     public List<PatchInfo> Patches() => new(PatchList());
     public List<ZoneInfo> Zones() => new(ZoneList());
     public PatchInfo? Patch(string id) => PatchList().FirstOrDefault(p => p.Id == id);
-    public ZoneInfo? Zone(string id) => ZoneList().FirstOrDefault(z => z.Id == id);
+    public ZoneInfo? Zone(string id) { ZoneList(); return _zoneById.GetValueOrDefault(id); }
 
     List<ShapeInfo> ShapeList(ShapeKind k) => k == ShapeKind.Patch ? PatchList().Cast<ShapeInfo>().ToList() : ZoneList().Cast<ShapeInfo>().ToList();
     ShapeInfo? ShapeById(ShapeKind k, string id) => k == ShapeKind.Patch ? Patch(id) : Zone(id);
@@ -150,11 +151,12 @@ public partial class EditorMode
     string? SelectedOf(ShapeKind k) => k == ShapeKind.Patch ? SelectedPatchId : SelectedZoneId;
 
     /// <summary>Next free ID: one above the highest in use (mcp_server._next_id).</summary>
-    public static string NextShapeId(Obj root, ShapeKind k)
+    public static string NextShapeId(Obj root, ShapeKind k) => NextId(root, KeyOf(k), PrefixOf(k));
+
+    static string NextId(Obj root, string key, string prefix)
     {
-        var prefix = PrefixOf(k);
         var top = 0;
-        if (ShapesOf(root, k) is { } so)
+        if (root.GetValueOrDefault(key) is Obj so)
             foreach (var id in so.Keys)
                 if (id.StartsWith(prefix) && int.TryParse(id.AsSpan(prefix.Length), out var n)) top = Math.Max(top, n);
         return $"{prefix}{top + 1:0000}";
@@ -363,12 +365,13 @@ public partial class EditorMode
     {
         var noun = NounOf(k);
         if (ShapeById(k, id) is not { } r) { Say($"{noun} {id} does not exist", true); return false; }
-        if (corner < 0 || corner >= r.Points.Count) { Say($"{id} has no corner {corner + 1}", true); return false; }
+        if (corner < 0 || corner >= r.Points.Count) { Say($"{r.Label} has no corner {corner + 1}", true); return false; }
         var ring = r.Points.ToList();
         ring[corner] = (Math.Round(x, 3), Math.Round(y, 3));
         if (ring[corner] == r.Points[corner]) return false;
         var code = ObjectEdits.RingProblemCode(ring);
         if (code != ObjectEdits.RingOk) { Say($"corner not moved: the outline would {RingMessage(code)}", true); return false; }
+        if (r is ZoneInfo { FromRule: true } rz) return EditRuleZone(rz, null, ring, $"moved corner {corner + 1} of {rz.Label}");
         return Mutate(root =>
         {
             if (ShapesOf(root, k)?.GetValueOrDefault(id) is not Obj e) return (false, $"{noun} {id} no longer exists");
@@ -380,6 +383,12 @@ public partial class EditorMode
     public bool DeleteShape(ShapeKind k, string id)
     {
         var noun = NounOf(k);
+        if (k == ShapeKind.Zone && Zone(id) is { FromRule: true } rz)
+        {
+            var gone = EditRuleZone(rz, null, null, $"deleted {rz.Label} (Ctrl+Z undoes)");
+            if (gone && SelectedOf(k) == id) SelectShape(k, null);
+            return gone;
+        }
         var ok = Mutate(root =>
         {
             var so = ShapesOf(root, k);
@@ -396,10 +405,10 @@ public partial class EditorMode
     {
         var k = CurrentKind;
         if (SelectedShape(k) is not { } s) { Say($"no {NounOf(k)} selected", true); return false; }
-        var id = s.Id;
-        var what = s is PatchInfo p ? $"{id} ({p.Type}, {p.Points.Count} corners, {p.AreaM2:F0} m2) is removed from the ground; the land under it goes back to what is below."
-            : s is ZoneInfo z ? $"{id} ({ZoneLabel(z.Kind)}, {z.Points.Count} corners, {z.AreaM2:F0} m2) is removed; the ground is not changed." : id;
-        ShowConfirm($"Delete {NounOf(k)} {id}?", what + " Undo (Ctrl+Z) brings it back.", "Delete", () => DeleteShape(k, id));
+        var id = s.Id; var name = s.Label;
+        var what = s is PatchInfo p ? $"{name} ({p.Type}, {p.Points.Count} corners, {p.AreaM2:F0} m2) is removed from the ground; the land under it goes back to what is below."
+            : s is ZoneInfo z ? $"{name} ({ZoneLabel(z.Kind)}, {z.Points.Count} corners, {z.AreaM2:F0} m2) is removed; the ground is not changed." : name;
+        ShowConfirm($"Delete {NounOf(k)} {name}?", what + " Undo (Ctrl+Z) brings it back.", "Delete", () => DeleteShape(k, id));
         return true;
     }
 
@@ -474,7 +483,7 @@ public partial class EditorMode
     {
         if (SelectedShape(CurrentKind) is not { } r) return;
         _activeCorner = ((_activeCorner + by) % r.Points.Count + r.Points.Count) % r.Points.Count;
-        Say($"{r.Id} corner {_activeCorner + 1} of {r.Points.Count}: arrows move it, Del deletes the {NounOf(CurrentKind)}");
+        Say($"{r.Label} corner {_activeCorner + 1} of {r.Points.Count}: arrows move it, Del deletes the {NounOf(CurrentKind)}");
         ShapeChanged();
     }
 
@@ -574,7 +583,7 @@ public partial class EditorMode
         var (rx, ry) = RawAbs(g);
         if (ShapeAt(k, rx, ry) is { } hit) { SelectShape(k, hit); return; }
         if (SelectedOf(k) != null) SelectShape(k, null);
-        if (k == ShapeKind.Patch) GroundPick(g); else ZonePick(g, rx, ry);
+        if (k == ShapeKind.Patch) GroundPick(g); else Say("no zone there");
     }
 
     void ShapeChanged() { _panelDirty = true; _shSignature = ""; }
@@ -721,7 +730,7 @@ public partial class EditorMode
                 ? $"new {noun}: LMB or C places the first corner, Ctrl free position, Esc cancels"
                 : $"drawing {_draft.Count}: LMB or C adds, Enter {(CurrentKind == ShapeKind.Patch && PatchTypeIsWater(_drawType) ? "closes" : "creates")}, Backspace undoes a corner, Esc cancels",
             ShapeState.Selected when CurrentKind == ShapeKind.Zone || _groundFocusPatch =>
-                $"{SelectedShapeId}: drag a corner, [ ] and arrows move one, Del deletes, N new {noun}, Ctrl+Z undoes, Esc deselects",
+                $"{SelectedShape(CurrentKind)?.Label}: drag a corner, [ ] and arrows move one, Del deletes, N new {noun}, Ctrl+Z undoes, Esc deselects",
             _ => null,
         };
     }
@@ -752,7 +761,7 @@ public partial class EditorMode
     sealed class ShapeUi
     {
         public Button New = null!, Finish = null!, Create = null!, Back = null!, Cancel = null!, Delete = null!;
-        public Label State = null!, Valid = null!, NoOrigin = null!, Empty = null!, ListHead = null!;
+        public Label State = null!, Valid = null!, NoOrigin = null!, Empty = null!, ListHead = null!, ListNote = null!;
         public HBoxContainer LevelRow = null!;
         public SpinBox Level = null!;
         public VBoxContainer List = null!;
@@ -801,6 +810,9 @@ public partial class EditorMode
         page.AddChild(u.ListHead);
         u.Empty = Note(emptyText);
         page.AddChild(u.Empty);
+        u.ListNote = Note("");
+        u.ListNote.Visible = false;
+        page.AddChild(u.ListNote);
         u.List = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         page.AddChild(u.List);
     }
@@ -830,10 +842,10 @@ public partial class EditorMode
 
         u.State.Text = mode switch
         {
-            ShapeState.Dragging => $"Moving corner {_dragCorner + 1} of {sel?.Id}",
+            ShapeState.Dragging => $"Moving corner {_dragCorner + 1} of {sel?.Label}",
             ShapeState.Level => $"Patch closed: {_draft.Count} corners. Set its water level.",
             ShapeState.Drawing => _draft.Count == 0 ? "Click the ground to place the first corner" : $"Drawing: {_draft.Count} corner{(_draft.Count == 1 ? "" : "s")}",
-            ShapeState.Selected => $"{sel!.Id} ({describe(sel)}): {sel.Points.Count} corners, {sel.AreaM2:F0} m2",
+            ShapeState.Selected => $"{sel!.Label} ({describe(sel)}): {sel.Points.Count} corners, {sel.AreaM2:F0} m2",
             _ => $"No {noun} selected",
         };
         string text, variation;
@@ -865,18 +877,23 @@ public partial class EditorMode
             if (mode == ShapeState.Level && !u.Level.GetLineEdit().HasFocus()) { u.Sync = true; u.Level.SetValueNoSignal(_newWaterY); u.Sync = false; }
         }
         u.Delete.Visible = mode == ShapeState.Selected && sel != null && (k == ShapeKind.Zone || _groundFocusPatch);
-        if (sel != null) u.Delete.Text = $"Delete {sel.Id}  (Del)";
+        if (sel != null) u.Delete.Text = $"Delete {sel.Label}  (Del)";
         u.Delete.TooltipText = $"Delete the {noun} (asks first; Ctrl+Z undoes)";
     }
 
     /// <summary>Refresh a list of shapes; rows are rebuilt only when what they show changes. <paramref name="row"/> gives a row's text, swatch colour and tooltip.</summary>
-    void RefreshShapeList(ShapeKind k, string noun, Func<ShapeInfo, (string Text, string Colour, string Tip)> row, string extraSig = "")
+    void RefreshShapeList(ShapeKind k, string noun, Func<ShapeInfo, (string Text, string Colour, string Tip)> row, string extraSig = "",
+        Func<ShapeInfo, bool>? filter = null, string? head = null, int cap = int.MaxValue)
     {
         var u = _su[k];
-        var shapes = ShapeList(k);
-        u.ListHead.Text = $"All {noun}s ({shapes.Count})";
-        u.Empty.Visible = shapes.Count == 0;
-        var sig = string.Join("|", shapes.Select(s => s.Id + row(s).Text + row(s).Colour + s.Points.Count)) + "#" + SelectedOf(k) + extraSig;
+        var all = ShapeList(k);
+        if (filter != null) all = all.Where(filter).ToList();
+        var shapes = all.Count > cap ? all.Take(cap).ToList() : all;
+        u.ListHead.Text = head != null ? $"{head} ({all.Count})" : $"All {noun}s ({all.Count})";
+        u.Empty.Visible = all.Count == 0;
+        u.ListNote.Visible = shapes.Count < all.Count;
+        u.ListNote.Text = $"Showing the first {shapes.Count} of {all.Count}. Pick a kind in the list above to see only its {noun}s.";
+        var sig = string.Join("|", shapes.Select(s => s.Id + row(s).Text + row(s).Colour + s.Points.Count)) + "#" + SelectedOf(k) + extraSig + "#" + all.Count;
         if (sig == u.ListSig) return;
         u.ListSig = sig;
         foreach (var b in u.Rows.Values) { u.List.RemoveChild(b); b.QueueFree(); }

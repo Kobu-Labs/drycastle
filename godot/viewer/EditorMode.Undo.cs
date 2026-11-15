@@ -4,7 +4,7 @@ using System.Linq;
 using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 
 /// <summary>
-/// Session undo/redo of every save the editor made since it opened (objects, group operations, Apply of fence). Each save records the before and after content of what it touched: `groups.&lt;ID&gt;`, `ground_patches.&lt;ID&gt;`, `zones.&lt;ID&gt;`, `cables.&lt;ID&gt;`
+/// Session undo/redo of every save the editor made since it opened (objects, group operations, Apply of fence). Each save records the before and after content of what it touched: `groups.&lt;ID&gt;`, `ground_patches.&lt;ID&gt;`, `zones.&lt;ID&gt;`, `zone_cuts.&lt;ID&gt;`, `cables.&lt;ID&gt;`
 /// and each object (by id, in the top-level `objects` list) as whole entries, a parcel at key level (`parcels.&lt;ID&gt;.fence`), with "absent" as a value.
 /// Undo reloads the file from disk, writes the before-values back (absent deletes), validates and saves; the watcher
 /// (or the instant objects path) applies the effect. Only the keys this operation touched are overwritten; everything
@@ -15,7 +15,7 @@ public partial class EditorMode
 {
     public const int UndoCap = 200;
 
-    /// <summary>One touched entry: kind is "parcels", "objects", "groups", "ground_patches", "zones", "cables" or "ground_types"; Before/After null means absent.</summary>
+    /// <summary>One touched entry: kind is "parcels", "objects", "groups", "ground_patches", "zones", "zone_cuts", "cables" or "ground_types"; Before/After null means absent.</summary>
     /// <summary>
     /// Key is null for the whole entry (objects by id, groups, ground patches, zones, cables). For a parcel it names the part that changed:
     /// "fence", so undo leaves the parcel's other keys (and other writers' edits) alone.
@@ -40,7 +40,7 @@ public partial class EditorMode
         var ox = ObjectsById(before); var oy = ObjectsById(after);
         foreach (var oid in ox.Keys.Union(oy.Keys).OrderBy(k => k, StringComparer.Ordinal))
             Add(list, "objects", oid, null, ox.GetValueOrDefault(oid), oy.GetValueOrDefault(oid));
-        foreach (var kind in new[] { "parcels", "groups", "ground_patches", "zones", "cables", "ground_types" })
+        foreach (var kind in new[] { "parcels", "groups", "ground_patches", "zones", "zone_cuts", "cables", "ground_types" })
         {
             var a = before.GetValueOrDefault(kind) as Obj ?? EditsFile.NewObject(); var b = after.GetValueOrDefault(kind) as Obj ?? EditsFile.NewObject();
             foreach (var id in a.Keys.Union(b.Keys).OrderBy(x => x, StringComparer.Ordinal))

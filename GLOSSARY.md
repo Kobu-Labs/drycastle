@@ -31,15 +31,15 @@ A hand-drawn polygon of exactly one ground type (and a water level when the type
 _Avoid_: region, paint, ground stack
 
 **Zone**:
-A hand-drawn polygon of exactly one zone kind. It marks what the area means in play and never changes how the ground looks; zones overlap freely and add up. Drawn in the Zones tool.
+A polygon of exactly one zone kind. It marks what the area means in play and never changes how the ground looks; zones overlap freely and add up. Every zone is the same to you: counted once, selected, reshaped, given another kind or deleted in the Zones tool, wherever it came from (drawn by you, or one per ground area of a kind's rule). The editor keeps a **cut** (`zone_cuts`, internal, never listed) when you edit one that came from a rule.
 _Avoid_: region, layer, attribute layer, ground type
 
 **Zone kind**:
-What a zone means in play, from a fixed list in code (each needs something in the pipeline or the game to read it): Bigfoot, deer, player spawn, ... Its numbers (density, clearances) are in `rules.yaml`, and it may apply by rule wherever a ground type lies (deer wherever there is forest) so that nothing needs drawing.
+What a zone means in play, from a fixed list in code (each needs something in the pipeline or the game to read it): Bigfoot, deer, player spawn, ... Its numbers (density, clearances) are in `rules.yaml`, and it may have a zone for every ground area of some ground types (deer wherever there is forest) without anything drawn; the editor shows one count of all its zones.
 _Avoid_: event area, spawn area, marker type
 
 **Runtime zone**:
-A zone, drawn or by rule, that the game server needs while it runs. The game never sees ground areas or zones, so the build exports **candidate points** instead: seeded points inside every zone of the kind, one per N m² between a minimum and a maximum, clear of buildings and water, in `attribute_points.json` of the map. The server picks one at random; a kind no zone covers has no point.
+A zone that the game server needs while it runs. The game never sees ground areas or zones, so the build exports **candidate points** instead: seeded points inside every zone of the kind, one per N m² between a minimum and a maximum, clear of buildings and water, in `attribute_points.json` of the map. The server picks one at random; a kind no zone covers has no point.
 _Avoid_: exported attribute, spawn area (an area is not exported)
 
 **Replacement scene**:

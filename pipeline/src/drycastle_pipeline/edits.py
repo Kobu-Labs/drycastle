@@ -10,6 +10,7 @@ formatting is fixed, so git diffs stay small. Version 1::
      "groups":  {"G-0001": {"parcels": ["P-0412", "P-0413"], "fence": {...}}},
      "ground_patches": {"GP-0001": {"type": "meadow", "polygon": [[x, y], ...]}},
      "zones":   {"Z-0001": {"kind": "bigfoot", "polygon": [[x, y], ...]}},
+     "zone_cuts": {"ZC-0001": {"kind": "deer", "polygon": [[x, y], ...]}},
      "cables":  {"C-0001": {"from": "o-0012", "to": "o-0015"}},
      "ground_types": {"meadow": {"attributes": {"colours": ["#7aa860"]}},
                       "my_dunes": {"attributes": {"colours": ["#d8c38a"], "recipe": "field"}}}}
@@ -82,6 +83,14 @@ formatting is fixed, so git diffs stay small. Version 1::
                         changes the terrain; zones overlap freely and add up. The export turns them into candidate points
                         for the server (``zone_points.json``) and, for ``player_spawn``, into spawn candidates.
     polygon             as of a ground patch. The ``zones`` key is only written when there are zones.
+
+``zone_cuts`` (internal: the editor's record that a zone that comes from a rule was moved, retyped or deleted; ``ZC-`` and 4
+or more digits; see zones.py). The user never sees these as zones.
+    kind                a zone kind of the catalog.
+    polygon             as of a ground patch: the area that was taken out, in absolute S-JTSK metres. The export subtracts it
+                        (grown by zones.CUT_BUFFER_M, so a rebuilt, slightly different area leaves no sliver) from the rule
+                        zone of that kind. It never touches drawn zones. Geometry, not ground area ids: those are not
+                        stable across builds. The ``zone_cuts`` key is only written when there are cuts.
 
 ``cables`` (the wires strung between two placed utility poles, or from a pole to a house connector;
 drawn by the game, see docs/utility-poles.md)
@@ -157,7 +166,7 @@ FENCE_TYPES: dict[str, dict[str, float | str]] = {
 # Columns a fence can be given instead of its type's own (fencestyles.COLUMN_STYLES).
 COLUMN_TYPES = ("none", "wood_post", "metal_post", "brick_red", "brick_white", "stone", "concrete")
 
-TOP_KEYS = ("version", "parcels", "objects", "groups", "ground_patches", "zones", "cables", "ground_types")
+TOP_KEYS = ("version", "parcels", "objects", "groups", "ground_patches", "zones", "zone_cuts", "cables", "ground_types")
 PARCEL_KEYS = ("fence", "objects")  # "objects" only so a file of the old shape still validates; see parse()
 FENCE_KEYS = ("mode", "type", "column", "height_m", "thickness_m", "colour", "gaps")
 CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "gaps")
@@ -181,6 +190,7 @@ _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")
 _PATCH_ID = re.compile(r"GP-\d{4,}")
 _ZONE_ID = re.compile(r"Z-\d{4,}")
+_ZONE_CUT_ID = re.compile(r"ZC-\d{4,}")
 _GROUND_TYPE = re.compile(r"[a-z][a-z0-9_]*")
 _GROUND_NAME = re.compile(r"[a-z][a-z0-9_]{0,%d}" % (GROUND_NAME_MAX - 1))
 _CABLE_ID = re.compile(r"C-\d{4,}")
@@ -198,13 +208,14 @@ class EditsError(ValueError):
 
 @dataclass
 class Edits:
-    """A validated edits document. ``parcels``, ``objects``, ``groups``, ``ground_patches``, ``zones``, ``cables`` and ``ground_types`` are JSON-native, as written."""
+    """A validated edits document. ``parcels``, ``objects``, ``groups``, ``ground_patches``, ``zones``, ``zone_cuts``, ``cables`` and ``ground_types`` are JSON-native, as written."""
 
     parcels: dict[str, dict] = field(default_factory=dict)
     objects: list[dict] = field(default_factory=list)
     groups: dict[str, dict] = field(default_factory=dict)
     ground_patches: dict[str, dict] = field(default_factory=dict)
     zones: dict[str, dict] = field(default_factory=dict)
+    zone_cuts: dict[str, dict] = field(default_factory=dict)
     cables: dict[str, dict] = field(default_factory=dict)
     ground_types: dict[str, dict] = field(default_factory=dict)
 
@@ -460,11 +471,12 @@ def _check_patches(patches: dict, own_types: dict, errors: list[str]) -> None:
         _check_polygon(entry, path, errors)
 
 
-def _check_zones(zones: dict, errors: list[str]) -> None:
+def _check_zones(zones: dict, errors: list[str], key: str = "zones") -> None:
+    cuts = key == "zone_cuts"
     for zid, entry in zones.items():
-        path = f"zones.{zid}"
-        if not _ZONE_ID.fullmatch(zid):
-            errors.append(f"{path}: zone IDs look like Z-0001")
+        path = f"{key}.{zid}"
+        if not (_ZONE_CUT_ID if cuts else _ZONE_ID).fullmatch(zid):
+            errors.append(f"{path}: {'zone cut' if cuts else 'zone'} IDs look like {'ZC-0001' if cuts else 'Z-0001'}")
         if not _is_dict(entry, path, errors):
             continue
         _unknown_keys(entry, ZONE_KEYS, path, errors)
@@ -643,6 +655,9 @@ def validate(doc: object) -> list[str]:
     zones = doc.get("zones", {})
     if _is_dict(zones, "zones", errors):
         _check_zones(zones, errors)
+    zone_cuts = doc.get("zone_cuts", {})
+    if _is_dict(zone_cuts, "zone_cuts", errors):
+        _check_zones(zone_cuts, errors, "zone_cuts")
     cables = doc.get("cables", {})
     if _is_dict(cables, "cables", errors):
         _check_cables(cables, errors)
@@ -673,6 +688,7 @@ def parse(doc: object) -> Edits:
         groups=copy.deepcopy(doc.get("groups", {})),
         ground_patches=copy.deepcopy(doc.get("ground_patches", {})),
         zones=copy.deepcopy(doc.get("zones", {})),
+        zone_cuts=copy.deepcopy(doc.get("zone_cuts", {})),
         cables=copy.deepcopy(doc.get("cables", {})),
         ground_types=copy.deepcopy(doc.get("ground_types", {})),
     )
@@ -701,6 +717,8 @@ def dump_text(edits: Edits) -> str:
         doc["ground_patches"] = edits.ground_patches
     if edits.zones:  # likewise
         doc["zones"] = edits.zones
+    if edits.zone_cuts:  # likewise
+        doc["zone_cuts"] = edits.zone_cuts
     if edits.cables:  # likewise
         doc["cables"] = edits.cables
     if edits.ground_types:  # likewise

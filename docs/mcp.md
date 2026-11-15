@@ -136,12 +136,12 @@ All inputs and outputs are JSON. Write tools return `summary`, `warnings` and th
 | `move_patch_corner` | `id`, `index`, `position?` `[x,y]` or `offset?` `{dx,dy}` | exactly one of position / offset |
 | `delete_ground_patch` | `id` | |
 | `list_ground_patches` | `near?` `{x,y,radius_m?}` or `{parcel,radius_m?}`, `limit?` | id, `type`, `water_y?`, `area_m2`, `points`, `bbox`, `centroid`; `distance_m` when `near` |
-| `list_zone_kinds` | | the catalog of zone kinds (`bigfoot`, `player_spawn`, one per wild species): label, group, `where_ground` (a rule zone: the ground types the kind applies to wherever they lie, `null`: drawn only), the `drawn_zones` of it and the density rule of its candidate points |
+| `list_zone_kinds` | | the catalog of zone kinds (`bigfoot`, `player_spawn`, one per wild species): label, group, `where_ground` (the ground types the kind has a zone for wherever they lie, `null`: only the zones you create), the number of its `zones` and the density rule of its candidate points |
 | `create_zone` | `kind` (a kind of `list_zone_kinds`), and either `polygon` or `parcel` + `points` as for a patch | new `Z-NNNN`: an area of that kind; never changes the terrain, zones overlap freely; after the next full run the export draws candidate points inside it for the server (`player_spawn`: spawn candidates on the ground inside it) |
-| `set_zone_kind` | `id`, `kind` | |
-| `move_zone_corner` | `id`, `index`, `position?` or `offset?` | as `move_patch_corner` |
-| `delete_zone` | `id` | |
-| `list_zones` | `kind?`, `near?`, `limit?` | the drawn zones: id, `kind`, `area_m2`, `points`, `bbox`, `centroid`; rule zones are not drawn, see `list_zone_kinds` |
+| `set_zone_kind` | `id`, `kind`, `from_kind?` | for an `A-` zone (see `list_zones`) give its current kind as `from_kind`: it becomes a new `Z-` zone of `kind` |
+| `move_zone_corner` | `id`, `index`, `position?` or `offset?`, `kind?` | as `move_patch_corner`; an `A-` zone needs its `kind` and is returned as a new `Z-` zone |
+| `delete_zone` | `id`, `kind?` | an `A-` zone needs its `kind` (one ground area is a zone of several kinds) |
+| `list_zones` | `kind?`, `near?`, `limit?` | every zone: the `Z-` ones you created and the `A-` ones a kind has by `where_ground`; editing an `A-` one writes a `Z-` zone and a `zone_cuts` entry (`ZC-NNNN`, internal) |
 | `list_ground_types` | | the effective ground types (`rules.yaml` with your `edits.json` `ground_types` laid over): `source` (`rules`, `overridden`, `custom`), the `attributes` each carries, OSM values, where it comes from; `deleted` names the rules' types you removed; `catalog` lists every attribute, grouped (Appearance, Water), and what values it takes |
 | `set_ground_type` | `name` (lower_snake, max 24), `attributes` (object: `colours` 1-6 `#rrggbb`, `recipe` field / forest / village / dike, `detail` object merged into your earlier detail settings, `water` true; a value `null` removes that attribute), `osm` (`{landuse?: [..], natural?: [..]}`) | creates a custom type or updates your override of a type of the rules: only the given attributes are overridden; a type is terrain only (what an area means in play is a zone), and one with only `colours` is a paint colour; validated like the file (refused with the reasons, nothing written); not for a deleted type (reset it first); shows after the next full run (`make map`) |
 | `reset_ground_type` | `name` | removes your override of a type of the rules (also brings a deleted one back); refused for a custom type (delete it) and when there is no override |

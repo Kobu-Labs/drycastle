@@ -84,7 +84,7 @@ from drycastle_pipeline.ground_attributes import (
 from drycastle_pipeline.patches import patch_rank
 from drycastle_pipeline.roads import edge_lines
 from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
-from drycastle_pipeline.zones import KIND_NAMES, PLAYER_SPAWN, RULE_KEYS
+from drycastle_pipeline.zones import KIND_NAMES, PLAYER_SPAWN, RULE_KEYS, rule_part_is_cut, rule_parts, zone_cuts
 from drycastle_pipeline.zones import kind_rows as zone_kind_rows
 from drycastle_pipeline.zones import rules as zone_rules
 
@@ -105,7 +105,8 @@ _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")
 _PATCH_ID = re.compile(r"GP-\d{4,}")
 _ZONE_ID = re.compile(r"Z-\d{4,}")
-_GENERATED_ID = re.compile(r"(?:[oGCZ]|GP)-(\d+)")
+_RULE_ZONE_ID = re.compile(r"A-\d{4,}(?:\.\d+)?")  # a zone that comes from a rule: a ground area (or one outline of it)
+_GENERATED_ID = re.compile(r"(?:[oGCZ]|GP|ZC)-(\d+)")
 
 
 def _r3(v: float) -> float:
@@ -177,6 +178,7 @@ class MapData:
         self.work_dir = work_dir
         self._stamp: tuple | None = None
         self.parcels: dict[str, dict] = {}
+        self.ground: list[dict] = []
         self.polys: dict[str, Polygon] = {}
         self.buildings: dict[str, dict] = {}
         self.bpolys: dict[str, Polygon] = {}
@@ -216,6 +218,7 @@ class MapData:
             )
         self.origin = (float(origin[0]), float(origin[1]))
         self.parcels = {p["id"]: p for p in doc["parcels"]}
+        self.ground = doc.get("ground", [])
         self._pids = sorted(self.parcels)
         self.polys = {}
         for pid in self._pids:
@@ -384,6 +387,8 @@ def _edits_doc(edits: Edits) -> dict:
         doc["ground_patches"] = edits.ground_patches
     if edits.zones:
         doc["zones"] = edits.zones
+    if edits.zone_cuts:
+        doc["zone_cuts"] = edits.zone_cuts
     if edits.cables:
         doc["cables"] = edits.cables
     if edits.ground_types:
@@ -1751,6 +1756,47 @@ class ParcelEditTools:
     def _zone_id(self, id: object) -> str:
         return self._id(_ZONE_ID, "zone", "Z-0001", "list_zones", id)
 
+    def _zone_ref(self, id: object) -> str:
+        """A zone ID: ``Z-0001`` or, for a zone that comes from a rule, ``A-0012`` (``A-0012.2`` for the second outline)."""
+        if isinstance(id, str) and _RULE_ZONE_ID.fullmatch(id):
+            return id
+        return self._zone_id(id)
+
+    def _rule_zones(self, edits: Edits, kind: str | None = None) -> list[tuple[str, str, Polygon]]:
+        """``(id, kind, polygon)`` of the zones that come from a rule (the ground areas of a kind's ``where_ground``), local
+        metres, less those that were cut (edited or deleted before)."""
+        m = self.map.ensure()
+        section = zone_rules(load_section("zones", self.settings.rules_path))
+        cuts = zone_cuts(edits.zone_cuts, m.origin)
+        out = []
+        for k, rule in section.items():
+            if (kind is not None and k != kind) or not rule.get("where_ground"):
+                continue
+            for area in sorted(m.ground, key=lambda a: a["id"]):
+                if area["kind"] not in rule["where_ground"]:
+                    continue
+                out += [(zid, k, poly) for zid, poly in rule_parts(area) if not rule_part_is_cut(poly, cuts.get(k))]
+        return out
+
+    def _detach(self, edits: Edits, rid: str, kind: object, new_kind: str | None = None, keep: bool = True) -> str | None:
+        """Make a zone that comes from a rule an ordinary edit: cut its polygon out of the rule zone of ``kind`` and, when
+        ``keep``, write it as a drawn zone (of ``new_kind``, default the same). Returns the new ``Z-`` id (None: nothing kept)."""
+        if not isinstance(kind, str) or kind not in KIND_NAMES:
+            of = sorted({k for z, k, _ in self._rule_zones(edits) if z == rid})
+            raise ToolError(
+                f"{rid} is a zone of several kinds ({', '.join(of) or 'none'}): give its `kind` (the kind it has now) too. list_zones shows them."
+            )
+        hit = [p for z, k, p in self._rule_zones(edits, kind) if z == rid]
+        if not hit:
+            raise ToolError(f"zone {rid} of kind {kind} does not exist (it may be edited already); call list_zones(kind={kind!r}) to see them.")
+        ring = [self.map.to_abs(x, y) for x, y in list(hit[0].exterior.coords)[:-1]]
+        edits.zone_cuts[_next_id("ZC", list(edits.zone_cuts))] = {"kind": kind, "polygon": ring}
+        if not keep:
+            return None
+        zid = _next_id("Z", list(edits.zones))
+        edits.zones[zid] = {"kind": new_kind or kind, "polygon": [list(p) for p in ring]}
+        return zid
+
     @staticmethod
     def _xy(name: str, p: object) -> list[float]:
         if not (isinstance(p, (list, tuple)) and len(p) == 2):
@@ -2141,6 +2187,7 @@ class ParcelEditTools:
         index: object,
         position: list[float] | None,
         offset: dict | None,
+        kind: str | None = None,
     ) -> dict:
         if isinstance(index, bool) or not isinstance(index, int):
             raise ToolError(f"index must be an integer, got {index!r}")
@@ -2157,7 +2204,10 @@ class ParcelEditTools:
         patches = collection == "ground_patches"
 
         def change(edits: Edits) -> dict:
-            entry = self._patch_entry(edits, sid) if patches else self._zone_entry(edits, sid)
+            zid = sid
+            if not patches and _RULE_ZONE_ID.fullmatch(sid):  # comes from a rule: it becomes an ordinary zone first
+                zid = self._detach(edits, sid, kind) or sid
+            entry = self._patch_entry(edits, sid) if patches else self._zone_entry(edits, zid)
             poly = entry["polygon"]
             if not 0 <= index < len(poly):
                 raise ToolError(
@@ -2167,9 +2217,10 @@ class ParcelEditTools:
             old = poly[index]
             new = target if target is not None else _pt(old[0] + dx, old[1] + dy)
             poly[index] = new
-            return {"old": old, "new": new, "warnings": self._overlap_warnings(edits, sid) if patches else []}
+            return {"id": zid, "old": old, "new": new, "warnings": self._overlap_warnings(edits, sid) if patches else []}
 
         out = self._write(change)
+        sid = out["id"]
         return {
             "summary": f"moved {sid} corner {index} {out['old']} -> {out['new']}",
             "id": sid,
@@ -2186,10 +2237,10 @@ class ParcelEditTools:
         return self._move_corner("ground_patches", self._patch_id(id), index, position, offset)
 
     def move_zone_corner(
-        self, id: str, index: int, position: list[float] | None = None, offset: dict | None = None
+        self, id: str, index: int, position: list[float] | None = None, offset: dict | None = None, kind: str | None = None
     ) -> dict:
         """Move one corner of a zone to a position or by an offset."""
-        return self._move_corner("zones", self._zone_id(id), index, position, offset)
+        return self._move_corner("zones", self._zone_ref(id), index, position, offset, kind)
 
     def delete_ground_patch(self, id: str) -> dict:
         """Delete a ground patch."""
@@ -2217,7 +2268,7 @@ class ParcelEditTools:
             raise ToolError('near needs "x" and "y" (S-JTSK metres) or "parcel"')
         keep = []
         for row in rows:
-            d = Polygon(polygon_ring(entries[row["id"]]["polygon"])).distance(src)
+            d = Polygon(polygon_ring(entries[row.get("_key", row["id"])]["polygon"])).distance(src)
             if d <= radius:
                 keep.append({**row, "distance_m": round(d, 1)})
         return sorted(keep, key=lambda r: (r["distance_m"], r["id"]))
@@ -2256,40 +2307,58 @@ class ParcelEditTools:
             "warnings": [],
         }
 
-    def set_zone_kind(self, id: str, kind: str) -> dict:
+    def set_zone_kind(self, id: str, kind: str, from_kind: str | None = None) -> dict:
         """Give a zone another kind."""
-        zid = self._zone_id(id)
+        zid = self._zone_ref(id)
         name = self._zone_kind(kind)
 
-        def change(edits: Edits) -> object:
+        def change(edits: Edits) -> tuple[str, str]:
+            if _RULE_ZONE_ID.fullmatch(zid):  # comes from a rule: it becomes an ordinary zone of the new kind
+                new = self._detach(edits, zid, from_kind, new_kind=name)
+                assert new is not None
+                return new, str(from_kind)
             entry = self._zone_entry(edits, zid)
             old = entry["kind"]
             entry["kind"] = name
-            return old
+            return zid, old
 
-        old = self._write(change)
-        return {"summary": f"{zid} kind {old} -> {name}", "id": zid, "kind": name, "warnings": []}
+        new, old = self._write(change)
+        return {"summary": f"{zid} kind {old} -> {name}" + (f" (now {new})" if new != zid else ""), "id": new, "kind": name, "warnings": []}
 
-    def delete_zone(self, id: str) -> dict:
+    def delete_zone(self, id: str, kind: str | None = None) -> dict:
         """Delete a zone."""
-        zid = self._zone_id(id)
+        zid = self._zone_ref(id)
 
         def change(edits: Edits) -> dict:
+            if _RULE_ZONE_ID.fullmatch(zid):  # comes from a rule: cut it out of the rule zone
+                self._detach(edits, zid, kind, keep=False)
+                return {"kind": kind}
             self._zone_entry(edits, zid)
             return edits.zones.pop(zid)
 
         entry = self._write(change)
         return {"summary": f"deleted {zid} ({entry['kind']})", "id": zid, "entry": entry, "warnings": []}
 
+    def _zone_entries(self, edits: Edits, kind: str | None) -> dict[str, dict]:
+        """Every zone of a kind (all kinds: None) as edits entries with absolute polygons: the ``Z-`` zones and the ones that
+        come from a rule (``A-``), which the editor treats the same."""
+        entries = {zid: e for zid, e in edits.zones.items() if kind is None or e["kind"] == kind}
+        if not self.map.work_dir.joinpath("parcels.json").is_file():
+            return entries
+        for zid, k, poly in self._rule_zones(edits, kind):
+            entries[zid + ("" if kind else f"|{k}")] = {"kind": k, "polygon": [self.map.to_abs(x, y) for x, y in list(poly.exterior.coords)[:-1]]}
+        return entries
+
     def list_zones(self, near: dict | None = None, limit: int = 50, kind: str | None = None) -> dict:
-        """List the drawn zones, optionally of one kind or near a point or parcel."""
+        """List the zones, optionally of one kind or near a point or parcel."""
         if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
             raise ToolError("limit must be an integer >= 1")
         if kind is not None:
             self._zone_kind(kind)
         edits = _read_edits(self.settings.edits_path)
-        rows = [self._shape_row(zid, e) for zid, e in sorted(edits.zones.items()) if kind is None or e["kind"] == kind]
-        rows = self._near_rows(rows, edits.zones, near)
+        entries = self._zone_entries(edits, kind)
+        rows = [{**self._shape_row(key.split("|")[0], e), "_key": key} for key, e in sorted(entries.items())]
+        rows = [{k: v for k, v in r.items() if k != "_key"} for r in self._near_rows(rows, entries, near)]
         return {"count": len(rows[:limit]), "total_matching": len(rows), "zones": rows[:limit]}
 
     def list_zone_kinds(self) -> dict:
@@ -2301,7 +2370,7 @@ class ParcelEditTools:
             rule = rules.get(row["name"], {})
             rows.append({
                 **{k: row[k] for k in ("name", "label", "group", "where_ground")},
-                "drawn_zones": sorted(z for z, e in edits.zones.items() if e["kind"] == row["name"]),
+                "zones": len(self._zone_entries(edits, row["name"])),
                 "points": "none: read by the props stage as spawn candidates" if row["name"] == PLAYER_SPAWN else {k: rule[k] for k in RULE_KEYS if k in rule} or "no rule in rules.yaml zones",
             })
         return {"summary": f"{len(rows)} zone kinds", "kinds": rows}
@@ -2608,7 +2677,7 @@ def build_server(settings: Settings) -> Any:
     @server.tool(description=(
         "List the zone kinds: what a marked area can mean in play (a fixed catalog: bigfoot, player_spawn and one per wild "
         "species). Per kind: label, group (event, player, wildlife), `where_ground` (a rule zone: the ground types the kind "
-        "applies to wherever they lie, nothing drawn; null: only drawn), the `drawn_zones` of it and `points` (the density "
+        "applies to wherever they lie; null: only the zones you create), the number of its `zones` and `points` (the density "
         "rule of the candidate points the server picks from; player_spawn has none, the props stage takes spawn "
         "candidates on its ground). Use a name as the `kind` of create_zone."))
     def list_zone_kinds() -> dict:
@@ -2629,26 +2698,32 @@ def build_server(settings: Settings) -> Any:
     ) -> dict:
         return tools.create_zone(kind, polygon, parcel, points)
 
-    @server.tool(description="Give a zone another kind (see list_zone_kinds).")
-    def set_zone_kind(id: str, kind: str) -> dict:
-        return tools.set_zone_kind(id, kind)
+    @server.tool(description=(
+        "Give a zone another kind (see list_zone_kinds). A zone from list_zones with an `A-` id (one the kind has by "
+        "rule, wherever some ground lies) works the same: give its current kind as `from_kind`; it is returned as a new Z- zone."))
+    def set_zone_kind(id: str, kind: str, from_kind: str | None = None) -> dict:
+        return tools.set_zone_kind(id, kind, from_kind)
 
     @server.tool(description=(
         "Move one corner of a zone's polygon (`index`, 0-based as in the file) to an absolute "
         "`position` [x, y] or by an `offset` {\"dx\": east m, \"dy\": north m}; give exactly one. "
-        "A move that would make the polygon self-intersect is refused and nothing is written."))
+        "A move that would make the polygon self-intersect is refused and nothing is written. For an `A-` zone from "
+        "list_zones give its `kind`; it is returned as a new Z- zone."))
     def move_zone_corner(
-        id: str, index: int, position: list[float] | None = None, offset: dict | None = None
+        id: str, index: int, position: list[float] | None = None, offset: dict | None = None, kind: str | None = None
     ) -> dict:
-        return tools.move_zone_corner(id, index, position, offset)
-
-    @server.tool(description="Delete a zone by id (e.g. Z-0001).")
-    def delete_zone(id: str) -> dict:
-        return tools.delete_zone(id)
+        return tools.move_zone_corner(id, index, position, offset, kind)
 
     @server.tool(description=(
-        "List the drawn zones: id, kind, area_m2, point count, bbox [minx, miny, maxx, maxy] and centroid (absolute "
-        "S-JTSK). Rule zones (kinds with `where_ground`) are not drawn, see list_zone_kinds. Optional filters `kind`, "
+        "Delete a zone by id (e.g. Z-0001, or A-0012 from list_zones: then also give its `kind`, since one ground area "
+        "is a zone of several kinds)."))
+    def delete_zone(id: str, kind: str | None = None) -> dict:
+        return tools.delete_zone(id, kind)
+
+    @server.tool(description=(
+        "List the zones: id, kind, area_m2, point count, bbox [minx, miny, maxx, maxy] and centroid (absolute "
+        "S-JTSK). Every zone is here, the Z- ones you created and the A- ones a kind has wherever some ground lies "
+        "(deer in forests); both can be moved, retyped and deleted the same. Optional filters `kind`, "
         "`near` = {\"x\", \"y\", radius_m?} or {\"parcel\", radius_m?} (default radius 100 m; adds distance_m, nearest "
         "first); `limit`."))
     def list_zones(near: dict | None = None, limit: int = 50, kind: str | None = None) -> dict:

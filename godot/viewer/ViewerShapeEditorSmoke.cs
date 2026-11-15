@@ -195,8 +195,11 @@ public partial class Viewer
         ed.SelectTool(EditorTool.Zones);
         await Frame();
         ed.RefreshNow();
+        ed.SelectZoneKind(null); ed.SelectShape(ShapeKind.Zone, null); ed.RefreshNow(); // the saved editor_ui.cfg of this machine may have restored a kind
         Check(ed.Tool == EditorTool.Zones && !ed.ZoneErrorShown && ed.ZoneKindRowCount > 0, $"Zones tool lists the map's zone kinds ({ed.ZoneKindRowCount}); the map has zone_kinds");
-        Check(ed.ShapeEmptyShown && ed.ShapeRowCount == 0 && ed.ShapePanelState == "No zone selected", "no zones yet: the empty state is shown");
+        Check(ed.Zones().All(z => z.FromRule) && ed.ShapePanelState == "No zone selected", "nothing drawn yet: every zone on the map comes from a rule, none is selected");
+        var deerRow = ed.ZoneKindRowText("deer");
+        Check(!deerRow.Contains("drawn") && !deerRow.Contains("rule"), $"a kind row has one number, no drawn/rule wording: '{deerRow}'");
         Check(ed.ShapeHint.Contains("zones:"), $"zones idle hint: '{ed.ShapeHint}'");
         await Key_(Key.N);
         Check(ed.ShapeMode == EditorMode.ShapeState.Idle && ed.StatusMessage.Contains("pick a zone kind"), $"N without a kind is refused with the way out: '{ed.StatusMessage}'");
@@ -221,7 +224,7 @@ public partial class Viewer
         await Key_(Key.Delete);
         Check(ed.ConfirmVisible && ed.ConfirmText.Contains("Z-0001"), $"Del asks first and names the zone: '{ed.ConfirmText.Replace('\n', '|')}'");
         await Gesture("delete Z-0001", () => { ed.ConfirmAccept(); return ed.Zone("Z-0001") == null; }, "p_moved", false);
-        Check(ed.SelectedZoneId == null && ed.ShapeEmptyShown, "deleted zone leaves the selection; the empty state is back (and the zones key is gone, as dump_text)");
+        Check(ed.SelectedZoneId == null && ed.Zone("Z-0001") == null, "deleted zone leaves the selection (and the zones key is gone, as dump_text)");
 
         // ---- undo / redo of every step, byte for byte ----
         var chain = new[] { ("z_rekinded", false), ("z_created", false), ("p_moved", false), ("p_water", true), ("p_moved", true), ("p_retyped", true), ("p_created", true), ("seed", true) };
@@ -278,6 +281,32 @@ public partial class Viewer
         ed.OpenPalette(); ed.PaletteSetFilter("Ground: draw a patch");
         Check(ed.PaletteRun(0) && ed.ShapeMode == EditorMode.ShapeState.Drawing, "palette runs 'Ground: draw a patch'");
         ed.ShapeEscape();
+
+        // ---- a zone that comes from a rule is edited like any other: one save, one undo step ----
+        ed.SelectTool(EditorTool.Zones);
+        await Frame();
+        ed.RefreshNow();
+        var rule = ed.Zones().FirstOrDefault(z => z.FromRule);
+        if (rule == null) GD.Print("info: the map has no zone that comes from a rule; skipped");
+        else
+        {
+            var kind = rule.Kind; var other = kind == "bigfoot" ? "deer" : "bigfoot";
+            var n0 = ed.ZoneCount(kind); var u0 = ed.UndoDepth; var s0 = ed.SaveCount; var before = Disk();
+            Check(ed.ZoneKindRowText(kind) == $"{ed.ZoneLabel(kind)}   {n0}", $"the row of {kind} shows every zone of it as one number: '{ed.ZoneKindRowText(kind)}' ({n0})");
+            ed.SelectShape(ShapeKind.Zone, rule.Id); ed.RefreshNow();
+            Check(ed.SelectedZoneId == rule.Id && ed.SelectedZoneKind == kind && ed.ShapeRowSelected(rule.Id), $"a zone from a rule ({rule.Label}) is selectable and listed");
+            Check(ed.DeleteShape(ShapeKind.Zone, rule.Id) && ed.SaveCount == s0 + 1 && ed.UndoDepth == u0 + 1, "deleting it is one save, one undo step");
+            Check(ed.ZoneCount(kind) == n0 - 1 && ed.ZoneCutCount == 1 && !Disk().Contains("\"zones\"") && Disk().Contains("zone_cuts"), "the count drops by one; a cut is recorded, no zone is drawn");
+            Check(ed.Undo() && Disk() == before && ed.ZoneCount(kind) == n0 && ed.ZoneCutCount == 0, "one undo brings it back exactly");
+            Check(ed.SetZoneKind(rule.Id, other) && ed.SaveCount == s0 + 3 && ed.UndoDepth == u0 + 1, "changing its kind is one save, one undo step");
+            Check(ed.SelectedZoneId == "Z-0001" && ed.Zone("Z-0001")!.Kind == other && ed.ZoneCount(kind) == n0 - 1 && ed.ZoneCutCount == 1, "it is now an ordinary zone of the new kind, selected; the old kind lost it");
+            Check(ed.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings it back exactly");
+            var c = rule.Points; var mid = (c.Average(p => p.x), c.Average(p => p.y));
+            var to = (c[0].x + (mid.Item1 - c[0].x) * 0.1, c[0].y + (mid.Item2 - c[0].y) * 0.1);
+            Check(ed.MoveShapeCorner(ShapeKind.Zone, rule.Id, 0, to.Item1, to.Item2) && ed.SaveCount == s0 + 5 && ed.UndoDepth == u0 + 1, $"moving a corner is one save, one undo step: '{ed.StatusMessage}'");
+            Check(ed.SelectedZoneId == "Z-0001" && ed.Zone("Z-0001")!.Points.Count == c.Count && ed.ZoneCount(kind) == n0, "the moved copy replaces it: same count, selected");
+            Check(ed.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings it back exactly");
+        }
 
         Check(_watcher!.FailedCount == 0, "no failed run during the whole smoke");
         GD.Print($"info: undo depth {ed.UndoDepth}, saves {ed.SaveCount}, selected {ed.SelectedPatchId}");

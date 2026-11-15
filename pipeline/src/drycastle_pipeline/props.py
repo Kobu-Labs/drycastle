@@ -395,11 +395,13 @@ def make_spawns(
     road_cfg: dict,
     chunk_m: float,
     zone_units: list[dict] | None = None,
+    rule_units: dict[str, dict] | None = None,
 ) -> list[dict]:
     """A seeded subset of candidate points on roads and open ground, away from buildings.
 
     Open ground is the parcels and ground areas of the kinds ``cfg["ground_kinds"]``, and ``zone_units``: parts of ground
-    areas inside a drawn ``player_spawn`` zone (``zones.drawn_spawn_units``), whatever their kind."""
+    areas inside a drawn ``player_spawn`` zone (``zones.drawn_spawn_units``), whatever their kind. ``rule_units``
+    (``zones.rule_spawn_units``) replace the ground areas that a cut of the rule zone touches, by id."""
     bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
     mind = float(cfg["min_building_distance_m"])
     bzone = unary_union(bpolys).buffer(mind) if bpolys else None
@@ -449,6 +451,15 @@ def make_spawns(
                 )
     ground_pool: list[dict] = []
     spawn_ground = [(p, poly) for p, poly in parcel_polys if p["kind"] in cfg["ground_kinds"]]
+    if rule_units:
+        cut_ground = []
+        for p, poly in spawn_ground:
+            unit = rule_units.get(p["id"])
+            if unit is None:
+                cut_ground.append((p, poly))
+            elif unit["polygon"] is not None:
+                cut_ground.append((unit, shape(unit["polygon"])))
+        spawn_ground = cut_ground
     spawn_ground += [(u, shape(u["polygon"])) for u in zone_units or []]
     for p, poly in spawn_ground:
         inner = poly.buffer(-1.5)
@@ -661,11 +672,13 @@ def run_props(
     edits = load_edits(edits_path)
     plan = plan_edits(edits, parcels, parcels_doc.get("origin_epsg5514"), chunk_m)
     origin = parcels_doc.get("origin_epsg5514")
+    cuts = zone_kinds.zone_cuts(edits.zone_cuts, origin) if edits.zone_cuts and origin else {}
     drawn_spawn = (
-        zone_kinds.drawn_spawn_units(parcels_doc, zone_kinds.drawn_zones(edits.zones, origin), spawn_where)
+        zone_kinds.drawn_spawn_units(parcels_doc, zone_kinds.drawn_zones(edits.zones, origin), spawn_where, cuts)
         if edits.zones and origin
         else []
     )
+    rule_units = zone_kinds.rule_spawn_units(parcels_doc, spawn_where, cuts)
     for warning in plan.warnings + unknown_asset_warnings(plan.objects):
         print(f"props: warning: {warning}", file=sys.stderr)
     fences = make_fences(
@@ -698,6 +711,7 @@ def run_props(
         load_section("roads", rules_path),
         float(parcels_doc["chunk_size_m"]),
         zone_units=drawn_spawn,
+        rule_units=rule_units,
     )
     objects_doc = {"format_version": OBJECTS_FORMAT_VERSION, "objects": plan.objects}
     if plan.cables:  # the wires between placed utility poles; the game strings them (docs/utility-poles.md)
