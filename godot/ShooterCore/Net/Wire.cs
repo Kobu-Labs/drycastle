@@ -276,7 +276,8 @@ public static class Wire
     //   v54 the Raid van's owner field: door in 63rds (bits 0-5), song bits 6-10, crew sitting inside bits 11-14, left door bit 15 (was door in thousandths, song bits 10-14)
     //   v53 the binoculars seen by the others (events 26 and 27); event 25 names the hit shape it was tested against (pose, frame) and the head
     //   v55 world interest (ADR 0025): world record flag FDormant 64 (the entity left this client's interest, no fields); animals, flocks and poop outside 800 m are not sent
-    public const byte ProtocolVersion = 55;
+    //   v56 wild animal size and weight (ticket #309): the animal state byte's bits 5-7 are the size step; event 25 ends in the animal's weight (u16, tenths of a kg)
+    public const byte ProtocolVersion = 56;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

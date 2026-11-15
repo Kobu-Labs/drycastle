@@ -269,7 +269,7 @@ public class AnimalTests
         var a = new Animal(file, species, new Vector3(10, 2, -5), 1f, new FakeWorld(), 3);
         var s = a.Serialize();
         Assert.Equal((ushort)species, s.Owner);
-        Assert.Equal((byte)file.Find("stag")!.Hp, s.Hp);
+        Assert.Equal((byte)a.MaxHp, s.Hp);
         Assert.Equal(AnimalState.Idle, AnimalRules.StateOf(s.State));
         Assert.False(AnimalRules.HitToggled(s.State));
         Assert.Equal(0, a.Owner); // the owner field of the entity stays free: it belongs to no player
@@ -278,7 +278,7 @@ public class AnimalTests
         var hit = a.Serialize();
         Assert.True(AnimalRules.HitToggled(hit.State));
         Assert.Equal(AnimalState.Flee, AnimalRules.StateOf(hit.State));
-        Assert.Equal((byte)(file.Find("stag")!.Hp - 10), hit.Hp);
+        Assert.Equal((byte)(a.MaxHp - 10), hit.Hp);
 
         a.OnDamage(10, 4);
         Assert.False(AnimalRules.HitToggled(a.Serialize().State)); // flips with every hit, so a client sees each one

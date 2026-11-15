@@ -101,7 +101,7 @@ public partial class NetClient
         {
             if (!GodotObject.IsInstanceValid(a.Node) || a.HitBox.Count < 3) continue;
             var p = a.Node.GlobalPosition;
-            var target = new HitTarget(0, new NVec3(p.X, p.Y, p.Z), Stance.Stand, a.Node.Rotation.Y, Box: new NVec3(a.HitBox[0], a.HitBox[1], a.HitBox[2]), BoxAhead: a.Def.HitBoxAhead);
+            var target = new HitTarget(0, new NVec3(p.X, p.Y, p.Z), Stance.Stand, a.Node.Rotation.Y, Box: new NVec3(a.HitBox[0], a.HitBox[1], a.HitBox[2]), BoxAhead: a.Def.HitBoxAhead * a.Size);
             if (HitMath.RayBox(o, d, target) is { } at) best = MathF.Min(best, at);
         }
         foreach (var r in _remotes.Values)

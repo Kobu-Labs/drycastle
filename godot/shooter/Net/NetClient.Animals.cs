@@ -25,8 +25,10 @@ public partial class NetClient
         public AnimalDef Def = null!;
         /// <summary>The model's name for each <see cref="AnimalClip"/> (indexed by it), null where it has none; empty without a model.</summary>
         public string?[] Clips = Array.Empty<string?>();
-        /// <summary>The body box of the look: for the puff's size.</summary>
+        /// <summary>The body box of the look, times its size: for the puff's size, the tumble and the binoculars.</summary>
         public IReadOnlyList<float> HitBox = Array.Empty<float>();
+        /// <summary>How much bigger than its model as measured it stands (the animal's size roll; 1 for a species with no weight).</summary>
+        public float Size = 1f;
         /// <summary>The state whose clip is showing; 255 = none yet.</summary>
         public byte Shown = 255;
         public bool Toggle;
@@ -83,13 +85,15 @@ public partial class NetClient
         }
         var def = AnimalData.Animals[species];
         var variant = AnimalRules.VariantOf(e.State.Owner);
-        var box = def.HitBoxOf(variant);
+        // a species with a weight rolls a size at spawn (the state byte's bits 5-7); the model and every box of it are scaled by it
+        var size = def.WeightKgOf(variant) != null ? AnimalRules.SizeOfStep(AnimalRules.SizeStepOf(e.State.State)) : 1f;
+        var box = def.HitBoxOf(variant).Select(x => x * size).ToArray();
         var node = new Node3D { Name = $"Animal{e.Id}" };
         AnimationPlayer? anim = null;
         var clips = Array.Empty<string?>();
         if (ModelLib.Instance(def.ModelOf(variant)) is { } model)
         {
-            model.Scale = Vector3.One * def.Scale;
+            model.Scale = Vector3.One * (def.Scale * size);
             model.RotationDegrees = new Vector3(0, def.ModelYawDeg, 0);
             node.AddChild(model);
             anim = model.FindChildren("*", "AnimationPlayer", true, false).FirstOrDefault() as AnimationPlayer;
@@ -106,7 +110,7 @@ public partial class NetClient
             node.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(w, h, l) }, Position = new Vector3(0, h / 2, 0) });
         }
         Owned.AddChild(node);
-        var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Toggle = AnimalRules.HitToggled(e.State.State) };
+        var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Size = size, Toggle = AnimalRules.HitToggled(e.State.State) };
         _animals[e.Id] = view;
         if (e.Dormant) SetAnimalDormant(view, e); // spawned outside the interest range: hidden until a keyframe shows it
     }

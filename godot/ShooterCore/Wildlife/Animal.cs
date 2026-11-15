@@ -11,8 +11,27 @@ public static class AnimalRules
     /// <summary>Wire id of the animal world entity type (1 corpse, 10 missile, 20 turret, 30 care package, 40 aircraft).</summary>
     public const byte TypeId = 50;
 
-    /// <summary>State byte: bits 0-3 the <see cref="AnimalState"/>, bit 4 flips on every hit that did not kill (a client plays its hit reaction when the bit changes).</summary>
-    public const byte StateMask = 15, HitToggle = 16;
+    /// <summary>State byte: bits 0-3 the <see cref="AnimalState"/>, bit 4 flips on every hit that did not kill (a client plays its hit reaction when the bit changes), bits 5-7 the size step (<see cref="SizeOfStep"/>; constant for the animal's life).</summary>
+    public const byte StateMask = 15, HitToggle = 16, SizeShift = 5;
+
+    /// <summary>Size steps the state byte carries (0 .. <see cref="SizeSteps"/> - 1), and the scale of the smallest and the largest.</summary>
+    public const int SizeSteps = 8;
+    public const float MinSize = 0.88f, MaxSize = 1.12f;
+
+    /// <summary>The weight roll of a new animal, 0..1: the mean of three uniform draws, so it clusters around the middle (a heavy one is rare, a trophy). Draws exactly three values from <paramref name="rng"/>.</summary>
+    public static float RollSize(Random rng) => (float)((rng.NextDouble() + rng.NextDouble() + rng.NextDouble()) / 3.0);
+
+    /// <summary>The size step of a roll: 0 .. <see cref="SizeSteps"/> - 1.</summary>
+    public static int StepOf(float roll) => Math.Clamp((int)MathF.Round(Math.Clamp(roll, 0f, 1f) * (SizeSteps - 1)), 0, SizeSteps - 1);
+
+    /// <summary>The scale (1 = the species' model and boxes as measured) of a size step.</summary>
+    public static float SizeOfStep(int step) => MinSize + (MaxSize - MinSize) * Math.Clamp(step, 0, SizeSteps - 1) / (SizeSteps - 1);
+
+    /// <summary>The size step in a state byte (what a client scales the model by, for a species with a weight).</summary>
+    public static int SizeStepOf(byte state) => state >> SizeShift;
+
+    /// <summary>The weight in kg of a roll within a species' range [min, max].</summary>
+    public static float WeightOf(IReadOnlyList<float> range, float roll) => range[0] + (range[1] - range[0]) * Math.Clamp(roll, 0f, 1f);
 
     /// <summary>The owner field of an animal's replicated state: the species index in the low byte, the variant index (which model of the species) in the high byte.</summary>
     public static ushort Look(int species, int variant) => (ushort)(species | variant << 8);
@@ -106,7 +125,8 @@ public sealed class Animal : IWorldEntity
     float _floorY;         // the last ground height it flew over, to land on where there is none (water, the terrain's rim)
     bool _hitToggle;
 
-    public Animal(AnimalsFile file, int species, Vector3 home, float yaw, IAnimalWorld world, int seed, int variant = 0)
+    /// <param name="sizeRoll">The size and weight roll, 0..1 (<see cref="AnimalRules.RollSize"/>); only a species with <see cref="AnimalDef.WeightKg"/> has a size.</param>
+    public Animal(AnimalsFile file, int species, Vector3 home, float yaw, IAnimalWorld world, int seed, int variant = 0, float sizeRoll = 0.5f)
     {
         Variant = variant;
         _file = file;
@@ -117,7 +137,17 @@ public sealed class Animal : IWorldEntity
         Home = home;
         Position = _world.GroundY(home.X, home.Z) is { } y ? new Vector3(home.X, y, home.Z) : home;
         Yaw = yaw;
-        Hp = Def.Hp;
+        if (Def.WeightKgOf(variant) is { } range)
+        {
+            SizeStep = AnimalRules.StepOf(sizeRoll);
+            Size = AnimalRules.SizeOfStep(SizeStep);
+            WeightKg = AnimalRules.WeightOf(range, sizeRoll);
+        }
+        var box = Def.HitBoxOf(variant);
+        HitBox = Size == 1f ? box : new[] { box[0] * Size, box[1] * Size, box[2] * Size };
+        // a bigger animal has more hit points, as its volume; a one-hit species has none to scale, and the hp byte of the wire holds 255
+        MaxHp = Def.OneHit ? Def.Hp : MathF.Min(255, MathF.Round(Def.Hp * Size * Size * Size));
+        Hp = MaxHp;
         _fsm.Restart(Between(file.IdleMinSeconds, file.IdleMaxSeconds));
     }
 
@@ -148,8 +178,16 @@ public sealed class Animal : IWorldEntity
     public ushort Owner => 0;
     public WorldDespawnReason? Ended { get; private set; }
 
-    /// <summary>The body box [width, height, length]: its variant's own, or the species'.</summary>
-    public IReadOnlyList<float> HitBox => Def.HitBoxOf(Variant);
+    /// <summary>Its size step (0 .. 7, the state byte's bits 5-7) and the scale it stands for: 1 for a species with no weight.</summary>
+    public int SizeStep { get; }
+    public float Size { get; } = 1f;
+    /// <summary>What it weighs, kg; 0 for a species with no weight. Rolled with the size and kept on the server (the hunt shot tells the shooter).</summary>
+    public float WeightKg { get; }
+    /// <summary>Its hit points at full health: the species' scaled by its size (a one-hit species: as they are).</summary>
+    public float MaxHp { get; }
+
+    /// <summary>The body box [width, height, length]: its variant's own, or the species', times its <see cref="Size"/>.</summary>
+    public IReadOnlyList<float> HitBox { get; }
 
     /// <summary>The body box for hit tests: its centre, half the width, height and length, and the yaw it is turned by (the box's length lies along the heading).</summary>
     public (Vector3 Centre, Vector3 Half, float Yaw) Bounds
@@ -223,7 +261,7 @@ public sealed class Animal : IWorldEntity
 
     public WorldState Serialize()
     {
-        var state = (byte)((byte)State | (_hitToggle ? AnimalRules.HitToggle : 0));
+        var state = (byte)((byte)State | (_hitToggle ? AnimalRules.HitToggle : 0) | SizeStep << AnimalRules.SizeShift);
         // a living animal never shows 0 hp (a sliver of health rounds up)
         return WorldState.Make(Position, Yaw, 0, AnimalRules.Look(Species, Variant), state, Alive ? MathF.Ceiling(Hp) : 0);
     }
