@@ -729,7 +729,7 @@ public partial class EditorMode
     {
         ZoneList();
         var zones = ids.Distinct().Select(id => _zoneById.GetValueOrDefault(id)).Where(z => z != null).Select(z => z!).ToList();
-        var kept = zones.Where(z => z.FromRule && ObjectEdits.RingProblemCode(z.Points) != ObjectEdits.RingOk).ToList();
+        var kept = zones.Where(z => z.FromRule && ObjectEdits.RingProblemCode(ObjectEdits.Despiked(z.Points)) != ObjectEdits.RingOk).ToList();
         var todo = zones.Except(kept).ToList();
         if (todo.Count == 0) { Say(kept.Count > 0 ? $"nothing deleted: the outline of {kept[0].Label}{(kept.Count > 1 ? $" and {kept.Count - 1} more" : "")} cannot be cut" : "nothing to delete: those zones no longer exist", true); return false; }
         var ok = Mutate(root =>
@@ -742,7 +742,7 @@ public partial class EditorMode
                 if (root.GetValueOrDefault("zone_cuts") is not Obj cuts) root["zone_cuts"] = cuts = EditsFile.NewObject();
                 var cut = EditsFile.NewObject();
                 cut["kind"] = z.Kind;
-                cut["polygon"] = PolygonValue(z.Points);
+                cut["polygon"] = PolygonValue(ObjectEdits.Despiked(z.Points));
                 cuts[NextId(root, "zone_cuts", "ZC-")] = cut;
                 n++;
             }

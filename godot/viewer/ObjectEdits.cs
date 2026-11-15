@@ -336,6 +336,29 @@ public static class ObjectEdits
         return errs;
     }
 
+    /// <summary>
+    /// The ring without its spikes: a corner where the outline goes out along a line and straight back (a zero-width antenna, as ground
+    /// areas from cadastre data have) is dropped, repeatedly. A ring without spikes comes back as given.
+    /// </summary>
+    public static List<(double x, double y)> Despiked(IReadOnlyList<(double x, double y)> points)
+    {
+        var ring = points.ToList();
+        if (ring.Count > 1 && ring[0] == ring[^1]) ring.RemoveAt(ring.Count - 1);
+        for (var again = true; again && ring.Count > 3;)
+        {
+            again = false;
+            for (var i = 0; i < ring.Count && ring.Count > 3; i++)
+            {
+                var p = ring[(i + ring.Count - 1) % ring.Count]; var v = ring[i]; var n = ring[(i + 1) % ring.Count];
+                double ax = v.x - p.x, ay = v.y - p.y, bx = n.x - v.x, by = n.y - v.y;
+                var la = Math.Sqrt(ax * ax + ay * ay); var lb = Math.Sqrt(bx * bx + by * by);
+                if (la == 0 || lb == 0 || ax * bx + ay * by >= 0 || Math.Abs(ax * by - ay * bx) > 1e-3 * la * lb) continue;
+                ring.RemoveAt(i); again = true; i--;
+            }
+        }
+        return ring;
+    }
+
     public const int RingOk = 0, RingTooFew = 1, RingRepeated = 2, RingNotSimple = 3;
 
     /// <summary>What is wrong with a patch or zone ring (RingOk when nothing): the same three rules as the validator. A repeated closing point is ignored.</summary>
