@@ -200,6 +200,11 @@ public sealed class GangClips
     public string ClimbUp { get; set; } = "";
     public string ClimbDown { get; set; } = "";
     public string ClimbWork { get; set; } = "";
+    /// <summary>The electrocution (ticket 07): falling, lying knocked down, getting up, and stunned at the top. Empty: a held pose (lying flat for Down).</summary>
+    public string KnockdownBegin { get; set; } = "";
+    public string KnockdownLoop { get; set; } = "";
+    public string KnockdownEnd { get; set; } = "";
+    public string StunLoop { get; set; } = "";
     public List<string> Death { get; set; } = new() { "death_back_sword", "death_left_sword" };
 }
 

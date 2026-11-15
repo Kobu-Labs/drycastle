@@ -33,6 +33,9 @@ public interface IThiefWork
 
     /// <summary>Every tick a Thief carries a piece: where it stands and faces (a kind whose thing travels with it, a pet, moves it there).</summary>
     void Carrying(LootOrigin piece, Vector3 at, float yaw);
+
+    /// <summary>The Thief reached the top of its climb: whether something strikes it there (<see cref="IStealSource.AloftHazard"/>). Default: nothing.</summary>
+    AloftShock? Hazard(in StealTarget target, GangMember thief, Random rng) => null;
 }
 
 /// <summary>
@@ -82,4 +85,6 @@ public sealed class RaidWork : IThiefWork
     public void Drop(LootOrigin piece, Vector3 at) => _book.Drop(piece, at);
 
     public void Carrying(LootOrigin piece, Vector3 at, float yaw) => _book.Carrying(piece, at, yaw);
+
+    public AloftShock? Hazard(in StealTarget target, GangMember thief, Random rng) => _book.AloftHazard(target, thief, rng);
 }

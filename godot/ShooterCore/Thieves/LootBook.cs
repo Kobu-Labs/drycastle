@@ -95,6 +95,17 @@ public sealed class LootBook
 
     public void Release(in StealTarget t) => Registry.Release(t);
 
+    /// <summary>A Thief was struck at the top of its climb (<see cref="IStealSource.AloftHazard"/>): who and what it climbs for. Raised as it happens, before the member's state changes.</summary>
+    public event Action<GangMember, StealTarget>? Shocked;
+
+    /// <summary>The Thief reached the top of its climb for <paramref name="t"/>: asks the kind's source (<see cref="IStealSource.AloftHazard"/>) and, when it strikes, raises <see cref="Shocked"/>.</summary>
+    public AloftShock? AloftHazard(in StealTarget t, GangMember thief, Random rng)
+    {
+        if (t.Lying || Registry.Source(t.Kind)?.AloftHazard(t.Id, rng) is not { } shock) return null;
+        Shocked?.Invoke(thief, t);
+        return shock;
+    }
+
     /// <summary>A piece is carried: its kind's source hears where the carrier stands (<see cref="IStealSource.Carried"/>).</summary>
     public void Carrying(LootOrigin piece, Vector3 at, float yaw) => Registry.Source(piece.Kind)?.Carried(piece.Id, at, yaw);
 

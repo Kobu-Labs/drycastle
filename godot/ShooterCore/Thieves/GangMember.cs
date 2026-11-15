@@ -7,12 +7,13 @@ public enum GangMemberKind : byte { Thief = 0, Enforcer = 1, GangBoss = 2 }
 
 /// <summary>
 /// What a Gang member is doing: the replicated state byte. 8 is the van's (ticket 03: Board); 9 to 16 are the stealing states (ticket 04: Seek, Approach, Steal, Haul, Load and the three climb
-/// states). A new state goes after the last one. The client treats an unknown value as standing.
+/// states); 17 and 18 are ticket 05's; 19 to 22 are the electrocution (ticket 07: Shocked, Falling, Down, GetUp). A new state goes after the last one. The client treats an unknown value as standing.
 /// </summary>
 public enum GangMemberState : byte
 {
     Idle = 0, Walk = 1, Guard = 2, Chase = 3, Windup = 4, Swing = 5, Flee = 6, Dead = 7, Board = 8,
     Seek = 9, Approach = 10, Steal = 11, Haul = 12, Load = 13, ClimbUp = 14, WorkAloft = 15, ClimbDown = 16,
+    Shocked = 19, Falling = 20, Down = 21, GetUp = 22,
 }
 
 /// <summary>A living player as the Gang members see them: where their feet are and whether they stand on the ground (a rider in a vehicle cannot be struck).</summary>
@@ -70,7 +71,7 @@ public static class GangRules
     public static bool SpeakerOf(byte hp) => (hp & SpeakerBit) != 0;
 
     /// <summary>A state byte as a state; a value this build does not know stands.</summary>
-    public static GangMemberState StateOf(byte state) => state <= (byte)GangMemberState.ClimbDown ? (GangMemberState)state : GangMemberState.Idle;
+    public static GangMemberState StateOf(byte state) => state <= (byte)GangMemberState.GetUp ? (GangMemberState)state : GangMemberState.Idle;
 
     public static void Register(WorldEntityRegistry registry)
     {
@@ -115,7 +116,11 @@ public sealed partial class GangMember : IWorldEntity
         .Allow(GangMemberState.Approach, GangMemberState.Steal, GangMemberState.ClimbUp, GangMemberState.Seek, GangMemberState.Chase, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.Steal, GangMemberState.Haul, GangMemberState.Seek, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.ClimbUp, GangMemberState.WorkAloft, GangMemberState.ClimbDown, GangMemberState.Flee, GangMemberState.Board)
-        .Allow(GangMemberState.WorkAloft, GangMemberState.ClimbDown, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.WorkAloft, GangMemberState.ClimbDown, GangMemberState.Shocked, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.Shocked, GangMemberState.Falling, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.Falling, GangMemberState.Down, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.Down, GangMemberState.GetUp, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.GetUp, GangMemberState.ClimbUp, GangMemberState.Seek, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.ClimbDown, GangMemberState.Haul, GangMemberState.Seek, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.Haul, GangMemberState.Load, GangMemberState.Seek, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.Load, GangMemberState.Seek, GangMemberState.Flee, GangMemberState.Board)
@@ -135,6 +140,10 @@ public sealed partial class GangMember : IWorldEntity
         .Note(GangMemberState.ClimbUp, "Climbs straight up from the climb's base to its top at climb_speed, off the navigation mesh (no clock: the distance). A Working state; shot dead here it falls to the ground.")
         .Note(GangMemberState.WorkAloft, "Works at the top of the climb (clock: the kind's steal_seconds), then has the thing. A Working state; shot dead here it falls to the ground.")
         .Note(GangMemberState.ClimbDown, "Climbs straight down to the base at climb_speed, then hauls what it has (or seeks again when it has nothing). A Working state; shot dead here it falls to the ground.")
+        .Note(GangMemberState.Shocked, "Electrocuted at the top of a climb (the kind's hazard rolled when the Thief started to work aloft; clock: the shock's seconds): held in place, beams and sound on the clients. Costs no hits. Ends in Falling; shot dead here it falls and lies.")
+        .Note(GangMemberState.Falling, "Falls from the top to the base's height under gravity (no clock: the height), off the navigation mesh. Ends in Down; shot dead here it keeps falling and lies.")
+        .Note(GangMemberState.Down, "Lies knocked down (clock: the shock's down seconds); a lying hit volume, normal hits count. Ends in GetUp.")
+        .Note(GangMemberState.GetUp, "Gets up (clock: the shock's get-up seconds), then goes for the same target again (ClimbUp), or looks for another when it is gone (Seek). All four are Working states: the Thief does not fight.")
         .Note(GangMemberState.Haul, "Carries the Loot to the van's door, faster than it approached (clock: haul_give_up_seconds, then it drops the Loot where it stands). A Working state; the client attaches the prop from the hp byte.")
         .Note(GangMemberState.Load, "Tosses the Loot into the van at the door (clock: load_seconds): counted in the van, the Thief seeks again. A van that cannot take it any more gets it dropped at the Thief's feet.")
         .Note(GangMemberState.Dead, "Lies for corpse_seconds (the clock's elapsed time), then the entity ends. Reached from any state; never left.")
@@ -211,7 +220,7 @@ public sealed partial class GangMember : IWorldEntity
     public WorldDespawnReason? Ended { get; private set; }
 
     /// <summary>The standing hit volume the shots test against: the player's capsule at the kind's scale (a headshot is a head hit).</summary>
-    public HitTarget HitVolume => new(HitId, Position, Stance.Stand, Yaw, HeadGuarded: false, Scale: _k.HitScale);
+    public HitTarget HitVolume => new(HitId, Position, State == GangMemberState.Down ? Stance.Prone : Stance.Stand, Yaw, HeadGuarded: false, Scale: _k.HitScale);
 
     public WorldState Serialize() => WorldState.Make(Position, Yaw, 0, Look, (byte)State, GangRules.PackHp(Kind, Alive, Carried, Speaker && Alive));
 

@@ -76,4 +76,10 @@ public interface IStealSource
     /// its arm). Default: nothing.
     /// </summary>
     void Carried(int id, Vector3 carrierAt, float carrierYaw) { }
+
+    /// <summary>
+    /// Asked once when a Thief reaches the top of a climb for thing <paramref name="id"/> (it starts to work aloft): a kind with a hazard up there (a pole's live wires) rolls it with <paramref name="rng"/>
+    /// and says what strikes (<see cref="AloftShock"/>); null: nothing. Default null, so a kind without one is untouched.
+    /// </summary>
+    AloftShock? AloftHazard(int id, Random rng) => null;
 }

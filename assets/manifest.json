@@ -4252,6 +4252,18 @@
       "note": "Additive synthesis of inharmonic bell partials by scripts/make_church_bells.py (in the repo, deterministic); mono OGG, ~12 s, five strokes"
     },
     {
+      "id": "sfx:drycastle-generated-sounds/shock_crackle",
+      "name": "Electric shock crackle (Thieves on a pole)",
+      "file": "drycastle-generated-sounds/shock_crackle.ogg",
+      "used_for": "shock.crackle",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-15",
+      "generated": true,
+      "note": "Mains hum, a whizz sweep and random crackle clicks by scripts/make_shock_crackle.py (in the repo, deterministic); mono OGG, ~2.2 s"
+    },
+    {
       "id": "sfx:drycastle-generated-sounds/vehicle_engine",
       "name": "Vehicle engine loop",
       "file": "drycastle-generated-sounds/vehicle_engine.ogg",
