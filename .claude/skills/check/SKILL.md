@@ -1,6 +1,6 @@
 ---
 name: check
-description: Start work on a ticket. Use for "/check #110", "check 110", "pick up #110", "start #110". Fetches latest main, makes an issue branch in its own worktree, reads the ticket, and reports a brief. Does not implement.
+description: Start work on a ticket. Use for "/check #110", "check 110", "pick up #110", "start #110". Fetches latest main, makes an issue branch in its own worktree, reads the ticket, and reports a brief (goal, recommendations, open questions). Does not implement.
 ---
 
 # /check #N
@@ -41,11 +41,11 @@ git worktree add -b issue-N-<slug> .claude/worktrees/issue-N-<slug> origin/main
 
 ## 4. Report (terse, bullets)
 
-- `#N title` (state, labels, assignee), worktree path + branch, base sha
-- Ask: what ticket wants, in 2-4 bullets
-- Where: files/modules involved
-- Constraints: ADRs, state machines, UI standard, blockers
-- Suggested approach: short
-- Unresolved questions last, if any
+- `#N title` (state, labels, assignee, blockers if any), worktree path + branch, base sha
+- **Goal**: summary of what the ticket is for, 2-4 bullets. Outcome, not implementation.
+- **Recommendations**: what to do + why, incl. ADR/state-machine/UI-standard implications when they shape the call. Opinionated, short.
+- **Open questions**: numbered (`1.`, `2.`), last. Each answerable in a line; state your default. Omit section if none.
+
+No file lists, no "Where" section, no code locations. Files are for your own familiarisation (step 3), not the report.
 
 Do not implement, commit, push, claim/assign, comment or label the issue unless asked. Don't run the game, take screenshots, or build extensively.
