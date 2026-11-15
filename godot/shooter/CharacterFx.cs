@@ -209,9 +209,45 @@ public sealed partial class CharacterView : Node3D
         SetRagdoll(true, _flailAmount, _flailFrozen);
     }
 
+    /// <summary>What <see cref="SetWeapon"/> holds for a pair of binoculars: not a weapon id.</summary>
+    const string BinocularsHeld = "#binoculars";
+    bool _binoculars;
+
+    /// <summary>
+    /// The player holds binoculars at the face (GLOSSARY "Binoculars"): from the next <see cref="Apply"/> the pair replaces the weapon in the hands,
+    /// both raised to the eyes, until it is set back. A dead body holds nothing.
+    /// </summary>
+    public void SetBinoculars(bool up) => _binoculars = up;
+
+    /// <summary>
+    /// The pair a character holds: the model of the paid pack wearing its atlas, at about real size (it is authored 0.35 m wide), or two dark
+    /// barrels when the pack is not there.
+    /// </summary>
+    static Node3D MakeBinoculars()
+    {
+        var root = new Node3D { Name = "Binoculars" };
+        if (SyntyLib.Instance("props/binoculars_01", "glb/atlas/military_01_A.png") is { } model)
+        {
+            // the pack's props face +Z, the hands hold things facing -Z; centred on its own height
+            model.Transform = new Transform3D(new Basis(Vector3.Up, Mathf.Pi).Scaled(Vector3.One * 0.5f), new Vector3(0, -0.03f, 0));
+            root.AddChild(model);
+            return root;
+        }
+        var dark = new StandardMaterial3D { AlbedoColor = new Color(0.12f, 0.13f, 0.14f), Roughness = 0.8f };
+        foreach (var x in new[] { -0.04f, 0.04f })
+            root.AddChild(new MeshInstance3D
+            {
+                Mesh = new CylinderMesh { TopRadius = 0.028f, BottomRadius = 0.034f, Height = 0.15f, RadialSegments = 12 },
+                MaterialOverride = dark, Position = new Vector3(x, 0, 0), Rotation = new Vector3(Mathf.Pi / 2, 0, 0),
+            });
+        return root;
+    }
+
     /// <summary>Update from snapshot state: horizontal speed (m/s), whether it fired in the last moments, dead, and the weapon id it holds.</summary>
     public void Apply(float speed, bool firing, bool dead, string weaponId)
     {
+        if (_binoculars && !dead) { weaponId = BinocularsHeld; firing = false; }
+        if (_arms != null) _arms.Binoculars = weaponId == BinocularsHeld;
         _lastSpeed = speed; _lastFiring = firing; _lastDead = dead; _lastWeapon = weaponId;
         SetWeapon(dead ? "" : weaponId);
         if (!HasModel) return;
@@ -269,7 +305,7 @@ public sealed partial class CharacterView : Node3D
         if (id == _heldId || WeaponParent() == null) return;
         _heldId = id;
         _held?.QueueFree();
-        _held = id == "" ? null : WeaponFx.Make(id);
+        _held = id == "" ? null : id == BinocularsHeld ? MakeBinoculars() : WeaponFx.Make(id);
         if (_held == null) return;
         // the weapon is built in metres and the rig is scaled by Scale
         _held.Scale = Vector3.One / Scale;

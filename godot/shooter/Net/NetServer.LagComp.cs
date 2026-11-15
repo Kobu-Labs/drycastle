@@ -144,7 +144,7 @@ public partial class NetServer
         AddGangTargets(list, view); // Gang members run: rewound like the Bigfoot (a pose ring each)
         AddVanTargets(list, view); // so do the Raid vans (they drive)
         AddPetTargets(list); // so do pets
-        AddWildlifeTargets(list); // and wild animals
+        AddWildlifeTargets(list, BackTicksOf(c) / (float)Wire.TickRate); // and wild animals, where they stand now but in the pose the shooter saw (a grazing head goes down and up)
         _workers?.AddTargets(list); // the Urad workers sit still
         AddDemonTarget(list); // so does the demon on its wall
         return list;

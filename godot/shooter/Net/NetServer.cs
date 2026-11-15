@@ -36,6 +36,8 @@ public partial class NetServer : Node
         public BreathState Breath = new(0);
         /// <summary>The zero this player dialled on each weapon with bullet drop (<see cref="BulletDrop"/>); a death resets it.</summary>
         public readonly ZeroDial Zero = new();
+        /// <summary>The player holds the binoculars at the face (<see cref="Binoculars"/>): what the others are told, nothing the server acts on.</summary>
+        public bool BinocularsUp;
         public readonly Queue<NetInput> Inputs = new();
         public ushort Ack;
         public bool HasAck;
@@ -433,6 +435,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpseItem } pi) OnPickUpCorpseItem(c, pi.Payload);
             else if (m is EventMsg { Kind: >= (byte)EventKind.EquipItem and <= (byte)EventKind.TakeGroundItem } ir) OnItemRequest(c, (EventKind)ir.Kind, ir.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SetZero } sz) { if (c.Joined && BulletDrop.TryDecodeZero(sz.Payload, out var zi, out var zm) && zi < Weapons.Weapons.Count && BulletDrop.HasDrop(Weapons.Weapons[zi])) c.Zero.Set(zi, Weapons.Weapons[zi], zm); }
+            else if (m is EventMsg { Kind: (byte)EventKind.RaiseBinoculars } rb) { if (c.Joined && Binoculars.TryDecodeRaise(rb.Payload, out var up)) SetBinoculars(c, up && CarriesBinoculars(c)); }
             else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
@@ -492,6 +495,7 @@ public partial class NetServer : Node
         c.Breath = new BreathState(c.Id);
         c.Worn = new Equipment(Items);
         c.Bag = new Bag();
+        ItemRules.IssueStandard(Items, c.Bag); // every player has the standard items (the binoculars) from the start
         c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = MapLadders };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
@@ -524,6 +528,7 @@ public partial class NetServer : Node
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
         SendWornOnJoin(c); // what the others wear (#266), to draw on their characters
+        SendBinocularsOnJoin(c); // and who holds the binoculars up
         SendStatusOnJoin(c); // who is blessed, cursed or burning
         _match.AddPlayer(c.Id, c.Name, c.Sandbox); // spawns the player (event) and broadcasts the scoreboard
         SandboxAnnounce(c); // sandbox name tags both ways, and the held streak (#156)
@@ -680,6 +685,9 @@ public partial class NetServer : Node
                     sc.Recoil.Reset();
                     sc.Breath.Reset();
                     sc.Zero.Reset();
+                    SetBinoculars(sc, false); // a new life starts with them down
+                    ItemRules.IssueStandard(Items, sc.Bag); // and with the standard items (the binoculars) in the bag
+                    SendEquipmentIfChanged(sc); // also what was issued at the join, before the first life
                     SendAmmo(sc);
                 }
                 BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(s.Id, s.Position, s.ProtectionSeconds)));
@@ -1015,7 +1023,7 @@ public partial class NetServer : Node
             if (hit is { } h)
             {
                 // a wild animal under a sniper rifle: where the bullet entered its body, taken before the hit can remove it (the hit diagram)
-                var hunt = w.Category == WeaponCategory.Sniper && WildlifeRules.IsHitId(h.Id) ? HuntShotOf(targets, h.Id, N(from + along * h.Distance), before + h.Distance, (byte)shot.WeaponIndex) : null;
+                var hunt = w.Category == WeaponCategory.Sniper && WildlifeRules.IsHitId(h.Id) ? HuntShotOf(targets, h.Id, N(from + along * h.Distance), before + h.Distance, (byte)shot.WeaponIndex, h.ShapeHead) : null;
                 var dealt = Deal(c.Id, (byte)shot.WeaponIndex, h.Id, HitMath.HitscanDamage(w, before + h.Distance, h.Head), h.Head, false);
                 if (dealt == DamageResult.Killed && hunt is { } shown) Send(c, new EventMsg((byte)EventKind.HuntShot, HuntShot.Encode(shown)));
             }

@@ -58,7 +58,7 @@ public partial class NetServer
     void InitWildlife()
     {
         FlockRules.Register(WorldEntityRegistry.Shared);
-        _wildlife = new WildlifeKeeper(WildlifeData, AnimalData, _match.Entities, System.Environment.TickCount) { Log = s => GD.PrintErr($"server: {s}") };
+        _wildlife = new WildlifeKeeper(WildlifeData, AnimalData, _match.Entities, System.Environment.TickCount) { Log = s => GD.PrintErr($"server: {s}"), Shapes = AnimalShapes };
         _match.Wildlife = _wildlife;
         _wildlife.Killed += (a, by) => GD.Print($"server: #{by} killed a wild {a.Def.Id}");
     }
@@ -104,17 +104,17 @@ public partial class NetServer
     }
 
     /// <summary>What the hit diagram shows of a bullet that met the wild animal <paramref name="hitId"/> at <paramref name="point"/>; null when the animal or its target is not there.</summary>
-    HuntShotMsg? HuntShotOf(IEnumerable<HitTarget> targets, ushort hitId, NVec3 point, float distance, byte weapon)
+    HuntShotMsg? HuntShotOf(IEnumerable<HitTarget> targets, ushort hitId, NVec3 point, float distance, byte weapon, bool head)
     {
         if (_wildlife?.AnimalOf(hitId) is not { } animal) return null;
         foreach (var t in targets)
-            if (t.Id == hitId) return HuntShot.From(t, point, animal.Species, distance, weapon);
+            if (t.Id == hitId) return HuntShot.From(t, point, animal.Species, distance, weapon, head, animal.Variant);
         return null;
     }
 
     /// <summary>The living wild animals as hit targets, only while damage can apply to them.</summary>
-    void AddWildlifeTargets(List<HitTarget> into)
+    void AddWildlifeTargets(List<HitTarget> into, float backSeconds = 0)
     {
-        if (_match.Phase == MatchPhase.Running) _wildlife?.AddTargets(into);
+        if (_match.Phase == MatchPhase.Running) _wildlife?.AddTargets(into, backSeconds);
     }
 }

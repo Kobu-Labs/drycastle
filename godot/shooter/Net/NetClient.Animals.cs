@@ -15,6 +15,8 @@ public partial class NetClient
 {
     /// <summary>animals.json: set by the host (the species table; the species index of a state is a position in it).</summary>
     public AnimalsFile AnimalData = new();
+    /// <summary>The hit shapes of the species: set by the host. The client only draws them (the hit diagram); the server tests bullets against them.</summary>
+    public AnimalShapes AnimalShapes = new();
 
     sealed class AnimalView
     {

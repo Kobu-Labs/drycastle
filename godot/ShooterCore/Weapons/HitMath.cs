@@ -10,11 +10,17 @@ namespace Drycastle.ShooterCore;
 /// <summary>
 /// A shot target. <paramref name="Box"/> (a wild animal's body, [width, height, length] with the length along the facing direction, feet on the
 /// ground, its centre <paramref name="BoxAhead"/> metres ahead of the feet) replaces the capsule for a bullet's ray when its height is above 0;
-/// blasts, knives and everything else that measures a distance keep the capsule.
+/// blasts, knives and everything else that measures a distance keep the capsule. <paramref name="Shape"/> (a wild animal's hit shape in the pose
+/// its shooter sees, with the pose and frame it is, for the hit diagram) replaces the box in turn: the bullet must cross a cell the animal covers.
 /// </summary>
-public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw, bool HeadGuarded = false, float Scale = 1f, Vector3 Box = default, float BoxAhead = 0f);
+public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw, bool HeadGuarded = false, float Scale = 1f, Vector3 Box = default, float BoxAhead = 0f,
+    AnimalShape? Shape = null, AnimalPose ShapePose = AnimalPose.Idle, int ShapeFrame = 0);
 
-public readonly record struct RayHit(ushort Id, float Distance, bool Head);
+/// <summary>
+/// A ray's hit. <paramref name="Head"/> is a headshot (the weapon's headshot damage). <paramref name="ShapeHead"/> says the bullet met the head cells of
+/// an animal's hit shape: for the hit diagram only, an animal has no headshot damage.
+/// </summary>
+public readonly record struct RayHit(ushort Id, float Distance, bool Head, bool ShapeHead = false);
 public readonly record struct MeleeHit(ushort Id, bool Backstab, float Distance);
 
 /// <summary>
@@ -220,6 +226,14 @@ public static class HitMath
         {
             if (t.Id == shooter) continue;
             float d;
+            if (t.Shape != null)
+            {
+                // a hit shape (a wild animal in the pose its shooter sees): the ray must cross a cell the animal covers
+                if (t.Shape.Ray(ToFrame(t, origin), ToFrameDirection(t, dir), limit) is not { } sh) continue;
+                if (best is { } sb && sb.Distance <= sh.Distance) continue;
+                best = new RayHit(t.Id, sh.Distance, false, sh.Head);
+                continue;
+            }
             if (t.Box.Y > 0)
             {
                 // a body box (a wild animal): no head, the ray meets the box or misses
@@ -238,6 +252,21 @@ public static class HitMath
             best = new RayHit(t.Id, d, head);
         }
         return best;
+    }
+
+    /// <summary>A world point in a target's own frame: x to its right, y up from its feet, z ahead of its feet (the frame of an <see cref="AnimalShape"/>).</summary>
+    public static Vector3 ToFrame(in HitTarget t, Vector3 p)
+    {
+        var f = Forward(t.Yaw, 0);
+        var rel = p - t.Feet;
+        return new Vector3(Vector3.Dot(rel, new Vector3(-f.Z, 0, f.X)), rel.Y, Vector3.Dot(rel, f));
+    }
+
+    /// <summary>A world direction in a target's own frame (<see cref="ToFrame"/>).</summary>
+    public static Vector3 ToFrameDirection(in HitTarget t, Vector3 d)
+    {
+        var f = Forward(t.Yaw, 0);
+        return new Vector3(Vector3.Dot(d, new Vector3(-f.Z, 0, f.X)), d.Y, Vector3.Dot(d, f));
     }
 
     /// <summary>A world point in the frame of a target's body box: x to the body's right, y up from the feet, z ahead of the box's centre.</summary>

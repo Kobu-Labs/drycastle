@@ -17,6 +17,8 @@ public class GameData
     public GlassConfig Glass { get; init; } = new();
     /// <summary>animals.json (the species of wildlife and livestock and their rules). Empty when the file is absent.</summary>
     public AnimalsFile Animals { get; init; } = new();
+    /// <summary>animal_shapes.json (the hit shapes of the wild species, baked from their models), with the private packs' species merged in by the host. Empty when absent: every animal is its body box.</summary>
+    public AnimalShapes Shapes { get; set; } = new();
     /// <summary>items.json (equippable items: headgear and the event rewards). Empty when the file is absent.</summary>
     public ItemsFile Items { get; init; } = new();
     /// <summary>pets.json (which property groups keep pets, of which species, and the poop rules). Inert when the file is absent.</summary>
@@ -97,6 +99,7 @@ public class GameData
             Camo = File.Exists(Path.Combine(dir, "camo.json")) ? CamoFile.Load(Path.Combine(dir, "camo.json")) : CamoFile.Parse(MinimalCamoJson),
             Glass = File.Exists(Path.Combine(dir, "glass.json")) ? GlassConfig.Load(Path.Combine(dir, "glass.json")) : new(),
             Animals = animals,
+            Shapes = File.Exists(Path.Combine(dir, "animal_shapes.json")) ? AnimalShapes.Load(Path.Combine(dir, "animal_shapes.json")) : new(),
             Pets = File.Exists(Path.Combine(dir, "pets.json")) ? PetsFile.Load(Path.Combine(dir, "pets.json")).CheckAgainst(animals) : new(),
             Wildlife = File.Exists(Path.Combine(dir, "wildlife.json")) ? WildlifeFile.Load(Path.Combine(dir, "wildlife.json")).CheckAgainst(animals) : new(),
             Items = File.Exists(Path.Combine(dir, "items.json")) ? ItemsFile.Load(Path.Combine(dir, "items.json")) : new(),

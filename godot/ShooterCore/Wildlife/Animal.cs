@@ -132,6 +132,8 @@ public sealed class Animal : IWorldEntity
     public float Yaw { get; private set; }
     public float Hp { get; private set; }
     public AnimalState State => _fsm.Current;
+    /// <summary>Seconds since the state began (or was begun again): how far into the state's clip a client is, less the delay it sees the animal with.</summary>
+    public float StateSeconds => _fsm.Elapsed;
     public bool Alive => State != AnimalState.Dead;
     /// <summary>The player whose hit killed it (0 until then, and for a death with no shooter).</summary>
     public ushort Killer { get; private set; }

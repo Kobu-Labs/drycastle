@@ -46,6 +46,10 @@ public enum EventKind : byte
     SetZero = 24,
     /// <summary>Server to the shooter: a sniper rifle killed a wild animal, with where the bullet entered its body (<see cref="HuntShot"/>); the client shows the hit diagram.</summary>
     HuntShot = 25,
+    /// <summary>Client to server: the player raised or lowered the binoculars (<see cref="Binoculars.EncodeRaise"/>: u8).</summary>
+    RaiseBinoculars = 26,
+    /// <summary>Server to everyone but that player, and to a joiner for each player who has them up: a player's binoculars are up or down (<see cref="Binoculars.EncodeRaised"/>: u16 player id, u8); the client poses the character.</summary>
+    BinocularsRaised = 27,
     /// <summary>Client to server: take a corpse's weapon into a hotbar position (<see cref="CorpseCodec"/>).</summary>
     PickUpCorpse = 20,
     /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
@@ -269,7 +273,9 @@ public static class Wire
     //   v34 player statuses (220, 221)
     //   v33 church door
     //   v52 bullet drop of the sniper rifles: the zero dial (event 24, client to server); the hit diagram of a hunted animal (event 25)
-    public const byte ProtocolVersion = 52;
+    //   v54 the Raid van's owner field: door in 63rds (bits 0-5), song bits 6-10, crew sitting inside bits 11-14, left door bit 15 (was door in thousandths, song bits 10-14)
+    //   v53 the binoculars seen by the others (events 26 and 27); event 25 names the hit shape it was tested against (pose, frame) and the head
+    public const byte ProtocolVersion = 54;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

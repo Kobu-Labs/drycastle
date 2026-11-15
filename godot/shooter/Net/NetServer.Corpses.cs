@@ -28,7 +28,7 @@ public partial class NetServer
     {
         if (!_byId.TryGetValue(victim, out var c) || c.W == null) return;
         var weapon = c.W.HotbarWeapon(CorpseRules.PrimaryPos);
-        var items = ItemRules.Strip(c.Worn, c.Bag);
+        var items = ItemRules.StripForCorpse(Items, c.Worn, c.Bag); // the standard items (the binoculars) are not left on the corpse
         var corpse = new Corpse(victim, N(c.Body.GlobalPosition), c.Body.Yaw, weapon, c.W.RoundsOf(weapon), items);
         if (_deathPush.Remove(victim, out var push)) corpse.Launch(push);
         var id = _corpses.Add(corpse);

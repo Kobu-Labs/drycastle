@@ -51,6 +51,16 @@ public sealed partial class ArmsReadyPose : SkeletonModifier3D
     /// <summary>The left arm reaches for the foregrip too.</summary>
     public bool TwoHanded { get; set; } = true;
 
+    /// <summary>
+    /// Binoculars instead of a weapon: both hands are raised to the face, one on each barrel, and <see cref="Aim"/> (the node the pair hangs on) sits
+    /// between them in front of the eyes, level. No recoil, no pitch.
+    /// </summary>
+    public bool Binoculars { get; set; }
+    /// <summary>Where the pair is held, metres in the model's own frame: in front of the eyes (measured on the soldier model: eyes about 1.45 m up, the face 0.33 m ahead).</summary>
+    static readonly Vector3 AtFace = new(0, 1.43f, 0.40f);
+    /// <summary>Each hand, from the pair's centre: to its side, a little under it and nearer the face.</summary>
+    static readonly Vector3 HandFromPair = new(0.10f, -0.03f, -0.04f);
+
     /// <param name="bind">Bind-pose global transform by bone index (<c>CharacterView.BindPoses</c>).</param>
     /// <param name="rigPerMetre">Rig units per metre (1 / the model's draw scale).</param>
     /// <returns>Null when the rig lacks the arm bones.</returns>
@@ -83,6 +93,14 @@ public sealed partial class ArmsReadyPose : SkeletonModifier3D
     {
         if (GetSkeleton() is not { } sk || _right == null || _left == null) return;
         _recoil = Mathf.Max(0f, _recoil - (float)delta * 9f);
+        if (Binoculars)
+        {
+            // x is to the character's left: the right hand is on the -x side
+            Solve(sk, _right, (AtFace + new Vector3(-HandFromPair.X, HandFromPair.Y, HandFromPair.Z)) * _rigPerMetre, out _);
+            Solve(sk, _left, (AtFace + HandFromPair) * _rigPerMetre, out _);
+            if (Aim != null) Aim.Transform = new Transform3D(new Basis(Vector3.Left, Vector3.Up, Vector3.Forward), AtFace * _rigPerMetre);
+            return;
+        }
         // a shot pushes the weapon back along the barrel and lifts the muzzle; the targets move, so the arms recoil with it
         var level = (Barrel + Vector3.Up * (_recoil * 0.12f)).Normalized();
         var (sp, cp) = Mathf.SinCos(Pitch);

@@ -8,12 +8,24 @@ namespace Drycastle.Shooter;
 /// The binoculars on the client (GLOSSARY "Binoculars"): with a pair in the bag, the binoculars key raises and lowers them. Raised, the camera
 /// narrows to <see cref="Binoculars.FovDeg"/>, the weapon is neither shown nor fired or aimed, and the HUD reads the distance to what is under
 /// the centre of the view: the nearest of the world (ground, walls, trees), a vehicle, a wild animal or pet (its body box) and another player.
-/// It is measured here, against what this client draws, ten times a second; nothing is sent. They come down by the key, on death, in a seat,
-/// when the mouse is released (a menu) and when the pair leaves the bag.
+/// It is measured here, against what this client draws, ten times a second. They come down by the key, on death, in a seat, when the mouse is
+/// released (a menu) and when the pair leaves the bag. The server is told only that they went up or down, and tells the others, whose clients
+/// pose that player's character with the pair held at the face (<see cref="CharacterView.SetBinoculars"/>).
 /// </summary>
 public partial class NetClient
 {
     bool _binoculars;
+    /// <summary>The other players who hold the binoculars up (<see cref="EventKind.BinocularsRaised"/>), kept by id so a character made later is posed at once.</summary>
+    readonly HashSet<ushort> _binocularsBy = new();
+
+    void OnBinocularsRaised(ushort player, bool up)
+    {
+        if (up) _binocularsBy.Add(player); else _binocularsBy.Remove(player);
+        if (_remotes.TryGetValue(player, out var r)) r.Binoculars = up;
+    }
+
+    /// <summary>Tells the server the binoculars went up or down, so the others see it.</summary>
+    void SendBinoculars(bool up) => SendItem(EventKind.RaiseBinoculars, Binoculars.EncodeRaise(up));
     double _binocularsMeasuredAt;
     int? _binocularsRange;
 
@@ -39,6 +51,7 @@ public partial class NetClient
             if (_me == null || Dead || _pinned || Mode.ScopeSuppressed || Input.MouseMode != Input.MouseModeEnum.Captured || !CarriesBinoculars) return false;
             _binoculars = true;
             _binocularsMeasuredAt = 0; _binocularsRange = null;
+            SendBinoculars(true);
             Sfx.Ui("ui.accept");
         }
         GetViewport().SetInputAsHandled();
@@ -51,6 +64,7 @@ public partial class NetClient
         _binoculars = false;
         _binocularsRange = null;
         if (_me != null) _me.HandsBusy = false;
+        SendBinoculars(false);
         Sfx.Ui("ui.back");
     }
 

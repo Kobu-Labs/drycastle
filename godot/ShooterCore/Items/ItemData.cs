@@ -30,6 +30,11 @@ public sealed class ItemDef
     public bool HeadshotImmune { get; set; }
     /// <summary>A plain item with no slot (the Thieves' speaker): it rides in the bag and cannot be worn. <see cref="Slot"/> is then unused.</summary>
     public bool BagOnly { get; set; }
+    /// <summary>
+    /// Standard issue: every player carries one from the start of each life (it is put in the bag at the spawn when the player has none and a cell
+    /// is free), and a death does not leave it on the corpse. Needs <see cref="BagOnly"/>.
+    /// </summary>
+    public bool Standard { get; set; }
     /// <summary>A pair of binoculars: carried in the bag, the binoculars key raises them (<see cref="ShooterCore.Binoculars"/>). Needs <see cref="BagOnly"/>.</summary>
     public bool Binoculars { get; set; }
 }
@@ -77,6 +82,7 @@ public sealed class ItemsFile : IVersioned
                 throw new DataFileException($"{F}: {i.Id}: model is a .glb path inside the asset library");
             if (i.Atlas != "" && (!i.Model.StartsWith("synty/glb/", StringComparison.Ordinal) || !i.Atlas.EndsWith(".png", StringComparison.Ordinal) || i.Atlas.StartsWith('/') || i.Atlas.Contains("..", StringComparison.Ordinal)))
                 throw new DataFileException($"{F}: {i.Id}: atlas is a .png path under synty/, for a model under synty/glb/");
+            if (i.Standard && !i.BagOnly) throw new DataFileException($"{F}: {i.Id}: a standard item is bag_only (it is issued into the bag)");
             if (i.Binoculars && !i.BagOnly) throw new DataFileException($"{F}: {i.Id}: binoculars are bag_only (they are used from the bag)");
             if (i.PickupLimit is < 1) throw new DataFileException($"{F}: {i.Id}: pickup_limit is at least 1 (leave it out for no limit)");
         }

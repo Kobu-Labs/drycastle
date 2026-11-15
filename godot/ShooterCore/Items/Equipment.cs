@@ -189,4 +189,32 @@ public static class ItemRules
         for (var i = 0; i < Bag.Cells; i++) bag.Remove(i);
         return all;
     }
+
+    /// <summary>
+    /// A death: everything is taken off and out of the bag (<see cref="Strip"/>), and what the corpse gets is that less the standard items
+    /// (<see cref="ItemDef.Standard"/>), which are gone: the next life is issued new ones.
+    /// </summary>
+    public static List<ItemStack> StripForCorpse(ItemsFile items, Equipment worn, Bag bag)
+    {
+        var all = Strip(worn, bag);
+        all.RemoveAll(s => items.At(s.Item) is { Standard: true });
+        return all;
+    }
+
+    /// <summary>
+    /// The start of a life: each standard item (<see cref="ItemDef.Standard"/>) the player does not carry is put in the first empty bag cell,
+    /// with no pickups counted. A full bag gets none. True when something was added.
+    /// </summary>
+    public static bool IssueStandard(ItemsFile items, Bag bag)
+    {
+        var added = false;
+        for (var index = 0; index < items.Items.Count; index++)
+        {
+            if (!items.Items[index].Standard) continue;
+            var has = false;
+            foreach (var held in bag.Held) if (held.Item == index) { has = true; break; }
+            if (!has && bag.Add(new ItemStack(index)) >= 0) added = true;
+        }
+        return added;
+    }
 }

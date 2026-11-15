@@ -61,3 +61,77 @@ public class BinocularsTests
         Assert.True(Binoculars.Carried(items, Enumerable.Range(0, Bag.Cells).Select(c => bag.Get(c)?.Item)));
     }
 }
+
+public class BinocularsWireTests
+{
+    [Fact]
+    public void The_raise_wish_round_trips_and_a_bad_one_is_refused()
+    {
+        Assert.True(Binoculars.TryDecodeRaise(Binoculars.EncodeRaise(true), out var up) && up);
+        Assert.True(Binoculars.TryDecodeRaise(Binoculars.EncodeRaise(false), out up) && !up);
+        Assert.False(Binoculars.TryDecodeRaise(new byte[] { 2 }, out _));
+        Assert.False(Binoculars.TryDecodeRaise(Array.Empty<byte>(), out _));
+    }
+
+    [Fact]
+    public void The_state_told_to_the_others_round_trips_and_a_bad_one_is_refused()
+    {
+        Assert.True(Binoculars.TryDecodeRaised(Binoculars.EncodeRaised(513, true), out var player, out var up));
+        Assert.Equal(513, player);
+        Assert.True(up);
+        Assert.True(Binoculars.TryDecodeRaised(Binoculars.EncodeRaised(7, false), out player, out up));
+        Assert.False(up);
+        Assert.False(Binoculars.TryDecodeRaised(new byte[] { 1, 0, 2 }, out _, out _));
+        Assert.False(Binoculars.TryDecodeRaised(new byte[2], out _, out _));
+    }
+}
+
+public class StandardItemTests
+{
+    static ItemsFile Shipped => ItemsFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "items.json"));
+
+    [Fact]
+    public void Every_life_starts_with_the_binoculars_in_the_bag_once()
+    {
+        var items = Shipped;
+        var bag = new Bag();
+        Assert.True(ItemRules.IssueStandard(items, bag));
+        Assert.True(Binoculars.Carried(items, Enumerable.Range(0, Bag.Cells).Select(c => bag.Get(c)?.Item)));
+        Assert.False(ItemRules.IssueStandard(items, bag)); // already carried: no second pair
+        Assert.Equal(1, bag.Count);
+    }
+
+    [Fact]
+    public void A_full_bag_is_issued_nothing()
+    {
+        var items = Shipped;
+        var bag = new Bag();
+        for (var c = 0; c < Bag.Cells; c++) bag.Set(c, new ItemStack(items.IndexOf("speaker")));
+        Assert.False(ItemRules.IssueStandard(items, bag));
+        Assert.Equal(Bag.Cells, bag.Count);
+    }
+
+    [Fact]
+    public void A_death_leaves_everything_on_the_corpse_but_the_standard_items()
+    {
+        var items = Shipped;
+        var worn = new Equipment(items);
+        var bag = new Bag();
+        ItemRules.IssueStandard(items, bag);
+        bag.Add(new ItemStack(items.IndexOf("speaker")));
+        worn.Wear(EquipSlot.Neck, new ItemStack(items.IndexOf("gold_chain"), 1));
+        var left = ItemRules.StripForCorpse(items, worn, bag);
+        Assert.Equal(new[] { items.IndexOf("gold_chain"), items.IndexOf("speaker") }, left.Select(s => s.Item));
+        Assert.Equal(0, bag.Count);
+        Assert.Null(worn.Get(EquipSlot.Neck));
+        // and the next life has them again
+        Assert.True(ItemRules.IssueStandard(items, bag));
+    }
+
+    [Fact]
+    public void A_standard_item_that_can_be_worn_is_refused()
+    {
+        var e = Assert.Throws<DataFileException>(() => ItemsFile.Parse("""{"version":1,"items":[{"id":"b","name":"B","standard":true}]}"""));
+        Assert.Contains("bag_only", e.Message);
+    }
+}

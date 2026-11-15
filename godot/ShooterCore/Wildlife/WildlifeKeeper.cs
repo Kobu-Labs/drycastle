@@ -193,25 +193,44 @@ public sealed class WildlifeKeeper : IAnimalHits
         foreach (var h in _herds) h.Update(dt, ground);
     }
 
+    /// <summary>The hit shapes of the species and their looks (animal_shapes.json); a look with none, and an animal knocked down or thrown, is tested against its body box.</summary>
+    public AnimalShapes? Shapes { get; set; }
+
+    /// <summary>The pose a client draws an animal in for its state; null when it lies or flies (no shape for that).</summary>
+    public static AnimalPose? PoseOf(AnimalState state) => state switch
+    {
+        AnimalState.Eat => AnimalPose.Eat,
+        AnimalState.Walk => AnimalPose.Walk,
+        AnimalState.Flee => AnimalPose.Run,
+        AnimalState.Thrown or AnimalState.Down or AnimalState.Dead or AnimalState.Carried => null,
+        _ => AnimalPose.Idle,
+    };
+
     /// <summary>
-    /// A wild animal's hit volume. A bullet meets its body box (its variant's, else the species': the length along its facing direction, so a deer is hit
-    /// from its nose to its tail, and nowhere is a head hit); a blast or a knife measures to the player capsule scaled to the box's height, as before.
+    /// A wild animal's hit volume. A bullet meets its hit shape (the animal's outline in the pose it is in, <paramref name="backSeconds"/> ago: what
+    /// the shooter's screen showed, so a grazing deer's head is where it was seen), or without one its body box (the length along its facing
+    /// direction); nowhere is a headshot. A blast or a knife measures to the player capsule scaled to the box's height, as before.
     /// </summary>
-    public static HitTarget TargetOf(ushort hitId, Animal animal)
+    public HitTarget TargetOf(ushort hitId, Animal animal, float backSeconds = 0)
     {
         var box = animal.HitBox;
-        return new(hitId, animal.Position, Stance.Stand, animal.Yaw, HeadGuarded: true, Scale: box[1] / PlayerHitBox.StandHeight,
+        var target = new HitTarget(hitId, animal.Position, Stance.Stand, animal.Yaw, HeadGuarded: true, Scale: box[1] / PlayerHitBox.StandHeight,
             Box: new Vector3(box[0], box[1], box[2]), BoxAhead: animal.Def.HitBoxAhead);
+        // each look of a species (a variant) has its own shapes, baked from its own model
+        if (Shapes == null || PoseOf(animal.State) is not { } pose) return target;
+        return Shapes.At(animal.Def.ShapeKey(animal.Variant), pose, MathF.Max(0, animal.StateSeconds - backSeconds)) is { } s
+            ? target with { Shape = s.Shape, ShapePose = pose, ShapeFrame = s.Frame }
+            : target;
     }
 
     /// <summary>The animal with a hit id, null when it is gone.</summary>
     public Animal? AnimalOf(ushort hitId) => _byHit.TryGetValue(hitId, out var w) ? w.Animal : null;
 
-    /// <summary>Adds the living wild animals as hit targets.</summary>
-    public void AddTargets(List<HitTarget> into)
+    /// <summary>Adds the living wild animals as hit targets, each in the pose it had <paramref name="backSeconds"/> ago (what the shooter's screen showed).</summary>
+    public void AddTargets(List<HitTarget> into, float backSeconds = 0)
     {
         foreach (var w in _all)
-            if (w.Animal.Alive) into.Add(TargetOf(w.HitId, w.Animal));
+            if (w.Animal.Alive) into.Add(TargetOf(w.HitId, w.Animal, backSeconds));
     }
 
     /// <summary>The living wild animals with their hit ids, into <paramref name="into"/> (a copy: a hit may remove one).</summary>

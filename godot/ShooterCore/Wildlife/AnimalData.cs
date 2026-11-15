@@ -79,6 +79,15 @@ public sealed class AnimalDef
     /// <summary>The model of a variant index (0 or out of range: the base model).</summary>
     public string ModelOf(int variant) => variant >= 1 && variant <= Variants.Count ? Variants[variant - 1].Model : Model;
 
+    string[]? _shapeKeys;
+
+    /// <summary>The name a look's hit shapes have in animal_shapes.json: the species id for its own model, "species/variant" for another look.</summary>
+    public string ShapeKey(int variant)
+    {
+        _shapeKeys ??= Enumerable.Range(0, VariantCount).Select(v => v == 0 ? Id : $"{Id}/{Variants[v - 1].Id}").ToArray();
+        return variant >= 0 && variant < _shapeKeys.Length ? _shapeKeys[variant] : Id;
+    }
+
     /// <summary>The body box of a variant index (0 or out of range: the species' box; a variant without its own: the species' box).</summary>
     public IReadOnlyList<float> HitBoxOf(int variant) => variant >= 1 && variant <= Variants.Count && Variants[variant - 1].HitBox is { } b ? b : HitBox;
 

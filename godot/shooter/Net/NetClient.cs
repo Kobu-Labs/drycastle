@@ -15,7 +15,7 @@ public partial class NetClient : Node
     sealed class Pending { public NetInput Input; public MoveState After; }
     sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc, WadeAcc; public double RippleDue; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
         /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the driven vehicle and seat this player was last matched to (<see cref="SeatRiders"/>).</summary>
-        public float ShownYaw, ShownPitch; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
+        public float ShownYaw, ShownPitch; public bool Binoculars; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -329,7 +329,7 @@ public partial class NetClient : Node
             case LeaveMsg l:
                 _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
                 if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
-                ForgetWorn(l.PlayerId);
+                ForgetWorn(l.PlayerId); _binocularsBy.Remove(l.PlayerId);
                 ForgetStatus(l.PlayerId);
                 break;
             case EventMsg e:
@@ -476,7 +476,7 @@ public partial class NetClient : Node
             PixelSize = 0.005f, NoDepthTest = true,
         });
         World.AddChild(node);
-        return new Remote { Node = node, View = view };
+        return new Remote { Node = node, View = view, Binoculars = _binocularsBy.Contains(id) };
     }
 
     void OnSelf(EntityRecord rec, ushort ack)
@@ -734,6 +734,7 @@ public partial class NetClient : Node
         }
         r.LastPos = p; r.LastT = now;
         var weaponId = Weapons != null && r.Slot >= 1 && r.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[r.Slot - 1].Id : "";
+        r.View?.SetBinoculars(r.Binoculars);
         r.View?.Apply(r.Speed, now < r.FireUntil, r.State == EntityState.Dead, weaponId);
     }
 

@@ -42,6 +42,30 @@ public partial class NetServer
             if (o != c && o.Worn.Slots.Any(s => s != null)) Send(c, WornEvent(o));
     }
 
+    bool CarriesBinoculars(Client c)
+    {
+        for (var cell = 0; cell < Bag.Cells; cell++)
+            if (c.Bag.Get(cell) is { } stack && Items.At(stack.Item) is { Binoculars: true }) return true;
+        return false;
+    }
+
+    /// <summary>The player's binoculars are up or down now: everyone else is told when it changed, so their clients pose that player's character.</summary>
+    void SetBinoculars(Client c, bool up)
+    {
+        if (c.BinocularsUp == up) return;
+        c.BinocularsUp = up;
+        var msg = new EventMsg((byte)EventKind.BinocularsRaised, Binoculars.EncodeRaised(c.Id, up));
+        foreach (var o in _byId.Values)
+            if (o != c) Send(o, msg);
+    }
+
+    /// <summary>A joiner learns who holds the binoculars up.</summary>
+    void SendBinocularsOnJoin(Client c)
+    {
+        foreach (var o in _byId.Values)
+            if (o != c && o.BinocularsUp) Send(c, new EventMsg((byte)EventKind.BinocularsRaised, Binoculars.EncodeRaised(o.Id, true)));
+    }
+
     /// <summary>Sends a player their equipment and bag when either changed since the last send.</summary>
     void SendEquipmentIfChanged(Client c)
     {

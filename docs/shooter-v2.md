@@ -56,9 +56,12 @@ Mechanics added in v2:
   10 m steps (event 24, `SetZero`); the scope shows the zero and mil-dots at true angles. A bot's shots do not drop.
 - Hit diagram: a sniper kill of a wild animal sends the shooter event 25 (`HuntShot`: species, where the bullet entered the
   body box, distance, weapon); the HUD shows the species' side view (`scripts/make_animal_silhouettes.py`) with the entry
-  marked. A bullet tests a wild animal against its body box (`hit_box`, `hit_box_ahead`), no longer the scaled capsule.
+  marked. A bullet tests a wild animal against its hit shape (`AnimalShapes`, `animal_shapes.json` baked by
+  `scripts/make_animal_shapes.py`: the outline per pose in 5 cm cells, the eating pose by time), else its body box
+  (`hit_box`, `hit_box_ahead`); no longer the scaled capsule. The diagram draws that same shape.
 - Binoculars: a bag item (`binoculars` in items.json, `/give binoculars`), key B. Zoom and a distance readout measured on
-  the client (`NetClient.Binoculars.cs`); no wire traffic.
+  the client (`NetClient.Binoculars.cs`). Only up/down travels (events 26 `RaiseBinoculars`, 27 `BinocularsRaised`), so
+  the others see the pair held at the face (`ArmsReadyPose.Binoculars`, `CharacterView.SetBinoculars`).
 - Iron sights (hold zoom) ease the gun to centre and fade the crosshair; the sniper keeps its scope (commit bda2271).
 - Bullet holes (64-decal ring buffer, fade after 15 s) and sparks oriented along the surface normal on hitscan hits (commit 189b6bf).
 

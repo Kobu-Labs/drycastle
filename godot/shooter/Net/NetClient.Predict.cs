@@ -78,7 +78,8 @@ public partial class NetClient
             else if (cue.Exhale) Sfx.Play2D("breath.out", -8f);
         }
         var v = BreathState.VisualSway(Now, _breath.SwayDegrees(w));
-        _me.ViewSway = GameSettings.Current.ReduceMotion ? Vector2.Zero : new Vector2(v.X, v.Y);
+        // the binoculars are held steady: the weapon's sway is not theirs (it would show at their zoom with a sniper rifle in the hotbar)
+        _me.ViewSway = GameSettings.Current.ReduceMotion || _binoculars ? Vector2.Zero : new Vector2(v.X, v.Y);
     }
 
     /// <summary>The breath while scoped with a breath hold (the HUD reads it each frame for the key hint).</summary>

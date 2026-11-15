@@ -205,7 +205,7 @@ stateDiagram-v2
 ```
 
 - **Ready**: Not holding: the meter refills. Also the phase whenever the weapon is not scoped or has no breath hold.
-- **Holding**: The breath key is down, scoped, meter above 0 and not latched by a forced exhale: sway x0.3, the meter drains.
+- **Holding**: The breath key is down, scoped, meter above 0 and not latched by a forced exhale: no sway, the meter drains.
 - **Exhaled**: The meter ran out: sway x2.5 for breath_recover_seconds, the breath cannot be held; the key must be released before the next hold.
 
 ## Citizen.State

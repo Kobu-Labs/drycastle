@@ -96,7 +96,16 @@ public partial class NetClient
         if (_hud == null || m.Species >= AnimalData.Animals.Count) return;
         var def = AnimalData.Animals[m.Species];
         var weapon = Weapons != null && m.Weapon < Weapons.Weapons.Count ? WeaponName(Weapons.Weapons[m.Weapon].Id) : "";
-        _hud.ShowHuntShot(def.Name.ToUpperInvariant(), Silhouette(def.Id), m.Along, m.Height, m.RightFlank, Strings.F("hud.hunt.line", m.DistanceM, weapon));
+        // always the look's one standing picture, whatever the animal was doing: the hit is moved from the shape the server tested the bullet
+        // against (the pose it was in) onto the standing shape, head to head and body to body. Without shapes: the species' baked picture
+        var key = def.ShapeKey(m.Variant);
+        var standing = AnimalShapes.Frame(key, AnimalPose.Idle, 0);
+        var (along, height) = (m.Along, m.Height);
+        if (standing != null && m.Pose != HuntShot.NoShape && AnimalShapes.Frame(key, (AnimalPose)m.Pose, m.Frame) is { } hitOn)
+            (along, height) = hitOn.MapOnto(standing, m.Along, m.Height, m.Head);
+        else if (m.Pose == HuntShot.NoShape) standing = null; // tested against the body box: its picture, by the box
+        var line = Strings.F(m.Head ? "hud.hunt.line.head" : "hud.hunt.line", m.DistanceM, weapon);
+        _hud.ShowHuntShot(def.Name.ToUpperInvariant(), standing, standing == null ? Silhouette(def.Id) : null, along, height, line);
     }
 
     void HudHit(HitMsg h)

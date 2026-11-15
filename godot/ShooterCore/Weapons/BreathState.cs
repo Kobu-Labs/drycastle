@@ -14,8 +14,8 @@ namespace Drycastle.ShooterCore;
 /// </summary>
 public sealed class BreathState
 {
-    /// <summary>Sway multiplier while the breath is held (steady).</summary>
-    public const float SteadyFactor = 0.3f;
+    /// <summary>Sway multiplier while the breath is held: none, the scope is still (and the shot has no aim error).</summary>
+    public const float SteadyFactor = 0f;
     /// <summary>Sway multiplier right after a forced exhale (heavy sway).</summary>
     public const float ExhaledFactor = 2.5f;
 
@@ -32,7 +32,7 @@ public sealed class BreathState
         .Allow(BreathPhase.Holding, BreathPhase.Ready, BreathPhase.Exhaled)
         .Allow(BreathPhase.Exhaled, BreathPhase.Ready)
         .Note(BreathPhase.Ready, "Not holding: the meter refills. Also the phase whenever the weapon is not scoped or has no breath hold.")
-        .Note(BreathPhase.Holding, "The breath key is down, scoped, meter above 0 and not latched by a forced exhale: sway x0.3, the meter drains.")
+        .Note(BreathPhase.Holding, "The breath key is down, scoped, meter above 0 and not latched by a forced exhale: no sway, the meter drains.")
         .Note(BreathPhase.Exhaled, "The meter ran out: sway x2.5 for breath_recover_seconds, the breath cannot be held; the key must be released before the next hold.")
         .Build();
 
