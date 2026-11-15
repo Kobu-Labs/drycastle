@@ -49,6 +49,39 @@ public sealed class RoadPath
         return Vector2.Lerp(Points[i], Points[i + 1], len > 0 ? (s - _cum[i]) / len : 0);
     }
 
+    /// <summary>The part of the path from <paramref name="from"/> to <paramref name="to"/> metres along (clamped; empty when they are the same point).</summary>
+    public RoadPath Slice(float from, float to)
+    {
+        if (Points.Length == 0) return Empty;
+        from = Math.Clamp(from, 0, Length); to = Math.Clamp(to, 0, Length);
+        if (to <= from) return Empty;
+        var pts = new List<Vector2> { At(from) };
+        for (var i = 0; i < Points.Length; i++) if (_cum[i] > from && _cum[i] < to) pts.Add(Points[i]);
+        pts.Add(At(to));
+        return new RoadPath(pts);
+    }
+
+    /// <summary>The same way driven the other way round.</summary>
+    public RoadPath Reversed() => new(Points.Reverse().ToArray());
+
+    /// <summary>These paths joined end to start (the second one starts where the first ends, or the leg between is a straight bridge).</summary>
+    public RoadPath Then(RoadPath next) => new(Points.Concat(next.Points).ToArray());
+
+    /// <summary>The distance from <paramref name="p"/> to the nearest point of the path.</summary>
+    public float DistanceTo(Vector2 p)
+    {
+        if (Points.Length == 0) return float.PositiveInfinity;
+        var best = Vector2.Distance(p, Points[0]);
+        for (var i = 0; i + 1 < Points.Length; i++)
+        {
+            var a = Points[i]; var ab = Points[i + 1] - a;
+            var len2 = ab.LengthSquared();
+            var t = len2 > 0 ? Math.Clamp(Vector2.Dot(p - a, ab) / len2, 0f, 1f) : 0f;
+            best = MathF.Min(best, Vector2.Distance(p, a + ab * t));
+        }
+        return best;
+    }
+
     /// <summary>The heading at <paramref name="s"/> as a Godot yaw (0 faces -Z), from a point <paramref name="lookAheadM"/> further along (the last leg's heading at the end).</summary>
     public float YawAt(float s, float lookAheadM = 2f)
     {
@@ -300,7 +333,7 @@ public sealed class RoadGraph
         public bool Reaches(int node) => float.IsFinite(Dist[node]);
     }
 
-    public Distances Dijkstra(IEnumerable<(int Node, float Cost)> starts)
+    public Distances Dijkstra(IEnumerable<(int Node, float Cost)> starts, int bannedEdge = -1)
     {
         var d = new Distances { Dist = new float[_nodes.Count], PrevEdge = new int[_nodes.Count], PrevNode = new int[_nodes.Count] };
         Array.Fill(d.Dist, float.PositiveInfinity); Array.Fill(d.PrevEdge, -1); Array.Fill(d.PrevNode, -1);
@@ -312,6 +345,7 @@ public sealed class RoadGraph
             if (du > d.Dist[u]) continue;
             foreach (var (edge, v) in _adj[u])
             {
+                if (edge == bannedEdge) continue;
                 var nd = du + _edges[edge].Length;
                 if (nd >= d.Dist[v]) continue;
                 d.Dist[v] = nd; d.PrevEdge[v] = edge; d.PrevNode[v] = u;
@@ -345,6 +379,53 @@ public sealed class RoadGraph
             if (to == e.To) pts.AddRange(e.Pts); else pts.AddRange(e.Pts.Reverse());
         }
         return start;
+    }
+
+    // ---- routes between places ----
+
+    /// <summary>
+    /// The distances from a place on a road to every node, for a van that stands there: <paramref name="forward"/> true heads towards the edge's To end, false towards From, null either way
+    /// for free. Turning round costs <paramref name="uTurnPenaltyM"/> (infinity: never, and the edge it stands on is not driven again).
+    /// </summary>
+    public Distances DijkstraFrom(RoadPlace from, bool? forward, float uTurnPenaltyM)
+    {
+        var e = _edges[from.Edge];
+        var toCost = e.Length - from.At; var fromCost = from.At;
+        if (forward == true) fromCost += uTurnPenaltyM;
+        else if (forward == false) toCost += uTurnPenaltyM;
+        return Dijkstra(new[] { (e.To, toCost), (e.From, fromCost) }, forward != null && !float.IsFinite(uTurnPenaltyM) ? from.Edge : -1); // no turning back: the edge it stands on is not driven again
+    }
+
+    /// <summary>The way from a place to another over the roads (a van at <paramref name="from"/> heading <paramref name="forward"/>, see <see cref="DijkstraFrom"/>) with whether it drives the last edge From to To; null when there is none. <paramref name="d"/> is <see cref="DijkstraFrom"/> of the same arguments.</summary>
+    public (RoadPath Path, bool Forward)? RouteBetween(RoadPlace from, bool? forward, float uTurnPenaltyM, RoadPlace to, Distances d)
+    {
+        var fe = _edges[from.Edge]; var te = _edges[to.Edge];
+        var viaFrom = d.Dist[te.From] + to.At;
+        var viaTo = d.Dist[te.To] + (te.Length - to.At);
+        var direct = float.PositiveInfinity;
+        if (from.Edge == to.Edge)
+        {
+            var back = (forward == true && to.At < from.At) || (forward == false && to.At > from.At);
+            if (back && !float.IsFinite(uTurnPenaltyM)) return null; // a driver that may not turn back does not drive on and turn round at the node either
+            direct = MathF.Abs(to.At - from.At) + (back ? uTurnPenaltyM : 0f);
+        }
+        if (!float.IsFinite(direct) && !float.IsFinite(viaFrom) && !float.IsFinite(viaTo)) return null;
+        if (direct <= viaFrom && direct <= viaTo) return (new RoadPath(Sub(fe, from.At, to.At)), to.At >= from.At);
+        var fwd = viaFrom <= viaTo;
+        var end = fwd ? te.From : te.To;
+        var pts = new List<Vector2>();
+        var start = AppendNodePath(pts, d, end);
+        var lead = Sub(fe, from.At, start == fe.From ? 0 : fe.Length);
+        pts.InsertRange(0, lead);
+        pts.AddRange(fwd ? Sub(te, 0, to.At) : Sub(te, te.Length, to.At));
+        return (new RoadPath(pts), fwd);
+    }
+
+    /// <summary>The shortest way between two places, either direction free; null when they are not connected.</summary>
+    public (RoadPath Path, bool Forward)? RouteBetween(RoadPlace from, RoadPlace to)
+    {
+        var d = DijkstraFrom(from, null, 0);
+        return RouteBetween(from, null, 0, to, d);
     }
 
     // ---- routes ----
@@ -406,8 +487,8 @@ public sealed class RoadGraph
     }
 }
 
-/// <summary>Where a Raid's van goes: from the map edge (null for a van that is put at its stop) to the stop, and how it faces there.</summary>
-public sealed record RaidPlan(RoadEntry? Entry, RoadPlace Stop, Vector2 StopAt, bool Forward, float Yaw, RoadPath In, int DoorSide, int Targets, bool Fallback);
+/// <summary>Where a Raid's van goes: from the map edge (null for a van that is put at its stop) to the stop, and how it faces there. A plan over a fixed route (<see cref="RaidRoutes"/>) carries its way out (<see cref="Out"/>) and the route's name.</summary>
+public sealed record RaidPlan(RoadEntry? Entry, RoadPlace Stop, Vector2 StopAt, bool Forward, float Yaw, RoadPath In, int DoorSide, int Targets, bool Fallback, RoadPath? Out = null, string? RouteName = null);
 
 /// <summary>
 /// Picks a Raid's way (GLOSSARY "Raid van"), pure: a random road in from the map edge and the stop: the road point with the most stealable targets within the stop radius that no earlier

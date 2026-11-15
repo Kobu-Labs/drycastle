@@ -75,6 +75,15 @@ public sealed class ThievesFile : IVersioned
         Positive(r.NextRaidSeconds, "raids.next_raid_seconds"); NotNegative(r.GapSeconds, "raids.gap_seconds");
         if (r.PlayersPerExtra < 1 || r.MaxExtraThieves < 0 || r.MaxExtraEnforcers < 0) throw new DataFileException($"{F}: raids.players_per_extra is at least 1, the extras are not negative");
         if (g.Raid.Size + r.MaxExtraThieves + r.MaxExtraEnforcers > GangRules.MaxCrew) throw new DataFileException($"{F}: raids can grow a crew past {GangRules.MaxCrew} members");
+        if (r.RoutePick != "random") throw new DataFileException($"{F}: raids.route_pick is \"random\" (the only way so far)");
+        Positive(r.RouteSnapMaxM, "raids.route_snap_max_m"); Positive(r.ParkNearChurchM, "raids.park_near_church_m"); NotNegative(r.RouteStopSearchM, "raids.route_stop_search_m"); NotNegative(r.RouteMinRoadWidthM, "raids.route_min_road_width_m");
+        if (r.ParkCentre is { } pc && (pc.Length != 2 || !float.IsFinite(pc[0]) || !float.IsFinite(pc[1]))) throw new DataFileException($"{F}: raids.park_centre is [x, z]");
+        foreach (var route in r.Routes)
+        {
+            if (route.Name == "") throw new DataFileException($"{F}: a raids.routes entry has no name");
+            if (route.Waypoints.Count < 2) throw new DataFileException($"{F}: raids.routes '{route.Name}' needs at least two waypoints");
+            if (route.Waypoints.Any(w => w.Length != 2 || !float.IsFinite(w[0]) || !float.IsFinite(w[1]))) throw new DataFileException($"{F}: raids.routes '{route.Name}' waypoints are [x, z]");
+        }
         f.Audio.Validate(F);
         if (f.Reward.ChainItem == "") throw new DataFileException($"{F}: reward.chain_item names an item of items.json");
         Positive(f.Reward.ChainCorpseSeconds, "reward.chain_corpse_seconds");
@@ -190,6 +199,24 @@ public sealed class RaidsConfig
     public int MaxExtraThieves { get; set; } = 3;
     public int MaxExtraEnforcers { get; set; } = 1;
 
+    /// <summary>
+    /// The fixed routes a van comes in on and leaves by (<see cref="RaidRoutes"/>), in the map's local ground metres; empty: the old automatic choice (a random road at the map edge, the stop with the most targets).
+    /// Each Raid picks one at random (<see cref="RoutePick"/>), follows the roads through its waypoints, then on to a stop near the church (<see cref="ParkNearChurchM"/>) and leaves the same way back.
+    /// </summary>
+    public List<RaidRouteConfig> Routes { get; set; } = new();
+    /// <summary>How a Raid picks its route: "random" (the only way so far).</summary>
+    public string RoutePick { get; set; } = "random";
+    /// <summary>The roads a route may be driven over: at least this wide (0: all, footpaths too, because the owner drew the routes over them; the van's own <see cref="VanConfig.MinRoadWidthM"/> applies from the route's end to the stop).</summary>
+    public float RouteMinRoadWidthM { get; set; } = 0;
+    /// <summary>A waypoint farther than this from the road graph makes its route unusable (skipped, logged).</summary>
+    public float RouteSnapMaxM { get; set; } = 30;
+    /// <summary>The van parks on a road within this distance of the church (the door of church.json) or of <see cref="ParkCentre"/>, preferring the main road its route continues on.</summary>
+    public float ParkNearChurchM { get; set; } = 100;
+    /// <summary>Overrides the church as the centre the van parks near: [x, z] in the map's local ground metres (a map without church.json). Null: the church; with neither the van parks at the end of its route.</summary>
+    public float[]? ParkCentre { get; set; }
+    /// <summary>With no centre to park near (or no stop found near it): the van parks at the end of its route, or, when that spot fails, the nearest working spot back along it within this distance.</summary>
+    public float RouteStopSearchM { get; set; } = 40;
+
     /// <summary>The crew of a Raid for <paramref name="players"/> human players: the base counts of <see cref="GangConfig.Raid"/> plus the extras.</summary>
     public GangRaidCounts CrewFor(GangRaidCounts baseCrew, int players)
     {
@@ -198,6 +225,13 @@ public sealed class RaidsConfig
         var enforcers = Math.Min(extra - thieves, MaxExtraEnforcers);
         return new GangRaidCounts { GangBosses = baseCrew.GangBosses, Enforcers = baseCrew.Enforcers + enforcers, Thieves = baseCrew.Thieves + thieves };
     }
+}
+
+/// <summary>One fixed route of the Raids (<see cref="RaidsConfig.Routes"/>): a name and the waypoints [x, z] in the map's local ground metres (x east, z south), in the order the van drives them.</summary>
+public sealed class RaidRouteConfig
+{
+    public string Name { get; set; } = "";
+    public List<float[]> Waypoints { get; set; } = new();
 }
 
 /// <summary>The Raid van (GLOSSARY "Raid van", ADR 0021): a scripted entity that follows the road graph, not a vehicle. Lengths are metres, speeds metres per second, times seconds.</summary>

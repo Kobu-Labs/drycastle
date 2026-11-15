@@ -4,7 +4,7 @@ For the Thieves event (`docs/events/README.md`, "Thieves storming the village") 
 
 **1. Why not a vehicle.** A vehicle's seats hold player ids, its driver's client predicts it (ADR 0014), it can be entered, pushed, thrown by the Bigfoot, and it returns to its origin when abandoned. The van needs none of that and would have to switch each of them off. Nothing in the game drives a vehicle by itself, so `DriveModel` with a steering controller would be new work whose only result is a van that can get stuck.
 
-**2. What it is.** A world entity of its own wire type with a brain: it follows a polyline at a set speed, its height sampled from the ground. The polyline is a shortest path over a graph built from `roads.json` (nodes and edges are already there; nothing read them as a graph before), from the point where a road crosses the map edge to the stop the server picked, and back out.
+**2. What it is.** A world entity of its own wire type with a brain: it follows a polyline at a set speed, its height sampled from the ground. The polyline is a shortest path over a graph built from `roads.json` (nodes and edges are already there; nothing read them as a graph before), from the first waypoint of one of two fixed routes (set in `thieves.json`, picked at random) along its roads to a stop near the church the server picks, and back out the same roads; a map with no usable route falls back to a random road crossing the map edge and the stop with the most targets.
 
 **3. It cannot be stopped by standing in its way.** It does not brake for players or vehicles: it pushes through (a player is rammed as by a car, a vehicle is shoved aside) and honks. A van that waits can be body-blocked for ever; the event has no other clock on the way in.
 

@@ -115,7 +115,17 @@
   // max_extra_thieves), then Enforcers (up to max_extra_enforcers).
   "raids": {
     "count": 3, "max_vans": 2, "next_raid_seconds": 150, "gap_seconds": 8,
-    "players_per_extra": 2, "max_extra_thieves": 3, "max_extra_enforcers": 1
+    "players_per_extra": 2, "max_extra_thieves": 3, "max_extra_enforcers": 1,
+    // Fixed routes: the only ways a van comes in and leaves by (each Raid picks one at random; route_pick "random" is the only way). Waypoints [x, z] in the map's local ground metres (x east, z south = the
+    // axes of roads.json with y flipped), in the order driven. THE VILLAGE MAP'S: sketch points A B C and D E F G H of the map editor (S-JTSK minus the map origin, z = -(y - origin y)), placed by the owner.
+    // The van appears at the first waypoint, drives the roads through them (each snapped to the nearest road within route_snap_max_m, on roads of any width from route_min_road_width_m: route 2's G to H is a 1.5 m footpath), carries on from the last one along the main road to a stop within
+    // park_near_church_m of the church (church.json doorway; park_centre [x, z] overrides it, for a map without a church) and leaves by the same roads backwards, gone at the first waypoint. A route this map
+    // cannot drive is skipped (logged); none usable (or none listed): the old automatic way in from the map edge. Without a centre the van parks at the end of its route (route_stop_search_m back along it if the spot fails).
+    "route_pick": "random", "route_snap_max_m": 30, "route_min_road_width_m": 0, "park_near_church_m": 100, "route_stop_search_m": 40,
+    "routes": [
+      { "name": "route 1 (A B C)", "waypoints": [[191.61, 1663.37], [104.11, 890.37], [16.11, 122.37]] },
+      { "name": "route 2 (D E F G H)", "waypoints": [[-264.89, 1266.37], [-104.39, 820.37], [7.11, 354.87], [-36.39, 95.37], [10.11, 81.37]] }
+    ]
   },
   // The Raid van (ADR 0021): a scripted entity, not a vehicle. It never brakes for what is in its way. Hit count: a bullet 1, a headshot is a body hit, explosive and vehicle weapon the weights.
   "van": {

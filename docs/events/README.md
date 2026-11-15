@@ -263,7 +263,7 @@ Terms: **Raid** = one van and its crew. **Gang member** = Thief, Enforcer or Gan
 
 ### Van
 - Its own scripted entity, not a vehicle: nobody enters it, nothing pushes it, it pushes through whatever is in its way (rams like a car). Honks at random and near players.
-- Enters on a random road at the map edge, drives the road graph to a stop the server picks: the road point with the most stealable targets within ~80 m, not used by another van this event.
+- Enters and leaves along one of two fixed routes (sketch points the owner placed: A B C and D E F G H, `raids.routes` in `thieves.json`), each Raid picks one at random. It drives the roads through the waypoints, carries on along the main road the route continues on and parks on a road within 100 m of the church (a random working spot, not within `used_apart_m` of another van's stop), then leaves by the same roads backwards. No usable route: the old automatic way (a random road at the map edge, the stop with the most stealable targets within ~80 m).
 - 300 hits. Can be destroyed on the way in. Destroyed: that Raid is done, everything loaded goes back by itself, the crew flees on foot to the map edge.
 - Leaves when full (8 Loot), when its stay timer runs out (~4 min), or when its crew is dead. Surviving crew board first.
 - Crew appear at the side door when it opens and vanish into it when boarding; the door is animated, there is no sit or exit animation.

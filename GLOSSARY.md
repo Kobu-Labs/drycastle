@@ -436,11 +436,11 @@ The Event started with `/event thieves`: three Raids come to the village one aft
 _Avoid_: invasion, heist, robbery
 
 **Raid**:
-One van of the Thieves event and its crew of Gang members (a Gang boss, Enforcers, Thieves). The van drives in from the map edge, stops where the most targets are, the crew steals and loads Loot, and the van leaves when it is full, its stay timer runs out or its crew is dead. At most two Raids are in the village at once.
+One van of the Thieves event and its crew of Gang members (a Gang boss, Enforcers, Thieves). The van drives in along one of two fixed routes (picked at random), parks on a road within 100 m of the church, the crew steals and loads Loot, and the van leaves when it is full, its stay timer runs out or its crew is dead. At most two Raids are in the village at once.
 _Avoid_: wave, attack, round (a round is the match's)
 
 **Raid van**:
-The vehicle of a Raid: a scripted world entity that follows the road graph, not a vehicle a player can use (ADR 0021). Nobody enters it and nothing pushes it; it pushes through what is in its way and honks. It has a Hit count; destroyed, its Raid is over, everything loaded in it goes back to its place and its crew flees on foot. World entity wire type 55.
+The vehicle of a Raid: a scripted world entity that follows the road graph (in and out along one of the two fixed routes), not a vehicle a player can use (ADR 0021). Nobody enters it and nothing pushes it; it pushes through what is in its way and honks. It has a Hit count; destroyed, its Raid is over, everything loaded in it goes back to its place and its crew flees on foot. World entity wire type 55.
 _Avoid_: truck, transport, car
 
 **Gang member**:

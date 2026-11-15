@@ -54,6 +54,21 @@ public partial class NetServer
     /// <summary>The road graph of the map's roads.json, cut to the roads a van may use (nothing is read as a graph before the first Raid).</summary>
     RoadGraph RaidRoads => _raidRoads ??= Map != null ? RoadGraph.Parse(Map.RoadsJson, ThievesData.Van.MinRoadWidthM) : RoadGraph.Empty;
 
+    /// <summary>The fixed routes (<c>raids.routes</c>) resolved on the road graph, once: the ones this map cannot drive are logged and left out. Empty: the automatic choice.</summary>
+    List<ResolvedRoute> RaidRouteList => _raidRoutes ??= RaidRoutes.Resolve(RaidRouteRoads, RaidRoads, ThievesData.Raids.Routes, ThievesData.Raids.RouteSnapMaxM, s => GD.Print($"server: {s}"));
+    List<ResolvedRoute>? _raidRoutes;
+
+    /// <summary>Where a van parks near: <c>raids.park_centre</c>, else the church's doorway (church.json), else null (the end of its route).</summary>
+    NVec2? RaidParkCentre()
+    {
+        if (ThievesData.Raids.ParkCentre is { } c) return new NVec2(c[0], c[1]);
+        return MapChurch is { } church ? new NVec2(church.DoorwayPos.X, church.DoorwayPos.Z) : null;
+    }
+
+    /// <summary>The roads the fixed routes are driven over: every road wide enough (<c>raids.route_min_road_width_m</c>, 0: footpaths too).</summary>
+    RoadGraph RaidRouteRoads => _raidRouteRoads ??= Map != null ? RoadGraph.Parse(Map.RoadsJson, ThievesData.Raids.RouteMinRoadWidthM) : RoadGraph.Empty;
+    RoadGraph? _raidRouteRoads;
+
     /// <summary>The map's extent as the Raids see it (the parcels' box: where a road crosses it, a van comes in). Infinite on both sides without a map: no road crosses it.</summary>
     (NVec2 Min, NVec2 Max) RaidExtent()
     {
@@ -98,7 +113,8 @@ public partial class NetServer
     }
 
     /// <summary>
-    /// The next Raid is due (<see cref="ThievesEvent.Tick"/>): a road in from the map edge to the stop with the most targets, the way out, the van and its crew. When the map has no
+    /// The next Raid is due (<see cref="ThievesEvent.Tick"/>): along one of the fixed routes (<see cref="RaidRoutes"/>) to a stop near the church and back out the same way; with no usable
+    /// route the old automatic choice: a road in from the map edge to the stop with the most targets, the way out, the van and its crew. When the map has no
     /// usable road graph, no entry point or no stop that can be reached, the van is put parked at a road point near the admin instead and the server log says so.
     /// </summary>
     void LaunchRaid()
@@ -108,21 +124,29 @@ public partial class NetServer
         var roads = RaidRoads;
         var (min, max) = RaidExtent();
         var players = _byId.Values.Where(c => !c.IsBot && _match.Get(c.Id)?.Life == PlayerLife.Alive).Select(c => new NVec2(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Z)).ToList();
-        var plan = RaidPlanner.Plan(roads, min, max, RaidTargetPoints(), _raids.UsedStops, players, vc, _rng, AcceptRaidStop);
+        RaidPlan? plan = null;
+        var routes = RaidRouteList;
+        if (routes.Count > 0)
+        {
+            plan = RaidRoutes.Plan(roads, routes, RaidParkCentre(), _raids.UsedStops, vc, ThievesData.Raids, _rng, AcceptRaidStop);
+            if (plan == null) GD.Print($"server: Thieves Raid {_thieves!.Launched}/{_thieves.Total}: no fixed route has a stop the crew can step out at, the automatic way in is used");
+        }
+        else if (ThievesData.Raids.Routes.Count > 0) GD.Print($"server: Thieves Raid {_thieves!.Launched}/{_thieves.Total}: no fixed route is usable on this map, the automatic way in is used");
+        plan ??= RaidPlanner.Plan(roads, min, max, RaidTargetPoints(), _raids.UsedStops, players, vc, _rng, AcceptRaidStop);
         if (plan == null)
         {
             GD.Print($"server: Thieves Raid {_thieves!.Launched}/{_thieves.Total}: no way in from the map edge ({(roads.IsEmpty ? "no road graph" : "no entry point or no reachable stop")}), the van is parked near the admin instead (fallback)");
             plan = RaidPlanner.Fallback(roads, RaidNearPoint(), 25f, _rng, AcceptRaidStop);
         }
         if (plan == null) { GD.PrintErr($"server: Thieves Raid {_thieves!.Launched}/{_thieves.Total}: no road with the navigation mesh beside it was found, no van launched"); return; }
-        var exit = RaidPlanner.Exit(roads, plan, min, max, vc);
+        var exit = plan.Out ?? RaidPlanner.Exit(roads, plan, min, max, vc);
         var first = plan.In.IsEmpty ? plan.StopAt : plan.In.Start;
         var y = Map?.GroundHeightOrMean(first.X, first.Y) ?? 0f; // the map edge may lie past the terrain: the mean height then, and the van takes the ground's as soon as it has one
         var start = new NVec3(first.X, y, first.Y);
         var crew = ThievesData.Raids.CrewFor(ThievesData.Gang.Raid, RaidHumans());
         var raid = _raids.Launch(plan, exit, start, crew, p => N(_nav!.Snap(new Vector3(p.X, p.Y, p.Z))), RaidFleePoint, RaidGround);
         if (raid == null) return;
-        GD.Print($"server: Thieves Raid {_thieves!.Launched}/{_thieves.Total}: van {(plan.Fallback ? "parked (fallback)" : $"in from ({first.X:F0},{first.Y:F0}), {plan.In.Length:F0} m of road")} to the stop at ({plan.StopAt.X:F0},{plan.StopAt.Y:F0}) with {plan.Targets} targets near, crew of {crew.Size}");
+        GD.Print($"server: Thieves Raid {_thieves!.Launched}/{_thieves.Total}: van {(plan.Fallback ? "parked (fallback)" : plan.RouteName != null ? $"on route '{plan.RouteName}' from ({first.X:F0},{first.Y:F0}), {plan.In.Length:F0} m of road" : $"in from ({first.X:F0},{first.Y:F0}), {plan.In.Length:F0} m of road")} to the stop at ({plan.StopAt.X:F0},{plan.StopAt.Y:F0}) with {plan.Targets} targets near, crew of {crew.Size}");
     }
 
     /// <summary>Where a crew that flees heads for: the nearest point of the map's edge (a point far to the east without a map).</summary>
