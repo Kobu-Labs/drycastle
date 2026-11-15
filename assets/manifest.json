@@ -4264,6 +4264,54 @@
       "note": "Mains hum, a whizz sweep and random crackle clicks by scripts/make_shock_crackle.py (in the repo, deterministic); mono OGG, ~2.2 s"
     },
     {
+      "id": "sfx:drycastle-generated-sounds/casing_tink_1",
+      "name": "Casing clink, variant 1 (spent casing on a hard floor)",
+      "file": "drycastle-generated-sounds/casing_tink_1.ogg",
+      "used_for": "casing.tink",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-16",
+      "generated": true,
+      "note": "Three detuned metal modes by scripts/make_casing_clinks.py (in the repo, deterministic); mono OGG, ~0.2 s"
+    },
+    {
+      "id": "sfx:drycastle-generated-sounds/casing_tink_2",
+      "name": "Casing clink, variant 2 (spent casing on a hard floor)",
+      "file": "drycastle-generated-sounds/casing_tink_2.ogg",
+      "used_for": "casing.tink",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-16",
+      "generated": true,
+      "note": "Three detuned metal modes by scripts/make_casing_clinks.py (in the repo, deterministic); mono OGG, ~0.2 s"
+    },
+    {
+      "id": "sfx:drycastle-generated-sounds/casing_tink_3",
+      "name": "Casing clink, variant 3 (spent casing on a hard floor)",
+      "file": "drycastle-generated-sounds/casing_tink_3.ogg",
+      "used_for": "casing.tink",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-16",
+      "generated": true,
+      "note": "Three detuned metal modes by scripts/make_casing_clinks.py (in the repo, deterministic); mono OGG, ~0.2 s"
+    },
+    {
+      "id": "sfx:drycastle-generated-sounds/casing_tink_4",
+      "name": "Casing clink, variant 4 (spent casing on a hard floor)",
+      "file": "drycastle-generated-sounds/casing_tink_4.ogg",
+      "used_for": "casing.tink",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-16",
+      "generated": true,
+      "note": "Three detuned metal modes by scripts/make_casing_clinks.py (in the repo, deterministic); mono OGG, ~0.2 s"
+    },
+    {
       "id": "sfx:drycastle-generated-sounds/heartbeat",
       "name": "Heartbeat (sniper breath running out)",
       "file": "drycastle-generated-sounds/heartbeat.ogg",

@@ -86,6 +86,8 @@ public partial class NetClient
             else
             {
                 if (v.LastState != s.State) SetArmedLook(v, TurretRules.IsFlashing(s.State));
+                if (TurretRules.IsFlashing(s.State) && !TurretRules.IsFlashing(v.LastState) && TurretRules.IsArmed(s.State))
+                    CasingFx.Eject(Owned, v.Barrel.GlobalPosition, -v.Node.GlobalTransform.Basis.Z, CasingKind.Heavy); // a shot: the flash bit comes up
                 v.Smoke.Near(true);
                 v.Smoke.Set(VehicleDamage.Stage(s.Hp, 255f, TurretDamageStages));
             }

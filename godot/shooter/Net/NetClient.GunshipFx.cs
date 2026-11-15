@@ -25,11 +25,16 @@ public partial class NetClient
         if (!melee && !exactMuzzle) { if (sh.Shooter == _myId) _viewmodel?.Flash(0.4f); else if (_remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
         var originV = new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z);
         // a gunship's impact is its own message (OnGunshipImpacts), so its tracer does not draw one too: no 300 m cut-off for a long round
-        ShotFx.Spawn(Owned, exactMuzzle ? originV : MuzzleOf(sh.Shooter, originV, endV), endV, melee, impact: impact, speed: speed, length: length, width: width);
+        var muzzle = exactMuzzle ? originV : MuzzleOf(sh.Shooter, originV, endV);
+        ShotFx.Spawn(Owned, muzzle, endV, melee, impact: impact, speed: speed, length: length, width: width);
+        if (!melee && !exactMuzzle && CasingKindOf(sh.Weapon) is { } ck) CasingFx.Eject(Owned, muzzle, endV - muzzle, ck);
         var marks = !melee && (holes ?? !exactMuzzle);
         if (marks) ShotHole(originV, endV);
         if (marks) BulletSurfaceHit(originV, endV);
     }
+
+    /// <summary>The casing a weapon byte ejects: the jeep's roof gun a big one, a hand weapon by its category, none for melee, launchers and the rest.</summary>
+    CasingKind? CasingKindOf(byte weapon) => weapon == SpecialWeapons.VehicleGun ? CasingKind.Heavy : Weapons != null && weapon < Weapons.Weapons.Count ? CasingFx.KindOf(Weapons.Weapons[weapon]) : null;
 
     /// <summary>One gunner's tracers this tick: each one drawn as its own shot.</summary>
     void OnGunshipShots(GunshipShotsMsg m)
@@ -39,6 +44,7 @@ public partial class NetClient
         {
             OnShot(new ShotMsg(m.Owner, t.Weapon, t.Origin, t.End), t.SpeedMps > 0 ? t.SpeedMps : null, t.LengthM > 0 ? t.LengthM : null, impact: false, exactMuzzle: true, width: flak != null ? FlakTracerWidth : 1f, holes: flak == null);
             flak?.Flak?.Kick();
+            if (flak != null) CasingFx.Eject(Owned, G(t.Origin) - (G(t.End) - G(t.Origin)).Normalized() * 1.2f, G(t.End) - G(t.Origin), CasingKind.Shell, CarVelocity(flak)); // a 35 mm case leaves the breech, well behind the muzzle
         }
     }
 

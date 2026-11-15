@@ -228,6 +228,10 @@ _Avoid_: oxygen, stamina, air
 The fall of a sniper rifle's bullet under gravity, as if it flew at the weapon's `muzzle_velocity`. The hit is still instant (no travel time, no leading a moving target): only the path is a curve. Sniper rifles only; a bot's shots do not drop. Not the damage falloff (less damage with distance).
 _Avoid_: falloff (that is damage), ballistics (the thrown arcs of the Bigfoot)
 
+**Casing**:
+The spent case a gun throws out when it fires (#307): every gun that fires a round has one (a pistol's, a rifle's, a shotgun's red hull, the big case of a door gun, the jeep's roof gun or a sentry turret, the 35 mm case of the flak), a knife or a bazooka none. Seen by every client, drawn only near the camera, never sent over the network (each client throws its own from the same shot). It flies, bounces up to three times with a clink (`casing.tink`), lies on the floor for 20 s and fades. One that lands on a vehicle's roof goes after a second; it does not come to rest inside a vehicle (not yet, #316).
+_Avoid_: shell (a flak **shell** is the round, not the case), brass
+
 **Zero**:
 The distance at which a sniper rifle's bullet lands on the crosshair: short of it the bullet is above the crosshair, beyond it under. The player dials it with the mouse wheel while scoped, in 10 m steps from 50 m to the weapon's range; the scope shows it. One zero per weapon, back to the weapon's `zero_distance` (100 m) on death. The distance to the target is the zero to dial, uphill and downhill alike.
 _Avoid_: elevation, sight setting
