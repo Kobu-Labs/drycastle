@@ -247,16 +247,26 @@ public partial class NetServer : Node
         DropSilentPeers();
         IntelTick(); // a made-up event whose time is up leaves the intel screen
         PerfLap(ServerPerf.Ph.Housekeeping);
+        _audit?.Begin();
         _match.Update();
+        _audit?.Lap(0);
         BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
         GangsPrepare(); // the players the Gang members fight, and who each fights
+        _audit?.Lap(1);
         _match.Entities.Tick((float)delta);
+        _audit?.Lap(2);
         CitizensTick((float)delta);
+        _audit?.Lap(3);
         PetsTick((float)delta);
+        _audit?.Lap(4);
         WildlifeTick((float)delta);
+        _audit?.Lap(5);
         MassTick((float)delta); // the Holy Mass: its clock, the pastor, the seats
+        _audit?.Lap(6);
         ThievesTick((float)delta); // the Thieves event: its phase clock
+        _audit?.Lap(7);
         RozhlasTick((float)delta); // the village loudspeaker: the schedule and the hijack clock
+        _audit?.Lap(8);
         PerfLap(ServerPerf.Ph.Match);
         StreakTick((float)delta);
         PerfLap(ServerPerf.Ph.Streaks);
@@ -595,6 +605,7 @@ public partial class NetServer : Node
     void Tx(ENetPacketPeer peer, int chan, byte[] data, int flags)
     {
         if (_clients.TryGetValue(peer, out var c)) c.BytesOut += data.Length;
+        _audit?.Sent(chan, data);
         if (Sim != null) Sim.Send(peer, chan, data, flags); else peer.Send(chan, data, flags);
     }
 
@@ -1209,6 +1220,7 @@ public partial class NetServer : Node
         var world = _match.Entities.Snapshot();
         foreach (var c in _clients.Values)
             if (c.Joined) foreach (var pkt in c.WEnc.Encode(_tick, c.WAck, world)) Tx(c.Peer!, Wire.ChanData, pkt, 0);
+        AuditTick(world);
         LossLogStates(ents);
         _host.Flush();
     }

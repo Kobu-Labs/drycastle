@@ -110,6 +110,7 @@ public partial class NetServer
     {
         if (PerfOut.Length == 0) return;
         _perf = new ServerPerf(PerfOut);
+        _audit = new PerfAudit(PerfOut);
         GD.Print($"server: perf phases on, writing {PerfOut}/server-ticks.csv (--perf-out)");
     }
 
