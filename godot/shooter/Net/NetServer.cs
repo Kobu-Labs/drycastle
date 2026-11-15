@@ -192,6 +192,7 @@ public partial class NetServer : Node
         _corpses = new CorpseBook(_match.Entities);
         InitBigfoot(); // after the corpse book, which follows the same despawns
         InitPets();
+        InitWildlife();
         InitAircraft();
         BuildCarePackages();
         BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
@@ -237,6 +238,7 @@ public partial class NetServer : Node
         _match.Entities.Tick((float)delta);
         CitizensTick((float)delta);
         PetsTick((float)delta);
+        WildlifeTick((float)delta);
         MassTick((float)delta); // the Holy Mass: its clock, the pastor, the seats
         RozhlasTick((float)delta); // the village loudspeaker: the schedule and the hijack clock
         PerfLap(ServerPerf.Ph.Match);
@@ -626,7 +628,8 @@ public partial class NetServer : Node
     {
         _mass?.End(); // the Holy Mass does not outlive the round
         _crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
-        PetsRoundStart(); // the match cleared the pets' entities too; a new round moves new ones into the property groups
+        PetsRoundStart();
+        WildlifeRoundStart(); // the match cleared the pets' entities too; a new round moves new ones into the property groups
         WorkersAfterRoundReset(); // the Urad workers of a detour still open sit down again
         ResetCars();
         StatusRoundStart();
@@ -834,6 +837,7 @@ public partial class NetServer : Node
         if (BigfootTarget() is { } bigfoot) list.Add(bigfoot); // the Bigfoot is a hit target like a player (issue #264)
         _crowd?.AddTargets(list); // the citizens of the Holy Mass
         AddPetTargets(list);
+        AddWildlifeTargets(list);
         _workers?.AddTargets(list); // the workers of the Urad
         AddDemonTarget(list);
         PerfCounters.LiveTargetsCalls++; PerfCounters.LiveTargetsElems += list.Count;
@@ -1015,7 +1019,7 @@ public partial class NetServer : Node
         if (DemonRules.IsHitId(victim)) return DemonHit(attackerId, weaponIdx, damage); // the demon: a hit count, no hit points
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
-        if (CitizenRules.IsHitId(victim) || PetRules.IsHitId(victim)) // a citizen or a pet: the hit marker, but no assist, streak, refill or kill feed
+        if (CitizenRules.IsHitId(victim) || PetRules.IsHitId(victim) || WildlifeRules.IsHitId(victim)) // a citizen, a pet or a wild animal: the hit marker, but no assist, streak, refill or kill feed
         {
             if (_byId.TryGetValue(attackerId, out var shooter)) Send(shooter, new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attackerId, weaponIdx, (ushort)damage, head, backstab, r == DamageResult.Killed))));
             return r;

@@ -350,6 +350,20 @@ stateDiagram-v2
 - **Won**: Concluded: the reward is due.
 - **Despawned**: Timed out, cancelled or cleared by a round: no reward.
 
+## Flock.Behaviour
+
+What a flock of birds is doing: fly its tour of waypoints, or scatter away from a player or vehicle that came too close.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Cruise
+    Cruise --> Scatter
+    Scatter --> Cruise
+```
+
+- **Cruise**: Flies to a waypoint near home at the species' speed (no clock: a waypoint is reached by distance), then picks the next. A threat within scatter_radius_m sends it to Scatter.
+- **Scatter**: Flies away from the threat, faster and climbing (clock: scatter_seconds), then returns to Cruise and heads for its next waypoint.
+
 ## HelicopterGunner.Phase
 
 The helicopter's gun cycle: wait, warn the picked enemy, fire a burst, wait again.

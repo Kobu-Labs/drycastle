@@ -128,6 +128,7 @@ public partial class NetClient : Node
         InitMissile();
         InitTurrets();
         InitAnimals();
+        InitFlocks();
         InitPoop();
         InitBigfoot();
         InitCitizens();
@@ -243,6 +244,7 @@ public partial class NetClient : Node
         RenderCarePackages();
         RenderTurrets();
         RenderAnimals();
+        RenderFlocks(delta);
         RenderBigfoot();
         RenderCitizens();
         RenderDemon();

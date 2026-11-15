@@ -4,5 +4,5 @@ namespace Drycastle.ShooterCore;
 public static class NonEnemyTargets
 {
     /// <summary>True for a citizen, a pet or the demon: automatic guns (turrets, the helicopter's helpers) leave them alone.</summary>
-    public static bool IsNonEnemy(ushort hitId) => CitizenRules.IsHitId(hitId) || PetRules.IsHitId(hitId) || DemonRules.IsHitId(hitId);
+    public static bool IsNonEnemy(ushort hitId) => CitizenRules.IsHitId(hitId) || PetRules.IsHitId(hitId) || WildlifeRules.IsHitId(hitId) || DemonRules.IsHitId(hitId);
 }

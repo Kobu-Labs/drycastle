@@ -140,6 +140,7 @@ public partial class NetServer
         if (BigfootTarget() is { } bigfoot) list.Add(BigfootRewound(bigfoot, view)); // the Bigfoot is rewound like a player (issue #264)
         _crowd?.AddTargets(list); // citizens walk slowly: not rewound
         AddPetTargets(list); // so do pets
+        AddWildlifeTargets(list); // and wild animals
         _workers?.AddTargets(list); // the Urad workers sit still
         AddDemonTarget(list); // so does the demon on its wall
         return list;

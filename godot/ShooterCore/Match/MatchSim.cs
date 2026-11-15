@@ -159,6 +159,8 @@ public sealed class MatchSim
 
     /// <summary>The pets (property groups' animals), set by the server; a hit on a victim id in their range goes to them (no score, no kill feed).</summary>
     public IAnimalHits? Pets { get; set; }
+    /// <summary>The wild animals (ids from <see cref="WildlifeRules.FirstHitId"/>); null: none.</summary>
+    public IAnimalHits? Wildlife { get; set; }
 
     public void SetTargets(IReadOnlyList<TargetSpot> spots) => Targets = new TargetDummies(spots, TargetDummies.RespawnDelay);
     public event Action<MatchEvent>? Event;
@@ -312,6 +314,7 @@ public sealed class MatchSim
     {
         if (CitizenRules.IsHitId(victim)) return Phase == MatchPhase.Running && Citizens != null ? Citizens.Hit(victim, attacker, amount) : DamageResult.Ignored;
         if (PetRules.IsHitId(victim)) return Phase == MatchPhase.Running && Pets != null ? Pets.Hit(victim, attacker, amount) : DamageResult.Ignored;
+        if (WildlifeRules.IsHitId(victim)) return Phase == MatchPhase.Running && Wildlife != null ? Wildlife.Hit(victim, attacker, amount) : DamageResult.Ignored;
         if (TargetDummies.IsDummyId(victim)) return ApplyTargetDamage(victim, attacker, weapon, amount, cause);
         _players.TryGetValue(victim, out var found);
         if (DamageGates.FirstBlock(FactsOf(found, victim, attacker, amount, ignoreProtection)) != null) return DamageResult.Ignored; // the ladder and its order: DamageGates

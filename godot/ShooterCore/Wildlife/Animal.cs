@@ -105,6 +105,8 @@ public sealed class Animal : IWorldEntity
     public AnimalDef Def { get; }
     /// <summary>Where it spawned: the centre of its wandering.</summary>
     public Vector3 Home { get; }
+    /// <summary>The herd it belongs to (set by the keeper right after spawning): it wanders about the herd's anchor instead of its own home and the herd takes fright together. Null: it is on its own.</summary>
+    public Herd? Herd { get; internal set; }
     public Vector3 Position { get; private set; }
     /// <summary>Godot convention: 0 faces -Z.</summary>
     public float Yaw { get; private set; }
@@ -145,6 +147,7 @@ public sealed class Animal : IWorldEntity
             _fsm.Enter(AnimalState.Dead);
             Killer = attacker;
             if (Def.OneHit) Ended = WorldDespawnReason.Destroyed; // no corpse: gone now, the clients show a puff where it stood
+            if (Def.Flees) Herd?.Alarm(this, _world.PositionOf(attacker) ?? Position - Forward * 5); // the rest of the herd bolts from the shooter
             Died?.Invoke(this, attacker);
             return;
         }
@@ -213,7 +216,20 @@ public sealed class Animal : IWorldEntity
     void StartFleeing(bool startOver)
     {
         if (startOver) _bias = 0;
-        if (State != AnimalState.Flee) Go(AnimalState.Flee);
+        if (State == AnimalState.Flee) return;
+        Go(AnimalState.Flee);
+        Herd?.Alarm(this, _fleeFrom); // a herd runs together: the others take fright from the same spot
+    }
+
+    /// <summary>Another animal of the herd took fright (<see cref="Herd.Alarm"/>): runs from the same spot for a while, without alarming the herd again.</summary>
+    internal void Startle(Vector3 from)
+    {
+        if (Ended != null || !Alive || !Def.Flees || State == AnimalState.Flee) return;
+        _alarmFrom = from;
+        _fleeFrom = from;
+        _alarm = _file.AlarmSeconds;
+        _calm = 0;
+        Go(AnimalState.Flee);
     }
 
     /// <summary>Idle, eat, sit and bark: wait out the timer; standing then decides what to do next, anything else goes back to standing.</summary>
@@ -234,7 +250,9 @@ public sealed class Animal : IWorldEntity
     /// <summary>After standing: walk back home when it strayed, otherwise sit, bark, eat or walk to a spot near home. Stands on when no spot has ground.</summary>
     void Choose()
     {
-        var strayed = HorizontalDistance(Position, Home) > Def.WanderRadius;
+        var centre = Herd?.Anchor ?? Home;
+        var radius = Herd != null ? MathF.Max(Herd.Spread, _file.WanderMinM + 1) : Def.WanderRadius; // a herd member stays close to the herd, not to the species' whole range
+        var strayed = HorizontalDistance(Position, centre) > radius;
         if (!strayed && Def.Sit is { } sit && Roll(sit.Chance))
         {
             Go(AnimalState.Sit, Between(sit.MinSeconds, sit.MaxSeconds));
@@ -253,9 +271,9 @@ public sealed class Animal : IWorldEntity
         for (var attempt = 0; attempt < 4; attempt++)
         {
             var angle = Between(0, MathF.Tau);
-            var reach = strayed ? Between(0, Def.WanderRadius * 0.25f) : Between(_file.WanderMinM, Def.WanderRadius);
-            var x = Home.X + MathF.Cos(angle) * reach;
-            var z = Home.Z + MathF.Sin(angle) * reach;
+            var reach = strayed ? Between(0, radius * 0.25f) : Between(_file.WanderMinM, radius);
+            var x = centre.X + MathF.Cos(angle) * reach;
+            var z = centre.Z + MathF.Sin(angle) * reach;
             if (_world.GroundY(x, z) is not { } y) continue;
             _target = new Vector3(x, y, z);
             Go(AnimalState.Walk, HorizontalDistance(Position, _target) / Def.WalkSpeed * 2 + 3); // twice the straight walk and a margin; then it gives up

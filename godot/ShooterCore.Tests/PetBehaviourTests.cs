@@ -212,7 +212,7 @@ public class PetBehaviourTests
         foreach (var id in new[] { "hen", "rooster", "chick", "duck" }) Assert.True(animals.Find(id)!.OneHit && animals.Find(id)!.Sit == null && animals.Find(id)!.Bark == null, id);
         Assert.Null(animals.Find("chicken")); // the placeholder is gone
         Assert.All(new[] { "dog", "cat", "hen", "rooster", "chick", "duck" }, id => Assert.True(animals.Find(id)!.OneHit && !animals.Find(id)!.Flees, id));
-        Assert.All(animals.Animals.Where(a => a.Flees), a => Assert.False(a.OneHit, a.Id)); // wildlife keeps its hit points
+        Assert.All(animals.Animals.Where(a => a.Flees && a.Model.StartsWith("animated-animals/")), a => Assert.False(a.OneHit, a.Id)); // the animated-animals wildlife keeps its hit points (they have Death and hit clips); the Synty forest animals die like pets
     }
 
     // ---- the clip table ----
