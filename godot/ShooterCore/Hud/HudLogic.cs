@@ -51,14 +51,16 @@ public static class HudLogic
     public static (int Mine, int Theirs, byte MyTeam) TeamScores(byte myTeam, int scoreA, int scoreB) =>
         myTeam == Teams.B ? (scoreB, scoreA, Teams.B) : (scoreA, scoreB, Teams.A);
 
-    /// <summary>Scoreboard order in team deathmatch: the leading team first (ties: team A), then <see cref="Sort"/> inside each team.</summary>
-    public static List<ScoreRow> SortTeams(IReadOnlyList<ScoreRow> rows, int scoreA, int scoreB)
+    /// <summary>
+    /// Team deathmatch scoreboard: one table per team, each in <see cref="Sort"/> order. The local player's team is the left
+    /// table (team A for a player without a team), so the sides do not swap when the lead changes. Players without a team are apart.
+    /// </summary>
+    public static (byte LeftTeam, List<ScoreRow> Left, List<ScoreRow> Right, List<ScoreRow> NoTeam) SplitTeams(IReadOnlyList<ScoreRow> rows, byte myTeam)
     {
-        var l = new List<ScoreRow>(rows);
-        int Rank(byte t) => t == Teams.None ? 2 : (t == Teams.A) == (scoreA >= scoreB) ? 0 : 1;
-        l.Sort((a, b) => Rank(a.Team) != Rank(b.Team) ? Rank(a.Team).CompareTo(Rank(b.Team))
-            : a.Kills != b.Kills ? b.Kills.CompareTo(a.Kills) : a.Deaths != b.Deaths ? a.Deaths.CompareTo(b.Deaths) : a.Id.CompareTo(b.Id));
-        return l;
+        var left = myTeam == Teams.B ? Teams.B : Teams.A;
+        var right = Teams.Other(left);
+        var l = Sort(rows);
+        return (left, l.FindAll(r => r.Team == left), l.FindAll(r => r.Team == right), l.FindAll(r => r.Team != left && r.Team != right));
     }
 
     /// <summary>

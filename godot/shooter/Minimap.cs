@@ -34,7 +34,7 @@ public sealed partial class Minimap : Control
     int _side;               // texture side in texels (0 = not built)
     float _metresPerTexel = 1f;
     float _shownYaw;         // eased towards the markers' view yaw
-    /// <summary>Team deathmatch: pings use the enemy colour (orange) and friends are drawn, as outlined circles in the friend colour.</summary>
+    /// <summary>Team deathmatch: pings use the enemy colour (orange) and friends are drawn, as green circles.</summary>
     public bool TeamColours { get => _markers.TeamColours; set => _markers.TeamColours = value; }
     static readonly Vector2[] Arrow = { new(0, -ArrowHalf), new(ArrowHalf * 0.8f, ArrowHalf), new(0, ArrowHalf * 0.4f), new(-ArrowHalf * 0.8f, ArrowHalf) };
 
@@ -140,12 +140,11 @@ public sealed partial class Minimap : Control
                 DrawRect(new Rect2(p - new Vector2(4, 4), new Vector2(8, 8)), ShooterTheme.Warn);
             }
             if (TeamColours)
-                for (var i = 0; i < _markers.Friends.Count; i++) // a ring, not a disc: the shape differs from the filled enemy pings (never colour only)
+                for (var i = 0; i < _markers.Friends.Count; i++) // teammates: green discs, larger than the enemy pings
                 {
                     var p = centre + Screen(_markers.Friends[i], theta, pxPerMetre, inner);
                     DrawCircle(p, 7f, ShooterTheme.Outline);
-                    DrawCircle(p, 5f, ShooterTheme.Friend);
-                    DrawCircle(p, 2.5f, ShooterTheme.Outline);
+                    DrawCircle(p, 5f, ShooterTheme.Good);
                 }
             var pings = _markers.Pings.Positions(now);
             for (var i = 0; i < pings.Count; i++)

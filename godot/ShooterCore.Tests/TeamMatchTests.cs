@@ -292,6 +292,14 @@ public class TeamPaletteTests
         Assert.Equal(HudLogic.Relation.Neutral, HudLogic.RelationOf(Teams.None, Teams.B));
         Assert.Equal((5, 2, Teams.B), HudLogic.TeamScores(Teams.B, 2, 5));
         var rows = new[] { new ScoreRow(1, "a", 1, 0, 0, Teams.A), new ScoreRow(2, "b", 4, 0, 0, Teams.B), new ScoreRow(3, "c", 0, 0, 0, Teams.A) };
-        Assert.Equal(new ushort[] { 2, 1, 3 }, HudLogic.SortTeams(rows, 1, 4).Select(r => r.Id).ToArray());
+        rows = rows.Append(new ScoreRow(4, "d", 9, 0, 0)).ToArray();
+        var mineB = HudLogic.SplitTeams(rows, Teams.B);
+        Assert.Equal(Teams.B, mineB.LeftTeam);
+        Assert.Equal(new ushort[] { 2 }, mineB.Left.Select(r => r.Id).ToArray());
+        Assert.Equal(new ushort[] { 1, 3 }, mineB.Right.Select(r => r.Id).ToArray());
+        Assert.Equal(new ushort[] { 4 }, mineB.NoTeam.Select(r => r.Id).ToArray());
+        var none = HudLogic.SplitTeams(rows, Teams.None);
+        Assert.Equal(Teams.A, none.LeftTeam);
+        Assert.Equal(new ushort[] { 1, 3 }, none.Left.Select(r => r.Id).ToArray());
     }
 }

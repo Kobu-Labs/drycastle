@@ -544,7 +544,7 @@ public sealed partial class TacticalMap : Control
 
 /// <summary>
 /// The tactical map's marker shapes, drawn by the map and the minimap alike. Shapes differ as well as colours (never colour
-/// only): the player is an arrow in a ring, vehicles are squares, friends are rings, enemy pings are discs. These are the
+/// only): the player is an arrow in a ring, vehicles are squares, friends are green discs, enemy pings are smaller orange discs. These are the
 /// minimap's shapes, a little larger for the big sheet.
 /// </summary>
 static class MapGlyphs
@@ -557,12 +557,11 @@ static class MapGlyphs
         c.DrawRect(new Rect2(p - new Vector2(5, 5), new Vector2(10, 10)), ShooterTheme.Warn);
     }
 
-    /// <summary>A ring, not a disc: its shape differs from the filled enemy pings.</summary>
+    /// <summary>A teammate: a green disc (the map's own friend colour, <see cref="ShooterTheme.Good"/>), larger than the enemy pings.</summary>
     public static void Friend(CanvasItem c, Vector2 p)
     {
         c.DrawCircle(p, 10f, ShooterTheme.Outline);
-        c.DrawCircle(p, 8f, ShooterTheme.Friend);
-        c.DrawCircle(p, 4f, ShooterTheme.Outline);
+        c.DrawCircle(p, 8f, ShooterTheme.Good);
     }
 
     public static void Ping(CanvasItem c, Vector2 p, bool teamColours)
@@ -572,7 +571,7 @@ static class MapGlyphs
     }
 
     /// <summary>
-    /// A gunfire blip: a hollow diamond that swells and fades (a ring-like outline, so it is not the UAV's filled disc or the friends' ring;
+    /// A gunfire blip: a hollow diamond that swells and fades (a ring-like outline, so it is not the UAV's or the friends' filled disc;
     /// never colour only). Reduce-motion: fixed size, full opacity until it ends.
     /// </summary>
     public static void Blip(CanvasItem c, Vector2 p, GunfireBlip blip, bool reduceMotion, float scale)
