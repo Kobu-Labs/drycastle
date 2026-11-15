@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
@@ -14,9 +15,12 @@ namespace Drycastle.Shooter;
 /// steers round a tree itself). The bake takes a few seconds for the village, so the tiles are kept on disk under a key made
 /// from the map's manifest, its placed objects and lamps, and the settings: a server bakes once per map version.
 /// <para>
-/// Route queries run on the tick (the engine does not promise they are safe on another thread), a few milliseconds each
-/// across the village; the caller rations them. The engine's simple path call gives up after a fixed number of polygons
-/// and returns a route cut short, so the query object is used with that limit off.
+/// A route costs 13-16 ms across the village, too much for the tick, so the tick does not compute them: <see cref="Submit"/> hands a request to ONE background worker and
+/// the server collects the answers with <see cref="TryTake"/> at a fixed point of each tick, so they are applied on the tick thread and never from the worker. The map is
+/// static after <see cref="Build"/> (no async iterations, forced update), and the engine's path query is made for other threads: it takes a path query slot of the map's
+/// current iteration under a lock (Godot 4.7.2, <c>NavMap3D::query_path</c>), and the closest-point lookups read that iteration. The worker has its own query and result objects.
+/// The synchronous <see cref="Route"/> stays for the callers that wait (citizens, on the tick thread, with its own pair). The engine's simple path call gives up after a fixed
+/// number of polygons and returns a route cut short, so the query object is used with that limit off.
 /// </para>
 /// </summary>
 public sealed class BotNav
@@ -32,6 +36,85 @@ public sealed class BotNav
     readonly List<NavigationMesh> _meshes = new(); // kept alive: the regions hold them
     NavigationPathQueryParameters3D _query = null!;
     readonly NavigationPathQueryResult3D _result = new();
+
+    // ---- the route worker ----
+
+    /// <summary>Most requests out with the worker at once (queued or being worked on): about a tenth of a second of work, so a burst cannot make routes arrive seconds late.</summary>
+    public const int MaxInFlight = 8;
+
+    /// <summary>An answer: the ticket of the request, the points (empty when there is no mesh under the start) and how long the worker took.</summary>
+    public readonly record struct Answer(long Ticket, Vector3[] Path, double WorkMs);
+
+    readonly record struct Job(long Ticket, Vector3 From, Vector3 To);
+
+    readonly ConcurrentQueue<Job> _jobs = new();
+    readonly ConcurrentQueue<Answer> _answers = new();
+    readonly SemaphoreSlim _wake = new(0);
+    Thread? _worker;
+    volatile bool _stop;
+    int _inFlight; // submitted and not yet taken; the tick thread only
+
+    /// <summary>Requests out with the worker (including answers not taken yet).</summary>
+    public int InFlight => _inFlight;
+
+    /// <summary>Room for another request (<see cref="MaxInFlight"/>).</summary>
+    public bool HasRoom => _inFlight < MaxInFlight;
+
+    /// <summary>
+    /// Sends a route request to the worker; the answer comes back through <see cref="TryTake"/> carrying <paramref name="ticket"/> (unique per request, chosen by the caller, so it can
+    /// tell a stale answer). False (nothing sent) when <see cref="HasRoom"/> is false. Tick thread.
+    /// </summary>
+    public bool Submit(long ticket, Vector3 from, Vector3 to)
+    {
+        if (_inFlight >= MaxInFlight) return false;
+        _inFlight++;
+        if (_worker == null) { _answers.Enqueue(new Answer(ticket, Array.Empty<Vector3>(), 0)); return true; } // no mesh: no route, at once
+        _jobs.Enqueue(new Job(ticket, from, to));
+        _wake.Release();
+        return true;
+    }
+
+    /// <summary>The next finished route, oldest first. Called on the tick thread at one fixed point of the tick.</summary>
+    public bool TryTake(out Answer answer)
+    {
+        if (!_answers.TryDequeue(out answer)) return false;
+        _inFlight--;
+        return true;
+    }
+
+    void StartWorker()
+    {
+        _worker = new Thread(Work) { IsBackground = true, Name = "bot-nav" };
+        _worker.Start();
+    }
+
+    void Work()
+    {
+        // its own query and result: the tick thread's pair (Route) is never touched from here
+        var query = new NavigationPathQueryParameters3D { Map = _map, PathSearchMaxPolygons = 0 };
+        var result = new NavigationPathQueryResult3D();
+        while (true)
+        {
+            _wake.Wait();
+            if (_stop) break;
+            if (!_jobs.TryDequeue(out var job)) continue;
+            var t0 = Stopwatch.GetTimestamp();
+            Vector3[] path;
+            try { path = Query(_map, query, result, job.From, job.To); }
+            catch (Exception e) { GD.PrintErr($"server: bot navigation worker: {e.Message}"); path = Array.Empty<Vector3>(); }
+            _answers.Enqueue(new Answer(job.Ticket, path, Stopwatch.GetElapsedTime(t0).TotalMilliseconds));
+        }
+        query.Dispose();
+        result.Dispose();
+    }
+
+    static Vector3[] Query(Rid map, NavigationPathQueryParameters3D query, NavigationPathQueryResult3D result, Vector3 from, Vector3 to)
+    {
+        query.StartPosition = NavigationServer3D.MapGetClosestPoint(map, from);
+        query.TargetPosition = NavigationServer3D.MapGetClosestPoint(map, to);
+        NavigationServer3D.QueryPath(query, result);
+        return result.Path;
+    }
 
     public int Polygons { get; private set; }
     public int Tiles => _regions.Count;
@@ -73,6 +156,7 @@ public sealed class BotNav
         // physics frame would have synchronised it (the query then fails: "made before first map synchronization")
         NavigationServer3D.MapForceUpdate(nav._map);
         nav._query = new NavigationPathQueryParameters3D { Map = nav._map, PathSearchMaxPolygons = 0 };
+        if (nav._regions.Count > 0) nav.StartWorker();
         nav.BuildSeconds = sw.Elapsed.TotalSeconds;
         return nav;
     }
@@ -84,10 +168,7 @@ public sealed class BotNav
     public Vector3[] Route(Vector3 from, Vector3 to)
     {
         if (_regions.Count == 0) return Array.Empty<Vector3>();
-        _query.StartPosition = NavigationServer3D.MapGetClosestPoint(_map, from);
-        _query.TargetPosition = NavigationServer3D.MapGetClosestPoint(_map, to);
-        NavigationServer3D.QueryPath(_query, _result);
-        return _result.Path;
+        return Query(_map, _query, _result, from, to);
     }
 
     /// <summary>The point of the mesh nearest to <paramref name="p"/> (where a citizen stands when it leaves a house).</summary>
@@ -95,6 +176,13 @@ public sealed class BotNav
 
     public void Free()
     {
+        if (_worker != null) // stop it before the map goes: it may be inside a query
+        {
+            _stop = true;
+            _wake.Release();
+            _worker.Join();
+            _worker = null;
+        }
         foreach (var r in _regions) NavigationServer3D.FreeRid(r);
         _regions.Clear();
         _meshes.Clear();

@@ -249,6 +249,7 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Housekeeping);
         _audit?.Begin();
         _match.Update();
+        NavDrain(); // the routes the worker finished since the last tick, applied here and nowhere else
         _audit?.Lap(0);
         BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
         GangsPrepare(); // the players the Gang members fight, and who each fights

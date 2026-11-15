@@ -670,6 +670,88 @@ public class GangMemberTests
     }
 
     [Fact]
+    public void BeginRouteTakesTheOldestUnsentRequestOnceAndDeliverGivesItsAnswer()
+    {
+        var rig = new Rig();
+        var gang = rig.Gang();
+        var a = One(gang, GangMemberKind.Enforcer, 0, 0);
+        var b = One(gang, GangMemberKind.Enforcer, 1, 0);
+        b.Flee(new Vector3(50, 0, 0));
+        Assert.True(gang.BeginRoute(10, out var from, out _));
+        Assert.Equal(b.Position, from);
+        Assert.Equal(10, b.RouteTicket);
+        Assert.Equal(0, gang.RoutesWaiting);
+        Assert.Equal(1, gang.RoutesInFlight);
+        a.Flee(new Vector3(50, 0, 0));
+        Assert.True(gang.BeginRoute(11, out from, out _)); // b is out already: not offered again, a goes
+        Assert.Equal(a.Position, from);
+        Assert.False(gang.BeginRoute(12, out _, out _));
+        Assert.Equal(2, gang.RoutesInFlight);
+        Assert.True(gang.DeliverRoute(10, new[] { b.Position, new Vector3(50, 0, 0) }));
+        Assert.Equal(1, gang.RoutesInFlight);
+        Assert.Null(b.RouteRequest);
+        Assert.Equal(2, b.Route.Count);
+    }
+
+    [Fact]
+    public void ADeadMemberReceivesNoRouteAndAStaleTicketIsDropped()
+    {
+        var rig = new Rig();
+        var gang = rig.Gang();
+        var e = One(gang, GangMemberKind.Enforcer);
+        e.Flee(new Vector3(50, 0, 0));
+        Assert.True(gang.BeginRoute(20, out _, out _));
+        e.Kill(1);
+        Assert.False(gang.DeliverRoute(20, new[] { e.Position, new Vector3(50, 0, 0) }));
+        Assert.Empty(e.Route);
+        Assert.Equal(0, gang.RoutesInFlight);
+        // a request cleared and replaced while out: the old answer is not the new request's
+        var t = One(gang, GangMemberKind.Thief, 5, 0);
+        t.Board(new Vector3(50, 0, 0));
+        Assert.True(gang.BeginRoute(21, out _, out _));
+        t.Flee(new Vector3(-50, 0, 0)); // a new request (run for the edge): the ticket is forgotten
+        Assert.Equal(0, t.RouteTicket);
+        Assert.False(gang.DeliverRoute(21, new[] { t.Position, new Vector3(50, 0, 0) }));
+        Assert.Empty(t.Route);
+        Assert.NotNull(t.RouteRequest); // still waiting for its own
+        Assert.True(gang.BeginRoute(22, out _, out var to));
+        Assert.Equal(new Vector3(-50, 0, 0), to);
+    }
+
+    [Fact]
+    public void AMemberWhoseRouteNeverComesAsksAgainAfterTheGiveUpTime()
+    {
+        var rig = new Rig();
+        var gang = rig.Gang();
+        var e = One(gang, GangMemberKind.Enforcer);
+        e.Flee(new Vector3(50, 0, 0));
+        Assert.True(gang.BeginRoute(30, out _, out _));
+        Assert.False(gang.BeginRoute(31, out _, out _));
+        for (var t = 0f; t < GangMember.RouteLostSeconds + 0.5f; t += Dt) e.Tick(Dt);
+        Assert.Equal(0, e.RouteTicket);
+        Assert.True(gang.BeginRoute(32, out _, out _));
+        Assert.False(gang.DeliverRoute(30, new[] { e.Position, new Vector3(50, 0, 0) })); // the late answer to the first
+    }
+
+    [Fact]
+    public void TheRosterBeginsRoutesOfAllRaidsInTurnAndDeliversByTicket()
+    {
+        var rig = new Rig();
+        var g1 = rig.Gang();
+        var g2 = rig.Gang(100, 0);
+        var a = One(g1, GangMemberKind.Thief); a.Flee(new Vector3(50, 0, 0));
+        var b = One(g2, GangMemberKind.Thief, 100, 0); b.Flee(new Vector3(150, 0, 0));
+        Assert.True(rig.Roster.BeginRoute(1, out var f1, out _));
+        Assert.True(rig.Roster.BeginRoute(2, out var f2, out _));
+        Assert.NotEqual(f1, f2);
+        Assert.Equal(2, rig.Roster.RoutesInFlight);
+        Assert.False(rig.Roster.AnyRouteWaiting);
+        Assert.True(rig.Roster.DeliverRoute(2, new[] { f2, f2 + new Vector3(5, 0, 0) }));
+        Assert.False(rig.Roster.DeliverRoute(2, new[] { f2, f2 }));
+        Assert.Equal(1, rig.Roster.RoutesInFlight);
+    }
+
+    [Fact]
     public void TheRosterTakesTurnsBetweenRaidsAndNeverServesTwoInACall()
     {
         var rig = new Rig();

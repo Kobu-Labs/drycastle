@@ -15,14 +15,13 @@ namespace Drycastle.Shooter;
 /// (<see cref="RunOverGang"/>). A member's blow reaches a player through <see cref="Deal"/> under <see cref="SpecialWeapons.Gang"/>.
 /// </para>
 /// <para>
-/// The routes they walk come from the same navigation mesh as the bots'; one is served a tick across all of them (<see cref="TakeNavTurn"/>).
+/// The routes they walk come from the same navigation mesh as the bots'; the route worker finds them, the oldest request first (<see cref="GangsTick"/>), the answers are applied at <see cref="NavDrain"/>.
 /// </para>
 /// </summary>
 public partial class NetServer
 {
     GangRoster? _gangs;
     readonly List<GangPlayer> _gangPlayers = new();
-    uint _navTurnTick;
     double _gangsAt;
 
     /// <summary>The Raids of the Thieves event (null until <c>_Ready</c>). Ticket 03 makes one per van; ticket 04 reads their members.</summary>
@@ -68,25 +67,20 @@ public partial class NetServer
     }
 
     /// <summary>
-    /// Once a tick after the entities tick: one waiting route is served, if the tick's ration is still free (<see cref="TakeNavTurn"/>). The members ask for routes when
-    /// they chase, follow or wander; the oldest request goes first.
+    /// Once a tick after the entities tick: waiting route requests go to the worker, the oldest first, while the Gang's share of it (<see cref="MaxGangRoutesInFlight"/>) and
+    /// the worker have room. The members ask for routes when they chase, follow or wander; a request goes out once, its answer is applied at <see cref="NavDrain"/>.
     /// </summary>
     void GangsTick()
     {
-        if (_gangs == null || _nav == null || !_gangs.AnyRouteWaiting || !TakeNavTurn()) return;
-        _gangs.ServeRoute((from, to) =>
+        if (_gangs == null || _nav == null || !_gangs.AnyRouteWaiting) return;
+        var sent = _gangs.RoutesInFlight;
+        while (sent < MaxGangRoutesInFlight && _nav.HasRoom)
         {
-            var route = _nav.Route(new Vector3(from.X, from.Y, from.Z), new Vector3(to.X, to.Y, to.Z));
-            return route.Length < 2 ? Array.Empty<NVec3>() : route.Select(N).ToArray();
-        });
-    }
-
-    /// <summary>The navigation ration: one route a tick for everyone who walks the mesh (bots, Gang members). True for the first caller of a tick.</summary>
-    bool TakeNavTurn()
-    {
-        if (_navTurnTick == _tick) return false;
-        _navTurnTick = _tick;
-        return true;
+            var ticket = NextNavTicket();
+            if (!_gangs.BeginRoute(ticket, out var from, out var to)) break;
+            _nav.Submit(ticket, new Vector3(from.X, from.Y, from.Z), new Vector3(to.X, to.Y, to.Z));
+            sent++;
+        }
     }
 
     /// <summary>The living members as hit targets, only while damage can apply to them (<see cref="MatchSim.ApplyDamage"/> ignores them outside Running). With a view tick: where the shooter saw them.</summary>

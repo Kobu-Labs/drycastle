@@ -18,8 +18,9 @@ namespace Drycastle.Shooter;
 /// </para>
 /// <para>
 /// Moving: each bot heads for the nearest other living player (<see cref="BotGoal"/>) along a route from
-/// <see cref="BotNav"/>, the navigation mesh baked from the map colliders at start. Routes cost milliseconds, so one is
-/// answered per tick, the bots taking turns. If the mesh cannot be built the bots stand where they spawn.
+/// <see cref="BotNav"/>, the navigation mesh baked from the map colliders at start. Routes cost 13-16 ms, so a background worker finds
+/// them: a bot sends its request (<see cref="ServeBotRoute"/>), the answers are applied on the tick thread at one point of the tick (<see cref="NavDrain"/>). If the
+/// mesh cannot be built the bots stand where they spawn.
 /// </para>
 /// </summary>
 public partial class NetServer
@@ -56,8 +57,46 @@ public partial class NetServer
     public string MapDir = "";
     public string NavCacheDir = "";
     BotNav? _nav;
-    int _navTurn, _navRoutes;
-    double _navMs, _navMaxMs, _navReportAt;
+    int _navTurn, _navRoutes, _navDropped;
+    double _navMs, _navMaxMs, _navWaitMs, _navWaitMaxMs, _navReportAt;
+    long _navTicket;
+
+    /// <summary>Most routes in flight per kind of asker, so bots and Gang members share the worker (<see cref="BotNav.MaxInFlight"/> is the total).</summary>
+    const int MaxBotRoutesInFlight = 4, MaxGangRoutesInFlight = 4;
+
+    /// <summary>A ticket for a route request: the microsecond clock, kept strictly rising, so it is unique and the answer's age is read off it.</summary>
+    long NextNavTicket() => _navTicket = Math.Max(_navTicket + 1, (long)Time.GetTicksUsec());
+
+    /// <summary>The route worker's finished answers, at one fixed point of the tick (before the entities tick): each goes to the bot or Gang member that asked, or is dropped when none wants it any more.</summary>
+    void NavDrain()
+    {
+        if (_nav == null) return;
+        while (_nav.TryTake(out var a))
+        {
+            var route = ToN(a.Path);
+            var applied = false;
+            foreach (var b in _byId.Values)
+            {
+                if (!b.IsBot || b.Brain!.PathTicket != a.Ticket) continue;
+                applied = b.BotWasAlive && b.Brain.AcceptPath(a.Ticket, route, N(b.Body.GlobalPosition), _elapsed);
+                break;
+            }
+            if (!applied && _gangs != null) applied = _gangs.DeliverRoute(a.Ticket, route);
+            if (!applied) { _navDropped++; continue; }
+            var wait = ((long)Time.GetTicksUsec() - a.Ticket) / 1000.0;
+            _navRoutes++; _navMs += a.WorkMs; _navMaxMs = Math.Max(_navMaxMs, a.WorkMs);
+            _navWaitMs += wait; _navWaitMaxMs = Math.Max(_navWaitMaxMs, wait);
+        }
+    }
+
+    /// <summary>A route of the worker as the pure side wants it; fewer than two points is no route.</summary>
+    static NVec3[] ToN(Vector3[] route)
+    {
+        if (route.Length < 2) return Array.Empty<NVec3>();
+        var r = new NVec3[route.Length];
+        for (var i = 0; i < r.Length; i++) r[i] = N(route[i]);
+        return r;
+    }
 
     bool _navTried;
 
@@ -97,28 +136,29 @@ public partial class NetServer
         return best;
     }
 
-    /// <summary>Answers one waiting route request, the bots in turn, and logs the cost of the routes every ten seconds.</summary>
+    /// <summary>Sends the waiting route requests to the worker (a bot with one out sends no second; the bots in turn, at most <see cref="MaxBotRoutesInFlight"/> out), and logs the cost of the routes every ten seconds.</summary>
     void ServeBotRoute(List<Client> bots)
     {
         if (_nav == null) return;
-        for (var k = 0; k < bots.Count; k++)
+        var sent = 0;
+        foreach (var b in bots) if (b.Brain!.PathInFlight) sent++;
+        var start = _navTurn;
+        for (var k = 0; k < bots.Count && sent < MaxBotRoutesInFlight && _nav.HasRoom; k++)
         {
-            var b = bots[(_navTurn + k) % bots.Count];
-            if (!b.BotWasAlive || b.Brain!.PathRequest is not { } want) continue;
-            if (!TakeNavTurn()) break; // a Gang member's route took this tick's ration
-            _navTurn = (_navTurn + k + 1) % bots.Count;
-            var t0 = Time.GetTicksUsec();
-            var route = _nav.Route(new Vector3(want.From.X, want.From.Y, want.From.Z), new Vector3(want.To.X, want.To.Y, want.To.Z));
-            var ms = (Time.GetTicksUsec() - t0) / 1000.0;
-            b.Brain.SetPath(route.Select(N).ToList(), want.To, _elapsed);
-            _navRoutes++; _navMs += ms; _navMaxMs = Math.Max(_navMaxMs, ms);
-            break;
+            var b = bots[(start + k) % bots.Count];
+            if (!b.BotWasAlive || b.Brain!.PathInFlight || b.Brain.PathRequest is not { } want) continue;
+            var ticket = NextNavTicket();
+            _nav.Submit(ticket, new Vector3(want.From.X, want.From.Y, want.From.Z), new Vector3(want.To.X, want.To.Y, want.To.Z));
+            b.Brain.PathSent(ticket, _elapsed);
+            _navTurn = (start + k + 1) % bots.Count;
+            sent++;
         }
         if (_elapsed < _navReportAt) return;
-        if (_navRoutes > 0) GD.Print($"server: bots {bots.Count}, routes {_navRoutes} in 10 s, mean {_navMs / _navRoutes:F1} ms, max {_navMaxMs:F1} ms");
+        if (_navRoutes > 0 || _navDropped > 0)
+            GD.Print($"server: bots {bots.Count}, routes {_navRoutes} in 10 s (dropped {_navDropped}), worker mean {_navMs / Math.Max(1, _navRoutes):F1} ms max {_navMaxMs:F1} ms, wait to applied mean {_navWaitMs / Math.Max(1, _navRoutes):F1} ms max {_navWaitMaxMs:F1} ms");
         // what each bot is doing, and how often it has been blocked this life: the first thing to read when bots misbehave
         GD.Print($"server: bots: {string.Join(", ", bots.Select(b => b.BotWasAlive ? $"{b.Name[4..]} {b.Brain!.Status}{(b.Brain.Stuck > 0 ? $" stuck x{b.Brain.Stuck}" : "")}" : $"{b.Name[4..]} dead"))}");
-        _navReportAt = _elapsed + 10; _navRoutes = 0; _navMs = _navMaxMs = 0;
+        _navReportAt = _elapsed + 10; _navRoutes = _navDropped = 0; _navMs = _navMaxMs = _navWaitMs = _navWaitMaxMs = 0;
     }
 
     /// <summary>Nothing that stops a bullet between the two points: world, vehicles and shot-only cover, as for a shot. Players do not block.</summary>

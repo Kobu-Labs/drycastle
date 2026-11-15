@@ -112,6 +112,39 @@ public sealed class BotBrain
     /// <summary>The route the bot wants (from its feet to its goal), or null. The host answers with <see cref="SetPath"/>; it is kept up to date while it waits.</summary>
     public (Vector3 From, Vector3 To)? PathRequest { get; private set; }
 
+    long _ticket;
+    PendingAnswer _asked;
+    Vector3 _askedTo;
+    /// <summary>Seconds after which a request the route worker never answered is offered again.</summary>
+    public const double AskGiveUpS = 5;
+
+    /// <summary>The request is out with the route worker (under <see cref="PathTicket"/>): the host must not send it again.</summary>
+    public bool PathInFlight => _ticket != 0;
+    public long PathTicket => _ticket;
+
+    /// <summary>The host sent the current <see cref="PathRequest"/> to the route worker under <paramref name="ticket"/> (not 0).</summary>
+    public void PathSent(long ticket, double now)
+    {
+        if (PathRequest is not { } want) return;
+        _ticket = ticket; _askedTo = want.To;
+        _asked.Begin(now);
+    }
+
+    /// <summary>
+    /// The worker's answer for <paramref name="ticket"/>. Dropped (false) when it is not the request out now (a new life, or given up on), when the bot no longer asks for a route, or
+    /// when its goal has moved by more than <see cref="BotTuning.RepathGoalMovedM"/> since: it asks again. Otherwise it is the route, from the point
+    /// after the one the bot has run past (<paramref name="feet"/>: the answer is some ticks old).
+    /// </summary>
+    public bool AcceptPath(long ticket, IReadOnlyList<Vector3> points, Vector3 feet, double now)
+    {
+        if (ticket == 0 || ticket != _ticket) return false;
+        _ticket = 0; _asked.End();
+        if (PathRequest is not { } want || Flat(want.To - _askedTo) > _t.RepathGoalMovedM) return false;
+        SetPath(points, _askedTo, now);
+        if (points.Count > 2 && Flat(points[1] - feet) < Flat(points[1] - points[0])) _wp = 1;
+        return true;
+    }
+
     /// <summary>The answer to <see cref="PathRequest"/>: the points to walk, in order, for the goal <paramref name="to"/>. An empty route is allowed (nowhere to go).</summary>
     public void SetPath(IReadOnlyList<Vector3> points, Vector3 to, double now)
     {
@@ -143,6 +176,7 @@ public sealed class BotBrain
         _pauseUntil = now;
         _scanDir = _rng.Next(2) == 0 ? 1f : -1f;
         _goal = null; _path = null; PathRequest = null;
+        _ticket = 0; _asked.End(); // an answer to the last life's request is stale
         _pathAt = double.NegativeInfinity;
         _wasTravelling = false; _escapeUntil = now;
         Status = "idle"; Stuck = 0;
@@ -219,6 +253,7 @@ public sealed class BotBrain
     {
         moveX = moveY = 0;
         if (_goal is not { } goal) { _path = null; PathRequest = null; Status = "idle"; return false; }
+        if (_asked.GiveUp(now, AskGiveUpS)) _ticket = 0; // never answered: asked again below
         var toGoal = Flat(goal - self.Feet);
         if (toGoal <= _t.ArriveM) { PathRequest = null; Status = "arrived"; return false; }
 

@@ -239,6 +239,90 @@ public class BotBrainTests
         Assert.All(cmds, c => Assert.Equal(0f, c.MoveY));
     }
 
+    // ---- the route worker: a request goes out once, its answer comes back later ----
+
+    /// <summary>A bot that asked for a route (goal 50 m ahead) and sent it to the worker under ticket 5.</summary>
+    static (BotBrain B, World W, Vector3 Feet) Sent(double now = 0.5)
+    {
+        var b = Brain();
+        var w = new World { GoalPos = new Vector3(0, 0, -50) };
+        var feet = Vector3.Zero;
+        Walk(b, w, now, ref feet);
+        Assert.NotNull(b.PathRequest);
+        Assert.False(b.PathInFlight);
+        b.PathSent(5, now);
+        return (b, w, feet);
+    }
+
+    [Fact]
+    public void AnInFlightRequestIsNotSentAgainAndItsAnswerIsTakenOnce()
+    {
+        var (b, _, feet) = Sent();
+        Assert.True(b.PathInFlight);
+        Assert.Equal(5, b.PathTicket);
+        Assert.False(b.AcceptPath(6, new[] { feet, new Vector3(0, 0, -50) }, feet, 1)); // another ticket: not its answer
+        Assert.True(b.PathInFlight);
+        Assert.True(b.AcceptPath(5, new[] { feet, new Vector3(0, 0, -50) }, feet, 1));
+        Assert.False(b.PathInFlight);
+        Assert.Null(b.PathRequest);
+        Assert.False(b.AcceptPath(5, new[] { feet, new Vector3(0, 0, -50) }, feet, 1)); // the same answer twice
+    }
+
+    [Fact]
+    public void AnAnswerFromBeforeANewLifeIsDropped()
+    {
+        var (b, _, feet) = Sent();
+        b.Reset(0, 1);
+        Assert.False(b.PathInFlight);
+        Assert.False(b.AcceptPath(5, new[] { feet, new Vector3(0, 0, -50) }, feet, 1));
+        Assert.Null(b.PathRequest);
+    }
+
+    [Fact]
+    public void AnAnswerForAGoalThatHasMovedAwayIsDroppedAndTheBotAsksAgain()
+    {
+        var (b, w, feet) = Sent();
+        w.GoalPos = new Vector3(60, 0, -50); // 60 m aside: far more than the repath distance
+        Walk(b, w, 0.2, ref feet, start: 0.5);
+        Assert.False(b.AcceptPath(5, new[] { feet, new Vector3(0, 0, -50) }, feet, 1));
+        Assert.False(b.PathInFlight); // free to send again
+        Assert.NotNull(b.PathRequest);
+        Assert.Equal(new Vector3(60, 0, -50), b.PathRequest!.Value.To);
+    }
+
+    [Fact]
+    public void AnAnswerForABotThatNoLongerWantsARouteIsDropped()
+    {
+        var (b, w, feet) = Sent();
+        w.GoalPos = null; // alone: nowhere to go
+        Walk(b, w, 0.2, ref feet, start: 0.5);
+        Assert.Null(b.PathRequest);
+        Assert.False(b.AcceptPath(5, new[] { feet, new Vector3(0, 0, -50) }, feet, 1));
+        Assert.False(b.PathInFlight);
+    }
+
+    [Fact]
+    public void ARequestTheWorkerNeverAnswersIsGivenUp()
+    {
+        var (b, w, feet) = Sent();
+        Walk(b, w, BotBrain.AskGiveUpS - 1, ref feet, start: 0.5);
+        Assert.True(b.PathInFlight);
+        Walk(b, w, 2, ref feet, start: 0.5 + BotBrain.AskGiveUpS - 1);
+        Assert.False(b.PathInFlight);
+        Assert.NotNull(b.PathRequest); // it can ask again
+    }
+
+    [Fact]
+    public void ALateAnswerStartsAtTheNextPointWhenTheBotHasRunPastTheFirst()
+    {
+        var (b, w, _) = Sent();
+        var feet = new Vector3(0, 0, -6); // ran 6 m ahead while the worker thought
+        Assert.True(b.AcceptPath(5, new[] { Vector3.Zero, new Vector3(0, 0, -20), new Vector3(0, 0, -50) }, feet, 1));
+        var cmds = Walk(b, w, 0.3, ref feet, start: 1);
+        Assert.Contains(cmds, c => c.MoveY > 0.5f); // straight on: not turning back for the point it passed
+        Assert.True(feet.Z < -6f);
+    }
+
     [Fact]
     public void ItWalksARouteRoundACornerAndStopsWhenItIsThere()
     {

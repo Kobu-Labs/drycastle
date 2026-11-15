@@ -231,25 +231,54 @@ public sealed class ThiefGang : IGangHits, IDisposable
     }
 
     /// <summary>
-    /// Answers one waiting route request, the one that has waited longest, with <paramref name="route"/> (from, to: the points to walk, empty for none). True when one was
-    /// served: the server counts it against the tick's ration (<see cref="GangRoster.ServeRoute"/>; the bots' routes cost the same milliseconds).
+    /// Takes the waiting route request that has waited longest and not gone out yet: it is marked as sent under <paramref name="ticket"/> (not offered again until it is answered or
+    /// the worker is given up on) and its endpoints are returned. False when none waits. The living only: a dead member's request is not served.
     /// </summary>
-    public bool ServeRoute(Func<Vector3, Vector3, IReadOnlyList<Vector3>> route)
+    public bool BeginRoute(long ticket, out Vector3 from, out Vector3 to)
     {
         GangMember? best = null;
         foreach (var m in _members)
         {
-            if (m.RouteRequest == null) continue;
+            if (m.RouteRequest == null || m.RouteTicket != 0 || !m.Alive || m.Ended != null) continue;
             if (m.RequestSeq == 0) m.RequestSeq = ++_seq; // queued now: the order of the first sight is the order of the queue
             if (best == null || m.RequestSeq < best.RequestSeq) best = m;
         }
-        if (best?.RouteRequest is not { } want) return false;
-        best.SetRoute(route(want.From, want.To));
+        if (best?.RouteRequest is not { } want) { from = to = default; return false; }
+        best.RouteSent(ticket);
+        from = want.From; to = want.To;
         return true;
     }
 
-    /// <summary>Members waiting for a route.</summary>
-    public int RoutesWaiting => _members.Count(m => m.RouteRequest != null);
+    /// <summary>
+    /// Gives the worker's answer for <paramref name="ticket"/> (the points to walk, empty for none) to the member that asked. False, and nothing given, when no member holds the ticket
+    /// any more (it was cleared or replaced, or the member is gone) or it died meanwhile.
+    /// </summary>
+    public bool DeliverRoute(long ticket, IReadOnlyList<Vector3> route)
+    {
+        foreach (var m in _members)
+        {
+            if (m.RouteTicket != ticket) continue;
+            if (!m.Alive || m.Ended != null || m.RouteRequest == null) { m.RouteDropped(); return false; }
+            m.SetRoute(route);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>Answers one waiting route request synchronously with <paramref name="route"/> (from, to): <see cref="BeginRoute"/> and <see cref="DeliverRoute"/> in one. True when one was served (tests; the server uses the two halves with the worker between).</summary>
+    public bool ServeRoute(Func<Vector3, Vector3, IReadOnlyList<Vector3>> route)
+    {
+        var ticket = ++_syncTicket;
+        if (!BeginRoute(ticket, out var from, out var to)) return false;
+        return DeliverRoute(ticket, route(from, to));
+    }
+    long _syncTicket = long.MinValue / 2; // apart from the server's tickets
+
+    /// <summary>Members waiting for a route that has not been sent yet.</summary>
+    public int RoutesWaiting { get { var n = 0; foreach (var m in _members) if (m.RouteRequest != null && m.RouteTicket == 0) n++; return n; } }
+
+    /// <summary>Members whose request is out with the worker.</summary>
+    public int RoutesInFlight { get { var n = 0; foreach (var m in _members) if (m.RouteTicket != 0) n++; return n; } }
 
     // ---- hits ----
 
@@ -456,7 +485,28 @@ public sealed class GangRoster : IGangHits
         }
     }
 
-    /// <summary>Serves one route request in all the Raids, taking turns between them. True when one was served.</summary>
+    /// <summary>Takes the oldest waiting request of the next Raid that has one, the Raids in turn (see <see cref="ThiefGang.BeginRoute"/>).</summary>
+    public bool BeginRoute(long ticket, out Vector3 from, out Vector3 to)
+    {
+        for (var k = 0; k < _gangs.Count; k++)
+        {
+            var g = _gangs[(_turn + k) % _gangs.Count];
+            if (!g.BeginRoute(ticket, out from, out to)) continue;
+            _turn = (_turn + k + 1) % _gangs.Count;
+            return true;
+        }
+        from = to = default;
+        return false;
+    }
+
+    /// <summary>Gives the answer to whichever member holds the ticket. False: nobody does (dropped).</summary>
+    public bool DeliverRoute(long ticket, IReadOnlyList<Vector3> route)
+    {
+        foreach (var g in _gangs) if (g.DeliverRoute(ticket, route)) return true;
+        return false;
+    }
+
+    /// <summary>Serves one route request in all the Raids synchronously, taking turns between them (tests). True when one was served.</summary>
     public bool ServeRoute(Func<Vector3, Vector3, IReadOnlyList<Vector3>> route)
     {
         for (var k = 0; k < _gangs.Count; k++)
@@ -469,7 +519,10 @@ public sealed class GangRoster : IGangHits
         return false;
     }
 
-    public bool AnyRouteWaiting => _gangs.Any(g => g.RoutesWaiting > 0);
+    public bool AnyRouteWaiting { get { foreach (var g in _gangs) if (g.RoutesWaiting > 0) return true; return false; } }
+
+    /// <summary>Requests of all the Raids that are out with the worker.</summary>
+    public int RoutesInFlight { get { var n = 0; foreach (var g in _gangs) n += g.RoutesInFlight; return n; } }
 
     public void RecordPoses(uint tick) { foreach (var g in _gangs) g.RecordPoses(tick); }
 
