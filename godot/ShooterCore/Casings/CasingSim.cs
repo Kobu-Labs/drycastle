@@ -158,7 +158,6 @@ public sealed class CasingSim
         if (s.Vel.X * s.Vel.X + s.Vel.Z * s.Vel.Z < 0.0025f)
         {
             s.Tumble = flat; s.Vel = Vector3.Zero;
-            if (speed > 0.15f) Impacts.Add(new Impact(s.Pos, speed, s.Kind));
             s.Fsm.Enter(CasingPhase.Resting, onVehicle ? VehicleStay : Stay);
         }
     }

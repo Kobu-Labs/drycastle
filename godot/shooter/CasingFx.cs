@@ -46,9 +46,11 @@ public static partial class CasingFx
         readonly RandomNumberGenerator _rng = new();
         MultiMesh _mm = null!;
         PhysicsRayQueryParameters3D? _q;
+        CasingFloor _floor = null!;
 
         public override void _Ready()
         {
+            _floor = Floor; // one delegate, not one per frame
             _rng.Randomize();
             var mesh = new CylinderMesh { TopRadius = 0.5f, BottomRadius = 0.5f, Height = 1f, RadialSegments = 6, Rings = 0 };
             mesh.Material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.4f, Metallic = 0.3f };
@@ -67,7 +69,7 @@ public static partial class CasingFx
             var at = port - fwd * p.PortBack + right * 0.03f;
             var vel = right * (p.Eject * _rng.RandfRange(0.7f, 1.1f)) + Vector3.Up * _rng.RandfRange(1.2f, 2.2f) - fwd * _rng.RandfRange(0f, 0.6f)
                 + new Vector3(_rng.RandfRange(-0.3f, 0.3f), 0, _rng.RandfRange(-0.3f, 0.3f)) + inherit;
-            var slot = _sim.Spawn(N(at), N(vel), _rng.RandfRange(0f, Mathf.Tau), _rng.RandfRange(-22f, 22f), kind, Floor);
+            var slot = _sim.Spawn(N(at), N(vel), _rng.RandfRange(0f, Mathf.Tau), _rng.RandfRange(-22f, 22f), kind, _floor);
             _mm.SetInstanceColor(slot.Index, new Color(p.Colour0, p.Colour1, p.Colour2));
         }
 
@@ -90,7 +92,7 @@ public static partial class CasingFx
 
         public override void _Process(double delta)
         {
-            _sim.Step((float)Mathf.Min(delta, 0.05), Floor);
+            _sim.Step((float)Mathf.Min(delta, 0.05), _floor);
             foreach (var i in _sim.Impacts)
             {
                 var db = CasingProfiles.Of(i.Kind).DbOffset + Mathf.Clamp((i.Speed - 3f) * 1.5f, -9f, 0f);
