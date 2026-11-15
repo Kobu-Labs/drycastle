@@ -83,6 +83,24 @@ def test_the_forest_keeps_off_buildings_and_roads(tmp_path: Path) -> None:
     assert shapely.contains_xy(box(10, 10, 210, 200), xs, ys).all()  # and inside the terrain
 
 
+def test_standalone_trees_are_not_planted_on_a_road(tmp_path: Path) -> None:
+    ws = make_workspace(tmp_path)
+    work = ws["work"]
+    buildings = json.loads((work / "buildings.json").read_text())["buildings"]
+    graph = json.loads((work / "roads.json").read_text())
+    rzone = road_zone(graph, TREE["road_clearance_m"])
+    terrain = make_terrain()
+    cand = [(x + 0.5, y + 0.5) for x in range(10, 210, 4) for y in range(10, 200, 4)]
+    on = [p for p in cand if rzone.contains(shapely.Point(p)) and shapely.contains_xy(terrain.coverage, *p)]
+    off = [p for p in cand if not rzone.contains(shapely.Point(p)) and shapely.contains_xy(terrain.coverage, *p)][:3]
+    assert on and off
+    standalone = [{"x": x, "y": y, "radius_m": 3.0, "score": 0.3} for x, y in on[:5] + off]
+    write_ortho(tmp_path / "ortho", (0.0, 0.0), (30, 40, 90, 100), standalone)
+    trees = make_trees(buildings, graph, terrain, cfg_for(tmp_path / "ortho"), origin=(0.0, 0.0))
+    alone = {(t["x"], t["y"]) for t in trees if t["src"] == "ortho"}
+    assert alone == set(off)
+
+
 def test_trees_keep_clear_of_placed_objects_and_out_of_water(tmp_path: Path) -> None:
     ws = make_workspace(tmp_path)
     work = ws["work"]

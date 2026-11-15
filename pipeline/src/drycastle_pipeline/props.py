@@ -252,7 +252,7 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
     """Every tree, planted from the orthophoto detector (``make ortho-trees``).
 
     * each standalone tree of ``trees.json`` is planted where the detector found it, its size following the crown
-      radius (``scale = 2 r / canopy_m``, kept within 0.8-3);
+      radius (``scale = 2 r / canopy_m``, kept within 0.8-3), unless its trunk would stand on a road;
     * the canopy mask (``canopy.png``) is planted so that the forest looks closed from above, as in the photo:
       ``ortho.canopy_per_1000m2`` trees per 1000 m2 of mask at least ``ortho.canopy_min_spacing_m`` apart, each with a
       crown ``ortho.canopy_crown_scale`` times the normal one (the rules' own forest density is far too thin for
@@ -275,6 +275,7 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
     spacing = float(ocfg.get("canopy_min_spacing_m", 4.0))
     canopy_m = float(cfg["canopy_m"])
     shapely.prepare(terrain.coverage)
+    road = zones[1]  # (building, road, object, water)
 
     trees: list[dict] = []
     grid: dict[tuple[int, int], list[tuple[float, float]]] = {}
@@ -294,6 +295,8 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
     for t in doc["standalone"]:
         x, y = float(t["x"]), float(t["y"])
         if not shapely.contains_xy(terrain.coverage, x, y):
+            continue
+        if road is not None and shapely.contains_xy(road, x, y):  # a trunk on a carriageway (roadside trees the photo puts on the road)
             continue
         scale = min(3.0, max(0.8, 2.0 * float(t["radius_m"]) / canopy_m))
         trees.append(tree(x, y, seeded(f"ortho:{t['x']}:{t['y']}"), None, False, "ortho", scale))
