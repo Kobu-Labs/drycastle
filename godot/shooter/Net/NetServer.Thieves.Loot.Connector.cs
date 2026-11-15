@@ -34,7 +34,7 @@ public partial class NetServer
             {
                 var foot = site.Foot;
                 if (BaseBeside(foot, cfg.BaseOffsetM) is not { } b) continue;
-                var topY = site.TopSeat?.Y ?? foot.Y + site.Height * cfg.TopFraction;
+                var topY = (site.TopSeat?.Y ?? foot.Y + site.Height * cfg.TopFraction) - cfg.FeetBelowTopM;
                 if (topY < b.Y + 1.5f) continue;
                 spots.Add(new PoleSpot(spots.Count, foot, b, new NVec3(b.X, topY, b.Z)));
             }

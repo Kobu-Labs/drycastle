@@ -15,7 +15,7 @@ public sealed class TireLootConfig : LootKindConfig
     public List<string> VehicleIds { get; set; } = new() { "car" };
     public float WheelSideM { get; set; } = 0.72f;
     public float WheelEndM { get; set; } = 1.12f;
-    public float WorkSideM { get; set; } = 1.9f;
+    public float WorkSideM { get; set; } = 1.15f;
     public float RestSpeedMps { get; set; } = 0.5f;
     public override void Validate(string file, string kind)
     {

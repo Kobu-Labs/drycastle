@@ -18,6 +18,8 @@ public sealed class ConnectorLootConfig : LootKindConfig
     public float GetUpSeconds { get; set; } = 1.2f;
     public float BaseOffsetM { get; set; } = 0.9f;
     public float TopFraction { get; set; } = 0.9f;
+    /// <summary>The Thief's feet stop this far under the top (its hands reach the wires, not its feet).</summary>
+    public float FeetBelowTopM { get; set; } = 1.6f;
 
     public override void Validate(string file, string kind)
     {
@@ -25,7 +27,7 @@ public sealed class ConnectorLootConfig : LootKindConfig
         void Positive(float v, string what) { if (!(v > 0) || !float.IsFinite(v)) throw new DataFileException($"{file}: loot.connector.{what} must be positive"); }
         if (!(PoleCooldownS >= 0) || !float.IsFinite(PoleCooldownS)) throw new DataFileException($"{file}: loot.connector.pole_cooldown_s must not be negative");
         if (!(ElectrocuteChance >= 0 && ElectrocuteChance <= 1)) throw new DataFileException($"{file}: loot.connector.electrocute_chance must be between 0 and 1");
-        Positive(ShockSeconds, "shock_seconds"); Positive(DownSeconds, "down_seconds"); Positive(GetUpSeconds, "get_up_seconds"); Positive(BaseOffsetM, "base_offset_m");
+        Positive(ShockSeconds, "shock_seconds"); Positive(DownSeconds, "down_seconds"); Positive(GetUpSeconds, "get_up_seconds"); Positive(BaseOffsetM, "base_offset_m"); if (!(FeetBelowTopM >= 0) || !float.IsFinite(FeetBelowTopM)) throw new DataFileException($"{file}: loot.connector.feet_below_top_m must not be negative");
         if (!(TopFraction > 0 && TopFraction <= 1)) throw new DataFileException($"{file}: loot.connector.top_fraction must be above 0 and at most 1");
     }
 }

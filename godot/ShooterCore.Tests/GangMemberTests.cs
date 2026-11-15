@@ -65,7 +65,7 @@ public class GangMemberTests
     public void ShippedNumbersAreTheTicketsAndTheFileRejectsNonsense()
     {
         var g = Shipped.Gang;
-        Assert.Equal((20f, 35f, 80f), (g.Thief.Hits, g.Enforcer.Hits, g.GangBoss.Hits));
+        Assert.Equal((5f, 8.75f, 20f), (g.Thief.Hits, g.Enforcer.Hits, g.GangBoss.Hits));
         Assert.Equal((10f, 25f, 10f), (g.Thief.Melee.Damage, g.Enforcer.Melee.Damage, g.GangBoss.Melee.Damage));
         Assert.All(new[] { g.Thief, g.Enforcer, g.GangBoss }, k => { Assert.Equal(2f, k.Melee.ReachM); Assert.Equal(1f, k.Melee.IntervalSeconds); Assert.True(k.Melee.WindupSeconds < 1f); });
         Assert.Equal((1, 2, 5), (g.Raid.GangBosses, g.Raid.Enforcers, g.Raid.Thieves));
@@ -136,9 +136,9 @@ public class GangMemberTests
     // ---- the Hit count ----
 
     [Theory]
-    [InlineData(GangMemberKind.Thief, 20)]
-    [InlineData(GangMemberKind.Enforcer, 35)]
-    [InlineData(GangMemberKind.GangBoss, 80)]
+    [InlineData(GangMemberKind.Thief, 5)]
+    [InlineData(GangMemberKind.Enforcer, 9)] // 8.75: the ninth bullet kills
+    [InlineData(GangMemberKind.GangBoss, 20)]
     public void ABulletCountsOneAndTheHitCountKills(GangMemberKind kind, int hits)
     {
         var rig = new Rig();
@@ -158,18 +158,17 @@ public class GangMemberTests
         var rig = new Rig();
         var gang = rig.Gang();
         var thief = One(gang, GangMemberKind.Thief);
-        for (var i = 0; i < 9; i++) rig.Roster.Hit(thief.HitId, 1, Bullet, 30, KillCause.Headshot);
-        Assert.Equal(18, thief.HitsTaken);
-        Assert.Equal(DamageResult.Killed, rig.Roster.Hit(thief.HitId, 1, Bullet, 30, KillCause.Headshot)); // ten headshots
-        var enforcer = One(gang, GangMemberKind.Enforcer);
+        for (var i = 0; i < 2; i++) rig.Roster.Hit(thief.HitId, 1, Bullet, 30, KillCause.Headshot);
+        Assert.Equal(4, thief.HitsTaken);
+        Assert.Equal(DamageResult.Killed, rig.Roster.Hit(thief.HitId, 1, Bullet, 30, KillCause.Headshot)); // three headshots
+        var boss = One(gang, GangMemberKind.GangBoss);
         var w = rig.Cfg.Hits;
-        rig.Roster.Hit(enforcer.HitId, 1, Rocket, 90, KillCause.Standard);
-        Assert.Equal(w.ExplosiveWeight, enforcer.HitsTaken);
-        rig.Roster.Hit(enforcer.HitId, 1, Rocket, 90, KillCause.Headshot); // a blast has no headshot bonus
-        Assert.Equal(2 * w.ExplosiveWeight, enforcer.HitsTaken);
-        rig.Roster.Hit(enforcer.HitId, 1, MountedGun, 20, KillCause.Standard);
-        Assert.Equal(2 * w.ExplosiveWeight + w.VehicleWeaponWeight, enforcer.HitsTaken);
-        Assert.Equal(DamageResult.Killed, rig.Roster.Hit(enforcer.HitId, 1, Rocket, 90, KillCause.Standard)); // 12 + 12 + 3 + 12 >= 35
+        rig.Roster.Hit(boss.HitId, 1, MountedGun, 20, KillCause.Standard);
+        Assert.Equal(w.VehicleWeaponWeight, boss.HitsTaken);
+        rig.Roster.Hit(boss.HitId, 1, Rocket, 90, KillCause.Standard);
+        Assert.Equal(w.VehicleWeaponWeight + w.ExplosiveWeight, boss.HitsTaken);
+        Assert.True(boss.Alive);
+        Assert.Equal(DamageResult.Killed, rig.Roster.Hit(boss.HitId, 1, Rocket, 90, KillCause.Headshot)); // a blast has no headshot bonus: 3 + 12 + 12 >= 20
     }
 
     [Fact]

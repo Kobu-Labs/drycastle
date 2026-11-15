@@ -125,7 +125,7 @@
     // The van appears at the first waypoint, drives the roads through them (each snapped to the nearest road within route_snap_max_m, on roads of any width from route_min_road_width_m: route 2's G to H is a 1.5 m footpath), carries on from the last one along the main road to a stop within
     // park_near_church_m of the church (church.json doorway; park_centre [x, z] overrides it, for a map without a church) and leaves by the same roads backwards, gone at the first waypoint. A route this map
     // cannot drive is skipped (logged); none usable (or none listed): the old automatic way in from the map edge. Without a centre the van parks at the end of its route (route_stop_search_m back along it if the spot fails).
-    "route_pick": "random", "route_snap_max_m": 30, "route_min_road_width_m": 0, "park_near_church_m": 100, "route_stop_search_m": 40,
+    "route_pick": "random", "route_snap_max_m": 30, "route_min_road_width_m": 0, "park_near_church_m": 180, "route_stop_search_m": 40,
     "routes": [
       { "name": "route 1 (A B C)", "waypoints": [[191.61, 1663.37], [104.11, 890.37], [16.11, 122.37]] },
       { "name": "route 2 (D E F G H)", "waypoints": [[-264.89, 1266.37], [-104.39, 820.37], [7.11, 354.87], [-36.39, 95.37], [10.11, 81.37]] }
@@ -147,7 +147,7 @@
     "door_out_m": 1.1, "door_along_m": 0.07,
     "honk_min_seconds": 9, "honk_max_seconds": 22, "honk_near_m": 25, "honk_near_gap_seconds": 6,
     // Roads at least min_road_width_m wide. Stop = the candidate (every stop_step_m, stop_inset_m inside the map) with most targets within stop_radius_m, not within used_apart_m of an earlier stop.
-    "min_road_width_m": 3, "stop_radius_m": 80, "stop_step_m": 20, "stop_inset_m": 30, "used_apart_m": 60,
+    "min_road_width_m": 3, "stop_radius_m": 80, "stop_step_m": 20, "stop_inset_m": 30, "used_apart_m": 120,
     // Turning round on the way out costs this much extra; with no road out it drives this far straight on.
     "u_turn_penalty_m": 150, "exit_straight_m": 150,
     // Ramming: its mass over a car's for the run-over damage of vehicles.json, and the damage when there is no such table.
@@ -179,7 +179,7 @@
   // Loot that lies (its carrier was killed): at most max_lying (over it the oldest goes back by itself); a player holds use return_seconds within reach_m of it to send it back; moving off or a hit starts it over.
   "loot": {
     "max_lying": 24, "return_seconds": 1.0, "reach_m": 1.8,
-    "seek_radius_m": 90, "seek_retry_seconds": 2, "approach_speed_mps": 3.0, "haul_speed_mps": 4.5, "arrive_m": 1.0,
+    "seek_radius_m": 90, "seek_retry_seconds": 2, "approach_speed_mps": 3.0, "haul_speed_mps": 2.5, "arrive_m": 1.0,
     "approach_give_up_seconds": 45, "avoid_seconds": 60, "haul_give_up_seconds": 60, "pickup_seconds": 1.0, "load_seconds": 0.6, "load_reach_m": 1.5,
     "climb_speed": 1.5,
 
@@ -190,7 +190,7 @@
 
     // Tires (ticket 04): one target per wheel of a car at rest, of the vehicle types listed (the sedan model, whose wheel nodes the client hides). The wheel centres are wheel_side_m either side of
     // the car's middle and wheel_end_m ahead of and behind it; the Thief kneels work_side_m out beside the wheel. At rest: nobody inside and slower than rest_speed_mps.
-    "tire": { "weight": 1, "steal_seconds": 6, "vehicle_ids": ["car"], "wheel_side_m": 0.72, "wheel_end_m": 1.12, "work_side_m": 1.9, "rest_speed_mps": 0.5 },
+    "tire": { "weight": 1, "steal_seconds": 6, "vehicle_ids": ["car"], "wheel_side_m": 0.72, "wheel_end_m": 1.12, "work_side_m": 1.15, "rest_speed_mps": 0.5 },
 
     // Pets (ticket 05): one target per living pet no Thief holds. A pet behind a fence is reached by a hop: the Thief stands hop_out_m outside the nearest section, jumps over it (hop_seconds, the arc clears the
     // fence by hop_clear_m) to hop_in_m inside, walks to the pet (in_walk_speed_mps; grabs within grab_m, then steal_seconds), and hops back out with it. A garden with no fence is a plain walk. The pet is
@@ -209,11 +209,11 @@
 
     // Connectors (ticket 07): one target per placed pole with wires. The Thief climbs to the top (the highest wire seat; 90 % of the height without one), works steal_seconds, climbs down with a
     // connector. Nothing goes missing on the pole; it can be robbed again after pole_cooldown_s. Reaching the top rolls electrocute_chance: Shocked shock_seconds (beams and sound), Falling,
-    // Down down_seconds (lying), GetUp get_up_seconds, then the same pole again; no hits lost. The climb's base is a navigation point base_offset_m beside the column.
+    // Down down_seconds (lying), GetUp get_up_seconds, then the same pole again; no hits lost. The climb's base is a navigation point base_offset_m beside the column; the Thief's feet stop feet_below_top_m under the top (the highest wire seat), so its hands are at the wires.
     "connector": {
       "weight": 1, "steal_seconds": 6, "pole_cooldown_s": 120,
       "electrocute_chance": 0.05, "shock_seconds": 2.0, "down_seconds": 4.0, "get_up_seconds": 1.2,
-      "base_offset_m": 0.9, "top_fraction": 0.9
+      "base_offset_m": 0.9, "top_fraction": 0.9, "feet_below_top_m": 1.6
     }
   }
 }

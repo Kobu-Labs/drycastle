@@ -252,7 +252,7 @@ public class RaidRoutesTests
         Assert.Equal("random", raids.RoutePick);
         Assert.Equal(2, raids.Routes.Count);
         Assert.Equal(new[] { 3, 5 }, raids.Routes.Select(r => r.Waypoints.Count));
-        Assert.Equal(100f, raids.ParkNearChurchM);
+        Assert.Equal(180f, raids.ParkNearChurchM);
         Assert.Equal(30f, raids.RouteSnapMaxM);
         Assert.Equal(40f, raids.RouteStopSearchM);
         Assert.Null(raids.ParkCentre);
@@ -294,7 +294,7 @@ public class RaidRoutesTests
             {
                 var plan = RaidRoutes.Plan(vanRoads, new List<ResolvedRoute> { route }, church, Array.Empty<Vector2>(), Van, raids, new Random(seed), (_, _) => 1)!;
                 Assert.NotNull(plan);
-                Assert.True(Vector2.Distance(plan.StopAt, church) <= 100f + 0.01f);
+                Assert.True(Vector2.Distance(plan.StopAt, church) <= raids.ParkNearChurchM + 0.01f);
                 Assert.Equal(route.Path.Start, plan.In.Start);
                 Assert.True(plan.In.Length > route.Path.Length);
                 Assert.Equal(plan.In.Length, plan.Out!.Length, 0.01f);
