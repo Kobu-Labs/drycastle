@@ -69,13 +69,12 @@ public partial class NetServer
     RoadGraph RaidRouteRoads => _raidRouteRoads ??= Map != null ? RoadGraph.Parse(Map.RoadsJson, ThievesData.Raids.RouteMinRoadWidthM) : RoadGraph.Empty;
     RoadGraph? _raidRouteRoads;
 
-    /// <summary>The map's extent as the Raids see it (the parcels' box: where a road crosses it, a van comes in). Infinite on both sides without a map: no road crosses it.</summary>
+    /// <summary>The map's extent as the Raids see it (the terrain's box, as for a helicopter: where a road crosses it, a van comes in). Infinite on both sides without a map: no road crosses it.</summary>
     (NVec2 Min, NVec2 Max) RaidExtent()
     {
-        var b = _raidExtent ??= FlightProbe.ParcelBounds(Map);
+        var b = MapFlightBounds;
         return (new NVec2(b.MinX, b.MinZ), new NVec2(b.MaxX, b.MaxZ));
     }
-    FlightBounds? _raidExtent;
 
     float RaidGround(float x, float z) => Map == null ? float.NaN : Map.GroundHeight(x, z);
 
@@ -150,7 +149,7 @@ public partial class NetServer
         if (plan == null) { ShrinkWave($"no stop of its own was found{(first ? " (no road with the navigation mesh beside it)" : "")}"); return; }
         var exit = plan.Out ?? RaidPlanner.Exit(roads, plan, min, max, vc);
         var start0 = plan.In.IsEmpty ? plan.StopAt : plan.In.Start;
-        var y = Map?.GroundHeightOrMean(start0.X, start0.Y) ?? 0f; // the map edge may lie past the terrain: the mean height then, and the van takes the ground's as soon as it has one
+        var y = Map?.GroundHeightOrMean(start0.X, start0.Y) ?? 0f; // the terrain is a ragged patch inside its box, so the edge may lie past it: the mean height then, and the van takes the ground's as soon as it has one
         var start = new NVec3(start0.X, y, start0.Y);
         var crew = ThievesData.Raids.CrewFor(ThievesData.Gang.Raid, RaidHumans());
         var raid = _raids.Launch(plan, exit, start, crew, p => N(_nav!.Snap(new Vector3(p.X, p.Y, p.Z))), RaidFleePoint, RaidGround);

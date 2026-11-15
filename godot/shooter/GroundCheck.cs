@@ -41,13 +41,6 @@ public partial class GroundCheck : Node3D
         _step = float.Parse(stepS, System.Globalization.CultureInfo.InvariantCulture);
         AddChild(_map.Root);
         _map.Load(Path.GetFullPath(dir));
-        var first = true;
-        foreach (var p in _map.Parcels.Values)
-        {
-            if (p.Rings.Count == 0) continue;
-            _ext = first ? p.Bounds : _ext.Merge(p.Bounds);
-            first = false;
-        }
         var sb = new Rect2(_map.SpawnPoints[0].Position.X, _map.SpawnPoints[0].Position.Z, 0, 0);
         foreach (var sp in _map.SpawnPoints) sb = sb.Expand(new Vector2(sp.Position.X, sp.Position.Z));
         _ext = sb.Grow(12);

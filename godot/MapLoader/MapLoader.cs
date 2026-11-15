@@ -161,11 +161,21 @@ public sealed partial class MapLoader
     public int BoundaryWalls { get; private set; }
     const float RimCell = 1f, RimHeight = 24f;
 
+    /// <summary>The box around the whole terrain (every chunk's collision mesh), or null without terrain. The terrain is a ragged patch inside it.</summary>
+    public Aabb? TerrainBox
+    {
+        get
+        {
+            if (_terrain.Count == 0) return null;
+            var box = _terrain[0].box;
+            foreach (var t in _terrain) box = box.Merge(t.box);
+            return box;
+        }
+    }
+
     void BuildTerrainBoundary()
     {
-        if (_terrain.Count == 0) return;
-        var box = _terrain[0].box;
-        foreach (var t in _terrain) box = box.Merge(t.box);
+        if (TerrainBox is not { } box) return;
         int x0 = (int)Mathf.Floor(box.Position.X / RimCell) - 1, x1 = (int)Mathf.Ceil(box.End.X / RimCell) + 1;
         int z0 = (int)Mathf.Floor(box.Position.Z / RimCell) - 1, z1 = (int)Mathf.Ceil(box.End.Z / RimCell) + 1;
         int w = x1 - x0 + 1, h = z1 - z0 + 1;

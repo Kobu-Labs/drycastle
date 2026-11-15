@@ -102,7 +102,7 @@ public sealed class MapBase
         {
             var g = new Vector2[r.Points.Length];
             for (var i = 0; i < g.Length; i++) g[i] = new Vector2(r.Points[i].X, -r.Points[i].Y); // local north-up to ground z
-            foreach (var part in ClipPolyline(g, extent))
+            foreach (var part in ClipPolyline(g, extent).SelectMany(c => _world && _map.TerrainBox != null ? ClipToTerrain(c) : new List<Vector2[]> { c }))
             {
                 var bounds = new Rect2(part[0], Vector2.Zero);
                 foreach (var q in part) bounds = bounds.Expand(q);
@@ -128,6 +128,43 @@ public sealed class MapBase
         Flush();
         return parts;
     }
+
+    /// <summary>
+    /// The pieces of <paramref name="line"/> that lie on the terrain (the world sheet only): the road network reaches far past the terrain's
+    /// outline, and a road nobody can reach is not drawn. Each segment is walked in steps of at most <see cref="TerrainStep"/> metres and a
+    /// crossing of the outline is narrowed down by bisection.
+    /// </summary>
+    List<Vector2[]> ClipToTerrain(Vector2[] line)
+    {
+        bool On(Vector2 p) => !float.IsNaN(_map.GroundHeight(p.X, p.Y));
+        Vector2 Crossing(Vector2 on, Vector2 off)
+        {
+            for (var k = 0; k < 6; k++) { var m = (on + off) / 2; if (On(m)) on = m; else off = m; }
+            return on;
+        }
+        var parts = new List<Vector2[]>();
+        var cur = new List<Vector2>();
+        void Flush() { if (cur.Count >= 2) parts.Add(cur.ToArray()); cur.Clear(); }
+        var prev = line[0];
+        var prevOn = On(prev);
+        if (prevOn) cur.Add(prev);
+        for (var i = 0; i + 1 < line.Length; i++)
+        {
+            var steps = Math.Max(1, (int)MathF.Ceiling(line[i].DistanceTo(line[i + 1]) / TerrainStep));
+            for (var k = 1; k <= steps; k++)
+            {
+                var p = line[i].Lerp(line[i + 1], (float)k / steps);
+                var on = On(p);
+                if (on && !prevOn) cur.Add(Crossing(p, prev));
+                else if (!on && prevOn) { cur.Add(Crossing(prev, p)); Flush(); }
+                if (on && k == steps) cur.Add(p); // the line's own vertices are kept; the samples between them are not
+                prev = p; prevOn = on;
+            }
+        }
+        Flush();
+        return parts;
+    }
+    const float TerrainStep = 8f;
 
     /// <summary>Liang-Barsky: the part of segment p0-p1 inside <paramref name="r"/>; false when none.</summary>
     static bool ClipSegment(Vector2 p0, Vector2 p1, Rect2 r, out Vector2 a, out Vector2 b)

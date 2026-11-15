@@ -21,7 +21,7 @@ public partial class NetServer
     bool _carWasAway;
 
     FlightBounds? _mapFlightBounds;
-    /// <summary>The flyable rectangle of the map (the box around its parcels); a smoke arena has none.</summary>
+    /// <summary>The flyable rectangle of the map (the box around its terrain, <see cref="FlightProbe.MapBounds"/>); a smoke arena has none.</summary>
     FlightBounds MapFlightBounds => _mapFlightBounds ??= FlightProbe.MapBounds(Map);
 
     /// <summary>A pilot whose inputs have not arrived for this many ticks is flown by the stabiliser (a hover), so a stalled client does not freeze the helicopter in the air.</summary>
