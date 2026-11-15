@@ -7,15 +7,15 @@
     // Hits is the Hit count: the weighted hits a member takes before it dies (a bullet 1, a headshot 2, see hits below). A player walks at 5 and sprints at 8, so a chase can be outrun.
     // Melee: a swing is a windup (a player can step out of reach in it), then the blow if the target is still within reach; interval_seconds is one swing's start to the next.
     "thief": {
-      "hits": 20, "walk_speed": 1.8, "run_speed": 5.5, "hit_scale": 1.0,
+      "hits": 5, "walk_speed": 1.8, "run_speed": 5.5, "hit_scale": 1.0,
       "melee": { "damage": 10, "reach_m": 2, "windup_seconds": 0.45, "interval_seconds": 1.0 }
     },
     "enforcer": {
-      "hits": 35, "walk_speed": 1.6, "run_speed": 5.0, "hit_scale": 1.04,
+      "hits": 8.75, "walk_speed": 1.6, "run_speed": 5.0, "hit_scale": 1.04,
       "melee": { "damage": 25, "reach_m": 2, "windup_seconds": 0.45, "interval_seconds": 1.0 }
     },
     "gang_boss": {
-      "hits": 80, "walk_speed": 1.4, "run_speed": 4.5, "hit_scale": 1.15,
+      "hits": 20, "walk_speed": 1.4, "run_speed": 4.5, "hit_scale": 1.15,
       "melee": { "damage": 10, "reach_m": 2, "windup_seconds": 0.45, "interval_seconds": 1.0 }
     },
     // What a hit counts besides a bullet (1). Run over by a vehicle: dead.
