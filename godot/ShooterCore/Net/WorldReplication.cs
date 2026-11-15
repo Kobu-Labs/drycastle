@@ -1,4 +1,7 @@
 using System.Buffers.Binary;
+using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Drycastle.ShooterCore;
 
@@ -9,9 +12,10 @@ namespace Drycastle.ShooterCore;
 ///
 /// Snapshot packet: u8 type, u32 tick, u32 baseTick (<see cref="Wire.NoTick"/> for a full set), u8 index, u8 total, u8 count,
 /// then per record: u16 id, u8 type, u8 flags, fields by flag:
-///   PosAbs i32 x,y,z | PosDelta i16 dx,dy,dz | Rot u16 yaw, i16 pitch | Status u16 owner, u8 state | Hp u8 hp | Remove (no fields).
+///   PosAbs i32 x,y,z | PosDelta i16 dx,dy,dz | Rot u16 yaw, i16 pitch | Status u16 owner, u8 state | Hp u8 hp | Remove, Dormant (no fields).
 /// A keyframe carries PosAbs, Rot and Status (plus Hp for types with hp) and goes only to an entity new to the baseline.
-/// Unchanged entities are omitted; an entity that left the baseline is a Remove record.
+/// Unchanged entities are omitted; an entity that left the baseline is a Remove record. A type with <see cref="WorldEntityDef.Interest"/>
+/// goes only to the clients near it (<see cref="WorldInterest"/>): out of range it is a Dormant record (alive, hide it), and back in range a keyframe.
 /// </summary>
 public static class WorldCodec
 {
@@ -136,8 +140,15 @@ public sealed class WorldSnapshotEncoder
     byte[] _rec = new byte[2048];
     readonly List<int> _ends = new();
     readonly HashSet<ushort> _present = new();
+    // distance interest (ADR 0024): what this client has of each filtered entity. Entries are reused in place; no entry is Unseen.
+    struct Rel { public WorldRelevance Phase; public uint First, Seen; }
+    readonly Dictionary<ushort, Rel> _rel = new();
+    readonly List<ushort> _prune = new();
+    int _touched;
 
-    public long FullEntries, DeltaEntries;
+    public long FullEntries, DeltaEntries, DormantEntries;
+    /// <summary>How many filtered entities this client's relevance table holds (those in range or told they left; despawned ones are dropped).</summary>
+    public int FilteredTracked => _rel.Count;
 
     /// <summary>The server shares one <paramref name="history"/> across its clients (the states are the same for everyone).</summary>
     public WorldSnapshotEncoder(WorldEntityRegistry? types = null, WorldHistory? history = null)
@@ -149,9 +160,10 @@ public sealed class WorldSnapshotEncoder
     /// <summary>
     /// Encodes the world for one client. <paramref name="baseTick"/> is the newest world tick the client has acknowledged, or
     /// <see cref="Wire.NoTick"/>. The tick's state is kept in the history, which the baseline is looked up in. Returns no packet
-    /// when nothing changed against the baseline.
+    /// when nothing changed against the baseline. <paramref name="viewer"/> is where the client's player is: the types that opted into
+    /// <see cref="WorldInterest"/> go only while they are near it (null: no filtering, everything is sent).
     /// </summary>
-    public List<byte[]> Encode(uint tick, uint baseTick, IReadOnlyList<WorldEntry> entities)
+    public List<byte[]> Encode(uint tick, uint baseTick, IReadOnlyList<WorldEntry> entities, Vector3? viewer = null)
     {
         _history.Record(tick, entities);
         IReadOnlyDictionary<ushort, WorldEntry>? b = null;
@@ -161,9 +173,13 @@ public sealed class WorldSnapshotEncoder
             if (b != null) { _keptTick = baseTick; _kept = b; }
         }
         var headerBase = b != null ? baseTick : Wire.NoTick;
+        var filter = viewer.HasValue;
+        long vx = 0, vz = 0;
+        if (viewer is { } v) { vx = Quant.Pos(v.X); vz = Quant.Pos(v.Z); }
 
         _ends.Clear();
         _present.Clear();
+        _touched = 0;
         var o = 0;
         foreach (var q in entities)
         {
@@ -171,9 +187,22 @@ public sealed class WorldSnapshotEncoder
             Reserve(ref o, MaxRecordBytes);
             var at = o;
             o += 4; // the record's header (id, type, flags) is filled once its fields are written
-            var hasHp = _types.Find(q.Type) is { HasHp: true };
+            var def = _types.Find(q.Type);
+            var hasHp = def is { HasHp: true };
             byte flags;
-            if (b != null && b.TryGetValue(q.Id, out var r) && r.Type == q.Type)
+            var emit = Emit.Delta;
+            if (filter && def is { Interest: true })
+            {
+                long dx = q.State.X - vx, dz = q.State.Z - vz;
+                emit = Decide(q, b, baseTick, tick, dx * dx + dz * dz);
+                if (emit == Emit.Skip) { o = at; continue; }
+            }
+            if (emit == Emit.Dormant)
+            {
+                flags = Wire.FDormant;
+                DormantEntries++;
+            }
+            else if (emit == Emit.Delta && b != null && b.TryGetValue(q.Id, out var r) && r.Type == q.Type)
             {
                 flags = WriteDelta(_rec, ref o, r.State, q.State, hasHp);
                 if (flags == 0) { o = at; continue; } // unchanged: omitted
@@ -191,6 +220,7 @@ public sealed class WorldSnapshotEncoder
             _rec[at + 3] = flags;
             _ends.Add(o);
         }
+        if (_touched < _rel.Count) PruneGone(tick); // a filtered entity that is no longer in the world: its despawn is the removal below
         // entities the baseline had and this tick does not: removals
         if (b != null)
             foreach (var kv in b)
@@ -218,6 +248,68 @@ public sealed class WorldSnapshotEncoder
             packets.Add(Finish(_rec, from, to, tick, headerBase, p, total, last - first));
         }
         return packets;
+    }
+
+    enum Emit : byte { Skip, Delta, Key, Dormant }
+
+    /// <summary>Moves a filtered entity's relevance (ADR 0024) to <paramref name="to"/>, beginning at <paramref name="tick"/>. An undeclared move is reported like any state machine's.</summary>
+    static void Move(ref Rel r, WorldRelevance to, uint tick)
+    {
+        if (r.Phase == to) return;
+        if (!WorldInterest.RelevanceSpec.Allows(r.Phase, to)) StateMachineDiagnostics.Illegal(WorldInterest.RelevanceSpec.Name, r.Phase.ToString(), to.ToString());
+        r.Phase = to; r.First = tick;
+    }
+
+    /// <summary>
+    /// Which record a filtered entity gets this tick, from its distance (squared, 1/128 m units) and what this client is known to have.
+    /// The client has a tick's records once it acknowledges that tick or a later one, so a state that began at <c>First</c> ends when the
+    /// baseline is at or past it; with no usable baseline nothing is acknowledged and the states that wait simply go on.
+    /// </summary>
+    Emit Decide(in WorldEntry q, IReadOnlyDictionary<ushort, WorldEntry>? b, uint baseTick, uint tick, long d2)
+    {
+        ref var r = ref CollectionsMarshal.GetValueRefOrNullRef(_rel, q.Id);
+        if (Unsafe.IsNullRef(ref r))
+        {
+            if (d2 > WorldInterest.EnterSq && b != null) return Emit.Skip; // never in range, and the client hides what it was never sent
+            _rel[q.Id] = default; // Unseen
+            r = ref CollectionsMarshal.GetValueRefOrNullRef(_rel, q.Id);
+        }
+        r.Seen = tick; _touched++;
+        var acked = b != null && baseTick >= r.First;
+        var inside = r.Phase is WorldRelevance.Keying or WorldRelevance.Synced ? d2 <= WorldInterest.LeaveSq : d2 <= WorldInterest.EnterSq;
+        if (inside)
+        {
+            if (r.Phase is WorldRelevance.Unseen or WorldRelevance.Leaving or WorldRelevance.Silent) { Move(ref r, WorldRelevance.Keying, tick); return Emit.Key; }
+            if (r.Phase == WorldRelevance.Keying)
+            {
+                if (!acked) return Emit.Key;
+                Move(ref r, WorldRelevance.Synced, tick);
+            }
+            if (b == null || !b.TryGetValue(q.Id, out var held) || held.Type != q.Type) { Move(ref r, WorldRelevance.Keying, tick); return Emit.Key; }
+            return Emit.Delta;
+        }
+        switch (r.Phase)
+        {
+            case WorldRelevance.Unseen:
+            case WorldRelevance.Keying:
+            case WorldRelevance.Synced:
+                Move(ref r, WorldRelevance.Leaving, tick);
+                return Emit.Dormant;
+            case WorldRelevance.Leaving:
+                if (!acked) return Emit.Dormant;
+                Move(ref r, WorldRelevance.Silent, tick);
+                return Emit.Skip;
+            default:
+                return Emit.Skip;
+        }
+    }
+
+    /// <summary>Drops the relevance of filtered entities that were not in this tick's world.</summary>
+    void PruneGone(uint tick)
+    {
+        _prune.Clear();
+        foreach (var kv in _rel) if (kv.Value.Seen != tick) _prune.Add(kv.Key);
+        foreach (var id in _prune) _rel.Remove(id);
     }
 
     /// <summary>Writes the changes of <paramref name="s"/> against the baseline state <paramref name="r"/>, and returns their flags (0 when nothing changed).</summary>
@@ -276,6 +368,8 @@ public sealed class WorldSnapshotEncoder
 /// the tick commits only when all of its packets have arrived. <see cref="AckTick"/> (the newest committed tick) goes back with the
 /// inputs. An entity's state is kept from its first keyframe, so one that beats its spawn event is picked up at the spawn.
 /// Each entity keeps an <see cref="Interpolator"/>, which takes a sample for every committed tick that changed it.
+/// An entity of a type with <see cref="WorldEntityDef.Interest"/> is <see cref="Entity.Dormant"/> from its spawn until a keyframe shows it, and again after
+/// the server's dormant record (ADR 0024): it keeps existing, a consumer must not show or animate it, and it comes back with a fresh <see cref="Interpolator"/>.
 /// </summary>
 public sealed class WorldReplica
 {
@@ -286,8 +380,11 @@ public sealed class WorldReplica
         public WorldState State;
         /// <summary>Samples at snapshot ticks. Read it at a render tick a little in the past with <see cref="Interpolator.At"/>.</summary>
         public readonly Interpolator Buf = new();
+        /// <summary>Outside this client's interest: <see cref="State"/> and <see cref="Buf"/> are stale. Hide it and do not animate it.</summary>
+        public bool Dormant { get; internal set; }
     }
 
+    readonly WorldEntityRegistry _types;
     readonly Dictionary<ushort, Entity> _ents = new();
     readonly HashSet<ushort> _gone = new();
     readonly WorldHistory _history = new();
@@ -300,6 +397,8 @@ public sealed class WorldReplica
     Dictionary<ushort, WorldEntry>? _asm;
     // the entities the tick being assembled changed (a tick's records name each id once)
     readonly List<ushort> _changed = new();
+
+    public WorldReplica(WorldEntityRegistry? types = null) => _types = types ?? WorldEntityRegistry.Shared;
 
     readonly record struct Staged(ushort Id, bool Remove, WorldEntry Entry);
 
@@ -315,6 +414,8 @@ public sealed class WorldReplica
     public int TicksStarted, TicksCompleted;
 
     public event Action<Entity>? Spawned;
+    /// <summary>Raised when an entity goes dormant or comes back (<see cref="Entity.Dormant"/> already holds the new value), not at its spawn.</summary>
+    public event Action<Entity>? DormancyChanged;
     public event Action<ushort>? Despawned;
     /// <summary>Raised just before <see cref="Despawned"/> with the server's reason, for a visual that depends on it (a shot-down aircraft explodes, an expired one just leaves).</summary>
     public event Action<ushort, WorldDespawnReason>? DespawnedFor;
@@ -338,10 +439,11 @@ public sealed class WorldReplica
     {
         if (_gone.Contains(id) || _ents.ContainsKey(id)) return;
         // a keyframe that beat the spawn is newer than the spawn's own state
-        if (_states.TryGetValue(id, out var known) && known.Type == type) s = known.State;
-        var e = new Entity { Id = id, Type = type };
+        var dormant = _types.Find(type) is { Interest: true }; // out of interest until a keyframe says otherwise
+        if (_states.TryGetValue(id, out var known) && known.Type == type) { s = known.State; dormant = known.Dormant; }
+        var e = new Entity { Id = id, Type = type, Dormant = dormant };
         _ents[id] = e;
-        Store(e, LastTick, s);
+        if (dormant) e.State = s; else Store(e, LastTick, s);
         Spawned?.Invoke(e);
     }
 
@@ -392,8 +494,9 @@ public sealed class WorldReplica
             var type = d[o + 2]; int flags = d[o + 3]; o += 4;
             if ((flags & Wire.FRemove) != 0) { staged.Add(new Staged(id, true, default)); continue; }
             var known = _asm!.TryGetValue(id, out var prev) && prev.Type == type;
-            // a delta for an entity the baseline does not have is meaningless: the packet is not usable
-            if (!known && (flags & Wire.FKey) != Wire.FKey) return false;
+            if ((flags & Wire.FDormant) != 0) { staged.Add(new Staged(id, false, new WorldEntry(id, type, known ? prev.State : default, true))); continue; }
+            // a delta for an entity the baseline does not have (or only as dormant) is meaningless: the packet is not usable
+            if ((!known || prev.Dormant) && (flags & Wire.FKey) != Wire.FKey) return false;
             var s = known ? prev.State : default;
             if ((flags & Wire.FPosAbs) != 0)
             {
@@ -446,6 +549,20 @@ public sealed class WorldReplica
         _asm = null; _assembling = false;
         LastTick = tick; HasState = true;
         foreach (var id in _changed)
-            if (_ents.TryGetValue(id, out var e)) Store(e, tick, _states[id].State);
+        {
+            if (!_ents.TryGetValue(id, out var e)) continue;
+            var w = _states[id];
+            if (w.Dormant)
+            {
+                if (e.Dormant) continue;
+                e.Dormant = true;
+                DormancyChanged?.Invoke(e);
+                continue;
+            }
+            var wasDormant = e.Dormant;
+            if (wasDormant) { e.Dormant = false; e.Buf.Reset(); } // it jumped: no sliding in from where it was
+            Store(e, tick, w.State);
+            if (wasDormant) DormancyChanged?.Invoke(e);
+        }
     }
 }

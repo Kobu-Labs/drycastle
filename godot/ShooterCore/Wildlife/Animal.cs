@@ -24,7 +24,7 @@ public static class AnimalRules
 
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "animal", HasHp: true));
+        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "animal", HasHp: true, Interest: true));
     }
 }
 

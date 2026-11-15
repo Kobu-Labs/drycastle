@@ -22,6 +22,8 @@ public partial class NetClient
         public Transform3D MeshLocal;
         public float FlapHz;
         public bool Started;
+        public int Birds;
+        public FlockSpecies Kind = null!;
     }
 
     readonly Dictionary<ushort, FlockView> _flocks = new();
@@ -40,6 +42,17 @@ public partial class NetClient
         FlockRules.Register(WorldEntityRegistry.Shared);
         WorldEntities.Spawned += OnFlockSpawned;
         WorldEntities.Despawned += OnFlockDespawned;
+        WorldEntities.DormancyChanged += OnFlockDormancy;
+    }
+
+    /// <summary>A flock outside the interest range (ADR 0024) is hidden and its boids are not flown; one that comes back starts a new swarm at its centre (the old one would fly across the map to catch up).</summary>
+    void OnFlockDormancy(WorldReplica.Entity e)
+    {
+        if (e.Type != FlockRules.TypeId || !_flocks.TryGetValue(e.Id, out var v)) return;
+        v.Node.Visible = !e.Dormant;
+        if (e.Dormant) return;
+        var p = e.State.Position;
+        v.Swarm = new BoidSwarm(v.Birds, new System.Numerics.Vector3(p.X, p.Y, p.Z), v.Kind.Boids, e.Id);
     }
 
     /// <summary>The mesh of a flock kind's bird and the transform that puts it upright, centred, scaled and facing -Z; a wedge when the model is missing.</summary>
@@ -89,7 +102,8 @@ public partial class NetClient
         var rng = new Random(e.Id);
         var phase = new float[birds];
         for (var i = 0; i < birds; i++) phase[i] = (float)rng.NextDouble() * Mathf.Tau;
-        _flocks[e.Id] = new FlockView { Node = node, Swarm = new BoidSwarm(birds, new System.Numerics.Vector3(p.X, p.Y, p.Z), kind.Boids, e.Id), Phase = phase, MeshLocal = local, FlapHz = 3.2f };
+        _flocks[e.Id] = new FlockView { Node = node, Swarm = new BoidSwarm(birds, new System.Numerics.Vector3(p.X, p.Y, p.Z), kind.Boids, e.Id), Phase = phase, MeshLocal = local, FlapHz = 3.2f, Birds = birds, Kind = kind };
+        node.Visible = !e.Dormant; // spawned outside the interest range: hidden until a keyframe shows it
     }
 
     void OnFlockDespawned(ushort id)
@@ -127,7 +141,7 @@ public partial class NetClient
         CollectFlockObstacles(delta, rt);
         foreach (var (id, v) in _flocks)
         {
-            if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
+            if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant) continue;
             var goal = e.Buf.At(rt) is { } s ? new System.Numerics.Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z) : e.State.Position;
             v.Swarm.Step((float)Math.Min(delta, 0.1), goal, e.State.State == (byte)FlockState.Scatter, _flockObstacles);
             var mm = v.Node.Multimesh;

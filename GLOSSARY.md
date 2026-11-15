@@ -315,6 +315,14 @@ _Avoid_: test map, sandbox
 A non-player thing the server replicates on one channel: a corpse, a ground item, a turret, an attack missile, a care package or an aircraft, identified by a type byte.
 _Avoid_: object, prop, actor
 
+**Interest**:
+The distance rule of the world channel (ADR 0024): the world entity types that opt in (animals, flocks, poop) are sent to a client only while they are within 800 m of its player (horizontal), and stay in until 850 m. Out of interest an entity is still alive and still counts (its spawn and despawn go to everyone); the client just does not see it. Players and vehicles are not subject to it.
+_Avoid_: relevancy, culling, area of interest, visibility range
+
+**Dormant**:
+A world entity that is alive but out of a client's interest: the server told that client (a dormant record) and the client hides it and stops animating it, keeping no pose. It comes back from a keyframe, never by sliding from its old pose. Not the same as despawned.
+_Avoid_: hidden entity, sleeping, culled
+
 **Protocol version**:
 The number in the hello and welcome messages. A client and a server must match, or the server refuses the client with both numbers in the message.
 _Avoid_: build number, version (alone)

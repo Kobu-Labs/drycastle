@@ -1237,3 +1237,27 @@ stateDiagram-v2
 - **Doomed**: Hit points are zero and DetonateAt is set: the blast goes off when the clock reaches it (the chain delay after a neighbour's blast, else this tick). A return repairs it.
 - **Destroyed**: Blown up, no collision, nobody aboard. ReturnAt is set; the return repairs it and puts it back at its origin.
 
+## WorldInterest.Relevance
+
+One filtered world entity as one client's encoder sees it: keyframed until the client has it, then delta, then dormant (hidden) until it is acknowledged, then silent. Ticks are acknowledgements, not seconds.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unseen
+    Unseen --> Keying
+    Unseen --> Leaving
+    Keying --> Synced
+    Keying --> Leaving
+    Synced --> Keying
+    Synced --> Leaving
+    Leaving --> Keying
+    Leaving --> Silent
+    Silent --> Keying
+```
+
+- **Unseen**: No entry in the table. In range it goes to Keying. Out of range it stays Unseen, except when the client has no baseline (a full set): then it goes to Leaving so the client hides it.
+- **Keying**: A keyframe every tick until the client acknowledges a tick at or after the first one (entered at 800 m). A lost packet is repaired by the next tick's keyframe.
+- **Synced**: Deltas against the shared baseline. Goes back to Keying if the baseline does not hold the entity (a safety net).
+- **Leaving**: The dormant record every tick until the client acknowledges a tick at or after the first one (left at 850 m). Never a removal: the entity is alive.
+- **Silent**: The client has the dormant record. Nothing is sent until the entity enters again.
+

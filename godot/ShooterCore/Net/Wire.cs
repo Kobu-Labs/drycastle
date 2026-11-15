@@ -275,7 +275,8 @@ public static class Wire
     //   v52 bullet drop of the sniper rifles: the zero dial (event 24, client to server); the hit diagram of a hunted animal (event 25)
     //   v54 the Raid van's owner field: door in 63rds (bits 0-5), song bits 6-10, crew sitting inside bits 11-14, left door bit 15 (was door in thousandths, song bits 10-14)
     //   v53 the binoculars seen by the others (events 26 and 27); event 25 names the hit shape it was tested against (pose, frame) and the head
-    public const byte ProtocolVersion = 54;
+    //   v55 world interest (ADR 0024): world record flag FDormant 64 (the entity left this client's interest, no fields); animals, flocks and poop outside 800 m are not sent
+    public const byte ProtocolVersion = 55;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {
@@ -315,6 +316,8 @@ public static class Wire
     public const byte FPosAbs = 1, FPosDelta = 2, FRot = 4, FStatus = 8, FHp = 16;
     /// <summary>Entity snapshot record flag: the entity is gone since the baseline (no fields follow).</summary>
     public const byte FRemove = 128;
+    /// <summary>World record flag: the entity is alive but outside this client's interest (<see cref="WorldInterest"/>); no fields follow, the client hides it until a keyframe shows it again.</summary>
+    public const byte FDormant = 64;
     /// <summary>Flags that make a snapshot record a keyframe (world entities; players and vehicles use the same three).</summary>
     public const byte FKey = FPosAbs | FRot | FStatus;
 
