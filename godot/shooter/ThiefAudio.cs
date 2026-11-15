@@ -96,7 +96,7 @@ public sealed partial class ThiefAudio : Node
     // ---- the van's song (ticket 03 calls these) ----
 
     /// <summary>
-    /// Loops song <paramref name="songIndex"/> (modulo the songs found) at <paramref name="van"/>, heard to <c>audio.van_range_m</c> (60 m), starting <paramref name="startOffsetSeconds"/> into
+    /// Loops song <paramref name="songIndex"/> (modulo the songs found) at <paramref name="van"/>, heard to <c>audio.van_range_m</c> at <c>audio.van_volume_db</c>, starting <paramref name="startOffsetSeconds"/> into
     /// it (modulo the song's length: the caller passes the server clock since the van's song began, so every client is in step). The player is a child of the node and follows it, and goes
     /// with it when the node is freed. Playing again on the same node restarts it. Null when there are no songs (silence).
     /// </summary>
@@ -105,7 +105,7 @@ public sealed partial class ThiefAudio : Node
         StopVanSong(van);
         if (!Sfx.Enabled || SongCount == 0 || !IsInstanceValid(van)) return null;
         if (Load(_songs![((songIndex % _songs.Length) + _songs.Length) % _songs.Length], true) is not { } song) return null;
-        var p = Player(song, MusicBus, _cfg.VanRangeM, 8f, 2f);
+        var p = Player(song, MusicBus, _cfg.VanRangeM, 8f, _cfg.VanVolumeDb);
         p.Name = VanSongNode;
         van.AddChild(p);
         var len = song.GetLength();

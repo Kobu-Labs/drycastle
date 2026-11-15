@@ -96,6 +96,17 @@ public partial class NetServer
         return list;
     }
 
+    /// <summary>
+    /// Vehicles first (<see cref="LootConfig.VehiclePriority"/>): each Raid looks for cars that newly became available to it (a spawn, a respawn, a player stopping one near its van; the cars come from
+    /// <see cref="ServerTires"/>) and sends a share of its free Thieves to their tires.
+    /// </summary>
+    void LootVehiclesTick(float dt)
+    {
+        if (_loot == null || _raids == null) return;
+        foreach (var raid in _raids.Raids)
+            if (raid.Gang.Work is RaidWork work) work.ScanVehicles(dt);
+    }
+
     /// <summary>A new round, or a cancelled event: lying Loot goes, claims end and every kind puts everything back (the cars' own reset puts the wheels back too).</summary>
     void ResetLoot() => _loot?.Reset();
 

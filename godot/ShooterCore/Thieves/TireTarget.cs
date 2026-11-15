@@ -88,6 +88,17 @@ public sealed class TireSource : IStealSource
         }
     }
 
+    /// <summary>The cars as the source sees them (the ones of <see cref="TireLootConfig.VehicleIds"/>).</summary>
+    public IEnumerable<TireCar> Cars() => _cars.Cars();
+
+    /// <summary>Appends the wheels still on the car (at rest) as targets, claimed or not.</summary>
+    public void WheelsOf(int carId, List<StealTarget> into)
+    {
+        if (!_cars.TryGet(carId, out var car) || !car.AtRest) return;
+        for (var w = 0; w < 4; w++)
+            if ((car.WheelsOff & (1 << w)) == 0) into.Add(TargetOf(car, w));
+    }
+
     public void Places(List<Vector2> into)
     {
         foreach (var car in _cars.Cars())

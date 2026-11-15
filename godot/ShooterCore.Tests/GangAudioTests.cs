@@ -58,7 +58,7 @@ public class GangAudioTests
     {
         var a = ThievesFile.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "thieves.json"))).Audio;
         Assert.Equal((8f, 3f, 25f, 15), (a.VoiceNearM, a.VoiceBusyS, a.VoiceRangeM, a.VoiceLines));
-        Assert.Equal((0.05f, 30f, 60f), (a.SpeakerChance, a.SpeakerRangeM, a.VanRangeM));
+        Assert.Equal((0.05f, 30f, 120f, 8f), (a.SpeakerChance, a.SpeakerRangeM, a.VanRangeM, a.VanVolumeDb));
         Assert.Equal(new ThievesAudioConfig().VoiceChance, ThievesFile.Parse("""{"version":1}""").Audio.VoiceChance); // a file without the section has the defaults
         Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"audio":{"voice_chance":1.5}}"""));
         Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"audio":{"voice_near_m":0}}"""));

@@ -23,6 +23,7 @@ public partial class NetServer
     GangRoster? _gangs;
     readonly List<GangPlayer> _gangPlayers = new();
     uint _navTurnTick;
+    double _gangsAt;
 
     /// <summary>The Raids of the Thieves event (null until <c>_Ready</c>). Ticket 03 makes one per van; ticket 04 reads their members.</summary>
     public GangRoster? Gangs => _gangs;
@@ -33,6 +34,7 @@ public partial class NetServer
         public GangWorld(NetServer server) => _s = server;
         public IReadOnlyList<GangPlayer> Players => _s._gangPlayers;
         public void Hurt(ushort player, float damage, ushort memberHitId) => _s.Deal(memberHitId, SpecialWeapons.Gang, player, damage, false, false);
+        public NVec3 Snap(NVec3 p) => _s._nav == null ? p : N(_s._nav.Snap(new Vector3(p.X, p.Y, p.Z)));
     }
 
     /// <summary>Called once from <see cref="InitThieves"/>: the entity type, the roster behind the match's hit routing, the weight of a weapon, the XP of a kill.</summary>
@@ -56,11 +58,13 @@ public partial class NetServer
     /// <summary>Once a tick before the entities tick (next to <see cref="BigfootPrepare"/>): the living players the members look at, then who each fights.</summary>
     void GangsPrepare()
     {
+        var dt = (float)(_elapsed - _gangsAt);
+        _gangsAt = _elapsed;
         if (_gangs == null || _gangs.Gangs.Count == 0) return;
         _gangPlayers.Clear();
         foreach (var c in _byId.Values)
             if (_match.Get(c.Id)?.Life == PlayerLife.Alive) _gangPlayers.Add(new GangPlayer(c.Id, N(c.Body.GlobalPosition), c.Car == null));
-        _gangs.Update();
+        _gangs.Update(dt);
     }
 
     /// <summary>

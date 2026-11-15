@@ -30,8 +30,9 @@ public sealed class GangHitIds
 /// they wait for, and answers the hits on them. The Raid's van (ticket 03) sets <see cref="Post"/> and calls <see cref="Add"/>; the stealing loop (ticket 04) runs in the members through <see cref="Work"/>. The gang owns no clock: the server calls <see cref="Update"/> before the entities tick and
 /// <see cref="ServeRoute"/> after.
 /// <para>
-/// Aggro is kept per Raid: a player who hit any member, or who stands within <see cref="GangAggro.CrowdM"/> of a working Thief, is fought by every member that
-/// can fight (Enforcers, the Gang boss, a Thief with free hands) until they die or are further than <see cref="GangAggro.GiveUpM"/> from every living member.
+/// Aggro is kept per Raid: a player who hit any member is fought by every member that can fight (Enforcers, the Gang boss, a Thief with free hands) for
+/// <see cref="GangAggro.ForgetSeconds"/> after their last hit (each hit starts it again), or until they die or are further than <see cref="GangAggro.GiveUpM"/> from every living member.
+/// When it lapses the members go back to what they did (Thieves steal, Enforcers and the boss guard).
 /// </para>
 /// </summary>
 public sealed class ThiefGang : IGangHits, IDisposable
@@ -45,7 +46,7 @@ public sealed class ThiefGang : IGangHits, IDisposable
     readonly Dictionary<ushort, GangMember> _byHit = new();
     readonly Dictionary<ushort, ushort> _entityOfHit = new();
     readonly Dictionary<ushort, ushort> _hitOfEntity = new();
-    readonly HashSet<ushort> _aggro = new();
+    readonly Dictionary<ushort, float> _aggro = new(); // player -> seconds of aggro left
     readonly List<ushort> _scratch = new();
     long _seq;
     Vector3 _post;
@@ -84,7 +85,7 @@ public sealed class ThiefGang : IGangHits, IDisposable
     }
 
     /// <summary>The players this Raid fights now.</summary>
-    public IReadOnlyCollection<ushort> Aggro => _aggro;
+    public IReadOnlyCollection<ushort> Aggro => _aggro.Keys;
 
     /// <summary>What this Raid's Thieves steal through (<see cref="RaidWork"/>); given to every member, those that join later too. Null: Thieves stand about.</summary>
     public IThiefWork? Work
@@ -153,34 +154,31 @@ public sealed class ThiefGang : IGangHits, IDisposable
 
     // ---- the tick ----
 
-    /// <summary>A player hit a member (or ran one over): the Raid fights them from now on. Only a living player counts.</summary>
+    /// <summary>A player hit a member (or ran one over): the Raid fights them for <see cref="GangAggro.ForgetSeconds"/> from now. Only a living player counts.</summary>
     public void NoteHit(ushort player)
     {
         foreach (var p in _world.Players)
-            if (p.Id == player) { _aggro.Add(player); return; }
+            if (p.Id == player) { _aggro[player] = _cfg.Aggro.ForgetSeconds; return; }
     }
 
     /// <summary>
-    /// Once a tick, before the members tick: the crowding rule, the give-up rule, who each member fights, and whom each Enforcer escorts. Everything about
+    /// Once a tick, before the members tick: the forget clock and the give-up rule, then who each member fights, and whom each Enforcer escorts. Everything about
     /// who is fought is decided here, from the players of this tick.
     /// </summary>
-    public void Update()
+    public void Update(float dt = 1f / 60)
     {
         var players = _world.Players;
-        foreach (var m in _members)
-            if (m.Alive && m.Kind == GangMemberKind.Thief && m.Working)
-                foreach (var p in players)
-                    if (Flat(p.Feet, m.Position) <= _cfg.Aggro.CrowdM) _aggro.Add(p.Id); // in the way of a working Thief
-
         if (_aggro.Count > 0)
         {
             _scratch.Clear();
-            _scratch.AddRange(_aggro);
+            _scratch.AddRange(_aggro.Keys);
             foreach (var id in _scratch)
             {
                 GangPlayer? p = null;
                 foreach (var q in players) if (q.Id == id) { p = q; break; }
-                if (p is not { } player || NearestLiving(player.Feet) > _cfg.Aggro.GiveUpM) _aggro.Remove(id); // died, left, or got away
+                var left = _aggro[id] - dt;
+                if (left <= 0 || p is not { } player || NearestLiving(player.Feet) > _cfg.Aggro.GiveUpM) _aggro.Remove(id); // forgotten, died, left, or got away
+                else _aggro[id] = left;
             }
         }
 
@@ -198,7 +196,7 @@ public sealed class ThiefGang : IGangHits, IDisposable
         var bestD = float.PositiveInfinity;
         foreach (var p in players)
         {
-            if (!_aggro.Contains(p.Id)) continue;
+            if (!_aggro.ContainsKey(p.Id)) continue;
             var d = Flat(p.Feet, from);
             if (d < bestD) { bestD = d; best = p; }
         }
@@ -353,6 +351,8 @@ public sealed class GangRoster : IGangHits
     readonly List<ThiefGang> _gangs = new();
     readonly Random _rng;
     int _turn;
+    readonly List<GangMember> _all = new();
+    float[] _pushX = new float[32], _pushZ = new float[32];
 
     public GangRoster(GangConfig cfg, IGangWorld world, WorldEntityManager entities, int seed = 0)
     {
@@ -399,7 +399,62 @@ public sealed class GangRoster : IGangHits
         foreach (var g in _gangs.ToList()) Remove(g);
     }
 
-    public void Update() { foreach (var g in _gangs) g.Update(); }
+    /// <summary>Once a tick (<paramref name="dt"/> seconds long, 60 Hz by default) before the entities tick: every Raid decides who it fights, then the chasers of one player get their own spots and walking members are nudged apart.</summary>
+    public void Update(float dt = 1f / 60)
+    {
+        foreach (var g in _gangs) g.Update(dt);
+        AssignSlots();
+        Separate(dt);
+    }
+
+    /// <summary>Each member with a target keeps its slot while the fight lasts; a new one takes the lowest slot of that player no other member (of any Raid) has.</summary>
+    void AssignSlots()
+    {
+        _all.Clear();
+        foreach (var g in _gangs) foreach (var m in g.Members) if (m.Alive) _all.Add(m);
+        foreach (var m in _all)
+        {
+            if (m.Target is not { } t) continue;
+            if (m.Slot >= 0 && m.SlotOf == t.Id) continue;
+            var slot = 0;
+            while (_all.Any(o => o != m && o.Target is { } ot && ot.Id == t.Id && o.Slot == slot && o.SlotOf == t.Id)) slot++;
+            m.Slot = slot; m.SlotOf = t.Id;
+        }
+    }
+
+    /// <summary>A pure push between members of any Raid (alive, walking about) closer than <see cref="GangConfig.SeparationM"/>: small, at most <see cref="GangConfig.SeparationMps"/> a second, along the line between them.</summary>
+    void Separate(float dt)
+    {
+        var sep = _cfg.SeparationM; var cap = _cfg.SeparationMps * dt;
+        if (!(cap > 0) || _all.Count < 2) return;
+        var n = _all.Count;
+        if (_pushX.Length < n) { _pushX = new float[n]; _pushZ = new float[n]; }
+        Array.Clear(_pushX, 0, n); Array.Clear(_pushZ, 0, n);
+        for (var i = 0; i < n; i++)
+        {
+            var a = _all[i];
+            if (!a.Pushable) continue;
+            for (var j = i + 1; j < n; j++)
+            {
+                var b = _all[j];
+                if (!b.Pushable || MathF.Abs(a.Position.Y - b.Position.Y) > 2f) continue;
+                var dx = b.Position.X - a.Position.X; var dz = b.Position.Z - a.Position.Z;
+                var d = MathF.Sqrt(dx * dx + dz * dz);
+                if (d >= sep) continue;
+                if (d < 0.001f) { var ang = (i * 7 + j) * 2.3999632f; dx = MathF.Cos(ang); dz = MathF.Sin(ang); d = 1f; } // on the same spot: any way apart, the same one for the same pair
+                var push = MathF.Min(sep - d, cap) * 0.5f;
+                dx = dx / d * push; dz = dz / d * push;
+                _pushX[i] -= dx; _pushZ[i] -= dz; _pushX[j] += dx; _pushZ[j] += dz;
+            }
+        }
+        for (var i = 0; i < n; i++)
+        {
+            var len = MathF.Sqrt(_pushX[i] * _pushX[i] + _pushZ[i] * _pushZ[i]);
+            if (len < 1e-5f) continue;
+            var k = len > cap ? cap / len : 1f;
+            _all[i].Nudge(_pushX[i] * k, _pushZ[i] * k);
+        }
+    }
 
     /// <summary>Serves one route request in all the Raids, taking turns between them. True when one was served.</summary>
     public bool ServeRoute(Func<Vector3, Vector3, IReadOnlyList<Vector3>> route)

@@ -99,13 +99,13 @@ public class ThievesTests
     [Fact]
     public void ThePhaseGoesIdleRaidingOverAndTheLastVanGoneWinsTheRun()
     {
-        var cfg = new RaidsConfig { Count = 1, MaxVans = 1, NextRaidSeconds = 10, GapSeconds = 1 };
+        var cfg = new RaidsConfig { MinVans = 1, MaxVans = 1, ConvoyGapSeconds = 1 };
         var t = new ThievesEvent();
         Assert.Equal(ThievesPhase.Idle, t.Phase);
         Assert.Equal(ThievesStep.None, t.Tick(1, 0)); // idle: nothing runs
         Assert.False(t.Finish());
-        Assert.True(t.Begin(cfg));
-        Assert.False(t.Begin(cfg)); // already raiding
+        Assert.True(t.Begin(cfg, new Random(1)));
+        Assert.False(t.Begin(cfg, new Random(1))); // already raiding
         Assert.Equal(ThievesPhase.Raiding, t.Phase);
         Assert.Equal(ThievesStep.Launch, t.Tick(1, 0));
         Assert.Equal(ThievesStep.None, t.Tick(1, 1)); // the van is in the village
@@ -121,14 +121,14 @@ public class ThievesTests
     {
         var cfg = new RaidsConfig();
         var t = new ThievesEvent();
-        t.Begin(cfg);
+        t.Begin(cfg, new Random(1));
         Assert.True(t.Reset()); // mid-run: the round ended it
         Assert.Equal(ThievesPhase.Idle, t.Phase);
         Assert.False(t.Reset());
-        t.Begin(cfg);
+        t.Begin(cfg, new Random(1));
         t.Finish();
-        Assert.True(t.Begin(cfg)); // Over -> Raiding: a new /event thieves
-        Assert.Equal(0, t.Launched); // from the first Raid again
+        Assert.True(t.Begin(cfg, new Random(1))); // Over -> Raiding: a new /event thieves
+        Assert.Equal(0, t.Launched); // from the first van again
         t.Finish();
         Assert.True(t.Reset());
         Assert.Equal(ThievesPhase.Idle, t.Phase);
@@ -143,5 +143,7 @@ public class ThievesTests
         Assert.Null(e.EndsAt); // stays until the run ends and withdraws it
         Assert.Equal(IntelStatus.Underway, IntelTime.Status(e, 50));
         Assert.False(e.Test);
+        Assert.Contains("convoy", e.Description);
+        Assert.Contains(e.Risks, r => r.Contains("only while you keep attacking"));
     }
 }

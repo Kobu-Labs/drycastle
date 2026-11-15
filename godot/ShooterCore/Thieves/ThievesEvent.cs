@@ -38,11 +38,11 @@ public sealed class ThievesEvent
     public int Launched => _launched;
     public int Total => _vans;
 
-    /// <summary>Starts a run for <paramref name="humans"/> human players: the first van is due at once. False when one already runs.</summary>
-    public bool Begin(RaidsConfig cfg, int humans)
+    /// <summary>Starts a run whose wave has a random number of vans (<see cref="RaidsConfig.VansFor"/>): the first van is due at once. False when one already runs.</summary>
+    public bool Begin(RaidsConfig cfg, Random rng)
     {
         if (Running) return false;
-        _cfg = cfg; _launched = 0; _vans = cfg.VansFor(humans); _next.Cancel();
+        _cfg = cfg; _launched = 0; _vans = cfg.VansFor(rng); _next.Cancel();
         return _fsm.Enter(ThievesPhase.Raiding);
     }
 

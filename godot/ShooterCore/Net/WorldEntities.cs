@@ -81,7 +81,7 @@ public readonly record struct WorldDespawned(ushort Id, WorldDespawnReason Reaso
 /// </summary>
 public sealed class WorldEntityManager
 {
-    public const int MaxEntities = 256;
+    public const int MaxEntities = 512;
 
     readonly WorldEntityRegistry _types;
     readonly Dictionary<ushort, IWorldEntity> _live = new();

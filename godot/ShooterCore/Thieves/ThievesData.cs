@@ -43,8 +43,8 @@ public sealed class ThievesFile : IVersioned
         }
         var h = g.Hits;
         Positive(h.HeadshotWeight, "gang.hits.headshot_weight"); NotNegative(h.ExplosiveWeight, "gang.hits.explosive_weight"); NotNegative(h.VehicleWeaponWeight, "gang.hits.vehicle_weapon_weight");
-        Positive(g.Aggro.CrowdM, "gang.aggro.crowd_m"); Positive(g.Aggro.GiveUpM, "gang.aggro.give_up_m");
-        if (!(g.Aggro.GiveUpM > g.Aggro.CrowdM)) throw new DataFileException($"{F}: gang.aggro.give_up_m is longer than crowd_m");
+        Positive(g.Aggro.ForgetSeconds, "gang.aggro.forget_seconds"); Positive(g.Aggro.GiveUpM, "gang.aggro.give_up_m");
+        Positive(g.SeparationM, "gang.separation_m"); NotNegative(g.SeparationMps, "gang.separation_mps");
         Positive(g.CorpseSeconds, "gang.corpse_seconds"); NotNegative(g.KillXp, "gang.kill_xp");
         Positive(g.TurnRateDegPerS, "gang.turn_rate_deg_per_s"); Positive(g.RepathSeconds, "gang.repath_seconds"); Positive(g.RepathM, "gang.repath_m");
         Positive(g.GuardFollowM, "gang.guard_follow_m"); Positive(g.WanderM, "gang.wander_m");
@@ -72,7 +72,6 @@ public sealed class ThievesFile : IVersioned
         var r = f.Raids;
         if (r.MinVans < 1) throw new DataFileException($"{F}: raids.min_vans is at least 1");
         if (r.MaxVans < r.MinVans || r.MaxVans > RaidVanRules.MaxVans) throw new DataFileException($"{F}: raids.max_vans is between min_vans and {RaidVanRules.MaxVans}");
-        if (r.PlayersPerVan < 1) throw new DataFileException($"{F}: raids.players_per_van is at least 1");
         NotNegative(r.ConvoyGapSeconds, "raids.convoy_gap_seconds");
         if (r.PlayersPerExtra < 1 || r.MaxExtraThieves < 0 || r.MaxExtraEnforcers < 0) throw new DataFileException($"{F}: raids.players_per_extra is at least 1, the extras are not negative");
         if (g.Raid.Size + r.MaxExtraThieves + r.MaxExtraEnforcers > GangRules.MaxCrew) throw new DataFileException($"{F}: raids can grow a crew past {GangRules.MaxCrew} members");
@@ -111,6 +110,9 @@ public sealed class GangConfig
     /// <summary>A chaser (or a follower) asks for a new route at most this often, and only when its goal moved this far from the end of the route it has.</summary>
     public float RepathSeconds { get; set; } = 1f;
     public float RepathM { get; set; } = 3f;
+    /// <summary>Members of any Raid that walk are nudged apart when closer than separation_m, at most separation_mps metres a second (a pure push, no collision).</summary>
+    public float SeparationM { get; set; } = 0.8f;
+    public float SeparationMps { get; set; } = 2f;
     /// <summary>An Enforcer guarding a Thief stays within this distance of it.</summary>
     public float GuardFollowM { get; set; } = 3.5f;
     /// <summary>A Thief with nothing to steal idles for a random time between these, then walks to a point within <see cref="WanderM"/> of the Raid's post (the stand-in for ticket 04's seeking).</summary>
@@ -170,8 +172,8 @@ public sealed class GangHitWeights
 /// <summary>When a Raid takes a player as its enemy and when it lets go.</summary>
 public sealed class GangAggro
 {
-    /// <summary>A player this near a Thief who is working (stealing or hauling, ticket 04) is in the way.</summary>
-    public float CrowdM { get; set; } = 4;
+    /// <summary>A player is fought for this long after their last hit on a member of the Raid (each further hit starts it again).</summary>
+    public float ForgetSeconds { get; set; } = 8;
     /// <summary>A player this far from every living member of the Raid is let go.</summary>
     public float GiveUpM { get; set; } = 30;
 }
@@ -190,8 +192,6 @@ public sealed class RaidsConfig
     /// <summary>The wave has at least this many vans, and at most <see cref="MaxVans"/> (at most <see cref="RaidVanRules.MaxVans"/>).</summary>
     public int MinVans { get; set; } = 1;
     public int MaxVans { get; set; } = 3;
-    /// <summary>One van per this many human players, rounded up, between <see cref="MinVans"/> and <see cref="MaxVans"/>.</summary>
-    public int PlayersPerVan { get; set; } = 3;
     /// <summary>The next van of the wave is launched this long after the one before: they drive the same route in a line (at the van's speed, seconds x speed = metres apart).</summary>
     public float ConvoyGapSeconds { get; set; } = 3;
     /// <summary>The crew grows by one extra member for every this many players beyond the first (Thieves first, then Enforcers), up to the maxima below.</summary>
@@ -217,8 +217,8 @@ public sealed class RaidsConfig
     /// <summary>With no centre to park near (or no stop found near it): the van parks at the end of its route, or, when that spot fails, the nearest working spot back along it within this distance.</summary>
     public float RouteStopSearchM { get; set; } = 40;
 
-    /// <summary>How many vans the wave has for <paramref name="humans"/> human players.</summary>
-    public int VansFor(int humans) => Math.Clamp((Math.Max(1, humans) + PlayersPerVan - 1) / PlayersPerVan, MinVans, MaxVans);
+    /// <summary>How many vans the wave has: a random number from <see cref="MinVans"/> to <see cref="MaxVans"/> (inclusive).</summary>
+    public int VansFor(Random rng) => rng.Next(MinVans, MaxVans + 1);
 
     /// <summary>The crew of a Raid for <paramref name="players"/> human players: the base counts of <see cref="GangConfig.Raid"/> plus the extras.</summary>
     public GangRaidCounts CrewFor(GangRaidCounts baseCrew, int players)
@@ -302,7 +302,10 @@ public sealed class VanView
     public string DoorColor { get; set; } = "#9b9585";
     public string WreckColor { get; set; } = "#2b2724";
     /// <summary>How far from the camera a honk is heard (the sound is a stand-in with no range of its own).</summary>
-    public float HonkHearM { get; set; } = 180;
+    public float HonkHearM { get; set; } = 360;
+    /// <summary>The honk's loudness on top of its sound's own (dB), and how much quieter it is at <see cref="HonkHearM"/> (it fades linearly with the distance).</summary>
+    public float HonkDb { get; set; } = 6;
+    public float HonkFadeDb { get; set; } = 12;
     /// <summary>The model under assets-private/synty/glb (without .glb), its atlas under synty/, and the node that is the sliding door ("" = the model has no door to slide).</summary>
     public string Model { get; set; } = "";
     public string Atlas { get; set; } = "";
@@ -321,6 +324,7 @@ public sealed class VanView
         if (Model != "" && Atlas == "") throw new DataFileException($"{file}: van.view.atlas names the model's atlas");
         if (DoorClosed.Length != 3 || DoorOpen.Length != 3) throw new DataFileException($"{file}: van.view.door_closed and door_open are three numbers");
         if (!(HonkHearM > 0)) throw new DataFileException($"{file}: van.view.honk_hear_m must be positive");
+        if (!float.IsFinite(HonkDb) || !(HonkFadeDb >= 0)) throw new DataFileException($"{file}: van.view.honk_db is a number and honk_fade_db is not negative");
         if (!(StageDim >= 0 && StageDim < 0.3f)) throw new DataFileException($"{file}: van.view.stage_dim is between 0 and 0.3");
     }
 }

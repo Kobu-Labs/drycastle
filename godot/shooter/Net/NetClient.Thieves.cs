@@ -191,8 +191,8 @@ public partial class NetClient
             case ThievesFxKind.Honk:
             {
                 var d = Sfx.ListenerDistance(at);
-                var range = ThievesData.Van.View.HonkHearM;
-                if (d <= range) Sfx.Play3D(HonkSound, at, -12f * d / range); // the stand-in sound has no range of its own: it fades with the distance here
+                var view = ThievesData.Van.View;
+                if (d <= view.HonkHearM) Sfx.Play3D(HonkSound, at, view.HonkDb - view.HonkFadeDb * d / view.HonkHearM); // the stand-in sound has no range of its own: it fades with the distance here
                 break;
             }
             case ThievesFxKind.Shock:

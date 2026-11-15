@@ -49,7 +49,7 @@ public class GangMemberTests
         /// <summary>One tick as the server does it: who fights whom, the entities, then one route.</summary>
         public void Step()
         {
-            Roster.Update();
+            Roster.Update(Dt);
             Entities.Tick(Dt);
             if (Roster.ServeRoute((from, to) => { RoutesServed++; return NoRoutes ? Array.Empty<Vector3>() : new[] { from, to }; })) { }
         }
@@ -72,7 +72,7 @@ public class GangMemberTests
         Assert.Equal(10f, g.CorpseSeconds);
         Assert.Equal(2f, g.Hits.HeadshotWeight);
         Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"gang":{"thief":{"hits":0}}}"""));
-        Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"gang":{"aggro":{"crowd_m":9,"give_up_m":5}}}"""));
+        Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"gang":{"aggro":{"forget_seconds":0,"give_up_m":5}}}"""));
         Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"gang":{"thief":{"melee":{"windup_seconds":2,"interval_seconds":1}}}}"""));
     }
 
@@ -322,20 +322,118 @@ public class GangMemberTests
     }
 
     [Fact]
-    public void ACrowdedWorkingThiefWouldAggroAPlayerWithinCrowdMAndThePrimedHookIsOffForNow()
+    public void StandingNearAWorkingThiefIsNoAggroAndABusyThiefDoesNotJoinAFight()
     {
         var rig = new Rig();
         var gang = rig.Gang();
         var thief = One(gang, GangMemberKind.Thief);
         rig.World.Player(1, 2, 0);
-        Assert.False(thief.Working); // ticket 04 turns this on in Steal and Haul
         rig.Step();
         Assert.Empty(gang.Aggro);
-        thief.Carried = 1; // hands full: a busy Thief does not join a fight either
+        thief.Carried = 1; // hands full: a busy Thief does not join a fight
         gang.NoteHit(1);
         rig.Step();
         Assert.Null(thief.Target);
         Assert.False(thief.CanFight);
+    }
+
+    [Fact]
+    public void AggroLapsesForgetSecondsAfterTheLastHitAndEachHitStartsItAgain()
+    {
+        var rig = new Rig(c => c.Aggro.ForgetSeconds = 4);
+        var gang = rig.Gang();
+        var e = One(gang, GangMemberKind.Enforcer);
+        var thief = One(gang, GangMemberKind.Thief, 3, 0);
+        rig.World.Player(1, 25, 0);
+        gang.NoteHit(1);
+        rig.Run(3);
+        Assert.Equal(new ushort[] { 1 }, gang.Aggro);
+        Assert.Equal(GangMemberState.Chase, e.State);
+        rig.Roster.Hit(thief.HitId, 1, Bullet, 14, KillCause.Standard); // keeps hitting: the clock starts again
+        rig.Run(3);
+        Assert.Equal(new ushort[] { 1 }, gang.Aggro);
+        rig.Run(1.5f);
+        Assert.Empty(gang.Aggro);
+        Assert.Null(e.Target);
+        rig.Run(0.2f);
+        Assert.Equal(GangMemberState.Guard, e.State); // back to its post
+        Assert.NotEqual(GangMemberState.Chase, thief.State); // the Thief stands (or walks) again
+    }
+
+    [Fact]
+    public void AMemberInItsWindupWhenTheAggroLapsesStopsAndGoesBack()
+    {
+        var rig = new Rig(c => c.Aggro.ForgetSeconds = 0.5f);
+        var gang = rig.Gang();
+        var e = One(gang, GangMemberKind.Enforcer);
+        rig.World.Player(1, 1.5f, 0);
+        gang.NoteHit(1);
+        rig.Step();
+        rig.Step();
+        Assert.Equal(GangMemberState.Windup, e.State);
+        rig.Run(1);
+        Assert.Empty(gang.Aggro);
+        Assert.Equal(GangMemberState.Guard, e.State);
+    }
+
+    // ---- surround and separation ----
+
+    static float MinPairDistance(IEnumerable<GangMember> ms)
+    {
+        var l = ms.ToList(); var best = float.PositiveInfinity;
+        for (var i = 0; i < l.Count; i++) for (var j = i + 1; j < l.Count; j++) best = MathF.Min(best, Vector3.Distance(l[i].Position, l[j].Position));
+        return best;
+    }
+
+    [Fact]
+    public void ChasersOfOnePlayerTakeDistinctSlotsAndDoNotStackIntoOneBlob()
+    {
+        var rig = new Rig(c => c.Aggro.ForgetSeconds = 60);
+        var gang = rig.Gang();
+        var chasers = Enumerable.Range(0, 8).Select(i => One(gang, GangMemberKind.Enforcer, -1 + i * 0.2f, 0)).ToList(); // nearly on one spot
+        rig.World.Player(1, 30, 0);
+        gang.NoteHit(1);
+        rig.Step();
+        Assert.Equal(8, chasers.Select(c => c.Slot).Distinct().Count());
+        Assert.Equal(8, chasers.Select(c => c.SlotPoint!.Value).Distinct().Count());
+        var slots = chasers.Select(c => c.Slot).ToList();
+        rig.Run(8); // all of them arrive and strike
+        Assert.Equal(slots, chasers.Select(c => c.Slot).ToList()); // stable while the fight lasts
+        Assert.True(MinPairDistance(chasers) > rig.Cfg.SeparationM * 0.8f, $"min distance {MinPairDistance(chasers)}");
+        Assert.All(chasers, c => Assert.True(Vector3.Distance(c.Position, new Vector3(30, 0, 0)) <= rig.Cfg.Enforcer.Melee.ReachM, "all of them are within reach"));
+    }
+
+    [Fact]
+    public void ASlotThatCannotBeStruckFromFallsBackToThePlayersFeetAndSlotsAreFreedWhenTheFightEnds()
+    {
+        var rig = new Rig(c => c.Aggro.ForgetSeconds = 1);
+        var gang = rig.Gang();
+        var e = One(gang, GangMemberKind.Enforcer);
+        rig.World.Player(1, 20, 0);
+        gang.NoteHit(1);
+        rig.Step();
+        Assert.Equal(0, e.Slot);
+        var onRing = e.SlotPoint!.Value;
+        Assert.InRange(Vector3.Distance(onRing, new Vector3(20, 0, 0)), 1f, 1.7f);
+        rig.Run(2);
+        Assert.Equal(-1, e.Slot);
+    }
+
+    [Fact]
+    public void MembersOfAnyRaidAreNudgedApartButADeadOneNeitherMovesNorPushes()
+    {
+        var rig = new Rig();
+        var a = rig.Gang(); var b = rig.Gang();
+        var x = One(a, GangMemberKind.Thief, 0, 0);
+        var y = One(b, GangMemberKind.Enforcer, 0.1f, 0);
+        rig.Run(2);
+        Assert.True(Vector3.Distance(x.Position, y.Position) >= rig.Cfg.SeparationM - 0.05f);
+        var dead = One(a, GangMemberKind.Thief, 10, 10);
+        var stand = One(b, GangMemberKind.Thief, 10.1f, 10);
+        dead.Kill(0);
+        var (atDead, atStand) = (dead.Position, stand.Position);
+        rig.Run(1);
+        Assert.Equal((atDead, atStand), (dead.Position, stand.Position)); // a body neither is pushed nor pushes
     }
 
     // ---- melee ----
@@ -393,7 +491,7 @@ public class GangMemberTests
     [Fact]
     public void AChaseAsksForARouteAtMostEveryRepathSecondsAndRunsItAtTheRunSpeed()
     {
-        var rig = new Rig();
+        var rig = new Rig(c => c.Aggro.ForgetSeconds = 60);
         var gang = rig.Gang();
         var e = One(gang, GangMemberKind.Enforcer);
         rig.World.Player(1, 25, 0);
@@ -448,7 +546,7 @@ public class GangMemberTests
         Assert.All(enforcers, e => Assert.NotNull(e.Escort));
         Assert.Equal(2, enforcers.Select(e => e.Escort).Distinct().Count()); // not both on one Thief
         rig.Run(40);
-        Assert.Equal(Vector3.Zero, boss.Position);
+        Assert.True(Vector3.Distance(Vector3.Zero, boss.Position) <= 1.5f, "the boss stays within its stop of the post");
         Assert.All(enforcers, e => Assert.True(Vector3.Distance(e.Position, e.Escort!.Position) <= rig.Cfg.GuardFollowM * 2.2f, "an escort stays by its Thief"));
         var escort = enforcers[0].Escort!;
         escort.Kill(1);
@@ -599,7 +697,7 @@ public class GangMemberTests
         var e = One(gang, GangMemberKind.Enforcer);
         rig.World.Player(1, 25, 0);
         gang.NoteHit(1);
-        rig.Roster.Update();
+        rig.Roster.Update(Dt);
         rig.Entities.Tick(Dt); // the chase asks for a route; nobody serves it yet
         Assert.NotNull(e.RouteRequest);
         Assert.Equal(1, gang.RoutesWaiting);

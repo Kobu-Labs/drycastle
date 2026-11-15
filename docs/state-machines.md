@@ -474,7 +474,7 @@ From any state: Dead
 - **Idle**: A Thief standing (clock: a random time, then it walks to a point near the post); a Thief that has Loot work (its Raid gave it) goes straight on to Seek instead.
 - **Walk**: A Thief on a route to a point near the post (clock: the time budget to arrive, then it stands again).
 - **Guard**: An Enforcer follows the Thief it escorts, or stands at the post; the Gang boss stands at the post. Never steals.
-- **Chase**: Runs at the player the Raid is fighting (a route from the navigation mesh, asked for at most every repath_seconds); winds up once within reach.
+- **Chase**: Runs at its own spot on a ring round the player the Raid is fighting (a route from the navigation mesh, asked for at most every repath_seconds); winds up once within reach. Ends (back to Idle or Guard) when the Raid forgets the player.
 - **Windup**: The swing's telegraph (clock: windup_seconds): a player can step out of reach. Ends in Swing, or in a stand if the target is gone.
 - **Swing**: The blow lands at its start, only if the target is still within reach; then recovers (clock: interval minus windup) and chases or stands again.
 - **Flee**: Runs for the map edge on a route (clock: flee_seconds); the entity ends there (no state follows).
@@ -482,7 +482,7 @@ From any state: Dead
 - **Board**: Called back by the van: runs to its side door on a route (never fights) and ends there, counted as boarded. Flee when the van is destroyed or leaves without it.
 - **Seek**: A Thief looks for a target: the nearest free one of a kind chosen by weight near the van's door, one Thief per target (clock: it asks again after seek_retry_seconds when nothing is free or the van takes no more). A Thief with free hands still joins a fight.
 - **Approach**: Walks a route to the target's work spot (clock: approach_give_up_seconds; a target that is gone, a lost route or the clock ends it and the target is avoided for a while). Arrived: Steal, or ClimbUp when the target needs a climb.
-- **Steal**: Stands at the target, a still target (clock: the kind's steal_seconds, or pickup_seconds for Loot that lies). When the clock runs out the Thief has it and it is gone from its place; a target that goes meanwhile ends it. Landed inside a fence (HopIn) it first walks straight to the pet and the clock starts within grab_m of it. A Working state: a player crowding it is aggro.
+- **Steal**: Stands at the target, a still target (clock: the kind's steal_seconds, or pickup_seconds for Loot that lies). When the clock runs out the Thief has it and it is gone from its place; a target that goes meanwhile ends it. Landed inside a fence (HopIn) it first walks straight to the pet and the clock starts within grab_m of it. A Working state.
 - **Haul**: Carries the Loot to the van's door, faster than it approached (clock: haul_give_up_seconds, then it drops the Loot where it stands). A Working state; the client attaches the prop from the hp byte.
 - **Load**: Tosses the Loot into the van at the door (clock: load_seconds): counted in the van, the Thief seeks again. A van that cannot take it any more gets it dropped at the Thief's feet.
 - **ClimbUp**: Climbs straight up from the climb's base to its top at climb_speed, off the navigation mesh (no clock: the distance). A Working state; shot dead here it falls to the ground.
@@ -835,7 +835,7 @@ From any state: Destroyed
 
 - **Arriving**: Drives the road path from the map edge to the stop at its speed (it brakes only for the stop, never for what is in its way); no clock. Ends in Opening at the stop.
 - **Opening**: Stopped; the side door slides open (clock: door seconds) and the crew starts getting out, one every stagger seconds.
-- **Parked**: The crew works (the stay clock runs beside). Leaves for Boarding (or Closing when nobody is afoot) when the Loot loaded reaches capacity, the stay time ran out, or the crew is gone (dead or aboard).
+- **Parked**: The crew works (the stay clock runs beside). Leaves for Boarding (or Closing when nobody is afoot) when the Loot loaded reaches capacity or the stay time ran out; a dead crew does not send it off.
 - **Boarding**: The living crew is called back (clock: board wait seconds); ends when none is afoot, or the wait ran out (those left behind flee).
 - **Closing**: The door slides shut (clock: door seconds), then the van drives off.
 - **Leaving**: Drives the way out to the map edge, accelerating; the entity ends at its end (no state follows).
@@ -925,7 +925,7 @@ stateDiagram-v2
 
 ## Thieves.Phase
 
-The Thieves event: idle until started, raiding while its Raids are in the village, then over until the round resets.
+The Thieves event: idle until started, raiding while its wave of vans is in the village, then over until the round resets.
 
 ```mermaid
 stateDiagram-v2
@@ -938,7 +938,7 @@ stateDiagram-v2
 ```
 
 - **Idle**: Nothing runs: never started, or a round reset cleared it.
-- **Raiding**: The Raids come and go (no clock of its own: the next-Raid clock runs beside). Left by Finish (won when the last van is gone, or an admin's end or cancel) or by a round reset.
+- **Raiding**: The convoy's vans are launched one after another (no clock of its own: the convoy-gap clock runs beside) and come and go. Left by Finish (won when every van of the wave is gone, or an admin's end or cancel) or by a round reset.
 - **Over**: Won or cancelled; what was stolen stays stolen. A new /event thieves starts it again, a round reset clears it.
 
 ## Turret.State

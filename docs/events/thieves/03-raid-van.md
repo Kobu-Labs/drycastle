@@ -1,6 +1,6 @@
 # 03 Raid van
 
-ADR 0021. The van drives in, lets the crew out, takes them back, drives off; three Raids make the event.
+ADR 0021. The van drives in, lets the crew out, takes them back, drives off; one convoy wave of 1 to 3 vans makes the event.
 
 ## Facts
 - `roads.json`: 191 nodes, 251 edges (from, to, 2D polyline, width, `highway`, `oneway`). Read as raw text by `MapLoader`; `RoadNetwork.Parse` (`Minimap/MinimapMath.cs`) and `RoadSurfaces.Parse` keep polylines only. No graph, no z (sample `Map.GroundHeight`).
@@ -15,14 +15,14 @@ ADR 0021. The van drives in, lets the crew out, takes them back, drives off; thr
 - Pushes through: players in its box are rammed as by a car, vehicles are shoved aside. Never brakes. Honk: an fx event at random intervals and when a player is within `honk_near_m`.
 - Hit count 300 (explosive weight in data), hittable while driving, rewound from its own pose ring. Solid for players and vehicles while parked.
 - Crew: on Opening, members spawn at the side-door point, one every `crew_stagger_s`. Boarding: a member reaching the door ends (counted as boarded).
-- Leave when: Loot loaded ≥ `capacity` (8; counter fed by 04), `stay_seconds` (240) ran out, or the crew is dead. Call the living crew back first; wait at most `board_wait_s`.
+- Leave when: Loot loaded ≥ `capacity` (8; counter fed by 04), or `stay_seconds` (240) ran out; a dead crew does not send it off (it stands parked, solid, destroyable). Call the living crew back first; wait at most `board_wait_s`.
 - Destroyed: Raid over, crew switches to Flee, hook `LootReturnAll()` for 04.
-- `ThievesEvent`: Raid sequence. Next Raid when the previous van left or was destroyed, or after `next_raid_s`; at most 2 vans. Crew size by player count. After the last van is gone: event won.
+- `ThievesEvent`: one wave of vans (`raids.min_vans`..`max_vans` at random), launched `convoy_gap_seconds` apart on one route. Crew size by player count. After every van of the wave is gone: event won.
 - Client: box van without the pack (a Kenney `van.glb` if simplest), door as a moving panel, wreck look, honk sound (reuse the closest existing id).
 
 ## Accept
 - Tests: shortest path on a small graph, entry points on an extent, stop choice, van state machine (leave rules, destroyed while arriving), Raid sequencing to the win.
-- `/event thieves`: three vans come and go by themselves with nobody near; the event ends won.
+- `/event thieves`: the convoy comes and goes by itself with nobody near; the event ends won.
 
 ## Done: notes
 Code: pure `godot/ShooterCore/Thieves/` (`RoadGraph.cs` graph + `RoadPath` + `RaidPlanner`, `RaidVan.cs` entity + `RaidVanRules`, `Raid.cs` `Raid` + `RaidRoster`, `ThievesFx.cs`, `ThievesEvent.cs` sequence, data in `ThievesData.cs` + `thieves.json` sections `raids` and `van`), server `NetServer.Thieves.Raid.cs`, client `NetClient.Thieves.cs` + `RaidVanView.cs`. Tests `RoadGraphTests.cs` (with `fixtures/roads_village.json`, a cut copy of the village roads), `RaidVanTests.cs`, `ThievesTests.cs`. Protocol 44. The 60 s placeholder and the "crew near the admin" stand-in are gone (`FindGangSpot`, `SpawnCrew` of the server; the pure `ThiefGang.SpawnCrew` stays, tests use it).
@@ -33,7 +33,6 @@ Code: pure `godot/ShooterCore/Thieves/` (`RoadGraph.cs` graph + `RoadPath` + `Ra
 - Door: `RaidVan.DoorPoint` (ground beside the van on `DoorSide`, a little ahead of centre; moves with the van, fixed while it stands), `DoorOpen` (0-1), `Solid`, `State`, `Position`, `Yaw`. The Raid sets `Gang.Post` to it when the door opens and `BoardAll` sends the crew to it. A Thief that reaches the door while called back ends as boarded (`GangMember.Board`/`Boarded`): 04 must unload what it carries into the van there (hook: `GangMember.Boarded` / `ThiefGang.Boarded`, `Carried` still set).
 - Hook `LootReturnAll`: `NetServer.LootReturnAll(Raid, loaded)` in `NetServer.Thieves.Raid.cs` (called when a van is destroyed; `loaded` = what the counter held, already zeroed). 04 returns the Loot there. A van that drove off keeps its Loot (nothing to do).
 - Stop choice: `NetServer.RaidTargetPoints()` returns the ground (x, z) of every stealable target; today the standing cars. 04 to 07 add their places there (tires: the cars' wheel spots; pets: gardens; dishes; poles). `RaidPlanner.Plan` counts those within `van.stop_radius_m` (80) of each candidate, drops candidates within `used_apart_m` (60) of a stop used this event, and picks the most; with none anywhere the nearest to a player.
-- Working Thief hook for 02's crowd rule is unchanged (`GangMember.Working` still false).
 - `RoadGraph` (pure; world ground axes: x east, `Y` = world z): `Parse(json, minWidthM)`, `EntryPoints(min, max)` (`RoadEntry`: border point, inside node, lead), `PointsAlong(step, min, max, inset)` (`RoadPoint`), `Nearest(p, maxM)`, `Dijkstra`, `ShortestPath(a, b)`, `RouteIn(entry, stop)`, `RouteOut(from, forward, entries, uTurnPenalty)`, `PointAt`, `YawAt`. `RoadPath`: `At(s)`, `YawAt(s)`, `Length`. Server: `RaidRoads` (cached, footpaths cut by `van.min_road_width_m`), `RaidExtent()` = the parcels' box (`MapFlightBounds`), `RaidGround(x, z)`. The SWAT bus can use all of it.
 - Hit ids `0x73E0..0x73FF` (`RaidVanRules.FirstHitId`, two per van: front and rear capsule), `SpecialWeapons.Vehicle` for a van's run-over (attacker id = the van's hit id, the feed says "Car").
 
@@ -51,7 +50,7 @@ Code: pure `godot/ShooterCore/Thieves/` (`RoadGraph.cs` graph + `RoadPath` + `Ra
 - Solid for players: a `StaticBody3D` on `VehicleSolid` (server `PlaceVanSolids`, client `PlaceVanSolid` from the state's own numbers, as `VehicleCollider` for cars) while the state is Opening, Parked, Boarding, Closing or Destroyed. A player inside the box when it stops is put out through the nearest side (`RaidVanRules.PushOut`).
 - Stop and entry: the map edge is the parcels' box (`MapFlightBounds`, not the chunk extent: the roads run far outside it). An entry is the last out-to-in crossing of an edge whose rest stays inside. Roads narrower than 3 m are cut (footpaths; tracks of 3 m stay: the village graph has one component and about twenty crossings of the parcels box). Up to 60 reachable stop candidates are tried against the navigation mesh (the crew must be able to step out: `AcceptRaidStop` snaps the door point, either side). Way out: shortest to the nearest entry, driving on preferred (`u_turn_penalty_m` 150).
 - Fallback (no graph usable, no entry, no reachable stop): parked at a road point 25+ m from the admin (else any human, else the map's middle), logged "(fallback)". `/event thieves` refuses only with no roads at all or no navigation mesh. No admin needed afterwards: nothing waits for a player.
-- Event: first Raid on the next tick, next after `raids.next_raid_seconds` (150) while fewer than `max_vans` (2) are in, or `gap_seconds` (8) after a van left or was destroyed. A Raid that could not be launched still counts (the event cannot hang). Natural win leaves fleeing crews to run to the edge; admin `end` and `cancel` and a round reset remove everything (vans, crews, boxes, used stops). Crew size: +1 member per `players_per_extra` (2) humans beyond the first, Thieves up to +3, then Enforcers up to +1.
+- Event: first van on the next tick, each next `convoy_gap_seconds` (3) after the one before, the same route for all, a stop of each own (a van with none is dropped, `ThievesEvent.Shrink`). Natural win leaves fleeing crews to run to the edge; admin `end` and `cancel` and a round reset remove everything (vans, crews, boxes, used stops). Crew size: +1 member per `players_per_extra` (2) humans beyond the first, Thieves up to +3, then Enforcers up to +1.
 - Names: `speed_mps`, `board_wait_seconds` etc. follow the file's `_seconds` style (the ticket said `speed`, `board_wait_s`).
 - Client: box van of boxes and cylinders (body, cab, dark windscreen, 4 wheels that turn, side door as a sliding panel over a dark opening), paint dims per damage stage, wreck = charred and canted, door hanging; vehicle blast when it is seen destroyed. Honk plays `helper.warning` (the closest id: a short low buzz; it is a UI sound with no range, so the client fades it by distance up to `van.view.honk_hear_m`). Nothing loaded from assets-private.
 

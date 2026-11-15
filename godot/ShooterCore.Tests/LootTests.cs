@@ -553,8 +553,9 @@ public class LootTests
         var worker = raid.Gang.Members.First(m => m.State == GangMemberState.Steal);
         Assert.True(worker.Working);
         Assert.False(worker.CanFight);
-        // a player crowds the working Thief: aggro (the crowd rule of ticket 02 reads Working)
+        // a player hits the Raid: aggro (crowding a working Thief is none)
         rig.World.List.Add(new GangPlayer(4, worker.Position + new Vector3(2, 0, 0), true));
+        raid.Gang.NoteHit(4);
         rig.Step();
         Assert.Contains((ushort)4, raid.Gang.Aggro);
         Assert.Equal(GangMemberState.Steal, worker.State);
@@ -741,5 +742,146 @@ public class LootTests
         credit.NoteLootReturned(6);
         Assert.Equal(new ushort[] { 4, 6 }, credit.Credited);
         Assert.NotNull(lying);
+    }
+
+    // ---- vehicles first ----
+
+    static VehiclePriorityConfig Vp(float share = 0.5f, int max = 4) => new() { ThiefShare = share, MaxThievesPerVehicle = max };
+
+    [Theory]
+    [InlineData(1, 4, 0, 1)]    // a lone Thief: at least one
+    [InlineData(2, 4, 0, 1)]    // half of 2
+    [InlineData(3, 4, 0, 2)]    // half of 3 rounded up
+    [InlineData(7, 4, 0, 4)]    // half of 7 is 4: the wheel cap
+    [InlineData(20, 4, 0, 4)]   // never more than the wheels
+    [InlineData(20, 2, 0, 2)]   // nor than the free tires
+    [InlineData(20, 4, 3, 1)]   // three are on the car already
+    [InlineData(0, 4, 0, 0)]    // nobody free
+    [InlineData(5, 0, 0, 0)]    // nothing to take
+    public void TheVehicleShareIsRoundedUpAndCappedByWheelsAndFreeTires(int free, int tires, int already, int expected) =>
+        Assert.Equal(expected, VehiclePriority.Count(free, tires, already, Vp()));
+
+    [Fact]
+    public void TheVehicleShareNeverPassesTheConfiguredMaxNorFourWheels()
+    {
+        Assert.Equal(2, VehiclePriority.Count(20, 4, 0, Vp(1f, 2)));
+        Assert.Equal(4, VehiclePriority.Count(20, 4, 0, Vp(1f, 9))); // 4 wheels even if the file said more
+    }
+
+    [Fact]
+    public void TheNearestThievesTakeTheNearestTiresOneEach()
+    {
+        var thieves = new[] { new Vector3(50, 0, 0), new Vector3(1, 0, 0), new Vector3(2, 0, 0) };
+        var tires = new[] { new Vector3(0, 0, 1), new Vector3(0, 0, -1) };
+        var pairs = VehiclePriority.Assign(thieves, tires, Vector3.Zero, 2);
+        Assert.Equal(2, pairs.Count);
+        Assert.Equal(new[] { 1, 2 }, pairs.Select(p => p.Thief).OrderBy(i => i)); // the far one stays out
+        Assert.Equal(2, pairs.Select(p => p.Tire).Distinct().Count());
+    }
+
+    [Fact]
+    public void ACarIsNewOnlyOnceUntilItLeavesAndComesBack()
+    {
+        var a = new VehicleArrivals();
+        var got = new List<int>();
+        TireCar Car(int id, float x, bool rest = true, byte off = 0) => new(id, new Vector3(x, 0, 0), 0, rest, off);
+        a.Scan(new[] { Car(1, 10) }, Vector3.Zero, 90, got);
+        Assert.Empty(got); // the first scan only notes what stands there
+        a.Scan(new[] { Car(1, 10), Car(2, 20) }, Vector3.Zero, 90, got);
+        Assert.Equal(new[] { 2 }, got); // a new one
+        got.Clear();
+        a.Scan(new[] { Car(1, 10), Car(2, 20) }, Vector3.Zero, 90, got);
+        Assert.Empty(got); // handled
+        a.Scan(new[] { Car(1, 10), Car(2, 20, rest: false) }, Vector3.Zero, 90, got); // 2 drives
+        a.Scan(new[] { Car(1, 10), Car(2, 20) }, Vector3.Zero, 90, got); // and stops again
+        Assert.Equal(new[] { 2 }, got);
+        got.Clear();
+        a.Scan(new[] { Car(1, 10), Car(2, 500) }, Vector3.Zero, 90, got); // out of the radius
+        a.Scan(new[] { Car(1, 10), Car(2, 80) }, Vector3.Zero, 90, got); // back in
+        Assert.Equal(new[] { 2 }, got);
+        got.Clear();
+        a.Scan(new[] { Car(3, 5, off: 0b1111) }, Vector3.Zero, 90, got); // stripped: nothing to take
+        Assert.Empty(got);
+    }
+
+    [Fact]
+    public void ATireStillOnACarIsPickedBeforeADishAndAnyOtherKindWhenTiresAreFree()
+    {
+        var rig = new Rig(f => { f.Loot.Tire.Weight = 1; f.Loot.Dish.Weight = 1000; f.Loot.Pet.Weight = 1000; });
+        rig.Cars.Add(1, 60, 0);
+        rig.Registry.Register(new FakeClimbSource(new Vector3(5, 0, 0), new Vector3(5, 4, 0)));
+        rig.Registry.Register(new FakePetSource());
+        for (var i = 0; i < 4; i++) Assert.Equal(LootKind.Tire, rig.Book.Pick(Vector3.Zero, 90, Vector3.Zero)!.Value.Kind); // the dish and the pet are nearer and weigh far more
+        Assert.NotEqual(LootKind.Tire, rig.Book.Pick(Vector3.Zero, 90, Vector3.Zero)!.Value.Kind); // no tire left: the others
+        rig.Registry.Reset();
+        rig.Cfg.Loot.Tire.Weight = 0; // a kind switched off is not preferred
+        Assert.NotEqual(LootKind.Tire, rig.Book.Pick(Vector3.Zero, 90, Vector3.Zero)!.Value.Kind);
+    }
+
+    static RaidWork WorkOf(Raid raid) => (RaidWork)raid.Gang.Work!;
+
+    [Fact]
+    public void ANewCarPullsAShareOfTheFreeThievesToItsTiresAndLeavesTheBusyOnesAlone()
+    {
+        var rig = new Rig(f => { f.Gang.Raid = new GangRaidCounts { GangBosses = 0, Enforcers = 0, Thieves = 4 }; f.Van.Capacity = 20; f.Van.StaySeconds = 1000; f.Loot.Dish.Weight = 1; });
+        rig.Registry.Register(new FakeClimbSource(new Vector3(20, 0, 15), new Vector3(20, 4, 15))); // something else to do
+        var raid = rig.Launch();
+        rig.RunUntil(() => raid.Gang.Members.Count(m => m.Kind == GangMemberKind.Thief) == 4);
+        rig.RunUntil(() => raid.Gang.Members.Any(m => m.State == GangMemberState.Steal || m.State == GangMemberState.ClimbUp || m.State == GangMemberState.WorkAloft)); // one is at work: it keeps going
+        var work = WorkOf(raid);
+        work.ScanVehicles(1f); // primes: nothing new
+        var busy = raid.Gang.Members.Where(m => m.Working).ToList();
+        var busyJobs = busy.Select(m => m.Job).ToList();
+        rig.Cars.Add(0x4001, 30, 12); // a car spawns
+        Assert.Equal(0, work.ScanVehicles(0.1f)); // not time yet
+        var free = raid.Gang.Members.Count(m => m.Kind == GangMemberKind.Thief && m.CanDelegate);
+        var sent = work.ScanVehicles(1f);
+        Assert.Equal(VehiclePriority.Count(free, 4, 0, rig.Cfg.Loot.VehiclePriority), sent);
+        Assert.InRange(sent, 1, 4);
+        Assert.True(busy.All(m => m.Working)); // untouched
+        Assert.Equal(busyJobs, busy.Select(m => m.Job));
+        Assert.Equal(0, work.ScanVehicles(1f)); // the car is handled
+        rig.Step(); rig.Step();
+        var onCar = raid.Gang.Members.Where(m => m.Job is { Kind: LootKind.Tire } j && TireSource.CarOf(j.Id) == 0x4001).ToList();
+        Assert.Equal(sent, onCar.Count);
+        Assert.Equal(sent, onCar.Select(m => m.Job!.Value.Id).Distinct().Count()); // one Thief per wheel
+        Assert.Equal(new HashSet<(LootKind, int, bool)>(raid.Gang.Members.Where(m => m.Job != null).Select(m => m.Job!.Value.Key)).Count, rig.Registry.Claimed); // claims stay exclusive and none is left behind
+    }
+
+    [Fact]
+    public void AThiefHandedATireReleasesItsOldClaimAndGoesForTheTire()
+    {
+        var rig = new Rig(f => { f.Van.Capacity = 20; f.Van.StaySeconds = 1000; });
+        rig.Cars.Add(0x4001, 70, 30);
+        var raid = rig.Launch();
+        var thief = rig.ThiefOut(raid);
+        rig.RunUntil(() => thief.State == GangMemberState.Approach);
+        var old = thief.Job!.Value;
+        var work = WorkOf(raid);
+        work.ScanVehicles(1f); // primes
+        rig.Cars.Add(0x4002, 25, 12); // a nearer car
+        Assert.Equal(1, work.ScanVehicles(1f));
+        Assert.False(rig.Registry.IsClaimed(old) && TireSource.CarOf(old.Id) != 0x4002); // the old claim ended
+        rig.Step(); rig.Step();
+        Assert.Equal(GangMemberState.Approach, thief.State);
+        Assert.Equal(0x4002, TireSource.CarOf(thief.Job!.Value.Id));
+        Assert.Equal(1, rig.Registry.Claimed);
+    }
+
+    [Fact]
+    public void AThiefCarryingOrStealingIsNeverHandedATire()
+    {
+        var rig = new Rig(f => { f.Van.Capacity = 20; f.Van.StaySeconds = 1000; });
+        rig.Cars.Add(0x4001, 30, 12);
+        var raid = rig.Launch();
+        var thief = rig.ThiefOut(raid);
+        rig.RunUntil(() => thief.State == GangMemberState.Steal);
+        var work = WorkOf(raid);
+        work.ScanVehicles(1f);
+        rig.Cars.Add(0x4002, 25, 12);
+        Assert.False(thief.CanDelegate);
+        Assert.Equal(0, work.ScanVehicles(1f));
+        rig.RunUntil(() => thief.State == GangMemberState.Haul);
+        Assert.False(thief.CanDelegate); // carrying
     }
 }

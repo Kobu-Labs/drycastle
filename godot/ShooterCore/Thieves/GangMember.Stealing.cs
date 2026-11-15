@@ -27,7 +27,7 @@ public sealed partial class GangMember
     /// <summary>What it carries, or null.</summary>
     public LootOrigin? CarriedOrigin => LootKinds.OfCarried(Carried) is { } k ? new LootOrigin(k, CarriedId) : null;
 
-    /// <summary>Stealing, climbing or hauling: a player crowding it is in the way (<see cref="ThiefGang.Update"/> reads it) and it does not join a fight.</summary>
+    /// <summary>Stealing, climbing or hauling: it does not join a fight.</summary>
     public bool Working => State is GangMemberState.Steal or GangMemberState.ClimbUp or GangMemberState.WorkAloft or GangMemberState.ClimbDown or GangMemberState.Shocked or GangMemberState.Falling or GangMemberState.Down or GangMemberState.GetUp or GangMemberState.Haul or GangMemberState.Load or GangMemberState.HopIn or GangMemberState.HopOut;
 
     /// <summary>On the way to a target or at one, or on the way to the van with it: the Loot it will bring counts against the van's capacity.</summary>
@@ -70,11 +70,34 @@ public sealed partial class GangMember
     {
         if (!_fsm.Tick(dt)) return;
         var cfg = Work!.Config;
-        if (Work.Pick(this, Allowed) is not { } t) { _fsm.Restart(cfg.SeekRetrySeconds); return; }
+        StealTarget t;
+        if (_job is { } given && Work.TryFind(given, out var found)) t = found; // handed to it (<see cref="Delegate"/>): already claimed
+        else if (Work.Pick(this, Allowed) is { } picked) { ReleaseJob(); t = picked; }
+        else { ReleaseJob(); _fsm.Restart(cfg.SeekRetrySeconds); return; }
         _job = t;
         ClearRoute();
         _fsm.Enter(GangMemberState.Approach, cfg.ApproachGiveUpSeconds);
         Request(t.WorkSpot);
+    }
+
+    /// <summary>Whether the Thief can be handed a target now: free hands, looking for work or on its way to some (not stealing, climbing or carrying).</summary>
+    public bool CanDelegate => Kind == GangMemberKind.Thief && Alive && Work != null && Carried == 0 && State is GangMemberState.Seek or GangMemberState.Approach or GangMemberState.Idle or GangMemberState.Walk;
+
+    /// <summary>
+    /// The Thief is handed <paramref name="target"/> (claimed for it by the caller) in place of what it was after (that claim ends): it goes for it as its next target. False when it cannot take one
+    /// (<see cref="CanDelegate"/>, or the target is one it gave up lately); the caller keeps the claim then.
+    /// </summary>
+    public bool Delegate(in StealTarget target)
+    {
+        if (!CanDelegate || !Allowed(target)) return false;
+        ReleaseJob();
+        _job = target;
+        switch (State)
+        {
+            case GangMemberState.Approach: EnterSeek(); break; // looks at once: takes the given target
+            case GangMemberState.Seek: _fsm.Restart(0f); break;
+        }
+        return true; // Idle and Walk reach Seek by themselves
     }
 
     bool Allowed(StealTarget t)

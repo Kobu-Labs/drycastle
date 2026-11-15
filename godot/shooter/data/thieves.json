@@ -20,8 +20,9 @@
     },
     // What a hit counts besides a bullet (1). Run over by a vehicle: dead.
     "hits": { "headshot_weight": 2, "explosive_weight": 12, "vehicle_weapon_weight": 3 },
-    // A player who hit any member of a Raid, or who is within crowd_m of a working Thief, is fought by the whole Raid until they die or are give_up_m from every living member.
-    "aggro": { "crowd_m": 4, "give_up_m": 30 },
+    // A player who hit any member of a Raid (bullet, headshot, explosive, vehicle weapon or ramming) is fought by the whole Raid for forget_seconds after their LAST hit (each hit starts it again), or until they die or are
+    // give_up_m from every living member. Then the members go back to what they did: Thieves steal, Enforcers and the boss guard.
+    "aggro": { "forget_seconds": 8, "give_up_m": 30 },
     "corpse_seconds": 10,
     // XP for killing a member (no kill feed, streak or assist).
     "kill_xp": 5,
@@ -29,6 +30,9 @@
     // A chaser or follower asks for a new route at most every repath_seconds, and only when its goal is repath_m from the end of the route it has.
     "repath_seconds": 1.0,
     "repath_m": 3,
+    // Members that walk are pushed apart when closer than separation_m (any Raid), at most separation_mps metres a second. Chasers of one player also take different spots on a ring round them.
+    "separation_m": 0.8,
+    "separation_mps": 2.0,
     // An Enforcer escorting a Thief stays within this of it.
     "guard_follow_m": 3.5,
     // A Thief with no Loot work (a gang the Raid gave none) idles for a random time, then walks to a point within wander_m of the Raid's post.
@@ -110,13 +114,13 @@
       "thief_color": "#7d6b4f", "enforcer_color": "#8a3b32", "gang_boss_color": "#c9a227", "capsule_height_m": 1.8
     }
   },
-  // The Raids, one after another. The first comes at once, the next when fewer than max_vans are in the village and next_raid_seconds passed since the last began, or gap_seconds after a van
-  // left or was destroyed. The event is won when the last Raid's van is gone. The crew grows by one extra member for every players_per_extra players beyond the first: Thieves first (up to
-  // max_extra_thieves), then Enforcers (up to max_extra_enforcers).
+  // The convoy: one wave of vans. vans = a random number from min_vans to max_vans; the first is launched at once, each next convoy_gap_seconds after the one before (they drive the same
+  // route in a line at the van's speed: 3 s is about 40 m apart) and park at different stops near the church, which splits them. The event is won when every van of the wave is gone. Each van's crew grows by
+  // one extra member for every players_per_extra players beyond the first: Thieves first (up to max_extra_thieves), then Enforcers (up to max_extra_enforcers).
   "raids": {
-    "count": 3, "max_vans": 2, "next_raid_seconds": 150, "gap_seconds": 8,
+    "min_vans": 1, "max_vans": 3, "convoy_gap_seconds": 3,
     "players_per_extra": 2, "max_extra_thieves": 3, "max_extra_enforcers": 1,
-    // Fixed routes: the only ways a van comes in and leaves by (each Raid picks one at random; route_pick "random" is the only way). Waypoints [x, z] in the map's local ground metres (x east, z south = the
+    // Fixed routes: the only ways a van comes in and leaves by (each wave picks one at random, all its vans take it; route_pick "random" is the only way). Waypoints [x, z] in the map's local ground metres (x east, z south = the
     // axes of roads.json with y flipped), in the order driven. THE VILLAGE MAP'S: sketch points A B C and D E F G H of the map editor (S-JTSK minus the map origin, z = -(y - origin y)), placed by the owner.
     // The van appears at the first waypoint, drives the roads through them (each snapped to the nearest road within route_snap_max_m, on roads of any width from route_min_road_width_m: route 2's G to H is a 1.5 m footpath), carries on from the last one along the main road to a stop within
     // park_near_church_m of the church (church.json doorway; park_centre [x, z] overrides it, for a map without a church) and leaves by the same roads backwards, gone at the first waypoint. A route this map
@@ -150,20 +154,20 @@
     "ram_mass_scale": 3, "ram_fallback_damage": 100,
     // Client only. With the private Military pack: model (glb/vehicles/raid_van.glb, +Z forward, origin at the middle on the ground, the right-hand sliding door a node "door") in its atlas; the door node slides from
     // door_closed to door_open (the model's own coordinates) by the door fraction; a left door is the mirrored model; model_lift_m lifts it (its wheels reach 0.10 m under the origin). The wreck: paint x wreck_tint, each
-    // damage stage dims the paint by stage_dim. Without the pack a box van of boxes and cylinders in the colours; honk_hear_m is how far from the camera a honk is heard.
+    // damage stage dims the paint by stage_dim. Without the pack a box van of boxes and cylinders in the colours; honk_hear_m is how far from the camera a honk is heard, honk_db its loudness on top of the sound's own (+6), honk_fade_db how much quieter it is at that distance.
     "view": {
       "model": "vehicles/raid_van", "atlas": "glb/atlas/military_land_vehicle_01_burnt.png", "door_node": "door",
       "door_closed": [-0.722, 0.763, 0.068], "door_open": [-0.842, 0.763, -0.932], "model_lift_m": 0.0, "wreck_tint": "#3a3532", "stage_dim": 0.07,
-      "body_color": "#b9b3a2", "cab_color": "#8c3f33", "door_color": "#9b9585", "wreck_color": "#2b2724", "honk_hear_m": 180
+      "body_color": "#b9b3a2", "cab_color": "#8c3f33", "door_color": "#9b9585", "wreck_color": "#2b2724", "honk_hear_m": 360, "honk_db": 6, "honk_fade_db": 12
     }
   },
   // Ticket 09. Voice lines (server): a living member not in a windup or swing with a human within voice_near_m rolls voice_chance every voice_roll_s; a member that spoke waits
   // voice_cooldown_s; one line at a time per Raid (voice_busy_s, the server does not know how long a line is). voice_lines = recordings the server picks from; the client plays line mod files found.
-  // Ranges are client only: voice_range_m, speaker_range_m (a member's speaker), van_range_m (a van's song). speaker_chance is rolled once per member.
+  // Ranges are client only: voice_range_m, speaker_range_m (a member's speaker), van_range_m and van_volume_db (a van's song: how far it is heard and how loud, dB). speaker_chance is rolled once per member.
   // Files (private, optional): assets-private/audio/thieves/voice/*.ogg and songs/*.ogg; none found = silence.
   "audio": {
     "voice_near_m": 8, "voice_chance": 0.3, "voice_roll_s": 2, "voice_cooldown_s": 15, "voice_busy_s": 3, "voice_lines": 15, "voice_range_m": 25,
-    "speaker_chance": 0.05, "speaker_range_m": 30, "van_range_m": 60
+    "speaker_chance": 0.05, "speaker_range_m": 30, "van_range_m": 120, "van_volume_db": 8
   },
   // The reward (ticket 10). Everyone credited (hit a Gang member or a van, or sent Loot back) gets the level data's event_win XP when the event is won.
   // chain_item: the items.json id a killed Gang boss leaves on his body; chain_corpse_seconds: how long that body lies. A boss who leaves alive keeps his.
@@ -178,6 +182,11 @@
     "seek_radius_m": 90, "seek_retry_seconds": 2, "approach_speed_mps": 3.0, "haul_speed_mps": 4.5, "arrive_m": 1.0,
     "approach_give_up_seconds": 45, "avoid_seconds": 60, "haul_give_up_seconds": 60, "pickup_seconds": 1.0, "load_seconds": 0.6, "load_reach_m": 1.5,
     "climb_speed": 1.5,
+
+    // Vehicles are the priority: a Thief picks a tire still on a car before any other kind (the nearest one), and a car at rest with a wheel on that newly comes within arrive_radius_m of a Raid's van
+    // (0: seek_radius_m; a spawn, a respawn, a player stopping one there) sends thief_share of the Raid's free Thieves (not carrying, not working; rounded up, at least one) to its tires, at most
+    // max_thieves_per_vehicle (one per wheel, 1 to 4). The server looks every check_seconds; a car stays handled until it leaves the radius (or is driven off) and returns.
+    "vehicle_priority": { "thief_share": 0.5, "max_thieves_per_vehicle": 4, "check_seconds": 1.0, "arrive_radius_m": 0 },
 
     // Tires (ticket 04): one target per wheel of a car at rest, of the vehicle types listed (the sedan model, whose wheel nodes the client hides). The wheel centres are wheel_side_m either side of
     // the car's middle and wheel_end_m ahead of and behind it; the Thief kneels work_side_m out beside the wheel. At rest: nobody inside and slower than rest_speed_mps.

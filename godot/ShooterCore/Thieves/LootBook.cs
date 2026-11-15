@@ -70,15 +70,19 @@ public sealed class LootBook
         var total = 0f;
         foreach (var kind in LootKinds.All) if (_scratch.Any(t => t.Kind == kind)) total += _cfg.Of(kind).Weight;
         if (!(total > 0)) return null;
-        var roll = (float)_rng.NextDouble() * total;
         LootKind? chosen = null;
-        foreach (var kind in LootKinds.All)
+        if (_cfg.Tire.Weight > 0 && _scratch.Any(IsTireOnCar)) chosen = LootKind.Tire; // vehicles are the priority: a tire still on a car makes the tire kind beat every other (the nearest tire, a dropped one too)
+        else
         {
-            if (!_scratch.Any(t => t.Kind == kind)) continue;
-            var w = _cfg.Of(kind).Weight;
-            if (!(w > 0)) continue;
-            chosen = kind;
-            if ((roll -= w) < 0) break;
+            var roll = (float)_rng.NextDouble() * total;
+            foreach (var kind in LootKinds.All)
+            {
+                if (!_scratch.Any(t => t.Kind == kind)) continue;
+                var w = _cfg.Of(kind).Weight;
+                if (!(w > 0)) continue;
+                chosen = kind;
+                if ((roll -= w) < 0) break;
+            }
         }
         if (chosen is not { } k) return null;
         StealTarget? best = null;
@@ -93,7 +97,25 @@ public sealed class LootBook
         return pick;
     }
 
+    static bool IsTireOnCar(StealTarget t) => t.Kind == LootKind.Tire && !t.Lying;
+
     public void Release(in StealTarget t) => Registry.Release(t);
+
+    /// <summary>Claims one target for a Thief (false when it is claimed already).</summary>
+    public bool Claim(in StealTarget t) => Registry.Claim(t);
+
+    /// <summary>Appends the wheels still on a car (at rest) that no Thief has claimed.</summary>
+    public void FreeTires(int carId, List<StealTarget> into)
+    {
+        if (Registry.Source(LootKind.Tire) is not TireSource src) return;
+        var from = into.Count;
+        src.WheelsOf(carId, into);
+        for (var i = into.Count - 1; i >= from; i--)
+            if (Registry.IsClaimed(into[i])) into.RemoveAt(i);
+    }
+
+    /// <summary>The cars the tire kind sees (empty without it).</summary>
+    public IEnumerable<TireCar> TireCars() => Registry.Source(LootKind.Tire) is TireSource src ? src.Cars() : Enumerable.Empty<TireCar>();
 
     /// <summary>A Thief was struck at the top of its climb (<see cref="IStealSource.AloftHazard"/>): who and what it climbs for. Raised as it happens, before the member's state changes.</summary>
     public event Action<GangMember, StealTarget>? Shocked;

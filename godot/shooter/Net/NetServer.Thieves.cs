@@ -5,8 +5,8 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// The Thieves event on the server (GLOSSARY "Thieves event", "Raid"; the design is in docs/events/README.md, the tickets in docs/events/thieves/). An admin starts it
-/// with <c>/event thieves</c>; <see cref="ThievesEvent"/> keeps its phase and its Raid sequence and this file puts it in the world: it starts (the book, a chat line, the intel entry and
-/// the Event announcement), launches the Raids as they fall due (<see cref="LaunchRaid"/>, <c>NetServer.Thieves.Raid.cs</c>) and is won when the last van is gone. <c>/event current end</c>
+/// with <c>/event thieves</c>; <see cref="ThievesEvent"/> keeps its phase and its wave of vans and this file puts it in the world: it starts (the book, a chat line, the intel entry and
+/// the Event announcement), launches the convoy's vans as they fall due (<see cref="LaunchRaid"/>, <c>NetServer.Thieves.Raid.cs</c>) and is won when every van of the wave is gone. <c>/event current end</c>
 /// wins it at once, <c>/event current cancel</c> removes it with no reward (both remove every van and crew), a new round clears it. It cannot be lost, and it runs to its end with no one
 /// near. The Loot plugs in at the marked places (<see cref="ThievesTick"/>, <see cref="ThievesFinish"/>, <see cref="SendThievesOnJoin"/>, <see cref="ThievesRoundReset"/>).
 /// </summary>
@@ -40,15 +40,15 @@ public partial class NetServer
         ClearGangs(); // what a run before left (wrecks, crews that fled) and the stops it used
         _events.Start(EventBook.Thieves, _elapsed);
         _thievesAdmin = admin.Id;
-        _thieves!.Begin(ThievesData.Raids); // the first Raid is due on the next tick
+        _thieves!.Begin(ThievesData.Raids, _rng); // the first van of the convoy is due on the next tick
         AnnounceIntel(ThievesEvent.Intel(_elapsed));
         ChatToAll(ChatLineKind.System, "", $"{admin.Name} started the Thieves event. Thieves are coming to the village.");
         GD.Print($"server: Thieves event started by {admin.Name} #{admin.Id}");
     }
 
     /// <summary>
-    /// Once a tick (after <see cref="MassTick"/>): the routes the Gang members wait for, the Raids (their crews, their vans' contact with the world) and the Raid sequence: the next Raid
-    /// when it is due, and the win once the last van is gone. What the Thieves steal runs in their members (<see cref="RaidWork"/>).
+    /// Once a tick (after <see cref="MassTick"/>): the routes the Gang members wait for, the Raids (their crews, their vans' contact with the world) and the wave: the next van
+    /// when it is due, and the win once every van is gone. What the Thieves steal runs in their members (<see cref="RaidWork"/>).
     /// </summary>
     void ThievesTick(float dt)
     {

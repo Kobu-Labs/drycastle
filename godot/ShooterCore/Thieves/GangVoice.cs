@@ -26,7 +26,9 @@ public sealed class ThievesAudioConfig
     /// <summary>Client: how far a speaker's song is heard.</summary>
     public float SpeakerRangeM { get; set; } = 30;
     /// <summary>Client: how far a van's song is heard (<c>ThiefAudio.PlayVanSong</c>, ticket 03).</summary>
-    public float VanRangeM { get; set; } = 60;
+    public float VanRangeM { get; set; } = 120;
+    /// <summary>Client: the loudness of a van's song, dB (+6 is twice the amplitude).</summary>
+    public float VanVolumeDb { get; set; } = 8;
 
     public void Validate(string file)
     {
@@ -34,6 +36,7 @@ public sealed class ThievesAudioConfig
         void Chance(float v, string what) { if (!(v >= 0 && v <= 1)) throw new DataFileException($"{file}: audio.{what} is between 0 and 1"); }
         Positive(VoiceNearM, "voice_near_m"); Positive(VoiceRollS, "voice_roll_s"); Positive(VoiceRangeM, "voice_range_m");
         Positive(SpeakerRangeM, "speaker_range_m"); Positive(VanRangeM, "van_range_m");
+        if (!float.IsFinite(VanVolumeDb)) throw new DataFileException($"{file}: audio.van_volume_db must be a number");
         if (!(VoiceCooldownS >= 0) || !(VoiceBusyS >= 0)) throw new DataFileException($"{file}: audio.voice_cooldown_s and voice_busy_s must not be negative");
         Chance(VoiceChance, "voice_chance"); Chance(SpeakerChance, "speaker_chance");
         if (VoiceLines is < 1 or > 255) throw new DataFileException($"{file}: audio.voice_lines is between 1 and 255");

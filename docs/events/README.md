@@ -246,8 +246,8 @@ Terms: **Raid** = one van and its crew. **Gang member** = Thief, Enforcer or Gan
 
 ### Event
 - Start: `/event thieves` only (no scheduler). Intel board entry + the standard Event announcement.
-- 3 Raids. A Raid: 1 Gang boss, 2 Enforcers, 5 Thieves. Next van comes when the previous leaves or on a timer; at most 2 vans at once. Counts grow with player count. All numbers in `thieves.json`.
-- Cannot be lost. Ends (won) when the last van is gone, destroyed or driven off. Runs to its end with no player near.
+- One wave of 1 to 3 vans (random, `min_vans`..`max_vans` in `raids` of `thieves.json`) arrives in a convoy: the first van at once, each next `convoy_gap_seconds` (3 s, about 40 m) after the one before, all on the same route, and they split in the village, each parking at a stop of its own. A van that finds no stop of its own is dropped from the wave (logged). A Raid: 1 Gang boss, 2 Enforcers, 5 Thieves, more with the player count. All numbers in `thieves.json`.
+- Cannot be lost. Ends (won) when every van of the wave is gone, destroyed or driven off. Runs to its end with no player near.
 - No event HUD.
 - State is kept after the event: Loot that left in a van is gone until the round resets; dropped Loot stays lying and can still be sent back (count capped in data).
 
@@ -262,10 +262,10 @@ Terms: **Raid** = one van and its crew. **Gang member** = Thief, Enforcer or Gan
 - Looks: Gang Warfare models (boss `GangBoss_01`, enforcer `GangMember_Male_03`, thief `GangMember_Male_02` or `StreetGirl_01`), a random look of the pack as shipped; cigarette, gold chain, tattoos, gold tooth. Without the private assets: coloured capsules, a box van, silent.
 
 ### Van
-- Its own scripted entity, not a vehicle: nobody enters it, nothing pushes it, it pushes through whatever is in its way (rams like a car). Honks at random and near players.
-- Enters and leaves along one of two fixed routes (sketch points the owner placed: A B C and D E F G H, `raids.routes` in `thieves.json`), each Raid picks one at random. It drives the roads through the waypoints, carries on along the main road the route continues on and parks on a road within 100 m of the church (a random working spot, not within `used_apart_m` of another van's stop), then leaves by the same roads backwards. No usable route: the old automatic way (a random road at the map edge, the stop with the most stealable targets within ~80 m).
+- Its own scripted entity, not a vehicle: nobody enters it, nothing pushes it, it pushes through whatever is in its way (rams like a car). Honks at random and near players; the honk and the van's song carry far (`van.view.honk_hear_m`, `audio.van_range_m`) and loud (`honk_db`, `van_volume_db`).
+- Enters and leaves along one of two fixed routes (sketch points the owner placed: A B C and D E F G H, `raids.routes` in `thieves.json`), each wave picks one at random and all its vans take it. It drives the roads through the waypoints, carries on along the main road the route continues on and parks on a road within 100 m of the church (a random working spot, not within `used_apart_m` of another van's stop, which is what splits the convoy), then leaves by the same roads backwards. No usable route: the old automatic way (a random road at the map edge, the stop with the most stealable targets within ~80 m).
 - 300 hits. Can be destroyed on the way in. Destroyed: that Raid is done, everything loaded goes back by itself, the crew flees on foot to the map edge.
-- Leaves when full (8 Loot), when its stay timer runs out (~4 min), or when its crew is dead. Surviving crew board first.
+- Leaves when full (8 Loot) or when its stay timer runs out (~4 min), not when its crew is dead. Surviving crew board first.
 - Crew appear at the side door when it opens and vanish into it when boarding; the door is animated, there is no sit or exit animation.
 
 ### Loot

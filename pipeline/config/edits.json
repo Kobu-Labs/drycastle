@@ -15995,7 +15995,7 @@
  "version": 1,
  "zones": {
   "Z-0043": {
-   "kind": "bigfoot",
+   "kind": "moose",
    "polygon": [
     [
      -588343.5,

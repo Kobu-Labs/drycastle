@@ -55,12 +55,15 @@ public class RaidVanTests
         var v = Shipped.Van; var r = Shipped.Raids;
         Assert.Equal((300f, 8, 240f), (v.Hits, v.Capacity, v.StaySeconds));
         Assert.Equal(80f, v.StopRadiusM);
-        Assert.Equal((3, 2), (r.Count, r.MaxVans));
+        Assert.Equal((360f, 6f), (v.View.HonkHearM, v.View.HonkDb)); // the honk carries far and loud
+        Assert.Equal((1, 3, 3f), (r.MinVans, r.MaxVans, r.ConvoyGapSeconds));
         Assert.True(v.Hit.ExplosiveWeight > 1);
         Assert.Equal(1f, v.Hit.HeadshotWeight); // a headshot is a body hit
         Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"van":{"capacity":0}}"""));
         Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"van":{"speed_mps":5,"park_speed_mps":9}}"""));
-        Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"raids":{"count":0}}"""));
+        Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"raids":{"min_vans":0}}"""));
+        Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"raids":{"min_vans":2,"max_vans":1}}"""));
+        Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"raids":{"max_vans":99}}"""));
         Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"van":{"honk_min_seconds":10,"honk_max_seconds":5}}"""));
     }
 
@@ -389,7 +392,7 @@ public class RaidVanTests
         /// <summary>One tick as the server does it: who fights whom, the entities, the Raids, one route, then the poses.</summary>
         public void Step(uint tick = 0)
         {
-            Gangs.Update();
+            Gangs.Update(Dt);
             Entities.Tick(Dt);
             Raids.Tick(Dt);
             Gangs.ServeRoute((from, to) => new[] { from, to });
@@ -723,74 +726,88 @@ public class RaidVanTests
         Assert.Equal(232, (int)EventKind.ThievesFx);
     }
 
-    // ---- the sequence of Raids ----
+    // ---- the convoy ----
 
-    static RaidsConfig Seq() => new() { Count = 3, MaxVans = 2, NextRaidSeconds = 100, GapSeconds = 5 };
+    static RaidsConfig Convoy() => new() { MinVans = 1, MaxVans = 3, ConvoyGapSeconds = 3 };
+
+    /// <summary>A generator that always picks <paramref name="n"/> vans.</summary>
+    sealed class FixedVans(int n) : Random { public override int Next(int min, int max) => n; }
+    static Random Vans(int n) => new FixedVans(n);
 
     [Fact]
-    public void TheFirstRaidComesAtOnceTheNextOnTheTimerAndNeverMoreThanTwoVansAtOnce()
+    public void TheWaveHasARandomNumberOfVansFromTheMinimumToTheMaximum()
     {
-        var e = new ThievesEvent();
-        Assert.Equal(ThievesStep.None, e.Tick(Dt, 0)); // idle
-        Assert.True(e.Begin(Seq()));
-        Assert.False(e.Begin(Seq()));
-        Assert.Equal(ThievesStep.Launch, e.Tick(Dt, 0)); // at once
-        Assert.Equal(1, e.Launched);
-        Assert.Equal(ThievesStep.None, e.Tick(Dt, 1));
-        var t = 0f;
-        for (; e.Tick(Dt, 1) != ThievesStep.Launch; t += Dt) { }
-        Assert.InRange(t, 99f, 101f); // next_raid_seconds after the first began, though its van is still there
-        Assert.Equal(2, e.Launched);
-        for (var i = 0; i < 100 * 30; i++) Assert.Equal(ThievesStep.None, e.Tick(Dt, 2)); // two vans: no third however long it waits
-        Assert.Equal(ThievesStep.Launch, e.Tick(Dt, 1)); // one left: the third comes at once (its clock ran out long ago)
-        Assert.Equal(3, e.Launched);
+        var c = Convoy();
+        var seen = new HashSet<int>();
+        var rng = new Random(7);
+        for (var i = 0; i < 200; i++) seen.Add(c.VansFor(rng));
+        Assert.Equal(new[] { 1, 2, 3 }, seen.OrderBy(x => x));
+        Assert.Equal(2, new RaidsConfig { MinVans = 2, MaxVans = 2 }.VansFor(new Random(1)));
     }
 
     [Fact]
-    public void AVanLeavingBringsTheNextRaidAfterTheGapAndTheLastOneGoneIsTheWin()
+    public void TheFirstVanComesAtOnceTheOthersOneConvoyGapAfterTheOneBeforeAndNoMore()
     {
         var e = new ThievesEvent();
-        e.Begin(Seq());
+        Assert.Equal(ThievesStep.None, e.Tick(Dt, 0)); // idle
+        Assert.True(e.Begin(Convoy(), Vans(3)));
+        Assert.False(e.Begin(Convoy(), Vans(3)));
+        Assert.Equal(3, e.Total);
+        Assert.Equal(ThievesStep.Launch, e.Tick(Dt, 0)); // at once
+        Assert.Equal(1, e.Launched);
+        var t = 0f;
+        for (; e.Tick(Dt, 1) != ThievesStep.Launch; t += Dt) { }
+        Assert.InRange(t, 2.9f, 3.1f);
+        t = 0f;
+        for (; e.Tick(Dt, 2) != ThievesStep.Launch; t += Dt) { }
+        Assert.InRange(t, 2.9f, 3.1f);
+        Assert.Equal(3, e.Launched);
+        for (var i = 0; i < 30 * 600; i++) Assert.Equal(ThievesStep.None, e.Tick(Dt, 3)); // the wave is out: no fourth van however long it takes
+    }
+
+    [Fact]
+    public void TheEventIsWonWhenEveryVanOfTheWaveIsGoneNotBeforeTheLastIsLaunched()
+    {
+        var e = new ThievesEvent();
+        e.Begin(Convoy(), Vans(2));
         Assert.Equal(ThievesStep.Launch, e.Tick(Dt, 0));
-        for (var i = 0; i < 30 * 20; i++) Assert.Equal(ThievesStep.None, e.Tick(Dt, 1)); // 20 s in: the van is still there
-        Assert.Equal(ThievesStep.None, e.Tick(Dt, 0)); // the van left
+        Assert.Equal(ThievesStep.None, e.Tick(Dt, 0)); // the first van is gone already but the second is still to come
         var t = 0f;
         for (; e.Tick(Dt, 0) != ThievesStep.Launch; t += Dt) { }
-        Assert.InRange(t, 4f, 6f); // gap_seconds after it
-        for (var i = 0; i < 30 * 10; i++) e.Tick(Dt, 1);
-        e.Tick(Dt, 0);
-        var s = 0f;
-        for (; e.Tick(Dt, 0) != ThievesStep.Launch; s += Dt) { }
-        Assert.Equal(3, e.Launched);
-        Assert.Equal(ThievesStep.None, e.Tick(Dt, 1)); // the last Raid is under way
-        Assert.Equal(ThievesStep.Won, e.Tick(Dt, 0)); // and gone: the event is won
+        Assert.Equal(2, e.Launched);
+        Assert.Equal(ThievesStep.None, e.Tick(Dt, 1));
+        Assert.Equal(ThievesStep.Won, e.Tick(Dt, 0));
         Assert.True(e.Finish());
         Assert.Equal(ThievesPhase.Over, e.Phase);
         Assert.Equal(ThievesStep.None, e.Tick(Dt, 0));
     }
 
     [Fact]
-    public void ARaidThatCouldNotBeLaunchedStillCountsSoTheEventCannotHangAndCannotBeLost()
+    public void AVanThatCouldNotBePlacedShrinksTheWaveAndAWaveOfNoneIsWonAtOnce()
     {
         var e = new ThievesEvent();
-        e.Begin(new RaidsConfig { Count = 2, MaxVans = 2, NextRaidSeconds = 10, GapSeconds = 1 });
-        var launches = 0; var won = false;
-        for (var i = 0; i < 30 * 60 && !won; i++) // the caller never manages to start a van: nothing is ever active
-        {
-            var s = e.Tick(Dt, 0);
-            if (s == ThievesStep.Launch) launches++;
-            won = s == ThievesStep.Won;
-        }
-        Assert.Equal(2, launches);
-        Assert.True(won);
+        e.Begin(Convoy(), Vans(3));
+        Assert.Equal(ThievesStep.Launch, e.Tick(Dt, 0));
+        Assert.Equal(ThievesStep.None, e.Tick(Dt, 1));
+        var t = 0f;
+        for (; e.Tick(Dt, 1) != ThievesStep.Launch; t += Dt) { }
+        e.Shrink(); // the second could not find a stop of its own: the wave is one van
+        Assert.Equal((1, 1), (e.Launched, e.Total));
+        for (var i = 0; i < 30 * 20; i++) Assert.Equal(ThievesStep.None, e.Tick(Dt, 1));
+        Assert.Equal(ThievesStep.Won, e.Tick(Dt, 0));
+        e.Finish();
+        e.Begin(Convoy(), Vans(1));
+        Assert.Equal(ThievesStep.Launch, e.Tick(Dt, 0));
+        e.Shrink(); // not even the first
+        Assert.Equal(ThievesStep.Won, e.Tick(Dt, 0)); // the event cannot hang
     }
 
     [Fact]
-    public void ThreeRaidsComeAndGoByThemselvesWithNobodyNearAndTheEventEndsWon()
+    public void TheWaveComesAndGoesByItselfWithNobodyNearAndTheEventEndsWon()
     {
-        var rig = new Rig(f => { f.Van.StaySeconds = 20; f.Van.BoardWaitSeconds = 10; f.Raids.NextRaidSeconds = 40; f.Raids.GapSeconds = 5; });
+        var rig = new Rig(f => { f.Van.StaySeconds = 20; f.Van.BoardWaitSeconds = 10; });
         var ev = new ThievesEvent();
-        ev.Begin(rig.Cfg.Raids);
+        ev.Begin(rig.Cfg.Raids, Vans(3));
         var vans = new List<RaidVan>();
         var won = false;
         for (var i = 0; i < 30 * 900 && !won; i++)
@@ -799,9 +816,8 @@ public class RaidVanTests
             switch (ev.Tick(Dt, rig.Raids.Active))
             {
                 case ThievesStep.Launch:
-                    var n = vans.Count;
-                    var y = 60f * n; // each Raid on its own road
-                    var raid = rig.Launch(new RoadPath(new[] { new Vector2(-20, y), new Vector2(60, y) }), new RoadPath(new[] { new Vector2(60, y), new Vector2(360, y) }));
+                    var n = vans.Count; // the same road in, a stop of its own each
+                    var raid = rig.Launch(new RoadPath(new[] { new Vector2(-20, 0), new Vector2(60 + 30 * n, 0) }), new RoadPath(new[] { new Vector2(60 + 30 * n, 0), new Vector2(360, 0) }));
                     vans.Add(raid.Van);
                     break;
                 case ThievesStep.Won: won = true; break;
@@ -816,11 +832,11 @@ public class RaidVanTests
     }
 
     [Fact]
-    public void ARaidThatIsShotUpStillLetsTheEventBeWon()
+    public void AVanThatIsShotUpStillLetsTheEventBeWon()
     {
-        var rig = new Rig(f => { f.Van.Hits = 10; f.Raids.Count = 1; });
+        var rig = new Rig(f => { f.Van.Hits = 10; });
         var ev = new ThievesEvent();
-        ev.Begin(rig.Cfg.Raids);
+        ev.Begin(rig.Cfg.Raids, Vans(1));
         Raid? raid = null;
         var won = false;
         for (var i = 0; i < 30 * 200 && !won; i++)

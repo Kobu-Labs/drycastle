@@ -46,6 +46,10 @@ public sealed class RaidWork : IThiefWork
 {
     readonly LootBook _book;
     readonly Raid _raid;
+    readonly VehicleArrivals _arrivals = new();
+    readonly List<int> _arrived = new();
+    readonly List<StealTarget> _tires = new();
+    Countdown _scan;
 
     public RaidWork(LootBook book, Raid raid) { _book = book; _raid = raid; }
 
@@ -70,6 +74,58 @@ public sealed class RaidWork : IThiefWork
     {
         if (!DoorOpen || Committed >= _raid.Van.Capacity) return null;
         return _book.Pick(_raid.Van.Position, _book.Config.SeekRadiusM, thief.Position, allow);
+    }
+
+    /// <summary>
+    /// Vehicles first: every <see cref="VehiclePriorityConfig.CheckSeconds"/>, while the door is open, looks for cars that newly became available (at rest, a wheel on, within
+    /// <see cref="VehiclePriorityConfig.ArriveRadiusM"/> of the van) and sends a share of the free Thieves to each one's tires (<see cref="VehiclePriority"/>). Returns how many Thieves were sent.
+    /// </summary>
+    public int ScanVehicles(float dt)
+    {
+        _scan.Tick(dt);
+        if (!_scan.Ready) return 0;
+        var vp = _book.Config.VehiclePriority;
+        _scan.Start(vp.CheckSeconds);
+        if (!DoorOpen) { _arrivals.Clear(); return 0; }
+        var radius = vp.ArriveRadiusM > 0 ? vp.ArriveRadiusM : _book.Config.SeekRadiusM;
+        _arrived.Clear();
+        _arrivals.Scan(_book.TireCars(), _raid.Van.Position, radius, _arrived);
+        var sent = 0;
+        foreach (var car in _arrived) sent += Delegate(car, vp);
+        return sent;
+    }
+
+    /// <summary>Hands the free tires of one car to the nearest free Thieves (see <see cref="VehiclePriority.Count"/>); each goes through a claim of its own. Returns how many were sent.</summary>
+    int Delegate(int carId, VehiclePriorityConfig vp)
+    {
+        _tires.Clear();
+        _book.FreeTires(carId, _tires);
+        if (_tires.Count == 0) return 0;
+        var free = new List<GangMember>();
+        var onCar = 0;
+        var room = _raid.Van.Capacity - Committed; // a Thief already on its way is counted in Committed; one handed a target from Seek is not yet
+        foreach (var m in _raid.Gang.Members)
+        {
+            if (!m.CanDelegate) continue;
+            if (m.State == GangMemberState.Approach && m.Job is { Kind: LootKind.Tire, Lying: false } j && TireSource.CarOf(j.Id) == carId) { onCar++; continue; }
+            free.Add(m);
+        }
+        var count = VehiclePriority.Count(free.Count, _tires.Count, onCar, vp);
+        if (count == 0) return 0;
+        var sent = 0;
+        var tires = _tires.ToList();
+        var car = tires[0].Position;
+        foreach (var (ti, wi) in VehiclePriority.Assign(free.Select(m => m.Position).ToList(), tires.Select(t => t.WorkSpot).ToList(), car, count))
+        {
+            var m = free[ti];
+            var counted = m.State == GangMemberState.Approach;
+            if (!counted && room <= 0) continue; // the van would be over its capacity
+            var t = tires[wi];
+            if (!_book.Claim(t)) continue;
+            if (m.Delegate(t)) { sent++; if (!counted) room--; }
+            else _book.Release(t);
+        }
+        return sent;
     }
 
     public bool TryFind(in StealTarget target, out StealTarget now) => _book.TryFind(target, out now);

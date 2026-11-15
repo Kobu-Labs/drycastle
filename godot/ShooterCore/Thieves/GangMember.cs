@@ -34,6 +34,9 @@ public interface IGangWorld
 
     /// <summary>The player takes <paramref name="damage"/> from the member with this hit id (<see cref="GangRules.FirstHitId"/> up).</summary>
     void Hurt(ushort player, float damage, ushort memberHitId);
+
+    /// <summary>The nearest walkable point to <paramref name="p"/> (the navigation mesh); the point itself when the world cannot tell. Used for the spots chasers take round a player.</summary>
+    Vector3 Snap(Vector3 p) => p;
 }
 
 /// <summary>What a weapon hit on a Gang member (the match calls it for a victim id in the members' range).</summary>
@@ -134,14 +137,14 @@ public sealed partial class GangMember : IWorldEntity
         .Note(GangMemberState.Idle, "A Thief standing (clock: a random time, then it walks to a point near the post); a Thief that has Loot work (its Raid gave it) goes straight on to Seek instead.")
         .Note(GangMemberState.Walk, "A Thief on a route to a point near the post (clock: the time budget to arrive, then it stands again).")
         .Note(GangMemberState.Guard, "An Enforcer follows the Thief it escorts, or stands at the post; the Gang boss stands at the post. Never steals.")
-        .Note(GangMemberState.Chase, "Runs at the player the Raid is fighting (a route from the navigation mesh, asked for at most every repath_seconds); winds up once within reach.")
+        .Note(GangMemberState.Chase, "Runs at its own spot on a ring round the player the Raid is fighting (a route from the navigation mesh, asked for at most every repath_seconds); winds up once within reach. Ends (back to Idle or Guard) when the Raid forgets the player.")
         .Note(GangMemberState.Windup, "The swing's telegraph (clock: windup_seconds): a player can step out of reach. Ends in Swing, or in a stand if the target is gone.")
         .Note(GangMemberState.Swing, "The blow lands at its start, only if the target is still within reach; then recovers (clock: interval minus windup) and chases or stands again.")
         .Note(GangMemberState.Flee, "Runs for the map edge on a route (clock: flee_seconds); the entity ends there (no state follows).")
         .Note(GangMemberState.Board, "Called back by the van: runs to its side door on a route (never fights) and ends there, counted as boarded. Flee when the van is destroyed or leaves without it.")
         .Note(GangMemberState.Seek, "A Thief looks for a target: the nearest free one of a kind chosen by weight near the van's door, one Thief per target (clock: it asks again after seek_retry_seconds when nothing is free or the van takes no more). A Thief with free hands still joins a fight.")
         .Note(GangMemberState.Approach, "Walks a route to the target's work spot (clock: approach_give_up_seconds; a target that is gone, a lost route or the clock ends it and the target is avoided for a while). Arrived: Steal, or ClimbUp when the target needs a climb.")
-        .Note(GangMemberState.Steal, "Stands at the target, a still target (clock: the kind's steal_seconds, or pickup_seconds for Loot that lies). When the clock runs out the Thief has it and it is gone from its place; a target that goes meanwhile ends it. Landed inside a fence (HopIn) it first walks straight to the pet and the clock starts within grab_m of it. A Working state: a player crowding it is aggro.")
+        .Note(GangMemberState.Steal, "Stands at the target, a still target (clock: the kind's steal_seconds, or pickup_seconds for Loot that lies). When the clock runs out the Thief has it and it is gone from its place; a target that goes meanwhile ends it. Landed inside a fence (HopIn) it first walks straight to the pet and the clock starts within grab_m of it. A Working state.")
         .Note(GangMemberState.HopIn, "Hops over the fence of the pet's garden: an arc from the point outside the fence to the point inside it, off the navigation mesh (clock: hop_seconds). A Working state; then Steal, where it walks to the pet.")
         .Note(GangMemberState.HopOut, "Back out of the garden with the pet (or with nothing when the pet went): walks straight to where it landed (no clock), then the arc out over the fence (clock: hop_seconds), then Haul with the pet. A Working state.")
         .Note(GangMemberState.ClimbUp, "Climbs straight up from the climb's base to its top at climb_speed, off the navigation mesh (no clock: the distance). A Working state; shot dead here it falls to the ground.")
@@ -158,6 +161,11 @@ public sealed partial class GangMember : IWorldEntity
 
     const float DirectM = 3f;       // a chaser this near its target with no route walks straight at it
     const float ReachDy = 2.2f;     // a blow reaches no higher or lower than this
+    const float SlotRing = 0.75f;   // a chaser's spot on the ring round its target: this fraction of the melee reach from it (inside the 0.9 a blow starts at)
+    const float SlotArriveM = 0.3f; // at its spot when this near
+    const float SlotStrikeM = 1f;   // it strikes from within this of its spot
+    const float SlotRefreshM = 0.75f; // its spot is worked out again when the target moved this far
+    const float GoldenAngle = 2.3999632f; // slots spread evenly whatever their number, and a slot's angle never changes when others come and go
 
     readonly GangConfig _d;
     readonly GangKindConfig _k;
@@ -171,6 +179,8 @@ public sealed partial class GangMember : IWorldEntity
     Vector3 _edge;
     Vector3 _door;
     float _taken;                   // the hit count taken so far, weighted
+    Vector3 _slotPoint, _slotFor;   // the spot on the ring round the target, and where the target stood when it was worked out
+    bool _slotValid;
 
     public GangMember(GangConfig cfg, GangMemberKind kind, IGangWorld world, Vector3 position, float yaw, ushort look, ushort hitId, int seed)
     {
@@ -203,6 +213,16 @@ public sealed partial class GangMember : IWorldEntity
     public bool CanFight => Alive && State != GangMemberState.Flee && State != GangMemberState.Board && (Kind != GangMemberKind.Thief || !Busy);
     /// <summary>The player it fights now, or null.</summary>
     public GangPlayer? Target => _target;
+    /// <summary>Its place among the members fighting the same player (0 up, kept while the fight lasts; -1 none): the angle of its spot on the ring round them. Set by <see cref="GangRoster"/>.</summary>
+    public int Slot { get; set; } = -1;
+    /// <summary>The player <see cref="Slot"/> was given for.</summary>
+    public ushort SlotOf { get; set; }
+    /// <summary>The spot it heads for when chasing: on the ring round the target (its feet when it has no slot or the spot cannot be used).</summary>
+    public Vector3? SlotPoint => _target is { } t && Slot >= 0 && _slotValid ? _slotPoint : _target?.Feet;
+    /// <summary>Walking about or fighting (not at work, not down or aloft, alive): a push from a neighbour may move it.</summary>
+    public bool Pushable => State is GangMemberState.Idle or GangMemberState.Walk or GangMemberState.Guard or GangMemberState.Chase or GangMemberState.Windup or GangMemberState.Swing or GangMemberState.Seek or GangMemberState.Approach or GangMemberState.Haul or GangMemberState.Board or GangMemberState.Flee;
+    /// <summary>Moves it a little (<see cref="GangRoster"/>'s separation). Only for <see cref="Pushable"/> members.</summary>
+    public void Nudge(float dx, float dz) { if (Pushable && Ended == null) Position = new Vector3(Position.X + dx, Position.Y, Position.Z + dz); }
     /// <summary>The weighted hits taken, and the Hit count that kills it (GLOSSARY "Hit count").</summary>
     public float HitsTaken => _taken;
     public float HitsNeeded => _k.Hits;
@@ -272,7 +292,11 @@ public sealed partial class GangMember : IWorldEntity
     // ---- orders from the gang ----
 
     /// <summary>Who to fight now (null: nobody). Refreshed every tick by the gang with where the player stands.</summary>
-    public void SetTarget(GangPlayer? target) => _target = Alive ? target : null;
+    public void SetTarget(GangPlayer? target)
+    {
+        _target = Alive ? target : null;
+        if (_target == null) { Slot = -1; _slotValid = false; }
+    }
 
     /// <summary>Runs for <paramref name="edge"/> (a point at the map edge) on a route; the entity ends when it arrives. Not for the dead.</summary>
     public void Flee(Vector3 edge)
@@ -399,15 +423,39 @@ public sealed partial class GangMember : IWorldEntity
     {
         var d = Flat(Position, t.Feet);
         var reach = _k.Melee.ReachM;
-        if (d <= reach * 0.9f && MathF.Abs(t.Feet.Y - Position.Y) <= ReachDy && t.OnFoot)
+        var goal = ChaseGoal(t, reach, out var slotted);
+        // in reach, and at its own spot when it has one (so they surround instead of all striking from the side they came)
+        if (d <= reach * 0.9f && (!slotted || Flat(Position, goal) <= SlotStrikeM || d <= reach * 0.5f) && MathF.Abs(t.Feet.Y - Position.Y) <= ReachDy && t.OnFoot)
         {
             ClearRoute();
             Face(t.Feet, dt);
             _fsm.Enter(GangMemberState.Windup, _k.Melee.WindupSeconds);
             return;
         }
-        if (GoTo(t.Feet, dt, _k.RunSpeed, reach * 0.8f)) return;
-        if (_route.Count == 0 && RouteRequest == null && d <= DirectM) Step(t.Feet, dt, _k.RunSpeed); // no route and nearly there: straight at it
+        if (GoTo(goal, dt, _k.RunSpeed, slotted ? SlotArriveM : reach * 0.8f)) return;
+        if (_route.Count == 0 && RouteRequest == null && Flat(Position, goal) <= DirectM) Step(goal, dt, _k.RunSpeed); // no route and nearly there: straight at it
+    }
+
+    /// <summary>
+    /// Where a chaser heads: its spot on a ring (<see cref="SlotRing"/> of the reach) round the target, at an angle by its slot from the way the Raid came (<see cref="Home"/>), so several chasers
+    /// surround the player instead of queueing on one path. Worked out again when the target moved. The spot goes through the world's snap; one that ends too far from the target to strike from is not used.
+    /// </summary>
+    Vector3 ChaseGoal(GangPlayer t, float reach, out bool slotted)
+    {
+        slotted = false;
+        if (Slot < 0) return t.Feet;
+        if (!_slotValid || Flat(t.Feet, _slotFor) > SlotRefreshM)
+        {
+            _slotFor = t.Feet;
+            var away = MathF.Atan2(Home.Z - t.Feet.Z, Home.X - t.Feet.X);
+            var a = away + Slot * GoldenAngle;
+            var raw = new Vector3(t.Feet.X + MathF.Cos(a) * reach * SlotRing, t.Feet.Y, t.Feet.Z + MathF.Sin(a) * reach * SlotRing);
+            var snapped = _world.Snap(raw);
+            _slotPoint = Flat(snapped, t.Feet) <= reach * 0.9f && MathF.Abs(snapped.Y - t.Feet.Y) <= ReachDy ? snapped : t.Feet;
+            _slotValid = true;
+        }
+        slotted = Flat(_slotPoint, t.Feet) > 0.01f;
+        return _slotPoint;
     }
 
     void TickFlee(float dt)
