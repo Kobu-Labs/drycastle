@@ -405,23 +405,6 @@ public class RaidVanTests
     }
 
     [Fact]
-    public void AVehicleThatBumpsTheVanHurtsItByTheSpeedItLostAboveTheMinimum()
-    {
-        var rig = new Rig();
-        var raid = rig.Launch();
-        var v = rig.Cfg.Van;
-        rig.World.List.Add(new GangPlayer(4, new Vector3(0, 0, 8), true));
-        Assert.False(rig.Raids.CrashHit(raid.Van, 4, v.CrashMinMps)); // a nudge costs nothing
-        Assert.Equal(0f, raid.Van.HitsTaken);
-        Assert.False(rig.Raids.CrashHit(raid.Van, 4, v.CrashMinMps + 5));
-        Assert.Equal(5 * v.CrashHitsPerMps, raid.Van.HitsTaken);
-        Assert.Contains(4, rig.Gangs.Gangs.SelectMany(g => g.Aggro).Select(i => (int)i)); // the driver is fought
-        Assert.True(rig.Raids.CrashHit(raid.Van, 4, v.CrashMinMps + 1000)); // a huge crash destroys it
-        Assert.Equal(RaidVanState.Destroyed, raid.Van.State);
-        Assert.False(rig.Raids.CrashHit(raid.Van, 4, 50)); // a wreck takes nothing
-    }
-
-    [Fact]
     public void AHitOnACapsuleGoesToTheVanThroughTheRosterAndTheMatchAndStartsTheRaidFighting()
     {
         var rig = new Rig();

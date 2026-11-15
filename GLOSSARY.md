@@ -448,7 +448,7 @@ One van of the Thieves event and its crew of Gang members (a Gang boss, Enforcer
 _Avoid_: wave, attack, round (a round is the match's)
 
 **Raid van**:
-The vehicle of a Raid: a scripted world entity that follows the road graph (in and out along one of the two fixed routes), not a vehicle a player can use (ADR 0021). Nobody enters it and nothing pushes it; it pushes through what is in its way and honks. It has a Hit count (bullets, explosives and vehicle weapons hit it, and so does a vehicle that crashes into it, by the speed the vehicle loses); it leaves when it is full or its stay timer runs out, crew dead or not; destroyed, its Raid is over, everything loaded in it goes back to its place and its crew flees on foot. World entity wire type 55.
+The vehicle of a Raid: a scripted world entity that follows the road graph (in and out along one of the two fixed routes), not a vehicle a player can use (ADR 0021). Nobody enters it and nothing pushes it; it pushes through what is in its way and honks. It has a Hit count; it leaves when it is full or its stay timer runs out, crew dead or not; destroyed, its Raid is over, everything loaded in it goes back to its place and its crew flees on foot. World entity wire type 55.
 _Avoid_: truck, transport, car
 
 **Gang member**:

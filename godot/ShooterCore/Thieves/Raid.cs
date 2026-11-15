@@ -256,19 +256,6 @@ public sealed class RaidRoster : IGangHits
         return killed ? DamageResult.Killed : DamageResult.Damaged;
     }
 
-    /// <summary>
-    /// A vehicle bumped <paramref name="van"/> and lost <paramref name="speedLoss"/> m/s of speed (the driver <paramref name="attacker"/>, 0 for none): above <see cref="VanConfig.CrashMinMps"/> it costs the van hits.
-    /// True when that destroyed it.
-    /// </summary>
-    public bool CrashHit(RaidVan van, ushort attacker, float speedLoss)
-    {
-        var weight = (speedLoss - _cfg.Van.CrashMinMps) * _cfg.Van.CrashHitsPerMps;
-        if (!(weight > 0) || !van.Alive || van.Ended != null) return false;
-        var killed = van.Hit(attacker, weight, false);
-        _raids.FirstOrDefault(r => r.Van == van)?.Gang.NoteHit(attacker); // ramming the van is interfering with the Raid
-        return killed;
-    }
-
     /// <summary>The living vans as hit targets (two capsules each). With a <paramref name="view"/> tick, where the shooter's screen showed them (ADR 0013: a van drives, so it is rewound like the Bigfoot, from its own pose ring).</summary>
     public void AddTargets(List<HitTarget> into, uint? view = null)
     {
