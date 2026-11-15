@@ -12,9 +12,10 @@ namespace Drycastle.ShooterCore;
 /// ground, its centre <paramref name="BoxAhead"/> metres ahead of the feet) replaces the capsule for a bullet's ray when its height is above 0;
 /// blasts, knives and everything else that measures a distance keep the capsule. <paramref name="Shape"/> (a wild animal's hit shape in the pose
 /// its shooter sees, with the pose and frame it is, for the hit diagram) replaces the box in turn: the bullet must cross a cell the animal covers.
+/// <paramref name="ShapeScale"/> is how much bigger than its baked model the animal stands (its size, <see cref="Animal.Size"/>): the shape is baked at the model's own size, so the ray is tested in the shape's frame, shrunk by it.
 /// </summary>
 public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw, bool HeadGuarded = false, float Scale = 1f, Vector3 Box = default, float BoxAhead = 0f,
-    AnimalShape? Shape = null, AnimalPose ShapePose = AnimalPose.Idle, int ShapeFrame = 0);
+    AnimalShape? Shape = null, AnimalPose ShapePose = AnimalPose.Idle, int ShapeFrame = 0, float ShapeScale = 1f);
 
 /// <summary>
 /// A ray's hit. <paramref name="Head"/> is a headshot (the weapon's headshot damage). <paramref name="ShapeHead"/> says the bullet met the head cells of
@@ -229,9 +230,12 @@ public static class HitMath
             if (t.Shape != null)
             {
                 // a hit shape (a wild animal in the pose its shooter sees): the ray must cross a cell the animal covers
-                if (t.Shape.Ray(ToFrame(t, origin), ToFrameDirection(t, dir), limit) is not { } sh) continue;
-                if (best is { } sb && sb.Distance <= sh.Distance) continue;
-                best = new RayHit(t.Id, sh.Distance, false, sh.Head);
+                // the frame is the baked model's size: a distance there is the world's divided by the animal's size
+                var size = t.ShapeScale > 0 ? t.ShapeScale : 1f;
+                if (t.Shape.Ray(ToFrame(t, origin), ToFrameDirection(t, dir), limit / size) is not { } sh) continue;
+                var shapeDistance = sh.Distance * size;
+                if (best is { } sb && sb.Distance <= shapeDistance) continue;
+                best = new RayHit(t.Id, shapeDistance, false, sh.Head);
                 continue;
             }
             if (t.Box.Y > 0)
@@ -254,11 +258,11 @@ public static class HitMath
         return best;
     }
 
-    /// <summary>A world point in a target's own frame: x to its right, y up from its feet, z ahead of its feet (the frame of an <see cref="AnimalShape"/>).</summary>
+    /// <summary>A world point in a target's own frame: x to its right, y up from its feet, z ahead of its feet (the frame of an <see cref="AnimalShape"/>, the baked model's size: shrunk by <see cref="HitTarget.ShapeScale"/>).</summary>
     public static Vector3 ToFrame(in HitTarget t, Vector3 p)
     {
         var f = Forward(t.Yaw, 0);
-        var rel = p - t.Feet;
+        var rel = t.ShapeScale > 0 ? (p - t.Feet) / t.ShapeScale : p - t.Feet;
         return new Vector3(Vector3.Dot(rel, new Vector3(-f.Z, 0, f.X)), rel.Y, Vector3.Dot(rel, f));
     }
 
