@@ -77,7 +77,7 @@ public partial class NetServer
         _loot = new LootBook(ThievesData.Loot, registry, _match.Entities, System.Environment.TickCount);
         // ---- the kinds of Loot: one registration line each (see IStealSource) ----
         registry.Register(new TireSource(ThievesData.Loot.Tire, new ServerTires(this)));
-        // pets (ticket 05):       registry.Register(new PetSource(...));
+        registry.Register(MakePetSource());
         registry.Register(MakeDishSource()); // dishes (ticket 06)
         RegisterConnectorLoot(registry); // connectors (ticket 07): NetServer.Thieves.Loot.Connector.cs
         // ---- end of the kinds ----

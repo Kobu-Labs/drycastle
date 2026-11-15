@@ -47,7 +47,7 @@
     // An empty clip name plays nothing: the windup and swing then lean the body, steal (kneeling at a target) bends and lowers it, climb_up, climb_down and climb_work (tickets 06 and 07) hold the pose.
     "view": {
       "models": ["peasant_male_01", "peasant_male_01", "peasant_female_01"],
-      "clips": { "idle": "idle_standing_masc", "walk": "walk_f_masc", "run": "sprint_up25f_femn", "windup": "", "swing": "", "steal": "", "climb_up": "", "climb_down": "", "climb_work": "", "knockdown_begin": "", "knockdown_loop": "", "knockdown_end": "", "stun_loop": "", "death": ["death_back_sword", "death_left_sword"] },
+      "clips": { "idle": "idle_standing_masc", "walk": "walk_f_masc", "run": "sprint_up25f_femn", "windup": "", "swing": "", "steal": "", "climb_up": "", "climb_down": "", "climb_work": "", "knockdown_begin": "", "knockdown_loop": "", "knockdown_end": "", "stun_loop": "", "hop_in": "", "death": ["death_back_sword", "death_left_sword"] },
       "thief_color": "#7d6b4f", "enforcer_color": "#8a3b32", "gang_boss_color": "#c9a227", "capsule_height_m": 1.8
     }
   },
@@ -108,8 +108,16 @@
     // the car's middle and wheel_end_m ahead of and behind it; the Thief kneels work_side_m out beside the wheel. At rest: nobody inside and slower than rest_speed_mps.
     "tire": { "weight": 1, "steal_seconds": 6, "vehicle_ids": ["car"], "wheel_side_m": 0.72, "wheel_end_m": 1.12, "work_side_m": 1.9, "rest_speed_mps": 0.5 },
 
-    // Pets (ticket 05).
-    "pet": { "weight": 1, "steal_seconds": 4 },
+    // Pets (ticket 05): one target per living pet no Thief holds. A pet behind a fence is reached by a hop: the Thief stands hop_out_m outside the nearest section, jumps over it (hop_seconds, the arc clears the
+    // fence by hop_clear_m) to hop_in_m inside, walks to the pet (in_walk_speed_mps; grabs within grab_m, then steal_seconds), and hops back out with it. A garden with no fence is a plain walk. The pet is
+    // held at the Thief's right (carry_right_m), carry_forward_m ahead, carry_up_m up. fence_candidates: how many of the nearest sections are tried for a hop point on the navigation mesh (nav_snap_m);
+    // plan_recheck_m: a plan is kept until the pet has moved this far.
+    "pet": {
+      "weight": 1, "steal_seconds": 4,
+      "hop_seconds": 0.7, "hop_out_m": 0.9, "hop_in_m": 0.9, "hop_clear_m": 0.5, "in_walk_speed_mps": 3.0, "grab_m": 0.8,
+      "carry_right_m": 0.4, "carry_forward_m": 0.25, "carry_up_m": 0.8,
+      "fence_candidates": 6, "nav_snap_m": 1.5, "plan_recheck_m": 2.0
+    },
 
     // Dishes (ticket 06): the placed objects with the generated dish model. The Thief stands base_out_m out from the dish along the way the wall faces, on the ground and on the navigation mesh (a base
     // more than snap_max_m (flat) or snap_max_dy_m (height) from the mesh makes the dish no target), climbs straight up to reach_below_m under the dish's origin (at least min_climb_m up), works there.

@@ -28,7 +28,7 @@ public sealed partial class GangMember
     public LootOrigin? CarriedOrigin => LootKinds.OfCarried(Carried) is { } k ? new LootOrigin(k, CarriedId) : null;
 
     /// <summary>Stealing, climbing or hauling: a player crowding it is in the way (<see cref="ThiefGang.Update"/> reads it) and it does not join a fight.</summary>
-    public bool Working => State is GangMemberState.Steal or GangMemberState.ClimbUp or GangMemberState.WorkAloft or GangMemberState.ClimbDown or GangMemberState.Shocked or GangMemberState.Falling or GangMemberState.Down or GangMemberState.GetUp or GangMemberState.Haul or GangMemberState.Load;
+    public bool Working => State is GangMemberState.Steal or GangMemberState.ClimbUp or GangMemberState.WorkAloft or GangMemberState.ClimbDown or GangMemberState.Shocked or GangMemberState.Falling or GangMemberState.Down or GangMemberState.GetUp or GangMemberState.Haul or GangMemberState.Load or GangMemberState.HopIn or GangMemberState.HopOut;
 
     /// <summary>On the way to a target or at one, or on the way to the van with it: the Loot it will bring counts against the van's capacity.</summary>
     public bool HasJob => Working || State == GangMemberState.Approach;
@@ -53,6 +53,8 @@ public sealed partial class GangMember
             case GangMemberState.WorkAloft: TickWorkAloft(dt); break;
             case GangMemberState.ClimbDown: TickClimbDown(dt); break;
             case GangMemberState.Shocked: case GangMemberState.Falling: case GangMemberState.Down: case GangMemberState.GetUp: TickShock(dt); break;
+            case GangMemberState.HopIn: TickHopIn(dt); break;
+            case GangMemberState.HopOut: TickHopOut(dt); break;
             case GangMemberState.Haul: TickHaul(dt); break;
             case GangMemberState.Load: TickLoad(dt); break;
         }
@@ -106,6 +108,7 @@ public sealed partial class GangMember
     {
         ClearRoute();
         var cfg = Work!.Config;
+        if (t.Hop is { } hop) { BeginHop(hop); return; }
         if (t.NeedsClimb)
         {
             _base = t.WorkSpot; _top = t.Top!.Value;
@@ -117,7 +120,8 @@ public sealed partial class GangMember
 
     void TickSteal(float dt)
     {
-        if (_job is not { } job || !Work!.TryFind(job, out var now)) { ReleaseJob(); EnterSeek(); return; } // the target went while it worked
+        if (_job is not { } job || !Work!.TryFind(job, out var now)) { ReleaseJob(); EndSteal(); return; } // the target went while it worked
+        if (_hop != null && TickHopWalk(now, dt)) return; // inside a fence: walking to the pet, the clock has not started
         Face(now.Position, dt);
         if (_fsm.Tick(dt)) FinishWork(now);
     }
@@ -128,6 +132,7 @@ public sealed partial class GangMember
         var piece = Work!.Take(t);
         _job = null;
         if (piece is { } p) { Carried = LootKinds.CarriedOf(p.Kind); CarriedId = p.Id; }
+        if (_hop != null) { EnterHopOut(); return; }
         if (Aloft) { _fsm.Enter(GangMemberState.ClimbDown); return; }
         if (piece == null) EnterSeek(); else EnterHaul();
     }
@@ -170,6 +175,7 @@ public sealed partial class GangMember
     void LeaveAloft()
     {
         if (Aloft) Position = _base;
+        LeaveHop();
     }
 
     // ---- hauling ----
