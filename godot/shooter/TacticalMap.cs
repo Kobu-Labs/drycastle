@@ -25,7 +25,7 @@ public sealed partial class TacticalMap : Control
     readonly MapMarkers _m;
     MapBase? _base;
     ImageTexture? _tex;
-    int _texSide;
+    int _texSide, _wantedSide;
     PanelFade _fade; // open/close and the alpha: the same fade as the Equipment screen's
     bool _layoutDirty = true;
     bool _open => _fade.Wanted;
@@ -95,12 +95,20 @@ public sealed partial class TacticalMap : Control
         return new Vector2(b.Origin.X + f.X * b.SideMetres, b.Origin.Y + f.Y * b.SideMetres);
     }
 
+    /// <summary>Starts making the sheet's picture for a window of <paramref name="viewport"/> pixels before the map is first opened, so the key does not stall a frame.</summary>
+    public void Prewarm(MapBase? map, Vector2 viewport)
+    {
+        if (map == null) return;
+        var side = TacticalMapLayout.Side(viewport.X, viewport.Y, ShooterTheme.Margin, Gutter, PanelMin, PanelGap);
+        map.Prewarm(MinimapView.TextureSide(map.SideMetres, side / map.SideMetres, MinTextureSide, MaxTextureSide));
+    }
+
     // ---- open and close ----
 
     /// <summary>Shows the map over <paramref name="map"/> (null: no map data, the sheet says so).</summary>
     public void Open(MapBase? map)
     {
-        if (!ReferenceEquals(map, _base)) { _base = map; _tex = null; _texSide = 0; }
+        if (!ReferenceEquals(map, _base)) { _base = map; _tex = null; _texSide = 0; _wantedSide = 0; }
         _rose.SetLabels(Strings.T("map.dir.0"), Strings.T("map.dir.2"), Strings.T("map.dir.4"), Strings.T("map.dir.6"));
         _shownCell = (-1, -1); _shownHeading = -1; _shownNone = false;
         _cursorShown = false;
@@ -141,6 +149,7 @@ public sealed partial class TacticalMap : Control
             return; // fading out: nothing else changes
         }
         if (_layoutDirty || Size != _laidOutFor) Layout();
+        else if (_base is { } nb && (_tex == null || MinimapView.NeedsRebuild(_texSide, _wantedSide)) && _wantedSide > 0 && nb.TryTexture(_wantedSide, out var built) is { } ready) { _tex = ready; _texSide = built; _sheet.QueueRedraw(); } // the picture a worker was making is ready
         UpdateReadouts();
         _markers.QueueRedraw();
     }
@@ -251,7 +260,7 @@ public sealed partial class TacticalMap : Control
                 for (var i = 0; i < cells; i++) { _colLabels[i] = TacticalMapMath.ColumnLabel(i); _rowLabels[i] = TacticalMapMath.RowLabel(i); }
             }
             var wanted = MinimapView.TextureSide(b.SideMetres, _k * Math.Max(0.01f, GetGlobalTransformWithCanvas().Scale.X), MinTextureSide, MaxTextureSide);
-            if (_tex == null || MinimapView.NeedsRebuild(_texSide, wanted)) { _texSide = wanted; _tex = b.Texture(wanted); }
+            if (_tex == null || MinimapView.NeedsRebuild(_texSide, wanted)) { _wantedSide = wanted; if (b.TryTexture(wanted, out var built) is { } made) { _tex = made; _texSide = built; } }
         }
         else
         {

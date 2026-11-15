@@ -43,6 +43,7 @@ public partial class NetClient
         WireLoadoutHud(_hud);
         _hud.AttachEquipment(this); // F (#268)
         _hud.Minimap.Build(Map); // once per connection; the texture comes from the map's parcels and roads (ticket #119)
+        _hud.PrewarmTacticalMap(GetViewport().GetVisibleRect().Size); // the full-screen map's picture is made on a worker meanwhile
     }
 
     /// <summary>The loaded map (set by the host): the minimap's texture source.</summary>

@@ -23,6 +23,9 @@ public partial class Hud
     /// <summary>Sandbox: a middle click on the open map picked this ground point (x, z) to teleport to.</summary>
     public Action<Vector2>? TacticalMapTeleport { set => _tacticalMap.TeleportTo = value; }
 
+    /// <summary>Starts making the tactical map's picture in the background (the map is loaded, the first M press should not stall a frame).</summary>
+    public void PrewarmTacticalMap(Vector2 viewport) => _tacticalMap.Prewarm(_minimap.Base?.World, viewport);
+
     void BuildTacticalMap()
     {
         _waypointMarker = new WaypointMarker(_mapMarkers.Waypoint, () => _minimap.Base) { MouseFilter = Control.MouseFilterEnum.Ignore };

@@ -47,6 +47,8 @@ public sealed class MapBase
 
     readonly bool _world;
     MapBase? _worldTwin;
+    readonly Dictionary<int, Task<Image?>> _building = new();
+    readonly object _topDownLock = new();
 
     MapBase(Drycastle.MapLoader.MapLoader map, bool world = false) { _map = map; _world = world; }
 
@@ -198,6 +200,53 @@ public sealed class MapBase
         return tex;
     }
 
+    /// <summary>
+    /// A texture near <paramref name="wanted"/> texels (within <see cref="MinimapView.NeedsRebuild"/>'s tolerance), built at <paramref name="built"/> texels, or null while it is being made. The world sheet with a top-down picture
+    /// is rasterised on a worker thread (decoding and resizing the picture would stall a frame for a second), so the caller asks again next frame; every other base makes it at once. Starts a build when none is near.
+    /// </summary>
+    public ImageTexture? TryTexture(int wanted, out int built)
+    {
+        foreach (var (k, t) in _textures)
+            if (!MinimapView.NeedsRebuild(k, wanted)) { built = k; return t; }
+        built = wanted;
+        if (!_world || !HasTopDownFiles) return Texture(wanted);
+        foreach (var (k, task) in _building.ToList())
+        {
+            if (MinimapView.NeedsRebuild(k, wanted)) continue;
+            if (!task.IsCompleted) { built = k; return null; } // on its way
+            _building.Remove(k);
+            built = k;
+            var img = task.IsCompletedSuccessfully ? task.Result : null;
+            if (img == null) return Texture(k); // the picture was unreadable: the terrain colours, made here
+            if (_textures.Count >= MaxTextures) _textures.Clear();
+            return _textures[k] = ImageTexture.CreateFromImage(img);
+        }
+        _building[wanted] = Task.Run(() => RasteriseWorld(wanted));
+        return null;
+    }
+
+    /// <summary>Starts building the world sheet's texture near <paramref name="wanted"/> texels without waiting for it (the map is not open yet).</summary>
+    public void Prewarm(int wanted) => TryTexture(wanted, out _);
+
+    bool HasTopDownFiles => File.Exists(Path.Combine(_map.MapDir, TopDownImage.PngName)) && File.Exists(Path.Combine(_map.MapDir, TopDownImage.JsonName));
+
+    /// <summary>The world sheet from the top-down picture alone (it holds the terrain colours too), on a worker thread: no scene object is touched. Null when the picture cannot be read.</summary>
+    Image? RasteriseWorld(int side)
+    {
+        try
+        {
+            var px = new byte[side * side * 4];
+            var terrain = Rgba(Terrain);
+            for (var i = 0; i < px.Length; i += 4) Buffer.BlockCopy(terrain, 0, px, i, 4);
+            if (TopDownSource() is null) return null;
+            PaintTopDown(px, null, side, SideMetres / side);
+            var img = Image.CreateFromData(side, side, false, Image.Format.Rgba8, px);
+            img.GenerateMipmaps();
+            return img;
+        }
+        catch (Exception e) { GD.PushWarning($"tactical map: could not build the world sheet ({e.Message})"); return null; }
+    }
+
     static byte[] Rgba(Color c) => new[] { (byte)Math.Round(c.R * 255f), (byte)Math.Round(c.G * 255f), (byte)Math.Round(c.B * 255f), (byte)Math.Round(c.A * 255f) };
 
     /// <summary>Rasterises the parcel fills into a square of <paramref name="side"/> texels, with mipmaps. Each row takes its edge crossings once (scanline fill), and the image is built from one byte buffer.</summary>
@@ -275,6 +324,11 @@ public sealed class MapBase
 
     /// <summary>The top-down picture (RGBA8) and its extent, read once from the map folder; null when the map has none (older maps) or it is unreadable.</summary>
     (Image Picture, TopDownImage Extent)? TopDownSource()
+    {
+        lock (_topDownLock) return TopDownSourceLocked();
+    }
+
+    (Image Picture, TopDownImage Extent)? TopDownSourceLocked()
     {
         if (!_topDownLoaded)
         {
