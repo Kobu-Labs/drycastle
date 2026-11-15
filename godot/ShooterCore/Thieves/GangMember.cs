@@ -20,7 +20,7 @@ public enum GangMemberState : byte
 /// <summary>A living player as the Gang members see them: where their feet are and whether they stand on the ground (a rider in a vehicle cannot be struck).</summary>
 public readonly record struct GangPlayer(ushort Id, Vector3 Feet, bool OnFoot);
 
-/// <summary>A member waits for a route on the navigation mesh. The gang serves one request a tick, the oldest first (<see cref="ThiefGang.ServeRoute"/>).</summary>
+/// <summary>A member waits for a route on the navigation mesh. The gang hands the oldest request to the route worker (<see cref="ThiefGang.BeginRoute"/>) and gives it the answer when it comes back (<see cref="ThiefGang.DeliverRoute"/>).</summary>
 public readonly record struct GangRouteRequest(Vector3 From, Vector3 To);
 
 /// <summary>A member was killed: which, by whom, where it lay (on the ground, also when it died aloft), what it carried (see <see cref="GangRules.PackHp"/>) and that piece's id in its source's numbers.</summary>
@@ -231,6 +231,17 @@ public sealed partial class GangMember : IWorldEntity
     /// <summary>The route it is waiting for (set by the member, cleared by <see cref="SetRoute"/>) and the place in the gang's queue (0: not queued yet; set by the gang).</summary>
     public GangRouteRequest? RouteRequest { get; private set; }
     public long RequestSeq { get; set; }
+    /// <summary>The ticket of the request while the route worker has it (0: not sent). An answer with another ticket is stale: the request was cleared or replaced since.</summary>
+    public long RouteTicket { get; private set; }
+    Countdown _routeLost;
+    /// <summary>Seconds after which a request the worker never answered is offered again.</summary>
+    public const float RouteLostSeconds = 5f;
+
+    /// <summary>The request went to the route worker under <paramref name="ticket"/>; it is not offered again while that is out.</summary>
+    public void RouteSent(long ticket) { RouteTicket = ticket; _routeLost.Start(RouteLostSeconds); }
+
+    /// <summary>The worker's answer is no use (the member died or no longer asks for it): forgets the ticket.</summary>
+    public void RouteDropped() { RouteTicket = 0; _routeLost.Cancel(); }
     /// <summary>The route points it follows now (read only: tests and logs).</summary>
     public IReadOnlyList<Vector3> Route => _route;
     /// <summary>The tick it was first seen by the pose recorder, and the poses of recent ticks, for the rewind of a shot (ADR 0013).</summary>
@@ -329,10 +340,12 @@ public sealed partial class GangMember : IWorldEntity
     /// <summary>The route the gang found for the request (empty: none). A route replaces the one being followed.</summary>
     public void SetRoute(IReadOnlyList<Vector3> route)
     {
-        RouteRequest = null; RequestSeq = 0;
+        RouteRequest = null; RequestSeq = 0; RouteDropped();
         _route.Clear(); _next = 0;
         if (route.Count < 2) { RouteFailed(); return; }
         _route.AddRange(route);
+        // the answer came after some ticks: when the member has run past the first point, it goes on from the next
+        if (route.Count > 2 && Flat(route[1], Position) < Flat(route[1], route[0])) _next = 1;
     }
 
     void RouteFailed()
@@ -350,6 +363,7 @@ public sealed partial class GangMember : IWorldEntity
     {
         if (Ended != null || dt <= 0) return;
         _repath.Tick(dt);
+        if (_routeLost.Tick(dt)) RouteTicket = 0; // the worker never answered: ask again
         TickAvoid(dt);
         if (Carried != 0 && Alive && Work != null && CarriedOrigin is { } carrying) Work.Carrying(carrying, Position, Yaw); // a piece that travels with the Thief in the world follows it
         switch (State)
@@ -511,9 +525,9 @@ public sealed partial class GangMember : IWorldEntity
         return false;
     }
 
-    void Request(Vector3 to) { RouteRequest = new GangRouteRequest(Position, to); RequestSeq = 0; }
+    void Request(Vector3 to) { RouteRequest = new GangRouteRequest(Position, to); RequestSeq = 0; RouteDropped(); }
 
-    void ClearRoute() { _route.Clear(); _next = 0; RouteRequest = null; RequestSeq = 0; }
+    void ClearRoute() { _route.Clear(); _next = 0; RouteRequest = null; RequestSeq = 0; RouteDropped(); }
 
     /// <summary>Walks the route from the current point, turning towards each leg. True when its end is reached.</summary>
     bool Follow(float dt, float speed)

@@ -248,6 +248,7 @@ public partial class NetServer : Node
         IntelTick(); // a made-up event whose time is up leaves the intel screen
         PerfLap(ServerPerf.Ph.Housekeeping);
         _match.Update();
+        NavDrain(); // the routes the worker finished since the last tick, applied here and nowhere else
         BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
         GangsPrepare(); // the players the Gang members fight, and who each fights
         _match.Entities.Tick((float)delta);
