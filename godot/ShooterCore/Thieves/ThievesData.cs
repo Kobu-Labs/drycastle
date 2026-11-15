@@ -67,7 +67,7 @@ public sealed class ThievesFile : IVersioned
         if (!(v.HonkMaxSeconds >= v.HonkMinSeconds)) throw new DataFileException($"{F}: van.honk_max_seconds is below honk_min_seconds");
         Positive(v.HonkNearM, "van.honk_near_m"); Positive(v.HonkNearGapSeconds, "van.honk_near_gap_seconds");
         Positive(v.MinRoadWidthM, "van.min_road_width_m"); Positive(v.StopRadiusM, "van.stop_radius_m"); Positive(v.StopStepM, "van.stop_step_m"); Positive(v.StopInsetM, "van.stop_inset_m");
-        NotNegative(v.UsedApartM, "van.used_apart_m"); NotNegative(v.UTurnPenaltyM, "van.u_turn_penalty_m"); Positive(v.ExitStraightM, "van.exit_straight_m"); Positive(v.RamMassScale, "van.ram_mass_scale"); NotNegative(v.RamFallbackDamage, "van.ram_fallback_damage");
+        NotNegative(v.UsedApartM, "van.used_apart_m"); NotNegative(v.UTurnPenaltyM, "van.u_turn_penalty_m"); Positive(v.ExitStraightM, "van.exit_straight_m"); Positive(v.RamMassScale, "van.ram_mass_scale"); NotNegative(v.RamFallbackDamage, "van.ram_fallback_damage"); NotNegative(v.CrashMinMps, "van.crash_min_mps"); NotNegative(v.CrashHitsPerMps, "van.crash_hits_per_mps");
         v.View.Validate(F);
         var r = f.Raids;
         if (r.MinVans < 1) throw new DataFileException($"{F}: raids.min_vans is at least 1");
@@ -287,6 +287,9 @@ public sealed class VanConfig
     /// <summary>Ramming: the van's mass over the car's for the run-over damage (<c>vehicles.json</c> numbers), and the damage when there is no such table.</summary>
     public float RamMassScale { get; set; } = 3;
     public float RamFallbackDamage { get; set; } = 100;
+    /// <summary>A vehicle that bumps the van and loses more than <see cref="CrashMinMps"/> of speed in the bump hurts it: each m/s lost above that counts <see cref="CrashHitsPerMps"/> hits (<see cref="VanConfig.Hits"/> destroy it).</summary>
+    public float CrashMinMps { get; set; } = 3;
+    public float CrashHitsPerMps { get; set; } = 6;
     public VanView View { get; set; } = new();
 }
 

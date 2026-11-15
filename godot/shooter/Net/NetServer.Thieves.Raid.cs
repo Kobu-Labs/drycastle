@@ -239,6 +239,7 @@ public partial class NetServer
                 if (VehicleContact.Test(shape, car.ContactShape(), car.Flies) is not { } hit) continue;
                 var bump = VehicleContact.Bump(hit, body, car.BumpBody(), Vehicles.BumpRestitution);
                 car.ApplyBump(bump.MoveB, bump.DeltaVB);
+                _raids.CrashHit(van, car.Seat.Driver, bump.SpeedLossB); // the car hurts the van too, by the speed it lost
                 if (car.Def.CrashDamage && bump.SpeedLossB > Vehicles.CrashMinSpeedLoss)
                     DamageVehicle(car, (bump.SpeedLossB - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, 0, SpecialWeapons.Vehicle, 0);
             }

@@ -152,6 +152,8 @@
     "u_turn_penalty_m": 150, "exit_straight_m": 150,
     // Ramming: its mass over a car's for the run-over damage of vehicles.json, and the damage when there is no such table.
     "ram_mass_scale": 3, "ram_fallback_damage": 100,
+    // A vehicle that bumps the van (parked or driving) and loses more than crash_min_mps of speed in the bump hurts it: each m/s lost above that counts crash_hits_per_mps hits (the driver is credited).
+    "crash_min_mps": 3, "crash_hits_per_mps": 6,
     // Client only. With the private Military pack: model (glb/vehicles/raid_van.glb, +Z forward, origin at the middle on the ground, the right-hand sliding door a node "door") in its atlas; the door node slides from
     // door_closed to door_open (the model's own coordinates) by the door fraction; a left door is the mirrored model; model_lift_m lifts it (its wheels reach 0.10 m under the origin). The wreck: paint x wreck_tint, each
     // damage stage dims the paint by stage_dim. Without the pack a box van of boxes and cylinders in the colours; honk_hear_m is how far from the camera a honk is heard, honk_db its loudness on top of the sound's own (+6), honk_fade_db how much quieter it is at that distance.
