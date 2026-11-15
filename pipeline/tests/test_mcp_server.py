@@ -578,6 +578,35 @@ def test_zone_errors_leave_file_untouched(env):
     assert settings.edits_path.read_bytes() == before
 
 
+def test_zones_by_rule_are_zones_too(env):
+    from shapely.geometry import box, mapping
+
+    tools, settings, _ = env
+    parcels = settings.work_dir / "parcels.json"
+    doc = json.loads(parcels.read_text())
+    doc["ground"] = [{"id": "A-0001", "kind": "forest", "polygon": mapping(box(0, 0, 40, 40)), "area": 1600.0}]
+    parcels.write_text(json.dumps(doc))
+    assert [r["id"] for r in tools.list_zones(kind="stag")["zones"]] == ["A-0001"]
+    kinds = {r["kind"] for r in tools.list_zones()["zones"] if r["id"] == "A-0001"}
+    assert {"stag", "boar", "wolf"} <= kinds  # one area is a zone of every kind whose rule names forest
+    assert {k["name"]: k["zones"] for k in tools.list_zone_kinds()["kinds"]}["stag"] == 1
+    with pytest.raises(ToolError, match="several kinds"):
+        tools.delete_zone("A-0001")
+    tools.delete_zone("A-0001", kind="stag")  # a plain delete: a cut, no zone
+    edits = load_edits(settings.edits_path)
+    assert edits.zones == {} and edits.zone_cuts["ZC-0001"]["kind"] == "stag"
+    assert tools.list_zones(kind="stag")["zones"] == [] and [r["id"] for r in tools.list_zones(kind="boar")["zones"]] == ["A-0001"]
+    out = tools.set_zone_kind("A-0001", "wolf", from_kind="boar")  # retype: a drawn zone of the new kind and a cut of the old
+    assert out["id"] == "Z-0001"
+    edits = load_edits(settings.edits_path)
+    assert edits.zones["Z-0001"]["kind"] == "wolf" and edits.zone_cuts["ZC-0002"]["kind"] == "boar"
+    assert tools.list_zones(kind="boar")["zones"] == []
+    tools.move_zone_corner("Z-0001", 0, offset={"dx": -3, "dy": 0})
+    moved = tools.move_zone_corner("A-0001", 0, offset={"dx": 1, "dy": 0}, kind="fox")  # a rule zone moves: detached first
+    assert moved["id"] == "Z-0002" and load_edits(settings.edits_path).zone_cuts["ZC-0003"]["kind"] == "fox"
+    canonical(settings)
+
+
 def test_list_zone_kinds_is_the_catalog_with_its_rules(env):
     from drycastle_pipeline.zones import KIND_NAMES
 
@@ -586,7 +615,7 @@ def test_list_zone_kinds_is_the_catalog_with_its_rules(env):
     out = tools.list_zone_kinds()
     rows = {k["name"]: k for k in out["kinds"]}
     assert list(rows) == list(KIND_NAMES)
-    assert rows["bigfoot"]["where_ground"] is None and rows["bigfoot"]["drawn_zones"] == ["Z-0001"]
+    assert rows["bigfoot"]["where_ground"] is None and rows["bigfoot"]["zones"] == 1
     assert rows["bigfoot"]["points"]["min_points"] == 30
     assert rows["stag"]["where_ground"] == ["forest"] and rows["stag"]["group"] == "wildlife"
     assert "props stage" in rows["player_spawn"]["points"]

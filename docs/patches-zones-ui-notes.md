@@ -25,7 +25,7 @@ Esc goes one level up. Ground: drag, water level, drawing, the selected patch (w
 type, the tool. Zones: drag, drawing, the selected zone, the selected kind, the tool. A text field is left first (typed text is dropped).
 
 ## Empty, loading and error states
-- **Empty**: no patches ("No patches yet. Select a ground type, press N, ..."), no zones ("No zones drawn yet. Pick a kind, ..."), no
+- **Empty**: no patches ("No patches yet. Select a ground type, press N, ..."), no zones ("No zones to list. Pick a kind, ..."), no
   selection ("No patch selected", "Click a patch in the list or on the ground to select it").
 - **Error / refusal, with the way out**: Draw disabled with the reason as tooltip and on `N` ("pick a ground type in the list first", "this
   map lists no zone kinds: build it again (make map), then reopen the editor", "finish or cancel the shape you are drawing first (Esc)", a

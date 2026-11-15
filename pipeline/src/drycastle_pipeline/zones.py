@@ -20,6 +20,12 @@ water (not of trees: the Bigfoot walks through and tramples them, and buildings 
 distributed points, the way ``props.make_spawns`` does. The count is a density rule in data: one point per ``m2_per_point``
 of that usable ground, kept between ``min_points`` and ``max_points``. No polygons are exported.
 
+To the user all of these are just zones: one kind, one count, each one selectable, movable, retypable, deletable. The editor
+does that to a rule zone lazily: editing one writes a drawn zone with its polygon (nothing for a plain delete) and a **cut**
+(``edits.json`` ``zone_cuts``, ``ZC-0001``): the polygon the area had, of its kind, that the export subtracts from the rule zone
+of that kind (:func:`zone_cuts`, :data:`CUT_BUFFER_M`). A cut is geometry, not a ground area id: the ids are not stable across
+builds. A cut never touches drawn zones (the detached copy is one). Nothing cut: the export is exactly what it was.
+
 ``player_spawn`` has no points: ``props.make_spawns`` takes the ground areas inside it (the whole areas of the rule zone's ground types and
 :func:`drawn_spawn_units`) as places players may spawn and writes ``spawns.json``.
 """
@@ -47,6 +53,8 @@ BIGFOOT = "bigfoot"
 WILDLIFE = ("deer", "doe", "stag", "moose", "boar", "bear", "fox", "wolf", "rabbit", "raccoon", "skunk")
 
 RULE_KEYS = ("m2_per_point", "min_points", "max_points", "building_clearance_m", "water_clearance_m")
+#: A cut is grown by this much before it is subtracted, so a rebuilt, slightly different area leaves no sliver.
+CUT_BUFFER_M = 0.5
 MAX_ATTEMPTS_PER_POINT = 30  # rejected draws (a rounded point that falls just outside) before the pool is left short
 
 
@@ -150,43 +158,106 @@ def drawn_zones(zones: dict[str, dict], origin: list[float] | tuple[float, float
     return out
 
 
+def zone_cuts(cuts: dict[str, dict], origin: list[float] | tuple[float, float]) -> dict[str, BaseGeometry]:
+    """``{kind: region}`` of the ``zone_cuts`` of the edits: the union of the kind's cut polygons grown by
+    :data:`CUT_BUFFER_M`, in local metres."""
+    from drycastle_pipeline.edits import polygon_ring
+
+    by_kind: dict[str, list[BaseGeometry]] = {}
+    for cid in sorted(cuts):
+        ring = [(x - origin[0], y - origin[1]) for x, y in polygon_ring(cuts[cid]["polygon"])]
+        poly = Polygon(ring)
+        by_kind.setdefault(cuts[cid]["kind"], []).append((poly if poly.is_valid else poly.buffer(0)).buffer(CUT_BUFFER_M))
+    return {k: unary_union(v) for k, v in by_kind.items()}
+
+
+def rule_parts(area: dict) -> list[tuple[str, Polygon]]:
+    """The selectable pieces of a ground area, ``(id, polygon)``: the area's id for one outline, ``A-0012.1``, ``A-0012.2``, ...
+    for each outline of a multi-part area. Holes are not part of the outline (an editor works on outlines)."""
+    geom = shape(area["polygon"])
+    parts = list(getattr(geom, "geoms", [geom]))
+    return [(area["id"] if len(parts) == 1 else f"{area['id']}.{i}", Polygon(p.exterior)) for i, p in enumerate(parts, 1) if p.geom_type == "Polygon"]
+
+
+def rule_part_is_cut(poly: BaseGeometry, cut: BaseGeometry | None) -> bool:
+    """True when a cut (:func:`zone_cuts`, of the part's kind) took the whole part out: what is left is a sliver."""
+    return cut is not None and poly.intersects(cut) and poly.difference(cut).area <= max(1.0, 0.02 * poly.area)
+
+
+def _cut_region(geom: BaseGeometry, cut: BaseGeometry | None) -> BaseGeometry | None:
+    """``geom`` less ``cut``: itself (the same object) when nothing is cut, ``None`` when nothing is left."""
+    if cut is None or not geom.intersects(cut):
+        return geom
+    left = (geom if geom.is_valid else geom.buffer(0)).difference(cut)
+    return None if left.is_empty or left.area <= 0.01 else left
+
+
 def kind_areas(
     kind: str,
     parcels_doc: dict,
     drawn: dict[str, tuple[str, Polygon]],
     where_ground: list[str] | None,
+    cuts: dict[str, BaseGeometry] | None = None,
 ) -> list[tuple[str, BaseGeometry]]:
     """``(id, polygon)`` of every zone of ``kind``, local metres, sorted by id: the ground areas of the rule zone's ground
-    types (their own polygon) and the drawn zones of the kind."""
+    types (their own polygon, less the kind's cuts) and the drawn zones of the kind."""
     out: list[tuple[str, BaseGeometry]] = []
+    cut = (cuts or {}).get(kind)
     if where_ground:
         for area in parcels_doc.get("ground", []):
-            if area["kind"] in where_ground:
-                out.append((area["id"], shape(area["polygon"])))
+            if area["kind"] in where_ground and (left := _cut_region(shape(area["polygon"]), cut)) is not None:
+                out.append((area["id"], left))
     out += [(zid, poly) for zid, (k, poly) in drawn.items() if k == kind]
     return sorted(out, key=lambda t: t[0])
 
 
+def rule_spawn_units(parcels_doc: dict, where_ground: list[str] | None, cuts: dict[str, BaseGeometry] | None) -> dict[str, dict]:
+    """``{area id: unit}`` of the ground areas of the ``player_spawn`` rule zone that a cut touches, as units shaped like a
+    parcel with the cut taken out. ``polygon`` is ``None`` for an area that is cut away completely. Areas no cut touches are
+    not here. ``props.make_spawns`` replaces those areas by these."""
+    cut = (cuts or {}).get(PLAYER_SPAWN)
+    out: dict[str, dict] = {}
+    if cut is None:
+        return out
+    for area in sorted(parcels_doc.get("ground", []), key=lambda a: a["id"]):
+        if area["kind"] not in (where_ground or []):
+            continue
+        poly = shape(area["polygon"])
+        if not poly.intersects(cut):
+            continue
+        left = _cut_region(poly, cut)
+        out[area["id"]] = {"id": area["id"], "kind": area["kind"], "polygon": None if left is None else left.__geo_interface__}
+    return out
+
+
 def drawn_spawn_units(
-    parcels_doc: dict, drawn: dict[str, tuple[str, Polygon]], where_ground: list[str] | None
+    parcels_doc: dict,
+    drawn: dict[str, tuple[str, Polygon]],
+    where_ground: list[str] | None,
+    cuts: dict[str, BaseGeometry] | None = None,
 ) -> list[dict]:
     """The part of every ground area that lies inside a drawn ``player_spawn`` zone, as units shaped like a parcel
     (``id`` and ``kind`` of the area, ``polygon``), sorted by id. ``props.make_spawns`` takes spawn points from them.
 
     The areas of the rule zone's ground types (``where_ground``) are not here: they are whole spawn kinds, which
-    ``make_spawns`` takes by their kind."""
+    ``make_spawns`` takes by their kind. Only what a cut took out of them is here, where a drawn zone covers it again (a
+    rule area that was moved)."""
     inside = [g if g.is_valid else g.buffer(0) for k, g in drawn.values() if k == PLAYER_SPAWN]
     if not inside:
         return []
     zone = unary_union(inside)
+    cut = (cuts or {}).get(PLAYER_SPAWN)
     out = []
     for area in sorted(parcels_doc.get("ground", []), key=lambda a: a["id"]):
-        if area["kind"] in (where_ground or []):
-            continue
         poly = shape(area["polygon"])
         if not poly.intersects(zone):
             continue
-        part = poly.intersection(zone)
+        if area["kind"] in (where_ground or []):
+            if cut is None or not poly.intersects(cut):
+                continue
+            part = poly.intersection(zone).intersection(cut)
+        else:
+            part = poly.intersection(zone)
         pieces = [g for g in getattr(part, "geoms", [part]) if g.geom_type == "Polygon" and g.area > 0.01]
         if pieces:
             out.append({"id": area["id"], "kind": area["kind"], "polygon": unary_union(pieces).__geo_interface__})
@@ -248,12 +319,13 @@ def build_zone_points(
     terrain,
     water_doc: dict,
     section_rules: dict[str, dict],
+    cuts: dict[str, BaseGeometry] | None = None,
 ) -> tuple[dict | None, list[str]]:
     """The ``zone_points.json`` document and its warnings, or ``(None, [])`` when no kind has a zone.
 
     ``parcels_doc`` is ``parcels.json`` (the ground areas), ``drawn`` the drawn zones (:func:`drawn_zones`), ``buildings`` the
     ``buildings.json`` records, ``terrain`` a ``Terrain`` (coverage and heights), ``water_doc`` the ``water.json`` document
-    and ``section_rules`` the ``zones`` rules (:func:`rules`). A kind that has zones is always in the document (with no points
+    ``section_rules`` the ``zones`` rules (:func:`rules`) and ``cuts`` the cut regions (:func:`zone_cuts`). A kind that has zones is always in the document (with no points
     when nothing usable is left, and a warning); one with no zones is not. ``player_spawn`` is never in it."""
     from drycastle_pipeline.buildings import footprint_polygon
     from drycastle_pipeline.props import seeded
@@ -275,7 +347,7 @@ def build_zone_points(
     for kind, rule in section_rules.items():
         if kind == PLAYER_SPAWN:
             continue
-        areas = kind_areas(kind, parcels_doc, drawn, rule.get("where_ground"))
+        areas = kind_areas(kind, parcels_doc, drawn, rule.get("where_ground"), cuts)
         if not areas:
             continue
         union = unary_union([g if g.is_valid else g.buffer(0) for _, g in areas])

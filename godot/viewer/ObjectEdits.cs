@@ -22,6 +22,7 @@ public static class ObjectEdits
     static readonly Regex GroupRx = new("^G-\\d{4,}$", RegexOptions.Compiled);
     static readonly Regex PatchRx = new("^GP-\\d{4,}$", RegexOptions.Compiled);
     static readonly Regex ZoneRx = new("^Z-\\d{4,}$", RegexOptions.Compiled);
+    static readonly Regex ZoneCutRx = new("^ZC-\\d{4,}$", RegexOptions.Compiled);
 
     /// <summary>The zone kinds the map knows (parcels.json `zone_kinds`; set by the editor). Empty: unknown, a zone's kind is not checked against the catalog.</summary>
     public static IReadOnlyCollection<string> ZoneKinds { get; set; } = Array.Empty<string>();
@@ -167,7 +168,7 @@ public static class ObjectEdits
     {
         var errs = new List<string>();
         if (!(root.GetValueOrDefault("version") is EditsFile.Num v && v.Text == "1")) errs.Add("version: must be 1");
-        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "objects" or "groups" or "ground_patches" or "zones" or "cables" or "ground_types")) errs.Add($"{k}: unknown key");
+        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "objects" or "groups" or "ground_patches" or "zones" or "zone_cuts" or "cables" or "ground_types")) errs.Add($"{k}: unknown key");
         var seen = new Dictionary<string, string>(); // object id -> where it first appears, unique across the whole file
         if (root.TryGetValue("objects", out var top)) errs.AddRange(CheckObjects(top, "objects", seen));
         foreach (var (pid, entry) in Parcels(root))
@@ -217,6 +218,17 @@ public static class ObjectEdits
                 {
                     var path = $"zones.{zid}";
                     if (!ZoneRx.IsMatch(zid)) errs.Add($"{path}: zone IDs look like Z-0001");
+                    errs.AddRange(CheckZone(entry, path));
+                }
+        }
+        if (root.GetValueOrDefault("zone_cuts") is { } cuts)
+        {
+            if (cuts is not Obj cuo) errs.Add("zone_cuts: must be an object");
+            else
+                foreach (var (cid, entry) in cuo)
+                {
+                    var path = $"zone_cuts.{cid}";
+                    if (!ZoneCutRx.IsMatch(cid)) errs.Add($"{path}: zone cut IDs look like ZC-0001");
                     errs.AddRange(CheckZone(entry, path));
                 }
         }

@@ -162,6 +162,28 @@ def test_invalid_zones(zones, message) -> None:
     assert any(message in e for e in errs), errs
 
 
+@pytest.mark.parametrize(
+    ("cuts", "message"),
+    [
+        ({"ZC-1": zone()}, "zone cut IDs look like ZC-0001"),
+        ({"Z-0001": zone()}, "zone cut IDs look like ZC-0001"),
+        ({"ZC-0001": zone("yeti")}, "zone_cuts.ZC-0001.kind: must be a zone kind"),
+        ({"ZC-0001": {"polygon": TRIANGLE}}, "zone_cuts.ZC-0001.kind: required"),
+        ({"ZC-0001": {"kind": "deer"}}, "zone_cuts.ZC-0001.polygon: required"),
+        ({"ZC-0001": zone("deer", BOWTIE)}, "must not intersect"),
+    ],
+)
+def test_invalid_zone_cuts(cuts, message) -> None:
+    assert any(message in e for e in validate({"version": 1, "zone_cuts": cuts}))
+
+
+def test_valid_zone_cuts_round_trip_and_are_only_written_when_there_are_any() -> None:
+    doc = {"version": 1, "parcels": {}, "groups": {}, "zone_cuts": {"ZC-0001": zone("deer", TRIANGLE)}}
+    assert validate(doc) == []
+    assert json.loads(dump_text(parse(doc)))["zone_cuts"] == doc["zone_cuts"]
+    assert '"zone_cuts"' not in dump_text(Edits())
+
+
 def test_valid_zones_overlap_freely() -> None:
     zones = {"Z-0001": zone("bigfoot"), "Z-0002": zone("deer"), "Z-0003": zone("player_spawn"), "Z-0004": zone("deer")}
     assert validate({"version": 1, "zones": zones}) == []

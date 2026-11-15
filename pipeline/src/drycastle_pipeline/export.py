@@ -39,6 +39,7 @@ from drycastle_pipeline.zones import (
     check_ground_types,
     drawn_zones,
     kind_rows,
+    zone_cuts,
 )
 from drycastle_pipeline.zones import rules as zone_rules
 
@@ -439,9 +440,12 @@ def run_export(
         _dump(water_file, water)
         files["water"] = "water.json"
         # candidate points of the zone kinds, drawn clear of the buildings and of the water just built
-        drawn = drawn_zones(load_edits(edits_path).zones, parcels_doc["origin_epsg5514"]) if parcels_doc.get("origin_epsg5514") else {}
+        zone_edits = load_edits(edits_path)
+        origin = parcels_doc.get("origin_epsg5514")
+        drawn = drawn_zones(zone_edits.zones, origin) if origin else {}
+        cuts = zone_cuts(zone_edits.zone_cuts, origin) if origin else {}
         points_doc, points_warnings = build_zone_points(
-            parcels_doc, drawn, list(buildings.values()), scene.terrain, water, zrules
+            parcels_doc, drawn, list(buildings.values()), scene.terrain, water, zrules, cuts
         )
         for warning in points_warnings:
             print(f"export: warning: zone points: {warning}", file=sys.stderr)

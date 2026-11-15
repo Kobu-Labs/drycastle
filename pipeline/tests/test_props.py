@@ -263,3 +263,31 @@ def test_run_props_writes_fences_json_for_every_section_deterministically(ws, tm
     for f, s in zip(doc["fences"], sections, strict=True):
         assert (f["a"], f["b"], f["za"], f["zb"]) == (s["a"], s["b"], s["za"], s["zb"])
         assert f["height_m"] == pytest.approx(FENCE["height_m"])
+
+
+def test_run_props_spawns_skip_a_cut_of_the_player_spawn_rule_zone(ws, tmp_path) -> None:
+    from shapely.geometry import mapping
+
+    parcels_file = ws["work"] / "parcels.json"
+    doc = json.loads(parcels_file.read_text())
+    doc["ground"] = [{"id": "A-0001", "kind": "meadow", "polygon": mapping(box(120, 120, 200, 190)), "area": 80 * 70}]
+    parcels_file.write_text(json.dumps(doc))
+    ox, oy = SYNTHETIC_ORIGIN
+    rules = tmp_path / "rules.yaml"
+    rules.write_text(yaml.safe_dump({
+        "spawns": {"count": 150, "ground_kinds": [], "road_fraction": 0.0, "ground_per_1000m2": 5.0},
+        "zones": {"player_spawn": {"where_ground": ["meadow"]}},
+    }))
+    edits = tmp_path / "edits.json"
+
+    def meadow(cuts):
+        edits.write_text(json.dumps({"version": 1, **({"zone_cuts": cuts} if cuts else {})}))
+        run_props(ws["work"], rules, edits)
+        return [s for s in json.loads((ws["work"] / "spawns.json").read_text())["spawns"] if s["kind"] == "meadow"]
+
+    assert meadow(None)  # the rule zone: every meadow area
+    half = [[ox + 100, oy + 100], [ox + 160, oy + 100], [ox + 160, oy + 200], [ox + 100, oy + 200]]
+    left = meadow({"ZC-0001": {"kind": "player_spawn", "polygon": half}})
+    assert left and all(s["x"] > 160 for s in left)  # the cut part is gone, the rest stays
+    whole = [[ox + 100, oy + 100], [ox + 210, oy + 100], [ox + 210, oy + 200], [ox + 100, oy + 200]]
+    assert meadow({"ZC-0001": {"kind": "player_spawn", "polygon": whole}}) == []

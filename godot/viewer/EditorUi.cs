@@ -270,7 +270,7 @@ public partial class EditorMode
         "Objects\tLMB place, R / Shift+R rotate, Ctrl free position, Ctrl+D duplicate, Del delete, arrows nudge\n" +
         "Ground\tpick a type in the list (Tab reaches it) or click the ground; tick what it carries (colours, recipe, water) and edit colours and OSM values: each change saves and Ctrl+Z undoes; Shift+N new type, Del delete type (asks); M shows the ground map; type changes show after make map\n" +
         "Ground patch\tN draws a patch of the selected type: LMB or C adds a corner, Enter closes and creates it (a water type asks for the water level first); click a patch to select it, change its type in the form\n" +
-        "Zones\tpick a kind in the list, N draws a zone of it: LMB or C adds a corner, Enter creates it; click a zone to select it, change its kind in the form; M shows the zone overlay (selected kind bright, rule zones light)\n" +
+        "Zones\tpick a kind in the list, N draws a zone of it: LMB or C adds a corner, Enter creates it; click a zone to select it, change its kind in the form; M shows the zone overlay (selected kind bright); every zone, also one the map gives a kind by itself, can be selected, reshaped, given another kind or deleted\n" +
         "Patch and zone edit\tdrag a corner, [ ] pick one, arrows move it, Backspace last corner, Del delete (asks), Ctrl+Z undo, Esc one level back\n" +
         "Poles plan\tP plans a line: LMB a pole point, RMB a house, Backspace removes the last, Enter builds poles, cables and house connections\n" +
         "Poles\tchoose a pole and LMB places it, C connects: LMB on a pole, then on the next poles or on a house, Esc stops\n" +
