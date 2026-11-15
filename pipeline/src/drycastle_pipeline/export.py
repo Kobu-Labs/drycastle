@@ -18,6 +18,7 @@ from drycastle_pipeline.config import DEFAULT_RAW_DIR, REPO_ROOT, map_paths
 from drycastle_pipeline.detail_meshes import clutter_meshes
 from drycastle_pipeline.edits import DEFAULT_EDITS, GROUND_RECIPES, load_edits
 from drycastle_pipeline.ground import (
+    clip_areas,
     ground_type_row,
     ground_types,
     ground_units,
@@ -200,6 +201,11 @@ def write_primitives(out_dir: Path) -> dict[str, dict]:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _on_terrain(areas: list[dict], terrain) -> list[dict]:
+    """The ground areas limited to the terrain: nothing is defined off the playing area (no terrain: as they are)."""
+    return areas if terrain is None else clip_areas(areas, terrain.coverage)
 
 
 def _dump(path: Path, doc: dict) -> None:
@@ -407,7 +413,7 @@ def run_export(
         # the ground areas by type (ground.py: kind = the type): the editor's Ground types tool draws them to show what is where
         "ground_areas": [
             {"id": a["id"], "kind": a["kind"], "area": a["area"], "polygon": a["polygon"]}
-            for a in sorted(parcels_doc.get("ground", []), key=lambda a: a["id"])
+            for a in sorted(_on_terrain(parcels_doc.get("ground", []), scene.terrain), key=lambda a: a["id"])
         ],
     }
     if "origin_epsg5514" in parcels_doc:  # always there from the parcels stage on

@@ -150,3 +150,32 @@ def test_same_class_roads_of_different_colour_never_overlap() -> None:
     )
     assert plain.difference(asphalt.union(gravel)).area < 0.5
     assert asphalt.union(gravel).contains(Point(60, 50))
+
+
+def test_clip_graph_cuts_edges_at_the_terrain_border() -> None:
+    from shapely.geometry import box
+
+    from drycastle_pipeline.roads import clip_graph
+
+    graph = {
+        "version": 1,
+        "axes": "",
+        "nodes": [
+            {"id": "N-0001", "x": 10.0, "y": 10.0},
+            {"id": "N-0002", "x": 150.0, "y": 10.0},
+            {"id": "N-0003", "x": 300.0, "y": 10.0},
+            {"id": "N-0004", "x": 400.0, "y": 10.0},
+        ],
+        "edges": [
+            {"id": "E-0001", "from": "N-0001", "to": "N-0002", "polyline": [[10, 10], [150, 10]], "length_m": 140.0},
+            {"id": "E-0002", "from": "N-0002", "to": "N-0003", "polyline": [[150, 10], [300, 10]], "length_m": 150.0},
+            {"id": "E-0003", "from": "N-0003", "to": "N-0004", "polyline": [[300, 10], [400, 10]], "length_m": 100.0},
+        ],
+    }
+    out = clip_graph(graph, box(0, 0, 200, 100))
+    assert [e["id"] for e in out["edges"]] == ["E-0001", "E-0002"]  # the one wholly outside is gone, ids kept
+    cut = out["edges"][1]
+    assert cut["polyline"][-1] == [200.0, 10.0] and cut["length_m"] == 50.0
+    ends = {n["id"]: (n["x"], n["y"]) for n in out["nodes"]}
+    assert set(ends) == {"N-0001", "N-0002", cut["to"]} and ends[cut["to"]] == (200.0, 10.0)  # new node on the border
+    assert clip_graph(out, box(0, 0, 200, 100)) == out  # clipping again changes nothing

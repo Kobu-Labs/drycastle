@@ -12,7 +12,9 @@ from pathlib import Path
 
 import numpy as np
 import shapely
+import shapely.prepared
 from shapely.geometry import LineString, Polygon
+from shapely.geometry.base import BaseGeometry
 
 from drycastle_pipeline.buildings import hex_to_rgb
 from drycastle_pipeline.config import map_paths
@@ -395,6 +397,59 @@ def run(force: bool = False, **_options: object) -> int:
     (work_dir / "roads.json").write_text(json.dumps(graph, indent=1, sort_keys=True) + "\n")
     print(f"roads: {len(graph['nodes'])} nodes, {len(graph['edges'])} edges")
     return 0
+
+
+def clip_graph(graph: dict, coverage: BaseGeometry) -> dict:
+    """``graph`` limited to ``coverage`` (the terrain): an edge that leaves it is cut at the border (a new node there),
+    one wholly outside is dropped, and so is a node nothing uses. Nothing in the game's world may lie off the terrain."""
+    nodes = {n["id"]: n for n in graph["nodes"]}
+    prepared = shapely.prepared.prep(coverage)
+    top = max((int(i[2:]) for i in nodes), default=0)
+    new_nodes: dict[tuple[float, float], str] = {}
+
+    def node_at(p: tuple[float, float]) -> str:
+        nonlocal top
+        key = (round(p[0], 3), round(p[1], 3))
+        for nid, n in nodes.items():
+            if (n["x"], n["y"]) == key:
+                return nid
+        if key not in new_nodes:
+            top += 1
+            new_nodes[key] = f"N-{top:04d}"
+        return new_nodes[key]
+
+    edges = []
+    for e in graph["edges"]:
+        line = LineString(e["polyline"])
+        if prepared.contains(line):
+            edges.append(e)
+            continue
+        inside = line.intersection(coverage)
+        for part in getattr(inside, "geoms", [inside]):
+            if part.geom_type != "LineString" or part.length < 0.5:
+                continue
+            pts = [(round(x, 3), round(y, 3)) for x, y in part.coords]
+            edges.append(
+                {
+                    **e,
+                    "from": node_at(pts[0]),
+                    "to": node_at(pts[-1]),
+                    "polyline": [list(p) for p in pts],
+                    "length_m": round(float(sum(math.dist(a, b) for a, b in pairwise(pts))), 2),
+                }
+            )
+    seen: set[str] = set()
+    last = max((int(e["id"][2:]) for e in graph["edges"]), default=0)
+    for e in edges:  # a whole edge keeps its id; the pieces after the first of a cut one get new ones
+        if e["id"] in seen:
+            last += 1
+            e["id"] = f"E-{last:04d}"
+        seen.add(e["id"])
+    used = {e["from"] for e in edges} | {e["to"] for e in edges}
+    kept = [n for n in graph["nodes"] if n["id"] in used] + [
+        {"id": nid, "x": k[0], "y": k[1]} for k, nid in new_nodes.items() if nid in used
+    ]
+    return {**graph, "nodes": sorted(kept, key=lambda n: n["id"]), "edges": edges}
 
 
 def edge_lines(graph: dict) -> list[tuple[dict, LineString]]:

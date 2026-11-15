@@ -148,12 +148,18 @@ def plan_water(
     for p in sorted(parcels, key=lambda p: p["id"]):
         if p["kind"] not in kinds:
             continue
-        geom = shape(p["polygon"])
-        surface = shore_surface(geom, terrain)
-        if surface is None:
+        whole = shape(p["polygon"])
+        if not whole.is_valid:
+            whole = whole.buffer(0)
+        on_terrain = whole if whole.within(terrain.coverage) else whole.intersection(terrain.coverage)  # no water off the playing area
+        pieces = [g for g in getattr(on_terrain, "geoms", [on_terrain]) if g.geom_type == "Polygon" and g.area > MIN_PIECE_M2]
+        surfaces = [(g, shore_surface(g, terrain)) for g in pieces]
+        surfaces = [(g, s) for g, s in surfaces if s is not None]
+        if not surfaces:
             plan.skipped.append(p["id"])
             continue
-        plan.bodies.append(_body(p["id"], geom, surface, rules))
+        for k, (g, surface) in enumerate(surfaces, 1):
+            plan.bodies.append(_body(p["id"] if len(surfaces) == 1 else f"{p['id']}.{k}", g, surface, rules))
     for pid, patch in sorted((patches or {}).items()):
         if patch.water_y is None:
             continue

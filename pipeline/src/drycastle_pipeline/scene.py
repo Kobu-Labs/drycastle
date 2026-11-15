@@ -26,7 +26,7 @@ from drycastle_pipeline.landmarks import build_landmark
 from drycastle_pipeline.meshes import Mesh, building_mesh, collision_mesh
 from drycastle_pipeline.patches import node_name, patch_meshes, plan_patches
 from drycastle_pipeline.propmeshes import fence_mesh, fence_meshes, parcel_props_meshes, trees_mesh
-from drycastle_pipeline.roads import road_mesh
+from drycastle_pipeline.roads import clip_graph, road_mesh
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.terrain import Terrain, cut_holes, load_terrain
 from drycastle_pipeline.textures import TexturedMesh, tex_node_name
@@ -253,6 +253,7 @@ def build_scene(
 
     scene.graph = _read(work_dir, "roads.json")
     if scene.graph:
+        scene.graph = clip_graph(scene.graph, t.coverage)  # nothing of the road network lies off the terrain
         put("roads", _by_chunk(road_mesh(scene.graph, t, load_section("roads", rules_path)), chunk_m))
 
     scene.warnings += pplan.warnings

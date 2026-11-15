@@ -472,3 +472,18 @@ def test_flock_kinds_are_the_flocks_of_the_wildlife_data() -> None:
     text = (REPO_ROOT / "godot" / "shooter" / "data" / "wildlife.json").read_text()
     data = json.loads(re.sub(r"(?m)^\s*//.*$", "", text))
     assert sorted(f["id"] for f in data["flocks"]) == sorted(FLOCKS)
+
+
+def test_ground_areas_are_clipped_to_the_terrain() -> None:
+    from shapely.geometry import box
+
+    from drycastle_pipeline.ground import clip_areas
+
+    def area(aid: str, g) -> dict:
+        return {"id": aid, "kind": "field", "area": g.area, "polygon": g.__geo_interface__}
+
+    inside, straddle, outside = area("A-0001", box(10, 10, 50, 50)), area("A-0002", box(80, 10, 180, 50)), area("A-0003", box(300, 0, 400, 50))
+    out = clip_areas([inside, straddle, outside], box(0, 0, 100, 100))
+    assert [a["id"] for a in out] == ["A-0001", "A-0002"]
+    assert out[0] is inside  # untouched
+    assert out[1]["area"] == 800.0 and max(c[0] for c in out[1]["polygon"]["coordinates"][0]) == 100.0

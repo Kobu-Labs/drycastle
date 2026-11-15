@@ -29,7 +29,7 @@ stable while the inputs are (they are numbered by type and place).
 import copy
 from pathlib import Path
 
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
@@ -150,6 +150,30 @@ def build_ground(
     order = list(cfg["types"])
     out = [(name, p) for name, p in out if p.area >= min_area]
     out.sort(key=lambda t: (order.index(t[0]), round(t[1].centroid.x, 2), round(t[1].centroid.y, 2), -t[1].area))
+    return out
+
+
+def clip_areas(areas: list[dict], coverage: BaseGeometry) -> list[dict]:
+    """The ground areas (``id``, ``kind``, ``area``, ``polygon`` as in parcels.json) limited to ``coverage`` (the terrain).
+
+    An area keeps its ID and its largest piece inside; further pieces of a cut one get new IDs after the last. One wholly
+    outside is dropped. An area wholly inside is returned as it is."""
+    last = max((int(a["id"][2:]) for a in areas), default=0)
+    out: list[dict] = []
+    for a in areas:
+        poly = shape(a["polygon"])
+        if not poly.is_valid:
+            poly = poly.buffer(0)
+        if poly.within(coverage):
+            out.append(a)
+            continue
+        pieces = sorted(_polys(poly.intersection(coverage)), key=lambda p: -p.area)
+        for i, piece in enumerate(pieces):
+            if piece.area < 1.0:
+                continue
+            if i:
+                last += 1
+            out.append({**a, "id": a["id"] if i == 0 else f"A-{last:04d}", "area": round(piece.area, 2), "polygon": piece.__geo_interface__})
     return out
 
 
