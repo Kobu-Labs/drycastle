@@ -111,7 +111,7 @@ public partial class NetServer
 
     // ---- the lifecycle ----
 
-    /// <summary>"/event bigfoot": spawns it at a baked point of an area that carries <c>event spawn: bigfoot</c>, or, with none on the map, near a random living player (a dev fallback, said to the admin and in the log).</summary>
+    /// <summary>"/event bigfoot": spawns it at a baked point of a <c>bigfoot</c> zone, or, with none on the map, near a random living player (a dev fallback, said to the admin and in the log).</summary>
     void StartBigfoot(Client admin)
     {
         if (_bigfootLife.WhyNotStart(_events) is { } why) { ChatTo(admin, ChatLineKind.Error, why); return; } // an event runs, or the last Bigfoot still lies where it fell
@@ -123,13 +123,13 @@ public partial class NetServer
         NVec3 nearPos = default;
         if (spawn is not { } point)
         {
-            // no area on this map carries the attribute: the dev fallback, a spot near a random living player (humans first)
+            // no bigfoot zone on this map: the dev fallback, a spot near a random living player (humans first)
             var pool = living.Where(o => !o.IsBot).ToList();
             if (pool.Count == 0) pool = living;
-            if (pool.Count == 0) { ChatTo(admin, ChatLineKind.Error, "The map has no 'event spawn: bigfoot' area and no player is alive to spawn it near."); return; }
+            if (pool.Count == 0) { ChatTo(admin, ChatLineKind.Error, "The map has no bigfoot zone and no player is alive to spawn it near."); return; }
             var anchor = pool[_rng.Next(pool.Count)];
             var found = FallbackBigfootSpot(N(anchor.Body.GlobalPosition));
-            if (found is not { } spot) { ChatTo(admin, ChatLineKind.Error, "The map has no 'event spawn: bigfoot' area, and no ground was found near a player for the fallback."); return; }
+            if (found is not { } spot) { ChatTo(admin, ChatLineKind.Error, "The map has no bigfoot zone, and no ground was found near a player for the fallback."); return; }
             spawn = spot; fallback = true; nearName = anchor.Name; nearPos = N(anchor.Body.GlobalPosition);
         }
         var at = spawn!.Value;
@@ -149,8 +149,8 @@ public partial class NetServer
         _events.Start(EventBook.Bigfoot, _elapsed);
         BigfootFxEvent(BigfootFxKind.Appear, bf.Position);
         ChatToAll(ChatLineKind.System, "", $"{admin.Name} started the Bigfoot event. Something huge is moving through the village.");
-        if (fallback) ChatTo(admin, ChatLineKind.Info, $"The map has no 'event spawn: bigfoot' area, so this is the dev fallback: it appeared {Dist2D(bf.Position, nearPos):0} m from {nearName}.");
-        GD.Print($"server: Bigfoot started by {admin.Name} #{admin.Id} at ({bf.Position.X:F1},{bf.Position.Y:F1},{bf.Position.Z:F1}), {(fallback ? $"FALLBACK spawn near {nearName} (the map has no event_spawn: bigfoot area)" : "a baked event_spawn point")}, hits needed {bf.HitsNeeded}, {participants} participants");
+        if (fallback) ChatTo(admin, ChatLineKind.Info, $"The map has no bigfoot zone, so this is the dev fallback: it appeared {Dist2D(bf.Position, nearPos):0} m from {nearName}.");
+        GD.Print($"server: Bigfoot started by {admin.Name} #{admin.Id} at ({bf.Position.X:F1},{bf.Position.Y:F1},{bf.Position.Z:F1}), {(fallback ? $"FALLBACK spawn near {nearName} (the map has no bigfoot zone)" : "a baked bigfoot zone point")}, hits needed {bf.HitsNeeded}, {participants} participants");
     }
 
     /// <summary>A random spot between the fallback distances from <paramref name="anchor"/> with ground under it, or null.</summary>

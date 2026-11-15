@@ -147,7 +147,7 @@
     "volume_db": -6
   },
 
-  // A dev aid: a map with no area that carries "event spawn: bigfoot" has no spawn point for it, so /event bigfoot puts it this far from a
+  // A dev aid: a map with no "bigfoot" zone has no spawn point for it, so /event bigfoot puts it this far from a
   // random living player instead (and says so to the admin and in the log).
   "fallback_spawn": {
     "min_distance_m": 55,

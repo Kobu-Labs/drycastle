@@ -27,7 +27,7 @@ public sealed class BigfootFile : IVersioned
     public BigfootGrab Grab { get; set; } = new();
     public BigfootWipe Wipe { get; set; } = new();
     public BigfootReward Reward { get; set; } = new();
-    /// <summary>Where the event starts when the map has no area that carries <c>event spawn: bigfoot</c> (a dev aid).</summary>
+    /// <summary>Where the event starts when the map has no <c>bigfoot</c> zone (a dev aid).</summary>
     public BigfootFallbackSpawn FallbackSpawn { get; set; } = new();
     public BigfootMusic Music { get; set; } = new();
 

@@ -13,8 +13,8 @@ namespace Drycastle.MapLoader;
 /// props / props_collision (items without a parcel, e.g. OSM trees).
 /// Independent of any mod. Axes: map x east, y north; Godot x east, y up, z = -north.
 /// </summary>
-/// <summary>A hand-drawn ground colour region, for the minimap: ring in ground (x, z) metres.</summary>
-public sealed record RegionPaint(string Id, Color Colour, Vector2[] Ring);
+/// <summary>A hand-drawn ground patch, for the minimap: its type's colour and ring in ground (x, z) metres.</summary>
+public sealed record PatchPaint(string Id, Color Colour, Vector2[] Ring);
 
 public sealed partial class MapLoader
 {
@@ -46,7 +46,7 @@ public sealed partial class MapLoader
     public string BunkersJson { get; private set; } = "";
     /// <summary>Origin of the local frame in S-JTSK (EPSG:5514) metres (east, north), from parcels.json (map 0.4.0+); null for older maps.</summary>
     public (double X, double Y)? OriginEpsg5514 { get; private set; }
-    /// <summary>The ground types a region can be given (name, "#rrggbb" of its terrain colour) as of the build: not the ones a rule makes, not water; from parcels.json `ground_types`, empty for older maps. The editor lists the current ones through <see cref="GroundTypeTable"/> and the edits.</summary>
+    /// <summary>The ground types a patch can be given (name, "#rrggbb" of its terrain colour) as of the build: not the ones a rule makes, not water; from parcels.json `ground_types`, empty for older maps. The editor lists the current ones through <see cref="GroundTypeTable"/> and the edits.</summary>
     public IReadOnlyList<(string Name, string Colour)> GroundTypes { get; private set; } = Array.Empty<(string, string)>();
     /// <summary>Every ground type of the map (those of rules.yaml, then the user's own) as written by the last build; empty for maps without `ground_types`.</summary>
     public IReadOnlyList<MapGroundType> GroundTypeTable { get; private set; } = Array.Empty<MapGroundType>();
@@ -58,7 +58,7 @@ public sealed partial class MapLoader
     public EditDefaults? EditDefaults { get; private set; }
     public LoadStats Stats { get; } = new();
     /// <summary>
-    /// Counts changes to the physics of the map (placed objects, parcel and props swaps, regions). A cached ray result
+    /// Counts changes to the physics of the map (placed objects, parcel and props swaps, patches). A cached ray result
     /// is valid only for the version it was cast in.
     /// </summary>
     public int GeometryVersion { get; private set; }
@@ -79,7 +79,7 @@ public sealed partial class MapLoader
 
     /// <summary>
     /// Headless (server) load: only the collision meshes and the data the server reads are kept. Visual nodes are freed
-    /// as they load (no materials, no triangle count, no region or props visuals), and placed objects get no model.
+    /// as they load (no materials, no triangle count, no patch or props visuals), and placed objects get no model.
     /// Set before <see cref="LoadSteps"/>. The bodies of the <c>_collision</c> nodes stay, they are their children.
     /// </summary>
     public bool CollisionOnly { get; set; }
@@ -113,8 +113,8 @@ public sealed partial class MapLoader
         if (File.Exists(lamps)) ReadLamps(lamps); // map 0.5.0+
         var roads = Path.Combine(mapDir, "roads.json");
         if (File.Exists(roads)) RoadsJson = File.ReadAllText(roads); // no consumer in v1
-        var regionsFile = Path.Combine(mapDir, "regions.json");
-        ReadRegionPaint(File.Exists(regionsFile) ? regionsFile : null);
+        var patchesFile = Path.Combine(mapDir, "patches.json");
+        ReadPatchPaint(File.Exists(patchesFile) ? patchesFile : null);
         var water = Path.Combine(mapDir, "water.json");
         WaterJson = File.Exists(water) ? File.ReadAllText(water) : "";
         var trees = Path.Combine(mapDir, "trees.json");
@@ -123,7 +123,7 @@ public sealed partial class MapLoader
         WindowsJson = File.Exists(windows) ? File.ReadAllText(windows) : ""; // only maps with hand-described building detail have it
         var bunkers = Path.Combine(mapDir, "bunkers.json");
         BunkersJson = File.Exists(bunkers) ? File.ReadAllText(bunkers) : ""; // only maps with an enterable bunker have it
-        ReadAttributePoints(mapDir, manifest.RootElement); // only maps with an area that carries a runtime attribute have it
+        ReadZonePoints(mapDir, manifest.RootElement); // only maps with a zone that has usable ground have the file
         yield return 0.03f;
 
         var tPhase = Time.GetTicksMsec();
@@ -222,24 +222,68 @@ public sealed partial class MapLoader
         if (dropped > 0) GD.Print($"map: dropped {dropped} spawn points within 2 m of the terrain rim");
     }
 
-    /// <summary>Ground paint regions (regions.json) for the minimap, in ID order (the higher ID paints last): ring in ground (x, z) metres and colour.</summary>
-    public IReadOnlyList<RegionPaint> RegionPaints => _regionPaints;
+    /// <summary>Ground patch paint (patches.json) for the minimap, in ID order (the higher ID paints last): ring in ground (x, z) metres and colour.</summary>
+    public IReadOnlyList<PatchPaint> PatchPaints => _patchPaints;
     /// <summary>The visible terrain meshes (one per chunk file, vertex colours = the ground's colour; identity transforms), for the maps' top-down colour. Empty on a collision-only load.</summary>
     public IReadOnlyList<MeshInstance3D> TerrainVisuals => _terrainVisuals;
-    readonly List<RegionPaint> _regionPaints = new();
+    readonly List<PatchPaint> _patchPaints = new();
 
-    void ReadRegionPaint(string? path)
+    void ReadPatchPaint(string? path)
     {
-        _regionPaints.Clear();
+        _patchPaints.Clear();
         if (path == null) return;
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
-        foreach (var r in doc.RootElement.GetProperty("regions").EnumerateArray())
+        foreach (var r in doc.RootElement.GetProperty("patches").EnumerateArray())
         {
             var c = r.GetProperty("colour");
             var ring = r.GetProperty("ring").EnumerateArray().Select(p => new Vector2(p[0].GetSingle(), -p[1].GetSingle())).ToArray();
             if (ring.Length < 3) continue;
-            _regionPaints.Add(new RegionPaint(r.GetProperty("id").GetString() ?? "", new Color(c[0].GetInt32() / 255f, c[1].GetInt32() / 255f, c[2].GetInt32() / 255f), ring));
+            _patchPaints.Add(new PatchPaint(r.GetProperty("id").GetString() ?? "", new Color(c[0].GetInt32() / 255f, c[1].GetInt32() / 255f, c[2].GetInt32() / 255f), ring));
         }
+    }
+
+    /// <summary>The zone kinds of the catalog in catalog order (parcels.json `zone_kinds`); empty for maps built before they were listed.</summary>
+    public IReadOnlyList<ZoneKindInfo> ZoneKinds { get; private set; } = Array.Empty<ZoneKindInfo>();
+
+    static List<ZoneKindInfo> ReadZoneKinds(JsonElement root)
+    {
+        var list = new List<ZoneKindInfo>();
+        if (!root.TryGetProperty("zone_kinds", out var zk) || zk.ValueKind != JsonValueKind.Array) return list;
+        foreach (var k in zk.EnumerateArray())
+        {
+            if (k.ValueKind != JsonValueKind.Object || !k.TryGetProperty("name", out var n) || n.ValueKind != JsonValueKind.String) continue;
+            string Str(string key, string fallback) => k.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? fallback : fallback;
+            List<string>? where = null;
+            if (k.TryGetProperty("where_ground", out var wg) && wg.ValueKind == JsonValueKind.Array)
+                where = wg.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList();
+            var name = n.GetString()!;
+            list.Add(new ZoneKindInfo(name, Str("label", name), Str("group", ""), Str("tint", "#808080"), where is { Count: > 0 } ? where : null));
+        }
+        return list;
+    }
+
+    /// <summary>Every ground area of the last build (empty for maps built before `ground_areas`).</summary>
+    public IReadOnlyList<GroundAreaInfo> GroundAreas => _groundAreas;
+    readonly List<GroundAreaInfo> _groundAreas = new();
+
+    /// <summary>The rings of a GeoJSON Polygon or MultiPolygon in ground (x, z) metres, all parts in one list, and the area they enclose (holes subtracted).</summary>
+    static List<Vector2[]> ReadRings(JsonElement poly, out float area)
+    {
+        var rings = new List<Vector2[]>();
+        area = 0f;
+        if (!poly.TryGetProperty("coordinates", out var coords)) return rings;
+        var multi = poly.TryGetProperty("type", out var ty) && ty.GetString() == "MultiPolygon";
+        foreach (var part in multi ? coords.EnumerateArray().ToList() : new List<JsonElement> { coords })
+        {
+            var i = 0;
+            foreach (var r in part.EnumerateArray())
+            {
+                var ring = r.EnumerateArray().Select(c => new Vector2(c[0].GetSingle(), -c[1].GetSingle())).ToArray();
+                rings.Add(ring);
+                area += (i++ == 0 ? 1 : -1) * ParcelInfo.RingArea(ring);
+            }
+        }
+        return rings;
     }
 
     void ReadParcels(string path)
@@ -267,6 +311,15 @@ public sealed partial class MapLoader
         if (doc.RootElement.TryGetProperty("ground_default", out var gd) && gd.ValueKind == JsonValueKind.String) GroundDefault = gd.GetString() ?? "";
         if (doc.RootElement.TryGetProperty("ground_recipes", out var gr) && gr.ValueKind == JsonValueKind.Object)
             GroundRecipes = gr.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetRawText());
+        ZoneKinds = ReadZoneKinds(doc.RootElement);
+        _groundAreas.Clear();
+        if (doc.RootElement.TryGetProperty("ground_areas", out var ga) && ga.ValueKind == JsonValueKind.Array)
+            foreach (var a in ga.EnumerateArray())
+            {
+                if (!(a.TryGetProperty("id", out var gi) && a.TryGetProperty("kind", out var gk) && a.TryGetProperty("polygon", out var gp))) continue;
+                var garings = ReadRings(gp, out var garea);
+                if (garings.Count > 0) _groundAreas.Add(new GroundAreaInfo(gi.GetString() ?? "", gk.GetString() ?? "", garings, Mathf.Max(0f, garea)));
+            }
         foreach (var p in doc.RootElement.GetProperty("parcels").EnumerateArray())
         {
             var id = p.GetProperty("id").GetString()!;
@@ -274,22 +327,8 @@ public sealed partial class MapLoader
             var ch = p.GetProperty("chunk");
             // a Polygon (rings: outer, then holes) or a MultiPolygon (one such list per part, e.g. a parcel cut down to
             // several buildings); the rings of all parts go in one list, which the even-odd point test handles
-            var rings = new List<Vector2[]>();
             var area = 0f;
-            if (p.TryGetProperty("polygon", out var poly) && poly.TryGetProperty("coordinates", out var coords))
-            {
-                var multi = poly.TryGetProperty("type", out var ty) && ty.GetString() == "MultiPolygon";
-                foreach (var part in multi ? coords.EnumerateArray().ToList() : new List<System.Text.Json.JsonElement> { coords })
-                {
-                    var i = 0;
-                    foreach (var r in part.EnumerateArray())
-                    {
-                        var ring = r.EnumerateArray().Select(c => new Vector2(c[0].GetSingle(), -c[1].GetSingle())).ToArray();
-                        rings.Add(ring);
-                        area += (i++ == 0 ? 1 : -1) * ParcelInfo.RingArea(ring);
-                    }
-                }
-            }
+            var rings = p.TryGetProperty("polygon", out var poly) ? ReadRings(poly, out area) : new List<Vector2[]>();
             var bounds = new Rect2();
             if (rings.Count > 0)
             {
@@ -379,9 +418,9 @@ public sealed partial class MapLoader
             {
                 _terrainVisuals.Add(mi);
             }
-            else if (RegionId(name) is { } regionId)
+            else if (PatchId(name) is { } patchId)
             {
-                RegisterBakedRegion(regionId, mi);
+                RegisterBakedPatch(patchId, mi);
             }
             else if (name.StartsWith("parcel_") && name.EndsWith("_visual"))
             {

@@ -10,6 +10,12 @@ namespace Drycastle.MapLoader;
 /// </summary>
 public sealed record MapGroundType(string Name, string Colour, bool Custom, string? RulesJson, bool Legacy);
 
+/// <summary>A zone kind of the catalog (parcels.json `zone_kinds`): <paramref name="Tint"/> is its "#rrggbb" overlay colour, <paramref name="WhereGround"/> the ground types it applies to by rule (null: drawn only).</summary>
+public sealed record ZoneKindInfo(string Name, string Label, string Group, string Tint, IReadOnlyList<string>? WhereGround);
+
+/// <summary>A ground area of the base map (parcels.json `ground_areas`): land of one ground type that is no property. Rings in ground (x, z) metres, outer first then holes (even-odd).</summary>
+public sealed record GroundAreaInfo(string Id, string Kind, IReadOnlyList<Vector2[]> Rings, float AreaM2);
+
 /// <summary>A parcel of the base map (from parcels.json).</summary>
 public sealed class ParcelInfo
 {
@@ -55,7 +61,7 @@ public sealed class ParcelInfo
         return inside;
     }
 
-    internal static float RingArea(Vector2[] ring)
+    public static float RingArea(Vector2[] ring)
     {
         double s = 0;
         for (int i = 0, j = ring.Length - 1; i < ring.Length; j = i++)

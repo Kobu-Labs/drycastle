@@ -147,11 +147,11 @@ public sealed class MapBase
             foreach (var parcel in _map.Parcels.Values)
                 Fill(px, side, metresPerTexel, Rgba(ParcelColour(parcel.Kind)), parcel.Rings.Select(r => r.Select(v => new NVector2(v.X, v.Y)).ToArray()).ToList(), parcel.Bounds);
         }
-        foreach (var region in _map.RegionPaints)
+        foreach (var patch in _map.PatchPaints)
         {
-            var box = new Rect2(region.Ring[0], Vector2.Zero);
-            foreach (var v in region.Ring) box = box.Expand(v);
-            Fill(px, side, metresPerTexel, Rgba(region.Colour), new List<NVector2[]> { region.Ring.Select(v => new NVector2(v.X, v.Y)).ToArray() }, box);
+            var box = new Rect2(patch.Ring[0], Vector2.Zero);
+            foreach (var v in patch.Ring) box = box.Expand(v);
+            Fill(px, side, metresPerTexel, Rgba(patch.Colour), new List<NVector2[]> { patch.Ring.Select(v => new NVector2(v.X, v.Y)).ToArray() }, box);
         }
         var inside = ParcelMask(side, metresPerTexel);
         for (var i = 0; i < px.Length; i += 4)
@@ -162,7 +162,7 @@ public sealed class MapBase
         return ImageTexture.CreateFromImage(img);
     }
 
-    /// <summary>RGBA mask of <paramref name="side"/> texels: alpha 255 inside a parcel. The ground outside every parcel is not part of the game: it takes the plain terrain colour, so the terrain mesh and the region paints that reach past the village polygon do not show.</summary>
+    /// <summary>RGBA mask of <paramref name="side"/> texels: alpha 255 inside a parcel. The ground outside every parcel is not part of the game: it takes the plain terrain colour, so the terrain mesh and the patch paints that reach past the village polygon do not show.</summary>
     byte[] ParcelMask(int side, float metresPerTexel)
     {
         var inside = new byte[side * side * 4];
