@@ -24,6 +24,12 @@ public static class PetRules
         new(hitId, pet.Position, Stance.Stand, pet.Yaw, HeadGuarded: true, Scale: pet.HitBox[1] / PlayerHitBox.StandHeight);
 }
 
+/// <summary>A living pet as the Thieves event sees it: its entity id (the id of its Loot), the animal and its property group.</summary>
+public readonly record struct LivePet(ushort Entity, Animal Pet, string Group);
+
+/// <summary>What it takes to make a pet again where it came from (a pet that was loaded in a van comes back as a new entity).</summary>
+public readonly record struct PetSeed(int Species, int Variant, string Group, Vector3 Home, float Yaw);
+
 /// <summary>
 /// The pets of a match: <see cref="Populate"/> picks property groups by pets.json's rules and puts pets into each group's <see cref="Pen"/>, as
 /// <see cref="Animal"/> world entities that never leave it. A pet can be shot dead (nothing scores, nothing replaces it this round; one that dies of one hit leaves no corpse) and leaves poop
@@ -55,6 +61,8 @@ public sealed class PetKeeper : IAnimalHits
     readonly Dictionary<Animal, Pet> _byAnimal = new();
     readonly List<Pet> _all = new(); // every pet, for the per-tick walks (no enumerator or copy per tick)
     readonly List<Pet> _tick = new(); // the snapshot Update walks: dropping poop can despawn entities, which changes the collections above
+    readonly Dictionary<string, PennedWorld> _worlds = new();
+    readonly Dictionary<string, Pen> _pens = new();
     int _nextHit;
 
     public PetKeeper(PetsFile cfg, AnimalsFile animals, WorldEntityManager entities, int seed)
@@ -64,6 +72,12 @@ public sealed class PetKeeper : IAnimalHits
         _poops = new PoopBook(cfg.PoopMaxPerGroup);
         entities.Despawned += OnDespawned;
     }
+
+    /// <summary>Counts up whenever the keeper forgets its pets (<see cref="Clear"/>): a record of a pet from an earlier round must not bring it back.</summary>
+    public int Round { get; private set; }
+
+    /// <summary>Raised at the end of every <see cref="Update"/> (once a tick, after the entities ticked).</summary>
+    public event Action? Updated;
 
     /// <summary>Error log for pets or poop that could not be spawned (the entity cap). Null means silent.</summary>
     public Action<string>? Log { get; set; }
@@ -77,6 +91,44 @@ public sealed class PetKeeper : IAnimalHits
     public IEnumerable<Animal> Pets => _all.Select(p => p.Animal);
     /// <summary>The property group a pet belongs to, or null for an animal that is not a pet.</summary>
     public string? GroupOf(Animal pet) => _byAnimal.TryGetValue(pet, out var p) ? p.Group : null;
+    /// <summary>The pen of a property group that keeps pets this round, or null.</summary>
+    public Pen? PenOf(string group) => _pens.GetValueOrDefault(group);
+    /// <summary>The pet with this entity id (alive or lying) and its group.</summary>
+    public bool TryGet(ushort entity, out Animal pet, out string group)
+    {
+        if (_byEntity.TryGetValue(entity, out var p) && !p.Gone) { pet = p.Animal; group = p.Group; return true; }
+        pet = null!; group = "";
+        return false;
+    }
+    /// <summary>The entity id of a pet, or null for an animal that is not one of ours.</summary>
+    public ushort? EntityOf(Animal pet) => _byAnimal.TryGetValue(pet, out var p) ? p.Entity : null;
+    /// <summary>Appends the living pets with their entity id and group (the target registry of the Thieves event).</summary>
+    public void LivePets(List<LivePet> into)
+    {
+        foreach (var p in _all)
+            if (!p.Gone && p.Animal.Alive) into.Add(new LivePet(p.Entity, p.Animal, p.Group));
+    }
+    /// <summary>What it takes to bring this pet back after its entity ended.</summary>
+    public PetSeed? SeedOf(ushort entity) =>
+        _byEntity.TryGetValue(entity, out var p) ? new PetSeed(p.Animal.Species, p.Animal.Variant, p.Group, p.Animal.Home, p.Animal.Yaw) : null;
+    /// <summary>The pet's entity ends (a Thief loaded it into a van). Its animal is forgotten with it.</summary>
+    public void End(ushort entity) => _entities.Despawn(entity, WorldDespawnReason.Removed);
+
+    /// <summary>
+    /// A pet comes back as a new entity where <paramref name="at"/> is (a van was destroyed with it inside) and walks home from there; at its home when that is inside its pen. Null when its group has no
+    /// pen this round (the keeper was cleared since), or the world is full of entities.
+    /// </summary>
+    public ushort? Respawn(PetSeed seed, Vector3 at)
+    {
+        if (!_worlds.TryGetValue(seed.Group, out var world)) return null;
+        var animal = new Animal(_animals, seed.Species, seed.Home, seed.Yaw, world, _rng.Next(), seed.Variant);
+        if (Add(animal, seed.Group) is not { } entity) return null;
+        animal.Carry();
+        animal.MoveCarried(at, seed.Yaw);
+        animal.Release();
+        return entity;
+    }
+
     public int PoopCount(string group) => _poops.Count(group);
     public int PoopTotal => _poops.Total;
 
@@ -89,8 +141,8 @@ public sealed class PetKeeper : IAnimalHits
     {
         Clear();
         if (_cfg.MaxPets <= 0) return 0;
-        var worlds = new Dictionary<string, PennedWorld>();
-        PennedWorld World(string group) => worlds.TryGetValue(group, out var w) ? w : worlds[group] = new PennedWorld(ground, pens[group]);
+        foreach (var (group, pen) in pens) _pens[group] = pen;
+        PennedWorld World(string group) => _worlds.TryGetValue(group, out var w) ? w : _worlds[group] = new PennedWorld(ground, pens[group]);
         // pinned pets first: the cap must not starve them
         foreach (var pin in _cfg.Pinned)
         {
@@ -131,7 +183,13 @@ public sealed class PetKeeper : IAnimalHits
         if (home is not { } h) return Spawned.NoGround;
         var species = pinned ?? _cfg.Pick(_animals, _rng.NextDouble());
         var animal = new Animal(_animals, species, new Vector3(h.X, 0, h.Y), (float)_rng.NextDouble() * MathF.Tau, world, _rng.Next(), pinnedVariant ?? _rng.Next(_animals.Animals[species].VariantCount));
-        if (_entities.Spawn(animal) is not { } entity) { Log?.Invoke("pets: the world is full of entities; no more pets"); return Spawned.EntitiesFull; }
+        return Add(animal, group) == null ? Spawned.EntitiesFull : Spawned.Yes;
+    }
+
+    /// <summary>Puts a new animal into the world as a pet of <paramref name="group"/>. Null (logged) when the world has no room for another entity.</summary>
+    ushort? Add(Animal animal, string group)
+    {
+        if (_entities.Spawn(animal) is not { } entity) { Log?.Invoke("pets: the world is full of entities; no more pets"); return null; }
         var hit = NextHitId();
         var pet = new Pet { Animal = animal, Entity = entity, HitId = hit, Group = group, Poop = new PoopSchedule(_cfg, new Random(_rng.Next())) };
         animal.Died += (a, by) => Killed?.Invoke(a, by);
@@ -139,7 +197,7 @@ public sealed class PetKeeper : IAnimalHits
         _byEntity[entity] = pet;
         _byAnimal[animal] = pet;
         _all.Add(pet);
-        return Spawned.Yes;
+        return entity;
     }
 
     ushort NextHitId()
@@ -156,6 +214,7 @@ public sealed class PetKeeper : IAnimalHits
         foreach (var pet in _tick)
             if (!pet.Gone && pet.Poop.Tick(dt, pet.Animal.Alive, pet.Animal.State)) Drop(pet);
         _tick.Clear();
+        Updated?.Invoke();
     }
 
     void Drop(Pet pet)
@@ -195,5 +254,7 @@ public sealed class PetKeeper : IAnimalHits
     {
         foreach (var p in _all) p.Gone = true;
         _byHit.Clear(); _byEntity.Clear(); _byAnimal.Clear(); _all.Clear(); _poops.Clear();
+        _worlds.Clear(); _pens.Clear();
+        Round++;
     }
 }

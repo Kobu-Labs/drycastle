@@ -132,6 +132,7 @@ public partial class NetClient : Node
         InitPoop();
         InitBigfoot();
         InitCitizens();
+        InitThieves();
         InitDemon();
         InitAircraft();
         InitFlak();
@@ -247,6 +248,7 @@ public partial class NetClient : Node
         RenderFlocks(delta);
         RenderBigfoot();
         RenderCitizens();
+        RenderGang(delta);
         RenderDemon();
         UpdatePounce(delta);
         RenderCars();
@@ -337,7 +339,9 @@ public partial class NetClient : Node
                 OnStatusEvent((EventKind)e.Kind, e.Payload); // statuses: blessing, curse, burning
                 OnItemEvent((EventKind)e.Kind, e.Payload); // what the player wears, what a corpse carries, an item crumbling
                 OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
+                OnThiefAudioEvent((EventKind)e.Kind, e.Payload); // a Gang member says a line (ticket 09)
                 OnBigfootEvent((EventKind)e.Kind, e.Payload); // the Bigfoot's effects and the footprints to its corpse (#264)
+                OnThievesEvent((EventKind)e.Kind, e.Payload); // the Raid vans' honk
                 OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
                 OnRozhlasEvent((EventKind)e.Kind, e.Payload); // the village loudspeaker's phase, broadcast and offset
                 OnUradDoorEvent((EventKind)e.Kind, e.Payload); // the Obecny Urad's door
@@ -625,7 +629,7 @@ public partial class NetClient : Node
             mi = new MoveInput { MoveY = 1, Yaw = yaw, Buttons = jump, SpeedScale = 1 };
         }
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
-        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); }
+        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); TickLootReturn(dt); }
         FxDemoInput(ref mi);
         _aimHeld = mi.Has(MoveButtons.Aim);
         TickRecoil(mi);

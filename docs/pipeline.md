@@ -351,6 +351,59 @@ lamp nodes: run `make fetch --force` once, then `make normalise` and `make props
 `lamps.json` to `out/village/map/` (map version 0.5.0, `files.lamps`); lamps are not in the chunk GLBs. The game
 builds the pole, the head and the light from primitives, so the viewer ignores them.
 
+**Fence sections (`fences.json`).** The fences are baked into the chunk GLBs, but the game server also needs where they
+stand (a gang member hops a pet's fence, `docs/events/thieves/05-pets.md`). The props stage writes the sections that
+`make_fences` produced (the same list as `fences` of `work/props.json`) to `data/village/work/fences.json`; the export copies it to
+`out/village/map/fences.json` (`files.fences`; no map version bump; absent when the map has no props stage output, a stale
+file is deleted; a loader that does not know it, or a map without it, means "no fence data"). Format, version 1:
+
+```json
+{"version": 1,
+ "axes": "local metres, x east, y north, z up (elevation of the ground at each end); height_m above that",
+ "fences": [{"parcel": "P-0412", "group": "G-0003", "a": [12.5, 40.0], "b": [16.25, 40.0], "za": 187.1, "zb": 187.2,
+             "height_m": 1.2, "type": null}]}
+```
+
+One entry per section (a straight piece of at most `props.fences.section_m`, in parcel ID order, along each fence line in order):
+`a` and `b` its two end points (`[x, y]`, local metres as `parcels.json`), `za` and `zb` the ground elevation under them (as
+`terrain.json`), `height_m` the effective fence height (the section's own for a custom fence, else `props.fences.height_m`),
+`type` the effective fence type (`picket`, `wire`, `brick_red`, ... as `edits.py` `FENCE_TYPES`) or `null` for the plain box,
+`parcel` the owning parcel and `group` the property group of that parcel (`G-NNNN`, as in `groups.json`) or `null`. A group's fence
+is one line round the members' outer edge, each piece owned by its member parcel. The gate gap and the stretches
+cleared of buildings and roads are simply missing: the sections are the fence that stands. `make parcel-run` (the editor's live
+regeneration) does not rewrite it; run `make map-update` (or `make props export`) after changing fences.
+
+**Satellite dishes** (`dishes.py`, `scripts/make_satellite_dish_model.py`; the Thieves event steals them, `docs/events/thieves/06-dishes.md`).
+The model is a generated household dish, 0.7 m across, on a short wall arm (`python3 -I scripts/make_satellite_dish_model.py`
+rebuilds `assets/drycastle-generated-models/satellite_dish.glb`, byte for byte; the asset `pack:drycastle-generated-models/satellite_dish`
+is in `assets/manifest.json`, category `other` so the editor's palette offers it, CC0 like the pack's other models). Its origin is the
+point of the wall where the arm leaves it, glTF y up and **+X out of the wall**, so a placed dish's `rotation_deg` is the way its wall
+faces (compass degrees, counter-clockwise from east, as for the wall connectors) and `z` the elevation of the origin; the dish reaches
+0.4 m above it and 0.3 m below, 0.35 m to either side.
+
+The placing is a street-at-a-time command like the house connectors (`docs/utility-poles.md`), into the hand edits so that a dish is a
+placed object the editor can see, move and delete, and `objects.json` gets it with the others at the next `make map-update`:
+
+```
+cd pipeline
+uv run python -m drycastle_pipeline.dishes --dry-run      # what it would do (--chance P overrides dish_chance)
+uv run python -m drycastle_pipeline.dishes                # appends the dishes to config/edits.json
+```
+
+Each dwelling (`area:house`, `area:large`, `type:commercial`; not hand-modelled landmarks) has a chance `dishes.dish_chance` (rules.yaml,
+default 0.4) of a dish, rolled from a generator seeded with `<building id>:dish`: the same houses every time, and raising the chance only adds
+houses. The dish goes on the wall that faces the nearest road (the nearest wall whose outward normal looks at the road's nearest point), `drop_m`
+(0.6-0.9, seeded) under the eave and never lower than `min_height_m` (2.0) above the ground, at a seeded place along the wall at least
+`wall_end_m` (0.8) from the corners. It keeps clear of the wall openings the pipeline knows (the windows, doors and garage doors of
+`config/buildings/<id>.yaml` that lie in its height band, with half a dish and 0.15 m beside them) and of any house connector within
+`connector_clear_m` (0.9) of it along that wall. When no place is left on that wall (a wall too short, an eave under `min_eave_m`, openings and
+connectors in the way) the house gets no dish; no other wall is tried. A house whose eave is below 2.6 m gets none.
+
+Ids and hand edits: a new dish takes the next free `o-NNNN` of `edits.json` and is never renumbered, so ids stay the same across map rebuilds
+(the dishes live in the edits file, not in the build). A rerun only adds: a house that has a dish within `owned_m` (1.5) of its footprint (the
+nearest house to that dish) is left alone however far the dish was moved; a dish deleted by hand comes back at the next run (set `dish_chance: 0`
+or do not rerun); existing objects are never touched. The game finds the dishes as the placed objects whose asset is the dish.
+
 **Tree collision (`trees.json`).** Each tree is two or three solids, built in the game from the rule model numbers
 (`model`: trunk width and height, canopy edge) and the tree's scale and rotation, with the same arithmetic as the drawn tree
 (`propmeshes.tree_mesh`): the trunk box (solid, starts 0.2 m below the ground) and the crown (two stacked boxes for a broadleaf,

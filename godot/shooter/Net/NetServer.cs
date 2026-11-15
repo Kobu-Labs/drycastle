@@ -75,6 +75,9 @@ public partial class NetServer : Node
         public bool UseHeld, LightsHeld, Handbrake, StreakHeld;
         /// <summary>The interact key's hold at the rozhlas dictation table (NetServer.RozhlasSet.cs).</summary>
         public InteractHold SetHold;
+        /// <summary>The use key's hold on lying Loot (NetServer.Thieves.Loot.cs) and the health it was last seen at (a drop is a hit taken).</summary>
+        public LootReturnHold LootHold;
+        public float LootHealth;
         /// <summary>The Bigfoot holds this player (issue #264) through this tick: their input is read and acknowledged but their body stays where it puts them.</summary>
         public uint HeldUntilTick;
         /// <summary>Until this server time a launched player's fall damage is the Bigfoot's own (the brain hurts them 2 to 5 on landing).</summary>
@@ -193,6 +196,8 @@ public partial class NetServer : Node
         InitBigfoot(); // after the corpse book, which follows the same despawns
         InitPets();
         InitWildlife();
+        InitThieves();
+        InitEvents(); // after the kinds above: the handler table names their start, end and cancel
         InitAircraft();
         BuildCarePackages();
         BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
@@ -235,11 +240,13 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Housekeeping);
         _match.Update();
         BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
+        GangsPrepare(); // the players the Gang members fight, and who each fights
         _match.Entities.Tick((float)delta);
         CitizensTick((float)delta);
         PetsTick((float)delta);
         WildlifeTick((float)delta);
         MassTick((float)delta); // the Holy Mass: its clock, the pastor, the seats
+        ThievesTick((float)delta); // the Thieves event: its phase clock
         RozhlasTick((float)delta); // the village loudspeaker: the schedule and the hijack clock
         PerfLap(ServerPerf.Ph.Match);
         StreakTick((float)delta);
@@ -247,6 +254,7 @@ public partial class NetServer : Node
         BotsTick((float)delta); // fills the roster and queues each bot's input for this tick (#214)
         PerfLap(ServerPerf.Ph.Bots);
         foreach (var car in _cars) car.PlaceSolid(); // the boxes on-foot players are stopped by, where the vehicles stand after the last tick (#217)
+        PlaceVanSolids(); // and the Raid vans' (a van that stands is solid)
         PerfLap(ServerPerf.Ph.PlaceSolids);
         _simClients.Clear(); _simClients.AddRange(_byId.Values); // a copy: a client may leave while the others are simulated
         foreach (var c in _simClients) SimulateClient(c, (float)delta); // every joined player, bots included
@@ -506,6 +514,7 @@ public partial class NetServer : Node
         SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
         SendIntelOnJoin(c); // the events on the intel screen
         SendMassOnJoin(c); // the Holy Mass, when one runs
+        SendThievesOnJoin(c); // the Thieves event, when one runs
         SendRozhlasOnJoin(c); // the village loudspeaker, when a detour broadcast is on
         SendUradDoorOnJoin(c); // and the Urad door, when it is open
         SendPounceOnJoin(c); // and the demon's pounce, when one is on
@@ -727,6 +736,7 @@ public partial class NetServer : Node
             var useDown = (i.Buttons & (ushort)MoveButtons.Use) != 0;
             var useEdge = useDown && !c.UseHeld;
             RozhlasSetUse(c, useDown);
+            LootUse(c, useDown);
             c.UseHeld = useDown;
             var lightsEdge = Headlights.Edge((i.Buttons & (ushort)MoveButtons.Headlights) != 0, ref c.LightsHeld);
             var streakDown = (i.Buttons & (ushort)MoveButtons.Killstreak) != 0;
@@ -757,7 +767,7 @@ public partial class NetServer : Node
                 if (useEdge) ExitCar(c);
                 continue;
             }
-            if (useEdge && (MassSit(c) || TryEnterCar(c))) continue;
+            if (useEdge && LootInReach(c) == null && (MassSit(c) || TryEnterCar(c))) continue; // the use key on lying Loot sends it back, it does not take a seat
             c.Body.Yaw = Quant.Yaw(i.Yaw);
             c.Body.Pitch = Quant.Pitch(i.Pitch);
             c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
@@ -836,6 +846,8 @@ public partial class NetServer : Node
         }
         if (BigfootTarget() is { } bigfoot) list.Add(bigfoot); // the Bigfoot is a hit target like a player (issue #264)
         _crowd?.AddTargets(list); // the citizens of the Holy Mass
+        AddGangTargets(list); // the Gang members of the Thieves event
+        AddVanTargets(list); // and their Raid vans
         AddPetTargets(list);
         AddWildlifeTargets(list);
         _workers?.AddTargets(list); // the workers of the Urad
@@ -1019,7 +1031,7 @@ public partial class NetServer : Node
         if (DemonRules.IsHitId(victim)) return DemonHit(attackerId, weaponIdx, damage); // the demon: a hit count, no hit points
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
-        if (CitizenRules.IsHitId(victim) || PetRules.IsHitId(victim) || WildlifeRules.IsHitId(victim)) // a citizen, a pet or a wild animal: the hit marker, but no assist, streak, refill or kill feed
+        if (CitizenRules.IsHitId(victim) || PetRules.IsHitId(victim) || WildlifeRules.IsHitId(victim) || GangRules.IsHitId(victim) || RaidVanRules.IsHitId(victim)) // a citizen, a pet, a wild animal, a Gang member or a Raid van: the hit marker, but no assist, streak, refill or kill feed
         {
             if (_byId.TryGetValue(attackerId, out var shooter)) Send(shooter, new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attackerId, weaponIdx, (ushort)damage, head, backstab, r == DamageResult.Killed))));
             return r;
@@ -1136,7 +1148,7 @@ public partial class NetServer : Node
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot,
                     c.Car != null ? RiderRules.HitStance(c.Car.Def, c.CarSeat, c.Body.State.Stance) : BodyStanceOf(c)));
-        foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed, car.Lights));
+        foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed, car.Lights, car.Life.WheelsOff));
         foreach (var car in _cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model
         foreach (var car in _cars) if (car.Flies) ents.Add(FlightRecord.Make(car.Id, car.Flight)); // a helicopter's velocity, tilt and rotor (ADR 0006)
         foreach (var car in _cars) if (car.Drives) ents.Add(DriveRecord.Make(car.Id, car.Drive)); // a driven vehicle's speeds, slope, steering and whether it floats (ADR 0010)

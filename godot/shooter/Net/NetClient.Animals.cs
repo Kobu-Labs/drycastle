@@ -144,6 +144,12 @@ public partial class NetClient
         v.Shown = (byte)state;
         if (v.Anim == null || v.Clips.Length == 0) return;
         string? Clip(AnimalClip c) => v.Clips[(int)c];
+        if (state == AnimalState.Carried)
+        {
+            // held under a Thief's arm: no clip of its own, the standing pose frozen
+            if (Clip(AnimalClip.Idle) is { } held) { v.Anim.Play(held, 0.1); v.Anim.Seek(0, true); v.Anim.Pause(); }
+            return;
+        }
         if (state == AnimalState.Sit)
         {
             // sits down, then holds the sat pose; one that was already sitting when we saw it just sits

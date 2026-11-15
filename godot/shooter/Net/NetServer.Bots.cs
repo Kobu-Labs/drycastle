@@ -105,6 +105,7 @@ public partial class NetServer
         {
             var b = bots[(_navTurn + k) % bots.Count];
             if (!b.BotWasAlive || b.Brain!.PathRequest is not { } want) continue;
+            if (!TakeNavTurn()) break; // a Gang member's route took this tick's ration
             _navTurn = (_navTurn + k + 1) % bots.Count;
             var t0 = Time.GetTicksUsec();
             var route = _nav.Route(new Vector3(want.From.X, want.From.Y, want.From.Z), new Vector3(want.To.X, want.To.Y, want.To.Z));

@@ -93,7 +93,7 @@ A lamp post of the base map, placed from OSM street lamp nodes or along roads by
 _Avoid_: light, streetlight, lamp post
 
 **Corpse**:
-A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. It also carries every Item its player wore or carried in the Bag (up to seven), which another player can take one at a time (see Pickup limit).
+A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. It also carries every Item its player wore or carried in the Bag (up to eight), which another player can take one at a time (see Pickup limit).
 _Avoid_: ragdoll, body, drop
 
 **Sandbox mode**:
@@ -105,7 +105,7 @@ A player whose player token is listed on the server (`--admin-token`). Admins ma
 _Avoid_: operator, moderator, op
 
 **Chat command**:
-A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/event` (`rozhlas` the loudspeaker, `intel` a test announcement, `bigfoot` starts the Bigfoot Event, `current end` concludes the running Event as a win for testing, `current cancel` removes it with no reward), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
+A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/event` (`rozhlas` the loudspeaker, `intel` a test announcement, `bigfoot` starts the Bigfoot Event, `thieves` starts the Thieves event, `current end` concludes the running Event as a win for testing, `current cancel` removes it with no reward), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
 _Avoid_: console command, cheat
 
 **Care package**:
@@ -145,11 +145,11 @@ The weapons a player can select: the primary, the secondary and the knife of the
 _Avoid_: inventory, toolbar, slots
 
 **Item**:
-Something a player wears that is not a weapon, perk or killstreak, defined in `items.json`. The first Items are event rewards (the Bigfoot head). A player wears at most one Item per equipment slot and carries the rest in the Bag.
+Something a player wears that is not a weapon, perk or killstreak, defined in `items.json`. The first Items are event rewards (the Bigfoot head, the Gold chain). A player wears at most one Item per equipment slot and carries the rest in the Bag.
 _Avoid_: loot, gear, drop (as a noun)
 
 **Equipment**:
-What a player wears right now: one Item per equipment slot, of which the headgear slot is the only one. It belongs to the match and not to the Profile: death puts the worn Items on the Corpse, leaving the match loses it, and a new round keeps it. What is carried unworn is the Bag.
+What a player wears right now: one Item per equipment slot (the headgear slot and the Neck slot). It belongs to the match and not to the Profile: death puts the worn Items on the Corpse, leaving the match loses it, and a new round keeps it. What is carried unworn is the Bag.
 _Avoid_: inventory (the weapons are the Hotbar), outfit (that is Camouflage)
 
 **Bag**:
@@ -167,6 +167,14 @@ _Avoid_: helmet slot, hat slot
 **Bigfoot head**:
 The first Item: headgear, the reward for defeating the Bigfoot event. A headshot on its wearer is a body hit: the weapon's body damage, with no headshot multiplier, marker or bonus XP. It has a Pickup limit of three.
 _Avoid_: Bigfoot mask, Bigfoot helmet
+
+**Neck slot**:
+The equipment slot on the neck, under the headgear slot: it holds one Item and nothing hides when it is worn. Worn, moved to the Bag and dropped as the headgear slot is.
+_Avoid_: necklace slot, amulet slot
+
+**Gold chain**:
+The Item of the Neck slot, cosmetic (it protects nothing): a chunky gold chain with a pendant, drawn on the wearer's neck. Each Gang boss killed by a hit leaves one on his body, a Corpse that lasts a few minutes (`reward.chain_corpse_seconds` in `thieves.json`) and carries only the chain. A Gang boss who boards his van and leaves, or flees off the map, keeps his. It has a Pickup limit of three.
+_Avoid_: necklace, bling
 
 **Pickup limit**:
 How many times an Item can be taken from a Corpse or the ground over its whole life. Moving it between the Bag and an equipment slot or dropping it counts nothing. The count belongs to the Item and travels with it from corpse to wearer or Bag to corpse or ground; the attempt after the last pickup makes it crumble (it is gone, and the player reads "The item crumbles in your hands"). An Item with no limit never crumbles.
@@ -360,7 +368,7 @@ A creature of the world that is not a player: a deer, a dog, a cow. It has hit p
 _Avoid_: NPC (alone), mob, critter
 
 **Pet**:
-An Animal (a dog, cat, hen, rooster, chick or duck) that lives in one property group and never leaves its Pen. It wanders, stands, eats, sits (dogs and cats) and barks (dogs) around the point it spawned at, and does not flee: not from players or vehicles, and not when shot. It dies of any hit that deals damage (`one_hit`, whatever its `hp`): it has no hit reaction and no corpse, the entity ends at once and every client shows a **puff** (a few small grey clouds) where it stood. A kill scores nothing, is not in the kill feed, and nothing replaces it until the next round. Each round starts with new pets: `pets.json` gives a property group's chance to keep pets, how many, which species (by weight, ids of `animals.json`) and a cap for the whole map; a parcel in no group gets none. A **pinned pet** (`pinned` in `pets.json`) is added to a named group on top of the random ones: a species, optionally one asset of it (a **variant**: another model of the species, listed in `animals.json`, such as a breed and its colour look; `base` names the species' own first model; unpinned pets wear a random one), a count and a chance rolled per pet each round, placed before the random pets so the cap never drops it. A variant may have its own hit box (a Chihuahua is smaller than a Saint Bernard); a shot is tested against the box of the pet's own variant. Their models are the paid Synty pet packs, kept outside the repository in the private asset folder (`assets-private/synty/glb/pets`): a game without that folder draws each pet as a box of its hit box, and everything else works the same. There is no bark sound (no asset). A world entity of wire type 50 like any Animal; the species' `flees: false` is what makes an animal a pet. Not a stray, wildlife (#254) or livestock in a field.
+An Animal (a dog, cat, hen, rooster, chick or duck) that lives in one property group and never leaves its Pen. It wanders, stands, eats, sits (dogs and cats) and barks (dogs) around the point it spawned at, and does not flee: not from players or vehicles, and not when shot. It dies of any hit that deals damage (`one_hit`, whatever its `hp`): it has no hit reaction and no corpse, the entity ends at once and every client shows a **puff** (a few small grey clouds) where it stood. A kill scores nothing, is not in the kill feed, and nothing replaces it until the next round. Each round starts with new pets: `pets.json` gives a property group's chance to keep pets, how many, which species (by weight, ids of `animals.json`) and a cap for the whole map; a parcel in no group gets none. A **pinned pet** (`pinned` in `pets.json`) is added to a named group on top of the random ones: a species, optionally one asset of it (a **variant**: another model of the species, listed in `animals.json`, such as a breed and its colour look; `base` names the species' own first model; unpinned pets wear a random one), a count and a chance rolled per pet each round, placed before the random pets so the cap never drops it. A variant may have its own hit box (a Chihuahua is smaller than a Saint Bernard); a shot is tested against the box of the pet's own variant. Their models are the paid Synty pet packs, kept outside the repository in the private asset folder (`assets-private/synty/glb/pets`): a game without that folder draws each pet as a box of its hit box, and everything else works the same. There is no bark sound (no asset). A world entity of wire type 50 like any Animal; the species' `flees: false` is what makes an animal a pet. A Thief of the Thieves event may carry a pet away as Loot (Animal state Carried, held at the Thief's side): it stays a hit target, walks home if its carrier is killed (penned again once inside its Pen), and is gone while loaded in a van. Not a stray, wildlife (#254) or livestock in a field.
 _Avoid_: companion, NPC (alone)
 
 **Pen**:
@@ -422,6 +430,26 @@ _Avoid_: quest, mission, mode (a match mode is another thing), wave
 **Bigfoot**:
 The first Event: a giant, twice a player's height, that spawns at a baked point of an area with `event spawn: bigfoot` (or, on a map with none, near a random player as a dev fallback) and hunts the players. It is a **world entity** with its own brain (`Bigfoot`), not a bot: it has no player health or weapons, ignores the navmesh, walks a straight line over the terrain towards the nearest player (trees do not stop it, buildings do), and has a **Hit count** instead of hit points. Its attacks come with its phases: it hurls tree trunks (phase one); stomps and throws vehicles (two); grabs a player, flails with them and launches them, at another player when there is one (three); everything it does to a player is 2 to 5 damage. When it dies the Event is won: players credited get XP, and footsteps lead to a Corpse that carries the Bigfoot head. Every number is in `bigfoot.json`.
 _Avoid_: boss (alone), monster, sasquatch, yeti
+
+**Thieves event**:
+The Event started with `/event thieves`: three Raids come to the village one after another to steal Loot. It cannot be lost: it is won when the last van is gone (destroyed or driven off), and it runs to its end even with no player near. What is stolen stays stolen until the round resets. Every number is in `thieves.json`; the design is in `docs/events/README.md`.
+_Avoid_: invasion, heist, robbery
+
+**Raid**:
+One van of the Thieves event and its crew of Gang members (a Gang boss, Enforcers, Thieves). The van drives in along one of two fixed routes (picked at random), parks on a road within 100 m of the church, the crew steals and loads Loot, and the van leaves when it is full, its stay timer runs out or its crew is dead. At most two Raids are in the village at once.
+_Avoid_: wave, attack, round (a round is the match's)
+
+**Raid van**:
+The vehicle of a Raid: a scripted world entity that follows the road graph (in and out along one of the two fixed routes), not a vehicle a player can use (ADR 0021). Nobody enters it and nothing pushes it; it pushes through what is in its way and honks. It has a Hit count; destroyed, its Raid is over, everything loaded in it goes back to its place and its crew flees on foot. World entity wire type 55.
+_Avoid_: truck, transport, car
+
+**Gang member**:
+A person of a Raid: a world entity with its own brain and a Hit count, not a Citizen (a Citizen dies of one hit and never reacts) and not a bot. Three kinds: a **Thief** steals Loot and carries it to the van; an **Enforcer** carries a pipe, steals nothing and guards the Thieves and the van; the **Gang boss** stays by the van and wears the Gold chain. They attack a player only when interfered with (a member of their Raid was hit, or the player crowds a working Thief): the whole Raid then fights that player (Enforcers, the Gang boss and a Thief with free hands) until they die or are 30 m from every living member. Killed by hits (a Hit count of 20 / 35 / 80: a bullet 1, a headshot 2, an explosive or a vehicle weapon a weight) or by a vehicle running it over; it lies 10 s, pays a little XP and is not in the kill feed. Turrets and killstreak weapons shoot it, bots ignore it. World entity wire type 57.
+_Avoid_: NPC (alone), enemy, bandit, robber; boss (alone: say Gang boss)
+
+**Loot**:
+What a Thief takes: a tire off a car, a Pet, a satellite dish off a house, a connector off a utility pole. It is carried, lying (its carrier was killed: another Thief may take it, a player holds use on it to send it back to its place; a Pet walks home by itself) or loaded in a Raid van. Loaded Loot of a van that drove off is gone until the round resets. At most 24 pieces lie at once (over it the oldest goes back by itself), and lying Loot stays, and stays returnable, after the event. Not an Item: a player never carries it.
+_Avoid_: item, pickup, cargo, stolen goods
 
 **Hit count**:
 How the Bigfoot is killed: not hit points but a number of hits, `hits.per_player` times the participants (at least one), tuned for about a minute. A bullet hit counts 1, with no headshot bonus (a headshot on it is a body hit); an explosive hit (a rocket, the attack missile, the MOAB) and a vehicle-weapon hit count a larger, configurable weight; ramming it counts nothing. The count only goes up while it fights.

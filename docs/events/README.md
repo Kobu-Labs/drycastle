@@ -188,13 +188,13 @@ Both are a status, not an Item: no slot, no drop. They survive a round change an
 # Election
 # Nazis in bunker
 
-# Gypsies storming the village
+# Thieves storming the village
 - rytmus songs playing from their cars
 
 
 - waves 
     - walk
-    - babety
+    - motorbikes
     - cars - rusty damanged
 ## Visual
 - rats will ocasionally run from the van and attack the player (jumping on them)
@@ -209,6 +209,7 @@ Both are a status, not an Item: no slot, no drop. They survive a round change an
 ### Audio snippets
 - when player is walking near the thieves they have a chance to say something to the player
 - these recordings will be provided by us as assets
+    - this are in downloads - around 15 couple seconds recordings
 - audio volume should be proximity based
 - note to ourselves:
     - dig more
@@ -238,6 +239,56 @@ Both are a status, not an Item: no slot, no drop. They survive a round change an
     - the thief can sometimes chose to jump the fence, grab the pet under their arm, and run it to the haul van
     - player needs to be careful not to shoot the pet, or it will die
     - when player kills the thief carrying the pet, the pet will pathfind to that garden it came from
+
+## Design (grilled 2026-11-14)
+
+Terms: **Raid** = one van and its crew. **Gang member** = Thief, Enforcer or Gang boss. **Loot** = a stolen tire, pet, dish or pole connector. Tickets: `docs/events/thieves/` (throwaway, deleted when done). Van decision: ADR 0021.
+
+### Event
+- Start: `/event thieves` only (no scheduler). Intel board entry + the standard Event announcement.
+- 3 Raids. A Raid: 1 Gang boss, 2 Enforcers, 5 Thieves. Next van comes when the previous leaves or on a timer; at most 2 vans at once. Counts grow with player count. All numbers in `thieves.json`.
+- Cannot be lost. Ends (won) when the last van is gone, destroyed or driven off. Runs to its end with no player near.
+- No event HUD.
+- State is kept after the event: Loot that left in a van is gone until the round resets; dropped Loot stays lying and can still be sent back (count capped in data).
+
+### Gang members
+- Hit count, not hit points: bullet 1, headshot 2, explosive and vehicle weapons a data weight, run over by a vehicle = dead.
+- **Thief**: steals; ~20 hits; shoves with free hands; keeps hauling (faster) when carrying.
+- **Enforcer**: rusty pipe; does not steal; escorts Thieves and guards the van; ~35 hits.
+- **Gang boss**: stays by the van; ~80 hits.
+- They attack only when interfered with: a member of the same Raid was hit by the player, or the player stands within a few metres of a Thief who is stealing or hauling. They give up when the player dies or is ~30 m away.
+- Melee: pipe 25, fist 10, one swing a second, reach 2 m, a windup a player can step out of.
+- Dead: lies ~10 s, small XP to the killer, no kill feed, streak or assist. Turrets and killstreak weapons treat them as enemies. Bots ignore them and they ignore bots.
+- Looks: Gang Warfare models (boss `GangBoss_01`, enforcer `GangMember_Male_03`, thief `GangMember_Male_02` or `StreetGirl_01`), a random look of the pack as shipped; cigarette, gold chain, tattoos, gold tooth. Without the private assets: coloured capsules, a box van, silent.
+
+### Van
+- Its own scripted entity, not a vehicle: nobody enters it, nothing pushes it, it pushes through whatever is in its way (rams like a car). Honks at random and near players.
+- Enters and leaves along one of two fixed routes (sketch points the owner placed: A B C and D E F G H, `raids.routes` in `thieves.json`), each Raid picks one at random. It drives the roads through the waypoints, carries on along the main road the route continues on and parks on a road within 100 m of the church (a random working spot, not within `used_apart_m` of another van's stop), then leaves by the same roads backwards. No usable route: the old automatic way (a random road at the map edge, the stop with the most stealable targets within ~80 m).
+- 300 hits. Can be destroyed on the way in. Destroyed: that Raid is done, everything loaded goes back by itself, the crew flees on foot to the map edge.
+- Leaves when full (8 Loot), when its stay timer runs out (~4 min), or when its crew is dead. Surviving crew board first.
+- Crew appear at the side door when it opens and vanish into it when boarding; the door is animated, there is no sit or exit animation.
+
+### Loot
+- A Thief picks the nearest free target of a random kind (weights in data); one Thief per target.
+- **Tire**: off a spawned car; the Thief kneels by the wheel; the wheel is visibly gone; the car drives as before.
+- **Pet**: the Thief jumps the fence where it is nearest, grabs the pet, comes back out the same way with it under one arm. A carried pet can be shot and dies. Carrier killed: the pet walks home by itself.
+- **Dish**: the pipeline places satellite dishes on houses (seeded chance, a wall under the eave facing the road, in `objects.json`, always in the village); a generated small model. The Thief climbs to it.
+- **Pole connector**: the Thief climbs the pole; nothing goes missing on the pole. 5 % chance of electrocution: beams and whizzing at the top, the Thief falls, lies knocked down a few seconds, gets up, tries again; it costs no hits.
+- Carrier killed: the Loot lies where they fell. Another Thief may pick it up. A player holds use ~1 s on it to send it back to its place (interrupted by moving off or taking a hit).
+- Animations: the climb clip is made by us (no pack has one); carrying is the run clip with a procedural arm pose (as `SitPose`); kneel, jump and land, pipe swings, shove, knockdown and stun come from the Synty packs.
+
+### Audio
+- Voice lines: the 15 recordings (`~/downloads/New Recording*.mov`) baked through one raspy chain (`make thief-voices`, ffmpeg, the chain as a JSON file, to be tuned by ear) into `assets-private/audio/thieves/voice/`.
+- The server decides a line: a member with a player within ~8 m rolls a chance every few seconds, a cooldown per member, one line at a time per Raid; every client near hears the same line from that member, to ~25 m.
+- Each van loops one song (positional, ~60 m, stops when destroyed). A member has a 5 % chance to carry a speaker playing another song (~30 m); it stops when they die and drops as a plain Item a player can put in the Bag (silent, no slot).
+- Songs: any `.ogg` in `assets-private/audio/thieves/songs/`, dropped there by us; an empty folder is silence. Picked: youtube `vUXzn-xTeA0`, `odp6sdJNUtg`, `D5F6tjfx-nY`.
+
+### Reward
+- Event XP to players who hit a member or sent Loot back.
+- A Gold chain Item (new Neck slot, pickup limit 3) on the corpse of each Gang boss. A boss who drives off alive keeps his.
+
+### Not in v1
+- Rats; arrivals on foot, on motorbikes and in the destroyed cars; a scheduler; bots taking part.
 
 
 # Pets Detour

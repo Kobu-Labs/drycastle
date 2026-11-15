@@ -3604,6 +3604,48 @@
       "used_for": "godot/shooter item id bigfoot_head (data/items.json `model`), worn by CharacterView on the head bone and rendered into ui/icons/items/bigfoot_head.png; authored in the headgear slot frame (forward -Z, origin at the middle of the head, metres), one mesh node, 8 flat-colour materials"
       },
       {
+      "id": "pack:drycastle-generated-models/gold_chain",
+      "category": "other",
+      "name": "Gold chain (chunky necklace of interlocked links with a diamond pendant)",
+      "file": "drycastle-generated-models/gold_chain.glb",
+      "size_m": [
+        0.23,
+        0.26,
+        0.27
+      ],
+      "tags": [
+        "shooter",
+        "worn-item",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_gold_chain_model.py (original geometry written as code; python3 -I scripts/make_gold_chain_model.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "godot/shooter item id gold_chain (data/items.json `model`), worn by CharacterView on the Neck bone and rendered into ui/icons/items/gold_chain.png; authored in the neck slot frame (forward -Z, origin at the Neck bone's origin, metres), one mesh node, 3 flat-colour materials"
+      },
+      {
+      "id": "pack:drycastle-generated-models/satellite_dish",
+      "category": "other",
+      "name": "Satellite dish (household, 0.7 m, on a short wall arm)",
+      "file": "drycastle-generated-models/satellite_dish.glb",
+      "size_m": [
+        0.67,
+        0.66,
+        0.7
+      ],
+      "tags": [
+        "dish",
+        "house",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_satellite_dish_model.py (original geometry written as code; python3 -I scripts/make_satellite_dish_model.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "the dishes of the Thieves event (pipeline/src/drycastle_pipeline/dishes.py places them on house walls); origin on the wall at the arm's root, +X out of the wall (set rotation_deg to the way the wall faces and z to the height of the origin; it reaches 0.4 m above it), a node each for mount, dish and lnb"
+      },
+      {
       "id": "pack:welcome-sign/welcome_sign",
       "category": "other",
       "name": "Welcome sign (VITAJTE V OBCI)",
@@ -4208,6 +4250,18 @@
       "downloaded": "2026-11-14",
       "generated": true,
       "note": "Additive synthesis of inharmonic bell partials by scripts/make_church_bells.py (in the repo, deterministic); mono OGG, ~12 s, five strokes"
+    },
+    {
+      "id": "sfx:drycastle-generated-sounds/shock_crackle",
+      "name": "Electric shock crackle (Thieves on a pole)",
+      "file": "drycastle-generated-sounds/shock_crackle.ogg",
+      "used_for": "shock.crackle",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-15",
+      "generated": true,
+      "note": "Mains hum, a whizz sweep and random crackle clicks by scripts/make_shock_crackle.py (in the repo, deterministic); mono OGG, ~2.2 s"
     },
     {
       "id": "sfx:drycastle-generated-sounds/vehicle_engine",

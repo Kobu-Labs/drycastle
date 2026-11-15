@@ -49,6 +49,21 @@ public sealed class VehicleLifecycle
     /// <summary>Hidden hit points (ticket #103): only the damage stage derived from them ever reaches clients.</summary>
     public float Hp { get; private set; }
 
+    /// <summary>
+    /// The wheels the Thieves have taken (GLOSSARY "Loot", docs/events/thieves/04): bit 0 front left, 1 front right, 2 back left, 3 back right. Not part of the machine (a car drives exactly as before) but it
+    /// lives and dies with the life: <see cref="Reset"/> puts the wheels back whenever it restores the hit points (a round start, a return after destruction); an abandon return keeps them taken,
+    /// as it keeps damage. Replicated in bits 2-5 of the vehicle record's health byte (<see cref="VehicleRecord.Make"/>).
+    /// </summary>
+    public byte WheelsOff { get; private set; }
+
+    public const int Wheels = 4;
+
+    public bool WheelOff(int wheel) => wheel is >= 0 and < Wheels && (WheelsOff & (1 << wheel)) != 0;
+
+    public void TakeWheel(int wheel) { if (wheel is >= 0 and < Wheels) WheelsOff |= (byte)(1 << wheel); }
+
+    public void ReturnWheel(int wheel) { if (wheel is >= 0 and < Wheels) WheelsOff &= (byte)~(1 << wheel); }
+
     public VehicleLife State => _life.Current;
     public bool Destroyed => _life.Is(VehicleLife.Destroyed);
     public bool Doomed => _life.Is(VehicleLife.Doomed);
@@ -89,6 +104,7 @@ public sealed class VehicleLifecycle
     {
         if (!repair && State == VehicleLife.Alive) return false;
         Hp = _maxHp;
+        WheelsOff = 0;
         _life.Enter(VehicleLife.Alive);
         return true;
     }

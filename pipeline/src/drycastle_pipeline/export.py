@@ -75,6 +75,8 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # patch_<ID> nodes of the chunk files are the water patches only (the other patches are ground, baked into terrain and detail).
 # (no bump) groups.json (files.groups): the property groups of the edits (group id -> parcel ids), for the game server's pets.
 # Only maps with a group have it; a loader that does not know it, or a map without it, means "no groups".
+# (no bump) fences.json (files.fences): every fence section (two end points with ground z, height_m, type, parcel, property group),
+# for the game server's pets (the fence hop). A loader that does not know it, or a map without it, means "no fence data".
 MAP_VERSION_BASE = "0.10.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
@@ -330,6 +332,13 @@ def run_export(
             ],
         })
         files["trees"] = "trees.json"
+    fences_src = work_dir / "fences.json"
+    if fences_src.is_file():
+        # fence sections (props stage); copied verbatim, the game server hops pets over them
+        (out_dir / "fences.json").write_bytes(fences_src.read_bytes())
+        files["fences"] = "fences.json"
+    else:
+        (out_dir / "fences.json").unlink(missing_ok=True)
     lamps_src = work_dir / "lamps.json"
     if lamps_src.is_file():
         # street lamp positions (props stage); copied verbatim, the game builds the lamps from them

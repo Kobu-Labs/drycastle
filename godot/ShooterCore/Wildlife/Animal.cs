@@ -3,7 +3,7 @@ using System.Numerics;
 namespace Drycastle.ShooterCore;
 
 /// <summary>What an animal is doing; the low three bits of its replicated state byte (the clients pick the clip from it).</summary>
-public enum AnimalState : byte { Idle = 0, Eat = 1, Walk = 2, Flee = 3, Dead = 4, Sit = 5, Bark = 6 }
+public enum AnimalState : byte { Idle = 0, Eat = 1, Walk = 2, Flee = 3, Dead = 4, Sit = 5, Bark = 6, Carried = 7 }
 
 /// <summary>Animal world entity rules: the wire type id and the state byte the clients read.</summary>
 public static class AnimalRules
@@ -42,6 +42,17 @@ public interface IAnimalWorld
 }
 
 /// <summary>
+/// An <see cref="IAnimalWorld"/> that keeps its animal inside an area (<see cref="PennedWorld"/>): it can say whether a point is inside and give the open ground it is cut from. A pet that is put down outside
+/// its area (a Thief let go of it) walks home on the open ground until it is inside again.
+/// </summary>
+public interface IPennedWorld : IAnimalWorld
+{
+    bool Inside(float x, float z);
+    /// <summary>The same ground with no area: where a pet that was carried out of its pen may walk.</summary>
+    IAnimalWorld Open { get; }
+}
+
+/// <summary>
 /// An animal (ambient wildlife, livestock or a pet). It stands, eats, wanders around the spot it spawned at, runs from threats
 /// and from the shot that hurt it (a species with <see cref="AnimalDef.Flees"/> off, like a pet, never runs), now and then sits or barks (species that opt in with
 /// <see cref="AnimalDef.Sit"/>, <see cref="AnimalDef.Bark"/>), and dies when its hit points run out: it then lies for
@@ -57,18 +68,20 @@ public sealed class Animal : IWorldEntity
     /// <summary>Who may follow whom. Idle is the hub: an animal stands, then eats or walks, and goes back to standing; a threat (or a hit that did not kill) sends any living state to Flee; Flee only ends by calming down into Idle.</summary>
     public static readonly StateMachineSpec<AnimalState> Spec = StateMachineSpec<AnimalState>.Define(
             "Animal.Behaviour", "What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot, lie dead until the corpse is removed.", AnimalState.Idle)
-        .Allow(AnimalState.Idle, AnimalState.Eat, AnimalState.Walk, AnimalState.Sit, AnimalState.Bark, AnimalState.Flee, AnimalState.Dead)
-        .Allow(AnimalState.Eat, AnimalState.Idle, AnimalState.Flee, AnimalState.Dead)
-        .Allow(AnimalState.Sit, AnimalState.Idle, AnimalState.Flee, AnimalState.Dead)
-        .Allow(AnimalState.Bark, AnimalState.Idle, AnimalState.Flee, AnimalState.Dead)
-        .Allow(AnimalState.Walk, AnimalState.Idle, AnimalState.Flee, AnimalState.Dead)
-        .Allow(AnimalState.Flee, AnimalState.Idle, AnimalState.Dead)
+        .Allow(AnimalState.Idle, AnimalState.Eat, AnimalState.Walk, AnimalState.Sit, AnimalState.Bark, AnimalState.Flee, AnimalState.Carried, AnimalState.Dead)
+        .Allow(AnimalState.Eat, AnimalState.Idle, AnimalState.Flee, AnimalState.Carried, AnimalState.Dead)
+        .Allow(AnimalState.Sit, AnimalState.Idle, AnimalState.Flee, AnimalState.Carried, AnimalState.Dead)
+        .Allow(AnimalState.Bark, AnimalState.Idle, AnimalState.Flee, AnimalState.Carried, AnimalState.Dead)
+        .Allow(AnimalState.Walk, AnimalState.Idle, AnimalState.Flee, AnimalState.Carried, AnimalState.Dead)
+        .Allow(AnimalState.Flee, AnimalState.Idle, AnimalState.Carried, AnimalState.Dead)
+        .Allow(AnimalState.Carried, AnimalState.Idle, AnimalState.Dead)
         .Note(AnimalState.Idle, "Stands for a random while (clock: idle seconds), then Choose: sit or bark (species that opt in), eat, or walk to a spot near home.")
         .Note(AnimalState.Eat, "Grazes (clock: eat seconds), then stands.")
         .Note(AnimalState.Sit, "Sits for a random while (clock: sit seconds; the client plays sit-down, holds, stands up after), then stands. Species with a sit rule only.")
         .Note(AnimalState.Bark, "Barks once (clock: the bark clip's length), then stands. Species with a bark rule only.")
         .Note(AnimalState.Walk, "Walks to a wander target (clock: the time budget to arrive, then it gives up and stands).")
         .Note(AnimalState.Flee, "Runs from the threat or the shooter; no clock of its own (calm and alarm timers run beside). Calms down into Idle.")
+        .Note(AnimalState.Carried, "A Thief of the Thieves event holds it (no clock: it is moved by the Thief, MoveCarried, and does nothing itself). Let go (Release) it stands; one put down outside its Pen walks home over open ground until it is inside again. Still a hit target: any hit that deals damage kills it.")
         .Note(AnimalState.Dead, "Lies for corpse_seconds (the clock's elapsed time), then the entity ends; a one-hit species' entity ends at once. Never left.")
         .Build();
 
@@ -81,6 +94,7 @@ public sealed class Animal : IWorldEntity
     Vector3 _alarmFrom;
     Vector3 _fleeFrom;
     float _bias;           // radians added to the flight heading to go round what blocked the way
+    IAnimalWorld? _open;   // a pet put down outside its pen walks home over this open ground; null = it stays in its own world
     Vector3 _target;       // the wander target
     bool _hitToggle;
 
@@ -152,7 +166,7 @@ public sealed class Animal : IWorldEntity
             return;
         }
         _hitToggle = !_hitToggle;
-        if (!Def.Flees) return; // a pet shrugs it off: the hit reaction plays, no alarm, no flight
+        if (!Def.Flees || State == AnimalState.Carried) return; // a pet shrugs it off: the hit reaction plays, no alarm, no flight
         // Run from where the shot came from; when the shooter is gone, from behind (the animal bolts the way it faces).
         _alarmFrom = _world.PositionOf(attacker) ?? Position - Forward * 5;
         _alarm = _file.AlarmSeconds;
@@ -170,6 +184,8 @@ public sealed class Animal : IWorldEntity
             if (_fsm.Elapsed >= _file.CorpseSeconds) Ended = WorldDespawnReason.Expired;
             return;
         }
+        if (State == AnimalState.Carried) return; // held: the Thief moves it
+        if (_open != null && _world is IPennedWorld pen && pen.Inside(Position.X, Position.Z)) _open = null; // back inside: its own world again
 
         var threat = Def.Flees ? _world.NearestThreat(Position, Def.FleeRadius) : null;
         if (_alarm > 0)
@@ -197,6 +213,45 @@ public sealed class Animal : IWorldEntity
         var state = (byte)((byte)State | (_hitToggle ? AnimalRules.HitToggle : 0));
         // a living animal never shows 0 hp (a sliver of health rounds up)
         return WorldState.Make(Position, Yaw, 0, AnimalRules.Look(Species, Variant), state, Alive ? MathF.Ceiling(Hp) : 0);
+    }
+
+    // ---- carried (the Thieves event) ----
+
+    /// <summary>A Thief takes it up: from any living state, it does nothing until <see cref="Release"/>. False when it is dead, gone or already held.</summary>
+    public bool Carry()
+    {
+        if (Ended != null || !Alive || State == AnimalState.Carried) return false;
+        _open = null;
+        Go(AnimalState.Carried);
+        return true;
+    }
+
+    /// <summary>The Thief moves it: where it is held now and which way it faces. Nothing when it is not held.</summary>
+    public void MoveCarried(Vector3 position, float yaw)
+    {
+        if (State != AnimalState.Carried) return;
+        Position = position;
+        Yaw = yaw;
+    }
+
+    /// <summary>
+    /// Let go (the Thief was killed, or its Raid was cancelled): it stands where it is on the ground. Put down outside its pen (<see cref="IPennedWorld"/>) it walks straight home over open ground and is penned again once
+    /// inside; a spot with no ground at all (water, a wall) sends it home at once. False when it was not held.
+    /// </summary>
+    public bool Release()
+    {
+        if (State != AnimalState.Carried || Ended != null) return false;
+        var pen = _world as IPennedWorld;
+        var ground = pen?.Open ?? _world;
+        if (ground.GroundY(Position.X, Position.Z) is { } y)
+        {
+            Position = new Vector3(Position.X, y, Position.Z);
+            if (pen != null && !pen.Inside(Position.X, Position.Z)) _open = ground;
+        }
+        else Position = _world.GroundY(Home.X, Home.Z) is { } hy ? new Vector3(Home.X, hy, Home.Z) : Home;
+        StandStill();
+        if (_open != null) GoHome();
+        return true;
     }
 
     // ---- behaviour ----
@@ -250,6 +305,7 @@ public sealed class Animal : IWorldEntity
     /// <summary>After standing: walk back home when it strayed, otherwise sit, bark, eat or walk to a spot near home. Stands on when no spot has ground.</summary>
     void Choose()
     {
+        if (_open != null) { GoHome(); return; } // outside its pen: straight home first
         var centre = Herd?.Anchor ?? Home;
         var radius = Herd != null ? MathF.Max(Herd.Spread, _file.WanderMinM + 1) : Def.WanderRadius; // a herd member stays close to the herd, not to the species' whole range
         var strayed = HorizontalDistance(Position, centre) > radius;
@@ -284,8 +340,16 @@ public sealed class Animal : IWorldEntity
 
     void Walk(float dt)
     {
-        if (_fsm.Tick(dt) || HorizontalDistance(Position, _target) < 0.6f) { StandStill(); return; }
+        if (_fsm.Tick(dt) || HorizontalDistance(Position, _target) < 0.6f) { if (_open != null) GoHome(); else StandStill(); return; }
         if (!Step(TurretMath.YawTo(Position, _target), Def.WalkSpeed, dt)) StandStill();
+    }
+
+    /// <summary>Walks to <see cref="Home"/> in a straight line over open ground (a pet that was carried out of its pen).</summary>
+    void GoHome()
+    {
+        _target = _world.GroundY(Home.X, Home.Z) is { } y ? new Vector3(Home.X, y, Home.Z) : Home;
+        if (_fsm.Is(AnimalState.Walk)) _fsm.Restart(HorizontalDistance(Position, _target) / Def.WalkSpeed * 2 + 3);
+        else Go(AnimalState.Walk, HorizontalDistance(Position, _target) / Def.WalkSpeed * 2 + 3);
     }
 
     void RunAway(float dt, bool threatened)
@@ -319,7 +383,7 @@ public sealed class Animal : IWorldEntity
         var f = Forward;
         var x = Position.X + f.X * speed * dt;
         var z = Position.Z + f.Z * speed * dt;
-        if (_world.GroundY(x, z) is not { } y || MathF.Abs(y - Position.Y) > _file.MaxStepM) return false;
+        if ((_open ?? _world).GroundY(x, z) is not { } y || MathF.Abs(y - Position.Y) > _file.MaxStepM) return false;
         Position = new Vector3(x, y, z);
         return true;
     }

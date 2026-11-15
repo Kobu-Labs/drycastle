@@ -616,3 +616,22 @@ lamps:
   min_lamp_distance_m: 10
   rule_highways: [primary, secondary, tertiary, unclassified, residential, living_street, service]
   avoid_kinds: [building_plot, garden]
+
+# --- Satellite dishes (python -m drycastle_pipeline.dishes, into config/edits.json as placed objects) ----------
+# A seeded share of the dwellings (not the hand-modelled landmarks) gets a dish on the wall that faces the nearest road,
+# under the eave, clear of the known openings (config/buildings/*.yaml) and of a house connector. See docs/pipeline.md.
+dishes:
+  # Chance per dwelling, rolled from a generator seeded with "<building id>:dish": the same houses on every run.
+  dish_chance: 0.4
+  # No dish on a house whose eave is lower than this (the dish would not fit under it).
+  min_eave_m: 2.6
+  # The dish's origin hangs this far under the eave (a seeded value in the range) and never lower than min_height_m above the ground.
+  drop_m: [0.6, 0.9]
+  min_height_m: 2.0
+  # The dish keeps this far from the corners of its wall (measured to its centre), and this far (along the wall) from a connector.
+  wall_end_m: 0.8
+  connector_clear_m: 0.9
+  # A dish within this distance of a footprint belongs to that house (so a dragged dish still counts), and a house further than
+  # this from every road gets none.
+  owned_m: 1.5
+  road_max_m: 60

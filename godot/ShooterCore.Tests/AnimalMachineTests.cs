@@ -60,8 +60,8 @@ public class AnimalMachineTests
             a.Tick(Dt);
             seen.Add(a.State);
         }
-        // every state this species can be in: Sit and Bark are for the species that opt in (see PetBehaviourTests)
-        Assert.Equal(Enum.GetValues<AnimalState>().Where(s => s is not (AnimalState.Sit or AnimalState.Bark)).Order(), seen.Order());
+        // every state this species can be in: Sit and Bark are for the species that opt in (see PetBehaviourTests), Carried for a Thief to cause (PetLootTests)
+        Assert.Equal(Enum.GetValues<AnimalState>().Where(s => s is not (AnimalState.Sit or AnimalState.Bark or AnimalState.Carried)).Order(), seen.Order()); // Carried is the Thieves event's (PetLootTests)
     }
 
     [Fact]

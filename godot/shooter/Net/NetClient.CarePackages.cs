@@ -133,7 +133,7 @@ public partial class NetClient
     void ShowHoldRing(double dt)
     {
         var target = _crateHold.Held > 0 && _crateNear != null ? (float)Math.Min(1.0, _crateHold.Held / CarePackageRules.OpenHoldSeconds) : 0f;
-        target = Math.Max(target, RozhlasSetHoldFraction);
+        target = Math.Max(target, Math.Max(RozhlasSetHoldFraction, LootHoldFraction));
         if (target >= _ringShown || GameSettings.Current.ReduceMotion) _ringShown = target;
         else _ringShown = Mathf.MoveToward(_ringShown, target, (float)dt / RingDrainSeconds);
         _hud?.SetRadial(_ringShown > 0 ? _ringShown : null);

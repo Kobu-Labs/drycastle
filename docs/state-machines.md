@@ -17,21 +17,29 @@ stateDiagram-v2
     Idle --> Sit
     Idle --> Bark
     Idle --> Flee
+    Idle --> Carried
     Idle --> Dead
     Eat --> Idle
     Eat --> Flee
+    Eat --> Carried
     Eat --> Dead
     Sit --> Idle
     Sit --> Flee
+    Sit --> Carried
     Sit --> Dead
     Bark --> Idle
     Bark --> Flee
+    Bark --> Carried
     Bark --> Dead
     Walk --> Idle
     Walk --> Flee
+    Walk --> Carried
     Walk --> Dead
     Flee --> Idle
+    Flee --> Carried
     Flee --> Dead
+    Carried --> Idle
+    Carried --> Dead
     Dead --> [*]
 ```
 
@@ -42,6 +50,7 @@ stateDiagram-v2
 - **Dead**: Lies for corpse_seconds (the clock's elapsed time), then the entity ends; a one-hit species' entity ends at once. Never left.
 - **Sit**: Sits for a random while (clock: sit seconds; the client plays sit-down, holds, stands up after), then stands. Species with a sit rule only.
 - **Bark**: Barks once (clock: the bark clip's length), then stands. Species with a bark rule only.
+- **Carried**: A Thief of the Thieves event holds it (no clock: it is moved by the Thief, MoveCarried, and does nothing itself). Let go (Release) it stands; one put down outside its Pen walks home over open ground until it is inside again. Still a hit target: any hit that deals damage kills it.
 
 ## App.Phase
 
@@ -364,6 +373,128 @@ stateDiagram-v2
 - **Cruise**: Flies to a waypoint near home at the species' speed (no clock: a waypoint is reached by distance), then picks the next. A threat within scatter_radius_m sends it to Scatter.
 - **Scatter**: Flies away from the threat, faster and climbing (clock: scatter_seconds), then returns to Cruise and heads for its next waypoint.
 
+## GangMember.State
+
+What a Gang member of a Raid is doing; the replicated state byte.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Walk
+    Idle --> Guard
+    Idle --> Chase
+    Idle --> Seek
+    Idle --> Flee
+    Idle --> Board
+    Walk --> Idle
+    Walk --> Chase
+    Walk --> Flee
+    Walk --> Board
+    Guard --> Idle
+    Guard --> Chase
+    Guard --> Flee
+    Guard --> Board
+    Chase --> Windup
+    Chase --> Idle
+    Chase --> Guard
+    Chase --> Flee
+    Chase --> Board
+    Windup --> Swing
+    Windup --> Idle
+    Windup --> Guard
+    Windup --> Flee
+    Windup --> Board
+    Swing --> Chase
+    Swing --> Idle
+    Swing --> Guard
+    Swing --> Flee
+    Swing --> Board
+    Seek --> Approach
+    Seek --> Chase
+    Seek --> Flee
+    Seek --> Board
+    Approach --> Steal
+    Approach --> ClimbUp
+    Approach --> Seek
+    Approach --> Chase
+    Approach --> Flee
+    Approach --> Board
+    Steal --> Haul
+    Steal --> Seek
+    Steal --> Flee
+    Steal --> Board
+    Approach --> HopIn
+    HopIn --> Steal
+    HopIn --> Flee
+    HopIn --> Board
+    Steal --> HopOut
+    HopOut --> Haul
+    HopOut --> Seek
+    HopOut --> Flee
+    HopOut --> Board
+    ClimbUp --> WorkAloft
+    ClimbUp --> ClimbDown
+    ClimbUp --> Flee
+    ClimbUp --> Board
+    WorkAloft --> ClimbDown
+    WorkAloft --> Shocked
+    WorkAloft --> Flee
+    WorkAloft --> Board
+    Shocked --> Falling
+    Shocked --> Flee
+    Shocked --> Board
+    Falling --> Down
+    Falling --> Flee
+    Falling --> Board
+    Down --> GetUp
+    Down --> Flee
+    Down --> Board
+    GetUp --> ClimbUp
+    GetUp --> Seek
+    GetUp --> Flee
+    GetUp --> Board
+    ClimbDown --> Haul
+    ClimbDown --> Seek
+    ClimbDown --> Flee
+    ClimbDown --> Board
+    Haul --> Load
+    Haul --> Seek
+    Haul --> Flee
+    Haul --> Board
+    Load --> Seek
+    Load --> Flee
+    Load --> Board
+    Board --> Flee
+    Flee --> [*]
+    Dead --> [*]
+```
+
+From any state: Dead
+
+- **Idle**: A Thief standing (clock: a random time, then it walks to a point near the post); a Thief that has Loot work (its Raid gave it) goes straight on to Seek instead.
+- **Walk**: A Thief on a route to a point near the post (clock: the time budget to arrive, then it stands again).
+- **Guard**: An Enforcer follows the Thief it escorts, or stands at the post; the Gang boss stands at the post. Never steals.
+- **Chase**: Runs at the player the Raid is fighting (a route from the navigation mesh, asked for at most every repath_seconds); winds up once within reach.
+- **Windup**: The swing's telegraph (clock: windup_seconds): a player can step out of reach. Ends in Swing, or in a stand if the target is gone.
+- **Swing**: The blow lands at its start, only if the target is still within reach; then recovers (clock: interval minus windup) and chases or stands again.
+- **Flee**: Runs for the map edge on a route (clock: flee_seconds); the entity ends there (no state follows).
+- **Dead**: Lies for corpse_seconds (the clock's elapsed time), then the entity ends. Reached from any state; never left.
+- **Board**: Called back by the van: runs to its side door on a route (never fights) and ends there, counted as boarded. Flee when the van is destroyed or leaves without it.
+- **Seek**: A Thief looks for a target: the nearest free one of a kind chosen by weight near the van's door, one Thief per target (clock: it asks again after seek_retry_seconds when nothing is free or the van takes no more). A Thief with free hands still joins a fight.
+- **Approach**: Walks a route to the target's work spot (clock: approach_give_up_seconds; a target that is gone, a lost route or the clock ends it and the target is avoided for a while). Arrived: Steal, or ClimbUp when the target needs a climb.
+- **Steal**: Stands at the target, a still target (clock: the kind's steal_seconds, or pickup_seconds for Loot that lies). When the clock runs out the Thief has it and it is gone from its place; a target that goes meanwhile ends it. Landed inside a fence (HopIn) it first walks straight to the pet and the clock starts within grab_m of it. A Working state: a player crowding it is aggro.
+- **Haul**: Carries the Loot to the van's door, faster than it approached (clock: haul_give_up_seconds, then it drops the Loot where it stands). A Working state; the client attaches the prop from the hp byte.
+- **Load**: Tosses the Loot into the van at the door (clock: load_seconds): counted in the van, the Thief seeks again. A van that cannot take it any more gets it dropped at the Thief's feet.
+- **ClimbUp**: Climbs straight up from the climb's base to its top at climb_speed, off the navigation mesh (no clock: the distance). A Working state; shot dead here it falls to the ground.
+- **WorkAloft**: Works at the top of the climb (clock: the kind's steal_seconds), then has the thing. A Working state; shot dead here it falls to the ground.
+- **ClimbDown**: Climbs straight down to the base at climb_speed, then hauls what it has (or seeks again when it has nothing). A Working state; shot dead here it falls to the ground.
+- **HopIn**: Hops over the fence of the pet's garden: an arc from the point outside the fence to the point inside it, off the navigation mesh (clock: hop_seconds). A Working state; then Steal, where it walks to the pet.
+- **HopOut**: Back out of the garden with the pet (or with nothing when the pet went): walks straight to where it landed (no clock), then the arc out over the fence (clock: hop_seconds), then Haul with the pet. A Working state.
+- **Shocked**: Electrocuted at the top of a climb (the kind's hazard rolled when the Thief started to work aloft; clock: the shock's seconds): held in place, beams and sound on the clients. Costs no hits. Ends in Falling; shot dead here it falls and lies.
+- **Falling**: Falls from the top to the base's height under gravity (no clock: the height), off the navigation mesh. Ends in Down; shot dead here it keeps falling and lies.
+- **Down**: Lies knocked down (clock: the shock's down seconds); a lying hit volume, normal hits count. Ends in GetUp.
+- **GetUp**: Gets up (clock: the shock's get-up seconds), then goes for the same target again (ClimbUp), or looks for another when it is gone (Seek). All four are Working states: the Thief does not fight.
+
 ## HelicopterGunner.Phase
 
 The helicopter's gun cycle: wait, warn the picked enemy, fire a burst, wait again.
@@ -683,6 +814,33 @@ stateDiagram-v2
 - **Pinned**: The victim lies pinned. Locally: the body is the server's (no prediction, no weapon), the camera is on the floor. A joiner can start here.
 - **Rising**: The local victim was let go: the camera rises back to standing height while the red fades. Only after a pin of the local player.
 
+## RaidVan.State
+
+What a Raid van is doing; the replicated state byte.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Arriving
+    Arriving --> Opening
+    Opening --> Parked
+    Parked --> Boarding
+    Parked --> Closing
+    Boarding --> Closing
+    Closing --> Leaving
+    Leaving --> [*]
+    Destroyed --> [*]
+```
+
+From any state: Destroyed
+
+- **Arriving**: Drives the road path from the map edge to the stop at its speed (it brakes only for the stop, never for what is in its way); no clock. Ends in Opening at the stop.
+- **Opening**: Stopped; the side door slides open (clock: door seconds) and the crew starts getting out, one every stagger seconds.
+- **Parked**: The crew works (the stay clock runs beside). Leaves for Boarding (or Closing when nobody is afoot) when the Loot loaded reaches capacity, the stay time ran out, or the crew is gone (dead or aboard).
+- **Boarding**: The living crew is called back (clock: board wait seconds); ends when none is afoot, or the wait ran out (those left behind flee).
+- **Closing**: The door slides shut (clock: door seconds), then the van drives off.
+- **Leaving**: Drives the way out to the map edge, accelerating; the entity ends at its end (no state follows).
+- **Destroyed**: Hit count taken, from any state: the Raid is over. The wreck lies where it stopped (clock: wreck seconds), then the entity ends. Never left.
+
 ## Rozhlas.Phase
 
 The village loudspeaker: a detour broadcast, and the hijack after the announcer is killed.
@@ -764,6 +922,24 @@ stateDiagram-v2
 
 - **Standing**: Hits register. Killed by the hit that takes its health to zero.
 - **Down**: Ignores hits until RespawnAt (the match clock), unless Respawns is off (sandbox): then until the round restarts.
+
+## Thieves.Phase
+
+The Thieves event: idle until started, raiding while its Raids are in the village, then over until the round resets.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Raiding
+    Raiding --> Over
+    Raiding --> Idle
+    Over --> Raiding
+    Over --> Idle
+```
+
+- **Idle**: Nothing runs: never started, or a round reset cleared it.
+- **Raiding**: The Raids come and go (no clock of its own: the next-Raid clock runs beside). Left by Finish (won when the last van is gone, or an admin's end or cancel) or by a round reset.
+- **Over**: Won or cancelled; what was stolen stays stolen. A new /event thieves starts it again, a round reset clears it.
 
 ## Turret.State
 

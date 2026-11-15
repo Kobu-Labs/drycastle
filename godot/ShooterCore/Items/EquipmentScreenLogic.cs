@@ -105,15 +105,15 @@ public readonly record struct DropTarget(DropOn On, CellRef Cell = default)
 /// <summary>
 /// The implicit controls of the Equipment screen as rules: a click or Enter on a cell, Delete on a cell and a drag from one cell to a target. Each
 /// returns the wish to send (the server decides; it is never applied on the client first). <paramref name="slotOf"/> says which equipment slot the item
-/// in a cell belongs to, or null for an empty cell.
+/// in a cell belongs to, or null for an empty cell. <paramref name="plain"/> says a cell holds a bag-only item (no slot, so no Equip wish); null: none does.
 /// </summary>
 public static class EquipmentWishes
 {
     /// <summary>Click or Enter: a worn item goes to the bag, a bagged item is put on (swapping what was worn into its cell).</summary>
-    public static ItemWish Activate(CellRef cell, Func<CellRef, EquipSlot?> slotOf, bool bagFull)
+    public static ItemWish Activate(CellRef cell, Func<CellRef, EquipSlot?> slotOf, bool bagFull, Func<CellRef, bool>? plain = null)
     {
         if (slotOf(cell) == null) return ItemWish.None;
-        if (cell.Home == CellHome.Bag) return new ItemWish(WishKind.Equip, cell.Index);
+        if (cell.Home == CellHome.Bag) return plain?.Invoke(cell) == true ? ItemWish.None : new ItemWish(WishKind.Equip, cell.Index);
         return bagFull ? new ItemWish(WishKind.BagFull) : new ItemWish(WishKind.Unequip, cell.Index);
     }
 
@@ -127,28 +127,29 @@ public static class EquipmentWishes
     /// to any bag cell that is empty (the server puts it in the first empty one) or onto one that holds an item of the same slot (the two swap); outside
     /// the panel an item drops on the ground. The bag is not reordered (the server has no such move), and anything else is not a valid target.
     /// </summary>
-    public static ItemWish Drag(CellRef from, DropTarget to, Func<CellRef, EquipSlot?> slotOf)
+    public static ItemWish Drag(CellRef from, DropTarget to, Func<CellRef, EquipSlot?> slotOf, Func<CellRef, bool>? plain = null)
     {
         if (slotOf(from) is not { } slot) return ItemWish.None;
+        var wearable = plain?.Invoke(from) != true;
         switch (to.On)
         {
             case DropOn.Ground:
                 return from.Home == CellHome.Worn ? new ItemWish(WishKind.DropWorn, from.Index) : new ItemWish(WishKind.DropBagged, from.Index);
             case DropOn.Avatar:
-                return from.Home == CellHome.Bag ? new ItemWish(WishKind.Equip, from.Index) : ItemWish.None;
+                return from.Home == CellHome.Bag && wearable ? new ItemWish(WishKind.Equip, from.Index) : ItemWish.None;
             case DropOn.Cell when to.Cell.Home == CellHome.Worn:
-                return from.Home == CellHome.Bag && (int)slot == to.Cell.Index ? new ItemWish(WishKind.Equip, from.Index) : ItemWish.None;
+                return from.Home == CellHome.Bag && wearable && (int)slot == to.Cell.Index ? new ItemWish(WishKind.Equip, from.Index) : ItemWish.None;
             case DropOn.Cell when from.Home == CellHome.Worn:
                 var there = slotOf(to.Cell);
                 if (there == null) return new ItemWish(WishKind.Unequip, from.Index);
-                return there == slot ? new ItemWish(WishKind.Equip, to.Cell.Index) : ItemWish.None;
+                return there == slot && plain?.Invoke(to.Cell) != true ? new ItemWish(WishKind.Equip, to.Cell.Index) : ItemWish.None;
             default:
                 return ItemWish.None;
         }
     }
 
     /// <summary>True when releasing a drag from <paramref name="from"/> on <paramref name="to"/> would do something (the valid target highlights).</summary>
-    public static bool CanDrop(CellRef from, DropTarget to, Func<CellRef, EquipSlot?> slotOf) => Drag(from, to, slotOf).Kind != WishKind.None;
+    public static bool CanDrop(CellRef from, DropTarget to, Func<CellRef, EquipSlot?> slotOf, Func<CellRef, bool>? plain = null) => Drag(from, to, slotOf, plain).Kind != WishKind.None;
 }
 
 /// <summary>Which device the player used last, for the hint row to show keys or buttons.</summary>
