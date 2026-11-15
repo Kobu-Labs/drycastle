@@ -69,7 +69,7 @@ public sealed partial class MapLoader
         if (_assetManifest == null) ReadAssetManifest();
         var category = _assetManifest!.TryGetValue(asset, out var entry) ? entry.Category : "";
         var size = entry?.Size ?? GVector3.One;
-        if (entry is { Scene.Length: > 0 } && GetAssetTemplate(asset, out _) is { } prefab)
+        if (entry is { Prefab: true } && GetAssetTemplate(asset, out _) is { } prefab)
         {
             // a private pack prefab brings its own bodies. With a model they are already in it; a headless load has no
             // model, so it gets a copy of the prefab with the meshes taken out.

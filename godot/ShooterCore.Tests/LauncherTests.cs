@@ -223,4 +223,127 @@ public class LauncherTests : IDisposable
         const string one = """{"tag_name":"v1.2.0","prerelease":false,"draft":false,"published_at":"2026-11-10T00:00:00Z","assets":[{"name":"manifest.json","browser_download_url":"m"}]}""";
         Assert.Equal("v1.2.0", ReleaseFeed.Pick(ReleaseFeed.ParseReleases(one), "stable")!.Tag);
     }
+
+    // ---- private asset pack ----
+
+    const string PackPass = "correct horse";
+
+    /// <summary>The encrypted pack as the publish script makes it (fast key derivation for the tests), and a manifest that names it.</summary>
+    (Manifest man, byte[] enc) WithPack(Manifest man, string packId, byte[] packZip, string password = PackPass)
+    {
+        var plain = Path.Combine(_tmp, "p-" + Guid.NewGuid().ToString("N")); var encPath = plain + ".enc";
+        File.WriteAllBytes(plain, packZip);
+        PackCrypto.Encrypt(plain, encPath, password, 1000);
+        var enc = File.ReadAllBytes(encPath);
+        File.Delete(plain); File.Delete(encPath);
+        var pack = new PackRef(packId, new FileRef("pack.zip.enc", "http://host/" + packId + ".zip.enc", Sha(enc), enc.Length), Sha(packZip), 1000);
+        return (man with { Pack = pack }, enc);
+    }
+
+    [Fact]
+    public async Task Pack_installs_with_the_password_and_outlives_a_game_update()
+    {
+        var g1 = Zip(("game.exe", "v1")); var g2 = Zip(("game.exe", "v2")); var m = Zip(("manifest.json", "{}")); var p = Zip(("synty/a.glb", "model"));
+        var (man1, enc) = WithPack(Make("dev-1", "map-1", g1, m), "pack-1", p);
+        var man2 = Make("dev-2", "map-1", g2, m) with { Pack = man1.Pack };
+        var h = new FakeHandler(); h.Files[man1.Game.Url] = g1; h.Files[man2.Game.Url] = g2; h.Files[man1.Map.File.Url] = m; h.Files[man1.Pack!.File.Url] = enc;
+        var inst = Inst(h, _tmp);
+        var sink = new Sink();
+        await inst.InstallAsync(man1, sink, default, PackPass);
+        Assert.Equal("model", File.ReadAllText(Path.Combine(inst.PackDir, "synty/a.glb")));
+        Assert.Equal("pack-1", inst.Installed()!.PackId);
+        Assert.True(inst.PackInstalled(man1));
+        Assert.Contains(sink.Seen, x => x.Phase == InstallPhase.DownloadingPack);
+        h.Requests.Clear();
+        await inst.InstallAsync(man2, new Sink(), default, PackPass);
+        Assert.Equal("v2", File.ReadAllText(Path.Combine(inst.GameDir, "game.exe")));
+        Assert.Equal("model", File.ReadAllText(Path.Combine(inst.PackDir, "synty/a.glb")));
+        Assert.Equal("pack-1", inst.Installed()!.PackId);
+        Assert.DoesNotContain(h.Requests, r => r.Contains(".enc"));
+        Assert.False(Installer.PlanPack(inst.Installed(), man2, PackPass, true));
+    }
+
+    [Fact]
+    public async Task Wrong_pack_password_still_installs_the_game()
+    {
+        var g = Zip(("game.exe", "v1")); var m = Zip(("manifest.json", "{}")); var p = Zip(("synty/a.glb", "model"));
+        var (man, enc) = WithPack(Make("dev-1", "map-1", g, m), "pack-1", p);
+        var h = new FakeHandler(); h.Files[man.Game.Url] = g; h.Files[man.Map.File.Url] = m; h.Files[man.Pack!.File.Url] = enc;
+        var inst = Inst(h, _tmp);
+        var e = await Assert.ThrowsAsync<PackException>(() => inst.InstallAsync(man, new Sink(), default, "not the password"));
+        Assert.True(e.WrongPassword);
+        Assert.Equal("dev-1", inst.Installed()!.Version);
+        Assert.Null(inst.Installed()!.PackId);
+        Assert.False(Directory.Exists(inst.PackDir));
+        Assert.False(Directory.Exists(Path.Combine(_tmp, "dl")));
+        // the right password afterwards fetches the pack alone
+        h.Requests.Clear();
+        await inst.InstallAsync(man, new Sink(), default, PackPass);
+        Assert.True(inst.PackInstalled(man));
+        Assert.DoesNotContain(h.Requests, r => r.Contains("game.zip") || r.Contains("map.zip"));
+    }
+
+    [Fact]
+    public async Task Without_a_password_the_pack_is_not_requested()
+    {
+        var g = Zip(("game.exe", "v1")); var m = Zip(("manifest.json", "{}"));
+        var (man, enc) = WithPack(Make("dev-1", "map-1", g, m), "pack-1", Zip(("a", "b")));
+        var h = new FakeHandler(); h.Files[man.Game.Url] = g; h.Files[man.Map.File.Url] = m; h.Files[man.Pack!.File.Url] = enc;
+        var inst = Inst(h, _tmp);
+        await inst.InstallAsync(man, new Sink(), default, "  ");
+        Assert.Equal("dev-1", inst.Installed()!.Version);
+        Assert.DoesNotContain(h.Requests, r => r.Contains(".enc"));
+        Assert.False(inst.PackInstalled(man));
+    }
+
+    [Fact]
+    public async Task Pack_host_down_or_corrupt_download_still_installs_the_game()
+    {
+        var g = Zip(("game.exe", "v1")); var m = Zip(("manifest.json", "{}"));
+        var (man, enc) = WithPack(Make("dev-1", "map-1", g, m), "pack-1", Zip(("a", "b")));
+        var h = new FakeHandler(); h.Files[man.Game.Url] = g; h.Files[man.Map.File.Url] = m; // the pack url answers 404
+        var inst = Inst(h, _tmp);
+        var e = await Assert.ThrowsAsync<PackException>(() => inst.InstallAsync(man, new Sink(), default, PackPass));
+        Assert.False(e.WrongPassword);
+        Assert.Equal("dev-1", inst.Installed()!.Version);
+        enc[^1] ^= 1; h.Files[man.Pack!.File.Url] = enc; // a damaged download fails its checksum, not the password
+        e = await Assert.ThrowsAsync<PackException>(() => inst.InstallAsync(man, new Sink(), default, PackPass));
+        Assert.False(e.WrongPassword);
+        Assert.False(Directory.Exists(inst.PackDir));
+    }
+
+    [Fact]
+    public async Task New_pack_replaces_the_old_one()
+    {
+        var g = Zip(("game.exe", "v1")); var m = Zip(("manifest.json", "{}"));
+        var (man1, enc1) = WithPack(Make("dev-1", "map-1", g, m), "pack-1", Zip(("old.glb", "1")));
+        var (man2, enc2) = WithPack(Make("dev-1", "map-1", g, m), "pack-2", Zip(("new.glb", "2")));
+        var h = new FakeHandler(); h.Files[man1.Game.Url] = g; h.Files[man1.Map.File.Url] = m; h.Files[man1.Pack!.File.Url] = enc1; h.Files[man2.Pack!.File.Url] = enc2;
+        var inst = Inst(h, _tmp);
+        await inst.InstallAsync(man1, new Sink(), default, PackPass);
+        Assert.True(Installer.PlanPack(inst.Installed(), man2, PackPass, true));
+        await inst.InstallAsync(man2, new Sink(), default, PackPass);
+        Assert.True(File.Exists(Path.Combine(inst.PackDir, "new.glb")));
+        Assert.False(File.Exists(Path.Combine(inst.PackDir, "old.glb")));
+        Assert.Equal("pack-2", inst.Installed()!.PackId);
+    }
+
+    [Fact]
+    public void Manifest_pack_entry_is_optional_and_validated()
+    {
+        const string head = "{\"schema\":2,\"version\":\"v1\",\"channel\":\"stable\",\"commit\":\"c\",\"protocol\":1,"
+            + "\"platforms\":{\"linux\":{\"exe\":\"g\",\"game\":{\"name\":\"g.zip\",\"url\":\"u\",\"sha256\":\"s\",\"size\":1}}},"
+            + "\"map\":{\"id\":\"m\",\"file\":{\"name\":\"map.zip\",\"url\":\"u\",\"sha256\":\"s\",\"size\":1}}";
+        Assert.Null(Manifest.Parse(head + "}", "linux").Pack);
+        var pack = Manifest.Parse(head + ",\"pack\":{\"id\":\"p1\",\"plain_sha256\":\"ab\",\"iterations\":5,\"file\":{\"name\":\"p.enc\",\"url\":\"http://h/p.enc\",\"sha256\":\"s\",\"size\":9}}}", "linux").Pack;
+        Assert.Equal(("p1", "ab", 5, 9L), (pack!.Id, pack.PlainSha256, pack.Iterations, pack.File.Size));
+        Assert.Throws<FormatException>(() => Manifest.Parse(head + ",\"pack\":{\"id\":\"p1\",\"file\":{\"name\":\"p.enc\",\"url\":\"\",\"sha256\":\"s\",\"size\":9}}}", "linux"));
+    }
+
+    [Fact]
+    public void Settings_keep_the_pack_password()
+    {
+        new LauncherSettings { PackPassword = "  secret " }.Save(_tmp);
+        Assert.Equal("secret", LauncherSettings.Load(_tmp).PackPassword);
+    }
 }

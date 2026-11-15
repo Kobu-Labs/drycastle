@@ -2,7 +2,7 @@
 # MAP: the map folder the viewer, editor and shooter targets load (override with MAP=<dir>).
 MAP ?= out/village/map
 
-.PHONY: rozhlas thief-voices editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run patch-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-patches-smoke viewer-editor-smoke viewer-panel-smoke viewer-shape-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: rozhlas thief-voices private-pack editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run patch-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-patches-smoke viewer-editor-smoke viewer-panel-smoke viewer-shape-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -292,6 +292,10 @@ rozhlas:
 # Bake the thieves' voice lines from ~/downloads/New Recording*.mov into assets-private/audio/thieves/voice/ (scripts/make_thief_voices.py, chain: godot/shooter/data/thief_voice.json).
 thief-voices:
 	python3 -I scripts/make_thief_voices.py
+
+# The private asset pack for players: the runtime subset of assets-private/ -> out/private-pack/assets-private.zip + .json (scripts/make_private_pack.py; never publish it on GitHub).
+private-pack:
+	python3 -I scripts/make_private_pack.py
 
 shooter-test:
 	dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj

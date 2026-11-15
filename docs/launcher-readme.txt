@@ -8,8 +8,10 @@ DRYCASTLE LAUNCHER
             or open it, dismiss the warning, then System Settings > Privacy & Security > Open Anyway.
             (The game itself downloads without this prompt.)
 2. On first start it downloads the game and the map (about 100 MB). Later it only downloads what changed.
-3. Press Play. In the game, enter the server address on the connect screen (it is remembered).
+3. Private assets (characters, animals, voices): open Settings, type the asset pack password you got from the host, press Apply, then Back.
+   The launcher downloads them (about 120 MB, once). Without the password the game still runs, with placeholder models and no voices.
+4. Press Play. In the game, enter the server address on the connect screen (it is remembered).
 
-Settings (in the launcher): update channel (Stable or Dev), automatic updates, UI scale.
+Settings (in the launcher): update channel (Stable or Dev), automatic updates, UI scale, asset pack password.
 The game is installed to %LOCALAPPDATA%\Drycastle (Windows) or ~/.local/share/Drycastle (Linux) or ~/Library/Application Support/Drycastle (macOS). Delete that folder to uninstall.
 If the launcher cannot reach the internet you can still play the installed version.

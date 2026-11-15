@@ -5,7 +5,8 @@ using Drycastle.LauncherCore;
 namespace Drycastle.Launcher;
 
 /// <summary>
-/// The launcher screen: checks the release feed, downloads/updates the game and the map (LauncherCore), then starts the game.
+/// The launcher screen: checks the release feed, downloads/updates the game, the map and (with the pack password from Settings) the private
+/// asset pack (LauncherCore), then starts the game. The pack is optional: without it, or when it fails, the game still installs and plays.
 /// States (<see cref="LauncherFlow"/>): Checking, Ready, UpdateAvailable, Working (progress, Esc cancels the download), Failed (message + Try again; the installed version stays playable).
 /// Once the downloaded files are being swapped in (Installing) nothing can cancel it: the button says Installing and is disabled.
 /// Esc: closes Settings, cancels a running download, otherwise nothing (the launcher never quits without the Quit button).
@@ -22,7 +23,9 @@ public partial class LauncherApp : Control
     CancellationTokenSource? _cts, _checkCts;
 
     VBoxContainer _main = null!, _settingsBox = null!;
-    Label _version = null!, _status = null!, _error = null!, _detail = null!, _hint = null!;
+    Label _version = null!, _status = null!, _error = null!, _detail = null!, _hint = null!, _packNote = null!;
+    LineEdit _pack = null!;
+    CheckBox _packShow = null!;
     ProgressBar _bar = null!;
     Button _primary = null!, _settingsBtn = null!, _quit = null!, _retry = null!;
     OptionButton _channel = null!, _scale = null!;
@@ -75,6 +78,9 @@ public partial class LauncherApp : Control
         _error = new Label { ThemeTypeVariation = "Error", HorizontalAlignment = HorizontalAlignment.Center, AutowrapMode = TextServer.AutowrapMode.WordSmart, Visible = false };
         _main.AddChild(_error);
 
+        _packNote = new Label { ThemeTypeVariation = "Small", HorizontalAlignment = HorizontalAlignment.Center, AutowrapMode = TextServer.AutowrapMode.WordSmart, Visible = false };
+        _main.AddChild(_packNote);
+
         _primary = new Button { ThemeTypeVariation = "Primary", CustomMinimumSize = new Vector2(0, LauncherTheme.ButtonHeight * 1.25f), FocusMode = FocusModeEnum.All };
         _primary.Pressed += OnPrimary;
         _main.AddChild(_primary);
@@ -123,6 +129,14 @@ public partial class LauncherApp : Control
         _scale.ItemSelected += _ => OnSettingsChanged();
         box.AddChild(_scale);
 
+        box.AddChild(new Label { Text = S.T("set_pack"), ThemeTypeVariation = "Dim" });
+        _pack = new LineEdit { CustomMinimumSize = new Vector2(0, LauncherTheme.ButtonHeight), Secret = true, PlaceholderText = S.T("set_pack_placeholder"), SelectAllOnFocus = true };
+        _pack.TextChanged += _ => OnSettingsChanged();
+        box.AddChild(_pack);
+        _packShow = new CheckBox { Text = S.T("set_pack_show"), CustomMinimumSize = new Vector2(0, LauncherTheme.ButtonHeight) };
+        _packShow.Toggled += on => _pack.Secret = !on;
+        box.AddChild(_packShow);
+
         _dirtyNote = new Label { ThemeTypeVariation = "Small", HorizontalAlignment = HorizontalAlignment.Center, Visible = false, Text = S.T("unsaved") };
         box.AddChild(_dirtyNote);
         var row = new HBoxContainer();
@@ -151,6 +165,8 @@ public partial class LauncherApp : Control
             _channel.Selected = _settings.Channel == Channels.Dev ? 1 : 0;
             _auto.ButtonPressed = _settings.AutoUpdate;
             _scale.Selected = Math.Max(0, Array.IndexOf(Scales, _settings.UiScale));
+            _pack.Text = _settings.PackPassword;
+            _packShow.ButtonPressed = false;
             _loadingSettings = false;
             RefreshDirty();
         }
@@ -163,11 +179,12 @@ public partial class LauncherApp : Control
     Button _apply = null!, _revert = null!;
     Label _dirtyNote = null!;
     bool _discardArmed;
-    string _checkedChannel = Channels.Stable;
+    string _checkedChannel = Channels.Stable, _checkedPack = "";
 
     string DraftChannel => _channel.Selected == 1 ? Channels.Dev : Channels.Stable;
     int DraftScale => Scales[Math.Max(0, _scale.Selected)];
-    bool Dirty => DraftChannel != _settings.Channel || _auto.ButtonPressed != _settings.AutoUpdate || DraftScale != _settings.UiScale;
+    string DraftPack => _pack.Text.Trim();
+    bool Dirty => DraftChannel != _settings.Channel || _auto.ButtonPressed != _settings.AutoUpdate || DraftScale != _settings.UiScale || DraftPack != _settings.PackPassword;
 
     /// <summary>Controls edit a draft; the UI scale previews live. Apply saves, Revert restores the saved values.</summary>
     void OnSettingsChanged()
@@ -191,6 +208,7 @@ public partial class LauncherApp : Control
         _settings.Channel = DraftChannel;
         _settings.AutoUpdate = _auto.ButtonPressed;
         _settings.UiScale = DraftScale;
+        _settings.PackPassword = DraftPack;
         _settings.Save(_installer.Root);
         _discardArmed = false;
         ApplyScale();
@@ -204,6 +222,7 @@ public partial class LauncherApp : Control
         _channel.Selected = _settings.Channel == Channels.Dev ? 1 : 0;
         _auto.ButtonPressed = _settings.AutoUpdate;
         _scale.Selected = Math.Max(0, Array.IndexOf(Scales, _settings.UiScale));
+        _pack.Text = _settings.PackPassword;
         _loadingSettings = false;
         _discardArmed = false;
         ApplyScale();
@@ -217,8 +236,10 @@ public partial class LauncherApp : Control
         if (Dirty && !_discardArmed) { _discardArmed = true; RefreshDirty(); return; }
         if (Dirty) RevertSettings();
         ShowSettings(false);
-        if (_settings.Channel != _checkedChannel) _ = CheckAsync();
+        if (SettingsNeedCheck) _ = CheckAsync(); // another channel, or a new pack password to try
     }
+
+    bool SettingsNeedCheck => _settings.Channel != _checkedChannel || _settings.PackPassword != _checkedPack;
 
     void ApplyScale() => GetWindow().ContentScaleFactor = _settings.UiScale / 100f;
 
@@ -235,6 +256,7 @@ public partial class LauncherApp : Control
         _checkCts = new CancellationTokenSource();
         var ct = _checkCts.Token;
         _checkedChannel = _settings.Channel;
+        _checkedPack = _settings.PackPassword;
         Render();
         var have = _installer.Installed();
         Manifest? latest;
@@ -264,7 +286,8 @@ public partial class LauncherApp : Control
         _latest = latest;
         if (_latest is null) { Fail(S.T("no_release", _settings.Channel), null); return; }
         var (game, map, _) = Installer.Plan(have, _latest, Directory.Exists(Path.Combine(_installer.GameDir, "map")));
-        if (!game && !map) { _flow.Finish(LauncherState.Ready); Render(); return; }
+        var pack = Installer.PlanPack(have, _latest, _settings.PackPassword, Directory.Exists(_installer.PackDir));
+        if (!game && !map && !pack) { _flow.Finish(LauncherState.Ready); Render(); return; }
         if (_settings.AutoUpdate || have is null) { _ = InstallAsync(); return; }
         _flow.Finish(LauncherState.UpdateAvailable);
         Render();
@@ -278,7 +301,9 @@ public partial class LauncherApp : Control
         Render();
         var have = _installer.Installed();
         var plan = Installer.Plan(have, m, Directory.Exists(Path.Combine(_installer.GameDir, "map")));
-        long total = Math.Max(1, plan.Bytes);
+        var password = _settings.PackPassword;
+        var planPack = Installer.PlanPack(have, m, password, Directory.Exists(_installer.PackDir));
+        long total = Math.Max(1, plan.Bytes + (planPack ? m.Pack!.File.Size : 0));
         long before = 0;
         var progress = new Progress<InstallProgress>(p =>
         {
@@ -290,18 +315,26 @@ public partial class LauncherApp : Control
                 _status.Text = S.T("installing"); _detail.Text = ""; _bar.Value = 1000;
                 return;
             }
-            long baseBytes = p.Phase == InstallPhase.DownloadingMap && plan.Game ? m.Game.Size : 0;
+            // downloads run in the order game, map, pack: the bar counts the ones already done
+            long baseBytes = (p.Phase != InstallPhase.DownloadingGame && plan.Game ? m.Game.Size : 0)
+                + (p.Phase == InstallPhase.DownloadingPack && plan.Map ? m.Map.File.Size : 0);
             before = baseBytes + p.Done;
             _bar.Value = 1000.0 * Math.Min(before, total) / total;
-            _status.Text = S.T(p.Phase == InstallPhase.DownloadingGame ? "dl_game" : "dl_map", Mb(p.Done), Mb(p.Total));
+            _status.Text = S.T(p.Phase == InstallPhase.DownloadingGame ? "dl_game" : p.Phase == InstallPhase.DownloadingMap ? "dl_map" : "dl_pack", Mb(p.Done), Mb(p.Total));
             _detail.Text = S.T("protocol", m.Protocol) + "   |   " + m.Version;
         });
         try
         {
-            await _installer.InstallAsync(m, progress, _cts.Token);
+            await _installer.InstallAsync(m, progress, _cts.Token, password);
             _flow.Finish(LauncherState.Ready);
             Render();
-            if (_settings.Channel != _checkedChannel) _ = CheckAsync(); // the channel was changed while the install ran (CloseSettings could not check then)
+            if (SettingsNeedCheck) _ = CheckAsync(); // the channel or the pack password was changed while the install ran (CloseSettings could not check then)
+        }
+        catch (PackException e)
+        {
+            // the game and the map are installed; only the private assets are missing
+            GD.PrintErr("asset pack: " + e);
+            Fail(e.WrongPassword ? S.T("pack_wrong") : S.T("pack_failed", e.Message), S.T("pack_hint"));
         }
         catch (OperationCanceledException)
         {
@@ -382,6 +415,12 @@ public partial class LauncherApp : Control
             case LauncherState.Working: _primary.Text = S.T(_flow.Installing ? "installing" : "cancel"); _bar.Value = 0; _status.Text = ""; break;
             case LauncherState.Failed: _primary.Text = S.T("play"); break;
         }
+        // the private asset pack: say when it is there, and what to do when it is locked (nothing is shown for a release without one, or mid-install)
+        var packKey = _latest?.Pack is null || s is LauncherState.Working or LauncherState.Checking ? null
+            : _installer.PackInstalled(_latest) ? "pack_installed"
+            : string.IsNullOrWhiteSpace(_settings.PackPassword) ? "pack_locked" : null;
+        _packNote.Visible = packKey != null;
+        _packNote.Text = packKey != null ? S.T(packKey) : "";
         _hint.Text = S.T(_flow.HintKey(_settingsBox.Visible)); // the settings hint stays while Settings is open
         if (!_settingsBox.Visible)
         {

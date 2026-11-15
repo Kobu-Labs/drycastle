@@ -50,6 +50,17 @@ git push origin main:release       # first run creates the branch (and deploys);
 Optional hardening: required reviewers on the `production` environment (Settings > Environments), and a branch rule on `release` that requires a pull request.
 Rollback: re-run the workflow on an older commit of `release`, or restore a backup (see "Backups" below).
 
+## Release checklist (the usual path)
+
+1. `make shooter-test` green; everything committed on `main`.
+2. Map changed (`make map`): `scripts/publish-map.sh`, commit `map-version.txt`.
+3. `assets-private/` changed (or first time): `SSH_OPTS="-i ~/.ssh/drycastle-vps -o IdentitiesOnly=yes" scripts/publish-private-pack.sh root@159.195.244.164`,
+   commit `private-pack.json` (see `docs/launcher.md`, "The private asset pack"). The VPS firewall (host and provider) must allow **TCP 27080**.
+   The password is in `assets-private/pack-password.txt`; send it to the players.
+4. Launcher changed: `git tag launcher-vX.Y.Z && git push origin launcher-vX.Y.Z`; players download the new launcher zip once.
+5. PR `main` -> `release`, merge: tests, builds, server deploy (restarts the server, which then reads the uploaded `assets-private/`), publish.
+Order matters: pack and map before the release (its manifest names them), launcher tag before or with it.
+
 ## Cutting a release (manual path)
 
 1. Make sure `main` is green: `make shooter-test` (and `make test` for the pipeline if the map changed).
