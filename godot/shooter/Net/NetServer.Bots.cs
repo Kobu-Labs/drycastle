@@ -17,7 +17,7 @@ namespace Drycastle.Shooter;
 /// dummies and the citizens.
 /// </para>
 /// <para>
-/// Moving: each bot heads for the nearest other living player (<see cref="BotGoal"/>) along a route from
+/// Moving: each bot heads for the nearest living enemy (<see cref="BotGoal"/>) along a route from
 /// <see cref="BotNav"/>, the navigation mesh baked from the map colliders at start. Routes cost 13-16 ms, so a background worker finds
 /// them: a bot sends its request (<see cref="ServeBotRoute"/>), the answers are applied on the tick thread at one point of the tick (<see cref="NavDrain"/>). If the
 /// mesh cannot be built the bots stand where they spawn.
@@ -40,13 +40,15 @@ public partial class NetServer
 
     /// <summary>Every living player as the bots see them, rebuilt once a tick and shared by all the brains.</summary>
     readonly List<BotContact> _botContacts = new();
+    /// <summary>Who each bot may fight: the contacts minus the bot's teammates in team deathmatch (<see cref="BotEnemies"/>).</summary>
+    readonly BotEnemies _botEnemies = new();
     BotWorld? _botWorld;
 
     sealed class BotWorld : IBotWorld
     {
         readonly NetServer _s;
         public BotWorld(NetServer server) => _s = server;
-        public IReadOnlyList<BotContact> Enemies(ushort self) => _s._botContacts; // the shared list: the brain skips itself
+        public IReadOnlyList<BotContact> Enemies(ushort self) => _s._botEnemies.For(_s._match, self); // the brain skips itself where the list holds it
         public bool Clear(NVec3 from, NVec3 to) => _s.BotLineClear(from, to);
         public NVec3? Goal(ushort self) => _s.BotGoal(self);
     }
@@ -120,21 +122,8 @@ public partial class NetServer
         }
     }
 
-    /// <summary>Where the action is for a bot: the nearest other living player. Null when it is alone.</summary>
-    NVec3? BotGoal(ushort self)
-    {
-        NVec3? best = null;
-        var bestD = float.PositiveInfinity;
-        NVec3 me = default;
-        foreach (var c in _botContacts) if (c.Id == self) { me = c.Feet; break; }
-        foreach (var c in _botContacts)
-        {
-            if (c.Id == self) continue;
-            var d = NVec3.DistanceSquared(c.Feet, me);
-            if (d < bestD) { bestD = d; best = c.Feet; }
-        }
-        return best;
-    }
+    /// <summary>Where the action is for a bot: the nearest living enemy (no teammate in team deathmatch). Null when there is none.</summary>
+    NVec3? BotGoal(ushort self) => _botEnemies.Goal(_match, self);
 
     /// <summary>Sends the waiting route requests to the worker (a bot with one out sends no second; the bots in turn, at most <see cref="MaxBotRoutesInFlight"/> out), and logs the cost of the routes every ten seconds.</summary>
     void ServeBotRoute(List<Client> bots)
@@ -192,6 +181,7 @@ public partial class NetServer
         foreach (var o in _byId.Values)
             if (_match.Get(o.Id)?.Life == PlayerLife.Alive)
                 _botContacts.Add(new BotContact(o.Id, N(o.Body.GlobalPosition), BodyStanceOf(o), _match.IsProtected(o.Id)));
+        _botEnemies.Rebuild(_match, _botContacts);
         _botWorld ??= new BotWorld(this);
 
         foreach (var b in bots)

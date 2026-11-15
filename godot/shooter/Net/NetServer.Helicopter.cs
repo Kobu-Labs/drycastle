@@ -59,14 +59,14 @@ public partial class NetServer
 
     NVec3? HelicopterPosition(ushort entityId) => _match.Entities.StateOf(entityId)?.Position;
 
-    /// <summary>Every live player except the owner, aimed at chest height, with the stance that sets their exposure.</summary>
+    /// <summary>Every live player except the owner and the owner's teammates, aimed at chest height, with the stance that sets their exposure.</summary>
     IReadOnlyList<HelperCandidate> HelperEnemies(ushort owner)
     {
         // one buffer for every helper: its gunner reads the enemies inside its own tick and keeps none (HelicopterGunner)
         _helperEnemies.Clear();
         var targets = LiveTargets();
         foreach (var t in targets)
-            if (t.Id != owner && !NonEnemyTargets.IsNonEnemy(t.Id)) _helperEnemies.Add(new HelperCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM, t.Stance));
+            if (BotEnemies.IsEnemy(_match, owner, t.Id) && !NonEnemyTargets.IsNonEnemy(t.Id)) _helperEnemies.Add(new HelperCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM, t.Stance));
         ReturnTargets(targets);
         return _helperEnemies;
     }

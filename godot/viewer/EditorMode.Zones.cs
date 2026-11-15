@@ -380,7 +380,7 @@ public partial class EditorMode
 
     static bool CutCovers(ZoneCut c, RulePart p)
     {
-        foreach (var v in p.Abs)
+        foreach (var v in ObjectEdits.Despiked(p.Abs)) // cuts are recorded despiked: the spike tips of the outline stick out of them
         {
             if (PointInRing(c.Ring, v.x, v.y)) continue;
             var near = false;
@@ -404,14 +404,16 @@ public partial class EditorMode
     /// </summary>
     bool EditRuleZone(ZoneInfo z, string? kind, List<(double x, double y)>? ring, string message)
     {
-        if (ObjectEdits.RingProblemCode(z.Points) is var code && code != ObjectEdits.RingOk) { Say($"{z.Label} cannot be edited: its outline {RingMessage(code)}", true); return false; }
+        var outline = ObjectEdits.Despiked(z.Points); // zero-width spikes of the rule outline would fail the ring check
+        if (ObjectEdits.RingProblemCode(outline) is var code && code != ObjectEdits.RingOk) { Say($"{z.Label} cannot be edited: its outline {RingMessage(code)}", true); return false; }
+        if (ring != null && ring.Count == z.Points.Count && ring.SequenceEqual(z.Points)) ring = outline;
         string? newId = null;
         var ok = Mutate(root =>
         {
             if (root.GetValueOrDefault("zone_cuts") is not Obj cuts) root["zone_cuts"] = cuts = EditsFile.NewObject();
             var cut = EditsFile.NewObject();
             cut["kind"] = z.Kind;
-            cut["polygon"] = PolygonValue(z.Points);
+            cut["polygon"] = PolygonValue(outline);
             cuts[NextId(root, "zone_cuts", "ZC-")] = cut;
             if (ring != null)
             {
@@ -729,7 +731,7 @@ public partial class EditorMode
     {
         ZoneList();
         var zones = ids.Distinct().Select(id => _zoneById.GetValueOrDefault(id)).Where(z => z != null).Select(z => z!).ToList();
-        var kept = zones.Where(z => z.FromRule && ObjectEdits.RingProblemCode(z.Points) != ObjectEdits.RingOk).ToList();
+        var kept = zones.Where(z => z.FromRule && ObjectEdits.RingProblemCode(ObjectEdits.Despiked(z.Points)) != ObjectEdits.RingOk).ToList();
         var todo = zones.Except(kept).ToList();
         if (todo.Count == 0) { Say(kept.Count > 0 ? $"nothing deleted: the outline of {kept[0].Label}{(kept.Count > 1 ? $" and {kept.Count - 1} more" : "")} cannot be cut" : "nothing to delete: those zones no longer exist", true); return false; }
         var ok = Mutate(root =>
@@ -742,7 +744,7 @@ public partial class EditorMode
                 if (root.GetValueOrDefault("zone_cuts") is not Obj cuts) root["zone_cuts"] = cuts = EditsFile.NewObject();
                 var cut = EditsFile.NewObject();
                 cut["kind"] = z.Kind;
-                cut["polygon"] = PolygonValue(z.Points);
+                cut["polygon"] = PolygonValue(ObjectEdits.Despiked(z.Points));
                 cuts[NextId(root, "zone_cuts", "ZC-")] = cut;
                 n++;
             }
