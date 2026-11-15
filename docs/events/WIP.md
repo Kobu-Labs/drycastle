@@ -12,7 +12,7 @@ Branch `events` = `main` + `rozhlas` (fast-forwarded, they are the same commit `
 | #260 Layered ground types with attributes | implemented, merged into `events` | `ground-attributes` | ADR 0015. Pipeline output verified byte-identical. Editor UI compiles, **never run** |
 | #261 Inventory: headgear slot, Bigfoot head, pickup limit | implemented, merged | `inventory-headgear` | ADR 0016, protocol 28, `/give`. Game **never run** |
 | #262 Intel room and NPC announcements | implemented, merged | `intel-room` | ADR 0017, protocol 29, `/event intel`. Needs `make export`; game **never run**. No NPC built |
-| #263 Runtime attribute areas: baked candidate points | implemented, branch not merged | `event-spawn-points` | option B: `attribute_points.json`, `NetServer.PickEventSpawn("bigfoot")`. Game **never run** |
+| #263 Runtime zones: baked candidate points | implemented, branch not merged | `event-spawn-points` | option B: `zone_points.json` (ADR 0022), `NetServer.PickEventSpawn("bigfoot")`. Game **never run** |
 | #264 Bigfoot event | implemented, on its own branch (not merged into `events`) | `bigfoot-event` | `docs/shooter-v2.md` 7c, protocol 32, `bigfoot.json`. Builds, `ShooterCore.Tests` pass. Game **never run** |
 | #266 to #269 Worn items drawn, bag, ground items, Equipment screen (F), corpse chooser list | implemented, merged | `items-worn-render`, `items-bag-ground`, `equipment-screen` | ADR 0018, protocol 31. Game **never run** |
 | #265 Private asset pack (VPS download, launcher password) | not started | | independent |
@@ -33,9 +33,7 @@ Bigfoot (first event, ticket #264):
 - Started with `/event bigfoot`, ended with `/event current end`. **No scheduler and no announcement in this ticket** (both postponed). Reward is the footsteps to a corpse carrying the Bigfoot head, plus XP. The event waits for the head (#261), which is done.
 
 Spawn areas (tickets #260, #263):
-- A ground type is a bundle of attributes (Appearance, Spawning, Water, Events). Areas stack; the topmost type with a terrain attribute decides the look, other attributes add up. First events attribute: `event_spawn: bigfoot`.
-- **Decided (#263):** option B. The pipeline bakes candidate points per runtime attribute (allowlist `runtime_points` in `rules.yaml`, first `event_spawn: bigfoot`) into `attribute_points.json`; the server picks one with `NetServer.PickEventSpawn`. Count is a density rule in data; only buildings and water need clearance (Bigfoot tramples trees). See `docs/pipeline.md`, "Runtime attributes".
-- #260 stores `spawns` and `event_spawn` of stacked layers (`ground_layers` in `parcels.json`). #263 resolves `event_spawn`; a `spawns` carried by a layer is still stored and unused (the props stage reads the ground area's type only).
+- ADR 0022: a ground type is terrain only; where an event may spawn is a **zone** of kind `bigfoot` (drawn, or by rule). The pipeline bakes candidate points per zone kind (`zones` in `rules.yaml`) into `zone_points.json`; the server picks one with `NetServer.PickEventSpawn`. Count is a density rule in data; only buildings and water need clearance (Bigfoot tramples trees). See `docs/pipeline.md`, "Zones".
 
 Private assets (ticket #265):
 - Paid packs (Synty) must never enter this **public** repo or public GitHub Releases. Plan: gitignored `assets-private/`, a CI guard against tracking it, a pack published to the VPS and downloaded by the launcher with a password, a fallback to the CC0 placeholder models.
@@ -62,7 +60,7 @@ Open:
 
 ## To check by hand (no agent ran the game)
 
-1. Editor, #260: Ground types tool (attribute groups, Create layer), Regions page (ground stack, Up/Down), the overlay (`V` toggles it). Needs screenshots at 1280x720 and 3840x2160 and a keyboard-only pass, see `docs/ground-types-ui-notes.md` "Not verified".
+1. Editor, ADR 0022: Ground tool (types, patches, ground map) and Zones tool. Needs screenshots at 1280x720 and 3840x2160 and a keyboard-only pass, see `docs/patches-zones-ui-notes.md`.
 2. `make export` (the hangar `o-0582` must be in `objects.json`; the intel room moved from the bunker `w378900206` to the military hangar, about (188, -41) local metres, ADR 0017 amended), then as admin `/event intel`: toast and chat line, then in through the small door of the hangar's SSW end (local +z end; the pack must be installed) to the screen on the far end wall. Check which end is which, that the small door opens and the screen is not buried in the door panel (numbers in `intel.json` `room`). Also `make shooter-intel-shots DIR=out/intel`.
 3. `/give bigfoot_head`, then check headshots become body hits, death drops it on the corpse, the third pickup still works and the fourth crumbles.
 4. Bigfoot (#264), as admin on a server with `--bots` and a client or two: `/event bigfoot` (the log says FALLBACK), then the giant is the right size, faces its way of walking, and its clips play; shoot it (the marker shows, headshots no extra, a rocket counts a lot); watch the phases (a roar), the stomp telegraph and ring (jump it), logs, standing a car beside it (it throws it, the driver is not rubber-banded for the whole flight), a grab and launch (the held player's view, the landing), die to it as the only player (it heals and waits), `/event current end` (chat line, XP in the end-of-round summary, 8 s later the footsteps, follow them to the corpse, take the head from it), `/event current cancel`.

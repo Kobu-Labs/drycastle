@@ -1,3 +1,7 @@
+---
+status: superseded by ADR 0022
+---
+
 # Ground types are bundles of attributes, and ground areas stack
 
 Decided with the user for the Bigfoot event (issue #260; the events themselves are `docs/events/README.md` and issue #263). Events need areas that sit on top of existing terrain ("Bigfoot may spawn here", over a forest). Ground areas were exclusive: each point had one ground type, and that type also decided terrain colour and detail, so a marker type would have repainted the forest and displaced what grows on it.

@@ -34,7 +34,7 @@ One map is built: the village inside its outline (`polygon`, see below). Its pat
 | work files | `data/village/work/` |
 | export, previews | `out/village/map/`, `out/village/preview/` |
 
-`make map-update` re-runs only `props`, `detail` and `export` (after `edits.json` changed: placed objects, regions, fences). It needs one full `make map` first, does not fetch, run the orthophoto stages or rebuild terrain/roads, and plants the trees again from the cached `ortho/trees.json`. Same output folder as `make map`. Only regions changed: `make detail export` is enough.
+`make map-update` re-runs only `props`, `detail` and `export` (after `edits.json` changed: placed objects, ground patches, zones, fences). It needs one full `make map` first, does not fetch, run the orthophoto stages or rebuild terrain/roads, and plants the trees again from the cached `ortho/trees.json`. Same output folder as `make map`. Only zones changed: `make export` is enough.
 | `map_version` | `<MAP_VERSION_BASE>-village` (`export.py`) |
 
 The committed registry `registry/parcels.registry.json` is the one
@@ -74,22 +74,23 @@ forest, water, the land the roads lie on, gardens of no property) is not kept as
 `ground` in `rules.yaml`) cuts it into **ground areas** by type instead, written to `parcels.json` under `ground` in the
 shape of a parcel (`id` `A-0001`..., `kind` = the type, polygon, area, anchor, chunk):
 
-* a region of `edits.json` with a `ground` stack (a list of type names, lowest first) is a **hand-drawn ground area**:
-  its polygon outside the parcels is ground of the topmost type of the stack that carries terrain attributes, whatever
-  the rules say (where two overlap the higher ID wins). Draw the region in the editor, then give it a stack there or with
-  the MCP tool `set_region_ground` (or `create_region` with `ground`). The editor paints it as a preview at once; the
-  real ground (terrain colour, detail, trees) comes with the next full run (`make map`), and the baked map does not paint
-  it as a region. A stack whose types carry no terrain attribute makes no ground area at all, see "Ground attributes
-  and stacks";
+* a **ground patch** of `edits.json` (`ground_patches`, `GP-0001`...) is a **hand-drawn ground area** of exactly one ground
+  type: its polygon outside the parcels is ground of that type, whatever the rules say (where two overlap the higher ID
+  wins). Draw the patch in the editor's Ground tool, or with the MCP tool `create_ground_patch`. The editor paints it as a
+  preview at once; the real ground (terrain colour, detail, trees) comes with the next full run (`make map`). A patch of a
+  water type is no ground area but a body of water, see "Ground patches" below;
 * then the types are tried in the order of `ground.types`, each takes what the ones above left of its source: `dike`
   (the parcels and clips of `detail.dike`), `water` and `forest` (the OSM natural/landuse polygons, with their own
   outlines), `allotments`, `orchard`, `meadow`, `village` (OSM `landuse=residential`: street sides, greens);
 * what no type claims is the default, `field`.
 
-A type is a named bundle of attributes, one entry of `ground.types`: its source (`osm` or `rule`, or none) and the
+`export` copies these areas to `parcels.json` `ground_areas` (`id`, `kind`, `area`, `polygon`) for the editor's ground map.
+
+A type is a named bundle of terrain attributes, one entry of `ground.types`: its source (`osm` or `rule`, or none) and the
 `attributes` it carries: terrain `colours`, detail `recipe` (field, forest, village, dike) with optional `detail`
 settings laid over that recipe's section for this type only (a meadow is the field recipe without furrows and
-headlands), `water`, `spawns`, `event_spawn` (see "Ground attributes and stacks"). A new type is one new entry. There is no road ground: a road is the OSM ribbon on top of whatever lies under it.
+headlands), `water` (see "Ground attributes"). A new type is one new entry. A type is terrain only: nothing a game system
+reads (where players spawn, where wildlife lives) is a property of the ground, that is a zone (see "Zones"). There is no road ground: a road is the OSM ribbon on top of whatever lies under it.
 Ground areas have no fence and no edits of their own, and their IDs are only stable while the inputs are. Trees are not
 part of a type: they come from the orthophoto only (`docs/ortho.md`).
 
@@ -98,38 +99,80 @@ land). `ground.carve` in `rules.yaml` lists such parcels: the parcel keeps its I
 grown by `margin_m` (a slim yard, mitre corners, never over another parcel), and the rest of its land becomes ground like
 any other. Today P-0073 (the dike strip, with a hut) and P-0754 (a 13 ha field with one building).
 
-### Ground attributes and stacks (ADR 0015)
+### Ground attributes (ADR 0015, 0022)
 
 A ground type ticks the attributes it carries, under `attributes` of its entry. The attributes are a fixed catalog in
 code (`ground_attributes.py`, mirrored in `godot/viewer/GroundTypeEdits.cs`); the editor groups them by relation:
 
-| Group | Attribute | Value | Stacks |
-|---|---|---|---|
-| Appearance | `colours` | 1-6 `#rrggbb` terrain shades | terrain |
-| Appearance | `recipe` | `field`, `forest`, `village`, `dike` (none: no detail) | terrain |
-| Appearance | `detail` | settings laid over that recipe's `detail` section | terrain |
-| Water | `water` | `true`: a body of water (`water.json`), no detail | terrain |
-| Spawning | `spawns` | `true`: players may spawn on it | adds up |
-| Events | `event_spawn` | the events that may spawn there (`bigfoot`) | adds up |
+| Group | Attribute | Value |
+|---|---|---|
+| Appearance | `colours` | 1-6 `#rrggbb` terrain shades |
+| Appearance | `recipe` | `field`, `forest`, `village`, `dike` (none: no detail) |
+| Appearance | `detail` | settings laid over that recipe's `detail` section |
+| Water | `water` | `true`: a body of water (`water.json`), no detail |
 
-* **Terrain attributes are decided by one type per point.** A ground area still has one `kind`, the topmost type of
-  its stack that carries any terrain attribute (colours, recipe, detail or water), and the terrain, detail and water
-  stages read that type exactly as they read the single type before; they have no stacking logic. A type without a
-  terrain attribute is never that type, so it can lie on top of forest without changing how the forest looks.
-* **The other attributes add up** over every stacked type (`ground_attributes.accumulate`): `spawns` if any carries it, the union of the `event_spawn` lists.
-* **Stacks.** A region's `ground` is a list of type names, lowest first, so `["forest", "bigfoot_zone"]` is forest that
-  also carries an event. Between regions the higher ID is on top, as for paint. `ground.drawn_ground` turns the
-  regions into ground areas (the topmost terrain type of each region, the higher ID winning an overlap) and into
-  **ground layers**: for every region, the types of its stack that carry attributes that add up, except the one that
-  decides its terrain (its ground area is that type). `parcels.json` lists them under `ground_layers` as `{id (L-0001...),
-  region, types, polygon}` over the region's whole polygon (not cut by the parcels), and only when there are some. A
-  point carries the types of the ground area under it plus those of every layer over it.
-* **Where the layers are used.** The editor draws them as a translucent, toggleable overlay (`docs/viewer-and-editor.md`).
-  The export stage bakes the `event_spawn` of the layers (and of the ground areas of a type that carries it) into candidate
-  points for the server, see "Runtime attributes (`attribute_points.json`)" under Export. The props stage still reads
-  `spawns` of the type of the ground area only: a `spawns` carried by a layer is stored but adds no player spawn points yet.
-* A type with an OSM source (`osm`) or a `rule` has to carry a terrain attribute: the land it takes has to look like
-  something. (A type with only events that should follow OSM land would need its own overlay of that land.)
+* **Every point has exactly one ground type.** A ground area has one `kind`, and the terrain, detail and water stages read
+  that type. There are no stacks: what an area means in play is a separate overlay, the zones.
+* A type with only `colours` (no recipe) is valid: it is the ground of a colour (no detail patches, no clutter). That is how
+  a colour that no type has is drawn: as a ground type of your own, then a patch of it.
+* A type with an OSM source (`osm`) or a `rule` has to carry an attribute: the land it takes has to look like
+  something.
+
+### Ground patches (`edits.json` `ground_patches`)
+
+```json
+"ground_patches": {"GP-0001": {"type": "meadow", "polygon": [[x, y], ...]},
+                   "GP-0023": {"type": "water", "polygon": [[x, y], ...], "water_y": 186.4}}
+```
+
+`GP-` and 4 or more digits (`G-` is a property group, `P-` a parcel, `A-` a ground area). `type` is a ground type of
+`rules.yaml` or of `ground_types`, not a deleted one. `polygon` is one ring in absolute S-JTSK metres (x east, y north), at
+least 3 corners, no repeated closing point, no self-intersection. `water_y` is required when the type carries the `water`
+attribute (the flat surface of the body of water, metres on the terrain datum) and refused otherwise.
+
+* **Ground.** `ground.drawn_ground` turns the patches into ground areas of their type (the higher ID winning an overlap),
+  before the rule types, never into a parcel. The terrain, detail, trees and everything else follow from the type.
+* **Water.** A patch of a water type is no ground area. It makes a body of water exactly as a `water_y` shape does: the
+  drawn outline is only a hint, the water lies wherever the terrain below the outline is under `water_y`
+  (`water.wet_area`), and the body goes to `water.json` (swimming, drowning, the shooter's water surface; the body's `id`
+  is the patch id, `GP-0023`, with `.1`, `.2` when the water has several pieces) with its bed at the lowest terrain inside.
+  It is also baked into the chunk files as the flat node `patch_<ID>` (see "Ground patches (preview and water)").
+* **Colours.** A patch has no colour of its own: it is in the first colour of its type (`patches.type_colour`).
+
+### Zones (ADR 0022)
+
+A **zone kind** says what a marked area means in play. The kinds are a fixed catalog in code (`zones.KINDS`; a kind needs
+something in the pipeline or the game that reads it): `bigfoot` (group event), `player_spawn` (group player), and one kind per
+wild species (group wildlife: `deer`, `doe`, `stag`, `moose`, `boar`, `bear`, `fox`, `wolf`, `rabbit`, `raccoon`, `skunk`;
+the ids of `godot/shooter/data/animals.json`, a test checks it). A **zone** is an area of one kind. A zone never changes the
+terrain (a zone over a forest does not cut the forest), and zones overlap freely and add up. Zones come from two places that
+are the same to the export:
+
+* a **drawn zone**: `edits.json` `zones`, `{"Z-0001": {"kind": "bigfoot", "polygon": [[x, y], ...]}}`. `Z-` and 4 or more
+  digits; `kind` is in the catalog; the polygon follows the rules of a patch polygon. Draw it in the editor's Zones tool or
+  with `create_zone`.
+* a **rule zone**: the kind's `where_ground` in `rules.yaml` `zones` lists ground types, and the kind applies wherever a
+  ground area of one of them lies (deer wherever there is forest), nothing is drawn.
+
+`rules.yaml` `zones` has one section per kind, the numbers and the rule zone of it:
+
+```yaml
+zones:
+  bigfoot: {m2_per_point: 1000, min_points: 30, max_points: 300, building_clearance_m: 10, water_clearance_m: 5}
+  player_spawn: {where_ground: [allotments, orchard, meadow, village, field]}
+  stag: {m2_per_point: 20000, min_points: 5, max_points: 80, building_clearance_m: 15, water_clearance_m: 5, where_ground: [forest]}
+```
+
+Every kind but `player_spawn` has all five numbers and may have `where_ground` (a list of ground type names that exist: the
+export refuses an unknown one); `player_spawn` has `where_ground` only. A kind that is in the catalog but has no section
+does nothing (a drawn zone of it is warned about at the export); a key or kind that does not exist is an error of the
+stage, never a silent skip (`zones.rules`).
+
+* **Player spawn.** The props stage (`props.make_spawns`, `spawns.json`) takes spawn candidates on open ground: the parcels of
+  `spawns.ground_kinds`, the ground areas of the types of the `player_spawn` rule zone, and the part of every other ground
+  area that lies inside a drawn `player_spawn` zone (`zones.drawn_spawn_units`). `player_spawn` is not exported as points.
+* **Every other kind** becomes candidate points for the server at the export, see "Zone points (`zone_points.json`)" under
+  Export. Ground areas are never cut by a zone.
 
 ### Ground types of your own (`edits.json` `ground_types`)
 
@@ -140,14 +183,15 @@ a value `null` removes that attribute of the type of the rules (the type stops c
 
 ```json
 "ground_types": {
- "meadow": {"attributes": {"colours": ["#8cb86a", "#82ad62"], "detail": {"tone_per_ha": 6}, "spawns": null}},
+ "meadow": {"attributes": {"colours": ["#8cb86a", "#82ad62"], "detail": {"tone_per_ha": 6}, "recipe": null}},
  "dunes": {"attributes": {"colours": ["#d8c38a"], "recipe": "field"}, "osm": {"natural": ["sand"]}},
- "bigfoot_zone": {"attributes": {"event_spawn": ["bigfoot"]}},
+ "paint_e2b92c": {"attributes": {"colours": ["#e2b92c"]}},
  "orchard": {"deleted": true}
 }
 ```
 
-and a region over a forest can then carry `"ground": ["forest", "bigfoot_zone"]`.
+and a patch can then be of type `dunes`. `paint_e2b92c` is the ground type of a colour (no recipe), how a paint colour
+that no type has is drawn.
 
 * **Merge rule** (`ground.ground_types(rules_path, edits_path=None)`, `merge_ground_types`): the types of
   `rules.yaml` come first; a key of an edits entry overrides that key of the rules entry (the
@@ -156,29 +200,25 @@ and a region over a forest can then carry `"ground": ["forest", "bigfoot_zone"]`
   removed; a new name is a new type
   appended after the rules' types (so the rules' types take OSM land first); `deleted` removes a type of the rules.
   Without `edits_path` the result is `rules.yaml` alone. Every stage that reads the types passes the edits path (parcels
-  for the OSM sources and `drawn_ground`, scene for the terrain colours, props for `spawns`, detail for the recipe and
-  its `detail` settings, export for `water`). A stack names a type that no longer exists: that name is skipped with a
-  warning by the parcels stage (a stack of only such names skips the region).
+  for the OSM sources and `drawn_ground`, scene for the terrain colours, detail for the recipe and its `detail`
+  settings, export for `water`). A patch names a type that no longer exists: the validator refuses the file, so a type
+  cannot be deleted while a patch is of it (the MCP tool names the patches).
 * **Validation** (`edits.py`, mirrored by the editor): names are lower_snake (`^[a-z][a-z0-9_]{0,23}$`); `attributes`
   holds only catalog keys: `colours` 1 to 6 `#rrggbb`; `recipe` one of `field`, `forest`, `village`, `dike`; `detail` an
   object whose top-level keys exist in the shipped `detail.<recipe>` section (the recipe is the entry's own or the rules
-  type's, one is needed); `water` and `spawns` `true`; `event_spawn` a non-empty list of known events; `null` only to
+  type's, one is needed); `water` `true`; `null` only to
   remove an attribute that the type of `rules.yaml` carries; `osm` an object `{landuse|natural: [text, ...]}`, and a
   type that takes OSM land has terrain attributes; `deleted` is `true` and alone, names a
   type of `rules.yaml`, and is refused for the default type and for a type with a `rule` (the dike, `detail.dike` needs
-  it). A region's `ground` is a non-empty list of unique names, not together with `water_y`. Unknown keys are errors,
-  also the old flat keys (`colours`, `recipe`, ... at the top of an entry, and `ground` as one name).
+  it). Unknown keys are errors, also the keys of what a ground type no longer is (`spawns`, `event_spawn`, `wildlife`
+  are not attributes) and the flat keys (`colours`, `recipe`, ... at the top of an entry).
 * **Rebuild**: a type change needs the full map build (`make map`): the ground areas, terrain colours and detail are
   made by the parcels, scene and detail stages. Nothing is hot-reloaded. The editor, MCP and this document say so.
 * **Export**: `parcels.json` `ground_types` lists every type of the rules (and then the user's own) with the rules'
   own entry (`rules`, in the shape of `rules.yaml`; `custom: true` instead for a user's type) and a summary at the build (`colour`, `colours`,
-  `recipe`, `water`, `spawns`, `attributes` = the attribute keys carried, `source` = `osm`, `rule` or `drawn`); `ground_default` names the default type;
+  `recipe`, `water`, `attributes` = the attribute keys carried, `source` = `osm`, `rule` or `drawn`); `ground_default` names the default type;
   `ground_recipes` holds the shipped settings of each recipe (without the clutter tables). The editor lays the current
   `edits.json` over `rules`, so its list is live between builds.
-* **Migration** (ADR 0015): `rules.yaml` `ground.types` moved every `colours`, `recipe`, `detail`, `water`, `spawns` of a
-  type under `attributes`; `edits.json` had no ground types or ground regions to move. A rebuilt village map is
-  byte-identical in terrain, detail and water (the baked chunk files and `water.json`); only `parcels.json` `ground_types[].rules`
-  and the `rules.yaml` hash in `manifest.json` change.
 Edits of a parcel that is no longer kept are skipped with a warning by the props stage; putting the parcel in a group
 with a building plot (by hand in `edits.json`, it is not shown in the editor) brings it back.
 
@@ -287,15 +327,16 @@ real meshes, UVs and textures into `out/textures/fences.png`, so the look can be
 file): per-parcel fence mode (`auto`, `none`, `custom` with a type, column, height, colour and gaps),
 property groups (`G-NNNN`: one fence around the members' combined outer edge), and placed objects (`pack:` or `prim:` assets, absolute S-JTSK metres).
 Objects go to `work/objects.json`, and with them the `cables` (`C-NNNN`: `from` and `to`, the ids of two
-placed utility poles) whose poles are both placed; the game strings the wires (`docs/utility-poles.md`). `regions` (`R-NNNN`: `colour` `#rrggbb`, `polygon` one ring of at
-least 3 `[x, y]` absolute S-JTSK points, no self-intersection) are shapes painted over the ground;
-they are not read by the props stage, only by the export and `region-run` (below). The format and validator are documented in
+placed utility poles) whose poles are both placed; the game strings the wires (`docs/utility-poles.md`). `ground_patches` (`GP-NNNN`: `type`, `polygon` one ring of at
+least 3 `[x, y]` absolute S-JTSK points, no self-intersection, `water_y` for a water type) are hand-drawn ground (see "Parcels and ground areas"); the props stage reads
+only their water ones (no trees in a lake). `zones` (`Z-NNNN`: `kind`, `polygon`) are what an area means in play (see "Zones"); the props
+stage reads the `player_spawn` ones. The format and validator are documented in
 `pipeline/src/drycastle_pipeline/edits.py`. Entries for parcels that no longer exist are skipped
 with a warning; schema errors fail the stage.
 
-**Spawns**: `out/village/map/spawns.json` has a seeded subset (default 60) of points on roads and on
-garden, field and other parcels, at least `min_building_distance_m` from any building, with
-elevation, parcel, highway type (roads) and chunk index.
+**Spawns**: `out/village/map/spawns.json` has a seeded subset (default 150) of points on roads and on
+open ground (garden parcels, the ground areas of the `player_spawn` zone, see "Zones"), at least `min_building_distance_m` from any building, with
+elevation, parcel (the id of the parcel or ground area), highway type (roads) and chunk index.
 
 **Street lamps** (`lamps.py`, run by the props stage, `make props`): `data/village/work/lamps.json` holds
 one point per lamp (`id` `L-NNNN`, `x`, `y`, `z` elevation, `source` `osm` or `rule`, `osm_id`,
@@ -319,33 +360,43 @@ through. The geometry is `ShooterCore/Colliders/PropColliders.cs`; the loader (`
 chunk and role, not one per tree. The surface of a hit (wood or foliage) comes from the tree lookup
 (`TreeColliders.GroupAt`). Trees that the viewer edits are not in the game's collision until the map is re-exported.
 
-## Regions
+## Ground patches (preview and water)
 
-A region (`regions` in `edits.json`) is a hand-drawn colour shape, independent of parcel borders. It
-changes only colour: no collision, no effect on trees, fences or objects, no `regions.json`. The
-export builds one flat mesh per region (`regions.py`): the polygon is cut along the terrain mesh
-triangles and, where it covers a road ribbon, along the ribbon outline, so the edges are exact and
-the surface follows the ground; every vertex is lifted `regions.lift_m` (0.03 m) above the terrain,
-or `regions.road_lift_m` (0.02 m) above the ribbon's own height on a road. Buildings, trees,
-fences and objects are not considered. Where regions overlap the higher ID wins: its polygon is
-subtracted from the lower regions before draping, so nothing z-fights. Parts outside the terrain
-coverage are cut off; a region wholly outside it is skipped with a warning (`export: warning:
-...`), as is any region when there is no terrain. Schema errors fail the run like every other edit.
-Nodes are `region_<ID>` in each chunk file the region touches (so a region over a chunk border is
-several nodes with the same name, one per chunk file); the manifest lists `regions` in `generated`.
+A ground patch (`ground_patches` in `edits.json`, see "Ground patches" under "Parcels and ground areas") is ground of one type in
+the baked map: the parcels stage makes a ground area of it, so the terrain colour, the detail and the trees follow on the next
+full run and the chunk files hold no node for it. Two things come from the patch outside of that, both built by
+`patches.py` with the same code (so what is hot-reloaded equals what is baked):
 
-`make region-run [REGION=R-0001] [GLB=file.glb] [OUT=file.json]` (`python -m drycastle_pipeline
-region-run --region ID ... --glb PATH`, none named = all) writes a GLB with one `region_<ID>` node
-per region (the whole region, in the chunk files' frame) and prints a JSON summary: `regions` (with
-a mesh), `replaces` (the baked `region_<ID>` nodes to hide: the named IDs, even deleted ones, plus
-every region overlapping a named one, whose visible area changes with it), `triangles`, `glb`,
-`timing_s`. Like `parcel-run --glb` it is for hot reload; nothing under `data/` is written.
+* **Preview** (hot reload). Before the full run the editor shows a patch as one flat mesh in the first colour of its type: the polygon is cut along the terrain mesh
+  triangles and, where it covers a road ribbon, along the ribbon outline, so the edges are exact and
+  the surface follows the ground; every vertex is lifted `ground_patches.lift_m` (0.03 m) above the terrain,
+  or `ground_patches.road_lift_m` (0.02 m) above the ribbon's own height on a road. Buildings, trees,
+  fences and objects are not considered. Where patches overlap the higher ID wins: its polygon is
+  subtracted from the lower patches before draping, so nothing z-fights. Parts outside the terrain
+  coverage are cut off; a patch wholly outside it is skipped with a warning (`export: warning:
+  ...`), as is any patch when there is no terrain or when its type does not exist. Schema errors fail the run like every other edit.
+  The preview has no collision and changes only colour.
+* **Water.** A patch of a water type is a flat mesh at `water_y` minus `WATER_VISUAL_DROP_M` (2 cm, so the shooter's water
+  surface at `water_y` always wins) over the terrain below that level; it is baked into the chunk files as the node
+  `patch_<ID>` in each chunk it touches (a patch over a chunk border is several nodes with the same name, one per chunk
+  file) and the manifest lists `patches` in `generated`. Only water patches are baked as nodes.
+
+The export also writes `patches.json` (`files.patches`; only when there is a patch of a ground type that has terrain under it): `{"version": 1, "patches": [{"id": "GP-0001",
+"type": "forest", "colour": [r, g, b], "ring": [[x, y], ...]}]}` in ID order (the higher ID is drawn last), local metres,
+the first colour of the type, for the minimap. Patches of a water type are not in it (they are in `water.json`).
+
+`make patch-run [PATCH=GP-0001] [GLB=file.glb] [OUT=file.json]` (`python -m drycastle_pipeline
+patch-run --patch ID ... --glb PATH`, none named = all) writes a GLB with one `patch_<ID>` node
+per patch (the whole patch, in the chunk files' frame) and prints a JSON summary: `patches` (with
+a mesh), `replaces` (the baked `patch_<ID>` nodes to hide: the named IDs, even deleted ones, plus
+every patch overlapping a named one, whose visible area changes with it), `triangles`, `glb`,
+`timing_s`. Like `parcel-run --glb` it is for hot reload; nothing under `data/` is written. Zones have no paint and no hot reload.
 
 ## Detail (ground patches and clutter)
 
 `make detail` (stage `detail`, in `run-all` between `props` and `export`) gives the
 ground something to look at. It reads `parcels`, `buildings`, `roads`, `terrain`, `props` (fences, trees), `objects`
-and `edits.json` (regions), and writes `data/village/work/detail.json` (clutter), `detail_patches.npy` and
+and `edits.json` (water patches), and writes `data/village/work/detail.json` (clutter), `detail_patches.npy` and
 `detail_patches.json` (patch triangles). `python -m drycastle_pipeline detail --work DIR` reads and writes another work
 directory (experiments). The module is `detail.py`; every number is in the `detail` section of `rules.yaml`.
 
@@ -353,7 +404,7 @@ directory (experiments). The module is `detail.py`; every number is in the `deta
 `garden` (parcel kinds `garden` and `building_plot`), `field` (`other`), `forest`, `road`, or nothing (`water`). It is
 the only place that reads the parcel kind; a real area-type layer replaces that one function. Parcels are clipped to
 the terrain coverage first (a parcel part under 4 m2 gets nothing). Water bodies, buildings, fences, trunks, placed
-objects (a circle of half the footprint diagonal plus 0.3 m), hand-drawn regions and the carriageway are kept free.
+objects (a circle of half the footprint diagonal plus 0.3 m), water patches and the carriageway are kept free.
 
 * **garden**: lawn pieces on tan plots (a green garden gets tones of its own terrain colour instead; `lawn.terrain_mix`),
   worn dirt along walls and in the open, a gravel path from the gate (the middle of the longest unfenced stretch of the
@@ -380,10 +431,10 @@ objects (a circle of half the footprint diagonal plus 0.3 m), hand-drawn regions
 * **verges**: along `track`, `residential`, `tertiary` and `service` roads, gravel and dirt blobs lie at the carriageway
   edge (built once per road edge, every parcel they touch takes its share), whatever the parcel kind.
 
-**Patches** are polygons draped on the terrain (`regions.drape`, so they follow the ground triangle by triangle) 2 cm
+**Patches** are polygons draped on the terrain (`patches.drape`, so they follow the ground triangle by triangle) 2 cm
 above it. The layers (`detail.PATCH_PRIORITY`: gravel, verge gravel, bed, furrow, dirt, verge dirt, litter, two tones,
-lawn) are clipped in that order, so no two patches overlap and nothing z-fights; parcels are disjoint. Hand-drawn
-regions (3 cm) are cut out of every patch. Patches go into the chunk GLBs as the node `detail_patches` (flat colours)
+lawn) are clipped in that order, so no two patches overlap and nothing z-fights; parcels are disjoint. Water
+patches (3 cm) are cut out of every patch. Patches go into the chunk GLBs as the node `detail_patches` (flat colours)
 and one `detail_patches_tex_<texture id>` node per texture (`dirt`, `gravel`, `leaf_litter`, `soil_rows`), at most five per
 chunk; they have no collision. A patch triangle belongs to the chunk of its centroid (terrain cells never cross a chunk
 border). The village has about 143k patch triangles (garden 76k, forest 33k, field 24k, road 10k), which is why the shapes
@@ -434,7 +485,7 @@ reference the tests compare it with and is not a stage.
   module fails with the build hint. There is no engine switch. `DRYCASTLE_DETAIL_THREADS=N` caps the
   threads (default: all cores); the result is byte-identical for any thread count. Nothing in `rules.yaml` changed: the engine reads the
   same `detail` section (including the `ground.types.<type>.detail` overlays, which Python lays over the recipe section and hands over).
-* **What runs where**: Python reads the work files, the rules, the ground types and `edits.json` (regions, placed-object clearance
+* **What runs where**: Python reads the work files, the rules, the ground types and `edits.json` (water patches, placed-object clearance
   discs, terrain colours, recipes per unit) and passes them as one JSON document plus the terrain arrays; Rust does everything per
   unit: parts and dike clips, free ground, the five recipes (garden, field, forest, village, dike), the patch layers, draping,
   clutter, the meadow raster, the per-chunk caps, and the files. Ported completely; nothing falls back to Python.
@@ -457,7 +508,7 @@ implemented.
 
 **Meadow (`meadow.bin`, map 0.9.0).** Field and forest parcels keep no dense clutter in `clutter.json` (only `detail.meadow.stored_kinds`, rocks). Instead the stage writes
 a density raster, `work/detail_meadow.bin`, copied by the export as `meadow.bin` (`files.meadow`): 2 m cells, one byte per cell per layer (tuft, flower, fern, pebble,
-litter), zlib per chunk, about 0.7 MB for the village. A cell is on it only where its whole jitter window is free ground (no buildings, fences, roads, objects, regions)
+litter), zlib per chunk, about 0.7 MB for the village. A cell is on it only where its whole jitter window is free ground (no buildings, fences, roads, objects, water patches)
 and the density comes from the recipe's zones (edge band, tone and litter patches, bare soil, near a trunk) times smooth noise; see `detail.meadow` in `rules.yaml` and
 `meadow.py`. The game generates the instances at run time (`docs/viewer-and-editor.md`, "Meadow clutter"). `detail_preview --meadow` draws what the game would generate for a parcel.
 
@@ -493,7 +544,7 @@ vertex); `roads`; `parcel_<ID>_props` (that parcel's fences and trees, visual) a
 the parcel's own chunk file so one parcel's props can be swapped at runtime; `parcel_<ID>_props_tex_<texture id>`
 (map 0.7.0: the textured parts of that parcel's typed fences, one node per texture; it carries UVs and a tint as
 vertex colour, and no image: the loader draws a node named `<node>_tex_<id>` with texture `<id>` of the asset
-library, and the manifest's `textures` lists the ids the map uses); `region_<ID>` (see Regions); `props` and
+library, and the manifest's `textures` lists the ids the map uses); `patch_<ID>` (see Ground patches); `props` and
 `props_collision` remain only for items without a parcel (the orthophoto trees). The manifest says
 `"props_layout": "per_parcel"`; `map_version` went from `0.1.0` to `0.2.0` for this node-layout
 change (pre-1.0, a node-layout change bumps the minor part). Also
@@ -537,18 +588,15 @@ depth is one value per body (an approximation). The file is absent for a map wit
 **Water craft placement (#132).** The amphibious transport spawns on land within 40 m of water when it can (`NetServer.Vehicles`,
 using `Water.ShoreDistance`); it is the only vehicle that floats, and nothing is placed on the water itself.
 
-**Runtime attributes (`attribute_points.json`, issue #263).** The game never sees ground areas (the pipeline bakes them into
-terrain colours and detail), so a ground attribute the server needs while it runs is exported as a pool of **candidate
-points** instead of polygons. `runtime_points` in `rules.yaml` is the explicit allowlist, `<attribute>: {<value>: rule}`; the
-first and only entry is `event_spawn: bigfoot`, and an attribute that is not listed stays in the build (`spawns` included).
-Only the list attributes of the catalog can be listed (`ground_attributes.LIST_VALUES`); a mistake is an error of the export
-stage, never a silent skip. For each entry `attribute_points.build_attribute_points` (called by the export stage, after the
-water, which it needs) takes every area that carries it, across stacked types (ADR 0015): the ground areas whose type carries
-it (a type that ticks `event_spawn: [bigfoot]`) and the attribute layers of `parcels.json` `ground_layers` with a stacked
-type that carries it. Their union, cut to the terrain coverage and with the clearances taken off, is the usable ground, and the
-points are drawn in it the way `props.make_spawns` does (seeded by `attribute_points:<attribute>:<value>`, uniformly
+**Zone points (`zone_points.json`, ADR 0022).** The game never sees ground areas or zones (the pipeline bakes the ground into
+terrain colours and detail), so a zone the server needs while it runs is exported as a pool of **candidate points** instead of
+polygons. `zones` in `rules.yaml` has the section of every kind (see "Zones" under Parcels and ground areas). For each kind
+but `player_spawn` that has areas, `zones.build_zone_points` (called by the export stage, after the water, which it needs)
+takes the areas of the kind: the ground areas of the types of its `where_ground` rule zone and the drawn zones of
+`edits.json`. Their union, cut to the terrain coverage and with the clearances taken off, is the usable ground, and the
+points are drawn in it the way `props.make_spawns` does (seeded by `zone_points:<kind>`, uniformly
 distributed by area: a triangle of the constrained Delaunay triangulation is picked in proportion to its area, a point inside
-it, rounded to a millimetre and kept only if still inside). Rules per entry:
+it, rounded to a millimetre and kept only if still inside). Rules per kind:
 
 | Key | Meaning |
 |---|---|
@@ -557,22 +605,27 @@ it, rounded to a millimetre and kept only if still inside). Rules per entry:
 | `building_clearance_m`, `water_clearance_m` | metres kept clear of buildings and of the water bodies of `water.json` (shore included) |
 
 There is no clearance from trees (the Bigfoot walks through and tramples them) and none from fences, roads or placed objects.
-Today `event_spawn: bigfoot` has 1000 m2 per point, 30 to 300 points, 10 m from buildings and 5 m from water.
+Today `bigfoot` has 1000 m2 per point, 30 to 300 points, 10 m from buildings and 5 m from water; the wildlife species have
+20000 m2 per point, 5 to 80 points, 15 m from buildings and 5 m from water.
 
-The file is listed under `files.attribute_points` in `manifest.json` and written **only when some area carries a listed
-attribute**; otherwise it is absent (and a stale one from an earlier build is deleted), which the loader reads as "no points".
-Format (`version` 1, compact, sorted keys):
-`{"version": 1, "axes": "...", "attributes": [{"attribute": "event_spawn", "value": "bigfoot", "areas": ["A-0003", "L-0001"],
-"area_m2": 52000.5, "points": [[x, y, z], ...]}]}`. `areas` are the ids of the ground areas and layers that carried it,
-`area_m2` the usable ground the points were drawn in, a point is local metres (x east, y north, as `parcels.json`) and `z`
-the terrain height there (as `terrain.json`). An allowlisted attribute with areas but no usable ground is listed with `points: []`
-and the export warns. The map version is not bumped (like `bunkers.json`, an optional file that a loader may ignore); an older
-loader ignores the key. No terrain, no file (the points need the coverage and the heights).
+The file is listed under `files.zone_points` in `manifest.json` and written **only when some zone has an area**; otherwise it
+is absent (and a stale one from an earlier build is deleted), which the loader reads as "no points".
+Format (`version` 2, compact, sorted keys):
+`{"version": 2, "axes": "...", "zones": [{"kind": "deer", "areas": ["A-0003", "Z-0001"],
+"area_m2": 52000.5, "points": [[x, y, z], ...]}]}`. One entry per kind that has areas, in catalog order. `areas` are the ids of
+the ground areas (rule zone) and drawn zones the points were drawn in, `area_m2` the usable ground, a point is local metres
+(x east, y north, as `parcels.json`) and `z` the terrain height there (as `terrain.json`). A kind with areas but no usable
+ground is listed with `points: []` and the export warns. `player_spawn` has no entry. The map version is not bumped (like
+`bunkers.json`, an optional file that a loader may ignore). No terrain, no file (the points need the coverage and the heights).
 
-The server reads it as `ShooterCore.AttributePoints` (`Parse`, format version 1; the map loader keeps the text as
-`MapLoader.AttributePointsJson`, empty without the file): `NetServer.PickEventSpawn("bigfoot")` returns a random point in Godot
-ground axes (x east, y the terrain height, z = -north), or `null` when there is none (the map has no file, no area carries the
-event, or nothing usable was left): the caller must handle it. A broken or newer file is logged and counts as no points.
+`parcels.json` also carries `zone_kinds`, `[{"name", "label", "group", "tint", "where_ground": [types] | null}]` in catalog
+order, for the editor's Zones tool; the drawn zones are not in it (the editor reads them from `edits.json`).
+
+The server reads the points as `ShooterCore.ZonePoints` (`Points(kind)`, `Count(kind)`, `Pick(kind, rng)`; the map loader
+keeps the text as `MapLoader.ZonePointsJson`, empty without the file): `NetServer.PickEventSpawn("bigfoot")` returns a random
+point in Godot ground axes (x east, y the terrain height, z = -north), or `null` when there is none (the map has no file, no
+zone of the kind, or nothing usable was left): the caller must handle it, and the wildlife keeper takes the points of each
+species. A broken or newer file is logged and counts as no points.
 
 **Property groups (`groups.json`).** The export copies the `groups` of `edits.json` into the map as
 `{"version": 1, "groups": {"G-0001": {"parcels": ["P-0412", ...]}}}` (sorted; only parcels the map has; no fence), so the server

@@ -19,23 +19,27 @@ The scripted, re-runnable process that generates the base map from source data w
 The category of a parcel: building plot (it holds a building) or garden (the rest of a property).
 
 **Ground area**:
-A piece of the land outside the parcels with a ground type (field, forest, water, village, dike), cut from OSM land use and rules instead of cadastral outlines, or drawn by hand (a region with a ground stack). It has the terrain of exactly one ground type, which picks its colour, vegetation and detail recipe, and it can lie under attribute layers. It has no fence and no stable ID.
-_Avoid_: zone, road parcel
+A piece of the land outside the parcels with one ground type (field, forest, water, village, dike), cut from OSM land use and rules instead of cadastral outlines, or drawn by hand (a ground patch). It has no fence and no stable ID.
+_Avoid_: road parcel
 
 **Ground type**:
-A named bundle of attributes: the whole description of one kind of ground (forest, field, meadow, orchard, allotments, village, dike, water, ...) or of a layer over ground (a Bigfoot zone). It says where it comes from (OSM land use or a rule, or only drawn by hand) and ticks the attributes it carries. Defined in `rules.yaml` (`ground.types`); you override, add and delete types in `edits.json` (`ground_types`) from the editor's Ground types tool or MCP. A change shows after the next full map build. Names are IDs and cannot be renamed.
-_Avoid_: biome, terrain type
+A named description of one kind of ground (forest, field, meadow, orchard, allotments, village, dike, water, ...): its terrain colours, detail recipe and whether it is water. It says where it comes from (OSM land use or a rule, or only drawn by hand). Every point of the map has exactly one. Defined in `rules.yaml` (`ground.types`); you override, add and delete types in `edits.json` (`ground_types`) from the editor's Ground types tool or MCP. A change shows after the next full map build. Names are IDs and cannot be renamed. It carries nothing a game system reads: that is a zone.
+_Avoid_: biome, terrain type, layer
 
-**Ground attribute**:
-One thing a ground type can carry, from a fixed list (each needs something in the pipeline or the game to use it), grouped by relation: Appearance (terrain colours, detail recipe and settings), Spawning (players may spawn), Water (a body of water), Events (which events may spawn there, first Bigfoot). Appearance and Water decide the terrain: one type does, per point. Spawning and Events add up over every type that lies there.
-_Avoid_: property, flag, tag
+**Ground patch**:
+A hand-drawn polygon of exactly one ground type (and a water level when the type is water); where patches overlap the higher ID wins. It is how you change the ground by hand, and the only thing drawn in the Ground tool.
+_Avoid_: region, paint, ground stack
 
-**Ground stack**:
-The ground types of one hand-drawn region, lowest first; between regions the higher ID is on top. The topmost type with appearance or water attributes decides the terrain of the area, exactly as a single type would; the attributes that add up are taken from every type in the stack. A stack of only such types is an **attribute layer**: it changes nothing about how the ground looks, and the editor draws it as a translucent overlay.
-_Avoid_: layer stack, z-order
+**Zone**:
+A hand-drawn polygon of exactly one zone kind. It marks what the area means in play and never changes how the ground looks; zones overlap freely and add up. Drawn in the Zones tool.
+_Avoid_: region, layer, attribute layer, ground type
 
-**Runtime attribute**:
-A ground attribute the game server needs while it runs, from an explicit allowlist in `rules.yaml` (`runtime_points`; the first is "event spawn: bigfoot"). The game never sees ground areas, so the build exports not the areas but **candidate points**: seeded points inside every area that carries the attribute (ground areas of a type with it, and attribute layers stacked over ground), one per N m² between a minimum and a maximum, clear of buildings and water, in `attribute_points.json` of the map. The server picks one at random; an attribute no area carries has no point. Attributes off the allowlist are not exported.
+**Zone kind**:
+What a zone means in play, from a fixed list in code (each needs something in the pipeline or the game to read it): Bigfoot, deer, player spawn, ... Its numbers (density, clearances) are in `rules.yaml`, and it may apply by rule wherever a ground type lies (deer wherever there is forest) so that nothing needs drawing.
+_Avoid_: event area, spawn area, marker type
+
+**Runtime zone**:
+A zone, drawn or by rule, that the game server needs while it runs. The game never sees ground areas or zones, so the build exports **candidate points** instead: seeded points inside every zone of the kind, one per N m² between a minimum and a maximum, clear of buildings and water, in `attribute_points.json` of the map. The server picks one at random; a kind no zone covers has no point.
 _Avoid_: exported attribute, spawn area (an area is not exported)
 
 **Replacement scene**:
@@ -279,13 +283,9 @@ _Avoid_: build number, version (alone)
 The ground the map covers: a polygon (`polygon` in `map.local.yaml`) of absolute S-JTSK points. Only what touches it is in the map; the terrain stops at it.
 _Avoid_: border, boundary
 
-**Region**:
-A hand-drawn shape of any form, independent of parcel boundaries, painted in one colour over the ground inside it. It changes only colour: parcels, roads, buildings and everything standing on the ground are unaffected.
-_Avoid_: zone
-
 **Sketch**:
 A named group (ROAD, FENCE_PLAN, ...) of the temporary marks a developer draws on the ground in the map editor to point at places in a prompt. Several sketches exist at once, each holding any number of **marks**: points (A, B, ...) and lines (L1, L2, ...; a closed line means the ground inside it). Mark names are unique across all sketches; a prompt can name one mark ("at A"), or a whole sketch ("everything in sketch ROAD"). The developer draws in the editor, and Claude draws through the MCP server (`sketch_add_*`, e.g. "highlight this road under sketch ROAD"). A sketch is never map content and is not a hand edit; it lives in `out/sketch.json` only.
-_Avoid_: annotation, drawing, region (a region is saved and paints the ground), layer
+_Avoid_: annotation, drawing, ground patch or zone (those are saved map content), layer
 
 **Building detail**:
 A hand-written description of one real building's geometry beyond its OSM footprint (`pipeline/config/buildings/<OSM id>.yaml`): wall openings, roof overhang, read from reference photos. The shell stays the rule-generated one; the detail adds to it and never changes the footprint.

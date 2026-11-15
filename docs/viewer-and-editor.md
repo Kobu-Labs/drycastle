@@ -40,12 +40,15 @@ under it when `z` is null), `rotation_deg` counter-clockwise seen from above, un
 `colour` (material override). Unknown or missing assets give a warning and a magenta placeholder box.
 Objects have no collision in v1.
 
-Regions (`regions` in `edits.json`, schema in `pipeline/src/drycastle_pipeline/edits.py`) are baked into the
-chunk files as `region_<ID>` nodes (flat colour, no collision) and rebuilt for hot reload by
-`region-run --region ID --glb PATH`, whose JSON summary has `replaces` (the baked `region_<ID>` nodes to hide)
-and a GLB with one `region_<ID>` node per region in the chunk frame. `EditsFile` keeps `regions` as read and writes
-them canonically (the key is omitted while empty); `ObjectEdits.ValidateDocument` mirrors the schema. The editor UI
-for drawing regions is a separate piece of work.
+Ground patches (`ground_patches` in `edits.json`: `{GP-NNNN: {type, polygon, water_y?}}`, schema in `pipeline/src/drycastle_pipeline/edits.py`,
+ADR 0022) are baked into the chunk files as `patch_<ID>` nodes (flat colour = the type's first terrain colour, no collision; patches of a
+water type have none) and rebuilt for hot reload by `patch-run --patch ID --glb PATH`, whose JSON summary has `replaces` (the baked
+`patch_<ID>` nodes to hide) and a GLB with one `patch_<ID>` node per patch in the chunk frame (`MapLoader.ApplyPatches`; `patches.json`
+feeds the minimap). Zones (`zones`: `{Z-NNNN: {kind, polygon}}`) have no paint and no hot reload: a zone edit changes nothing in the
+viewer's world, the build turns zones into candidate points. `EditsFile` keeps both keys as read and writes them canonically (omitted
+while empty); `ObjectEdits.ValidateDocument` mirrors the schema (a `regions` key is unknown; a patch needs an existing, not deleted
+type and a `water_y` exactly when the type is water; a zone's kind must be in the map's `zone_kinds` when the map lists them). The
+editor UI is the Ground tool (patches) and the Zones tool, below.
 
 Assets directory: `--assets DIR`, else env `DRYCASTLE_ASSETS`, else `<repo>/assets`.
 
@@ -75,7 +78,7 @@ viewing and headless servers are unaffected):
   `parcel_<ID>_collision`, `window_*`) swapped with `MapLoader.ReloadChunkBuildings`, one chunk per frame. The
   viewer prints `map reloaded: buildings of N chunk(s) ...`, the editor shows it in the status line. So after
   changing a building: `make rules export`, no restart. Not reloaded: everything else baked into a chunk
-  (terrain, roads; fences, trees and regions keep following the edits file). A re-export with different parcels
+  (terrain, roads; fences, trees and ground patches keep following the edits file). A re-export with different parcels
   or a new chunk is not swapped in; the viewer says to restart.
 - `editor-state.json` (written at most once a second while watching, an ignored build output):
   `{"camera": {"x": east, "y": north, "z": elevation, "yaw_deg": view direction counter-clockwise from east},
@@ -91,11 +94,11 @@ viewing and headless servers are unaffected):
 - `make viewer-edit-smoke` exports a fresh map and a work-directory copy into a scratch directory
   (`SMOKE_DIR=...`, default a temp dir), starts the viewer headless with `--watch`, writes edits files during the
   run and checks objects, swapped props, colliders, replacement without leaks and survival of a broken file.
-- `make viewer-regions-smoke` does the same for regions: exports a map with three regions, then recolours,
-  reshapes, adds and removes regions through the watcher (alone and together with a parcel edit in one file
-  change) and checks that only those regions are swapped (`region-run --glb`, `MapLoader.ApplyRegions`; a region
-  split over chunk files is swapped completely), that repeated swaps do not grow the node count and that a broken
-  file changes nothing.
+- `make viewer-patches-smoke` does the same for ground patches: exports a map with three patches (each colour is a ground
+  type of its own, `paint_<rrggbb>`), then retypes, reshapes, adds and removes patches through the watcher (alone and together
+  with a parcel edit in one file change) and checks that only those patches are swapped (`patch-run --glb`,
+  `MapLoader.ApplyPatches`; a patch split over chunk files is swapped completely), that repeated swaps do not grow the node
+  count and that a broken file changes nothing. (`ViewerPatchesSmoke.cs`, `patches_smoke.py`; not run when it was last changed.)
   `parcel-run`/`export` take `--work DIR` and `export` takes `--out DIR` for such experiments.
 
 ### Ground clutter (near-only)
@@ -248,7 +251,7 @@ the others open).
   apply, validate with the Python validator's rules (`ObjectEdits.ValidateDocument`, it never writes a file
   `edits.validate` rejects), and write it atomically in the canonical format.
 * **Instant objects**: when the watcher sees that only placed objects changed (no fence or group changed, no
-  region), it does not run `parcel-run`: `MapLoader.ApplyObjectChanges` removes the objects that are gone and
+  ground patch; zones do not count), it does not run `parcel-run`: `MapLoader.ApplyObjectChanges` removes the objects that are gone and
   re-instances the ones that are new or differ, straight from the file (S-JTSK minus `origin_epsg5514`, terrain height
   when `z` is absent), with the same node names (`objects_<parcel>/object_<id>`) and grouping as a fragment, so a
   later fragment swap stays consistent. The same happens for the objects of a save that also needs a run. The editor calls it right after saving (`EditsWatcher.NotifySaved`, about 1 to 3 ms from reading the
@@ -368,55 +371,71 @@ unique across all sketches. Every mark shows its name as a tag in the 3D view, i
 - Checked by the build and by the MCP server's sketch tests on the file format only; there is no headless smoke for the
   tool yet (the picker, the naming row and the reload from `sketch.json` are not covered).
 
-### Ground types tool
+### Ground tool
 
-Rail icon 4 (`Ground types`). Lists every ground type of the map (swatch of the first colour, or the overlay tint of a type
-that only adds attributes; name, what it does, and a tag when you edited it, made it, or deleted it) and edits one at a time.
-A type is a bundle of **attributes** (ADR 0015); the form groups them by relation and a checkbox ticks each one the type
-carries: **Appearance** (Terrain colours: swatch, picker, `#rrggbb` field, add up to 6, remove; Detail recipe: dropdown, with
-"Advanced detail settings", the effective `detail` overlay as read-only text plus number fields for furrow probability,
-headland keep and tone patches per ha, from the one table `GroundTypeEdits.DetailFields`), **Spawning** (players may spawn
-here), **Water** (water body) and **Events** (Event spawn: one checkbox per event, today Bigfoot; it only marks where the
-event may spawn, the game does not use it yet). Appearance and Water say "topmost wins" and Spawning and Events "adds up
-over every stacked type" under their headings. A type that takes OSM land or is made by a rule cannot untick its last
-appearance or water attribute (the checkbox is disabled with the reason as tooltip); OSM values (comma lists for `landuse`
-and `natural`; read only for a rule type). Buttons: New type (name field, Create: one green shade and the field recipe;
-Create layer: carries nothing yet, for a type that only adds spawning or events; or Duplicate selected, which copies the
-attributes but not the OSM tags), Reset to rules (removes your override, also brings a deleted type back), Delete (asks
-first; disabled for the default type and the dike). Rename does not exist: names are IDs (a disabled button explains it).
-Every change is one save and one undo step; the types live in `edits.json` `ground_types` over `rules.yaml`
-(docs/pipeline.md "Ground attributes and stacks", "Ground types of your own"). A banner says the change shows after the next
-full map build (`make map`); the editor does not hot-reload ground. The Regions page's ground stack lists the effective types
-(your edits included, deleted ones and rule types left out). Keys: `4` opens, Tab reaches the list, `N` the name field, `Del`
-deletes, Ctrl+Z undoes, Esc leaves a text field, then deselects, then leaves the tool; `Ctrl+P` lists the types. States,
-keyboard walkthrough and what is not verified: `docs/ground-types-ui-notes.md`. A map without `ground_types` in its
-`parcels.json` shows an explanation to build it again.
+Rail icon 4 (`Ground`). One page, top to bottom: the ground map switch, the ground types, the ground patches, a New type row and the
+form of the selected type. Ground is terrain only (ADR 0022): every point of the map has exactly one ground type and a type is its
+colours, detail recipe and whether it is water; what a place means in play (Bigfoot, deer, player spawn) is a zone (Zones tool, below).
 
-### Regions tool
+**Ground types.** Lists every ground type of the map (swatch of the first colour; name, what it does, and a tag when you edited it, made
+it, or deleted it) and edits one at a time. The form ticks the **attributes** the type carries (ADR 0022 catalog): **Appearance**
+(Terrain colours: swatch, picker, `#rrggbb` field, add up to 6, remove; Detail recipe: dropdown, with "Advanced detail settings", the
+effective `detail` overlay as read-only text plus number fields for furrow probability, headland keep and tone patches per ha, from the
+one table `GroundTypeEdits.DetailFields`) and **Water** (water body: a patch of it needs a water level). A type with only colours is plain
+paint: a colour you want that no type has is a ground type of your own. A type that takes OSM land or is made by a rule cannot untick its
+last appearance or water attribute (the checkbox is disabled with the reason as tooltip); OSM values (comma lists for `landuse` and
+`natural`; read only for a rule type). Buttons: New type (name field, Create: one green shade and the field recipe; or Duplicate selected,
+which copies the attributes but not the OSM tags), Reset to rules (removes your override, also brings a deleted type back), Delete (asks
+first; disabled for the default type, the dike and a type some patch uses, with the reason). Ticking or unticking Water on a type a patch
+uses is refused with the reason (each patch of a water type needs its water level, a land type refuses one). Rename does not exist:
+names are IDs (a disabled button explains it). `edits.json` `ground_types` lays over `rules.yaml`; a type's attributes may only be
+`colours`, `recipe`, `detail`, `water` (`spawns`, `event_spawn`, `wildlife` are unknown). A banner says a type change shows after the next
+full map build (`make map`).
 
-Rail icon 6. `N` starts a shape, LMB or `C` adds corners (0.5 m grid, Ctrl free), Enter closes it, the colour is chosen
-(picker or `#rrggbb`) and Enter creates the region: one save, one undo step. Select a region by clicking it or its row in the panel;
-drag corners, `[` `]` plus arrows, recolour, `Del` (asks first). Invalid shapes are refused before commit with the reason in the panel
-(a red preview outline while drawing or dragging). `Ctrl+P` opens a command palette. Esc steps back one level. Details and the
-keyboard walkthrough: `docs/regions-ui-notes.md`. `make viewer-region-editor-smoke` drives all of it headless and compares every saved
-`edits.json` with the Python writer's text.
+**Ground map** (`EditorMode.GroundMap.cs`): while the tool is open every ground area is drawn on the terrain in its type's colour
+(parcels.json `ground_areas`, as of the last build, plus the hand-drawn patches, shown before the next build). Selecting a type
+brightens its areas (white edge) and dims the rest; the list rows say "N areas, X ha" (or "none on the map"); hovering the ground names the
+patch or type under the cursor, clicking selects it (click the same type or empty ground to deselect). `M` or the "Show areas on the map"
+checkbox toggles it (remembered in `editor_ui.cfg`). Built one type per frame with a progress line; a map built before `ground_areas`
+says to build it again.
 
-A selected region has a **Ground stack** (ADR 0015). "Paint only" (an empty stack): the region only colours the ground. Add a
-type of the map (`ground_types` in the exported `parcels.json`: field, meadow, orchard, forest, bigfoot_zone, ...) from the Add
-dropdown and it goes on top of the stack; each row has Up, Down and Remove, and says what the type does there: it decides the
-terrain, adds spawning or events, or is shadowed by the type above. With a type that carries terrain attributes the region is a
-hand-drawn ground area (`ground` in `edits.json`, a list, lowest first; see docs/pipeline.md "Parcels and ground areas"): its colour
-becomes the colour of the topmost such type and the editor keeps showing it as paint, and the real ground (terrain colour,
-grass, trees) appears after the next full map build (`make map`). A stack of only types that add attributes (spawning, events) makes
-no ground: the ground stays as it is and the region is drawn as an attribute layer (below), its colour being the overlay colour. One
-save and one undo step for each change; disabled for a water region. A deleted or unknown type in a stack is shown with a warning
-and skipped by the build.
+**Ground patches** (`EditorMode.Patches.cs`, the polygon machinery of `EditorMode.Shapes.cs` shared with the Zones tool). A patch is a
+hand-drawn polygon of exactly one ground type, plus a water level when the type is water; where patches overlap the higher ID wins.
+Select a type, then **Draw patch of this type** (`N`): LMB or `C` adds corners (0.5 m grid, Ctrl free), Enter closes the shape and
+creates `GP-NNNN` (one save, one undo step; clicking the first corner closes too). A water type asks for the water level first (a row
+with a number field, starting at the terrain height under the shape; Enter creates, Esc goes back to the corners). Select a patch by
+clicking it in the world or its row (this selects its type too); drag its corners, `[` `]` plus arrows, change its type in the form
+(a water type gets a starting water level, a land type loses it), edit the water level, `Del` (asks first); each is one save and one undo
+step. Invalid shapes are refused before commit with the reason in the panel (a red preview outline while drawing or dragging). Until
+`make map` the world shows a patch as paint in its type's first terrain colour (`patch-run` through the watcher) and the ground map
+shows it as an area of its type; grass, trees and water come with the build. Details and the keyboard walkthrough:
+`docs/patches-zones-ui-notes.md`.
 
-**Attribute layers.** The regions whose stack has a type that adds spawning or events (not counting the type that decides the
-terrain) are drawn as a translucent overlay (about a third opaque, a thin edge in the same colour) draped on the terrain, in the
-region's own colour, so they never hide the ground under them. `V` toggles it; the same switch is under View > Layers and on the
-Regions page, it is on by default and remembered (`editor_ui.cfg`); `Ctrl+P` has it too. The overlay is rebuilt when the edits or the
-ground types change. Nothing is saved by it.
+Keys: `4` opens, Tab reaches the list, `N` draws a patch, `Shift+N` the New type name field, `M` the ground map, `Del` deletes the patch
+or type last selected (asks), Ctrl+Z undoes, Esc steps back (a field, the drawing, the patch, the type, the tool); `Ctrl+P` lists tools,
+actions, types, patch IDs and zone IDs. A map without `ground_types` in its `parcels.json` shows an explanation to build it again.
+
+### Zones tool
+
+Rail icon 6 (`Zones`, `zone` icon). A zone is a hand-drawn polygon of exactly one zone kind (`zones` in `edits.json`, `Z-NNNN`); it marks
+what the area means in play and never changes the ground; zones overlap freely and add up. The kinds are a fixed catalog in code
+(`pipeline/.../zones.py`), listed in the map's `parcels.json` `zone_kinds` (name, label, group, tint, `where_ground`): `bigfoot`,
+`player_spawn` and one per wild species. The page lists them (swatch = the tint, label, how many zones are drawn of it, and `rule: forest,
+meadow` for a kind that also applies by rule wherever those ground types lie, with nothing to draw); pick one, **Draw zone of this kind**
+(`N`): corners as for patches, Enter creates `Z-NNNN` (one save, one undo step; no extra step). Select a zone by clicking it or its row
+(this selects its kind), drag corners, `[` `]` plus arrows, change its kind in the form, `Del` (asks first).
+
+**Zone overlay** (`M`, or the checkbox; remembered in `editor_ui.cfg`; same key and name as the ground map, only while the tool is open):
+every zone is drawn translucent on the terrain in its kind's tint with a thin edge; the selected kind is brightened and the others dimmed;
+**rule zones** (the baked ground areas of a kind's `where_ground` types) are drawn lighter and the hover text says "rule zone". Hover names
+the zones and rule kinds under the cursor, a click selects the topmost drawn zone (where zones overlap the selected kind's wins, then the
+higher ID); a click on a rule zone selects its kind and says it is by rule. Built one kind per frame with a progress line. Zones have no
+paint and no hot reload; nothing is saved by the overlay. A map built before `zone_kinds` shows a red note to build it again and the Draw
+action says why it is disabled.
+
+Esc steps back: the drawing, the zone, the kind, the tool. Notes, states and the keyboard walkthrough: `docs/patches-zones-ui-notes.md`.
+`make viewer-shape-editor-smoke` drives the patch and zone gestures headless and compares every saved `edits.json` with the Python writer's
+text (needs a pipeline that exports `zone_kinds`).
 
 **Floor plan.** `B` (also View > Layers and `Ctrl+P`) hides the buildings of the one selected parcel and shows their plan on the
 ground: the wall lines (a horizontal cut 1.2 m above the ground, so recessed doors and windows show), over a 1 m grid on the
