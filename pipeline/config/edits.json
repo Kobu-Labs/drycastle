@@ -11240,6 +11240,1066 @@
     -1249591.07
    ],
    "rotation_deg": 62.5
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0672",
+   "position": [
+    -589259.346,
+    -1250063.466
+   ],
+   "rotation_deg": 94.1,
+   "z": 191.821
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0673",
+   "position": [
+    -589174.402,
+    -1249834.86
+   ],
+   "rotation_deg": 64.0,
+   "z": 192.178
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0674",
+   "position": [
+    -587672.395,
+    -1248947.556
+   ],
+   "rotation_deg": 118.1,
+   "z": 193.039
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0675",
+   "position": [
+    -587691.632,
+    -1248937.671
+   ],
+   "rotation_deg": 27.8,
+   "z": 196.576
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0676",
+   "position": [
+    -587594.855,
+    -1249076.528
+   ],
+   "rotation_deg": 26.0,
+   "z": 193.36
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0677",
+   "position": [
+    -589232.45,
+    -1249972.273
+   ],
+   "rotation_deg": 61.1,
+   "z": 194.145
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0678",
+   "position": [
+    -588994.27,
+    -1250103.948
+   ],
+   "rotation_deg": 168.8,
+   "z": 190.621
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0679",
+   "position": [
+    -588790.01,
+    -1249754.412
+   ],
+   "rotation_deg": 268.8,
+   "z": 190.712
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0680",
+   "position": [
+    -589485.022,
+    -1249849.802
+   ],
+   "rotation_deg": 349.6,
+   "z": 193.594
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0681",
+   "position": [
+    -588993.344,
+    -1250036.4
+   ],
+   "rotation_deg": 256.8,
+   "z": 190.874
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0682",
+   "position": [
+    -587632.412,
+    -1249101.723
+   ],
+   "rotation_deg": 297.1,
+   "z": 194.73
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0683",
+   "position": [
+    -587840.73,
+    -1249325.296
+   ],
+   "rotation_deg": 183.2,
+   "z": 195.619
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0684",
+   "position": [
+    -587800.303,
+    -1248969.671
+   ],
+   "rotation_deg": 298.3,
+   "z": 195.61
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0685",
+   "position": [
+    -587632.22,
+    -1249056.409
+   ],
+   "rotation_deg": 115.4,
+   "z": 194.003
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0686",
+   "position": [
+    -589463.767,
+    -1249946.22
+   ],
+   "rotation_deg": 143.5,
+   "z": 190.976
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0687",
+   "position": [
+    -589068.356,
+    -1249907.363
+   ],
+   "rotation_deg": 151.8,
+   "z": 191.078
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0688",
+   "position": [
+    -589000.356,
+    -1250049.08
+   ],
+   "rotation_deg": 258.5,
+   "z": 191.452
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0689",
+   "position": [
+    -587746.63,
+    -1249013.845
+   ],
+   "rotation_deg": 300.6,
+   "z": 193.607
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0690",
+   "position": [
+    -587685.453,
+    -1249123.391
+   ],
+   "rotation_deg": 206.3,
+   "z": 195.355
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0691",
+   "position": [
+    -587719.417,
+    -1249096.103
+   ],
+   "rotation_deg": 24.4,
+   "z": 194.467
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0692",
+   "position": [
+    -589413.52,
+    -1249799.069
+   ],
+   "rotation_deg": 78.8,
+   "z": 196.796
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0693",
+   "position": [
+    -589501.775,
+    -1249778.459
+   ],
+   "rotation_deg": 154.2,
+   "z": 195.88
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0694",
+   "position": [
+    -589195.549,
+    -1249760.841
+   ],
+   "rotation_deg": 170.1,
+   "z": 197.289
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0695",
+   "position": [
+    -589294.459,
+    -1249937.938
+   ],
+   "rotation_deg": 165.5,
+   "z": 191.624
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0696",
+   "position": [
+    -589435.245,
+    -1249774.683
+   ],
+   "rotation_deg": 72.3,
+   "z": 193.641
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0697",
+   "position": [
+    -589452.666,
+    -1250003.535
+   ],
+   "rotation_deg": 246.4,
+   "z": 191.469
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0698",
+   "position": [
+    -589443.436,
+    -1250029.504
+   ],
+   "rotation_deg": 153.4,
+   "z": 192.727
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0699",
+   "position": [
+    -589164.947,
+    -1249922.907
+   ],
+   "rotation_deg": 330.4,
+   "z": 192.558
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0700",
+   "position": [
+    -589339.734,
+    -1249762.607
+   ],
+   "rotation_deg": 161.4,
+   "z": 193.941
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0701",
+   "position": [
+    -589209.056,
+    -1249920.92
+   ],
+   "rotation_deg": 48.2,
+   "z": 191.086
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0702",
+   "position": [
+    -589170.218,
+    -1249733.071
+   ],
+   "rotation_deg": 88.3,
+   "z": 193.572
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0703",
+   "position": [
+    -589252.171,
+    -1249963.497
+   ],
+   "rotation_deg": 69.0,
+   "z": 191.108
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0704",
+   "position": [
+    -589267.724,
+    -1249807.418
+   ],
+   "rotation_deg": 91.9,
+   "z": 194.161
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0705",
+   "position": [
+    -589351.238,
+    -1250018.677
+   ],
+   "rotation_deg": 78.2,
+   "z": 192.111
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0706",
+   "position": [
+    -589496.924,
+    -1249948.567
+   ],
+   "rotation_deg": 291.8,
+   "z": 193.158
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0707",
+   "position": [
+    -589490.456,
+    -1249766.657
+   ],
+   "rotation_deg": 154.9,
+   "z": 193.93
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0708",
+   "position": [
+    -589506.778,
+    -1249884.246
+   ],
+   "rotation_deg": 266.7,
+   "z": 192.969
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0709",
+   "position": [
+    -589345.852,
+    -1249837.706
+   ],
+   "rotation_deg": 346.7,
+   "z": 193.724
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0710",
+   "position": [
+    -589221.164,
+    -1249980.964
+   ],
+   "rotation_deg": 330.0,
+   "z": 192.626
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0711",
+   "position": [
+    -589398.388,
+    -1249821.09
+   ],
+   "rotation_deg": 353.5,
+   "z": 193.914
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0712",
+   "position": [
+    -589375.178,
+    -1250017.699
+   ],
+   "rotation_deg": 352.9,
+   "z": 193.208
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0713",
+   "position": [
+    -589266.317,
+    -1249888.813
+   ],
+   "rotation_deg": 148.4,
+   "z": 192.123
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0714",
+   "position": [
+    -589408.168,
+    -1250024.74
+   ],
+   "rotation_deg": 254.6,
+   "z": 192.121
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0715",
+   "position": [
+    -589338.679,
+    -1249790.432
+   ],
+   "rotation_deg": 256.1,
+   "z": 192.636
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0716",
+   "position": [
+    -589215.174,
+    -1249875.483
+   ],
+   "rotation_deg": 252.1,
+   "z": 192.956
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0717",
+   "position": [
+    -589488.648,
+    -1249964.428
+   ],
+   "rotation_deg": 301.7,
+   "z": 190.936
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0718",
+   "position": [
+    -589313.324,
+    -1249877.337
+   ],
+   "rotation_deg": 149.3,
+   "z": 192.772
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0719",
+   "position": [
+    -589467.904,
+    -1249779.969
+   ],
+   "rotation_deg": 159.1,
+   "z": 195.652
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0720",
+   "position": [
+    -589490.05,
+    -1249868.779
+   ],
+   "rotation_deg": 266.9,
+   "z": 195.759
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0721",
+   "position": [
+    -589422.467,
+    -1249734.166
+   ],
+   "rotation_deg": 163.9,
+   "z": 194.187
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0722",
+   "position": [
+    -589433.339,
+    -1249751.36
+   ],
+   "rotation_deg": 163.9,
+   "z": 194.641
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0723",
+   "position": [
+    -589456.156,
+    -1249844.385
+   ],
+   "rotation_deg": 263.2,
+   "z": 194.357
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0724",
+   "position": [
+    -589503.17,
+    -1249798.59
+   ],
+   "rotation_deg": 154.0,
+   "z": 193.616
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0725",
+   "position": [
+    -589427.724,
+    -1249840.126
+   ],
+   "rotation_deg": 356.9,
+   "z": 192.494
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0726",
+   "position": [
+    -589466.92,
+    -1249833.925
+   ],
+   "rotation_deg": 255.5,
+   "z": 193.211
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0727",
+   "position": [
+    -589326.428,
+    -1249816.452
+   ],
+   "rotation_deg": 68.8,
+   "z": 196.014
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0728",
+   "position": [
+    -589417.981,
+    -1250019.445
+   ],
+   "rotation_deg": 254.7,
+   "z": 191.472
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0729",
+   "position": [
+    -589162.807,
+    -1249982.495
+   ],
+   "rotation_deg": 31.4,
+   "z": 193.474
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0730",
+   "position": [
+    -589410.091,
+    -1249835.007
+   ],
+   "rotation_deg": 355.4,
+   "z": 192.6
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0731",
+   "position": [
+    -589188.114,
+    -1249818.167
+   ],
+   "rotation_deg": 62.1,
+   "z": 193.165
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0732",
+   "position": [
+    -589360.962,
+    -1249763.795
+   ],
+   "rotation_deg": 338.9,
+   "z": 192.976
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0733",
+   "position": [
+    -589308.809,
+    -1249802.456
+   ],
+   "rotation_deg": 256.3,
+   "z": 197.429
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0734",
+   "position": [
+    -589198.767,
+    -1249893.9
+   ],
+   "rotation_deg": 158.6,
+   "z": 194.655
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0735",
+   "position": [
+    -589185.299,
+    -1249735.714
+   ],
+   "rotation_deg": 153.0,
+   "z": 195.936
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0736",
+   "position": [
+    -589125.91,
+    -1250042.724
+   ],
+   "rotation_deg": 30.6,
+   "z": 194.23
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0737",
+   "position": [
+    -588945.587,
+    -1250175.253
+   ],
+   "rotation_deg": 346.8,
+   "z": 194.119
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0738",
+   "position": [
+    -589198.459,
+    -1250058.782
+   ],
+   "rotation_deg": 86.7,
+   "z": 194.325
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0739",
+   "position": [
+    -589074.403,
+    -1250113.297
+   ],
+   "rotation_deg": 203.0,
+   "z": 192.029
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0740",
+   "position": [
+    -588940.524,
+    -1249716.207
+   ],
+   "rotation_deg": 266.5,
+   "z": 193.221
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0741",
+   "position": [
+    -589120.159,
+    -1249937.679
+   ],
+   "rotation_deg": 330.6,
+   "z": 191.658
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0742",
+   "position": [
+    -588597.504,
+    -1249633.615
+   ],
+   "rotation_deg": 134.6,
+   "z": 192.307
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0743",
+   "position": [
+    -588160.201,
+    -1249940.887
+   ],
+   "rotation_deg": 244.5,
+   "z": 192.108
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0744",
+   "position": [
+    -589048.792,
+    -1249692.057
+   ],
+   "rotation_deg": 262.8,
+   "z": 193.783
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0745",
+   "position": [
+    -588831.259,
+    -1249732.207
+   ],
+   "rotation_deg": 320.0,
+   "z": 191.593
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0746",
+   "position": [
+    -589059.641,
+    -1249703.321
+   ],
+   "rotation_deg": 77.1,
+   "z": 194.239
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0747",
+   "position": [
+    -589256.575,
+    -1250049.529
+   ],
+   "rotation_deg": 288.4,
+   "z": 191.605
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0748",
+   "position": [
+    -589085.359,
+    -1250089.992
+   ],
+   "rotation_deg": 204.3,
+   "z": 194.399
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0749",
+   "position": [
+    -588897.115,
+    -1249730.687
+   ],
+   "rotation_deg": 82.2,
+   "z": 191.61
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0750",
+   "position": [
+    -589377.361,
+    -1249708.275
+   ],
+   "rotation_deg": 66.3,
+   "z": 192.518
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0751",
+   "position": [
+    -588935.184,
+    -1249703.286
+   ],
+   "rotation_deg": 176.8,
+   "z": 196.034
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0752",
+   "position": [
+    -588999.996,
+    -1250082.772
+   ],
+   "rotation_deg": 346.8,
+   "z": 191.689
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0753",
+   "position": [
+    -589140.274,
+    -1249979.726
+   ],
+   "rotation_deg": 118.3,
+   "z": 191.992
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0754",
+   "position": [
+    -589005.436,
+    -1249717.491
+   ],
+   "rotation_deg": 77.5,
+   "z": 194.574
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0755",
+   "position": [
+    -588212.037,
+    -1249942.698
+   ],
+   "rotation_deg": 64.7,
+   "z": 190.425
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0756",
+   "position": [
+    -589083.947,
+    -1249698.108
+   ],
+   "rotation_deg": 75.1,
+   "z": 193.036
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0757",
+   "position": [
+    -588921.466,
+    -1249740.997
+   ],
+   "rotation_deg": 355.1,
+   "z": 193.599
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0758",
+   "position": [
+    -589394.749,
+    -1250037.696
+   ],
+   "rotation_deg": 67.0,
+   "z": 194.107
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0759",
+   "position": [
+    -588865.662,
+    -1249749.687
+   ],
+   "rotation_deg": 339.0,
+   "z": 191.823
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0760",
+   "position": [
+    -588768.709,
+    -1249749.533
+   ],
+   "rotation_deg": 179.4,
+   "z": 190.364
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0761",
+   "position": [
+    -588130.17,
+    -1249955.031
+   ],
+   "rotation_deg": 243.3,
+   "z": 191.601
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0762",
+   "position": [
+    -588894.732,
+    -1250191.967
+   ],
+   "rotation_deg": 96.7,
+   "z": 191.574
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0763",
+   "position": [
+    -588724.05,
+    -1249755.977
+   ],
+   "rotation_deg": 269.4,
+   "z": 194.908
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0764",
+   "position": [
+    -589188.727,
+    -1250039.746
+   ],
+   "rotation_deg": 173.9,
+   "z": 191.299
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0765",
+   "position": [
+    -589148.543,
+    -1250041.738
+   ],
+   "rotation_deg": 93.5,
+   "z": 191.53
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0766",
+   "position": [
+    -588745.926,
+    -1249743.796
+   ],
+   "rotation_deg": 342.0,
+   "z": 192.713
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0767",
+   "position": [
+    -588987.035,
+    -1249721.601
+   ],
+   "rotation_deg": 80.0,
+   "z": 195.764
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0768",
+   "position": [
+    -589015.941,
+    -1250182.636
+   ],
+   "rotation_deg": 167.5,
+   "z": 191.621
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0769",
+   "position": [
+    -588082.925,
+    -1249971.663
+   ],
+   "rotation_deg": 153.9,
+   "z": 193.278
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0770",
+   "position": [
+    -588930.825,
+    -1249727.831
+   ],
+   "rotation_deg": 86.5,
+   "z": 195.879
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0771",
+   "position": [
+    -588814.393,
+    -1250189.196
+   ],
+   "rotation_deg": 10.2,
+   "z": 192.621
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0772",
+   "position": [
+    -588869.904,
+    -1249718.722
+   ],
+   "rotation_deg": 239.1,
+   "z": 191.304
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0773",
+   "position": [
+    -589133.453,
+    -1250029.454
+   ],
+   "rotation_deg": 25.6,
+   "z": 193.826
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0774",
+   "position": [
+    -588625.878,
+    -1249749.39
+   ],
+   "rotation_deg": 232.2,
+   "z": 192.38
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0775",
+   "position": [
+    -589091.806,
+    -1250133.656
+   ],
+   "rotation_deg": 91.6,
+   "z": 190.949
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0776",
+   "position": [
+    -589124.826,
+    -1249945.873
+   ],
+   "rotation_deg": 330.1,
+   "z": 190.792
+  },
+  {
+   "asset": "pack:drycastle-generated-models/satellite_dish",
+   "id": "o-0777",
+   "position": [
+    -589221.445,
+    -1249794.444
+   ],
+   "rotation_deg": 358.4,
+   "z": 196.287
   }
  ],
  "parcels": {
